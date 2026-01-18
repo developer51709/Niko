@@ -194,8 +194,8 @@ async def on_message(msg):
         if not user_input:
             user_input = "Someone called your name or pinged you. Respond naturally."
 
-        await msg.channel.trigger_typing()
-        reply = generate_reply(msg.author.id, user_input, msg.author.display_name)
+        async with msg.channel.typing():
+            reply = generate_reply(msg.author.id, user_input, msg.author.display_name)
 
         if len(reply) > 1800:
             reply = reply[:1800] + "..."
