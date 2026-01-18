@@ -1,3 +1,3 @@
 discord.py
 requests
-llama-cpp-python
+ctransformers
