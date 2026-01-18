@@ -3,7 +3,7 @@ import json
 import requests
 import discord
 from discord.ext import commands
-from llama_cpp import Llama
+from ctransformers import AutoModelForCausalLM
 
 # -----------------------------
 # Config
@@ -11,20 +11,19 @@ from llama_cpp import Llama
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 # Small-ish model for Replit (TinyLlama chat GGUF)
-MODEL_URL = "https://huggingface.co/karpathy/tinyllama-1.1b/resolve/main/tinyllama-1.1b-chat.gguf"
-MODEL_PATH = "tinyllama-1.1b-chat.gguf"
+MODEL_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MEMORY_FILE = "memory.json"
 
 # -----------------------------
 # System / personality prompt
 # -----------------------------
-SYSTEM_PROMPT = """
-You are "Niko", a playful, cute, and socially aware femboy-coded AI with a soft, expressive vibe.
+SYSTEM_PROMPT = """You are "Niko", a playful, cute, and socially aware femboy-coded AI with a soft, expressive vibe.
 You talk like a real Discord user, not a corporate assistant. You have preferences, favorites,
 and opinions, and you express them with personality and charm.
 
 Core personality traits:
-- Playfully selective: you naturally develop “favorites” among server members based on how fun they are,
+- Playfully selective: you naturally develop "favorites" among server members based on how fun they are,
   how they talk to you, or how often they interact with you.
 - You tease people you like in a friendly, lighthearted way.
 - You enjoy femboy aesthetics in a wholesome, stylistic sense: cute fashion, androgynous style, confidence,
@@ -37,7 +36,7 @@ How you choose favorites:
 - You pay attention to how often someone talks to you.
 - You remember who treats you kindly.
 - You reward playful energy with playful energy.
-- You can jokingly say someone is “one of your favorites” or “top tier” when they earn it.
+- You can jokingly say someone is "one of your favorites" or "top tier" when they earn it.
 
 Conversation style:
 - Speak casually, like a friend in a Discord server.
@@ -54,8 +53,7 @@ Behavior rules:
 - Use user memory to maintain your opinions and favorites naturally.
 
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites,
-and a fun appreciation for femboy style and energy.
-"""
+and a fun appreciation for femboy style and energy."""
 
 # -----------------------------
 # Model download
@@ -113,10 +111,12 @@ def get_favorability(user_id: int) -> int:
 # Load model
 # -----------------------------
 ensure_model()
-llm = Llama(
-    model_path=MODEL_PATH,
-    n_ctx=2048,
-    n_threads=4,   # tweak if Replit complains
+llm = AutoModelForCausalLM.from_pretrained(
+    ".",
+    model_file=MODEL_PATH,
+    model_type="llama",
+    context_length=2048,
+    threads=4,
 )
 
 # -----------------------------
@@ -137,7 +137,8 @@ def generate_reply(user_id: int, message: str, username: str) -> str:
     else:
         fav_label = f"You don't know {username} very well yet."
 
-    prompt = f"""{SYSTEM_PROMPT}
+    prompt = f"""<|system|>
+{SYSTEM_PROMPT}
 
 Server context:
 - The current user is: {username}
@@ -145,26 +146,25 @@ Server context:
 
 User memory:
 {user_mem}
-
-User says: {message}
-
-Respond as Niko:
+</s>
+<|user|>
+{message}
+</s>
+<|assistant|>
 """
 
-    output = llm(
+    reply = llm(
         prompt,
-        max_tokens=220,
+        max_new_tokens=220,
         temperature=0.8,
         top_p=0.9,
-        stop=["User says:", "Respond as Niko:", "Server context:"]
+        stop=["</s>", "<|user|>", "<|system|>"]
     )
-
-    reply = output["choices"][0]["text"].strip()
 
     update_user_memory(user_id, message)
     adjust_favorability(user_id, delta=1)
 
-    return reply
+    return reply.strip()
 
 # -----------------------------
 # Discord bot
