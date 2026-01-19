@@ -43,7 +43,10 @@ class InfoCog(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="roleinfo")
-    async def roleinfo(self, ctx, role: discord.Role):
+    async def roleinfo(self, ctx, role: discord.Role = None):
+        if role is None:
+            await ctx.send("Please specify a role to get info for! Example: `!roleinfo @Role`")
+            return
         embed = discord.Embed(title=f"Role Info", description=f"Role Name: {role.name}\nRole ID: {role.id}\nRole Color: {role.color}\nRole Position: {role.position}\nRole Members: {len(role.members)}", color=0x00ff00)
         await ctx.send(embed=embed)
 
@@ -73,7 +76,7 @@ class InfoCog(commands.Cog):
     @commands.command(name="booststats")
     async def booststats(self, ctx):
         server = ctx.guild
-        embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}\nBoost Progress: {server.premium_progress}\nActive Perks: {server.premium_features}", color=0x00ff00)
+        embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}\nActive Perks: {server.premium_features}", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="spotify")
