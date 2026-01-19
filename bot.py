@@ -10,7 +10,7 @@ from ctransformers import AutoModelForCausalLM
 # -----------------------------
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-# Small-ish model for Replit (TinyLlama chat GGUF)
+# AI model (TinyLlama chat GGUF)
 MODEL_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MEMORY_FILE = "memory.json"
@@ -188,6 +188,14 @@ User memory:
     return reply.strip()
 
 # -----------------------------
+# Command error messages
+# -----------------------------
+
+async def NotImplementedError():
+    await ctx.send("This command is not implemented yet.")
+    return
+
+# -----------------------------
 # Discord bot
 # -----------------------------
 intents = discord.Intents.default()
@@ -230,6 +238,95 @@ async def favor(ctx, member: discord.Member = None):
     target = member or ctx.author
     score = get_favorability(target.id)
     await ctx.send(f"{target.display_name} has a favorability score of **{score}** with Niko.")
+
+@bot.command(name="memory")
+async def memory(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    mem = get_user_memory(target.id)
+    if not mem:
+        await ctx.send(f"No memory recorded for {target.display_name}.")
+        return
+    else:
+        await ctx.send(f"Memory for {target.display_name}:")
+
+@bot.command(name="uwu")
+async def uwu(ctx):
+    await ctx.send("Nyaa~!")
+
+@bot.command(name="ping")
+async def ping(ctx):
+    await ctx.send("Pong!")
+
+@bot.command(name="serverinfo")
+async def serverinfo(ctx):
+    server_name = ctx.guild.name
+    server_id = ctx.guild.id
+    member_count = ctx.guild.member_count
+    embed = discord.Embed(title="Server Info", description=f"Server Name: {server_name}\nServer ID: {server_id}\nMember Count: {member_count}", color=0x00ff00)
+    await ctx.send(embed=embed)
+
+@bot.command(name="userinfo")
+async def userinfo(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    embed = discord.Embed(title="User Info", description=f"Username: {target.display_name}\nUser ID: {target.id}\nJoined Server: {target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}", color=0x00ff00)
+    await ctx.send(embed=embed)
+
+@bot.command(name="avatar")
+async def avatar(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    embed = discord.Embed(title=f"{target.display_name}'s Avatar", color=0x00ff00)
+    embed.set_image(url=target.avatar.url)
+    await ctx.send(embed=embed)
+
+@bot.command(name="about")
+async def about(ctx):
+    embed = discord.Embed(title="About Niko", description="Niko is a friendly, playful, and socially aware femboy-coded AI. He is designed to be a fun and engaging companion in your Discord server.", color=0x00ff00)
+    await ctx.send(embed=embed)
+
+@bot.command(name="creator")
+async def creator(ctx):
+    creator = await bot.fetch_user(1435974392810307604)
+    embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
+    await ctx.send(embed=embed)
+
+@bot.command(name="partner_request")
+async def partner_request(ctx, invite: str):
+    requester = ctx.author
+    log_channel = bot.get_channel(1462614744052797683)
+    if log_channel:
+        embed = discord.Embed(title="Partner Request", description=f"Requested by: {requester.display_name}\nOnvite: {invite}", color=0x00ff00)
+        await log_channel.send(embed=embed)
+        await ctx.send("Partnership request sent successfully!")
+    else:
+        await ctx.send("Error: Log channel not found.")
+
+@bot.command(name="slay")
+async def slay(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    await ctx.send(f"{target.display_name} is slaying!")
+
+@bot.command(name="kill")
+async def kill(ctx, member: discord.Member = None):
+    target = member
+    if target:
+        await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
+    else:
+        await ctx.send("You need to mention a user to kill them!")
+
+@bot.command(name="fuck")
+async def fuck(ctx, member: discord.Member = None):
+    target = member
+    if target:
+        await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
+    else:
+        await ctx.send("You need to mention a user to fuck them!")
+
+@bot.command(name="nitro")
+async def nitro(ctx):
+    rickroll_gif = "https://media.tenor.com/4Q4Q4Q4Q4Q4AAAAA/rick-roll.gif"
+    embed = discord.Embed(title="Nitro", description="No nitro here!", color=0x00ff00)
+    embed.set_image(url=rickroll_gif)
+    await ctx.send(embed=embed)
 
 if __name__ == "__main__":
     if not TOKEN:
