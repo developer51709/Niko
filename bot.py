@@ -312,24 +312,6 @@ async def partnership_request(ctx, invite: str):
     else:
         await ctx.send("Error: Log channel not found.")
 
-# !kill command
-@bot.command(name="kill")
-async def kill(ctx, member: discord.Member = None):
-    target = member
-    if target:
-        await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
-    else:
-        await ctx.send("You need to mention a user to kill them!")
-
-# !fuck command
-@bot.command(name="fuck")
-async def fuck(ctx, member: discord.Member = None):
-    target = member
-    if target:
-        await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
-    else:
-        await ctx.send("You need to mention a user to fuck them!")
-
 # !nitro command
 @bot.command(name="nitro")
 async def nitro(ctx):

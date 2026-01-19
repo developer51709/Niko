@@ -7,20 +7,23 @@ class RolePlayCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="isitworking")
-    async def isitworking(self, ctx):
-        messages = [
-            "Gfys",
-            "Go die in a fucking hole bitch",
-            "Kys",
-            "Fuck you",
-            "Fuck off",
-            "I'm not your fucking slave dumb ass",
-            "Please just do us all a favor and fucking die",
-            "Kill yourself bitch"
-        ]
-        random_message = random.choice(messages)
-        await ctx.send(random_message)
+    # !kill command
+    @commands.command(name="kill")
+    async def kill(self, ctx, member: discord.Member = None):
+        target = member
+        if target:
+            await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
+        else:
+            await ctx.send("You need to mention a user to kill them!")
+
+    # !fuck command
+    @commands.command(name="fuck")
+    async def fuck(self, ctx, member: discord.Member = None):
+        target = member
+        if target:
+            await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
+        else:
+            await ctx.send("You need to mention a user to fuck them!")
 
 
 async def setup(bot):
