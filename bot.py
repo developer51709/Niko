@@ -5,16 +5,24 @@ import requests
 import discord
 import asyncio
 from discord.ext import commands
-from ctransformers import AutoModelForCausalLM
+from openai import OpenAI
 
 # -----------------------------
 # Config
 # -----------------------------
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-# AI model (TinyLlama chat GGUF)
-MODEL_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
-MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+# the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+# do not change this unless explicitly requested by the user
+AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+
+# This is using Replit's AI Integrations service, which provides OpenAI-compatible API access without requiring your own OpenAI API key.
+openai = OpenAI(
+    api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+    base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+)
+
 MEMORY_FILE = "memory.json"
 
 # -----------------------------
@@ -84,22 +92,10 @@ Your goal is to feel like a real, socially dynamic server member with preference
 and a fun appreciation for femboy style and energy."""
 
 # -----------------------------
-# Model download
+# Load model (removed for OpenAI)
 # -----------------------------
-def ensure_model():
-    if os.path.exists(MODEL_PATH):
-        return
-
-    print("Downloading model... this may take a while.")
-    r = requests.get(MODEL_URL, stream=True)
-    r.raise_for_status()
-
-    with open(MODEL_PATH, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-
-    print("Model downloaded successfully.")
+# ensure_model()
+# llm = AutoModelForCausalLM.from_pretrained(...)
 
 # -----------------------------
 # Memory handling
@@ -136,18 +132,6 @@ def get_favorability(user_id: int) -> int:
     return memory["favorability"].get(str(user_id), 0)
 
 # -----------------------------
-# Load model
-# -----------------------------
-ensure_model()
-llm = AutoModelForCausalLM.from_pretrained(
-    ".",
-    model_file=MODEL_PATH,
-    model_type="llama",
-    context_length=2048,
-    threads=4,
-)
-
-# -----------------------------
 # Generate reply
 # -----------------------------
 def generate_reply(user_id: int, message: str, username: str) -> str:
@@ -165,29 +149,18 @@ def generate_reply(user_id: int, message: str, username: str) -> str:
     else:
         fav_label = f"You don't know {username} very well yet."
 
-    prompt = f"""<|system|>
-{SYSTEM_PROMPT}
-
-Server context:
-- The current user is: {username}
-- Your current impression: {fav_label}
-
-User memory:
-{user_mem}
-</s>
-<|user|>
-{message}
-</s>
-<|assistant|>
-"""
-
-    reply = llm(
-        prompt,
-        max_new_tokens=220,
-        temperature=0.8,
-        top_p=0.9,
-        stop=["</s>", "<|user|>", "<|system|>"]
+    # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+    # do not change this unless explicitly requested by the user
+    response = openai.chat.completions.create(
+        model="gpt-5",
+        messages=[
+            {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nServer context:\n- The current user is: {username}\n- Your current impression: {fav_label}\n\nUser memory:\n{user_mem}"},
+            {"role": "user", "content": message}
+        ],
+        max_completion_tokens=220
     )
+    
+    reply = response.choices[0].message.content or ""
 
     update_user_memory(user_id, message)
     adjust_favorability(user_id, delta=1)
