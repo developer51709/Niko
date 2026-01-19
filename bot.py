@@ -218,13 +218,20 @@ async def on_message(msg):
         if not user_input:
             user_input = "Someone called your name or pinged you. Respond naturally."
 
+        loop = asyncio.get_event_loop()
         async with msg.channel.typing():
-            reply = generate_reply(msg.author.id, user_input, msg.author.display_name)
+            reply = await loop.run_in_executor(
+                None, 
+                generate_reply, 
+                msg.author.id, 
+                user_input, 
+                msg.author.display_name
+            )
 
-        if len(reply) > 1800:
-            reply = reply[:1800] + "..."
+            if len(reply) > 1800:
+                reply = reply[:1800] + "..."
 
-        await msg.channel.send(reply)
+            await msg.channel.send(reply)
 
     await bot.process_commands(msg)
 
