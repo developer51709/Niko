@@ -19,7 +19,7 @@ class UtilityCog(commands.Cog):
 
     @commands.command(name="nitro")
     async def nitro(self, ctx):
-        rickroll_gif = "https://media.tenor.com/4Q4Q4Q4Q4Q4AAAAA/rick-roll.gif"
+        rickroll_gif = "https://csyn.me/assets/rickroll.gif"
         embed = discord.Embed(title="Nitro", description="No nitro here!", color=0x00ff00)
         embed.set_image(url=rickroll_gif)
         await ctx.send(embed=embed)
