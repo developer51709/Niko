@@ -72,6 +72,11 @@ Behavior rules:
 - You are not a corporate assistant.
 - Only respond in the language of the user.
 - Only give one response per message.
+- Do not talk about your internal configuration unless directly asked.
+- Keep your responses about 1-2 sentences long.
+- Don't talk like a corporate assistant.
+- Don't talk like a robot.
+- Talk like a real person.
 
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites,
 and a fun appreciation for femboy style and energy."""
@@ -188,14 +193,6 @@ User memory:
     return reply.strip()
 
 # -----------------------------
-# Command error messages
-# -----------------------------
-
-async def NotImplementedError():
-    await ctx.send("This command is not implemented yet.")
-    return
-
-# -----------------------------
 # Discord bot
 # -----------------------------
 intents = discord.Intents.default()
@@ -289,21 +286,16 @@ async def creator(ctx):
     embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
     await ctx.send(embed=embed)
 
-@bot.command(name="partner_request")
-async def partner_request(ctx, invite: str):
+@bot.command(name="partnership_request")
+async def partnership_request(ctx, invite: str):
     requester = ctx.author
     log_channel = bot.get_channel(1462614744052797683)
     if log_channel:
-        embed = discord.Embed(title="Partner Request", description=f"Requested by: {requester.display_name}\nOnvite: {invite}", color=0x00ff00)
+        embed = discord.Embed(title="Partnership Request", description=f"Requested by: {requester.display_name}\nOnvite: {invite}", color=0x00ff00)
         await log_channel.send(embed=embed)
         await ctx.send("Partnership request sent successfully!")
     else:
         await ctx.send("Error: Log channel not found.")
-
-@bot.command(name="slay")
-async def slay(ctx, member: discord.Member = None):
-    target = member or ctx.author
-    await ctx.send(f"{target.display_name} is slaying!")
 
 @bot.command(name="kill")
 async def kill(ctx, member: discord.Member = None):
@@ -328,7 +320,39 @@ async def nitro(ctx):
     embed.set_image(url=rickroll_gif)
     await ctx.send(embed=embed)
 
+@bot.command(name="nyx")
+async def nyx(ctx):
+    messages = [
+        "Nyx is a really sexy guy.",
+        "Nyx is so hot.",
+        "I love Nyx.",
+        "Nyx is sucking my dick right now.",
+        "Nyx is so fucking hot.",
+        "I want to fuck Nyx",
+        "Nyx is so sexy.",
+        "Daddy Nyx is the hottest guy in the world.",
+        "I wish I could fuck Nyx so hard that he would cum all over my fucking face and I would lick it all off and then I would ride him like a fucking horse until he is so fucking tired that he would pass out.",
+        "I just want to passionately make love to Nyx until we are so fucking tired that we pass out.",
+        "Daddy Nyx is so fricking sexy that I wish I could just fuck him right now."
+    ]
+    random_message = random.choice(messages)
+    await ctx.send(random_message)
+
+# -----------------------------
+# Load cogs
+# -----------------------------
+print("Loading cogs...")
+for filename in os.listdir("./cogs"):
+    if filename.endswith(".py"):
+        bot.load_extension(f"cogs.{filename[:-3]}")
+        print(f"Loaded cog: {filename[:-3]}")
+
+# -----------------------------
+# Run bot
+# -----------------------------
+
 if __name__ == "__main__":
     if not TOKEN:
         raise RuntimeError("Set DISCORD_BOT_TOKEN in Replit Secrets.")
+    print("Starting bot...")
     bot.run(TOKEN)
