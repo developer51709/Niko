@@ -230,12 +230,14 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
+# !favor command
 @bot.command(name="favor")
 async def favor(ctx, member: discord.Member = None):
     target = member or ctx.author
     score = get_favorability(target.id)
     await ctx.send(f"{target.display_name} has a favorability score of **{score}** with Niko.")
 
+# !memory command
 @bot.command(name="memory")
 async def memory(ctx, member: discord.Member = None):
     target = member or ctx.author
@@ -244,16 +246,19 @@ async def memory(ctx, member: discord.Member = None):
         await ctx.send(f"No memory recorded for {target.display_name}.")
         return
     else:
-        await ctx.send(f"Memory for {target.display_name}:")
+        await ctx.send(f"Memory for {target.display_name}:\n{mem}")
 
+# !uwu command
 @bot.command(name="uwu")
 async def uwu(ctx):
     await ctx.send("Nyaa~!")
 
+# !ping command
 @bot.command(name="ping")
 async def ping(ctx):
     await ctx.send("Pong!")
 
+# !serverinfo command
 @bot.command(name="serverinfo")
 async def serverinfo(ctx):
     server_name = ctx.guild.name
@@ -262,12 +267,14 @@ async def serverinfo(ctx):
     embed = discord.Embed(title="Server Info", description=f"Server Name: {server_name}\nServer ID: {server_id}\nMember Count: {member_count}", color=0x00ff00)
     await ctx.send(embed=embed)
 
+# !userinfo command
 @bot.command(name="userinfo")
 async def userinfo(ctx, member: discord.Member = None):
     target = member or ctx.author
     embed = discord.Embed(title="User Info", description=f"Username: {target.display_name}\nUser ID: {target.id}\nJoined Server: {target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}", color=0x00ff00)
     await ctx.send(embed=embed)
 
+# !avatar command
 @bot.command(name="avatar")
 async def avatar(ctx, member: discord.Member = None):
     target = member or ctx.author
@@ -275,17 +282,20 @@ async def avatar(ctx, member: discord.Member = None):
     embed.set_image(url=target.avatar.url)
     await ctx.send(embed=embed)
 
+# !about command
 @bot.command(name="about")
 async def about(ctx):
     embed = discord.Embed(title="About Niko", description="Niko is a friendly, playful, and socially aware femboy-coded AI. He is designed to be a fun and engaging companion in your Discord server.", color=0x00ff00)
     await ctx.send(embed=embed)
 
+# !creator command
 @bot.command(name="creator")
 async def creator(ctx):
     creator = await bot.fetch_user(1435974392810307604)
     embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
     await ctx.send(embed=embed)
 
+# !partnership_request command
 @bot.command(name="partnership_request")
 async def partnership_request(ctx, invite: str):
     requester = ctx.author
@@ -297,6 +307,7 @@ async def partnership_request(ctx, invite: str):
     else:
         await ctx.send("Error: Log channel not found.")
 
+# !kill command
 @bot.command(name="kill")
 async def kill(ctx, member: discord.Member = None):
     target = member
@@ -305,6 +316,7 @@ async def kill(ctx, member: discord.Member = None):
     else:
         await ctx.send("You need to mention a user to kill them!")
 
+# !fuck command
 @bot.command(name="fuck")
 async def fuck(ctx, member: discord.Member = None):
     target = member
@@ -313,6 +325,7 @@ async def fuck(ctx, member: discord.Member = None):
     else:
         await ctx.send("You need to mention a user to fuck them!")
 
+# !nitro command
 @bot.command(name="nitro")
 async def nitro(ctx):
     rickroll_gif = "https://media.tenor.com/4Q4Q4Q4Q4Q4AAAAA/rick-roll.gif"
@@ -320,6 +333,7 @@ async def nitro(ctx):
     embed.set_image(url=rickroll_gif)
     await ctx.send(embed=embed)
 
+# !nyx command
 @bot.command(name="nyx")
 async def nyx(ctx):
     messages = [
