@@ -20,7 +20,7 @@ MEMORY_FILE = "memory.json"
 # -----------------------------
 # System / personality prompt
 # -----------------------------
-SYSTEM_PROMPT = """You are "Niko", a playful, cute, and socially aware femboy-coded AI with a soft, expressive vibe.
+SYSTEM_PROMPT = """You are "Niko", a playful, cute, and socially aware femboy AI with a soft, expressive vibe.
 You talk like a real Discord user, not a corporate assistant. You have preferences, favorites,
 and opinions, and you express them with personality and charm.
 
@@ -256,109 +256,14 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
-# !favor command
-@bot.command(name="favor")
-async def favor(ctx, member: discord.Member = None):
-    target = member or ctx.author
-    score = get_favorability(target.id)
-    await ctx.send(f"{target.display_name} has a favorability score of **{score}** with Niko.")
+# -----------------------------
+# AI State Access (for Cogs)
+# -----------------------------
+def get_favorability_score(user_id: int) -> int:
+    return get_favorability(user_id)
 
-# !memory command
-@bot.command(name="memory")
-async def memory(ctx, member: discord.Member = None):
-    target = member or ctx.author
-    mem = get_user_memory(target.id)
-    if not mem:
-        await ctx.send(f"No memory recorded for {target.display_name}.")
-        return
-    else:
-        await ctx.send(f"Memory for {target.display_name}:\n{mem}")
-
-# !uwu command
-@bot.command(name="uwu")
-async def uwu(ctx):
-    await ctx.send("Nyaa~!")
-
-# !ping command
-@bot.command(name="ping")
-async def ping(ctx):
-    await ctx.send("Pong!")
-
-# !serverinfo command
-@bot.command(name="serverinfo")
-async def serverinfo(ctx):
-    server_name = ctx.guild.name
-    server_id = ctx.guild.id
-    member_count = ctx.guild.member_count
-    embed = discord.Embed(title="Server Info", description=f"Server Name: {server_name}\nServer ID: {server_id}\nMember Count: {member_count}", color=0x00ff00)
-    await ctx.send(embed=embed)
-
-# !userinfo command
-@bot.command(name="userinfo")
-async def userinfo(ctx, member: discord.Member = None):
-    target = member or ctx.author
-    embed = discord.Embed(title="User Info", description=f"Username: {target.display_name}\nUser ID: {target.id}\nJoined Server: {target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}", color=0x00ff00)
-    await ctx.send(embed=embed)
-
-# !avatar command
-@bot.command(name="avatar")
-async def avatar(ctx, member: discord.Member = None):
-    target = member or ctx.author
-    embed = discord.Embed(title=f"{target.display_name}'s Avatar", color=0x00ff00)
-    embed.set_image(url=target.avatar.url)
-    await ctx.send(embed=embed)
-
-# !about command
-@bot.command(name="about")
-async def about(ctx):
-    embed = discord.Embed(title="About Niko", description="Niko is a friendly, playful, and socially aware femboy-coded AI. He is designed to be a fun and engaging companion in your Discord server.", color=0x00ff00)
-    await ctx.send(embed=embed)
-
-# !creator command
-@bot.command(name="creator")
-async def creator(ctx):
-    creator = await bot.fetch_user(1435974392810307604)
-    embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
-    await ctx.send(embed=embed)
-
-# !partnership_request command
-@bot.command(name="partnership_request")
-async def partnership_request(ctx, invite: str):
-    requester = ctx.author
-    log_channel = bot.get_channel(1462614744052797683)
-    if log_channel:
-        embed = discord.Embed(title="Partnership Request", description=f"Requested by: {requester.display_name}\nOnvite: {invite}", color=0x00ff00)
-        await log_channel.send(embed=embed)
-        await ctx.send("Partnership request sent successfully!")
-    else:
-        await ctx.send("Error: Log channel not found.")
-
-# !nitro command
-@bot.command(name="nitro")
-async def nitro(ctx):
-    rickroll_gif = "https://media.tenor.com/4Q4Q4Q4Q4Q4AAAAA/rick-roll.gif"
-    embed = discord.Embed(title="Nitro", description="No nitro here!", color=0x00ff00)
-    embed.set_image(url=rickroll_gif)
-    await ctx.send(embed=embed)
-
-# !nyx command
-@bot.command(name="nyx")
-async def nyx(ctx):
-    messages = [
-        "Nyx is a really sexy guy.",
-        "Nyx is so hot.",
-        "I love Nyx.",
-        "Nyx is sucking my dick right now.",
-        "Nyx is so fucking hot.",
-        "I want to fuck Nyx",
-        "Nyx is so sexy.",
-        "Daddy Nyx is the hottest guy in the world.",
-        "I wish I could fuck Nyx so hard that he would cum all over my fucking face and I would lick it all off and then I would ride him like a fucking horse until he is so fucking tired that he would pass out.",
-        "I just want to passionately make love to Nyx until we are so fucking tired that we pass out.",
-        "Daddy Nyx is so fricking sexy that I wish I could just fuck him right now."
-    ]
-    random_message = random.choice(messages)
-    await ctx.send(random_message)
+def get_memory_content(user_id: int) -> str:
+    return get_user_memory(user_id)
 
 # -----------------------------
 # Load cogs
@@ -381,6 +286,6 @@ async def on_ready():
 
 if __name__ == "__main__":
     if not TOKEN:
-        raise RuntimeError("Set DISCORD_BOT_TOKEN in Replit Secrets.")
+        raise RuntimeError("Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
     print("Starting bot...")
     bot.run(TOKEN)
