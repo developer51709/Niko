@@ -1,10 +1,16 @@
 import discord
 from discord.ext import commands
 import random
+import time
+import platform
+import psutil
+import os
 
 class InfoCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        if not hasattr(self.bot, 'start_time'):
+            self.bot.start_time = time.time()
 
     @commands.command(name="serverinfo")
     async def serverinfo(self, ctx):
@@ -101,6 +107,31 @@ class InfoCog(commands.Cog):
         ]
         random_message = random.choice(messages)
         await ctx.send(random_message)
+
+    @commands.command(name="debuginfo")
+    async def debuginfo(self, ctx):
+        uptime_seconds = int(time.time() - self.bot.start_time)
+        uptime = f"{uptime_seconds // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
+        ai_model = "TinyLlama-1.1B"
+        command_count = len(self.bot.commands)
+        ping_latency = round(self.bot.latency * 1000)
+        cpu_usage = psutil.cpu_percent()
+        memory_usage = round(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024), 2)
+        embed = discord.Embed(title="Debug Info", description=f"Uptime: {uptime}\nAI Model: {ai_model}\nCommand Count: {command_count}\nPing Latency: {ping_latency}ms\nCPU Usage: {cpu_usage}%\nMemory Usage: {memory_usage}MB", color=0x00ff00)
+        await ctx.send(embed=embed)
+
+    @commands.command(name="hostinfo")
+    async def hostinfo(self, ctx):
+        hostname = platform.node()
+        os_info = f"{platform.system()} {platform.release()}"
+        cpu = platform.processor() or "N/A"
+        ram = round(psutil.virtual_memory().total / (1024**3), 2)
+        embed = discord.Embed(title="Host Info", description=f"Hostname: {hostname}\nOS: {os_info}\nCPU: {cpu}\nRAM: {ram}GB", color=0x00ff00)
+        await ctx.send(embed=embed)
+
+async def setup(bot):
+    await bot.add_cog(InfoCog(bot))
+
 
 async def setup(bot):
     await bot.add_cog(InfoCog(bot))
