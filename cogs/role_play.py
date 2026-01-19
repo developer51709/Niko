@@ -1,7 +1,5 @@
-import requests
 import discord
 from discord.ext import commands
-import random
 
 class RolePlayCog(commands.Cog):
     def __init__(self, bot):
