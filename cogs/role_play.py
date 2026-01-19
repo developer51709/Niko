@@ -10,20 +10,14 @@ class RolePlayCog(commands.Cog):
     # !kill command
     @commands.command(name="kill")
     async def kill(self, ctx, member: discord.Member = None):
-        target = member
-        if target:
-            await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
-        else:
-            await ctx.send("You need to mention a user to kill them!")
+        target = member or ctx.author
+        await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
 
     # !fuck command
     @commands.command(name="fuck")
     async def fuck(self, ctx, member: discord.Member = None):
-        target = member
-        if target:
-            await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
-        else:
-            await ctx.send("You need to mention a user to fuck them!")
+        target = member or ctx.author
+        await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
 
 
 async def setup(bot):

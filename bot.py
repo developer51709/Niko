@@ -118,7 +118,8 @@ llm = AutoModelForCausalLM.from_pretrained(
 # -----------------------------
 _memory_data = {
     "users": {},
-    "favorability": {}
+    "favorability": {},
+    "conversations": {}  # New field for short-term conversation memory
 }
 
 if os.path.exists(MEMORY_FILE):
@@ -132,10 +133,27 @@ def save_memory():
 def get_user_memory(user_id: int) -> str:
     return _memory_data.get("users", {}).get(str(user_id), "")
 
-def update_user_memory(user_id: int, message: str):
+def get_conversation_history(user_id: int, limit: int = 5) -> str:
+    history = _memory_data.get("conversations", {}).get(str(user_id), [])
+    return "\n".join([f"{h['role']}: {h['content']}" for h in history[-limit:]])
+
+def update_user_memory(user_id: int, message: str, role: str = "User"):
     uid = str(user_id)
+    # Update persistent character profile
     prev = _memory_data["users"].get(uid, "")
     _memory_data["users"][uid] = (prev + "\n" + message).strip()
+    
+    # Update short-term conversation history
+    if "conversations" not in _memory_data:
+        _memory_data["conversations"] = {}
+    
+    if uid not in _memory_data["conversations"]:
+        _memory_data["conversations"][uid] = []
+    
+    _memory_data["conversations"][uid].append({"role": role, "content": message})
+    # Keep only last 10 exchanges to prevent context bloat
+    _memory_data["conversations"][uid] = _memory_data["conversations"][uid][-10:]
+    
     save_memory()
 
 def adjust_favorability(user_id: int, delta: int = 1):
@@ -152,6 +170,7 @@ def get_favorability(user_id: int) -> int:
 # -----------------------------
 def generate_reply(user_id: int, message: str, username: str) -> str:
     user_mem = get_user_memory(user_id)
+    conv_history = get_conversation_history(user_id)
     favor = get_favorability(user_id)
 
     if favor > 15:
@@ -172,8 +191,8 @@ Server context:
 - The current user is: {username}
 - Your current impression: {fav_label}
 
-User memory:
-{user_mem}
+Recent Conversation:
+{conv_history}
 </s>
 <|user|>
 {message}
@@ -183,16 +202,18 @@ User memory:
 
     reply = llm(
         prompt,
-        max_new_tokens=220,
-        temperature=0.8,
+        max_new_tokens=60, # Even shorter for speed and natural chat feel
+        temperature=0.75,
         top_p=0.9,
-        stop=["</s>", "<|user|>", "<|system|>"]
+        stop=["</s>", "<|user|>", "<|system|>", f"{username}:", "Niko:", "\n"]
     )
 
-    update_user_memory(user_id, message)
+    clean_reply = reply.strip()
+    update_user_memory(user_id, message, role=username)
+    update_user_memory(user_id, clean_reply, role="Niko")
     adjust_favorability(user_id, delta=1)
 
-    return reply.strip()
+    return clean_reply
 
 # -----------------------------
 # Discord bot
