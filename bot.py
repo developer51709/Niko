@@ -109,8 +109,9 @@ llm = AutoModelForCausalLM.from_pretrained(
     ".",
     model_file=MODEL_PATH,
     model_type="llama",
-    context_length=2048,
+    context_length=512, # Significantly reduced for faster processing
     threads=4,
+    gpu_layers=0 # Explicitly set to 0 for local CPU inference
 )
 
 # -----------------------------
@@ -202,8 +203,8 @@ Recent Conversation:
 
     reply = llm(
         prompt,
-        max_new_tokens=60, # Even shorter for speed and natural chat feel
-        temperature=0.75,
+        max_new_tokens=40, # Even shorter for speed
+        temperature=0.7,
         top_p=0.9,
         stop=["</s>", "<|user|>", "<|system|>", f"{username}:", "Niko:", "\n"]
     )
