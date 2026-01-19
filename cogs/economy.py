@@ -59,7 +59,7 @@ class EconomyCog(commands.Cog):
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
-        user_data = get_user_economy_data(target.id)
+        user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
         await ctx.send(f"{target.display_name}'s balance is {balance} coins.")
 
