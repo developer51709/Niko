@@ -76,7 +76,7 @@ class InfoCog(commands.Cog):
     @commands.command(name="booststats")
     async def booststats(self, ctx):
         server = ctx.guild
-        embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}\nActive Perks: {server.premium_features}", color=0x00ff00)
+        embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="spotify")
