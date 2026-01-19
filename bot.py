@@ -1,7 +1,9 @@
 import os
 import json
+import random
 import requests
 import discord
+import asyncio
 from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 
@@ -202,10 +204,6 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
-async def on_ready():
-    print(f"Niko is online as {bot.user}")
-
-@bot.event
 async def on_message(msg):
     if msg.author.bot:
         return
@@ -355,15 +353,21 @@ async def nyx(ctx):
 # -----------------------------
 # Load cogs
 # -----------------------------
-print("Loading cogs...")
-for filename in os.listdir("./cogs"):
-    if filename.endswith(".py"):
-        bot.load_extension(f"cogs.{filename[:-3]}")
-        print(f"Loaded cog: {filename[:-3]}")
+async def load_cogs():
+    print("Loading cogs...")
+    for filename in os.listdir("./cogs"):
+        if filename.endswith(".py"):
+            await bot.load_extension(f"cogs.{filename[:-3]}")
+            print(f"Loaded cog: {filename[:-3]}")
 
 # -----------------------------
 # Run bot
 # -----------------------------
+
+@bot.event
+async def on_ready():
+    print(f"Niko is online as {bot.user}")
+    await load_cogs()
 
 if __name__ == "__main__":
     if not TOKEN:
