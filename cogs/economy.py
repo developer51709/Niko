@@ -23,21 +23,31 @@ class EconomyCog(commands.Cog):
     # Load economy data from economy_data directory
     def load_economy_data(self):
         economy_data = {}
-        for filename in os.listdir("economy_data")
-        if filename.endswith(".json"):
-            with open(os.path.join("economy_data", filename) "r") as f: economy_data.update(json.load(f))
+        if os.path.exists("economy_data"):
+            for filename in os.listdir("economy_data"):
+                if filename.endswith(".json"):
+                    try:
+                        with open(os.path.join("economy_data", filename), "r") as f:
+                            user_id = filename[:-5]
+                            economy_data[user_id] = json.load(f)
+                    except Exception as e:
+                        print(f"Error loading {filename}: {e}")
         return economy_data
 
     # Save economy data to economy_data directory per user
     def save_economy_data(self):
+        if not os.path.exists("economy_data"):
+            os.makedirs("economy_data")
         for user_id, data in self.economy_data.items():
             with open(os.path.join("economy_data", f"{user_id}.json"), "w") as f:
                 json.dump(data, f, indent=4)
-        print(f"Saved economy data for user {user_id}")
 
     # Get user economy data
-    def get_user_economy_data(self, user_id)
-    return self.economy_data.get(str(user_id), {"balance": 0, "inventory": [], "bank": 0, "net_worth": 0, "daily_streak": 0, "last_daily": 0, "last_work": 0, "last_crime": 0, "last_rob": 0, "last_heist": 0, "last_slots": 0, "last_blackjack": 0, "last_roulette": 0, "last_casino": 0, "last_gamble": 0, "last_bet": 0, "last_race": 0, "last_fight": 0, "last_duel": 0})
+    def get_user_economy_data(self, user_id):
+        uid = str(user_id)
+        if uid not in self.economy_data:
+            self.economy_data[uid] = {"balance": 0, "inventory": [], "bank": 0, "net_worth": 0, "daily_streak": 0, "last_daily": 0, "last_work": 0, "last_crime": 0, "last_rob": 0, "last_heist": 0, "last_slots": 0, "last_blackjack": 0, "last_roulette": 0, "last_casino": 0, "last_gamble": 0, "last_bet": 0, "last_race": 0, "last_fight": 0, "last_duel": 0}
+        return self.economy_data[uid]
 
     # -----------------------------
     # Economy Commands
@@ -48,7 +58,7 @@ class EconomyCog(commands.Cog):
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
-        user_data = get_user_economy_data(target.id)
+        user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
         await ctx.send(f"{target.display_name}'s balance is {balance} coins.")
 
