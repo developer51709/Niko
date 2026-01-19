@@ -13,6 +13,10 @@ import os
 import time
 
 class HelpCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.help_data = self.load_help_data()
+
     def load_help_data(self):
         # Placeholder or actual implementation for loading help data
         return {}
