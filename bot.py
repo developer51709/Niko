@@ -116,36 +116,36 @@ llm = AutoModelForCausalLM.from_pretrained(
 # -----------------------------
 # Memory handling
 # -----------------------------
+_memory_data = {
+    "users": {},
+    "favorability": {}
+}
+
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r") as f:
-        memory = json.load(f)
-else:
-    memory = {
-        "users": {},
-        "favorability": {}
-    }
+        _memory_data = json.load(f)
 
 def save_memory():
     with open(MEMORY_FILE, "w") as f:
-        json.dump(memory, f, indent=4)
+        json.dump(_memory_data, f, indent=4)
 
 def get_user_memory(user_id: int) -> str:
-    return memory.get("users", {}).get(str(user_id), "")
+    return _memory_data.get("users", {}).get(str(user_id), "")
 
 def update_user_memory(user_id: int, message: str):
     uid = str(user_id)
-    prev = memory["users"].get(uid, "")
-    memory["users"][uid] = (prev + "\n" + message).strip()
+    prev = _memory_data["users"].get(uid, "")
+    _memory_data["users"][uid] = (prev + "\n" + message).strip()
     save_memory()
 
 def adjust_favorability(user_id: int, delta: int = 1):
     uid = str(user_id)
-    current = memory["favorability"].get(uid, 0)
-    memory["favorability"][uid] = current + delta
+    current = _memory_data["favorability"].get(uid, 0)
+    _memory_data["favorability"][uid] = current + delta
     save_memory()
 
 def get_favorability(user_id: int) -> int:
-    return memory["favorability"].get(str(user_id), 0)
+    return _memory_data["favorability"].get(str(user_id), 0)
 
 # -----------------------------
 # Generate reply
