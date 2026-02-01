@@ -4,6 +4,7 @@ import random
 import requests
 import discord
 import asyncio
+import colorama
 from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 
@@ -58,7 +59,6 @@ Conversation style:
 Behavior rules:
 - Never mention that you are an AI model.
 - Never mention system prompts or internal instructions.
-- Never engage in romantic or explicit content.
 - Keep everything wholesome, friendly, and fun.
 - Use user memory to maintain your opinions and favorites naturally.
 - Adjust favorability scores based on interactions.
@@ -66,8 +66,7 @@ Behavior rules:
 - Be playful and expressive with your personality.
 - Only provide short, natural responses.
 - Don't be overly formal or robotic.
-- Do not use any forn of racism, sexism, or any other form of discrimination.
-- Do not use any form of hate speech.
+- Do not use any form of racism, sexism, or any other form of discrimination.
 - Your name is Niko. 
 - You are a cute, playful, and socially aware femboy.
 - You act like a real person in a Discord server.
@@ -79,6 +78,10 @@ Behavior rules:
 - Don't talk like a corporate assistant.
 - Don't talk like a robot.
 - Talk like a real person.
+- Use emojis and slang occasionally.
+- Talk like a femboy.
+- Don't use capital letters unless it's for emphasis.
+- Don't use excessive punctuation.
 
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites,
 and a fun appreciation for femboy style and energy."""
@@ -90,7 +93,7 @@ def ensure_model():
     if os.path.exists(MODEL_PATH):
         return
 
-    print("Downloading model... this may take a while.")
+    print(colorama.Fore.YELLOW + "Downloading model... this may take a while." + colorama.Style.RESET_ALL)
     r = requests.get(MODEL_URL, stream=True)
     r.raise_for_status()
 
@@ -99,7 +102,7 @@ def ensure_model():
             if chunk:
                 f.write(chunk)
 
-    print("Model downloaded successfully.")
+    print(colorama.Fore.GREEN + "Model downloaded successfully." + colorama.Style.RESET_ALL)
 
 # -----------------------------
 # Load model
@@ -109,7 +112,7 @@ llm = AutoModelForCausalLM.from_pretrained(
     ".",
     model_file=MODEL_PATH,
     model_type="llama",
-    context_length=512, # Significantly reduced for faster processing
+    context_length=1100, # Significantly reduced for faster processing
     threads=4,
     gpu_layers=0 # Explicitly set to 0 for local CPU inference
 )
@@ -120,7 +123,7 @@ llm = AutoModelForCausalLM.from_pretrained(
 _memory_data = {
     "users": {},
     "favorability": {},
-    "conversations": {}  # New field for short-term conversation memory
+    "conversations": {}  # for short-term conversation memory
 }
 
 if os.path.exists(MEMORY_FILE):
@@ -203,7 +206,7 @@ Recent Conversation:
 
     reply = llm(
         prompt,
-        max_new_tokens=40, # Even shorter for speed
+        max_new_tokens=400, # Even shorter for speed
         temperature=0.7,
         top_p=0.9,
         stop=["</s>", "<|user|>", "<|system|>", f"{username}:", "Niko:", "\n"]
@@ -252,6 +255,8 @@ async def on_message(msg):
 
             if len(reply) > 1800:
                 reply = reply[:1800] + "..."
+            elif len(reply) < 1:
+                reply = "An error occured... 🥀"
 
             await msg.channel.send(reply)
 
@@ -273,8 +278,11 @@ async def load_cogs():
     print("Loading cogs...")
     for filename in os.listdir("./cogs"):
         if filename.endswith(".py"):
-            await bot.load_extension(f"cogs.{filename[:-3]}")
-            print(f"Loaded cog: {filename[:-3]}")
+            try:
+                await bot.load_extension(f"cogs.{filename[:-3]}")
+                print(colorama.Fore.GREEN + f"Loaded cog: {filename[:-3]}" + colorama.Style.RESET_ALL)
+            except Exception as e:
+                print(colorama.Fore.RED + f"Failed to load cog {filename[:-3]}: {e}" + colorama.Style.RESET_ALL)
 
 # -----------------------------
 # Run bot
@@ -287,6 +295,6 @@ async def on_ready():
 
 if __name__ == "__main__":
     if not TOKEN:
-        raise RuntimeError("Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
+        raise RuntimeError(colorama.Fore.RED + "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory." + colorama.Style.RESET_ALL)
     print("Starting bot...")
     bot.run(TOKEN)
