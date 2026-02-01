@@ -29,3 +29,9 @@ args = "python bot.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[userenv]
+
+[userenv.shared]
+DISCORD_BOT_STATUS = ""
+STATUS_TYPE = ""
