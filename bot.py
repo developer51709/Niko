@@ -5,6 +5,7 @@ import requests
 import discord
 import asyncio
 import colorama
+import datetime
 from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 
@@ -87,6 +88,56 @@ Your goal is to feel like a real, socially dynamic server member with preference
 and a fun appreciation for femboy style and energy."""
 
 # -----------------------------
+# Console functions
+# -----------------------------
+def clear_console():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def print_banner():
+    clear_console()
+    print(colorama.Fore.MAGENTA + """
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░▓░░▓░▓▓▓░░▓▓▓░░▓▓▓░░░░░░░░░░
+░░░░░░░░░▓▓░▓░░▓░░▓░░░░▓░░░▓░░░░░░░░░
+░░░░░░░░░▓░▓▓░░▓░░▓░░░░▓░░░▓░░░░░░░░░
+░░░░░░░░░▓░░▓░▓▓▓░░▓▓▓░░▓▓▓░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+    """ + colorama.Style.RESET_ALL)
+    print(colorama.Fore.MAGENTA + f"""
+Niko - A cute, playful, and socially 
+aware femboy AI
+
+Made by Nyxen:
+    Discord - @.n.y.x.e.n.
+    GitHub - @developer51709
+
+Version: 1.0
+
+Model: TinyLlama-1.1B-Chat-v1.0
+
+Online as {bot.user}
+    """ + colorama.Style.RESET_ALL)
+
+# -----------------------------
+# Set the bot's status
+# -----------------------------
+def set_status():
+    status = os.getenv("DISCORD_BOT_STATUS")
+    if status:
+        # Status type
+        status_type = os.getenv("STATUS_TYPE", "playing")
+        if status_type == "playing":
+            print("Bot status configuration coming soon!")
+        elif status_type == "streaming":
+            print("Bot status configuration coming soon!")
+        elif status_type == "listening":
+            print("Bot status configuration coming soon!")
+        elif status_type == "watching":
+            print("Bot status configuration coming soon!")
+        else:
+            print("Bot status configuration coming soon!")
+
+# -----------------------------
 # Model download
 # -----------------------------
 def ensure_model():
@@ -112,7 +163,7 @@ llm = AutoModelForCausalLM.from_pretrained(
     ".",
     model_file=MODEL_PATH,
     model_type="llama",
-    context_length=1100, # Significantly reduced for faster processing
+    context_length=1500,
     threads=4,
     gpu_layers=0 # Explicitly set to 0 for local CPU inference
 )
@@ -123,7 +174,7 @@ llm = AutoModelForCausalLM.from_pretrained(
 _memory_data = {
     "users": {},
     "favorability": {},
-    "conversations": {}  # for short-term conversation memory
+    "conversations": {}  # short-term conversation memory
 }
 
 if os.path.exists(MEMORY_FILE):
@@ -275,7 +326,7 @@ def get_memory_content(user_id: int) -> str:
 # Load cogs
 # -----------------------------
 async def load_cogs():
-    print("Loading cogs...")
+    print(colorama.Fore.CYAN + "Loading cogs..." + colorama.Style.RESET_ALL)
     for filename in os.listdir("./cogs"):
         if filename.endswith(".py"):
             try:
@@ -290,8 +341,9 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
-    print(f"Niko is online as {bot.user}")
+    print(colorama.Fore.CYAN + f"Niko is online as {bot.user}" + colorama.Style.RESET_ALL)
     await load_cogs()
+    print_banner()
 
 if __name__ == "__main__":
     if not TOKEN:
