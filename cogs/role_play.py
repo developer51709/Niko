@@ -1,4 +1,5 @@
 import discord
+import random
 from discord.ext import commands
 
 class RolePlayCog(commands.Cog):
@@ -9,8 +10,18 @@ class RolePlayCog(commands.Cog):
     @commands.command(name="kill")
     async def kill(self, ctx, member: discord.Member = None):
         '''Kill another user. (not really)'''
-        target = member or ctx.author
-        await ctx.send(f"{ctx.author.display_name} killed {target.display_name}!")
+        try:
+            target = member or ctx.author
+            kill_gifs = [
+                "https://tenor.com/bRHng.gif"
+            ]
+            kill_embed = discord.Embed(title="Kill", description=f"{ctx.author.display_name} killed {target.display_name}!", color=discord.Color.red())
+            kill_embed.set_image(url=random.choice(kill_gifs))
+            kill_embed.set_footer(text="This is a joke, don't actually kill anyone.")
+            await ctx.send(embed=kill_embed)
+        except Exception as e:
+            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
+            await ctx.send(embed=error_embed)
 
     # !fuck command
     @commands.command(name="fuck")
