@@ -35,3 +35,5 @@ outputType = "console"
 [userenv.shared]
 DISCORD_BOT_STATUS = "your favorite femboy ai :P"
 STATUS_TYPE = "playing"
+STATUS_LINK = ""
+DEBUG_MODE = "True"
