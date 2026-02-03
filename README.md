@@ -27,3 +27,9 @@ The bot runs as a console application. It will:
 - Mention "niko" in a message or ping the bot
 - `!ai <message>` - Direct message to the bot
 - `!favor [@user]` - Check favorability score
+- `!help` - See the full command list
+
+## To-Do
+- [ ] Add a better help command
+- [ ] Fix the response speed
+- [ ] Add a gambling cog
