@@ -20,7 +20,12 @@ class AICog(commands.Cog):
         if not mem:
             await ctx.send(f"No memory recorded for {target.display_name}.")
         else:
-            await ctx.send(f"Memory for {target.display_name}:\n{mem}")
+            try:
+                memory_embed = discord.Embed(title=f"Memory for {target.display_name}", description=f"```\n{mem}\n```", color=discord.Color.green())
+                await ctx.send(embed=memory_embed)
+            except Exception as e:
+                error_embed = discord.Embed(title="Error", description=f"Failed to display memory: \n```\n{e}\n```")
+                await ctx.send(embed=error_embed)
 
 async def setup(bot):
     await bot.add_cog(AICog(bot))
