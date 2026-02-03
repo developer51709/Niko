@@ -137,3 +137,7 @@ The bot runs as a console application. It will:
 
 ## To-Do
 - [ ] Fix the AI response speed
+- [ ] Add a leveling system
+- [ ] Add reaction roles
+- [ ] Add custom per server commands
+- [ ] Add slash command support
