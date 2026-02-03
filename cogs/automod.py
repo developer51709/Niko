@@ -94,14 +94,26 @@ class AutoMod(commands.Cog):
     @commands.group(invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
     async def automod(self, ctx):
-        """Show automod status."""
+        """
+        Show automod status.
+        Usage:
+        `automod [toggle|threshold|mentions]`
+        Toggle: 
+        `antispam, antilink, badwords, massmention`
+        Threshold: 
+        `messages per interval (seconds)`
+        Mentions: 
+        `max mentions before trigger`
+        """
         cfg = self.get_cfg(ctx.guild.id)
         auto = cfg["automod"]
         desc = "\n".join(
             f"**{k}**: {'ON' if v else 'OFF'}"
             for k, v in auto.items()
         )
-        await ctx.send(f"🔧 Automod settings:\n{desc}")
+        # await ctx.send(f"🔧 Automod settings:\n{desc}")
+        embed = discord.Embed(title="🔧 Automod Settings", description=desc, color=discord.Color.blue())
+        await ctx.send(embed=embed)
 
     @automod.command(name="toggle")
     @commands.has_permissions(manage_guild=True)

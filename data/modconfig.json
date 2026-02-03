@@ -3,7 +3,7 @@
         "modlog_channel": null,
         "automod": {
             "antispam": true,
-            "antilink": true,
+            "antilink": false,
             "badwords": true,
             "massmention": true
         },
