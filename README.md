@@ -33,6 +33,7 @@ The bot runs as a console application. It will:
     <li>Mention "niko" in a message or ping the bot</li>
     <li><code>!ai &lt;message&gt;</code> - Direct message to the bot</li>
     <li><code>!favor [@user]</code> - Check favorability score</li>
+    <li><code>!memory [@user]</code> - Get the bots conversation history for a specific user</li>
   </ul>
 </details>
 <details>
