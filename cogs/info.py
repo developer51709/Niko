@@ -21,7 +21,7 @@ class InfoCog(commands.Cog):
     @commands.command(name="userinfo")
     async def userinfo(self, ctx, member: discord.Member = None):
         target = member or ctx.author
-        embed = discord.Embed(title="User Info", description=f"Username: {target.display_name}\nUser ID: {target.id}\nJoined Server: {target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}", color=0x00ff00)
+        embed = discord.Embed(title="User Info", description=f"**Username:** {target.display_name}\n**User ID:** `{target.id}`\n**Account Created:** `{target.created_at.strftime('%Y-%m-%d %H:%M:%S')}`\n**Joined Server:** `{target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}`\n**Top Role:** `{target.top_role.name if target.top_role else 'N/A'}`\n**Roles:** `{'`, `'.join([role.name for role in target.roles if role.name != '@everyone'])}`", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="avatar")
