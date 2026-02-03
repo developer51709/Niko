@@ -14,18 +14,21 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="serverinfo")
     async def serverinfo(self, ctx):
+        """Displays information about the server."""
         server = ctx.guild
         embed = discord.Embed(title="Server Info", description=f"Server Name: {server.name}\nServer ID: {server.id}\nMember Count: {server.member_count}", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="userinfo")
     async def userinfo(self, ctx, member: discord.Member = None):
+        """Displays information about a user."""
         target = member or ctx.author
         embed = discord.Embed(title="User Info", description=f"**Username:** {target.display_name}\n**User ID:** `{target.id}`\n**Account Created:** `{target.created_at.strftime('%Y-%m-%d %H:%M:%S')}`\n**Joined Server:** `{target.joined_at.strftime('%Y-%m-%d %H:%M:%S') if target.joined_at else 'N/A'}`\n**Top Role:** `{target.top_role.name if target.top_role else 'N/A'}`\n**Roles:** `{'`, `'.join([role.name for role in target.roles if role.name != '@everyone'])}`", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="avatar")
     async def avatar(self, ctx, member: discord.Member = None):
+        """Displays the avatar of a user."""
         target = member or ctx.author
         embed = discord.Embed(title=f"{target.display_name}'s Avatar", color=0x00ff00)
         embed.set_image(url=target.avatar.url)
@@ -33,17 +36,20 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="about")
     async def about(self, ctx):
+        """Displays information about the bot."""
         embed = discord.Embed(title="About Niko", description="Niko is a friendly, playful, and socially aware femboy-coded AI. He is designed to be a fun and engaging companion in your Discord server.", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="creator")
     async def creator(self, ctx):
+        """Displays information about the bot's creator."""
         creator = await self.bot.fetch_user(1435974392810307604)
         embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="roleinfo")
     async def roleinfo(self, ctx, role: discord.Role = None):
+        """Displays information about a role."""
         if role is None:
             await ctx.send("Please specify a role to get info for! Example: `!roleinfo @Role`")
             return
@@ -52,12 +58,14 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="serverstats")
     async def serverstats(self, ctx):
+        """Displays statistics about the server."""
         server = ctx.guild
         embed = discord.Embed(title="Server Stats", description=f"Server Name: {server.name}\nServer ID: {server.id}\nMember Count: {server.member_count}\nUser Count: {len([member for member in server.members if not member.bot])}\nBot Count: {len([member for member in server.members if member.bot])}\nRole Count: {len(server.roles)}", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="servericon")
     async def servericon(self, ctx):
+        """Displays the server's icon."""
         server = ctx.guild
         embed = discord.Embed(title="Server Icon", color=0x00ff00)
         embed.set_image(url=server.icon.url)
@@ -65,6 +73,7 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="serverbanner")
     async def serverbanner(self, ctx):
+        """Displays the server's banner."""
         server = ctx.guild
         if server.banner:
             embed = discord.Embed(title="Server Banner", color=0x00ff00)
@@ -75,12 +84,14 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="booststats")
     async def booststats(self, ctx):
+        """Displays the server's boost stats."""
         server = ctx.guild
         embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}", color=0x00ff00)
         await ctx.send(embed=embed)
 
     @commands.command(name="spotify")
     async def spotify(self, ctx, member: discord.Member = None):
+        """Displays a user's Spotify activity."""
         target = member or ctx.author
         if target.activities:
             for activity in target.activities:
@@ -95,6 +106,7 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="nyx")
     async def nyx(self, ctx):
+        """Displays a random message about Nyx."""
         messages = [
             "Nyx is a really sexy guy.",
             "Nyx is so hot.",
@@ -113,6 +125,7 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="debuginfo")
     async def debuginfo(self, ctx):
+        """Displays debug information about the bot."""
         uptime_seconds = int(time.time() - self.bot.start_time)
         uptime = f"{uptime_seconds // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
         ai_model = "TinyLlama-1.1B"
@@ -125,15 +138,13 @@ class InfoCog(commands.Cog):
 
     @commands.command(name="hostinfo")
     async def hostinfo(self, ctx):
+        """Displays information about the bot's host."""
         hostname = platform.node()
         os_info = f"{platform.system()} {platform.release()}"
         cpu = platform.processor() or "N/A"
         ram = round(psutil.virtual_memory().total / (1024**3), 2)
         embed = discord.Embed(title="Host Info", description=f"Hostname: {hostname}\nOS: {os_info}\nCPU: {cpu}\nRAM: {ram}GB", color=0x00ff00)
         await ctx.send(embed=embed)
-
-async def setup(bot):
-    await bot.add_cog(InfoCog(bot))
 
 
 async def setup(bot):
