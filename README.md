@@ -60,10 +60,11 @@ The bot runs as a console application. It will:
   <ul>
     <li><code>!blackjack &lt;amount&gt;</code> - Play a game of blackjack</li>
     <li><code>!slots &lt;amount&gt;</code> - Play a game of slots</li>
+    <li><code>!roulette</code> - Play a game of roulette</li>
   </ul>
 </details>
 <details>
-  <summary>Info Cog</summary>
+  <summary>Info Commands</summary>
   <ul>
     <li><code>!about</code> - Get info about the bot</li>
     <li><code>!avatar [@user]</code> - View a users pfp</li>
@@ -82,7 +83,7 @@ The bot runs as a console application. It will:
   </ul>
 </details>
 <details>
-  <summary>Roleplay Cog</summary>
+  <summary>Roleplay Commands</summary>
   <ul>
     <li><code>!fuck &lt;user_id&gt;</code> - Fuck another user. (not really)</li>
     <li><code>!hug &lt;user_id&gt;</code> - Hug another user. (not really)</li>
@@ -92,20 +93,46 @@ The bot runs as a console application. It will:
   </ul>
 </details>
 <details>
-  <summary>Utility Cog</summary>
+  <summary>Utility Commands</summary>
   <ul>
-    <li><code>!boring</code></li>
-    <li><code>!crazy</code></li>
-    <li><code>!echo</code></li>
-    <li><code>!nitro</code></li>
-    <li><code>!notboring</code></li>
-    <li><code>!partnership_request</code></li>
-    <li><code>!ping</code></li>
-    <li><code>!uwu</code></li>
+    <li><code>!boring</code> - A boring command</li>
+    <li><code>!crazy</code> - Crazy? I was crazy once...</li>
+    <li><code>!echo</code> - echo a message</li>
+    <li><code>!nitro</code> - free nitro?</li>
+    <li><code>!notboring</code> - a not boring command :P</li>
+    <li><code>!partnership_request</code> - a command for submitting a server partnership request</li>
+    <li><code>!ping</code> - Pong!</li>
+    <li><code>!uwu</code> - UwU</li>
+  </ul>
+</details>
+<details>
+  <summary>Moderation Commands</summary>
+  <ul>
+    <li><code>!kick</code> - Kick a member from the server.</li>
+    <li><code>!ban</code> - Ban a member from the server.</li>
+    <li><code>!unban</code> - Unban a user by ID.</li>
+    <li><code>!warn</code> - Warn a member.</li>
+    <li><code>!warnings</code> - View a member's warnings.</li>
+    <li><code>!clearwarnings</code> - Clear all warnings for a member.</li>
+    <li><code>!mute</code> - Mute a member.</li>
+    <li><code>!tempmute</code> - Temporarily mute a member. Duration in seconds.</li>
+    <li><code>!unmute</code> - Unmute a member.</li>
+    <li><code>!clear</code> - Clear a number of messages.</li>
+    <li><code>!purge</code> - Purge messages from a specific user.</li>
+    <li><code>!slowmode</code> - Set slowmode in this channel (seconds).</li>
+    <li><code>!lock</code> - Lock this channel.</li>
+    <li><code>!unlock</code> - Unlock this channel.</li>
+    <li><code>!nick</code> - Change a member's nickname.</li>
+    <li><code>!setmodlog</code> - Set the mod-log channel.</li>
+    <li><code>!badwords</code> - Show the blocked word list.</li>
+  </ul>
+</details>
+<details>
+  <summary>AutoMod Commands</summary>
+  <ul>
+    <li><code>!automod [toggle|threshold|mentions]</code> - Manage the automod config for the current server</li>
   </ul>
 </details>
 
 ## To-Do
-- [ ] Add a better help command
-- [ ] Fix the response speed
-- [ ] Add a gambling cog
+- [ ] Fix the AI response speed
