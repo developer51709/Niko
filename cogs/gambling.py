@@ -13,6 +13,11 @@ import asyncio
 import math
 from discord.ui import Button, View
 
+# Cooldowns
+slots_cooldown = os.getenv("SLOTS_COOLDOWN") or 60
+blackjack_cooldown = os.getenv("BLACKJACK_COOLDOWN") or 60
+roulette_cooldown = os.getenv("ROULETTE_COOLDOWN") or 60
+
 class GamblingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -53,9 +58,9 @@ class GamblingCog(commands.Cog):
             self.economy_data[uid] = {"balance": 0, "inventory": [], "bank": 0, "net_worth": 0, "daily_streak": 0, "last_daily": 0, "last_work": 0, "last_crime": 0, "last_rob": 0, "last_heist": 0, "last_slots": 0, "last_blackjack": 0, "last_roulette": 0, "last_casino": 0, "last_gamble": 0, "last_bet": 0, "last_race": 0, "last_fight": 0, "last_duel": 0}
         return self.economy_data[uid]
 
-    # --------------------------------
+    # -------------------------------
     # Gambling Commands
-    # --------------------------------
+    # -------------------------------
 
     # !slots command
     @commands.command(name="slots")
@@ -64,8 +69,8 @@ class GamblingCog(commands.Cog):
         user_data = self.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
         # Check cooldown
-        if user_data["last_slots"] + 60 > time.time():
-            await ctx.send("You can only play slots once every 60 seconds.")
+        if user_data["last_slots"] + slots_cooldown > time.time():
+            await ctx.send(f"You can only play slots once every {slots_cooldown} seconds.")
             return
         if not amount:
             await ctx.send("Please specify an amount to play with.")
