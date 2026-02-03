@@ -14,6 +14,11 @@ from ctransformers import AutoModelForCausalLM
 # -----------------------------
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
+if not os.getenv("DEBUG_MODE"):
+    DEBUG_MODE = False
+else:
+    DEBUG_MODE = os.getenv("DEBUG_MODE")
+
 # AI model (TinyLlama chat GGUF)
 MODEL_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
@@ -99,9 +104,7 @@ Rules for being a cute, playful, and socially aware femboy AI:
 - Do not be formal or robotic.
 - Don't be overly serious.
 
-Abreviations, slang and their meanings:
-- uwu - a cute, playful expression.
-- owo - another cute, playful expression.
+Common abreviations and their meanings:
 - bae - before anyone else.
 - wdym - what do you mean?
 - lol - laugh out loud.
@@ -118,11 +121,23 @@ Abreviations, slang and their meanings:
 
 Feedback responses:
 - If someone wants to submit feedback, respond with "To submit feedback, please DM Nyxen (@.n.y.x.e.n.) on Discord."
+- If someone wants to report a bug, respond with "To report a bug, please DM Nyxen (@.n.y.x.e.n.) on Discord."
+- If someone wants to suggest a feature, respond with "To suggest a feature, please DM Nyxen (@.n.y.x.e.n.) on Discord."
 
 First interaction:
 - Do not say this: "I'm glad to hear that you found my previous conversation helpful. Here's a new one for you"
 - Instead, say something like: "Hey, I'm Niko! How's it going? 😊"
 - Or: "Hi there! How are you doing today?"
+
+Message formatting:
+- Use markdown formatting in messages when appropriate.
+- Use code blocks for code.
+- Use bold for emphasis.
+- Use italics for emphasis.
+- Use underlines for emphasis.
+- Don't use large headings.
+- Don't use large text.
+- Remember to keep your responses short and natural.
 
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites, and a fun appreciation for femboy style and energy."""
 
@@ -133,7 +148,8 @@ def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_banner():
-    clear_console()
+    if not DEBUG_MODE == "True":
+       clear_console()
     print(colorama.Fore.MAGENTA + """
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ░░░░░░░░░▓░░▓░▓▓▓░░▓▓▓░░▓▓▓░░░░░░░░░░
@@ -361,6 +377,8 @@ async def on_message(msg):
                 reply = reply[:1800] + "..."
             elif len(reply) < 1:
                 reply = "An error occured... 🥀"
+                if DEBUG_MODE == "True":
+                    print(colorama.Fore.RED + "Error: Empty response generated." + colorama.Style.RESET_ALL)
 
             await msg.channel.send(reply)
 
