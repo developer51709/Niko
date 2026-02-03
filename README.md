@@ -58,6 +58,7 @@ The bot runs as a console application. It will:
 <details>
   <summary>Gambling Commands</summary>
   <ul>
+    <li><code>!blackjack &lt;amount&gt;</code> - Play a game of blackjack</li>
     <li><code>!slots &lt;amount&gt;</code> - Play a game of slots</li>
   </ul>
 </details>
