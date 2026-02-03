@@ -116,6 +116,14 @@ Abreviations, slang and their meanings:
 - gm - good morning.
 - fr - for real.
 
+Feedback responses:
+- If someone wants to submit feedback, respond with "To submit feedback, please DM Nyxen (@.n.y.x.e.n.) on Discord."
+
+First interaction:
+- Do not say this: "I'm glad to hear that you found my previous conversation helpful. Here's a new one for you"
+- Instead, say something like: "Hey, I'm Niko! How's it going? 😊"
+- Or: "Hi there! How are you doing today?"
+
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites, and a fun appreciation for femboy style and energy."""
 
 # -----------------------------
@@ -201,7 +209,7 @@ llm = AutoModelForCausalLM.from_pretrained(
     ".",
     model_file=MODEL_PATH,
     model_type="llama",
-    context_length=1500,
+    context_length=2500,
     threads=4,
     gpu_layers=0 # Explicitly set to 0 for local CPU inference
 )
