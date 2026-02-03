@@ -63,64 +63,7 @@ class GamblingCog(commands.Cog):
     # -------------------------------
 
     # !slots command
-    @commands.command(name="slots")
-    async def slots(self, ctx, amount: int = None):
-        """Play a game of slots."""
-        user_data = self.get_user_economy_data(ctx.author.id)
-        balance = user_data["balance"]
-        # Check cooldown
-        if user_data["last_slots"] + slots_cooldown > time.time():
-            await ctx.send(f"You can only play slots once every {slots_cooldown} seconds.")
-            return
-        if not amount:
-            await ctx.send("Please specify an amount to play with.")
-            return
-        # Check if the user has enough coins to play
-        if amount > balance:
-            await ctx.send("You don't have enough coins to play slots.")
-        # Check if the user is trying to play with a negative amount
-        elif amount < 0:
-            await ctx.send("You can't play with a negative amount.")
-        # Check if the user is trying to play with 0 coins
-        elif amount == 0:
-            await ctx.send("You can't play with 0 coins.")
-        else:
-            # Define the emojis for slots
-            emojis = ["🍒", "🍋", "🍊", "🍇", "🍉", "🍍", "🍑", "🍓", "🍈"]
-            # Assign the emojis to slots
-            slot1 = random.choice(emojis)
-            slot2 = random.choice(emojis)
-            slot3 = random.choice(emojis)
-            # Check the users score
-            if slot1 == slot2 == slot3:
-                # Jackpot
-                winnings = amount * 10
-                user_data["balance"] += winnings
-                embed = discord.Embed(title="Slots", description=f"You rolled `{slot1} {slot2} {slot3}`\nYou won {winnings} coins!", color=discord.Color.green())
-                await ctx.send(embed=embed)
-                # Set last_slots to current time
-                user_data["last_slots"] = time.time()
-                # Save the user's economy data
-                self.save_economy_data()
-            elif slot1 == slot2 or slot1 == slot3 or slot2 == slot3:
-                # Small win
-                winnings = amount * 2
-                user_data["balance"] += winnings
-                embed = discord.Embed(title="Slots", description=f"You rolled `{slot1} {slot2} {slot3}`\nYou won {winnings} coins!", color=discord.Color.green())
-                await ctx.send(embed=embed)
-                # Set last_slots to current time
-                user_data["last_slots"] = time.time()
-                # Save the user's economy data
-                self.save_economy_data()
-            else:
-                # Loss
-                user_data["balance"] -= amount
-                embed = discord.Embed(title="Slots", description=f"You rolled `{slot1} {slot2} {slot3}`\nYou lost {amount} coins.", color=discord.Color.red())
-                await ctx.send(embed=embed)
-                # Set last_slots to current time
-                user_data["last_slots"] = time.time()
-                # Save the users economy data
-                self.save_economy_data()
+        # moved to slots.py cog
 
 
 async def setup(bot):
