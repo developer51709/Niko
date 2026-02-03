@@ -141,3 +141,6 @@ The bot runs as a console application. It will:
 - [ ] Add reaction roles
 - [ ] Add custom per server commands
 - [ ] Add slash command support
+- [ ] Add a qotd feature
+- [ ] Add more gambling commands
+- [ ] Add a dashboard?
