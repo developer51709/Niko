@@ -1,0 +1,15 @@
+{
+    "1443314822182732010": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": []
+    }
+}

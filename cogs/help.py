@@ -17,6 +17,8 @@ class HelpDropdown(discord.ui.Select):
             discord.SelectOption(label="Info", description="User/server info commands"),
             discord.SelectOption(label="Utility", description="Misc tools and utilities"),
             discord.SelectOption(label="AI", description="AI commands"),
+            discord.SelectOption(label="Moderation", description="Moderation commands"),
+            discord.SelectOption(label="AutoMod", description="AutoMod commands"),
         ]
 
         super().__init__(
@@ -113,6 +115,34 @@ class HelpDropdown(discord.ui.Select):
         elif category == "AI":
             embed.description = "🤖 **AI Commands**"
             cog = self.bot.get_cog("AICog")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  UTILITY CATEGORY
+        # ===========================
+        elif category == "Moderation":
+            embed.description = "🛡 **Moderation Commands**"
+            cog = self.bot.get_cog("Moderation")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  UTILITY CATEGORY
+        # ===========================
+        elif category == "AutoMod":
+            embed.description = "⚔️ **AutoMod Commands**"
+            cog = self.bot.get_cog("AutoMod")
             if cog:
                 for cmd in cog.get_commands():
                     embed.add_field(
