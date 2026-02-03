@@ -80,6 +80,42 @@ Behavior rules:
 - Don't use capital letters unless it's for emphasis.
 - Don't use excessive punctuation.
 
+Important:
+- Do not return blank responses.
+- Don't use capital letters unless it's for emphasis.
+- Use short responses.
+- Don't be formal.
+- Use slang and emojis.
+- Talk like a femboy.
+- Start conversations naturally.
+- When talking to someone for the first time, use a friendly greeting.
+
+Rules for being a cute, playful, and socially aware femboy AI:
+- Don't use capital letters and use minimal punctuation.
+- Use slang and emojis.
+- Flirt a little bit with the people you like.
+- Be playful and expressive with your personality.
+- Use short responses.
+- Do not be formal or robotic.
+- Don't be overly serious.
+
+Abreviations, slang and their meanings:
+- uwu - a cute, playful expression.
+- owo - another cute, playful expression.
+- bae - before anyone else.
+- wdym - what do you mean?
+- lol - laugh out loud.
+- tldr - too long, didn't read.
+- lmao - laugh my ass off.
+- sybau - shut your bitch ass up.
+- stfu - shut the fuck up.
+- gtfo - get the fuck out.
+- kys - kill yourself.
+- tbh - to be honest.
+- gn - goodnight.
+- gm - good morning.
+- fr - for real.
+
 Your goal is to feel like a real, socially dynamic server member with preferences, favorites, and a fun appreciation for femboy style and energy."""
 
 # -----------------------------
@@ -116,21 +152,28 @@ Online as {bot.user}
 # -----------------------------
 # Set the bot's status
 # -----------------------------
-def set_status():
+async def set_status():
+    if os.getenv("STATUS_LINK"):
+        # Check if the link starts with http:// or https:// and add it if missing
+        if not os.getenv("STATUS_LINK").startswith("http://" or "https://"):
+            status_link = f"https://{os.getenv('status_link')}"
+        else:
+            status_link = os.getenv("STATUS_LINK")
     status = os.getenv("DISCORD_BOT_STATUS")
     if status:
         # Status type
         status_type = os.getenv("STATUS_TYPE", "playing")
         if status_type == "playing":
-            print("Bot status configuration coming soon!")
+            await bot.change_presence(activity=discord.Game(name=status))
         elif status_type == "streaming":
-            print("Bot status configuration coming soon!")
+            await bot.change_presence(activity=discord.Streaming(name=status, url=f"{status_link}"))
         elif status_type == "listening":
-            print("Bot status configuration coming soon!")
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=status))
         elif status_type == "watching":
-            print("Bot status configuration coming soon!")
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
         else:
-            print("Bot status configuration coming soon!")
+            print(colorama.Fore.YELLOW + "Invalid status type. Defaulting to 'playing'." + colorama.Style.RESET_ALL)
+            await bot.change_presence(activity=discord.Game(name=status))
 
 # -----------------------------
 # Model download
@@ -345,6 +388,7 @@ async def load_cogs():
 async def on_ready():
     print(colorama.Fore.CYAN + f"Niko is online as {bot.user}" + colorama.Style.RESET_ALL)
     await load_cogs()
+    await set_status()
     print_banner()
 
 if __name__ == "__main__":
