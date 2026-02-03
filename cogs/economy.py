@@ -115,12 +115,17 @@ class EconomyCog(commands.Cog):
 
     # !rob command
     @commands.command(name="rob")
-    async def rob(self, ctx, member: discord.Member):
+    async def rob(self, ctx, member: discord.Member = None):
         '''Rob another user to earn money.'''
+        if member is None:
+            await ctx.send("Please specify a user to rob.")
+            return
         user_data = self.get_user_economy_data(ctx.author.id)
         target_data = self.get_user_economy_data(member.id)
         current_time = int(time.time())
-        if current_time - user_data['last_rob'] < 3600:
+        if target_data["balance"] < 100:
+            await ctx.send("You can't rob someone with less than 100 coins.")
+        elif current_time - user_data['last_rob'] < 3600:
             await ctx.send("You can only rob someone once every hour.")
         else:
             rob_amount = random.randint(-200, 300)
