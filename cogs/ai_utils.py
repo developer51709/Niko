@@ -7,6 +7,7 @@ class AICog(commands.Cog):
 
     @commands.command(name="favor")
     async def favor(self, ctx, member: discord.Member = None):
+        """Display the favorability score for a user."""
         from bot import get_favorability_score
         target = member or ctx.author
         score = get_favorability_score(target.id)
@@ -14,6 +15,7 @@ class AICog(commands.Cog):
 
     @commands.command(name="memory")
     async def memory(self, ctx, member: discord.Member = None):
+        """Display the memory content for a user."""
         from bot import get_memory_content
         target = member or ctx.author
         mem = get_memory_content(target.id)
