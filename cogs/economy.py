@@ -142,8 +142,12 @@ class EconomyCog(commands.Cog):
 
     # !pay command
     @commands.command(name="pay")
-    async def pay(self, ctx, member: discord.Member, amount: int):
+    async def pay(self, ctx, member: discord.Member = None, amount: int = None):
         '''Pay another user money.'''
+        if not member:
+            return await ctx.send("Please specify a user to pay.")
+        if not amount:
+            return await ctx.send("Please specify an amount to pay.")
         user_data = self.get_user_economy_data(ctx.author.id)
         target_data = self.get_user_economy_data(member.id)
         if user_data["balance"] < amount:
@@ -180,8 +184,10 @@ class EconomyCog(commands.Cog):
 
     # !buy command
     @commands.command(name="buy")
-    async def buy(self, ctx, item_id: str):
+    async def buy(self, ctx, item_id: str = None):
         '''Buy an item from the shop.'''
+        if not item_id:
+            return await ctx.send("Please specify an item to buy.")
         user_data = self.get_user_economy_data(ctx.author.id)
         shop_items = {
             "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
@@ -213,8 +219,10 @@ class EconomyCog(commands.Cog):
 
     # !sell command
     @commands.command(name="sell")
-    async def sell(self, ctx, item_id: str):
+    async def sell(self, ctx, item_id: str = None):
         '''Sell an item from your inventory.'''
+        if not item_id:
+            return await ctx.send("Please specify an item to sell.")
         user_data = self.get_user_economy_data(ctx.author.id)
         shop_items = {
             "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
@@ -237,8 +245,10 @@ class EconomyCog(commands.Cog):
 
     # !deposit command
     @commands.command(name="deposit")
-    async def deposit(self, ctx, amount: int):
+    async def deposit(self, ctx, amount: int = None):
         '''Deposit money into the bank.'''
+        if not amount:
+            return await ctx.send("Please specify an amount to deposit.")
         user_data = self.get_user_economy_data(ctx.author.id)
         if user_data["balance"] < amount:
             await ctx.send("You don't have enough money to deposit that amount.")
@@ -250,8 +260,10 @@ class EconomyCog(commands.Cog):
 
     # !withdraw command
     @commands.command(name="withdraw")
-    async def withdraw(self, ctx, amount: int):
+    async def withdraw(self, ctx, amount: int = None):
         '''Withdraw money from the bank.'''
+        if not amount:
+            return await ctx.send("Please specify an amount to withdraw.")
         user_data = self.get_user_economy_data(ctx.author.id)
         if user_data["bank"] < amount:
             await ctx.send("You don't have enough money in the bank to withdraw that amount.")
