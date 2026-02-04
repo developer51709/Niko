@@ -143,8 +143,11 @@ class AutoMod(commands.Cog):
 
     @automod.command(name="mentions")
     @commands.has_permissions(manage_guild=True)
-    async def automod_mentions(self, ctx, max_mentions: int):
+    async def automod_mentions(self, ctx, max_mentions: int = None):
         """Set max mentions before mass-mention triggers."""
+        if not max_mentions:
+            embed = discord.Embed(title="⚠️ Missing Arguments", description="Please provide the maximum number of mentions.\nExample: `!automod mentions 5`\nThis would set the limit to 5 mentions.", color=discord.Color.red())
+            return await ctx.send(embed=embed)
         cfg = self.get_cfg(ctx.guild.id)
         cfg["max_mentions"] = max_mentions
         self.utils().save_config()
