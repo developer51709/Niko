@@ -130,8 +130,11 @@ class AutoMod(commands.Cog):
 
     @automod.command(name="threshold")
     @commands.has_permissions(manage_guild=True)
-    async def automod_threshold(self, ctx, messages: int, interval: int):
+    async def automod_threshold(self, ctx, messages: int = None, interval: int = None):
         """Set spam threshold: messages per interval (seconds)."""
+        if not messages or not interval:
+            embed = discord.Embed(title="⚠️ Missing Arguments", description="Please provide both messages and interval.\nExample: `!automod threshold 5 10`\nThis would would set the limit to 5 messages per 10 seconds.", color=discord.Color.red())
+            return await ctx.send(embed=embed)
         cfg = self.get_cfg(ctx.guild.id)
         cfg["spam_threshold"] = messages
         cfg["spam_interval"] = interval
