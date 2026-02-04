@@ -4,6 +4,14 @@ import aiohttp
 import asyncio
 import random
 import os
+import colorama
+
+# Auto‑disable if Reddit credentials are missing
+if not os.getenv("REDDIT_CLIENT_ID") or not os.getenv("REDDIT_CLIENT_SECRET"):
+    DNL = True
+    DNL_REASON = "Missing Reddit API credentials."
+else:
+    DNL = False
 
 class RedditCog(commands.Cog):
     def __init__(self, bot):

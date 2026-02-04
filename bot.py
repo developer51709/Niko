@@ -6,6 +6,7 @@ import discord
 import asyncio
 import colorama
 import datetime
+import importlib
 from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 
@@ -399,13 +400,33 @@ def get_memory_content(user_id: int) -> str:
 # -----------------------------
 async def load_cogs():
     print(colorama.Fore.YELLOW + "Loading cogs..." + colorama.Style.RESET_ALL)
+
     for filename in os.listdir("./cogs"):
-        if filename.endswith(".py"):
-            try:
-                await bot.load_extension(f"cogs.{filename[:-3]}")
-                print(colorama.Fore.GREEN + f"Loaded cog: {filename[:-3]}" + colorama.Style.RESET_ALL)
-            except Exception as e:
-                print(colorama.Fore.RED + f"Failed to load cog {filename[:-3]}: {e}" + colorama.Style.RESET_ALL)
+        if not filename.endswith(".py"):
+            continue
+
+        module_name = f"cogs.{filename[:-3]}"
+
+        try:
+            # Import the module WITHOUT loading it as an extension yet
+            module = importlib.import_module(module_name)
+
+            # Check for DNL flag
+            if getattr(module, "DNL", False):
+                reason = getattr(module, "DNL_REASON", "No reason provided")
+                print(
+                    colorama.Fore.YELLOW
+                    + f"Skipped loading cog: {filename[:-3]} (Reason: {reason})"
+                    + colorama.Style.RESET_ALL
+                )
+                continue
+
+            # Safe to load
+            await bot.load_extension(module_name)
+            print(colorama.Fore.GREEN + f"Loaded cog: {filename[:-3]}" + colorama.Style.RESET_ALL)
+
+        except Exception as e:
+            print(colorama.Fore.RED + f"Failed to load cog {filename[:-3]}: {e}" + colorama.Style.RESET_ALL)
 
 # -----------------------------
 # Run bot
