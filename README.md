@@ -134,6 +134,24 @@ The bot runs as a console application. It will:
     <li><code>!automod [toggle|threshold|mentions]</code> - Manage the automod config for the current server</li>
   </ul>
 </details>
+<details>
+  <summary>EmojiManager Commands</summary>
+  <ul>
+    <li><code>!emojimanager</code> - Displays the help menu for the Emoji Manager cog.</li>
+    <li><code>!steal</code> - Steals a single custom emoji from any server and adds it to the current one.</li>
+    <li><code>!steal-multiple</code> - Steals multiple custom emojis in one command.</li>
+    <li><code>!steal-from-url</code> - Adds a new emoji by providing a direct image URL.</li>
+    <li><code>!stickersteal</code> - Steals a sticker by prompting the user to send one in the chat.</li>
+    <li><code>!enlarge</code> - Displays a larger PNG/GIF version of a given custom emoji.</li>
+    <li><code>!emojistats</code> - Displays a detailed breakdown of the server's emoji usage and available slots.</li>
+    <li><code>!list-emojis</code> - Provides a list of all custom emojis in the server with their names and animated status.</li>
+    <li><code>!extract-emoji</code> - Sends the image file for a given custom emoji.</li>
+    <li><code>!emdownloadserver</code> - Downloads all custom emojis from the server and sends them as a zip file.</li>
+    <li><code>!emdownload</code> - Downloads a specific custom emoji or sticker and puts it in a zip file.</li>
+    <li><code>!remove-emoji</code> - Removes a single custom emoji from the server.</li>
+    <li><code>!remove-all-emojis</code> - Removes all custom emojis from the server with a confirmation button.</li>
+  </ul>
+</details>
 
 ## To-Do
 - [ ] Fix the AI response speed
