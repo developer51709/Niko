@@ -4,6 +4,8 @@ import aiohttp
 import asyncio
 import json
 import os
+import re
+import random
 from typing import Dict, List, Any
 
 
@@ -190,21 +192,104 @@ class UwULock(commands.Cog):
     # uwuify helper
     # -----------------------------
     def uwuify(self, text: str) -> str:
-        replacements = {
-            "r": "w",
-            "l": "w",
-            "R": "W",
-            "L": "W",
-            "no": "nyo",
-            "has": "haz",
-            "have": "haz",
-            "you": "uu",
-        }
+        # ---------------------------
+        # Load safe-word filters
+        # ---------------------------
+        try:
+            with open("blocked_words.json", "r") as f:
+                filters = json.load(f)
+        except Exception:
+            filters = {"slurs": [], "threats": []}
 
-        for k, v in replacements.items():
-            text = text.replace(k, v)
+        # Cute replacements for bad words
+        slur_replacements = [
+            "sweetie", "snugglebun", "fluffball", "cutie‑pie", "honeybee"
+        ]
 
-        return text
+        threat_replacements = [
+            "I need a hug…", 
+            "I should calm down…", 
+            "I’m feeling spicy but harmless…",
+            "deep breaths…"
+        ]
+
+        # ---------------------------
+        # Replace slurs safely
+        # ---------------------------
+        for bad in filters.get("slurs", []):
+            pattern = re.compile(rf"\b{re.escape(bad)}\b", re.IGNORECASE)
+            text = pattern.sub(random.choice(slur_replacements), text)
+
+        # ---------------------------
+        # Replace threats safely
+        # ---------------------------
+        for bad in filters.get("threats", []):
+            pattern = re.compile(rf"\b{re.escape(bad)}\b", re.IGNORECASE)
+            text = pattern.sub(random.choice(threat_replacements), text)
+
+        # ---------------------------
+        # Begin uwuification
+        # ---------------------------
+        text = text.replace("r", "w").replace("l", "w")
+        text = text.replace("R", "W").replace("L", "W")
+
+        interjections = [
+            "owo", "uwu", "x3", ">w<", "^w^", "rawr~",
+            "nya~", "teehee~", "(≧◡≦)", "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+            "(｡♥‿♥｡)", "(ᵘʷᵘ)", "(๑˃ᴗ˂)ﻭ"
+        ]
+
+        prefixes = [
+            "uhh", "umm", "ahh", "oh~", "hehe", "teehee", "h‑hewwo"
+        ]
+
+        emojis = [
+            "✨", "💖", "🥺", "👉👈", "🌸", "💞", "😳", "😼", "💗", "🌟"
+        ]
+
+        words = text.split()
+        uwu_words = []
+
+        # Optional prefix
+        if random.random() < 0.35:
+            uwu_words.append(random.choice(interjections))
+
+        for w in words:
+            base = w.lower()
+
+            # Random prefix before word
+            if random.random() < 0.20:
+                uwu_words.append(random.choice(prefixes))
+
+            # Random stutter
+            if random.random() < 0.40:
+                w = f"{w[0]}-{w}"
+
+            # Strong stutter for emotional words
+            if base in ["i", "to", "my", "we", "you"] and random.random() < 0.65:
+                w = f"{w[0]}-{w}"
+
+            # Dramatic stutter for "to"
+            if base == "to" and random.random() < 0.45:
+                w = f"{w[0]}-{w[0]}-{w}"
+
+            # Cute replacements
+            w = w.replace("no", "nyo")
+            w = w.replace("has", "haz")
+            w = w.replace("have", "haz")
+            w = w.replace("you", "uu")
+
+            uwu_words.append(w)
+
+            # Random interjection between words
+            if random.random() < 0.25:
+                uwu_words.append(random.choice(interjections))
+
+            # Random emoji between words
+            if random.random() < 0.20:
+                uwu_words.append(random.choice(emojis))
+
+        return " ".join(uwu_words)
 
     async def cog_unload(self):
         self.process_uwu_queue.cancel()
