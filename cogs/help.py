@@ -20,6 +20,7 @@ class HelpDropdown(discord.ui.Select):
             discord.SelectOption(label="Moderation", description="Moderation commands"),
             discord.SelectOption(label="AutoMod", description="AutoMod commands"),
             discord.SelectOption(label="EmojiManager", description="EmojiManager commands"),
+            discord.SelectOption(label="Onboarding", description="Onboarding commands"),
         ]
 
         super().__init__(
@@ -158,6 +159,20 @@ class HelpDropdown(discord.ui.Select):
         elif category == "EmojiManager":
             embed.description = "😂 **EmojiManager Commands**"
             cog = self.bot.get_cog("EmojiManagerCog")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  ONBOARDING CATEGORY
+        # ===========================
+        elif category == "Onboarding":
+            embed.description = "🎉 **Onboarding Commands**"
+            cog = self.bot.get_cog("Onboarding")
             if cog:
                 for cmd in cog.get_commands():
                     embed.add_field(

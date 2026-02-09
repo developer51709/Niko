@@ -152,6 +152,13 @@ The bot runs as a console application. It will:
     <li><code>!remove-all-emojis</code> - Removes all custom emojis from the server with a confirmation button.</li>
   </ul>
 </details>
+<details>
+  <summary>Onboarding Commands</summary>
+  <ul>
+    <li><code>!onboarding_setup</code> - Setup onboarding for the server.</li>
+    <li><code>!onboarding_role_menu</code> - Setup role menu for the server.</li>
+  </ul>
+</details>
 
 ## To-Do
 - [ ] Fix the AI response speed
