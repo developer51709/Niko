@@ -187,8 +187,19 @@ class HelpDropdown(discord.ui.Select):
         else:
             embed.description = (
                 "Welcome to the help menu.\n"
-                "Use the dropdown below to browse categories."
+                "> Use the dropdown below to browse categories."
             )
+            embed.add_field(
+                name="🤖 About Niko",
+                value="Niko is a simple, lightweight, open-source AI powered Discord bot made to provide Discord servers with a fun, interactive, and engaging experience.",
+                inline=False
+            )
+            embed.add_field(
+                name="🔗 Links",
+                value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8)",
+                inline=False
+            )
+            embed.set_footer(text="Made with ❤️ by Nyxen")
 
         await interaction.response.edit_message(embed=embed)
 
@@ -212,8 +223,18 @@ class HelpCog(commands.Cog):
         """Shows the help menu."""
         embed = discord.Embed(
             title="📘 Help Menu",
-            description="Use the dropdown below to select a category.",
+            description="> Use the dropdown below to select a category.",
             color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="🤖 About Niko",
+            value="Niko is a simple, lightweight, open-source AI powered Discord bot made to provide Discord servers with a fun, interactive, and engaging experience.",
+            inline=False
+        )
+        embed.add_field(
+            name="🔗 Links",
+            value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8)",
+            inline=False
         )
         embed.set_footer(text=f"Requested by {ctx.author}")
 
