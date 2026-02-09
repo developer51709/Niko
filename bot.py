@@ -25,6 +25,9 @@ MODEL_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resol
 MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MEMORY_FILE = "memory.json"
 
+# AI config
+ANSWER_REPLYS = True
+
 # -----------------------------
 # System / personality prompt
 # -----------------------------
@@ -357,7 +360,11 @@ async def on_message(msg):
 
     content = msg.content.lower()
     called_by_name = "niko" in content
-    called_by_ping = bot.user in msg.mentions
+    if ANSWER_REPLYS == True:
+        called_by_ping = bot.user in msg.mentions
+    else:
+        # Respond to direct pings only and ignore replies
+        called_by_ping = bot.user in msg.mentions and not msg.reference
     is_ai_command = content.startswith("!ai ")
 
     if called_by_name or called_by_ping or is_ai_command:
