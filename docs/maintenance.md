@@ -10,7 +10,6 @@ Restart the bot process after updating.
 
 ## Backing Up Data
 - **JSON Data**: Regularly back up the `data/` folder.
-- **Database**: If using PostgreSQL, use `pg_dump` to create periodic backups.
 
 ## Monitoring
 - Check the console logs for errors.
