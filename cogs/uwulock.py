@@ -278,6 +278,7 @@ class UwULock(commands.Cog):
             w = w.replace("has", "haz")
             w = w.replace("have", "haz")
             w = w.replace("you", "uu")
+            w = w.replace("love", "wuv")
 
             uwu_words.append(w)
 
