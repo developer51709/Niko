@@ -1,7 +1,3 @@
-# tell the cog loader to skip this file
-DNL = True
-DNL_REASON = "This is a utility file for the onboarding cog."
-
 import json
 import os
 from dataclasses import dataclass, asdict

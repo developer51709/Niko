@@ -2,13 +2,13 @@ import discord
 from discord.ext import commands
 from discord.ui import Modal, TextInput, View, Button, Select
 
-from .onboarding_utils import (
+from utils.onboarding_utils import (
     get_config,
     update_config,
     build_welcome_embed,
     build_rules_embed,
 )
-from .onboarding_config import OnboardingConfig
+from utils.onboarding_config import OnboardingConfig
 
 
 # -------------------- UTILITY FUNCTIONS --------------------

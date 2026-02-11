@@ -1,9 +1,5 @@
-# tell the cog loader to skip this file
-DNL = True
-DNL_REASON = "This is a utility file for the onboarding cog."
-
 import discord
-from .onboarding_config import load_config, save_config, OnboardingConfig
+from utils.onboarding_config import load_config, save_config, OnboardingConfig
 
 
 def get_config(guild_id: int) -> OnboardingConfig:
