@@ -1,6 +1,5 @@
 import os
 import json
-import random
 import requests
 import discord
 import asyncio
@@ -27,6 +26,9 @@ MEMORY_FILE = "memory.json"
 
 # AI config
 ANSWER_REPLYS = True
+
+# Other config
+CMD_PREFIX = "!"
 
 # -----------------------------
 # System / personality prompt
@@ -308,7 +310,10 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(
+    command_prefix=CMD_PREFIX,
+    intents=intents
+)
 bot.remove_command("help")
 
 @bot.event
