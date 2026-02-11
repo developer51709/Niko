@@ -11,6 +11,7 @@ class HelpDropdown(discord.ui.Select):
 
         options = [
             discord.SelectOption(label="General", description="General bot information"),
+            discord.SelectOption(label="Fun", description="Fun commands"),
             discord.SelectOption(label="Gambling", description="Blackjack, Slots, Roulette"),
             discord.SelectOption(label="Economy", description="Balance, daily, work, etc"),
             discord.SelectOption(label="Roleplay", description="RP commands"),
@@ -46,6 +47,23 @@ class HelpDropdown(discord.ui.Select):
             # Collect commands from gambling cogs
             gambling_cogs = ["Blackjack", "Roulette", "Slots", "GamblingCog"]
             for cog_name in gambling_cogs:
+                cog = self.bot.get_cog(cog_name)
+                if cog:
+                    for cmd in cog.get_commands():
+                        embed.add_field(
+                            name=f"`{cmd.name}`",
+                            value=cmd.help or "No description",
+                            inline=False
+                        )
+
+        # ===========================
+        #  FUN CATEGORY
+        # ===========================
+        elif category == "Fun":
+            embed.description = "🎉 **Fun Commands**"
+            # Collect commands from fun cogs
+            fun_cogs = ["UwULock", "Meme"]
+            for cog_name in fun_cogs:
                 cog = self.bot.get_cog(cog_name)
                 if cog:
                     for cmd in cog.get_commands():
