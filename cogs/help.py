@@ -134,6 +134,11 @@ class HelpDropdown(discord.ui.Select):
         # ===========================
         elif category == "AI":
             embed.description = "🤖 **AI Commands**"
+            embed.add_field(
+                name="`ai`",
+                value="Talk to Niko",
+                inline=False
+            )
             cog = self.bot.get_cog("AICog")
             if cog:
                 for cmd in cog.get_commands():
