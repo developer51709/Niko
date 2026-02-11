@@ -37,6 +37,13 @@ The bot runs as a console application. It will:
   </ul>
 </details>
 <details>
+  <summary>Fun Commands</summary>
+  <ul>
+    <li><code>!uwulock</code> - Locks a user so their messages become uwu‑ified</li>
+    <li><code>!meme</code> - Fetch a random meme using meme-api.com.</li>
+  </ul>
+</details>
+<details>
   <summary>Economy Commands</summary>
   <ul>
     <li><code>!balance [@user]</code> - Check your balance or another user's balance.</li>
@@ -73,7 +80,6 @@ The bot runs as a console application. It will:
     <li><code>!creator</code> - Learn about the bot creator</li>
     <li><code>!debuginfo</code> - View debug info for the bot</li>
     <li><code>!hostinfo</code> - View info about the bots host</li>
-    <li><code>!nyx</code></li>
     <li><code>!roleinfo [@role]</code> - View info about a role on the server</li>
     <li><code>!serverbanner</code> - View the server banner</li>
     <li><code>!servericon</code> - View the server icon</li>
