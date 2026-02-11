@@ -11,5 +11,18 @@
         "spam_interval": 7,
         "max_mentions": 5,
         "blocked_words": []
+    },
+    "1470878953743974587": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": []
     }
 }
