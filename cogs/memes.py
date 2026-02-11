@@ -9,7 +9,7 @@ class Meme(commands.Cog):
 
     @commands.command(name="meme")
     async def meme(self, ctx):
-        """Fetch a random meme using meme-api.com."""
+        """Fetch a random meme using meme-api.com"""
         url = "https://meme-api.com/gimme/50"
 
         async with aiohttp.ClientSession() as session:
