@@ -104,25 +104,6 @@ class InfoCog(commands.Cog):
         else:
             await ctx.send(f"{target.display_name} is not listening to Spotify.")
 
-    @commands.command(name="nyx")
-    async def nyx(self, ctx):
-        """Displays a random message about Nyx."""
-        messages = [
-            "Nyx is a really sexy guy.",
-            "Nyx is so hot.",
-            "I love Nyx.",
-            "Nyx is sucking my dick right now.",
-            "Nyx is so fucking hot.",
-            "I want to fuck Nyx",
-            "Nyx is so sexy.",
-            "Daddy Nyx is the hottest guy in the world.",
-            "I wish I could fuck Nyx so hard that he would cum all over my fucking face and I would lick it all off and then I would ride him like a fucking horse until he is so fucking tired that he would pass out.",
-            "I just want to passionately make love to Nyx until we are so fucking tired that we pass out.",
-            "Daddy Nyx is so fricking sexy that I wish I could just fuck him right now."
-        ]
-        random_message = random.choice(messages)
-        await ctx.send(random_message)
-
     @commands.command(name="debuginfo")
     async def debuginfo(self, ctx):
         """Displays debug information about the bot."""
