@@ -22,6 +22,7 @@ class HelpDropdown(discord.ui.Select):
             discord.SelectOption(label="AutoMod", description="AutoMod commands"),
             discord.SelectOption(label="EmojiManager", description="EmojiManager commands"),
             discord.SelectOption(label="Onboarding", description="Onboarding commands"),
+            discord.SelectOption(label="NSFW", description="NSFW commands"),
         ]
 
         super().__init__(
@@ -196,6 +197,20 @@ class HelpDropdown(discord.ui.Select):
         elif category == "Onboarding":
             embed.description = "🎉 **Onboarding Commands**"
             cog = self.bot.get_cog("Onboarding")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  NSFW CATEGORY
+        # ===========================
+        elif category == "NSFW":
+            embed.description = "🔞 **NSFW Commands**\n> NOTICE: These commands are only allowed in nsfw channels and will not work elsewhere."
+            cog = self.bot.get_cog("NSFW")
             if cog:
                 for cmd in cog.get_commands():
                     embed.add_field(
