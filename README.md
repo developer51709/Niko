@@ -41,6 +41,7 @@ The bot runs as a console application. It will:
   <ul>
     <li><code>!uwulock</code> - Locks a user so their messages become uwu‑ified</li>
     <li><code>!meme</code> - Fetch a random meme using meme-api.com.</li>
+    <li><code>!tictactoe &lt;@user&gt;</code> - Play a game of tictactoe with another user.</li>
   </ul>
 </details>
 <details>
