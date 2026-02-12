@@ -15,6 +15,7 @@ class TicTacToeButton(discord.ui.Button['TicTacToe']):
 
 
     async def callback(self, interaction: discord.Interaction):
+        content = None
 
 
         global player1

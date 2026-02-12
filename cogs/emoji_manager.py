@@ -24,36 +24,6 @@ class EmojiManagerCog(commands.Cog):
             return self.bot.command_prefix[0]
         return self.bot.command_prefix
 
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        if isinstance(error, MissingPermissions):
-            embed = discord.Embed(
-                title="Permission Denied",
-                description="You do not have the necessary permissions (`Manage Guild` or `Administrator`) to use this command.",
-                color=discord.Color.red()
-            )
-            embed.set_footer(text="Made By Nyxen")
-            await ctx.send(embed=embed)
-        elif isinstance(error, MissingRequiredArgument):
-            embed = discord.Embed(
-                title="Missing Argument",
-                description=f"You are missing a required argument: `{error.param.name}`. Please check the command help for usage.",
-                color=discord.Color.red()
-            )
-            embed.set_footer(text="Made By Nyxen")
-            await ctx.send(embed=embed)
-        elif isinstance(error, EmojiNotFound):
-
-            embed = discord.Embed(
-                title="Emoji Not Found",
-                description=f"The emoji `{error.argument}` could not be found. Please ensure it is a valid custom emoji from this or another server.",
-                color=discord.Color.red()
-            )
-            embed.set_footer(text="Made By Nyxen")
-            await ctx.send(embed=embed)
-        else:
-            raise error
-
     async def _get_emoji_info(self, emoji_string: str):
         """
         Parses an emoji string (<:name:id> or <a:name:id>) and fetches its image data.
