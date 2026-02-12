@@ -166,6 +166,13 @@ The bot runs as a console application. It will:
     <li><code>!onboarding_role_menu</code> - Setup role menu for the server.</li>
   </ul>
 </details>
+<details>
+  <summary>NSFW Commands</summary>
+  <ul>
+    <li><code>!rule34 &lt;query&gt;</code> - Search for images on rule34.xxx</li>
+    <li><code>!gelbooru &lt;query&gt;</code> - Search for images on gelbooru.com</li>
+  </ul>
+</details>
 
 ## To-Do
 - [ ] Fix the AI response speed
