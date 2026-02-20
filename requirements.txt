@@ -3,3 +3,4 @@ requests
 ctransformers
 psutil
 colorama
+flask

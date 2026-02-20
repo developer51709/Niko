@@ -30,6 +30,15 @@ args = "python bot.py"
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "Start the website"
+mode = "sequential"
+author = 53393504
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python website.py"
+
 [userenv]
 
 [userenv.shared]
@@ -40,6 +49,10 @@ DEBUG_MODE = "True"
 ROULETTE_COOLDOWN = ""
 BLACKJACK_COOLDOWN = ""
 SLOTS_COOLDOWN = ""
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 5678
