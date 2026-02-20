@@ -10,7 +10,13 @@ from utils.memory import (
     adjust_favorability
 )
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = None
+
+def _get_client():
+    global client
+    if client is None:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return client
 
 def generate_reply_openai(bot, user_id: int, message: str, username: str, SYSTEM_PROMPT: str):
     member_count = len(bot.users)
@@ -47,7 +53,7 @@ User message:
 {message}
 """
 
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
