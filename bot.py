@@ -8,6 +8,8 @@ import datetime
 import importlib
 from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
+from utils.ai_local import generate_reply_local
+from utils.ai_openai import generate_reply_openai
 
 # -----------------------------
 # Config
@@ -25,6 +27,7 @@ MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MEMORY_FILE = "memory.json"
 
 # AI config
+USE_OPENAI = True
 ANSWER_REPLYS = True
 
 # Other config
@@ -131,10 +134,12 @@ Online as {bot.user}
 # Set the bot's status
 # -----------------------------
 async def set_status():
-    status_link = os.getenv("STATUS_LINK", "")
-    if status_link:
-        if not status_link.startswith(("http://", "https://")):
-            status_link = f"https://{status_link}"
+    if os.getenv("STATUS_LINK"):
+        # Check if the link starts with http:// or https:// and add it if missing
+        if not os.getenv("STATUS_LINK").startswith("http://" or "https://"):
+            status_link = f"https://{os.getenv('status_link')}"
+        else:
+            status_link = os.getenv("STATUS_LINK")
     status = os.getenv("DISCORD_BOT_STATUS")
     if status:
         # Status type
@@ -247,59 +252,11 @@ def get_favorability(user_id: int) -> int:
 # -----------------------------
 # Generate reply
 # -----------------------------
-def generate_reply(user_id: int, message: str, username: str) -> str:
-    member_count = len(bot.users)
-    server_name = bot.guilds[0].name if bot.guilds else "Server name unavailable"
-    user_mem = get_user_memory(user_id)
-    conv_history = get_conversation_history(user_id)
-    favor = get_favorability(user_id)
-
-    if favor > 15:
-        fav_label = f"{username} is one of your absolute favorites on this server."
-    elif favor > 8:
-        fav_label = f"You like {username} a lot and consider them top-tier."
-    elif favor > 3:
-        fav_label = f"You have a good impression of {username}."
-    elif favor > 0:
-        fav_label = f"You are warming up to {username}."
+def generate_reply(user_id, message, username):
+    if USE_OPENAI:
+        return generate_reply_openai(bot, user_id, message, username, SYSTEM_PROMPT)
     else:
-        fav_label = f"You don't know {username} very well yet."
-
-    prompt = f"""<|system|>
-{SYSTEM_PROMPT}
-
-Server context:
-- The current user is: {username}
-- Your current impression: {fav_label}
-- There are {member_count} members in this server.
-- The server name is: {server_name}
-
-Global context:
-- It is currently {datetime.datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")} (timezone: UTC)
-
-Recent Conversation:
-{conv_history}
-</s>
-<|user|>
-{message}
-</s>
-<|assistant|>
-"""
-
-    reply = llm(
-        prompt,
-        max_new_tokens=400, # Even shorter for speed
-        temperature=0.7,
-        top_p=0.9,
-        stop=["</s>", "<|user|>", "<|system|>", f"{username}:", "Niko:", "\n"]
-    )
-
-    clean_reply = reply.strip()
-    update_user_memory(user_id, message, role=username)
-    update_user_memory(user_id, clean_reply, role="Niko")
-    adjust_favorability(user_id, delta=1)
-
-    return clean_reply
+        return generate_reply_local(bot, user_id, message, username, SYSTEM_PROMPT)
 
 # -----------------------------
 # Discord bot
