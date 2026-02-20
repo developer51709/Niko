@@ -28,7 +28,7 @@ MEMORY_FILE = "memory.json"
 ANSWER_REPLYS = True
 
 # Other config
-CMD_PREFIX = "!"
+CMD_PREFIX = "."
 
 # -----------------------------
 # System / personality prompt
