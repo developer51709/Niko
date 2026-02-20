@@ -131,12 +131,10 @@ Online as {bot.user}
 # Set the bot's status
 # -----------------------------
 async def set_status():
-    if os.getenv("STATUS_LINK"):
-        # Check if the link starts with http:// or https:// and add it if missing
-        if not os.getenv("STATUS_LINK").startswith("http://" or "https://"):
-            status_link = f"https://{os.getenv('status_link')}"
-        else:
-            status_link = os.getenv("STATUS_LINK")
+    status_link = os.getenv("STATUS_LINK", "")
+    if status_link:
+        if not status_link.startswith(("http://", "https://")):
+            status_link = f"https://{status_link}"
     status = os.getenv("DISCORD_BOT_STATUS")
     if status:
         # Status type
