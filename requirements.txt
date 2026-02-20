@@ -4,3 +4,4 @@ ctransformers
 psutil
 colorama
 flask
+openai
