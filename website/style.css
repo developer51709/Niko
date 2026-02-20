@@ -1,0 +1,142 @@
+/* ---------- Global Styles ---------- */
+
+:root {
+  --bg: #f7f7fb;
+  --card: #ffffff;
+  --text: #333;
+  --accent: #6c63ff;      /* soft purple */
+  --accent-light: #8f88ff;
+  --cute-pink: #ffb3d1;   /* subtle cute accent */
+  --radius: 14px;
+  --shadow: 0 4px 12px rgba(0,0,0,0.08);
+  --max-width: 900px;
+  --font: "Inter", "Poppins", sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ---------- Layout ---------- */
+
+header.hero {
+  text-align: center;
+  padding: 60px 20px;
+  background: linear-gradient(135deg, var(--accent), var(--cute-pink));
+  color: white;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+header.hero h1 {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+header.hero p {
+  max-width: 600px;
+  margin: 0 auto;
+  font-size: 1.1rem;
+  opacity: 0.95;
+}
+
+.hero-buttons {
+  margin-top: 25px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  background: white;
+  color: var(--accent);
+  padding: 12px 22px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transition: 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-3px);
+  background: var(--accent-light);
+  color: white;
+}
+
+.btn.secondary {
+  background: var(--card);
+  color: var(--text);
+}
+
+.btn.secondary:hover {
+  background: var(--cute-pink);
+  color: white;
+}
+
+/* ---------- Main Sections ---------- */
+
+main {
+  max-width: var(--max-width);
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+section {
+  background: var(--card);
+  padding: 25px;
+  margin-bottom: 25px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+section h2 {
+  margin-top: 0;
+  font-size: 1.8rem;
+  color: var(--accent);
+}
+
+/* ---------- Lists ---------- */
+
+.features ul,
+.links ul {
+  padding-left: 20px;
+}
+
+.features li,
+.links li {
+  margin-bottom: 8px;
+  font-size: 1.05rem;
+}
+
+/* ---------- Footer ---------- */
+
+footer {
+  text-align: center;
+  padding: 20px;
+  margin-top: 40px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* ---------- Mobile Tweaks ---------- */
+
+@media (max-width: 600px) {
+  header.hero h1 {
+    font-size: 2.4rem;
+  }
+
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+}
