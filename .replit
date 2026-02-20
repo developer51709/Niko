@@ -1,4 +1,4 @@
-modules = ["python-3.12"]
+modules = ["python-3.12", "web"]
 [agent]
 expertMode = true
 integrations = ["python_openai_ai_integrations:1.0.0"]
