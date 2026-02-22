@@ -314,8 +314,65 @@ class HelpCog(commands.Cog):
         self.bot = bot
 
     @commands.command(name="help")
-    async def help(self, ctx):
-        """Shows the help menu."""
+    async def help(self, ctx, *, command_name=None):
+        """Shows the help menu or info about a specific command."""
+
+    # -------------------------------
+    # INDIVIDUAL COMMAND HELP
+    # -------------------------------
+        if command_name:
+            cmd = self.bot.get_command(command_name)
+
+            if not cmd:
+                embed = discord.Embed(
+                    title="❌ Command Not Found",
+                    description=f"No command named `{command_name}` exists.",
+                    color=discord.Color.red()
+                )
+                return await ctx.send(embed=embed)
+
+            embed = discord.Embed(
+                title=f"📘 Help: `{cmd.name}`",
+                color=discord.Color.blue()
+            )
+
+            # Description / docstring
+            embed.add_field(
+                name="Description",
+                value=cmd.help or "No description provided.",
+                inline=False
+            )
+
+            # Aliases
+            if cmd.aliases:
+                embed.add_field(
+                    name="Aliases",
+                    value=", ".join(f"`{a}`" for a in cmd.aliases),
+                    inline=False
+                )
+
+            # Usage (auto-generated)
+            signature = cmd.signature or ""
+            embed.add_field(
+                name="Usage",
+                value=f"`{self.bot.command_prefix}{cmd.name} {signature}`",
+                inline=False
+            )
+
+            # Cog name
+            if cmd.cog_name:
+                embed.add_field(
+                    name="Category",
+                    value=cmd.cog_name,
+                    inline=False
+                )
+
+            embed.set_footer(text=f"Requested by {ctx.author}")
+            return await ctx.send(embed=embed)
+
+    # -------------------------------
+    # DEFAULT HELP MENU (dropdown)
+    # -------------------------------
         embed = discord.Embed(
             title="📘 Help Menu",
             description="> Use the dropdown below to select a category.",
