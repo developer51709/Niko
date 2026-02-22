@@ -266,6 +266,7 @@ def generate_reply(user_id, message, username):
 # -----------------------------
 intents = discord.Intents.default()
 intents.message_content = True
+intents.presences = True
 intents.members = True
 
 bot = commands.Bot(

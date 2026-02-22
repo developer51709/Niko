@@ -178,21 +178,84 @@ class InfoCog(commands.Cog):
         server = ctx.guild
         embed = discord.Embed(title="Boost Stats", description=f"Boost Count: {server.premium_subscription_count}\nBoost Tier: {server.premium_tier}\nBoosters: {len(server.premium_subscribers)}", color=0x00ff00)
         await ctx.send(embed=embed)
+        
 
     @commands.command(name="spotify")
     async def spotify(self, ctx, member: discord.Member = None):
-        """Displays a user's Spotify activity."""
+        """Displays a user's Spotify activity with detailed info."""
+
         target = member or ctx.author
-        if target.activities:
-            for activity in target.activities:
-                if isinstance(activity, discord.Spotify):
-                    embed = discord.Embed(title=f"{target.display_name}'s Spotify", description=f"Listening to: {activity.title}\nArtist: {activity.artist}\nAlbum: {activity.album}", color=0x00ff00)
-                    embed.set_thumbnail(url=activity.album_cover_url)
-                    await ctx.send(embed=embed)
-                    return
+
+        # Ensure target is a Member (not a User from DMs)
+        if not isinstance(target, discord.Member):
+            await ctx.send("I can only check Spotify activity for server members.")
+            return
+
+        activities = getattr(target, "activities", None)
+        if not activities:
             await ctx.send(f"{target.display_name} is not listening to Spotify.")
-        else:
+            return
+
+        spotify = None
+        for activity in activities:
+            if isinstance(activity, discord.Spotify):
+                spotify = activity
+                break
+
+        if not spotify:
             await ctx.send(f"{target.display_name} is not listening to Spotify.")
+            return
+
+        # Build detailed embed
+        embed = discord.Embed(
+            title=f"{target.display_name} is listening to Spotify",
+            color=0x1DB954
+        )
+
+        embed.set_thumbnail(url=spotify.album_cover_url)
+
+        # Format timestamps
+        start = spotify.start
+        end = spotify.end
+        duration_ms = spotify.duration.total_seconds()
+        duration_min = int(duration_ms // 60)
+        duration_sec = int(duration_ms % 60)
+
+        embed.add_field(name="Track", value=spotify.title, inline=False)
+        embed.add_field(name="Artist", value=spotify.artist, inline=False)
+        embed.add_field(name="Album", value=spotify.album, inline=False)
+        embed.add_field(
+            name="Duration",
+            value=f"{duration_min}:{duration_sec:02d}",
+            inline=True
+        )
+
+        if start and end:
+            embed.add_field(
+                name="Started",
+                value=f"<t:{int(start.timestamp())}:t>",
+                inline=True
+            )
+            embed.add_field(
+                name="Ends",
+                value=f"<t:{int(end.timestamp())}:t>",
+                inline=True
+            )
+
+        embed.set_footer(text="Spotify status updates in real time.")
+
+        # Buttons (Spotify track link)
+        view = View()
+
+        track_button = Button(
+            label="Open in Spotify",
+            style=discord.ButtonStyle.link,
+            url=f"https://open.spotify.com/track/{spotify.track_id}"
+        )
+
+        view.add_item(track_button)
+
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(name="debuginfo")
     async def debuginfo(self, ctx):
