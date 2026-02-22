@@ -10,19 +10,62 @@ class HelpDropdown(discord.ui.Select):
         self.bot = bot
 
         options = [
-            discord.SelectOption(label="General", description="General bot information"),
-            discord.SelectOption(label="Fun", description="Fun commands"),
-            discord.SelectOption(label="Gambling", description="Blackjack, Slots, Roulette"),
-            discord.SelectOption(label="Economy", description="Balance, daily, work, etc"),
-            discord.SelectOption(label="Roleplay", description="RP commands"),
-            discord.SelectOption(label="Info", description="User/server info commands"),
-            discord.SelectOption(label="Utility", description="Misc tools and utilities"),
-            discord.SelectOption(label="AI", description="AI commands"),
-            discord.SelectOption(label="Moderation", description="Moderation commands"),
-            discord.SelectOption(label="AutoMod", description="AutoMod commands"),
-            discord.SelectOption(label="EmojiManager", description="EmojiManager commands"),
-            discord.SelectOption(label="Onboarding", description="Onboarding commands"),
-            discord.SelectOption(label="NSFW", description="NSFW commands"),
+            discord.SelectOption(
+                label="General", 
+                description="General bot information"
+            ),
+            discord.SelectOption(
+                label="Fun", 
+                description="Fun commands"
+            ),
+            discord.SelectOption(
+                label="Gambling", 
+                description="Blackjack, Slots, Roulette"
+            ),
+            discord.SelectOption(
+                label="Economy", 
+                description="Balance, daily, work, etc"
+            ),
+            discord.SelectOption(
+                label="Roleplay", 
+                description="RP commands"
+            ),
+            discord.SelectOption(
+                label="Info", 
+                description="User/server info commands"
+            ),
+            discord.SelectOption(
+                label="Utility", 
+                description="Misc tools and utilities"
+            ),
+            discord.SelectOption(
+                label="AI", 
+                description="AI commands"
+            ),
+            discord.SelectOption(
+                label="Moderation", 
+                description="Moderation commands"
+            ),
+            discord.SelectOption(
+                label="AutoMod", 
+                description="AutoMod commands"
+            ),
+            discord.SelectOption(
+                label="EmojiManager", 
+                description="EmojiManager commands"
+            ),
+            discord.SelectOption(
+                label="Onboarding", 
+                description="Onboarding commands"
+            ),
+            discord.SelectOption(
+                label="NSFW", 
+                description="NSFW commands"
+            ),
+            discord.SelectOption(
+                label="Music", 
+                description="Music commands"
+            ),
         ]
 
         super().__init__(
@@ -211,6 +254,20 @@ class HelpDropdown(discord.ui.Select):
         elif category == "NSFW":
             embed.description = "🔞 **NSFW Commands**\n> NOTICE: These commands are only allowed in nsfw channels and will not work elsewhere."
             cog = self.bot.get_cog("NSFW")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  MUSIC CATEGORY
+        # ===========================
+        elif category == "Music":
+            embed.description = "🎵 **Music Commands**"
+            cog = self.bot.get_cog("MusicSystem")
             if cog:
                 for cmd in cog.get_commands():
                     embed.add_field(
