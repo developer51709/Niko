@@ -43,6 +43,7 @@ class CuteAnimals(commands.Cog):
 
     @commands.command()
     async def cuteanimal(self, ctx):
+        """Sends a random cute animal image."""
         animal, (url, api_type) = random.choice(list(self.animal_apis.items()))
         response = requests.get(url)
         data = response.json()
@@ -55,13 +56,15 @@ class CuteAnimals(commands.Cog):
 
     @commands.command()
     async def cat(self, ctx):
+        """Sends a random cat image."""
         response = requests.get("https://api.thecatapi.com/v1/images/search")
         await ctx.send(response.json()[0]["url"])
 
     @commands.command()
     async def dog(self, ctx):
+        """Sends a random dog image."""
         response = requests.get("https://dog.ceo/api/breeds/image/random")
         await ctx.send(response.json()["message"])
 
-async def setup(bot):
-    await bot.add_cog(CuteAnimals(bot))
+def setup(bot):
+    bot.add_cog(CuteAnimals(bot))
