@@ -3,6 +3,7 @@ import wavelink
 from discord.ext import commands
 import discord
 import random
+import re
 
 # ===================================
 # PERSONALITY TOGGLE
@@ -60,20 +61,64 @@ def vibe():
 
 
 # ===================================
-# PUBLIC LAVALINK NODE SOURCES
-# ===================================
-# These URLs should point to JSON lists of public Lavalink nodes.
-# You can add multiple sources for redundancy.
+# DARREN NATHANAEL LAVALINK LIST (HTML)
 # ===================================
 
-PUBLIC_NODE_LISTS = [
-    "https://lavalink-list.example/api/nodes.json",   # placeholder
-    "https://another-source.example/nodes.json",      # placeholder
-]
+DARREN_LIST_URL = "https://lavalink.darrennathanael.com/list/"
+
+
+def parse_darren_nodes(html: str):
+    """
+    Very simple HTML parser for Darren's list.
+    Assumes table rows (<tr>) with <td> columns in order:
+    host | port | password | secure | ...
+    We don't rely on status; we just try nodes until one works.
+    """
+    nodes = []
+
+    # Grab all table rows
+    rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html, flags=re.DOTALL | re.IGNORECASE)
+
+    for row in rows:
+        # Grab all <td> contents
+        cols = re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.DOTALL | re.IGNORECASE)
+        # Clean HTML tags and whitespace
+        cols = [re.sub(r"<.*?>", "", c).strip() for c in cols]
+
+        if len(cols) < 4:
+            continue
+
+        host = cols[0]
+        port = cols[1]
+        password = cols[2]
+        secure_raw = cols[3].lower()
+
+        # Basic sanity checks
+        if not host or not port or not password:
+            continue
+
+        try:
+            port = int(port)
+        except ValueError:
+            continue
+
+        # Determine SSL from the "secure" column (yes/true/ssl)
+        secure = any(x in secure_raw for x in ["yes", "true", "ssl", "tls"])
+
+        nodes.append(
+            {
+                "host": host,
+                "port": port,
+                "password": password,
+                "secure": secure,
+            }
+        )
+
+    return nodes
 
 
 # ===================================
-# MAIN COG
+# MAIN COG (Lavalink + Music Commands)
 # ===================================
 
 class MusicSystem(commands.Cog):
@@ -84,22 +129,23 @@ class MusicSystem(commands.Cog):
         bot.loop.create_task(self.startup_connect())
 
     # -------------------------------
-    # FETCH PUBLIC LAVALINK NODES
+    # FETCH NODES FROM DARREN'S LIST
     # -------------------------------
-    async def fetch_public_nodes(self):
-        """Fetch node lists from multiple public sources."""
-        nodes = []
-
+    async def fetch_darren_nodes(self):
+        """Fetch and parse Darren Nathanael's Lavalink list."""
         async with aiohttp.ClientSession() as session:
-            for url in PUBLIC_NODE_LISTS:
-                try:
-                    async with session.get(url, timeout=5) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            nodes.extend(data)
-                except:
-                    continue
+            try:
+                async with session.get(DARREN_LIST_URL, timeout=10) as resp:
+                    if resp.status != 200:
+                        print(f"[Lavalink] Failed to fetch Darren list: {resp.status}")
+                        return []
+                    html = await resp.text()
+            except Exception as e:
+                print(f"[Lavalink] Error fetching Darren list: {e}")
+                return []
 
+        nodes = parse_darren_nodes(html)
+        print(f"[Lavalink] Parsed {len(nodes)} nodes from Darren's list.")
         return nodes
 
     # -------------------------------
@@ -113,13 +159,13 @@ class MusicSystem(commands.Cog):
                 host=node["host"],
                 port=node["port"],
                 password=node["password"],
-                https=node.get("secure", False)
+                https=node.get("secure", False),
             )
-            print(f"[Lavalink] Connected to {node['host']}")
+            print(f"[Lavalink] Connected to {node['host']} (SSL={node.get('secure', False)})")
             print("[Personality]", vibe())
             return True
         except Exception as e:
-            print(f"[Lavalink] Failed node {node['host']}: {e}")
+            print(f"[Lavalink] Failed node {node['host']}:{node['port']} SSL={node.get('secure', False)} -> {e}")
             return False
 
     # -------------------------------
@@ -129,19 +175,19 @@ class MusicSystem(commands.Cog):
         """Runs at bot startup: fetch nodes, test them, connect to one."""
         await self.bot.wait_until_ready()
 
-        nodes = await self.fetch_public_nodes()
-
+        nodes = await self.fetch_darren_nodes()
         if not nodes:
-            print("[Lavalink] No public nodes found.")
+            print("[Lavalink] No nodes parsed from Darren's list.")
             return
 
+        # Shuffle so we don't hammer the same node every time
         random.shuffle(nodes)
 
         for node in nodes:
             if await self.connect_to_node(node):
                 return
 
-        print("[Lavalink] All public nodes failed.")
+        print("[Lavalink] All nodes from Darren's list failed.")
 
     # -------------------------------
     # AUTO-FAILOVER
@@ -171,6 +217,28 @@ class MusicSystem(commands.Cog):
         # Otherwise create a new player
         player = await channel.connect(cls=wavelink.Player)
         return player
+
+    # -------------------------------
+    # !musicstatus
+    # -------------------------------
+    @commands.command(name="musicstatus")
+    async def music_status(self, ctx):
+        """Shows whether Lavalink is connected."""
+        if not wavelink.NodePool.nodes:
+            msg = (
+                "bestie… I’m not connected to ANY music servers rn 😭"
+                if PERSONALITY != "normal"
+                else "Not connected to any Lavalink nodes."
+            )
+            return await ctx.send(msg)
+
+        node = list(wavelink.NodePool.nodes.values())[0]
+        msg = (
+            f"yaaas I’m connected to `{node.host}` and ready to serve ✨🎶"
+            if PERSONALITY != "normal"
+            else f"Connected to `{node.host}`."
+        )
+        await ctx.send(msg)
 
     # -------------------------------
     # !play
