@@ -1,13 +1,9 @@
 import asyncio
-import warnings
 import aiohttp
 import wavelink
 from discord.ext import commands
 import discord
 import random
-
-warnings.filterwarnings("ignore", message="Unclosed client session")
-warnings.filterwarnings("ignore", message="Unclosed connector")
 
 PERSONALITY = "gremlin"
 
@@ -94,6 +90,7 @@ class MusicSystem(commands.Cog):
             try:
                 await wavelink.Pool.close()
             except Exception:
+                print(f"[Lavalink] Failed to close connection to {node_info['host']}:{node_info['port']}")
                 pass
             return False
         except Exception as e:
@@ -101,6 +98,7 @@ class MusicSystem(commands.Cog):
             try:
                 await wavelink.Pool.close()
             except Exception:
+                print(f"[Lavalink] Failed to close connection to {node_info['host']}:{node_info['port']}")
                 pass
             return False
 
