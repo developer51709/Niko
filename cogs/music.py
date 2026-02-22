@@ -1,3 +1,4 @@
+import asyncio
 import aiohttp
 import wavelink
 from discord.ext import commands
@@ -75,14 +76,28 @@ class MusicSystem(commands.Cog):
             uri = f"{'https' if secure else 'http'}://{host}:{port}"
 
             node = wavelink.Node(uri=uri, password=password)
-            await wavelink.Pool.connect(nodes=[node], client=self.bot)
+            await asyncio.wait_for(
+                wavelink.Pool.connect(nodes=[node], client=self.bot),
+                timeout=8
+            )
 
             print(f"[Lavalink] Connected to {host}:{port} (SSL={secure})")
             print("[Personality]", vibe())
             self.connected = True
             return True
+        except asyncio.TimeoutError:
+            print(f"[Lavalink] Timed out connecting to {node_info['host']}:{node_info['port']}")
+            try:
+                await wavelink.Pool.close()
+            except Exception:
+                pass
+            return False
         except Exception as e:
             print(f"[Lavalink] Failed node {node_info['host']}:{node_info['port']} SSL={node_info.get('secure', False)} -> {e}")
+            try:
+                await wavelink.Pool.close()
+            except Exception:
+                pass
             return False
 
     async def startup_connect(self):
