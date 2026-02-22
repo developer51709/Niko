@@ -258,22 +258,47 @@ class InsideBetView(discord.ui.View):
 #  NUMBER SELECTION DROPDOWNS
 # ============================
 
-class NumberDropdown(discord.ui.Select):
+class NumberDropdownLow(discord.ui.Select):
     def __init__(self, count):
         options = [
             discord.SelectOption(label=str(i), value=str(i))
-            for i in range(37)
+            for i in range(0, 19)
         ]
         super().__init__(
-            placeholder=f"Select {count} number(s)",
-            min_values=count,
+            placeholder=f"Numbers 0-18 (select {count})",
+            min_values=0,
             max_values=count,
             options=options
         )
 
     async def callback(self, interaction):
-        self.view.choice = [int(v) for v in self.values]
-        self.view.stop()
+        self.view.selected_low = [int(v) for v in self.values]
+        total = self.view.selected_low + self.view.selected_high
+        if len(total) == self.view.count:
+            self.view.choice = total
+            self.view.stop()
+        await interaction.response.defer()
+
+
+class NumberDropdownHigh(discord.ui.Select):
+    def __init__(self, count):
+        options = [
+            discord.SelectOption(label=str(i), value=str(i))
+            for i in range(19, 37)
+        ]
+        super().__init__(
+            placeholder=f"Numbers 19-36 (select {count})",
+            min_values=0,
+            max_values=count,
+            options=options
+        )
+
+    async def callback(self, interaction):
+        self.view.selected_high = [int(v) for v in self.values]
+        total = self.view.selected_low + self.view.selected_high
+        if len(total) == self.view.count:
+            self.view.choice = total
+            self.view.stop()
         await interaction.response.defer()
 
 
@@ -282,7 +307,11 @@ class NumberSelectView(discord.ui.View):
         super().__init__(timeout=30)
         self.ctx = ctx
         self.choice = None
-        self.add_item(NumberDropdown(count))
+        self.count = count
+        self.selected_low = []
+        self.selected_high = []
+        self.add_item(NumberDropdownLow(count))
+        self.add_item(NumberDropdownHigh(count))
 
     async def interaction_check(self, interaction):
         return interaction.user.id == self.ctx.author.id
