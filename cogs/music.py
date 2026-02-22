@@ -131,6 +131,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="musicstatus")
     async def music_status(self, ctx):
+        """Check if the bot is connected to a music server."""
         if not self.connected:
             msg = (
                 "bestie… I'm not connected to ANY music servers rn 😭"
@@ -148,6 +149,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="play", aliases=["p"])
     async def play(self, ctx, *, search: str):
+        """Play a song in a voice channel."""
         player = await self.get_player(ctx)
         if not player:
             return
@@ -168,6 +170,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="pause")
     async def pause(self, ctx):
+        """Pause the currently playing song."""
         player = ctx.voice_client
         if not player or not player.playing:
             return await ctx.send("bestie there's literally nothing playing 😭")
@@ -177,6 +180,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="resume")
     async def resume(self, ctx):
+        """Resume the currently paused song."""
         player = ctx.voice_client
         if not player:
             return await ctx.send("bestie nothing is paused rn 😭")
@@ -186,6 +190,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="skip")
     async def skip(self, ctx):
+        """Skip the currently playing song."""
         player = ctx.voice_client
         if not player or not player.playing:
             return await ctx.send("skip what babe… the silence? 😭")
@@ -205,6 +210,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="queue", aliases=["q"])
     async def queue(self, ctx):
+        """Show the current queue."""
         player = ctx.voice_client
         if not player or player.queue.is_empty:
             return await ctx.send("the queue is emptier than my love life 😭")
@@ -217,6 +223,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="volume", aliases=["vol"])
     async def volume(self, ctx, vol: int):
+        """Adjust the volume of the player."""
         player = ctx.voice_client
         if not player:
             return await ctx.send("bestie nothing is even playing 😭")
@@ -227,6 +234,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="disconnect", aliases=["dc", "leave"])
     async def disconnect(self, ctx):
+        """Disconnect the bot from the voice channel."""
         player = ctx.voice_client
         if not player:
             return await ctx.send("I'm not even in a VC babe 😭")
