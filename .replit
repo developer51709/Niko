@@ -39,6 +39,15 @@ author = 53393504
 task = "shell.exec"
 args = "python website.py"
 
+[[workflows.workflow]]
+name = "Display the TODO list"
+mode = "sequential"
+author = 53393504
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python todo.py"
+
 [userenv]
 
 [userenv.shared]
