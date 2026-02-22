@@ -33,6 +33,9 @@ class IPPullerDetector(commands.Cog):
             "that link is giving ‘click me and regret it’ energy and I’m not emotionally prepared for that",
             "pls… that URL is literally wearing a fake mustache trying to blend in 😭",
             "I love how that link is pretending to be normal like we can’t all feel the chaos radiating off it lol",
+            "bruhhh that link is radiating ✨mysterious hacker energy✨ and I’m low‑key scared but also impressed (≧◡≦)",
+            "lol not you dropping a link that screams ‘I promise I won’t steal your soul’ 💀✨",
+            "okay but why does that URL look like it wants my IP AND a hug at the same time 😭",
         ]
 
     async def scan_single_url(self, url: str) -> bool:
