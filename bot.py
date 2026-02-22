@@ -105,6 +105,10 @@ def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_banner():
+    if USE_OPENAI:
+        CURRENT_MODEL = "OpenAI"
+    else:
+        CURRENT_MODEL = "TinyLlama-1.1B-Chat-v1.0"
     if not DEBUG_MODE == "True":
        clear_console()
     print(colorama.Fore.MAGENTA + """
@@ -116,8 +120,7 @@ def print_banner():
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
     """ + colorama.Style.RESET_ALL)
     print(colorama.Fore.MAGENTA + f"""
-Niko - A cute, playful, and socially 
-aware femboy AI
+Niko - A cute, playful, and very social AI companion for your Discord server.
 
 Made by Nyxen:
     Discord - @.n.y.x.e.n.
@@ -125,7 +128,7 @@ Made by Nyxen:
 
 Version: 1.0
 
-Model: TinyLlama-1.1B-Chat-v1.0
+Model: {CURRENT_MODEL}
 
 Online as {bot.user}
     """ + colorama.Style.RESET_ALL)

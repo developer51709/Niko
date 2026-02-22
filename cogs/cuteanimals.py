@@ -66,5 +66,5 @@ class CuteAnimals(commands.Cog):
         response = requests.get("https://dog.ceo/api/breeds/image/random")
         await ctx.send(response.json()["message"])
 
-def setup(bot):
-    bot.add_cog(CuteAnimals(bot))
+async def setup(bot):
+    await bot.add_cog(CuteAnimals(bot))
