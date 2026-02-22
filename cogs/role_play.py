@@ -17,7 +17,11 @@ class RolePlayCog(commands.Cog):
             kill_gifs = [
                 "https://i.pinimg.com/originals/36/d5/fd/36d5fd46d8331661819031b2b7adcda4.gif"
             ]
-            kill_embed = discord.Embed(title="Kill", description=f"{ctx.author.display_name} killed {target.display_name}!", color=discord.Color.red())
+            kill_embed = discord.Embed(
+                title="Kill", 
+                description=f"{ctx.author.display_name} killed {target.display_name}!", 
+                color=discord.Color.red()
+            )
             kill_embed.set_image(url=random.choice(kill_gifs))
             kill_embed.set_footer(text="*This is a joke, don't actually kill anyone.*")
             await ctx.send(embed=kill_embed)
@@ -46,7 +50,16 @@ class RolePlayCog(commands.Cog):
             if not member:
                 return await ctx.send("You need to mention someone to use this command on them!")
             target = member
-            await ctx.send(f"{ctx.author.display_name} hugged {target.display_name}! :hugging:")
+            hug_gifs = [
+                "https://media.tenor.com/SYsRdiK-T7gAAAAe/hug-anime.png"
+            ]
+            hug_embed = discord.Embed(
+                title="Hug",
+                description=f"{ctx.author.display_name} hugged {target.display_name}! :hugging:",
+                color=discord.Color.green()
+            )
+            hug_embed.set_image(url=random.choice(hug_gifs))
+            await ctx.send(embed=hug_embed)
         except Exception as e:
             error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
             await ctx.send(embed=error_embed)
