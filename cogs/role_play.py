@@ -29,28 +29,40 @@ class RolePlayCog(commands.Cog):
     @commands.command(name="fuck")
     async def fuck(self, ctx, member: discord.Member = None):
         """Fuck another user. (not really)"""
-        if not member:
-            return await ctx.send("You need to mention someone to use this command on them!")
-        target = member
-        await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
+        try:
+            if not member:
+                return await ctx.send("You need to mention someone to use this command on them!")
+            target = member
+            await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
+        except Exception as e:
+            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
+            await ctx.send(embed=error_embed)
 
     # !hug command
     @commands.command(name="hug")
     async def hug(self, ctx, member: discord.Member = None):
         """Hug another user. (not really)"""
-        if not member:
-            return await ctx.send("You need to mention someone to use this command on them!")
-        target = member
-        await ctx.send(f"{ctx.author.display_name} hugged {target.display_name}! :hugging:")
+        try:
+            if not member:
+                return await ctx.send("You need to mention someone to use this command on them!")
+            target = member
+            await ctx.send(f"{ctx.author.display_name} hugged {target.display_name}! :hugging:")
+        except Exception as e:
+            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
+            await ctx.send(embed=error_embed)
 
     # !makeout command
     @commands.command(name="makeout")
     async def makeout(self, ctx, member: discord.Member = None):
         """Make out with another user. (not really)"""
-        if not member:
-            return await ctx.send("You need to mention someone to use this command on them!")
-        target = member
-        await ctx.send(f"{ctx.author.display_name} made out with {target.display_name}! :kissing_heart:")
+        try:
+            if not member:
+                return await ctx.send("You need to mention someone to use this command on them!")
+            target = member
+            await ctx.send(f"{ctx.author.display_name} made out with {target.display_name}! :kissing_heart:")
+        except Exception as e:
+            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
+            await ctx.send(embed=error_embed)
 
 
 async def setup(bot):
