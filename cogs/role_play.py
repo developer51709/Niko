@@ -51,7 +51,9 @@ class RolePlayCog(commands.Cog):
                 return await ctx.send("You need to mention someone to use this command on them!")
             target = member
             hug_gifs = [
-                "https://media.tenor.com/SYsRdiK-T7gAAAAe/hug-anime.png"
+                "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
+                "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
+                "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
             ]
             hug_embed = discord.Embed(
                 title="Hug",
