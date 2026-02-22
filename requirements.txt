@@ -5,3 +5,4 @@ psutil
 colorama
 flask
 openai
+wavelink
