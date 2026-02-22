@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import View, Button
 import random
 import time
 import platform
@@ -37,8 +38,51 @@ class InfoCog(commands.Cog):
     @commands.command(name="about")
     async def about(self, ctx):
         """Displays information about the bot."""
-        embed = discord.Embed(title="About Niko", description="Niko is a friendly, playful, and socially aware femboy-coded AI. He is designed to be a fun and engaging companion in your Discord server.", color=0x00ff00)
-        await ctx.send(embed=embed)
+
+        bot_user = self.bot.user
+
+        embed = discord.Embed(
+            title="About Niko",
+            description=(
+                "Niko is a friendly, playful, and very social AI designed to be an engaging "
+                "companion in your Discord server. He loves chatting, helping out, and making "
+                "your community feel more alive."
+            ),
+            color=0x00ff00
+        )
+
+        # Bot profile picture in the embed header
+        embed.set_author(
+            name=bot_user.name,
+            icon_url=bot_user.avatar.url if bot_user.avatar else None
+        )
+
+        # Add some extra details
+        embed.add_field(name="Developer", value="Nyxen", inline=True)
+        embed.add_field(name="Library", value="discord.py", inline=True)
+        embed.add_field(name="Servers", value=f"{len(self.bot.guilds)}", inline=True)
+
+        embed.set_footer(text="Thanks for using Niko!")
+
+        # Buttons
+        view = View()
+
+        invite_button = Button(
+            label="Invite Niko",
+            style=discord.ButtonStyle.link,
+            url=f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
+        )
+
+        github_button = Button(
+            label="GitHub",
+            style=discord.ButtonStyle.link,
+            url="https://github.com/developer51709/Niko"
+        )
+
+        view.add_item(invite_button)
+        view.add_item(github_button)
+
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(name="creator")
     async def creator(self, ctx):
