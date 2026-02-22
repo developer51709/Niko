@@ -63,7 +63,7 @@ class HelpDropdown(discord.ui.Select):
         elif category == "Fun":
             embed.description = "🎉 **Fun Commands**"
             # Collect commands from fun cogs
-            fun_cogs = ["UwULock", "Meme", "tictactoe"]
+            fun_cogs = ["UwULock", "Meme", "tictactoe", "CuteAnimals"]
             for cog_name in fun_cogs:
                 cog = self.bot.get_cog(cog_name)
                 if cog:
