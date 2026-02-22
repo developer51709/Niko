@@ -1,9 +1,13 @@
 import asyncio
+import warnings
 import aiohttp
 import wavelink
 from discord.ext import commands
 import discord
 import random
+
+warnings.filterwarnings("ignore", message="Unclosed client session")
+warnings.filterwarnings("ignore", message="Unclosed connector")
 
 PERSONALITY = "gremlin"
 
@@ -200,6 +204,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="stop")
     async def stop(self, ctx):
+        """Stop the player and clear the queue."""
         player = ctx.voice_client
         if not player:
             return await ctx.send("there's nothing to stop bestie 😭")
