@@ -87,9 +87,55 @@ class InfoCog(commands.Cog):
     @commands.command(name="creator")
     async def creator(self, ctx):
         """Displays information about the bot's creator."""
+
         creator = await self.bot.fetch_user(1435974392810307604)
-        embed = discord.Embed(title="Creator", description=f"Niko was created by {creator.display_name}.", color=0x00ff00)
-        await ctx.send(embed=embed)
+        bot_user = self.bot.user
+
+        embed = discord.Embed(
+            title="Creator",
+            description=(
+                f"Niko was created by **{creator.display_name}**."
+            ),
+            color=0x00ff00
+        )
+
+        # Bot PFP in the embed header
+        embed.set_author(
+            name=bot_user.name,
+            icon_url=bot_user.avatar.url if bot_user.avatar else None
+        )
+
+        # Creators PFP as the thumbnail
+        embed.set_thumbnail(
+            url=creator.avatar.url if creator.avatar else None
+        )
+
+        # Extra details
+        embed.add_field(name="Creator Tag", value=str(creator), inline=False)
+        embed.add_field(name="User ID", value=creator.id, inline=False)
+        embed.add_field(name="Project", value="Niko All-In-One Discord Bot", inline=False)
+
+        embed.set_footer(text="Thanks for using Niko!")
+
+        # Social buttons
+        view = View()
+
+        discord_button = Button(
+            label="Discord Profile",
+            style=discord.ButtonStyle.link,
+            url=f"https://discord.com/users/{creator.id}"
+        )
+
+        github_button = Button(
+            label="GitHub",
+            style=discord.ButtonStyle.link,
+            url="https://github.com/developer51709"
+        )
+
+        view.add_item(discord_button)
+        view.add_item(github_button)
+
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(name="roleinfo")
     async def roleinfo(self, ctx, role: discord.Role = None):
