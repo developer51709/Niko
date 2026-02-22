@@ -143,7 +143,7 @@ async def set_status():
             status_link = f"https://{os.getenv('status_link')}"
         else:
             status_link = os.getenv("STATUS_LINK")
-    status = os.getenv("DISCORD_BOT_STATUS")
+    status = os.getenv("STATUS_MESSAGE")
     if status:
         # Status type
         status_type = os.getenv("STATUS_TYPE", "playing")
