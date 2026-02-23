@@ -97,7 +97,6 @@ The bot runs as a console application. It will:
     <li><code>!hug &lt;user_id&gt;</code> - Hug another user. (not really)</li>
     <li><code>!kill &lt;user_id&gt;</code> - Kill another user. (not really)</li>
     <li><code>!makeout &lt;user_id&gt;</code> - Make out with another user. (not really)</li>
-    <li><code>!rape &lt;user_id&gt;</code> - Rape another user. (not really)</li>
   </ul>
 </details>
 <details>
@@ -173,10 +172,30 @@ The bot runs as a console application. It will:
     <li><code>!gelbooru &lt;query&gt;</code> - Search for images on gelbooru.com</li>
   </ul>
 </details>
+<details>
+  <summary>Music Commands</summary>
+  <ul>
+    <li><code>!musicstatus</code> - Check if the bot is connected to a music server.</li>
+    <li><code>!play &lt;search&gt;</code> - Play a song in a voice channel.</li>
+    <li><code>!pause</code> - Pause the currently playing song.</li>
+    <li><code>!resume</code> - Resume the currently paused song.</li>
+    <li><code>!skip</code> - Skip the currently playing song.</li>
+    <li><code>!stop</code> - Stop the player and clear the queue.</li>
+    <li><code>!queue</code> - Show the current queue.</li>
+    <li><code>!volume &lt;1-100&gt;</code> - Adjust the volume of the player.</li>
+    <li><code>!disconnect</code> - Disconnect the bot from the voice channel.</li>
+  </ul>
+</details>
+<details>
+  <summary>Leveling Commands</summary>
+  <ul>
+    <li><code>!level</code> - Check your current level and XP.</li>
+    <li><code>!level-leaderboard</code> - View the leveling leaderboard.</li>
+  </ul>
+</details>
 
 ## To-Do
 - [ ] Fix the AI response speed
-- [ ] Add a leveling system
 - [ ] Add reaction roles
 - [ ] Add custom per server commands
 - [ ] Add slash command support
