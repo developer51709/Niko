@@ -8,6 +8,7 @@ import random
 import json
 import os
 import time
+from utils import logging as log
 
 
 class EconomyCog(commands.Cog):
@@ -17,9 +18,9 @@ class EconomyCog(commands.Cog):
 
     # Create a directory for economy data if it doesn't exist
     if not os.path.exists("economy_data"):
-        print("economy_data directory not found. Creating directory...")
+        log.info("Economy", "economy_data directory not found. Creating directory...")
         os.makedirs("economy_data")
-        print("economy_data directory created successfully. Continuing...")
+        log.success("Economy", "economy_data directory created successfully. Continuing...")
 
     # Load economy data from economy_data directory
     def load_economy_data(self):
@@ -32,7 +33,7 @@ class EconomyCog(commands.Cog):
                             user_id = filename[:-5]
                             economy_data[user_id] = json.load(f)
                     except Exception as e:
-                        print(f"Error loading {filename}: {e}")
+                        log.error("Economy", f"Error loading {filename}: {e}")
         return economy_data
 
     # Save economy data to economy_data directory per user

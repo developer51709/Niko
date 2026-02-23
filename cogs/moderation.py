@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from utils import logging as log
 
 
 class Moderation(commands.Cog):
@@ -7,6 +8,7 @@ class Moderation(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        log.info("Moderation", "Moderation cog initialized.")
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
