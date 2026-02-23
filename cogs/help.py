@@ -66,6 +66,10 @@ class HelpDropdown(discord.ui.Select):
                 label="Music", 
                 description="Music commands"
             ),
+            discord.SelectOption(
+                label="Leveling",
+                description="Leveling commands"
+            ),
         ]
 
         super().__init__(
@@ -268,6 +272,20 @@ class HelpDropdown(discord.ui.Select):
         elif category == "Music":
             embed.description = "🎵 **Music Commands**"
             cog = self.bot.get_cog("MusicSystem")
+            if cog:
+                for cmd in cog.get_commands():
+                    embed.add_field(
+                        name=f"`{cmd.name}`",
+                        value=cmd.help or "No description",
+                        inline=False
+                    )
+
+        # ===========================
+        #  LEVELING CATEGORY
+        # ===========================
+        elif category == "Leveling":
+            embed.description = "🏆 **Leveling Commands**"
+            cog = self.bot.get_cog("Leveling")
             if cog:
                 for cmd in cog.get_commands():
                     embed.add_field(
