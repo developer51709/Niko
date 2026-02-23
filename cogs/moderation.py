@@ -8,7 +8,6 @@ class Moderation(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        log.info("Moderation", "Moderation cog initialized.")
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
