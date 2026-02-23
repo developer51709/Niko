@@ -10,6 +10,7 @@ from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
+from utils.logging import info, success, warning, error, debug
 
 # -----------------------------
 # Config
@@ -156,7 +157,7 @@ async def set_status():
         elif status_type == "watching":
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
         else:
-            print(colorama.Fore.YELLOW + "Invalid status type. Defaulting to 'playing'." + colorama.Style.RESET_ALL)
+            warning("Startup", "Invalid status type. Defaulting to 'playing'.")
             await bot.change_presence(activity=discord.Game(name=status))
 
 # -----------------------------
@@ -166,7 +167,7 @@ def ensure_model():
     if os.path.exists(MODEL_PATH):
         return
 
-    print(colorama.Fore.YELLOW + "Downloading model... this may take a while." + colorama.Style.RESET_ALL)
+    warning("Startup", "Downloading model... this may take a while.")
     try:
         r = requests.get(MODEL_URL, stream=True)
         r.raise_for_status()
@@ -176,16 +177,16 @@ def ensure_model():
                 if chunk:
                     f.write(chunk)
 
-        print(colorama.Fore.GREEN + "Model downloaded successfully." + colorama.Style.RESET_ALL)
+        success("Startup", "Model downloaded successfully.")
     except Exception as e:
         if "401" in str(e):
-            print(colorama.Fore.RED + "Error 401: Unauthorized. The resource may require authentication." + colorama.Style.RESET_ALL)
+            error("Startup", "Error 401: Unauthorized. The resource may require authentication.")
         elif "403" in str(e):
-            print(colorama.Fore.RED + "Error 403: Forbidden. You don't have permission to access this resource." + colorama.Style.RESET_ALL)
+            error("Startup", "Error 403: Forbidden. You don't have permission to access this resource.")
         elif "404" in str(e):
-            print(colorama.Fore.RED + "Error 404: Model not found. Please check the MODEL_URL." + colorama.Style.RESET_ALL)
+            error("Startup", "Error 404: Model not found. Please check the MODEL_URL.")
         else:
-            print(colorama.Fore.RED + f"Failed to download model: {e}" + colorama.Style.RESET_ALL)
+            error("Startup", f"Failed to download model: {e}")
 
 # -----------------------------
 # Load model
@@ -309,7 +310,7 @@ async def on_message(msg):
             elif len(reply) < 1:
                 reply = "An error occured... 🥀"
                 if DEBUG_MODE == "True":
-                    print(colorama.Fore.RED + "Error: Empty response generated." + colorama.Style.RESET_ALL)
+                    error("AIGeneration", "Error: Empty response generated.")
 
             await msg.channel.send(reply)
 
@@ -363,13 +364,17 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
-    print(colorama.Fore.CYAN + f"Niko is online as {bot.user}" + colorama.Style.RESET_ALL)
+    info("Startup", f"Niko is online as {bot.user}")
     await load_cogs()
     await set_status()
     print_banner()
 
 if __name__ == "__main__":
     if not TOKEN:
-        raise RuntimeError(colorama.Fore.RED + "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory." + colorama.Style.RESET_ALL)
-    print("Starting bot...")
-    bot.run(TOKEN)
+        error("Startup", "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
+        exit(1)
+    info("Startup", "Starting bot...")
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        error("Startup", f"Error connecting to Discord: {e}")
