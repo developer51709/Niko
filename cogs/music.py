@@ -4,6 +4,7 @@ import wavelink
 from discord.ext import commands
 import discord
 import random
+from utils.logging import info, warning, error
 
 PERSONALITY = "gremlin"
 
@@ -57,13 +58,13 @@ class MusicSystem(commands.Cog):
             try:
                 async with session.get(AJIE_ALL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status != 200:
-                        print(f"[Lavalink] Failed to fetch AjieBlogs list: {resp.status}")
+                        error("Lavalink", f"Failed to fetch AjieBlogs list: {resp.status}")
                         return []
                     data = await resp.json()
-                    print(f"[Lavalink] Loaded {len(data)} nodes from AjieBlogs API.")
+                    info("Lavalink", f"Loaded {len(data)} nodes from AjieBlogs API.")
                     return data
             except Exception as e:
-                print(f"[Lavalink] Error fetching AjieBlogs list: {e}")
+                error("Lavalink", f"Error fetching AjieBlogs list: {e}")
                 return []
 
     async def try_connect_node(self, node_info):
@@ -81,24 +82,24 @@ class MusicSystem(commands.Cog):
                 timeout=8
             )
 
-            print(f"[Lavalink] Connected to {host}:{port} (SSL={secure})")
-            print("[Personality]", vibe())
+            info("Lavalink", f"Connected to {host}:{port} (SSL={secure})")
+            info("Personality", vibe())
             self.connected = True
             return True
         except asyncio.TimeoutError:
-            print(f"[Lavalink] Timed out connecting to {node_info['host']}:{node_info['port']}")
+            warning("Lavalink", f"Timed out connecting to {node_info['host']}:{node_info['port']}")
             try:
                 await wavelink.Pool.close()
             except Exception:
-                print(f"[Lavalink] Failed to close connection to {node_info['host']}:{node_info['port']}")
+                error("Lavalink", f"Failed to close connection to {node_info['host']}:{node_info['port']}")
                 pass
             return False
         except Exception as e:
-            print(f"[Lavalink] Failed node {node_info['host']}:{node_info['port']} SSL={node_info.get('secure', False)} -> {e}")
+            error("Lavalink", f"Failed node {node_info['host']}:{node_info['port']} SSL={node_info.get('secure', False)} -> {e}")
             try:
                 await wavelink.Pool.close()
             except Exception:
-                print(f"[Lavalink] Failed to close connection to {node_info['host']}:{node_info['port']}")
+                error("Lavalink", f"Failed to close connection to {node_info['host']}:{node_info['port']}")
                 pass
             return False
 
@@ -107,7 +108,7 @@ class MusicSystem(commands.Cog):
 
         nodes = await self.fetch_nodes()
         if not nodes:
-            print("[Lavalink] No nodes available from AjieBlogs API.")
+            warning("Lavalink", "No nodes available from AjieBlogs API.")
             return
 
         random.shuffle(nodes)
@@ -116,7 +117,7 @@ class MusicSystem(commands.Cog):
             if await self.try_connect_node(node_info):
                 return
 
-        print("[Lavalink] All nodes failed to connect.")
+        error("Lavalink", "All nodes failed to connect.")
 
     async def get_player(self, ctx):
         if not ctx.author.voice:
