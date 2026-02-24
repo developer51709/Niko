@@ -169,56 +169,9 @@ html, body {
   align-items: center;
 }
 
-.cup {
-  width: 120px;
-  height: 70px;
-  background: #fff;
-  border-radius: 0 0 60px 60px;
-  position: relative;
-  box-shadow: var(--shadow-soft);
-}
-
-.cup::before {
-  content: "";
-  position: absolute;
-  right: -25px;
-  top: 15px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 6px solid #fff;
-  border-left-color: transparent;
-  border-bottom-color: transparent;
-}
-
-.cup::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border-radius: 0 0 50px 50px;
-  background: linear-gradient(180deg, #c58b6b, #8b5a3c);
-}
-
-.steam {
-  position: absolute;
-  width: 10px;
-  height: 30px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.9), transparent);
-  top: -35px;
-  left: 30px;
-  opacity: 0;
-  animation: steamUp 3s infinite ease-in-out;
-}
-
-.steam--2 {
-  left: 55px;
-  animation-delay: 0.8s;
-}
-
-.steam--3 {
-  left: 80px;
-  animation-delay: 1.6s;
+.coffee-svg {
+  width: 200px;   /* or whatever size fits your layout */
+  height: auto;
 }
 
 /* sections */
