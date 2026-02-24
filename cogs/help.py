@@ -309,7 +309,7 @@ class HelpDropdown(discord.ui.Select):
             )
             embed.add_field(
                 name="🔗 Links",
-                value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8) | [website](https://developer51709.github.io/Niko)",
+                value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8) | [website](https://developer51709.github.io/Niko) | [server](https://dsc.gg/astral-haven)",
                 inline=False
             )
             embed.set_footer(text="Made with ❤️ by Nyxen")
@@ -403,7 +403,7 @@ class HelpCog(commands.Cog):
         )
         embed.add_field(
             name="🔗 Links",
-            value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8) | [website](https://developer51709.github.io/Niko)",
+            value=f"[GitHub](https://github.com/developer51709/Niko) | [invite](https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=8) | [website](https://developer51709.github.io/Niko) | [server](https://dsc.gg/astral-haven)",
             inline=False
         )
         embed.set_footer(text=f"Requested by {ctx.author}")
