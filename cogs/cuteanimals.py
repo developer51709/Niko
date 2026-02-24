@@ -2,7 +2,89 @@ from discord.ext import commands
 import requests
 import random
 
+# personality mode: "normal" or "cafe"
+PERSONALITY = "cafe"
+
+# -----------------------------
+# MESSAGE DICTIONARY
+# -----------------------------
+MESSAGES = {
+    "normal": {
+        "en": {
+            "fetch_fail": "Couldn't fetch a cute animal right now.",
+            "sending_random": "Here's a random {animal}:",
+            "sending_cat": "Here's a cat:",
+            "sending_dog": "Here's a dog:",
+        },
+        "de": {
+            "fetch_fail": "Konnte gerade kein süßes Tier abrufen.",
+            "sending_random": "Hier ist ein zufälliges {animal}:",
+            "sending_cat": "Hier ist eine Katze:",
+            "sending_dog": "Hier ist ein Hund:",
+        },
+    },
+
+    "cafe": {
+        "en": {
+            "fetch_fail": "aww i couldn’t fetch a cute lil animal rn 😭☕",
+            "sending_random": "okay bestie, here’s a cozy lil {animal} for you ☕✨",
+            "sending_cat": "brewing a soft lil kitty just for you ☕🐱",
+            "sending_dog": "serving a warm fluffy doggo straight from the café counter ☕🐶",
+        },
+        "de": {
+            "fetch_fail": "aww ich konnte gerade kein süßes tierchen holen 😭☕",
+            "sending_random": "okay liebchen, hier ist ein gemütliches kleines {animal} für dich ☕✨",
+            "sending_cat": "brühe dir ein kleines kätzchen auf ☕🐱",
+            "sending_dog": "serviere dir einen warmen flauschigen hund aus dem café ☕🐶",
+        },
+    },
+
+    # future personalities can be added here
+}
+
+# -----------------------------
+# LANGUAGE + PERSONALITY HELPERS
+# -----------------------------
+def get_lang(ctx):
+    if ctx and ctx.guild and ctx.guild.preferred_locale:
+        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+
+def get_personality():
+    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
+
+
+def msg(ctx, key, **kwargs):
+    personality = get_personality()
+    lang = get_lang(ctx)
+
+    # try personality + lang
+    block = MESSAGES.get(personality, {}).get(lang, {})
+    text = block.get(key)
+
+    # fallback personality + en
+    if text is None:
+        text = MESSAGES.get(personality, {}).get("en", {}).get(key)
+
+    # fallback normal + lang
+    if text is None:
+        text = MESSAGES["normal"].get(lang, {}).get(key)
+
+    # fallback normal + en
+    if text is None:
+        text = MESSAGES["normal"]["en"].get(key, key)
+
+    return text.format(**kwargs) if kwargs else text
+
+
+# -----------------------------
+# CUTE ANIMALS COG
+# -----------------------------
 class CuteAnimals(commands.Cog):
+    """Cute animal image commands with cozy café personality + bilingual support."""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -41,7 +123,13 @@ class CuteAnimals(commands.Cog):
             return data["image"]
         return None
 
-    @commands.command()
+    # -----------------------------
+    # RANDOM ANIMAL COMMAND
+    # -----------------------------
+    @commands.command(
+        name="cuteanimal",
+        help="get a cozy random animal pic ☕✨ | zeigt ein zufälliges süßes tier"
+    )
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
         animal, (url, api_type) = random.choice(list(self.animal_apis.items()))
@@ -50,21 +138,37 @@ class CuteAnimals(commands.Cog):
 
         img_url = self.extract_url(api_type, data)
         if img_url:
+            await ctx.send(msg(ctx, "sending_random", animal=animal))
             await ctx.send(img_url)
         else:
-            await ctx.send("Couldn't fetch a cute animal right now.")
+            await ctx.send(msg(ctx, "fetch_fail"))
 
-    @commands.command()
+    # -----------------------------
+    # CAT COMMAND
+    # -----------------------------
+    @commands.command(
+        name="cat",
+        help="get a cozy lil kitty ☕🐱 | zeigt ein süßes kätzchen"
+    )
     async def cat(self, ctx):
         """Sends a random cat image."""
         response = requests.get("https://api.thecatapi.com/v1/images/search")
+        await ctx.send(msg(ctx, "sending_cat"))
         await ctx.send(response.json()[0]["url"])
 
-    @commands.command()
+    # -----------------------------
+    # DOG COMMAND
+    # -----------------------------
+    @commands.command(
+        name="dog",
+        help="get a warm fluffy doggo ☕🐶 | zeigt einen süßen hund"
+    )
     async def dog(self, ctx):
         """Sends a random dog image."""
         response = requests.get("https://dog.ceo/api/breeds/image/random")
+        await ctx.send(msg(ctx, "sending_dog"))
         await ctx.send(response.json()["message"])
+
 
 async def setup(bot):
     await bot.add_cog(CuteAnimals(bot))

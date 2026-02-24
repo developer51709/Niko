@@ -3,11 +3,92 @@ from discord.ext import commands
 import aiohttp
 import random
 
+# personality mode: "normal" or "cafe"
+PERSONALITY = "cafe"
+
+# -----------------------------
+# MESSAGE DICTIONARY
+# -----------------------------
+MESSAGES = {
+    "normal": {
+        "en": {
+            "fetch_fail": "Couldn't fetch memes right now.",
+            "no_safe_memes": "No safe memes available right now.",
+            "meme_title_prefix": "",
+        },
+        "de": {
+            "fetch_fail": "Konnte gerade keine Memes abrufen.",
+            "no_safe_memes": "Keine sicheren Memes verfügbar.",
+            "meme_title_prefix": "",
+        },
+    },
+
+    "cafe": {
+        "en": {
+            "fetch_fail": "aww i couldn’t fetch any memes rn 😭☕",
+            "no_safe_memes": "no safe memes in the café right now 😭☕",
+            "meme_title_prefix": "☕ meme of the moment — ",
+        },
+        "de": {
+            "fetch_fail": "aww ich konnte gerade keine memes holen 😭☕",
+            "no_safe_memes": "keine sicheren memes im café gerade 😭☕",
+            "meme_title_prefix": "☕ meme des moments — ",
+        },
+    },
+
+    # future personalities can be added here
+}
+
+# -----------------------------
+# LANGUAGE + PERSONALITY HELPERS
+# -----------------------------
+def get_lang(ctx):
+    if ctx and ctx.guild and ctx.guild.preferred_locale:
+        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+
+def get_personality():
+    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
+
+
+def msg(ctx, key, **kwargs):
+    personality = get_personality()
+    lang = get_lang(ctx)
+
+    # try personality + lang
+    block = MESSAGES.get(personality, {}).get(lang, {})
+    text = block.get(key)
+
+    # fallback personality + en
+    if text is None:
+        text = MESSAGES.get(personality, {}).get("en", {}).get(key)
+
+    # fallback normal + lang
+    if text is None:
+        text = MESSAGES["normal"].get(lang, {}).get(key)
+
+    # fallback normal + en
+    if text is None:
+        text = MESSAGES["normal"]["en"].get(key, key)
+
+    return text.format(**kwargs) if kwargs else text
+
+
+# -----------------------------
+# MEME COG
+# -----------------------------
 class Meme(commands.Cog):
+    """Fetches memes with cozy café personality + bilingual support."""
+
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="meme")
+    @commands.command(
+        name="meme",
+        help="get a cozy random meme ☕✨ | holt ein zufälliges meme"
+    )
     async def meme(self, ctx):
         """Fetch a random meme using meme-api.com"""
         url = "https://meme-api.com/gimme/50"
@@ -15,7 +96,7 @@ class Meme(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200:
-                    return await ctx.send("Couldn't fetch memes right now.")
+                    return await ctx.send(msg(ctx, "fetch_fail"))
 
                 data = await resp.json()
 
@@ -26,14 +107,21 @@ class Meme(commands.Cog):
             memes = [m for m in memes if not m.get("nsfw")]
 
         if not memes:
-            return await ctx.send("No safe memes available right now.")
+            return await ctx.send(msg(ctx, "no_safe_memes"))
 
         meme = random.choice(memes)
 
+        # personality-aware embed styling
+        personality = get_personality()
+        lang = get_lang(ctx)
+
+        title_prefix = msg(ctx, "meme_title_prefix")
+        title = f"{title_prefix}{meme['title']}"
+
         embed = discord.Embed(
-            title=meme["title"],
+            title=title,
             url=meme["postLink"],
-            color=discord.Color.random()
+            color=discord.Color.gold() if personality == "cafe" else discord.Color.random()
         )
         embed.set_image(url=meme["url"])
         embed.set_footer(text=f"👍 {meme['ups']} • r/{meme['subreddit']}")
