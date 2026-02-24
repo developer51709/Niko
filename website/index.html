@@ -1,46 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Niko | Discord Bot</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Niko — Cozy Café Discord Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
-<body>
-  <header class="hero">
-    <h1>Niko</h1>
-    <p>Niko is an all‑in‑one Discord bot with moderation, automod, fun commands, economy, conversational AI, and much more.</p>
-    <div class="hero-buttons">
-      <a class="btn" href="https://discord.com/api/oauth2/authorize?client_id=1462548836705898506&permissions=8&scope=bot%20applications.commands">Invite Niko</a>
-      <a class="btn secondary" href="https://github.com/developer51709/Niko">GitHub</a>
+<body class="page page--fade-in">
+  <header class="header">
+    <div class="header__left">
+      <span class="logo">niko ☕</span>
+    </div>
+    <div class="header__right">
+      <button class="lang-toggle" data-lang="en">EN</button>
+      <button class="lang-toggle" data-lang="de">DE</button>
     </div>
   </header>
 
-  <main>
-    <section class="features">
-      <h2>Features</h2>
-      <ul>
-        <li>Moderation tools (kick, ban, timeout, logs)</li>
-        <li>Automod with customizable filters</li>
-        <li>Fun commands and mini‑games</li>
-        <li>Economy system with currency and items</li>
-        <li>Conversational AI responses</li>
-        <li>Utility commands for servers and users</li>
-      </ul>
+  <main class="main">
+    <section class="hero">
+      <div class="hero__content">
+        <h1 id="hero-title" class="lang-fade"></h1>
+        <p id="hero-sub" class="lang-fade"></p>
+        <div class="hero__buttons">
+          <a id="btn-invite" href="#" class="btn btn--primary lang-fade"></a>
+          <a id="btn-commands" href="#features" class="btn btn--ghost lang-fade"></a>
+          <a id="btn-github" href="https://github.com/developer51709/Niko" class="btn btn--ghost lang-fade" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+      </div>
+      <div class="hero__art">
+        <div class="cup">
+          <div class="steam steam--1"></div>
+          <div class="steam steam--2"></div>
+          <div class="steam steam--3"></div>
+        </div>
+      </div>
     </section>
 
-    <section class="links">
-      <h2>Links</h2>
-      <ul>
-        <li><a href="https://discord.com/api/oauth2/authorize?client_id=1462548836705898506&permissions=8&scope=bot%20applications.commands">Invite Niko</a></li>
-        <li><a href="https://github.com/developer51709/Niko">GitHub Repository</a></li>
-      </ul>
+    <section id="features" class="section section--cards">
+      <h2 id="features-title" class="lang-fade"></h2>
+      <div class="cards">
+        <article class="card">
+          <h3 id="feat-personality-title" class="lang-fade"></h3>
+          <p id="feat-personality-text" class="lang-fade"></p>
+        </article>
+        <article class="card">
+          <h3 id="feat-music-title" class="lang-fade"></h3>
+          <p id="feat-music-text" class="lang-fade"></p>
+        </article>
+        <article class="card">
+          <h3 id="feat-level-title" class="lang-fade"></h3>
+          <p id="feat-level-text" class="lang-fade"></p>
+        </article>
+        <article class="card">
+          <h3 id="feat-fun-title" class="lang-fade"></h3>
+          <p id="feat-fun-text" class="lang-fade"></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section section--split">
+      <div class="split__block">
+        <h2 id="personality-title" class="lang-fade"></h2>
+        <p id="personality-text" class="lang-fade"></p>
+        <ul class="pill-list">
+          <li>normal 🫗</li>
+          <li>café ☕</li>
+        </ul>
+      </div>
+      <div class="split__block">
+        <h2 id="bilingual-title" class="lang-fade"></h2>
+        <div class="example-card">
+          <div>
+            <h4>EN</h4>
+            <p>“brewing your track bestie ☕🎶”</p>
+          </div>
+          <div>
+            <h4>DE</h4>
+            <p>„brühe deinen track auf liebchen ☕🎶“</p>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <p>© 2026 Niko Bot — Created with ♡ by Nyxen</p>
+  <footer class="footer">
+    <div>
+      <span id="footer-text"></span>
+    </div>
+    <nav class="footer__nav">
+      <a href="tos.html" class="link--transition">ToS</a>
+      <a href="privacy.html" class="link--transition">Privacy</a>
+    </nav>
   </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>
