@@ -1,198 +1,59 @@
 # Niko Discord Bot
 
+![Niko Banner](banner.png)
+
 ## Overview
-A Discord bot powered by a local LLM (TinyLlama) that has a unique personality. The bot responds when mentioned by name or pinged, and remembers interactions with users.
+Niko is a cozy, bilingual Discord bot powered by a local LLM (TinyLlama). With a unique "café bestie" personality, Niko interacts with users, remembers past conversations, and brings a warm, lo-fi aesthetic to your server.
+
+## Features
+- **Local AI Personality**: Powered by TinyLlama-1.1B for private, local inference.
+- **Bilingual Support**: Fully functional in both English and German.
+- **Multi-Personality System**: Currently featuring a cozy "Café" vibe with themed responses.
+- **Economy & Games**: A full economy system, gambling (Blackjack, Slots, Roulette), and fun mini-games.
+- **Music Player**: High-quality music streaming via Lavalink with a cozy twist.
+- **Leveling System**: Earn XP and level up like a growing coffee bean.
+- **Moderation & AutoMod**: Powerful tools to keep your server safe and organized.
 
 ## Project Structure
-- `bot.py` - Main bot code with Discord integration and LLM handling
-- `requirements.txt` - Python dependencies
-- `memory.json` - User memory storage (created at runtime)
-- `*.gguf` - LLM model file (downloaded at first run)
-- `\cogs` - This folder is for command cogs and are loaded dynamically when the bot is started
+- `bot.py` - Main bot entry point and LLM integration.
+- `cogs/` - Modular feature sets (Economy, Music, Leveling, etc.).
+- `utils/` - Shared utilities including a custom colored logging system.
+- `data/` - Persistent storage for levels, warns, and server configs.
+- `economy_data/` - Per-user economy profiles.
+- `memory.json` - AI conversation memory.
 
-## Dependencies
-- `discord.py` - Discord API wrapper
-- `ctransformers` - Local LLM inference
-- `requests` - HTTP requests for model download
-- `colorama` - Adds colored terminal logs for more user friendly logging
-
-## Configuration
-The bot requires a `DISCORD_BOT_TOKEN` secret to be set. This is your Discord bot token from the Discord Developer Portal.
-
-## Running
-The bot runs as a console application. It will:
-1. Download the TinyLlama model on first run (~600MB)
-2. Load the model into memory
-3. Connect to Discord and respond to messages
+## Setup & Running
+1. **Secrets**: Add your `DISCORD_BOT_TOKEN` to the environment secrets.
+2. **First Run**: The bot will automatically download the TinyLlama model (~600MB) on its first startup.
+3. **Workflows**: Use the "Discord Bot" workflow to start the application.
 
 ## Commands
-- `!help` - See the full command list
-<details>
-  <summary>AI Commands</summary>
-  <ul>
-    <li>Mention "niko" in a message or ping the bot</li>
-    <li><code>!ai &lt;message&gt;</code> - Direct message to the bot</li>
-    <li><code>!favor [@user]</code> - Check favorability score</li>
-    <li><code>!memory [@user]</code> - Get the bots conversation history for a specific user</li>
-  </ul>
-</details>
-<details>
-  <summary>Fun Commands</summary>
-  <ul>
-    <li><code>!uwulock</code> - Locks a user so their messages become uwu‑ified</li>
-    <li><code>!meme</code> - Fetch a random meme using meme-api.com.</li>
-    <li><code>!tictactoe &lt;@user&gt;</code> - Play a game of tictactoe with another user.</li>
-  </ul>
-</details>
-<details>
-  <summary>Economy Commands</summary>
-  <ul>
-    <li><code>!balance [@user]</code> - Check your balance or another user's balance.</li>
-    <li><code>!bank</code> - View your bank balance.</li>
-    <li><code>!buy &lt;item&gt;</code> - Buy an item from the shop.</li>
-    <li><code>!crime</code> - Commit a crime to earn money.</li>
-    <li><code>!daily</code> - Claim your daily reward.</li>
-    <li><code>!deposit &lt;amount&gt;</code> - Deposit money into the bank.</li>
-    <li><code>!inventory</code> - View your inventory.</li>
-    <li><code>!leaderboard</code> - View the economy leaderboard.</li>
-    <li><code>!networth</code> - View your net worth.</li>
-    <li><code>!pay &lt;user_id&gt; &lt;amount&gt;</code> - Pay another user money.</li>
-    <li><code>!rob &lt;user_id&gt;</code> - Rob another user to earn money.</li>
-    <li><code>!sell &lt;item&gt;</code> - Sell an item from your inventory.</li>
-    <li><code>!shop</code> - View the shop.</li>
-    <li><code>!withdraw &lt;amount&gt;</code> - Withdraw money from the bank.</li>
-    <li><code>!work</code> - Work to earn money.</li>
-  </ul>
-</details>
-<details>
-  <summary>Gambling Commands</summary>
-  <ul>
-    <li><code>!blackjack &lt;amount&gt;</code> - Play a game of blackjack</li>
-    <li><code>!slots &lt;amount&gt;</code> - Play a game of slots</li>
-    <li><code>!roulette</code> - Play a game of roulette</li>
-  </ul>
-</details>
-<details>
-  <summary>Info Commands</summary>
-  <ul>
-    <li><code>!about</code> - Get info about the bot</li>
-    <li><code>!avatar [@user]</code> - View a users pfp</li>
-    <li><code>!booststats</code> - View boost info for the server</li>
-    <li><code>!creator</code> - Learn about the bot creator</li>
-    <li><code>!debuginfo</code> - View debug info for the bot</li>
-    <li><code>!hostinfo</code> - View info about the bots host</li>
-    <li><code>!roleinfo [@role]</code> - View info about a role on the server</li>
-    <li><code>!serverbanner</code> - View the server banner</li>
-    <li><code>!servericon</code> - View the server icon</li>
-    <li><code>!serverinfo</code> - View info about the server</li>
-    <li><code>!serverstats</code> - View the server stats</li>
-    <li><code>!spotify [@user]</code> - See what a user is listening to on spotify</li>
-    <li><code>!userinfo [@user]</code> - View info about a user</li>
-  </ul>
-</details>
-<details>
-  <summary>Roleplay Commands</summary>
-  <ul>
-    <li><code>!fuck &lt;user_id&gt;</code> - Fuck another user. (not really)</li>
-    <li><code>!hug &lt;user_id&gt;</code> - Hug another user. (not really)</li>
-    <li><code>!kill &lt;user_id&gt;</code> - Kill another user. (not really)</li>
-    <li><code>!makeout &lt;user_id&gt;</code> - Make out with another user. (not really)</li>
-  </ul>
-</details>
-<details>
-  <summary>Utility Commands</summary>
-  <ul>
-    <li><code>!boring</code> - A boring command</li>
-    <li><code>!crazy</code> - Crazy? I was crazy once...</li>
-    <li><code>!echo</code> - echo a message</li>
-    <li><code>!nitro</code> - free nitro?</li>
-    <li><code>!notboring</code> - a not boring command :P</li>
-    <li><code>!partnership_request</code> - a command for submitting a server partnership request</li>
-    <li><code>!ping</code> - Pong!</li>
-    <li><code>!uwu</code> - UwU</li>
-  </ul>
-</details>
-<details>
-  <summary>Moderation Commands</summary>
-  <ul>
-    <li><code>!kick</code> - Kick a member from the server.</li>
-    <li><code>!ban</code> - Ban a member from the server.</li>
-    <li><code>!unban</code> - Unban a user by ID.</li>
-    <li><code>!warn</code> - Warn a member.</li>
-    <li><code>!warnings</code> - View a member's warnings.</li>
-    <li><code>!clearwarnings</code> - Clear all warnings for a member.</li>
-    <li><code>!mute</code> - Mute a member.</li>
-    <li><code>!tempmute</code> - Temporarily mute a member. Duration in seconds.</li>
-    <li><code>!unmute</code> - Unmute a member.</li>
-    <li><code>!clear</code> - Clear a number of messages.</li>
-    <li><code>!purge</code> - Purge messages from a specific user.</li>
-    <li><code>!slowmode</code> - Set slowmode in this channel (seconds).</li>
-    <li><code>!lock</code> - Lock this channel.</li>
-    <li><code>!unlock</code> - Unlock this channel.</li>
-    <li><code>!nick</code> - Change a member's nickname.</li>
-    <li><code>!setmodlog</code> - Set the mod-log channel.</li>
-    <li><code>!badwords</code> - Show the blocked word list.</li>
-  </ul>
-</details>
-<details>
-  <summary>AutoMod Commands</summary>
-  <ul>
-    <li><code>!automod [toggle|threshold|mentions]</code> - Manage the automod config for the current server</li>
-  </ul>
-</details>
-<details>
-  <summary>EmojiManager Commands</summary>
-  <ul>
-    <li><code>!emojimanager</code> - Displays the help menu for the Emoji Manager cog.</li>
-    <li><code>!steal</code> - Steals a single custom emoji from any server and adds it to the current one.</li>
-    <li><code>!steal-multiple</code> - Steals multiple custom emojis in one command.</li>
-    <li><code>!steal-from-url</code> - Adds a new emoji by providing a direct image URL.</li>
-    <li><code>!stickersteal</code> - Steals a sticker by prompting the user to send one in the chat.</li>
-    <li><code>!enlarge</code> - Displays a larger PNG/GIF version of a given custom emoji.</li>
-    <li><code>!emojistats</code> - Displays a detailed breakdown of the server's emoji usage and available slots.</li>
-    <li><code>!list-emojis</code> - Provides a list of all custom emojis in the server with their names and animated status.</li>
-    <li><code>!extract-emoji</code> - Sends the image file for a given custom emoji.</li>
-    <li><code>!emdownloadserver</code> - Downloads all custom emojis from the server and sends them as a zip file.</li>
-    <li><code>!emdownload</code> - Downloads a specific custom emoji or sticker and puts it in a zip file.</li>
-    <li><code>!remove-emoji</code> - Removes a single custom emoji from the server.</li>
-    <li><code>!remove-all-emojis</code> - Removes all custom emojis from the server with a confirmation button.</li>
-  </ul>
-</details>
-<details>
-  <summary>Onboarding Commands</summary>
-  <ul>
-    <li><code>!onboarding_setup</code> - Setup onboarding for the server.</li>
-    <li><code>!onboarding_role_menu</code> - Setup role menu for the server.</li>
-  </ul>
-</details>
-<details>
-  <summary>NSFW Commands</summary>
-  <ul>
-    <li><code>!rule34 &lt;query&gt;</code> - Search for images on rule34.xxx</li>
-    <li><code>!gelbooru &lt;query&gt;</code> - Search for images on gelbooru.com</li>
-  </ul>
-</details>
-<details>
-  <summary>Music Commands</summary>
-  <ul>
-    <li><code>!musicstatus</code> - Check if the bot is connected to a music server.</li>
-    <li><code>!play &lt;search&gt;</code> - Play a song in a voice channel.</li>
-    <li><code>!pause</code> - Pause the currently playing song.</li>
-    <li><code>!resume</code> - Resume the currently paused song.</li>
-    <li><code>!skip</code> - Skip the currently playing song.</li>
-    <li><code>!stop</code> - Stop the player and clear the queue.</li>
-    <li><code>!queue</code> - Show the current queue.</li>
-    <li><code>!volume &lt;1-100&gt;</code> - Adjust the volume of the player.</li>
-    <li><code>!disconnect</code> - Disconnect the bot from the voice channel.</li>
-  </ul>
-</details>
-<details>
-  <summary>Leveling Commands</summary>
-  <ul>
-    <li><code>!level</code> - Check your current level and XP.</li>
-    <li><code>!level-leaderboard</code> - View the leveling leaderboard.</li>
-  </ul>
-</details>
+- `!help` - View the full interactive help menu.
+
+### ☕ Café Specials (AI & Leveling)
+- Mention "niko" or ping to chat!
+- `!favor [@user]` - Check our vibe score ☕✨
+- `!memory [@user]` - See my café notes on you ☕📝
+- `!level` - Check your cozy level stats ☕
+- `!level-leaderboard` - View the cozy leaderboard ☕
+
+### 🥐 Pastry Shop (Economy)
+- `!balance` - Check your pastry bag balance 🥐✨
+- `!daily` - Claim your daily treats 🍬✨
+- `!work` - Work a shift at the café ☕
+- `!shop` / `!buy` / `!inventory` - Manage your café goodies.
+
+### 🎶 Cozy Tunes (Music)
+- `!play <search>` - Brew a cozy track for your ears ☕🎶
+- `!queue` - See what’s on the cozy playlist ☕📜
+- `!stop` / `!skip` / `!pause` - Manage the café ambiance.
+
+### 🌿 Social (Roleplay)
+- `!hug <@user>` - Give a big, warm café hug ☕💖
+- `!kill <@user>` - Playfully take out a friend ☕💀
+
+---
+*Niko - Making your Discord server a little bit cozier, one cup at a time.*
 
 ## To-Do
 - [ ] Fix the AI response speed
