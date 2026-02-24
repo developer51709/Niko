@@ -6,24 +6,25 @@ import discord
 import random
 from utils.logging import info, warning, error
 
-PERSONALITY = "gremlin"
+# Set to either "cafe" or "normal"
+PERSONALITY = "cafe"  # soft café‑vibe default
 
-SOFT = [
-    "yaaay bestie I got your song queued up ✨🎶",
-    "omg the vibes are immaculate already (≧◡≦)",
-    "bestie your music taste is so cute I can't 💖",
+CAFE_SOFT = [
+    "okay bestie, your song is brewing ☕✨",
+    "aww this track feels like warm sunlight through a café window (≧◡≦)🌿",
+    "your music taste is like… cinnamon‑sweet?? i love it sm 🍪💛",
 ]
 
-SPICY = [
-    "ugh fine I'll play your lil song 💅",
-    "okay queen I see you with the taste",
-    "this track better not flop like your ex",
+CAFE_GERMAN = [
+    "alles klar liebchen, dein song läuft gleich ☕✨",
+    "ohhh das fühlt sich an wie ein ruhiger morgen im café (˘͈ᵕ ˘͈♡)🌿",
+    "dein musikgeschmack ist so cozy ich kann nicht 🍪💛",
 ]
 
-GREMLIN = [
-    "OMG YES LET'S SUMMON THE DEMON OF MUSIC 😭🔥✨",
-    "BESTIE THIS SONG IS ABOUT TO GO FERALLLL",
-    "I'M BLASTING THIS LIKE A GREMLIN IN A SUBWOOFER 😈🌈",
+CAFE_PLAYFUL = [
+    "one cozy track coming right up, like a lil latte for your ears ☕🎶",
+    "okay okay, i see you ordering the *fancy* vibes today ✨",
+    "this song is giving soft lo‑fi café energy and i’m here for it 🌿",
 ]
 
 NORMAL = [
@@ -33,13 +34,14 @@ NORMAL = [
 ]
 
 
-def vibe():
-    if PERSONALITY == "soft":
-        return random.choice(SOFT)
-    if PERSONALITY == "spicy":
-        return random.choice(SPICY)
-    if PERSONALITY == "gremlin":
-        return random.choice(GREMLIN)
+def vibe(ctx=None):
+    lang = "de" if ctx and ctx.guild and ctx.guild.preferred_locale.startswith("de") else "en"
+
+    if PERSONALITY == "cafe":
+        if lang == "de":
+            return random.choice(CAFE_GERMAN)
+        return random.choice(CAFE_SOFT + CAFE_PLAYFUL)
+
     return random.choice(NORMAL)
 
 
@@ -83,7 +85,6 @@ class MusicSystem(commands.Cog):
             )
 
             info("Lavalink", f"Connected to {host}:{port} (SSL={secure})")
-            info("Personality", vibe())
             self.connected = True
             return True
         except asyncio.TimeoutError:
@@ -92,7 +93,6 @@ class MusicSystem(commands.Cog):
                 await wavelink.Pool.close()
             except Exception:
                 error("Lavalink", f"Failed to close connection to {node_info['host']}:{node_info['port']}")
-                pass
             return False
         except Exception as e:
             error("Lavalink", f"Failed node {node_info['host']}:{node_info['port']} SSL={node_info.get('secure', False)} -> {e}")
@@ -100,7 +100,6 @@ class MusicSystem(commands.Cog):
                 await wavelink.Pool.close()
             except Exception:
                 error("Lavalink", f"Failed to close connection to {node_info['host']}:{node_info['port']}")
-                pass
             return False
 
     async def startup_connect(self):
@@ -121,8 +120,7 @@ class MusicSystem(commands.Cog):
 
     async def get_player(self, ctx):
         if not ctx.author.voice:
-            await ctx.send("bestie you're not even in a voice channel 😭")
-            return None
+            return await ctx.send("uhh bestie… du bist nicht mal im voice channel 😭☕")
 
         channel = ctx.author.voice.channel
         player = ctx.voice_client
@@ -134,92 +132,74 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="musicstatus")
     async def music_status(self, ctx):
-        """Check if the bot is connected to a music server."""
         if not self.connected:
-            msg = (
-                "bestie… I'm not connected to ANY music servers rn 😭"
-                if PERSONALITY != "normal"
-                else "Not connected to any Lavalink nodes."
-            )
-            return await ctx.send(msg)
+            return await ctx.send("hmm… ich bin grad mit keinem musikserver verbunden 😭☕")
 
-        msg = (
-            "yaaas I'm connected to a music server and ready to serve ✨🎶"
-            if PERSONALITY != "normal"
-            else "Connected to a Lavalink node."
-        )
-        await ctx.send(msg)
+        await ctx.send("yesss, i’m connected + ready to play cozy café vibes ✨🎶")
 
     @commands.command(name="play", aliases=["p"])
     async def play(self, ctx, *, search: str):
-        """Play a song in a voice channel."""
         player = await self.get_player(ctx)
         if not player:
             return
 
         tracks = await wavelink.Playable.search(search)
         if not tracks:
-            await ctx.send("bestie I couldn't find that song 😭")
-            return
+            return await ctx.send("konnte den song nicht finden liebchen 😭🌿")
 
         track = tracks[0]
 
         if not player.playing:
             await player.play(track)
-            await ctx.send(f"{vibe()} — now playing **{track.title}** 🎧")
+            await ctx.send(f"{vibe(ctx)} — now playing **{track.title}** 🎧☕")
         else:
             player.queue.put(track)
-            await ctx.send(f"{vibe()} — added **{track.title}** to the queue 💖")
+            await ctx.send(f"{vibe(ctx)} — added **{track.title}** to the queue 🍪✨")
 
     @commands.command(name="pause")
     async def pause(self, ctx):
-        """Pause the currently playing song."""
         player = ctx.voice_client
         if not player or not player.playing:
-            return await ctx.send("bestie there's literally nothing playing 😭")
+            return await ctx.send("there’s nothing playing rn babe 😭☕")
 
         await player.pause(True)
-        await ctx.send(f"{vibe()} — pausing the vibes ✨")
+        await ctx.send(f"{vibe(ctx)} — pausing the cozy vibes 🌿")
 
     @commands.command(name="resume")
     async def resume(self, ctx):
-        """Resume the currently paused song."""
         player = ctx.voice_client
         if not player:
-            return await ctx.send("bestie nothing is paused rn 😭")
+            return await ctx.send("nichts zum fortsetzen da 😭")
 
         await player.pause(False)
-        await ctx.send(f"{vibe()} — the vibes are BACK 🎶✨")
+        await ctx.send(f"{vibe(ctx)} — vibes resumed ✨🎶")
 
     @commands.command(name="skip")
     async def skip(self, ctx):
-        """Skip the currently playing song."""
         player = ctx.voice_client
         if not player or not player.playing:
-            return await ctx.send("skip what babe… the silence? 😭")
+            return await ctx.send("skip what… the silence? 😭☕")
 
         await player.skip()
-        await ctx.send(f"{vibe()} — skipped like a messy breakup 💅")
+        await ctx.send(f"{vibe(ctx)} — skipped like turning a café page 🍂")
 
     @commands.command(name="stop")
     async def stop(self, ctx):
-        """Stop the player and clear the queue."""
         player = ctx.voice_client
         if not player:
-            return await ctx.send("there's nothing to stop bestie 😭")
+            return await ctx.send("there’s nothing to stop babe 😭")
 
         await player.stop()
         player.queue.clear()
-        await ctx.send(f"{vibe()} — okay fine I stopped EVERYTHING 😭✨")
+        await ctx.send(f"{vibe(ctx)} — okay okay, stopping everything ☕💛")
 
     @commands.command(name="queue", aliases=["q"])
     async def queue(self, ctx):
-        """Show the current queue."""
         player = ctx.voice_client
         if not player or player.queue.is_empty:
-            return await ctx.send("the queue is emptier than my love life 😭")
+            return await ctx.send("the queue is emptier than a café at closing time 😭")
 
-        msg = "**Current Queue:**\n"
+        msg = "**current queue:**\n"
         for i, track in enumerate(player.queue, start=1):
             msg += f"{i}. {track.title}\n"
 
@@ -227,24 +207,22 @@ class MusicSystem(commands.Cog):
 
     @commands.command(name="volume", aliases=["vol"])
     async def volume(self, ctx, vol: int):
-        """Adjust the volume of the player."""
         player = ctx.voice_client
         if not player:
-            return await ctx.send("bestie nothing is even playing 😭")
+            return await ctx.send("nothing is playing rn 😭")
 
         vol = max(0, min(vol, 100))
         await player.set_volume(vol)
-        await ctx.send(f"{vibe()} — volume set to **{vol}%** ✨")
+        await ctx.send(f"{vibe(ctx)} — volume set to **{vol}%** ☕✨")
 
     @commands.command(name="disconnect", aliases=["dc", "leave"])
     async def disconnect(self, ctx):
-        """Disconnect the bot from the voice channel."""
         player = ctx.voice_client
         if not player:
-            return await ctx.send("I'm not even in a VC babe 😭")
+            return await ctx.send("i’m not even in vc babe 😭")
 
         await player.disconnect()
-        await ctx.send(f"{vibe()} — fine I left the VC like a dramatic queen 💅")
+        await ctx.send(f"{vibe(ctx)} — leaving the vc like a soft lil barista wave 🌿☕")
 
 
 async def setup(bot):
