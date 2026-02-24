@@ -51,7 +51,7 @@ class RolePlayCog(commands.Cog):
         self.bot = bot
 
     # !kill command
-    @commands.command(name="kill")
+    @commands.command(name="kill", help="playfully take out a friend ☕💀 | schalte einen Freund spielerisch aus")
     async def kill(self, ctx, member: discord.Member = None):
         """Kill another user. (not really)"""
         try:
@@ -74,7 +74,7 @@ class RolePlayCog(commands.Cog):
             await ctx.send(embed=error_embed)
 
     # !hug command
-    @commands.command(name="hug")
+    @commands.command(name="hug", help="give a big, warm café hug ☕💖 | gib eine große, warme Café-Umarmung")
     async def hug(self, ctx, member: discord.Member = None):
         """Hug another user. (not really)"""
         try:

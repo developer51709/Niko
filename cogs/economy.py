@@ -107,7 +107,7 @@ class EconomyCog(commands.Cog):
     # -----------------------------
 
     # !balance command
-    @commands.command(name="balance")
+    @commands.command(name="balance", help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
@@ -116,7 +116,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(msg(ctx, "balance", name=target.display_name, balance=balance))
 
     # !daily command
-    @commands.command(name="daily")
+    @commands.command(name="daily", help="claim your daily treats 🍬✨ | hol dir deine täglichen Belohnungen")
     async def daily(self, ctx):
         '''Claim your daily reward.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -131,7 +131,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(msg(ctx, "daily_success", reward=daily_reward))
 
     # !work command
-    @commands.command(name="work")
+    @commands.command(name="work", help="work a shift at the café ☕ | arbeite eine Schicht im Café")
     async def work(self, ctx):
         '''Work to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)
