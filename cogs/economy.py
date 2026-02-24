@@ -10,6 +10,57 @@ import os
 import time
 from utils import logging as log
 
+# personality mode: "normal" or "cafe"
+PERSONALITY = "cafe"
+
+MESSAGES = {
+    "normal": {
+        "en": {
+            "balance": "{name}'s balance is {balance} coins.",
+            "daily_wait": "You can only claim your daily reward once every 24 hours.",
+            "daily_success": "You claimed your daily reward of {reward} coins!",
+            "work_wait": "You can only work once every hour.",
+            "work_success": "You worked and earned {reward} coins!",
+        },
+        "de": {
+            "balance": "Das Guthaben von {name} beträgt {balance} Münzen.",
+            "daily_wait": "Du kannst deine tägliche Belohnung nur alle 24 Stunden abholen.",
+            "daily_success": "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
+            "work_wait": "Du kannst nur einmal pro Stunde arbeiten.",
+            "work_success": "Du hast gearbeitet und {reward} Münzen verdient!",
+        }
+    },
+    "cafe": {
+        "en": {
+            "balance": "hey! {name} has {balance} coins in their pastry bag 🥐✨",
+            "daily_wait": "patience, bestie! your daily treats aren't ready yet. try again in a bit ☕🍰",
+            "daily_success": "yesss! you got your daily {reward} coins. go buy something cute! 🍬✨",
+            "work_wait": "you're working too hard! take a coffee break and come back in an hour ☕💤",
+            "work_success": "good job! you worked a shift and earned {reward} coins for the tip jar 🍯✨",
+        },
+        "de": {
+            "balance": "hey! {name} hat {balance} Münzen in der Gebäcktasche 🥐✨",
+            "daily_wait": "Geduld, Liebes! Deine täglichen Leckereien sind noch nicht fertig. Versuch es später nochmal ☕🍰",
+            "daily_success": "yesss! Du hast deine täglichen {reward} Münzen bekommen. Geh dir was Schönes kaufen! 🍬✨",
+            "work_wait": "Du arbeitest zu hart! Mach eine Kaffeepause und komm in einer Stunde wieder ☕💤",
+            "work_success": "Gute Arbeit! Du hast eine Schicht gearbeitet und {reward} Münzen für das Trinkgeldglas verdient 🍯✨",
+        }
+    }
+}
+
+def get_lang(ctx):
+    if ctx and ctx.guild and ctx.guild.preferred_locale:
+        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+def msg(ctx, key, **kwargs):
+    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    lang = get_lang(ctx)
+    text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
+    if text is None:
+        text = MESSAGES["normal"].get(lang, {}).get(key, key)
+    return text.format(**kwargs) if kwargs else text
 
 class EconomyCog(commands.Cog):
     def __init__(self, bot):
@@ -62,7 +113,7 @@ class EconomyCog(commands.Cog):
         target = member or ctx.author
         user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
-        await ctx.send(f"{target.display_name}'s balance is {balance} coins.")
+        await ctx.send(msg(ctx, "balance", name=target.display_name, balance=balance))
 
     # !daily command
     @commands.command(name="daily")
@@ -71,13 +122,13 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(ctx.author.id)
         current_time = int(time.time())
         if current_time - user_data["last_daily"] < 86400:
-            await ctx.send("You can only claim your daily reward once every 24 hours.")
+            await ctx.send(msg(ctx, "daily_wait"))
         else:
             daily_reward = 1000
             user_data["balance"] += daily_reward
             user_data["last_daily"] = current_time
             self.save_economy_data()
-            await ctx.send(f"You claimed your daily reward of {daily_reward} coins!")
+            await ctx.send(msg(ctx, "daily_success", reward=daily_reward))
 
     # !work command
     @commands.command(name="work")
@@ -86,13 +137,13 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(ctx.author.id)
         current_time = int(time.time())
         if current_time - user_data["last_work"] < 3600:
-            await ctx.send("You can only work once every hour.")
+            await ctx.send(msg(ctx, "work_wait"))
         else:
             work_reward = random.randint(30, 100)
             user_data["balance"] += work_reward
             user_data["last_work"] = current_time
             self.save_economy_data()
-            await ctx.send(f"You worked and earned {work_reward} coins!")
+            await ctx.send(msg(ctx, "work_success", reward=work_reward))
 
     # !crime command
     @commands.command(name="crime")

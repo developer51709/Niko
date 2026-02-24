@@ -2,6 +2,50 @@ import discord
 import random
 from discord.ext import commands
 
+# personality mode: "normal" or "cafe"
+PERSONALITY = "cafe"
+
+MESSAGES = {
+    "normal": {
+        "en": {
+            "need_mention": "You need to mention someone to use this command on them!",
+            "hug_desc": "{author} hugged {target}! :hugging:",
+            "kill_desc": "{author} killed {target}!",
+        },
+        "de": {
+            "need_mention": "Du musst jemanden erwähnen, um diesen Befehl zu nutzen!",
+            "hug_desc": "{author} hat {target} umarmt! :hugging:",
+            "kill_desc": "{author} hat {target} getötet!",
+        }
+    },
+    "cafe": {
+        "en": {
+            "need_mention": "who are we doing this with? mention a friend! ☕✨",
+            "hug_desc": "omg! {author} gave {target} a big, warm café hug! ☕💖",
+            "kill_desc": "oh no! {author} playfully took out {target}! ☕💀",
+        },
+        "de": {
+            "need_mention": "Mit wem machen wir das? Erwähne einen Freund! ☕✨",
+            "hug_desc": "omg! {author} hat {target} eine große, warme Café-Umarmung gegeben! ☕💖",
+            "kill_desc": "oh nein! {author} hat {target} spielerisch ausgeschaltet! ☕💀",
+        }
+    }
+}
+
+def get_lang(ctx):
+    if ctx and ctx.guild and ctx.guild.preferred_locale:
+        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+def msg(ctx, key, **kwargs):
+    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    lang = get_lang(ctx)
+    text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
+    if text is None:
+        text = MESSAGES["normal"].get(lang, {}).get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
 class RolePlayCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -12,32 +56,19 @@ class RolePlayCog(commands.Cog):
         """Kill another user. (not really)"""
         try:
             if not member:
-                return await ctx.send("You need to mention someone to use this command on them!")
+                return await ctx.send(msg(ctx, "need_mention"))
             target = member
             kill_gifs = [
                 "https://i.pinimg.com/originals/36/d5/fd/36d5fd46d8331661819031b2b7adcda4.gif"
             ]
             kill_embed = discord.Embed(
                 title="Kill", 
-                description=f"{ctx.author.display_name} killed {target.display_name}!", 
+                description=msg(ctx, "kill_desc", author=ctx.author.display_name, target=target.display_name), 
                 color=discord.Color.red()
             )
             kill_embed.set_image(url=random.choice(kill_gifs))
             kill_embed.set_footer(text="*This is a joke, don't actually kill anyone.*")
             await ctx.send(embed=kill_embed)
-        except Exception as e:
-            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
-            await ctx.send(embed=error_embed)
-
-    # !fuck command
-    @commands.command(name="fuck")
-    async def fuck(self, ctx, member: discord.Member = None):
-        """Fuck another user. (not really)"""
-        try:
-            if not member:
-                return await ctx.send("You need to mention someone to use this command on them!")
-            target = member
-            await ctx.send(f"{ctx.author.display_name} fucked {target.display_name}!")
         except Exception as e:
             error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
             await ctx.send(embed=error_embed)
@@ -48,7 +79,7 @@ class RolePlayCog(commands.Cog):
         """Hug another user. (not really)"""
         try:
             if not member:
-                return await ctx.send("You need to mention someone to use this command on them!")
+                return await ctx.send(msg(ctx, "need_mention"))
             target = member
             hug_gifs = [
                 "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
@@ -57,24 +88,11 @@ class RolePlayCog(commands.Cog):
             ]
             hug_embed = discord.Embed(
                 title="Hug",
-                description=f"{ctx.author.display_name} hugged {target.display_name}! :hugging:",
+                description=msg(ctx, "hug_desc", author=ctx.author.display_name, target=target.display_name),
                 color=discord.Color.green()
             )
             hug_embed.set_image(url=random.choice(hug_gifs))
             await ctx.send(embed=hug_embed)
-        except Exception as e:
-            error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
-            await ctx.send(embed=error_embed)
-
-    # !makeout command
-    @commands.command(name="makeout")
-    async def makeout(self, ctx, member: discord.Member = None):
-        """Make out with another user. (not really)"""
-        try:
-            if not member:
-                return await ctx.send("You need to mention someone to use this command on them!")
-            target = member
-            await ctx.send(f"{ctx.author.display_name} made out with {target.display_name}! :kissing_heart:")
         except Exception as e:
             error_embed = discord.Embed(title="Error", description=f"An error occurred:\n```\n{e}\n```", color=discord.Color.red())
             await ctx.send(embed=error_embed)
