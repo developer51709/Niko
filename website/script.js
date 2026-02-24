@@ -41,44 +41,43 @@ const LANG = {
 
 let currentLang = "en";
 
+function safeSet(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
 function applyLang(lang) {
   currentLang = lang;
   const t = LANG[lang];
 
-  // All elements that should fade
   const fadeEls = document.querySelectorAll(".lang-fade");
-
-  // Fade out
   fadeEls.forEach(el => el.classList.add("hidden"));
 
-  // After fade-out, swap text, then fade back in
   setTimeout(() => {
-    document.getElementById("hero-title").textContent = t.hero_title;
-    document.getElementById("hero-sub").textContent = t.hero_sub;
-    document.getElementById("btn-invite").textContent = t.invite;
-    document.getElementById("btn-commands").textContent = t.commands;
+    safeSet("hero-title", t.hero_title);
+    safeSet("hero-sub", t.hero_sub);
+    safeSet("btn-invite", t.invite);
+    safeSet("btn-commands", t.commands);
 
-    document.getElementById("features-title").textContent = t.features_title;
-    document.getElementById("feat-personality-title").textContent = t.feat_personality_title;
-    document.getElementById("feat-personality-text").textContent = t.feat_personality_text;
-    document.getElementById("feat-music-title").textContent = t.feat_music_title;
-    document.getElementById("feat-music-text").textContent = t.feat_music_text;
-    document.getElementById("feat-level-title").textContent = t.feat_level_title;
-    document.getElementById("feat-level-text").textContent = t.feat_level_text;
-    document.getElementById("feat-fun-title").textContent = t.feat_fun_title;
-    document.getElementById("feat-fun-text").textContent = t.feat_fun_text;
+    safeSet("features-title", t.features_title);
+    safeSet("feat-personality-title", t.feat_personality_title);
+    safeSet("feat-personality-text", t.feat_personality_text);
+    safeSet("feat-music-title", t.feat_music_title);
+    safeSet("feat-music-text", t.feat_music_text);
+    safeSet("feat-level-title", t.feat_level_title);
+    safeSet("feat-level-text", t.feat_level_text);
+    safeSet("feat-fun-title", t.feat_fun_title);
+    safeSet("feat-fun-text", t.feat_fun_text);
 
-    document.getElementById("personality-title").textContent = t.personality_title;
-    document.getElementById("personality-text").textContent = t.personality_text;
-    document.getElementById("bilingual-title").textContent = t.bilingual_title;
+    safeSet("personality-title", t.personality_title);
+    safeSet("personality-text", t.personality_text);
+    safeSet("bilingual-title", t.bilingual_title);
 
-    document.getElementById("footer-text").textContent = t.footer_text;
+    safeSet("footer-text", t.footer_text);
 
-    // Fade back in
     fadeEls.forEach(el => el.classList.remove("hidden"));
-  }, 350); // matches CSS transition
+  }, 350);
 
-  // Update toggle buttons
   document.querySelectorAll(".lang-toggle").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   });
@@ -118,6 +117,42 @@ function setupPageTransitions() {
     });
   });
 }
+
+// Smooth scrolling
+function smoothScrollTo(targetY, duration = 600) {
+  const startY = window.scrollY;
+  const diff = targetY - startY;
+  let start;
+
+  function step(timestamp) {
+    if (!start) start = timestamp;
+    const time = timestamp - start;
+    const percent = Math.min(time / duration, 1);
+
+    // soft cubic easing
+    const eased = percent < 0.5
+      ? 4 * percent * percent * percent
+      : 1 - Math.pow(-2 * percent + 2, 3) / 2;
+
+    window.scrollTo(0, startY + diff * eased);
+
+    if (time < duration) requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+}
+
+
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener("click", e => {
+    const target = document.querySelector(link.getAttribute("href"));
+    if (!target) return;
+
+    e.preventDefault();
+    const y = target.getBoundingClientRect().top + window.scrollY - 20;
+    smoothScrollTo(y, 700);
+  });
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   setupLangToggle();

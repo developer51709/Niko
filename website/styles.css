@@ -402,12 +402,12 @@ html, body {
 }
 
 .lang-fade {
-  opacity: 1;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.35s ease, filter 0.35s ease;
 }
 
 .lang-fade.hidden {
   opacity: 0;
+  filter: blur(2px);
 }
 
 /* responsive */
