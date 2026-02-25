@@ -254,11 +254,11 @@ def get_favorability(user_id: int) -> int:
 # -----------------------------
 # Generate reply
 # -----------------------------
-def generate_reply(user_id, message, username):
+def generate_reply(user_id, server, message, username):
     if USE_OPENAI:
-        return generate_reply_openai(bot, user_id, message, username, SYSTEM_PROMPT)
+        return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
     else:
-        return generate_reply_local(bot, user_id, message, username, SYSTEM_PROMPT)
+        return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
 
 # -----------------------------
 # Discord bot
@@ -299,6 +299,7 @@ async def on_message(msg):
                 None, 
                 generate_reply, 
                 msg.author.id, 
+                msg.guild,
                 user_input, 
                 msg.author.display_name
             )

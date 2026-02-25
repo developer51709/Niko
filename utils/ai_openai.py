@@ -21,9 +21,9 @@ def _get_client():
         )
     return client
 
-def generate_reply_openai(bot, user_id: int, message: str, username: str, SYSTEM_PROMPT: str):
+def generate_reply_openai(bot, user_id: int, server, message: str, username: str, SYSTEM_PROMPT: str):
     member_count = len(bot.users)
-    server_name = bot.guilds[0].name if bot.guilds else "Server name unavailable"
+    server_name = server.name
 
     user_mem = get_user_memory(user_id)
     conv_history = get_conversation_history(user_id)
