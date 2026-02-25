@@ -67,6 +67,8 @@ class AICog(commands.Cog):
             await ctx.send(msg(ctx, "no_memory", name=target.display_name))
         else:
             try:
+                # shorten memory to the most recent 3000 characters
+                mem = mem[-3000:]
                 memory_embed = discord.Embed(
                     title=msg(ctx, "memory_title", name=target.display_name),
                     description=f"```\n{mem}\n```",
