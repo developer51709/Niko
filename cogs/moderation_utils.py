@@ -68,8 +68,11 @@ class ModerationUtils(commands.Cog):
             self.save_config()
         return self.config[gid]
 
-    def save_config(self):
-        save_json(CONFIG_FILE, self.config)
+    def get_mod_config(self, guild_id: int):
+        return self.get_guild_config(guild_id)
+
+    def save_mod_config(self):
+        self.save_config()
 
     def set_modlog_channel(self, guild_id: int, channel_id: int | None):
         cfg = self.get_guild_config(guild_id)
