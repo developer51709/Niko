@@ -90,7 +90,7 @@ class AutoMod(commands.Cog):
                 return
 
     # ---------- AUTOMOD COMMANDS ----------
-
+'''
     @commands.group(invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
     async def automod(self, ctx):
@@ -152,7 +152,7 @@ class AutoMod(commands.Cog):
         cfg["max_mentions"] = max_mentions
         self.utils().save_config()
         await ctx.send(f"✅ Max mentions set to {max_mentions}")
-
+'''
 
 async def setup(bot):
     await bot.add_cog(AutoMod(bot))

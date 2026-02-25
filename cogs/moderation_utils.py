@@ -79,6 +79,9 @@ class ModerationUtils(commands.Cog):
         cfg["modlog_channel"] = channel_id
         self.save_config()
 
+    def save_config(self):
+        save_json(CONFIG_FILE, self.config)
+
     # ---------- LOGGING ----------
 
     async def log_action(self, guild: discord.Guild, title: str, description: str):
