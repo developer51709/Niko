@@ -75,7 +75,9 @@
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
-        "blocked_words": []
+        "blocked_words": [
+            "carajo"
+        ]
     },
     "1475870072512974972": {
         "modlog_channel": null,
@@ -91,6 +93,19 @@
         "blocked_words": []
     },
     "1433645653220786238": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": []
+    },
+    "1343433242463965235": {
         "modlog_channel": null,
         "automod": {
             "antispam": true,

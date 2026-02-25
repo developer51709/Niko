@@ -99,7 +99,30 @@ class EconomyCog(commands.Cog):
     def get_user_economy_data(self, user_id):
         uid = str(user_id)
         if uid not in self.economy_data:
-            self.economy_data[uid] = {"balance": 0, "inventory": [], "bank": 0, "net_worth": 0, "daily_streak": 0, "last_daily": 0, "last_work": 0, "last_crime": 0, "last_rob": 0, "last_heist": 0, "last_slots": 0, "last_blackjack": 0, "last_roulette": 0, "last_casino": 0, "last_gamble": 0, "last_bet": 0, "last_race": 0, "last_fight": 0, "last_duel": 0}
+            self.economy_data[uid] = {
+                "balance": 100, 
+                "inventory": [], 
+                "bank": 0, 
+                "net_worth": 100, 
+                "daily_streak": 0, 
+                "last_daily": 0, 
+                "last_work": 0, 
+                "last_crime": 0, 
+                "last_rob": 0, 
+                "last_heist": 0, 
+                "last_slots": 0, 
+                "last_blackjack": 0, 
+                "last_roulette": 0, 
+                "last_casino": 0, 
+                "last_gamble": 0, 
+                "last_bet": 0, 
+                "last_race": 0, 
+                "last_fight": 0, 
+                "last_duel": 0
+            }
+        
+        # Ensure net_worth is always up to date
+        self.economy_data[uid]["net_worth"] = self.economy_data[uid].get("balance", 0) + self.economy_data[uid].get("bank", 0)
         return self.economy_data[uid]
 
     # -----------------------------
@@ -107,13 +130,21 @@ class EconomyCog(commands.Cog):
     # -----------------------------
 
     # !balance command
-    @commands.command(name="balance", help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
+    @commands.command(name="balance", aliases=["bal"], help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
         user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
-        await ctx.send(msg(ctx, "balance", name=target.display_name, balance=balance))
+        bank = user_data["bank"]
+        
+        embed = discord.Embed(title=f"Wallet — {target.display_name}", color=discord.Color.gold())
+        embed.set_thumbnail(url=target.display_avatar.url)
+        embed.add_field(name="Cash", value=f"{balance} 🥐", inline=True)
+        embed.add_field(name="Bank", value=f"{bank} 🏦", inline=True)
+        embed.add_field(name="Total", value=f"{user_data['net_worth']} ✨", inline=True)
+        
+        await ctx.send(embed=embed)
 
     # !daily command
     @commands.command(name="daily", help="claim your daily treats 🍬✨ | hol dir deine täglichen Belohnungen")
@@ -122,7 +153,10 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(ctx.author.id)
         current_time = int(time.time())
         if current_time - user_data["last_daily"] < 86400:
-            await ctx.send(msg(ctx, "daily_wait"))
+            remaining = 86400 - (current_time - user_data["last_daily"])
+            hours = remaining // 3600
+            minutes = (remaining % 3600) // 60
+            await ctx.send(f"Patience! Your treats are still baking. Try again in {hours}h {minutes}m. ☕🍰")
         else:
             daily_reward = 1000
             user_data["balance"] += daily_reward
@@ -137,60 +171,71 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(ctx.author.id)
         current_time = int(time.time())
         if current_time - user_data["last_work"] < 3600:
-            await ctx.send(msg(ctx, "work_wait"))
+            remaining = 3600 - (current_time - user_data["last_work"])
+            minutes = remaining // 60
+            await ctx.send(f"You're on break! Take it easy for another {minutes} minutes. ☕💤")
         else:
-            work_reward = random.randint(30, 100)
+            work_reward = random.randint(50, 200)
             user_data["balance"] += work_reward
             user_data["last_work"] = current_time
             self.save_economy_data()
             await ctx.send(msg(ctx, "work_success", reward=work_reward))
 
     # !crime command
-    @commands.command(name="crime")
+    @commands.command(name="crime", help="try to steal some extra treats 😈 | versuch, ein paar extra Leckereien zu stibitzen")
     async def crime(self, ctx):
         '''Commit a crime to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)
         current_time = int(time.time())
         if current_time - user_data["last_crime"] < 3600:
-            await ctx.send("You can only commit a crime once every hour.")
+            await ctx.send("The shopkeeper is watching! Wait an hour before trying anything sneaky again. 👮‍♂️")
         else:
-            crime_reward = random.randint(-100, 200)
-            if crime_reward < 0:
-                await ctx.send(f"You were caught and lost {abs(crime_reward)} coins!")
-            elif crime_reward == 0:
-                await ctx.send("You got away with nothing.")
+            success = random.random() > 0.5
+            if success:
+                reward = random.randint(200, 500)
+                user_data["balance"] += reward
+                await ctx.send(f"You successfully swiped {reward} coins from the tip jar! 🍯✨")
             else:
-                await ctx.send(f"You successfully committed a crime and earned {crime_reward} coins!")
-            user_data["balance"] += crime_reward
+                loss = random.randint(100, 300)
+                user_data["balance"] = max(0, user_data["balance"] - loss)
+                await ctx.send(f"Caught! You had to pay {loss} coins in fines. 😭👮‍♂️")
+            
             user_data["last_crime"] = current_time
             self.save_economy_data()
 
     # !rob command
-    @commands.command(name="rob")
-    async def rob(self, ctx, member: discord.Member = None):
+    @commands.command(name="rob", help="try to rob another user 🔫 | versuch, einen anderen Nutzer auszurauben")
+    async def rob(self, ctx, member: discord.Member):
         '''Rob another user to earn money.'''
-        if member is None:
-            await ctx.send("Please specify a user to rob.")
-            return
+        if member.id == ctx.author.id:
+            return await ctx.send("You can't rob yourself, silly! ☕")
+            
         user_data = self.get_user_economy_data(ctx.author.id)
         target_data = self.get_user_economy_data(member.id)
         current_time = int(time.time())
+        
+        if user_data["balance"] < 100:
+            return await ctx.send("You need at least 100 coins to plan a robbery! 🥐")
         if target_data["balance"] < 100:
-            await ctx.send("You can't rob someone with less than 100 coins.")
-        elif current_time - user_data['last_rob'] < 3600:
-            await ctx.send("You can only rob someone once every hour.")
+            return await ctx.send("They don't even have 100 coins... leave them alone! 😭")
+            
+        if current_time - user_data['last_rob'] < 3600:
+            return await ctx.send("You're still laying low. Try again in an hour! 🕵️‍♂️")
+            
+        success = random.random() > 0.6
+        if success:
+            amount = random.randint(10, min(target_data["balance"], 500))
+            user_data["balance"] += amount
+            target_data["balance"] -= amount
+            await ctx.send(f"Success! You robbed {member.display_name} and made off with {amount} coins! 💰✨")
         else:
-            rob_amount = random.randint(-200, 300)
-            if rob_amount < 0:
-                await ctx.send(f"You were caught and lost {abs(rob_amount)} coins!")
-            elif rob_amount == 0:
-                await ctx.send("You got away with nothing.")
-            else:
-                await ctx.send(f"You successfully robbed {member.display_name} and earned {rob_amount} coins!")
-            user_data["balance"] += rob_amount
-            target_data["balance"] -= rob_amount
-            user_data["last_rob"] = current_time
-            self.save_economy_data()
+            loss = 150
+            user_data["balance"] = max(0, user_data["balance"] - loss)
+            await ctx.send(f"Failed! You got caught and had to pay {loss} coins to {member.display_name} as apology. 😭🥐")
+            target_data["balance"] += loss
+            
+        user_data["last_rob"] = current_time
+        self.save_economy_data()
 
     # !pay command
     @commands.command(name="pay")
@@ -296,34 +341,52 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"You have {user_data['bank']} coins in your bank.")
 
     # !deposit command
-    @commands.command(name="deposit")
-    async def deposit(self, ctx, amount: int = None):
+    @commands.command(name="deposit", aliases=["dep"], help="put coins in the safety vault 🏦 | zahl Münzen in den Safe ein")
+    async def deposit(self, ctx, amount: str):
         '''Deposit money into the bank.'''
-        if not amount:
-            return await ctx.send("Please specify an amount to deposit.")
         user_data = self.get_user_economy_data(ctx.author.id)
-        if user_data["balance"] < amount:
-            await ctx.send("You don't have enough money to deposit that amount.")
+        
+        if amount.lower() == "all":
+            amount = user_data["balance"]
         else:
-            user_data["balance"] -= amount
-            user_data["bank"] += amount
-            self.save_economy_data()
-            await ctx.send(f"You deposited {amount} coins into the bank.")
+            try:
+                amount = int(amount)
+            except ValueError:
+                return await ctx.send("Please specify a valid number or 'all'! 🥐")
+                
+        if amount <= 0:
+            return await ctx.send("You can't deposit nothing! ☕")
+        if user_data["balance"] < amount:
+            return await ctx.send("You don't have that many coins in your pastry bag! 🥐")
+            
+        user_data["balance"] -= amount
+        user_data["bank"] += amount
+        self.save_economy_data()
+        await ctx.send(f"Deposited {amount} coins into your vault! 🏦✨")
 
     # !withdraw command
-    @commands.command(name="withdraw")
-    async def withdraw(self, ctx, amount: int = None):
+    @commands.command(name="withdraw", aliases=["with"], help="take coins from the vault 🥐 | nimm Münzen aus dem Safe")
+    async def withdraw(self, ctx, amount: str):
         '''Withdraw money from the bank.'''
-        if not amount:
-            return await ctx.send("Please specify an amount to withdraw.")
         user_data = self.get_user_economy_data(ctx.author.id)
-        if user_data["bank"] < amount:
-            await ctx.send("You don't have enough money in the bank to withdraw that amount.")
+        
+        if amount.lower() == "all":
+            amount = user_data["bank"]
         else:
-            user_data["bank"] -= amount
-            user_data["balance"] += amount
-            self.save_economy_data()
-            await ctx.send(f"You withdrew {amount} coins from the bank.")
+            try:
+                amount = int(amount)
+            except ValueError:
+                return await ctx.send("Please specify a valid number or 'all'! 🥐")
+                
+        if amount <= 0:
+            return await ctx.send("You can't withdraw nothing! ☕")
+        if user_data["bank"] < amount:
+            return await ctx.send("You don't have that many coins in your vault! 🏦")
+            
+        user_data["bank"] -= amount
+        user_data["balance"] += amount
+        self.save_economy_data()
+        await ctx.send(f"Withdrew {amount} coins from your vault! 🥐✨")
 
     # !networth command
     @commands.command(name="networth")
