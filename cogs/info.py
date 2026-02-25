@@ -556,12 +556,32 @@ class InfoCog(commands.Cog):
         view.add_item(Button(
             label="Invite Niko",
             style=discord.ButtonStyle.link,
-            url=f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
+            url=f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands",
+            row=0
         ))
         view.add_item(Button(
             label="GitHub",
             style=discord.ButtonStyle.link,
-            url="https://github.com/developer51709/Niko"
+            url="https://github.com/developer51709/Niko",
+            row=0
+        ))
+        view.add_item(Button(
+            label="Website",
+            style=discord.ButtonStyle.link,
+            url="https://developer51709.github.io/Niko",
+            row=0
+        ))
+        view.add_item(Button(
+            label="ToS",
+            style=discord.ButtonStyle.link,
+            url="https://developer51709.github.io/Niko/tos.html",
+            row=1
+        ))
+        view.add_item(Button(
+            label="Privacy Policy",
+            style=discord.ButtonStyle.link,
+            url="https://developer51709.github.io/Niko/privacy.html",
+            row=1
         ))
 
         await ctx.send(embed=embed, view=view)
@@ -606,6 +626,11 @@ class InfoCog(commands.Cog):
             label="GitHub",
             style=discord.ButtonStyle.link,
             url="https://github.com/developer51709"
+        ))
+        view.add_item(Button(
+            label="Website",
+            style=discord.ButtonStyle.link,
+            url="https://developer51709.github.io"
         ))
 
         await ctx.send(embed=embed, view=view)
