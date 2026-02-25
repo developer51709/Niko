@@ -39,6 +39,7 @@ ENV/
 
 # Memory/data files
 memory.json
+blackjack_shoe.json
 
 # OS
 .DS_Store
