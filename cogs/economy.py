@@ -238,107 +238,116 @@ class EconomyCog(commands.Cog):
         self.save_economy_data()
 
     # !pay command
-    @commands.command(name="pay")
+    @commands.command(name="pay", help="share some treats with a friend 💸🥐 | teile deine Leckereien mit einem Freund")
     async def pay(self, ctx, member: discord.Member = None, amount: int = None):
-        '''Pay another user money.'''
+        '''pay another user 💸💰 | bezahl einen anderen Nutzer'''
         if not member:
-            return await ctx.send("Please specify a user to pay.")
-        if not amount:
-            return await ctx.send("Please specify an amount to pay.")
+            return await ctx.send("Please specify a user to pay. 🥐")
+        if not amount or amount <= 0:
+            return await ctx.send("Please specify a valid amount to pay. ☕")
         user_data = self.get_user_economy_data(ctx.author.id)
         target_data = self.get_user_economy_data(member.id)
         if user_data["balance"] < amount:
-            await ctx.send("You don't have enough money to pay that amount.")
+            await ctx.send("You don't have enough coins in your pastry bag! 🥐")
         else:
             user_data["balance"] -= amount
             target_data["balance"] += amount
             self.save_economy_data()
-            await ctx.send(f"You paid {member.display_name} {amount} coins.")
+            await ctx.send(f"You gave {member.display_name} {amount} coins! 💸✨")
 
     # !leaderboard command
-    @commands.command(name="leaderboard")
+    @commands.command(name="leaderboard", aliases=["lb", "top"], help="see who has the most treats 🏆🥐 | sieh nach, wer die meisten Leckereien hat")
     async def leaderboard(self, ctx):
         '''View the economy leaderboard.'''
-        leaderboard = sorted(self.economy_data.items(), key=lambda x: x[1]["balance"], reverse=True)
-        embed = discord.Embed(title="Economy Leaderboard", color=0x00ff00)
+        leaderboard = sorted(self.economy_data.items(), key=lambda x: x[1]["balance"] + x[1].get("bank", 0), reverse=True)
+        embed = discord.Embed(title="Café Rich List 🥐✨", color=discord.Color.gold())
         for i, (user_id, data) in enumerate(leaderboard[:10]):
-            user = await self.bot.fetch_user(int(user_id))
-            embed.add_field(name=f"{i+1}. {user.display_name}", value=f"Balance: {data['balance']} coins", inline=False)
-            await ctx.send(embed=embed)
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                name = user.display_name
+            except:
+                name = f"Unknown ({user_id})"
+            total = data['balance'] + data.get('bank', 0)
+            embed.add_field(name=f"{i+1}. {name}", value=f"{total} 🥐", inline=False)
+        await ctx.send(embed=embed)
 
     # !shop command
-    @commands.command(name="shop")
+    @commands.command(name="shop", help="browse the café boutique 🛍️✨ | stöbere in der Café-Boutique")
     async def shop(self, ctx):
         '''View the shop.'''
         shop_items = {
-            "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
-            "item2": {"name": "Item 2", "price": 200, "description": "This is item 2."}
+            "coffee": {"name": "Premium Coffee", "price": 500, "description": "A warm cup of high-quality coffee."},
+            "cake": {"name": "Strawberry Cake", "price": 1200, "description": "A delicious slice of strawberry cake."},
+            "badge": {"name": "Café Regular Badge", "price": 5000, "description": "Show everyone you're a regular here!"}
         }
-        embed = discord.Embed(title="Shop", color=0x00ff00)
+        embed = discord.Embed(title="Niko's Café Boutique 🛍️✨", color=discord.Color.pink())
         for item_id, item_data in shop_items.items():
-            embed.add_field(name=item_data["name"], value=f"Price: {item_data['price']} coins\nDescription: {item_data['description']}", inline=False)
-            await ctx.send(embed=embed)
+            embed.add_field(name=f"{item_data['name']} — {item_data['price']} 🥐", value=item_data['description'], inline=False)
+        await ctx.send(embed=embed)
 
     # !buy command
-    @commands.command(name="buy")
+    @commands.command(name="buy", help="buy a treat from the shop 🍰✨ | kauf dir eine Leckerei im Shop")
     async def buy(self, ctx, item_id: str = None):
         '''Buy an item from the shop.'''
         if not item_id:
-            return await ctx.send("Please specify an item to buy.")
+            return await ctx.send("What would you like to buy? 🥐")
         user_data = self.get_user_economy_data(ctx.author.id)
         shop_items = {
-            "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
-            "item2": {"name": "Item 2", "price": 200, "description": "This is item 2."}
+            "coffee": {"name": "Premium Coffee", "price": 500},
+            "cake": {"name": "Strawberry Cake", "price": 1200},
+            "badge": {"name": "Café Regular Badge", "price": 5000}
         }
+        item_id = item_id.lower()
         if item_id not in shop_items:
-            await ctx.send("That item does not exist.")
+            await ctx.send("We don't have that in stock! 🥐")
         elif user_data["balance"] < shop_items[item_id]["price"]:
-            await ctx.send("You don't have enough money to buy that item.")
+            await ctx.send("You don't have enough coins in your bag! 🥐")
         else:
             user_data["balance"] -= shop_items[item_id]["price"]
             user_data["inventory"].append(item_id)
             self.save_economy_data()
-            await ctx.send(f"You bought {shop_items[item_id]['name']} for {shop_items[item_id]['price']} coins.")
+            await ctx.send(f"You bought a {shop_items[item_id]['name']}! Enjoy! 🍰✨")
 
     # !inventory command
-    @commands.command(name="inventory")
+    @commands.command(name="inventory", aliases=["inv"], help="check your collection of treats 🎒✨ | sieh dir deine gesammelten Leckereien an")
     async def inventory(self, ctx):
         '''View your inventory.'''
         user_data = self.get_user_economy_data(ctx.author.id)
-        shop_items = {
-            "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
-            "item2": {"name": "Item 2", "price": 200, "description": "This is item 2."}
-        }
-        embed = discord.Embed(title="Inventory", color=0x00ff00)
-        for item_id in user_data["inventory"]:
-            embed.add_field(name=shop_items[item_id]["name"], value=f"Price: {shop_items[item_id]['price']} coins\nDescription: {shop_items[item_id]['description']}", inline=False)
-            await ctx.send(embed=embed)
+        if not user_data["inventory"]:
+            return await ctx.send("Your bag is empty! Go buy some treats! 🥐")
+            
+        items = ", ".join(user_data["inventory"])
+        embed = discord.Embed(title=f"{ctx.author.display_name}'s Bag 🎒", description=items, color=discord.Color.blue())
+        await ctx.send(embed=embed)
 
     # !sell command
-    @commands.command(name="sell")
+    @commands.command(name="sell", help="sell back a treat for some coins 💰 | verkauf eine Leckerei gegen Münzen")
     async def sell(self, ctx, item_id: str = None):
         '''Sell an item from your inventory.'''
         if not item_id:
-            return await ctx.send("Please specify an item to sell.")
+            return await ctx.send("What would you like to sell? 🥐")
         user_data = self.get_user_economy_data(ctx.author.id)
         shop_items = {
-            "item1": {"name": "Item 1", "price": 100, "description": "This is item 1."},
-            "item2": {"name": "Item 2", "price": 200, "description": "This is item 2."}
+            "coffee": {"name": "Premium Coffee", "price": 250},
+            "cake": {"name": "Strawberry Cake", "price": 600},
+            "badge": {"name": "Café Regular Badge", "price": 2500}
         }
+        item_id = item_id.lower()
         if item_id not in user_data["inventory"]:
-            await ctx.send("You don't have that item in your inventory.")
+            await ctx.send("You don't have that in your bag! 🥐")
         else:
-            user_data["balance"] += shop_items[item_id]["price"]
+            sell_price = shop_items.get(item_id, {"price": 50})["price"]
+            user_data["balance"] += sell_price
             user_data["inventory"].remove(item_id)
             self.save_economy_data()
-            await ctx.send(f"You sold {shop_items[item_id]['name']} for {shop_items[item_id]['price']} coins.")
+            await ctx.send(f"Sold your {item_id} for {sell_price} coins! 💰")
 
-    # !bank command
-    @commands.command(name="bank")
+    # !bank command (Handled by balance embed, but kept for legacy)
+    @commands.command(name="bank", help="check your vault balance 🏦 | sieh dir dein Tresorguthaben an")
     async def bank(self, ctx):
         '''View your bank balance.'''
         user_data = self.get_user_economy_data(ctx.author.id)
-        await ctx.send(f"You have {user_data['bank']} coins in your bank.")
+        await ctx.send(f"You have {user_data['bank']} coins safely tucked away in your vault! 🏦✨")
 
     # !deposit command
     @commands.command(name="deposit", aliases=["dep"], help="put coins in the safety vault 🏦 | zahl Münzen in den Safe ein")
@@ -389,12 +398,12 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"Withdrew {amount} coins from your vault! 🥐✨")
 
     # !networth command
-    @commands.command(name="networth")
+    @commands.command(name="networth", aliases=["nw"], help="calculate your total café fortune 📊🥐 | berechne dein gesamtes Café-Vermögen")
     async def networth(self, ctx):
         '''View your net worth.'''
         user_data = self.get_user_economy_data(ctx.author.id)
         net_worth = user_data["balance"] + user_data["bank"]
-        await ctx.send(f"Your net worth is {net_worth} coins.")
+        await ctx.send(f"Your total net worth is {net_worth} coins! You're quite the regular! 📊🥐✨")
         
 
 
