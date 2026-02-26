@@ -25,7 +25,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python bot.py"
+args = "python src/bot.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
@@ -37,16 +37,7 @@ author = 53393504
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python website.py"
-
-[[workflows.workflow]]
-name = "Display the TODO list"
-mode = "sequential"
-author = 53393504
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python todo.py"
+args = "python src/website.py"
 
 [userenv]
 

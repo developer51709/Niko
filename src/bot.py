@@ -330,7 +330,7 @@ def get_memory_content(user_id: int) -> str:
 async def load_cogs():
     print(colorama.Fore.YELLOW + "Loading cogs..." + colorama.Style.RESET_ALL)
 
-    for filename in os.listdir("./cogs"):
+    for filename in os.listdir("./src/cogs"):
         if not filename.endswith(".py"):
             continue
 
