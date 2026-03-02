@@ -13,10 +13,40 @@ OWNER_IDS = {123456789012345678, 987654321098765432}  # replace with yours
 
 
 def is_owner():
-    """Custom owner check supporting multiple owners."""
+    """Custom owner check to support multiple owners."""
     async def predicate(ctx):
         return ctx.author.id in OWNER_IDS or await ctx.bot.is_owner(ctx.author)
     return commands.check(predicate)
+
+
+class ServerListView(discord.ui.View):
+    def __init__(self, pages, author_id):
+        super().__init__(timeout=60)
+        self.pages = pages
+        self.index = 0
+        self.author_id = author_id
+
+    async def update(self, interaction):
+        await interaction.response.edit_message(embed=self.pages[self.index], view=self)
+
+    async def interaction_check(self, interaction):
+        return interaction.user.id == self.author_id
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.gray)
+    async def previous(self, interaction, button):
+        if self.index > 0:
+            self.index -= 1
+            await self.update(interaction)
+        else:
+            await interaction.response.defer()
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.gray)
+    async def next(self, interaction, button):
+        if self.index < len(self.pages) - 1:
+            self.index += 1
+            await self.update(interaction)
+        else:
+            await interaction.response.defer()
 
 
 class OwnerCog(commands.Cog):
@@ -272,6 +302,70 @@ class OwnerCog(commands.Cog):
             await ctx.send(f"🧪 **Eval Result:**\n```\n{result}\n```")
         except Exception as e:
             await ctx.send(f"❌ Error:\n```\n{e}\n```")
+
+    # -------------------------------
+    # Server list command
+    # -------------------------------
+    @commands.command(name="servers")
+    @is_owner()
+    async def list_servers(self, ctx):
+        """List all servers the bot is in with multipage embed navigation."""
+
+        guilds = list(self.bot.guilds)
+        guilds.sort(key=lambda g: g.name.lower())
+
+        pages = []
+        per_page = 10
+
+        for i in range(0, len(guilds), per_page):
+            chunk = guilds[i:i + per_page]
+            embed = discord.Embed(
+                title=f"📜 Server List ({len(guilds)} total)",
+                color=discord.Color.blurple()
+            )
+
+            for g in chunk:
+                embed.add_field(
+                    name=f"{g.name}",
+                    value=f"ID: `{g.id}` • Members: `{g.member_count}`",
+                    inline=False
+                )
+
+            embed.set_footer(text=f"Page {len(pages)+1}/{(len(guilds)-1)//per_page + 1}")
+            pages.append(embed)
+
+        view = ServerListView(pages, ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
+
+    # -------------------------------
+    # Server invite command
+    # -------------------------------
+    @commands.command(name="serverinvite")
+    @is_owner()
+    async def server_invite(self, ctx, server_id: int):
+        """Create a single-use, 24-hour invite for a server."""
+
+        guild = self.bot.get_guild(server_id)
+        if not guild:
+            return await ctx.send("❌ Bot is not in that server.")
+
+        # Find a text channel the bot can create invites in
+        channel = None
+        for ch in guild.text_channels:
+            if ch.permissions_for(guild.me).create_instant_invite:
+                channel = ch
+                break
+
+        if not channel:
+            return await ctx.send("❌ No channel found where I can create invites.")
+
+        invite = await channel.create_invite(
+            max_age=86400,  # 24 hours
+            max_uses=1,     # single use
+            unique=True
+        )
+
+        await ctx.send(f"🔗 **Single-use invite (24h):**\n{invite.url}")
 
 
 async def setup(bot):
