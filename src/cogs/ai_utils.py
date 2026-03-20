@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 
-# personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
 
 MESSAGES = {
@@ -45,6 +44,7 @@ def msg(ctx, key, **kwargs):
         text = MESSAGES["normal"].get(lang, {}).get(key, key)
     return text.format(**kwargs) if kwargs else text
 
+
 class AICog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -57,7 +57,7 @@ class AICog(commands.Cog):
         score = get_favorability_score(target.id)
         await ctx.send(msg(ctx, "favor_score", name=target.display_name, score=score))
 
-    @commands.command(name="memory", help="see my café notes on you ☕📝 | sieh dir meine Café-Notizen über dich an")
+    @commands.command(name="memory", help="see my café notes on you ☕📝 | sieh dir meine Café-Notizen an")
     async def memory(self, ctx, member: discord.Member = None):
         """Display the memory content for a user."""
         from bot import get_memory_content
@@ -67,17 +67,21 @@ class AICog(commands.Cog):
             await ctx.send(msg(ctx, "no_memory", name=target.display_name))
         else:
             try:
-                # shorten memory to the most recent 3000 characters
                 mem = mem[-3000:]
-                memory_embed = discord.Embed(
-                    title=msg(ctx, "memory_title", name=target.display_name),
-                    description=f"```\n{mem}\n```",
-                    color=discord.Color.green()
-                )
-                await ctx.send(embed=memory_embed)
+                title = msg(ctx, "memory_title", name=target.display_name)
+                text = f"### {title}\n```\n{mem}\n```"
+                view = discord.ui.LayoutView()
+                view.add_item(discord.ui.Container(
+                    discord.ui.TextDisplay(content=text)
+                ))
+                await ctx.send(view=view)
             except Exception as e:
-                error_embed = discord.Embed(title="Error", description=f"Failed to display memory: \n```\n{e}\n```")
-                await ctx.send(embed=error_embed)
+                view = discord.ui.LayoutView()
+                view.add_item(discord.ui.Container(
+                    discord.ui.TextDisplay(content=f"### ❌ Error\nFailed to display memory:\n```\n{e}\n```")
+                ))
+                await ctx.send(view=view)
+
 
 async def setup(bot):
     await bot.add_cog(AICog(bot))

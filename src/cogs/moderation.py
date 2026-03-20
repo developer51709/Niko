@@ -22,7 +22,11 @@ class Moderation(commands.Cog):
             await ctx.send("Please specify a member to kick.")
             return
         await member.kick(reason=reason)
-        await ctx.send(f"✅ Kicked {member} | Reason: {reason}")
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(
+            content=f"### 👟 User Kicked\n**{member}** has been kicked.\n**Reason:** {reason}"
+        )))
+        await ctx.send(view=view)
         await self.utils().log_action(ctx.guild, "Kick", f"{member} was kicked by {ctx.author}.\nReason: {reason}")
 
     @commands.command(help="Ban a member from the server.")
@@ -33,20 +37,25 @@ class Moderation(commands.Cog):
             return
         await member.ban(reason=reason)
         try:
+            thumb_url = self.bot.user.avatar.url if self.bot.user.avatar else None
             view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.Section(
-                    discord.ui.TextDisplay(
-                        content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
-                    ),
-                    accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            if thumb_url:
+                container = discord.ui.Container(
+                    discord.ui.Section(
+                        discord.ui.TextDisplay(
+                            content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
+                        ),
+                        accessory=discord.ui.Thumbnail(thumb_url)
+                    )
                 )
-            )
+            else:
+                container = discord.ui.Container(discord.ui.TextDisplay(
+                    content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
+                ))
             view.add_item(container)
             await ctx.send(view=view)
         except Exception as e:
             error("moderation", f"Error sending ban message: {e}")
-            # plaintext fallback
             await ctx.send(f"✅ Banned {member} | Reason: {reason}")
         await self.utils().log_action(ctx.guild, "Ban", f"{member} was banned by {ctx.author}.\nReason: {reason}")
 
@@ -58,7 +67,11 @@ class Moderation(commands.Cog):
             return
         user = await self.bot.fetch_user(user_id)
         await ctx.guild.unban(user)
-        await ctx.send(f"✅ Unbanned {user}")
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(
+            content=f"### ✅ User Unbanned\n**{user}** has been unbanned."
+        )))
+        await ctx.send(view=view)
         await self.utils().log_action(ctx.guild, "Unban", f"{user} was unbanned by {ctx.author}.")
 
     # ---------- WARN SYSTEM ----------
@@ -84,15 +97,15 @@ class Moderation(commands.Cog):
         warns = utils.get_warnings(ctx.guild.id, member.id)
         if not warns:
             return await ctx.send(f"{member} has no warnings.")
-        embed = discord.Embed(title=f"Warnings for {member}", color=discord.Color.orange())
+
+        lines = f"### ⚠️ Warnings for {member}\n"
         for i, w in enumerate(warns, start=1):
             mod = ctx.guild.get_member(w["mod"])
-            embed.add_field(
-                name=f"#{i} by {mod or w['mod']}",
-                value=f"Reason: {w['reason']}\nTime: {w['time']}",
-                inline=False
-            )
-        await ctx.send(embed=embed)
+            lines += f"**#{i}** by {mod or w['mod']}\nReason: {w['reason']}\nTime: {w['time']}\n\n"
+
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lines)))
+        await ctx.send(view=view)
 
     @commands.command(help="Clear all warnings for a member.")
     @commands.has_permissions(moderate_members=True)
@@ -226,7 +239,7 @@ class Moderation(commands.Cog):
         """Interactive AutoMod configuration."""
         utils = self.utils()
         config = utils.get_mod_config(ctx.guild.id)
-        
+
         class AutoModView(discord.ui.View):
             def __init__(self, utils, guild_id, config):
                 super().__init__(timeout=60)
@@ -307,12 +320,10 @@ class Moderation(commands.Cog):
         if not words:
             return await ctx.send("No blocked words set for this server.")
 
-        embed = discord.Embed(
-            title="🚫 Blocked Words",
-            description="\n".join(f"- {w}" for w in words),
-            color=discord.Color.red()
-        )
-        await ctx.send(embed=embed)
+        text = "### 🚫 Blocked Words\n" + "\n".join(f"- {w}" for w in words)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
+        await ctx.send(view=view)
 
     @badwords.command(name="add")
     @commands.has_permissions(manage_guild=True)

@@ -1,6 +1,5 @@
 # leveling.py
-# Fully rewritten to match the music cog’s personality + language system
-# Includes bilingual EN/DE support, café personality, clean embeds, and future expansion.
+# Bilingual EN/DE, café personality, cv2 LayoutView responses.
 
 import discord
 from discord.ext import commands
@@ -9,12 +8,8 @@ import json
 import os
 from utils import logging as log
 
-# personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
 
-# -----------------------------
-# MESSAGE DICTIONARY
-# -----------------------------
 MESSAGES = {
     "normal": {
         "en": {
@@ -38,13 +33,12 @@ MESSAGES = {
             "leaderboard_empty": "Noch niemand hat XP auf diesem Server gesammelt.",
         },
     },
-
     "cafe": {
         "en": {
             "level_up": "omg {mention}, you leveled up to **{level}** — look at you growing like a lil coffee bean ☕🌱",
-            "no_xp": "{name} hasn’t brewed any XP yet ☕😔",
+            "no_xp": "{name} hasn't brewed any XP yet ☕😔",
             "stats_title": "☕ cozy level stats for {name}",
-            "stats_level": "vibe‑level",
+            "stats_level": "vibe-level",
             "stats_xp": "xp brewed",
             "stats_rank": "café rank",
             "leaderboard_title": "☕ cozy leaderboard — {guild}",
@@ -53,22 +47,17 @@ MESSAGES = {
         "de": {
             "level_up": "omg {mention}, du bist auf **{level}** gestiegen — wie eine kleine kaffeebohne die wächst ☕🌱",
             "no_xp": "{name} hat noch keine XP aufgebrüht ☕😔",
-            "stats_title": "☕ gemütliche level‑statistiken für {name}",
-            "stats_level": "vibe‑level",
+            "stats_title": "☕ gemütliche level-statistiken für {name}",
+            "stats_level": "vibe-level",
             "stats_xp": "aufgebrühte xp",
-            "stats_rank": "café‑rang",
+            "stats_rank": "café-rang",
             "leaderboard_title": "☕ gemütliche bestenliste — {guild}",
             "leaderboard_empty": "niemand hat hier bisher xp aufgebrüht 😭",
         },
     },
-
-    # future personalities can be added here
 }
 
 
-# -----------------------------
-# LANGUAGE + PERSONALITY HELPERS
-# -----------------------------
 def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
@@ -84,28 +73,19 @@ def msg(ctx, key, **kwargs):
     personality = get_personality()
     lang = get_lang(ctx)
 
-    # try personality + lang
     block = MESSAGES.get(personality, {}).get(lang, {})
     text = block.get(key)
 
-    # fallback personality + en
     if text is None:
         text = MESSAGES.get(personality, {}).get("en", {}).get(key)
-
-    # fallback normal + lang
     if text is None:
         text = MESSAGES["normal"].get(lang, {}).get(key)
-
-    # fallback normal + en
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
 
     return text.format(**kwargs) if kwargs else text
 
 
-# -----------------------------
-# LEVELING COG
-# -----------------------------
 class Leveling(commands.Cog):
     """Cozy bilingual leveling system with personality support."""
 
@@ -129,9 +109,6 @@ class Leveling(commands.Cog):
     def get_xp_for_level(self, level):
         return 5 * (level ** 2) + (50 * level) + 100
 
-    # -----------------------------
-    # XP GAIN + LEVEL UP
-    # -----------------------------
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
@@ -142,11 +119,9 @@ class Leveling(commands.Cog):
 
         if guild_id not in self.levels:
             self.levels[guild_id] = {}
-
         if user_id not in self.levels[guild_id]:
             self.levels[guild_id][user_id] = {"xp": 0, "level": 0}
 
-        # Add random XP
         xp_gain = random.randint(15, 25)
         self.levels[guild_id][user_id]["xp"] += xp_gain
 
@@ -169,13 +144,10 @@ class Leveling(commands.Cog):
 
         self.save_levels()
 
-    # -----------------------------
-    # LEVEL COMMAND
-    # -----------------------------
     @commands.command(
         name="level",
         aliases=["rank"],
-        help="check your cozy level stats ☕ | zeigt deine level‑statistiken"
+        help="check your cozy level stats ☕ | zeigt deine level-statistiken"
     )
     async def level(self, ctx, member: discord.Member = None):
         """Check your current level and XP."""
@@ -191,7 +163,6 @@ class Leveling(commands.Cog):
         current_xp = user_data["xp"]
         next_level_xp = self.get_xp_for_level(current_level)
 
-        # rank calculation
         sorted_users = sorted(
             self.levels[guild_id].items(),
             key=lambda x: (x[1]["level"], x[1]["xp"]),
@@ -203,31 +174,26 @@ class Leveling(commands.Cog):
                 break
             rank += 1
 
-        # embed styling based on personality
-        personality = get_personality()
-        lang = get_lang(ctx)
-
-        title = msg(ctx, "stats_title", name=member.display_name)
-        embed = discord.Embed(
-            title=title,
-            color=discord.Color.gold() if personality == "cafe" else discord.Color.blue()
+        text = (
+            f"### {msg(ctx, 'stats_title', name=member.display_name)}\n"
+            f"**{msg(ctx, 'stats_level')}:** {current_level}\n"
+            f"**{msg(ctx, 'stats_xp')}:** {current_xp}/{next_level_xp}\n"
+            f"**{msg(ctx, 'stats_rank')}:** #{rank}"
         )
 
-        embed.set_thumbnail(url=member.display_avatar.url)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(content=text),
+                accessory=discord.ui.Thumbnail(member.display_avatar.url)
+            )
+        ))
+        await ctx.send(view=view)
 
-        embed.add_field(name=msg(ctx, "stats_level"), value=str(current_level), inline=True)
-        embed.add_field(name=msg(ctx, "stats_xp"), value=f"{current_xp}/{next_level_xp}", inline=True)
-        embed.add_field(name=msg(ctx, "stats_rank"), value=f"#{rank}", inline=True)
-
-        await ctx.send(embed=embed)
-
-    # -----------------------------
-    # LEADERBOARD COMMAND
-    # -----------------------------
     @commands.command(
         name="level-leaderboard",
         aliases=["lvl-lb"],
-        help="view the cozy leaderboard ☕ | zeigt die level‑bestenliste"
+        help="view the cozy leaderboard ☕ | zeigt die level-bestenliste"
     )
     async def leaderboard(self, ctx):
         """View the leveling leaderboard."""
@@ -242,22 +208,18 @@ class Leveling(commands.Cog):
             reverse=True
         )
 
-        title = msg(ctx, "leaderboard_title", guild=ctx.guild.name)
-        personality = get_personality()
-
-        embed = discord.Embed(
-            title=title,
-            color=discord.Color.gold() if personality == "cafe" else discord.Color.blue()
-        )
-
         description = ""
         for i, (user_id, data) in enumerate(sorted_users[:10], start=1):
             user = self.bot.get_user(int(user_id))
             name = user.display_name if user else f"User {user_id}"
             description += f"**{i}. {name}** — Level {data['level']} ({data['xp']} XP)\n"
 
-        embed.description = description
-        await ctx.send(embed=embed)
+        text = f"### {msg(ctx, 'leaderboard_title', guild=ctx.guild.name)}\n{description}"
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=text)
+        ))
+        await ctx.send(view=view)
 
 
 async def setup(bot):

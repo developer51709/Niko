@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 
+
 class UtilityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -24,9 +25,14 @@ class UtilityCog(commands.Cog):
     async def nitro(self, ctx):
         """FREE NITRO!!!"""
         rickroll_gif = "https://csyn.me/assets/rickroll.gif"
-        embed = discord.Embed(title="Nitro", description="No nitro here!", color=0x00ff00)
-        embed.set_image(url=rickroll_gif)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="### 🎁 Nitro\nNo nitro here! ☕")
+        ))
+        view.add_item(discord.ui.MediaGallery(
+            discord.ui.MediaGalleryItem(url=rickroll_gif)
+        ))
+        await ctx.send(view=view)
 
     @commands.command(name="partnership_request")
     async def partnership_request(self, ctx, invite: str = None):
@@ -37,8 +43,13 @@ class UtilityCog(commands.Cog):
             await ctx.send("Please provide an invite link for your server. Example: `!partnership_request https://discord.gg/yourinvite`")
             return
         if log_channel:
-            embed = discord.Embed(title="Partnership Request", description=f"Requested by: {requester.display_name}\nInvite: {invite}", color=0x00ff00)
-            await log_channel.send(embed=embed)
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🤝 Partnership Request\n**Requested by:** {requester.display_name}\n**Invite:** {invite}"
+                )
+            ))
+            await log_channel.send(view=view)
             await ctx.send("Partnership request sent successfully!")
         else:
             await ctx.send("Error: Log channel not found.")
@@ -46,20 +57,43 @@ class UtilityCog(commands.Cog):
     @commands.command(name="boring")
     async def boring(self, ctx):
         """A boring command."""
-        embed = discord.Embed(title="What did you expect?", description="I bet you thought this command would do something cool, but no. It's just boring.", color=0x00ff00)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### ☕ What did you expect?\nI bet you thought this command would do something cool, but no. It's just boring."
+            )
+        ))
+        await ctx.send(view=view)
 
     @commands.command(name="notboring")
     async def notboring(self, ctx):
         """A not boring command."""
-        embed = discord.Embed(title="I lied :)", description="This command is actually in fact quite boring.", color=0x00ff00)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### ☕ I lied :)\nThis command is actually in fact quite boring."
+            )
+        ))
+        await ctx.send(view=view)
 
     @commands.command(name="crazy")
     async def crazy(self, ctx):
         """Crazy? I was crazy once..."""
-        embed = discord.Embed(title="Crazy?", description="Crazy? I was crazy once. They locked me in a room. A rubber room. A rubber room with rats. And rats make me crazy.\n\nCrazy? I was crazy once. They locked me in a room. A rubber room. A rubber room with rats. And rats make me crazy.\n\nCrazy? I was crazy once...", color=0x00ff00)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    "### ☕ Crazy?\n"
+                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
+                    "A rubber room with rats. And rats make me crazy.\n\n"
+                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
+                    "A rubber room with rats. And rats make me crazy.\n\n"
+                    "Crazy? I was crazy once..."
+                )
+            )
+        ))
+        await ctx.send(view=view)
+
 
 async def setup(bot):
     await bot.add_cog(UtilityCog(bot))

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Niko is a Discord bot powered by a local LLM (TinyLlama) with a unique "femboy AI" personality. The bot responds when mentioned by name or pinged, maintains memory of user interactions, tracks favorability scores based on user behavior, and includes various utility features like an economy system and roleplay commands.
+Niko is a Discord bot with a cozy café personality, bilingual EN/DE support, and a full feature set including economy, leveling, music, moderation, roleplay, info, and AI utility commands. All cogs reside under `src/cogs/`.
 
 ## User Preferences
 
@@ -11,47 +11,65 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Bot Framework
-- **Discord.py with Cogs pattern**: The bot uses Discord.py's commands extension with a modular cog system for organizing functionality. Each feature category (economy, info, utility, roleplay, AI utilities) is separated into its own cog file under the `cogs/` directory.
-- **Rationale**: Cogs provide clean separation of concerns and make it easy to add/remove features without modifying core bot code.
+- **Discord.py with Cogs pattern**: Modular cog system under `src/cogs/`. All 37+ cogs load on startup.
+- All cogs live in `src/cogs/` (NOT a separate `cogs/` root directory).
+- Logging via `utils/logging.py` custom logger (`from utils import logging as log`).
+
+### UI / Response System
+- **Components v2 (cv2) LayoutView**: All user-facing responses use `discord.ui.LayoutView` instead of `discord.Embed`.
+  - Pattern: `view = discord.ui.LayoutView()` → `view.add_item(discord.ui.Container(discord.ui.TextDisplay(...)))` → `await ctx.send(view=view)`
+  - Thumbnail accessory: wrap `TextDisplay` in `discord.ui.Section(..., accessory=discord.ui.Thumbnail(url))`
+  - Images/GIFs: `view.add_item(discord.ui.MediaGallery(discord.ui.MediaGalleryItem(url=...)))`
+  - Link buttons: `view.add_item(discord.ui.ActionRow(discord.ui.Button(style=discord.ButtonStyle.link, url=...)))`
+  - Exception: `automod` command uses `discord.ui.View` + `discord.Embed` because it has interactive toggle buttons that edit the message.
+- **Bilingual EN/DE**: Every cog has a `MESSAGES` dict with `normal`/`cafe` personalities and `en`/`de` languages. `get_lang(ctx)` checks `guild.preferred_locale`. 4-level fallback in `msg()`.
+- **Personality**: `PERSONALITY = "cafe"` across all cogs for cozy café-themed text.
+
+### Critical Design Notes
+- Do NOT use `discord.TextChannel | None` union type hints — use `= None` default instead.
+- The `edit` tool can fail with "did not appear verbatim" for files with special chars (é, ü, ☕). Use the `write` tool to fully rewrite such files.
+- `discord.ui.LayoutView` and `discord.ui.View` cannot be mixed in the same message send.
+- `discord.ui.Section` requires an accessory — if no image, use a plain `TextDisplay` as fallback.
 
 ### AI/LLM Integration
-- **Local LLM inference using ctransformers**: The bot runs TinyLlama-1.1B locally using ctransformers library rather than calling external APIs.
-- **Model**: TinyLlama-1.1B-Chat GGUF format (Q4_K_M quantization, ~600MB)
-- **Auto-download**: Model is downloaded from HuggingFace on first run if not present
-- **Rationale**: Local inference provides free, unlimited AI responses without API costs or rate limits. The small model size allows running on modest hardware.
-
-### Memory System
-- **JSON-based persistent storage**: User interactions are stored in `memory.json` with three tracked dimensions:
-  - `users`: Raw message history per user
-  - `favorability`: Numeric score (-100 to 100+) tracking how much Niko "likes" each user
-  - `conversations`: Structured conversation history with role/content pairs
-- **Rationale**: Simple file-based storage is sufficient for this use case and requires no database setup.
+- **OpenAI API** via Replit integration (`python_openai_ai_integrations`)
+- Memory stored in `memory.json` with `users`, `favorability`, `conversations` keys.
 
 ### Economy System
-- **Per-user JSON files**: Economy data stored in `economy_data/` directory with one JSON file per user ID
-- **Features tracked**: balance, bank, inventory, net worth, cooldown timestamps for various actions (daily, work, crime, gambling, etc.)
-- **Rationale**: Separate files per user prevent data corruption from affecting all users and make debugging easier.
+- **Per-user JSON files**: `economy_data/{user_id}.json`
+- Starting balance: 100 coins
+- Shop items: Coffee (50), Cake (120), Café Badge (300)
+- Commands: balance, deposit, withdraw (supports "all"), daily, work, crime, rob, shop, buy, inventory, leaderboard, give, net_worth
 
-### Personality System
-- **System prompt engineering**: Niko's personality is defined through a detailed system prompt that instructs the LLM on behavior, speech patterns, and social dynamics
-- **Favorability-aware responses**: The bot tracks positive/negative interactions and adjusts responses based on user favorability scores
+### Leveling System
+- XP stored in `data/levels.json` per guild/user
+- Random 15–25 XP per message
+- XP formula: `5 * level² + 50 * level + 100`
+- Commands: `!level` / `!rank`, `!level-leaderboard` / `!lvl-lb`
+
+### Moderation
+- Mod log channel stored via `moderation_utils.py`
+- AutoMod config (antispam, antilink, badwords, massmention, thresholds) via `!automod` interactive UI
+- Commands: kick, ban, unban, warn, warnings, clearwarnings, mute, tempmute, unmute, clear, purge, slowmode, lock, unlock, nick, setmodlog, automod, badwords
+
+### Music
+- Lavalink-based music via wavelink
+- Nodes loaded from AjieBlogs API on startup
 
 ## External Dependencies
 
 ### Discord API
-- **discord.py**: Primary interface for Discord bot functionality
-- **Requires**: `DISCORD_BOT_TOKEN` environment secret from Discord Developer Portal
-
-### AI Model
-- **ctransformers**: Local GGUF model inference library (CPU-based)
-- **Model source**: HuggingFace (TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF)
-- **Download**: Automatic on first run via requests library
+- **discord.py**: Primary bot framework
+- **Requires**: `DISCORD_BOT_TOKEN` environment secret
 
 ### System Libraries
-- **psutil**: System resource monitoring (used in info commands for bot statistics)
-- **requests**: HTTP client for downloading the AI model
+- **psutil**: System resource monitoring
+- **requests**: HTTP client
 
 ### Data Storage
-- **Local filesystem**: All data persisted to JSON files (no external database required)
+- **Local filesystem**: JSON files only, no external database
   - `memory.json`: AI memory and favorability
   - `economy_data/*.json`: Per-user economy state
+  - `data/levels.json`: Per-guild leveling data
+  - `data/mod_config.json`: Per-guild moderation config
+  - `data/warnings.json`: Per-guild warning records
