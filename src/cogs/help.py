@@ -135,7 +135,7 @@ def _command_detail_text(bot, cmd) -> str:
         "",
         f"**Description**\n{cmd.help or 'No description provided.'}",
         "",
-        f"**Usage**\n`{prefix}{cmd.name} {signature}`.strip()",
+        f"**Usage**\n`{prefix}{cmd.name} {signature}`",
     ]
     if cmd.aliases:
         lines.append(f"\n**Aliases**\n" + ", ".join(f"`{a}`" for a in cmd.aliases))
