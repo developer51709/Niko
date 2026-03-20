@@ -10,6 +10,35 @@ WARN_FILE = os.path.join(DATA_DIR, "warns.json")
 MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 
+DEFAULT_GUILD_CONFIG = {
+    "modlog_channel": None,
+    "automod": {
+        "antispam": True,
+        "antilink": True,
+        "badwords": True,
+        "massmention": True,
+        "antinuke": False,
+        "antiraid": False,
+    },
+    "spam_threshold": 6,
+    "spam_interval": 7,
+    "max_mentions": 5,
+    "blocked_words": [],
+    "antinuke": {
+        "ban_threshold": 3,
+        "kick_threshold": 3,
+        "channel_delete_threshold": 3,
+        "role_delete_threshold": 3,
+        "interval": 10,
+        "action": "strip",
+    },
+    "antiraid": {
+        "join_threshold": 10,
+        "join_interval": 10,
+        "action": "kick",
+    },
+}
+
 
 def ensure_files():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -27,13 +56,33 @@ def load_json(path, default):
     try:
         with open(path, "r") as f:
             return json.load(f)
-    except:
+    except Exception:
         return default
 
 
 def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
+
+
+def _migrate_guild_config(cfg: dict) -> dict:
+    """Ensure all required keys exist, adding defaults for new fields."""
+    am = cfg.setdefault("automod", {})
+    for key, val in DEFAULT_GUILD_CONFIG["automod"].items():
+        am.setdefault(key, val)
+
+    for key in ("spam_threshold", "spam_interval", "max_mentions", "blocked_words"):
+        cfg.setdefault(key, DEFAULT_GUILD_CONFIG[key])
+
+    cfg.setdefault("antinuke", dict(DEFAULT_GUILD_CONFIG["antinuke"]))
+    for k, v in DEFAULT_GUILD_CONFIG["antinuke"].items():
+        cfg["antinuke"].setdefault(k, v)
+
+    cfg.setdefault("antiraid", dict(DEFAULT_GUILD_CONFIG["antiraid"]))
+    for k, v in DEFAULT_GUILD_CONFIG["antiraid"].items():
+        cfg["antiraid"].setdefault(k, v)
+
+    return cfg
 
 
 class ModerationUtils(commands.Cog):
@@ -49,32 +98,23 @@ class ModerationUtils(commands.Cog):
 
     # ---------- CONFIG HELPERS ----------
 
-    def get_guild_config(self, guild_id: int):
+    def get_guild_config(self, guild_id: int) -> dict:
         gid = str(guild_id)
         if gid not in self.config:
-            self.config[gid] = {
-                "modlog_channel": None,
-                "automod": {
-                    "antispam": True,
-                    "antilink": True,
-                    "badwords": True,
-                    "massmention": True,
-                },
-                "spam_threshold": 6,
-                "spam_interval": 7,
-                "max_mentions": 5,
-                "blocked_words": [],
-            }
+            import copy
+            self.config[gid] = copy.deepcopy(DEFAULT_GUILD_CONFIG)
             self.save_config()
+        else:
+            _migrate_guild_config(self.config[gid])
         return self.config[gid]
 
-    def get_mod_config(self, guild_id: int):
+    def get_mod_config(self, guild_id: int) -> dict:
         return self.get_guild_config(guild_id)
 
     def save_mod_config(self):
         self.save_config()
 
-    def set_modlog_channel(self, guild_id: int, channel_id: int | None):
+    def set_modlog_channel(self, guild_id: int, channel_id):
         cfg = self.get_guild_config(guild_id)
         cfg["modlog_channel"] = channel_id
         self.save_config()
@@ -92,23 +132,25 @@ class ModerationUtils(commands.Cog):
         channel = guild.get_channel(channel_id)
         if not channel:
             return
-        embed = discord.Embed(title=title, description=description, color=discord.Color.red())
-        embed.timestamp = discord.utils.utcnow()
-        await channel.send(embed=embed)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### 🔔 {title}\n{description}")
+        ))
+        try:
+            await channel.send(view=view)
+        except Exception:
+            pass
 
     # ---------- WARN SYSTEM ----------
 
     def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str):
         gid = str(guild_id)
         uid = str(user_id)
-        if gid not in self.warns:
-            self.warns[gid] = {}
-        if uid not in self.warns[gid]:
-            self.warns[gid][uid] = []
+        self.warns.setdefault(gid, {}).setdefault(uid, [])
         self.warns[gid][uid].append({
             "mod": moderator_id,
             "reason": reason,
-            "time": datetime.utcnow().isoformat()
+            "time": datetime.utcnow().isoformat(),
         })
         save_json(WARN_FILE, self.warns)
 
@@ -133,11 +175,11 @@ class ModerationUtils(commands.Cog):
         for channel in guild.channels:
             try:
                 await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False)
-            except:
+            except Exception:
                 continue
         return role
 
-    async def mute_member(self, member: discord.Member, duration: int | None, reason: str | None):
+    async def mute_member(self, member: discord.Member, duration=None, reason=None):
         role = await self.ensure_mute_role(member.guild)
         await member.add_roles(role, reason=reason or "Muted")
         gid = str(member.guild.id)
@@ -145,13 +187,10 @@ class ModerationUtils(commands.Cog):
         until = None
         if duration:
             until = (datetime.utcnow() + timedelta(seconds=duration)).isoformat()
-        self.mutes.setdefault(gid, {})[uid] = {
-            "until": until,
-            "reason": reason,
-        }
+        self.mutes.setdefault(gid, {})[uid] = {"until": until, "reason": reason}
         save_json(MUTE_FILE, self.mutes)
 
-    async def unmute_member(self, member: discord.Member, reason: str | None = None):
+    async def unmute_member(self, member: discord.Member, reason=None):
         role = await self.ensure_mute_role(member.guild)
         await member.remove_roles(role, reason=reason or "Unmuted")
         gid = str(member.guild.id)
@@ -174,31 +213,29 @@ class ModerationUtils(commands.Cog):
                     if until:
                         try:
                             until_dt = datetime.fromisoformat(until)
-                        except:
+                        except Exception:
                             continue
                         if now >= until_dt:
                             member = guild.get_member(int(uid))
                             if member:
                                 try:
                                     await self.unmute_member(member, reason="Mute expired")
-                                except:
+                                except Exception:
                                     pass
                             changed = True
             if changed:
                 save_json(MUTE_FILE, self.mutes)
             await asyncio.sleep(15)
 
-    # ---------- BLOCKED WORDS MANAGEMENT ----------
+    # ---------- BLOCKED WORDS ----------
 
     def get_blocked_words(self, guild_id: int):
-        cfg = self.get_guild_config(guild_id)
-        return cfg.get("blocked_words", [])
+        return self.get_guild_config(guild_id).get("blocked_words", [])
 
     def add_blocked_word(self, guild_id: int, word: str):
         cfg = self.get_guild_config(guild_id)
-        if "blocked_words" not in cfg:
-            cfg["blocked_words"] = []
         w = word.lower()
+        cfg["blocked_words"] = list(cfg.get("blocked_words", []))
         if w not in cfg["blocked_words"]:
             cfg["blocked_words"].append(w)
         self.save_config()
@@ -206,18 +243,16 @@ class ModerationUtils(commands.Cog):
     def remove_blocked_word(self, guild_id: int, word: str):
         cfg = self.get_guild_config(guild_id)
         w = word.lower()
-        if "blocked_words" in cfg and w in cfg["blocked_words"]:
+        if w in cfg.get("blocked_words", []):
             cfg["blocked_words"].remove(w)
         self.save_config()
 
     def clear_blocked_words(self, guild_id: int):
-        cfg = self.get_guild_config(guild_id)
-        cfg["blocked_words"] = []
+        self.get_guild_config(guild_id)["blocked_words"] = []
         self.save_config()
 
     def contains_blocked_word(self, guild_id: int, content: str):
-        cfg = self.get_guild_config(guild_id)
-        words = cfg.get("blocked_words", [])
+        words = self.get_guild_config(guild_id).get("blocked_words", [])
         lowered = content.lower()
         return any(w in lowered for w in words)
 
