@@ -10,7 +10,7 @@ import colorama
 
 # Developer user IDs
 DEVELOPERS = {
-    1435974392810307604,  # Nyxen
+    1479968201319125013,  # Nyxen
 }
 
 
@@ -46,12 +46,18 @@ class Development(commands.Cog):
                 print(colorama.Fore.RED + f"Args: {ctx.args}" + colorama.Style.RESET_ALL)
             else:
                 print(colorama.Fore.RED + "No args" + colorama.Style.RESET_ALL)
-            embed = discord.Embed(
-                title="⚠️ Unauthorized Access",
-                description="This command is restricted to developers only.\n**__Notice:__**\nYour attempt has been logged.",
-                color=discord.Color.red()
+
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.Section(
+                    discord.ui.TextDisplay(
+                        content=f"### ⚠️ Unauthorized Access\nThis command is restricted to developers only.\n**Notice:**\nYour attempt has been logged."
+                    ),
+                    accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+                )
             )
-            await ctx.send(embed=embed)
+            view.add_item(container)
+            await ctx.send(view=view)
 
     # -------------------------------
     # Developer-only check
@@ -64,39 +70,36 @@ class Development(commands.Cog):
     # -------------------------------
     @commands.command(name="devhelp")
     async def dev_help(self, ctx):
-        embed = discord.Embed(
-            title="Developer Toolkit",
-            description="Easy-to-use debugging and control commands.",
-            color=0x3498DB
+        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content="# 🛠 Developer Toolkit\n> Easy-to-use debugging and control commands."
+                ),
+                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"### Cog Management\n`{prefix}devload <cog>`\n`{prefix}devunload <cog>`\n`{prefix}devreload <cog>`"
+            ),
+            discord.ui.TextDisplay(
+                content=f"### Diagnostics\n`{prefix}devping`\n`{prefix}devlatency`\n`{prefix}devuptime`\n`{prefix}devmem`\n`{prefix}devtasks`"
+            ),
+            discord.ui.TextDisplay(
+                content=f"### Guild Tools\n`{prefix}devguild`\n`{prefix}devchannels`\n`{prefix}devroles`\n`{prefix}devmembers`"
+            ),
+            discord.ui.TextDisplay(
+                content=f"### Eval / Exec\n`{prefix}deveval <code>`\n`{prefix}devexec <code>`"
+            ),
+            discord.ui.TextDisplay(
+                content=f"### Bot Control\n`{prefix}devsay <msg>`\n`{prefix}devshutdown`"
+            ),
         )
+        view.add_item(container)
 
-        embed.add_field(
-            name="Cog Management",
-            value="`!devload <cog>`\n`!devunload <cog>`\n`!devreload <cog>`",
-            inline=False
-        )
-        embed.add_field(
-            name="Diagnostics",
-            value="`!devping`\n`!devlatency`\n`!devuptime`\n`!devmem`\n`!devtasks`",
-            inline=False
-        )
-        embed.add_field(
-            name="Guild Tools",
-            value="`!devguild`\n`!devchannels`\n`!devroles`\n`!devmembers`",
-            inline=False
-        )
-        embed.add_field(
-            name="Eval / Exec",
-            value="`!deveval <code>`\n`!devexec <code>`",
-            inline=False
-        )
-        embed.add_field(
-            name="Bot Control",
-            value="`!devsay <msg>`\n`!devshutdown`",
-            inline=False
-        )
-
-        await ctx.send(embed=embed)
+        await ctx.send(view=view)
 
     # -------------------------------
     # Cog Management
@@ -201,9 +204,31 @@ class Development(commands.Cog):
             result = eval(code)
             if asyncio.iscoroutine(result):
                 result = await result
-            await ctx.send(f"```\n{result}\n```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ✅️ Evaluation Success\nThe code was evaluated successfully."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Result\n```\n{result}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
         except Exception as e:
-            await ctx.send(f"Error:\n```{e}```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ⚠️ Evaluation Error\nAn error occurred while evaluating the code."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Traceback\n```\n{e}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     @commands.command(name="devexec")
     async def dev_exec(self, ctx, *, code: str):
@@ -216,13 +241,25 @@ class Development(commands.Cog):
             "discord": discord,
             "asyncio": asyncio,
             "__import__": __import__,
+            "self": self,
         }
 
         try:
             exec(code, env)
             await ctx.send("Executed successfully.")
         except Exception:
-            await ctx.send(f"Error:\n```{traceback.format_exc()}```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ⚠️ Execution Error\nAn error occurred while executing the code."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Traceback\n```\n{traceback.format_exc()}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     # -------------------------------
     # Bot Control
