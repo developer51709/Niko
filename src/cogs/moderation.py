@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from utils import logging as log
+from utils.logging import info, success, warning, error, debug
 
 
 class Moderation(commands.Cog):
@@ -31,7 +32,22 @@ class Moderation(commands.Cog):
             await ctx.send("Please specify a member to ban.")
             return
         await member.ban(reason=reason)
-        await ctx.send(f"✅ Banned {member} | Reason: {reason}")
+        try:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.Section(
+                    discord.ui.TextDisplay(
+                        content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
+                    ),
+                    accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+        except Exception as e:
+            error("moderation", f"Error sending ban message: {e}")
+            # plaintext fallback
+            await ctx.send(f"✅ Banned {member} | Reason: {reason}")
         await self.utils().log_action(ctx.guild, "Ban", f"{member} was banned by {ctx.author}.\nReason: {reason}")
 
     @commands.command(help="Unban a user by ID.")
