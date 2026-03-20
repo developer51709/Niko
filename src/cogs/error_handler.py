@@ -43,12 +43,23 @@ class ErrorHandler(commands.Cog):
 
     # Utility: embed generator
     def error_embed(self, title, description):
-        return discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.red(),
-            timestamp=datetime.datetime.utcnow()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content=f"### ⚠️ {title}\n{description}"
+                ),
+                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            )
         )
+        view.add_item(container)
+        return view
+        # return discord.Embed(
+        #     title=title,
+        #     description=description,
+        #     color=discord.Color.red(),
+        #     timestamp=datetime.datetime.utcnow()
+        # )
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
@@ -70,7 +81,7 @@ class ErrorHandler(commands.Cog):
                 "Missing Permissions",
                 f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} tried to use {ctx.command} without permissions")
             return
 
@@ -79,7 +90,7 @@ class ErrorHandler(commands.Cog):
                 "Bot Missing Permissions",
                 f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("ERROR", f"Bot missing permissions for {ctx.command}")
             return
 
@@ -88,7 +99,7 @@ class ErrorHandler(commands.Cog):
                 "Missing Role",
                 f"You must have the `{error.missing_role}` role to use this command."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} missing role {error.missing_role}")
             return
 
@@ -97,7 +108,7 @@ class ErrorHandler(commands.Cog):
                 "Missing Required Roles",
                 f"You need **one** of these roles: `{', '.join(error.missing_roles)}`"
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} missing any of roles {error.missing_roles}")
             return
 
@@ -106,7 +117,7 @@ class ErrorHandler(commands.Cog):
                 "Cooldown Active",
                 f"Try again in `{error.retry_after:.1f}` seconds."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("INFO", f"{ctx.author} hit cooldown on {ctx.command}")
             return
 
@@ -115,7 +126,7 @@ class ErrorHandler(commands.Cog):
                 "Missing Argument",
                 f"You're missing a required argument: `{error.param.name}`"
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} missing argument {error.param.name}")
             return
 
@@ -124,7 +135,7 @@ class ErrorHandler(commands.Cog):
                 "Invalid Argument",
                 "One or more arguments were invalid. Check your input and try again."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"Bad argument from {ctx.author} in {ctx.command}")
             return
 
@@ -133,7 +144,7 @@ class ErrorHandler(commands.Cog):
                 "Not Allowed in DMs",
                 "This command can only be used in a server."
             )
-            await ctx.author.send(embed=embed)
+            await ctx.author.send(view=embed)
             self.log("INFO", f"{ctx.author} tried using {ctx.command} in DMs")
             return
 
@@ -142,7 +153,7 @@ class ErrorHandler(commands.Cog):
                 "DM Only Command",
                 "This command can only be used in private messages."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("INFO", f"{ctx.author} tried using DM-only command in a guild")
             return
 
@@ -151,7 +162,7 @@ class ErrorHandler(commands.Cog):
                 "NSFW Required",
                 "This command can only be used in an NSFW channel."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} attempted NSFW command in non-NSFW channel")
             return
 
@@ -161,7 +172,7 @@ class ErrorHandler(commands.Cog):
                 "Owner Only",
                 "Only the bot owner can use this command."
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"{ctx.author} attempted owner-only command")
             return
 
@@ -175,7 +186,7 @@ class ErrorHandler(commands.Cog):
                 "Not Found",
                 str(error)
             )
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"Lookup error: {error}")
             return
 
@@ -192,7 +203,7 @@ class ErrorHandler(commands.Cog):
         )
         if isinstance(error, other_known):
             embed = self.error_embed("Error", str(error))
-            await ctx.reply(embed=embed)
+            await ctx.reply(view=embed)
             self.log("WARN", f"Handled known error: {error}")
             return
 
@@ -204,7 +215,7 @@ class ErrorHandler(commands.Cog):
             "Unexpected Error",
             "An unexpected error occurred. The developers have been notified."
         )
-        await ctx.reply(embed=embed)
+        await ctx.reply(view=embed)
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
