@@ -93,6 +93,8 @@ MESSAGES = {
             "hostinfo_os": "OS",
             "hostinfo_cpu": "CPU",
             "hostinfo_ram": "RAM",
+            "invite_title": "Invite Niko",
+            "invite_link": "Click here to invite Niko to your server"
         },
 
         "de": {
@@ -174,6 +176,8 @@ MESSAGES = {
             "hostinfo_os": "Betriebssystem",
             "hostinfo_cpu": "CPU",
             "hostinfo_ram": "RAM",
+            "invite_title": "Niko einladen",
+            "invite_link": "Klicke hier, um Niko auf deinen Server einzuladen",
         },
     },
 
@@ -257,6 +261,8 @@ MESSAGES = {
             "hostinfo_os": "os",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
+            "invite_title": "☕️ invite niko",
+            "invite_link": "click here to invite niko to your café",
         },
 
         "de": {
@@ -338,6 +344,8 @@ MESSAGES = {
             "hostinfo_os": "betriebssystem",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
+            "invite_title": "☕️ niko einladen",
+            "invite_link": "klicke hier, um niko in dein café einzuladen",
         },
     },
 }
@@ -392,11 +400,16 @@ def cv2_text(text, thumbnail_url=None):
 def cv2_image(text, image_url):
     """Build a LayoutView with text container + MediaGallery image."""
     view = discord.ui.LayoutView()
-    view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=text
+        )
+    )
     if image_url:
-        view.add_item(discord.ui.MediaGallery(
-            discord.ui.MediaGalleryItem(url=image_url)
+        container.add_item(discord.ui.MediaGallery(
+            discord.MediaGalleryItem(media=image_url)
         ))
+    view.add_item(container)
     return view
 
 
@@ -716,6 +729,25 @@ class InfoCog(commands.Cog):
             f"**{msg(ctx, 'hostinfo_ram')}:** `{ram}GB`"
         )
         await ctx.send(view=cv2_text(text))
+
+    # -------------------------------
+    # INVITE
+    # -------------------------------
+    @commands.command(
+        name="invite",
+        help="get Niko's invite link ☕️ | einladungslink für Niko"
+    )
+    async def invite(self, ctx):
+        bot_user = self.bot.user
+        invite_link = f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
 
 async def setup(bot):
