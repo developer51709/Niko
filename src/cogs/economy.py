@@ -9,6 +9,7 @@ import json
 import os
 import time
 from utils import logging as log
+from utils.paginator import PaginatedView, paginate
 
 # personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
@@ -259,17 +260,30 @@ class EconomyCog(commands.Cog):
     @commands.command(name="leaderboard", aliases=["lb", "top"], help="see who has the most treats 🏆🥐 | sieh nach, wer die meisten Leckereien hat")
     async def leaderboard(self, ctx):
         '''View the economy leaderboard.'''
-        leaderboard = sorted(self.economy_data.items(), key=lambda x: x[1]["balance"] + x[1].get("bank", 0), reverse=True)
-        embed = discord.Embed(title="Café Rich List 🥐✨", color=discord.Color.gold())
-        for i, (user_id, data) in enumerate(leaderboard[:10]):
-            try:
-                user = await self.bot.fetch_user(int(user_id))
-                name = user.display_name
-            except:
-                name = f"Unknown ({user_id})"
-            total = data['balance'] + data.get('bank', 0)
-            embed.add_field(name=f"{i+1}. {name}", value=f"{total} 🥐", inline=False)
-        await ctx.send(embed=embed)
+        sorted_users = sorted(
+            self.economy_data.items(),
+            key=lambda x: x[1]["balance"] + x[1].get("bank", 0),
+            reverse=True,
+        )
+
+        if not sorted_users:
+            return await ctx.send("no one has any coins yet — the café is just opening! ☕")
+
+        lines = []
+        for i, (user_id, data) in enumerate(sorted_users, start=1):
+            user = self.bot.get_user(int(user_id))
+            name = user.display_name if user else f"User {user_id}"
+            total = data["balance"] + data.get("bank", 0)
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
+            lines.append(f"{medal} {name} — {total:,} 🥐")
+
+        pages = paginate(lines, per_page=10)
+        view = PaginatedView(
+            title="☕ café rich list 🥐✨",
+            pages=pages,
+            icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
+        )
+        await ctx.send(view=view)
 
     # !shop command
     @commands.command(name="shop", help="browse the café boutique 🛍️✨ | stöbere in der Café-Boutique")

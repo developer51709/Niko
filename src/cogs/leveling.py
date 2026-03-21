@@ -7,6 +7,7 @@ import random
 import json
 import os
 from utils import logging as log
+from utils.paginator import PaginatedView, paginate
 
 PERSONALITY = "cafe"
 
@@ -208,17 +209,19 @@ class Leveling(commands.Cog):
             reverse=True
         )
 
-        description = ""
-        for i, (user_id, data) in enumerate(sorted_users[:10], start=1):
+        lines = []
+        for i, (user_id, data) in enumerate(sorted_users, start=1):
             user = self.bot.get_user(int(user_id))
             name = user.display_name if user else f"User {user_id}"
-            description += f"**{i}. {name}** — Level {data['level']} ({data['xp']} XP)\n"
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
+            lines.append(f"{medal} {name} — Level {data['level']} ({data['xp']} XP)")
 
-        text = f"### {msg(ctx, 'leaderboard_title', guild=ctx.guild.name)}\n{description}"
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=text)
-        ))
+        pages = paginate(lines, per_page=10)
+        view = PaginatedView(
+            title=msg(ctx, "leaderboard_title", guild=ctx.guild.name),
+            pages=pages,
+            icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
+        )
         await ctx.send(view=view)
 
 

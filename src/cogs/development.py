@@ -7,6 +7,7 @@ import os
 import psutil
 from discord.ext import commands
 import colorama
+from utils.paginator import PaginatedView, paginate
 
 # Developer user IDs
 DEVELOPERS = {
@@ -214,18 +215,44 @@ class Development(commands.Cog):
 
     @commands.command(name="devchannels")
     async def dev_channels(self, ctx):
-        channels = "\n".join([f"{c.id} — {c.name}" for c in ctx.guild.channels])
-        await ctx.send(f"**Channels:**\n```\n{channels}\n```")
+        lines = [
+            f"`{c.id}` — **{c.name}** ({type(c).__name__})"
+            for c in sorted(ctx.guild.channels, key=lambda c: c.name)
+        ]
+        pages = paginate(lines, per_page=15)
+        view = PaginatedView(
+            title=f"📋 Channels — {ctx.guild.name}",
+            pages=pages,
+        )
+        await ctx.send(view=view)
 
     @commands.command(name="devroles")
     async def dev_roles(self, ctx):
-        roles = "\n".join([f"{r.id} — {r.name}" for r in ctx.guild.roles])
-        await ctx.send(f"**Roles:**\n```\n{roles}\n```")
+        lines = [
+            f"`{r.id}` — **{r.name}**"
+            + (" *(managed)*" if r.managed else "")
+            for r in sorted(ctx.guild.roles, key=lambda r: -r.position)
+        ]
+        pages = paginate(lines, per_page=15)
+        view = PaginatedView(
+            title=f"🏷️ Roles — {ctx.guild.name}",
+            pages=pages,
+        )
+        await ctx.send(view=view)
 
     @commands.command(name="devmembers")
     async def dev_members(self, ctx):
-        members = "\n".join([f"{m.id} — {m}" for m in ctx.guild.members][:50])
-        await ctx.send(f"**Members (first 50):**\n```\n{members}\n```")
+        lines = [
+            f"`{m.id}` — **{m.display_name}** ({m.name})"
+            + (" 🤖" if m.bot else "")
+            for m in sorted(ctx.guild.members, key=lambda m: m.display_name.lower())
+        ]
+        pages = paginate(lines, per_page=15)
+        view = PaginatedView(
+            title=f"👥 Members — {ctx.guild.name} ({len(ctx.guild.members)} total)",
+            pages=pages,
+        )
+        await ctx.send(view=view)
 
     # -------------------------------
     # Eval / Exec
