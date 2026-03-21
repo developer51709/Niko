@@ -9,7 +9,10 @@ import sys
 import asyncio
 
 # Optional: Add your owner IDs here if you want multiple owners
-OWNER_IDS = {123456789012345678, 987654321098765432}  # replace with yours
+OWNER_IDS = {
+    123456789012345678, 
+    987654321098765432
+}
 
 
 def is_owner():
@@ -76,25 +79,29 @@ class OwnerCog(commands.Cog):
     async def owner_help(self, ctx):
         """Shows help for owner-only commands."""
 
-        embed = discord.Embed(
-            title="🛠️ Owner Command Panel",
-            description="These commands are restricted to bot owners only.",
-            color=discord.Color.red()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="# Owner Commands\n> These commands are restricted to bot owners only."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
-
+        
+        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
         cog = self.bot.get_cog("OwnerCog")
         if not cog:
             return await ctx.send("❌ OwnerCog not loaded.")
 
         for cmd in cog.get_commands():
-            embed.add_field(
-                name=f"`{cmd.name}`",
-                value=cmd.help or "No description provided.",
-                inline=False
+            container.add_item(discord.ui.TextDisplay(
+                content=f"**`{prefix}{cmd.name}`**\n{cmd.help or 'No description.'}"
+                )
             )
-
-        embed.set_footer(text=f"Requested by {ctx.author}")
-        await ctx.send(embed=embed)
+        container.add_item(discord.ui.TextDisplay(
+            content=f"Requested by {ctx.author}"
+        ))
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # -------------------------------
     # Set bot profile picture
