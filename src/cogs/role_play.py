@@ -63,16 +63,25 @@ class RolePlayCog(commands.Cog):
             kill_gifs = [
                 "https://i.pinimg.com/originals/36/d5/fd/36d5fd46d8331661819031b2b7adcda4.gif"
             ]
-            text = (
-                f"### ☕💀 kill\n"
-                f"{msg(ctx, 'kill_desc', author=ctx.author.display_name, target=member.display_name)}\n"
-                f"-# {msg(ctx, 'kill_footer')}"
-            )
             view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
-            view.add_item(discord.ui.MediaGallery(
-                discord.ui.MediaGalleryItem(url=random.choice(kill_gifs))
-            ))
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### 💀 kill"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{msg(ctx, 'kill_desc', author=ctx.author.display_name, target=member.display_name)}"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=random.choice(kill_gifs)
+                    )
+                ),
+                discord.ui.TextDisplay(
+                    content=f"-# {msg(ctx, 'kill_footer')}"
+                ),
+            )
+            view.add_item(container)
             await ctx.send(view=view)
         except Exception as e:
             view = discord.ui.LayoutView()
@@ -92,15 +101,24 @@ class RolePlayCog(commands.Cog):
                 "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
                 "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
             ]
-            text = (
-                f"### ☕💖 hug\n"
-                f"{msg(ctx, 'hug_desc', author=ctx.author.display_name, target=member.display_name)}"
-            )
             view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
-            view.add_item(discord.ui.MediaGallery(
-                discord.ui.MediaGalleryItem(url=random.choice(hug_gifs))
-            ))
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### 💖 hug"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{msg(ctx, 'hug_desc', author=ctx.author.display_name, target=member.display_name)}"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=random.choice(hug_gifs)
+                    )
+                ),
+                discord.ui.TextDisplay(
+                    content=f"-# {msg(ctx, 'kill_footer')}"
+                )
+            )
             await ctx.send(view=view)
         except Exception as e:
             view = discord.ui.LayoutView()
