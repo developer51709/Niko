@@ -21,14 +21,6 @@ class NSFW(commands.Cog):
     @commands.command(name='rule34', help='Search for images on rule34.xxx')
     @commands.is_nsfw()
     async def rule34(self, ctx, *, query: str):
-        if not ctx.channel.is_nsfw():
-            embed = discord.Embed(
-                title='Rule34',
-                description='This command can only be used in NSFW channels.',
-                color=discord.Color.red()
-            )
-            return await ctx.send(embed=embed)
-
         # make request to rule34 API with api key and user id
         RULE34_API_URL = f'https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags={query}&limit=100&pid=0&api_key={RULE34_API_KEY}&user_id={RULE34_USER_ID}'
         response = requests.get(RULE34_API_URL)
@@ -75,13 +67,6 @@ class NSFW(commands.Cog):
     @commands.command(name='gelbooru', help='Search for images on gelbooru.com')
     @commands.is_nsfw()
     async def gelbooru(self, ctx, *, query: str):
-        if not ctx.channel.is_nsfw():
-            embed = discord.Embed(
-                title='Gelbooru',
-                description='This command can only be used in NSFW channels.',
-                color=discord.Color.red()
-            )
-            return await ctx.send(embed=embed)
         # make request to gelbooru API with api key and user id
         GELBOORU_API_URL = f'https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags={query}&limit=100&pid=0&api_key={GELBOORU_API_KEY}&user_id={GELBOORU_USER_ID}'
         response = requests.get(GELBOORU_API_URL)
