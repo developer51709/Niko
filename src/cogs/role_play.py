@@ -114,11 +114,9 @@ class RolePlayCog(commands.Cog):
                     discord.MediaGalleryItem(
                         media=random.choice(hug_gifs)
                     )
-                ),
-                discord.ui.TextDisplay(
-                    content=f"-# {msg(ctx, 'kill_footer')}"
                 )
             )
+            view.add_item(container)
             await ctx.send(view=view)
         except Exception as e:
             view = discord.ui.LayoutView()
