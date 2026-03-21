@@ -519,7 +519,7 @@ class InfoCog(commands.Cog):
         help="meet Niko's creator ☕ | entwickler-infos"
     )
     async def creator(self, ctx):
-        creator = await self.bot.fetch_user(1435974392810307604)
+        creator = await self.bot.fetch_user(1479968201319125013)
         bot_user = self.bot.user
         avatar_url = creator.avatar.url if creator.avatar else None
 
