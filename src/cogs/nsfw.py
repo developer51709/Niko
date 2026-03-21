@@ -26,43 +26,55 @@ class NSFW(commands.Cog):
         response = requests.get(RULE34_API_URL)
         # check if response is valid
         if response.status_code != 200:
-            embed = discord.Embed(
-                title='Rule34', 
-                description='An error occurred while fetching images.', 
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Rule34\nAn error occurred while fetching images.\n-# Response code: `{response.status_code}`"
+                )
             )
-            embed.set_footer(text=f'Response code: `{response.status_code}`')
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # parse response
         data = response.json()
         # check if any images were found
         if not data:
-            embed = discord.Embed(
-                title='Rule34',
-                description='No images found for the given query.',
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Rule34\nNo images found for the given query."
+                )
             )
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # select random image
         image = random.choice(data)
         # check if image is valid
         if not image.get('file_url'):
-            embed = discord.Embed(
-                title='Rule34',
-                description='An error occurred while fetching the image.',
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Rule34\nAn error occurred while fetching the image.\n-# Invalid image URL"
+                )
             )
-            embed.set_footer(text='Invalid image URL')
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # send image in an embed with the query and image source
-        embed = discord.Embed(
-            title=f'Rule34 - {query}',
-            description=f'[Image Source]({image["file_url"]})',
-            color=discord.Color.blue()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### Rule34\nQuery: `{query}`\n[Image Source]({image['file_url']})"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=image['file_url']
+                )
+            ),
+            discord.ui.TextDisplay(
+                content=f"-# Requested by {ctx.author.display_name}"
+            )
         )
-        embed.set_image(url=image['file_url'])
-        embed.set_footer(text=f'Requested by {ctx.author.display_name}')
-        await ctx.send(embed=embed)
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name='gelbooru', help='Search for images on gelbooru.com')
     @commands.is_nsfw()
@@ -72,54 +84,68 @@ class NSFW(commands.Cog):
         response = requests.get(GELBOORU_API_URL)
         # check if response is valid
         if response.status_code != 200:
-            embed = discord.Embed(
-                title='Gelbooru', 
-                description='An error occurred while fetching images.', 
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Gelbooru\nAn error occurred while fetching images.\n-# Response code: `{response.status_code}`"
+                )
             )
-            embed.set_footer(text=f'Response code: `{response.status_code}`')
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # check if response is valid json
         content_type = response.headers.get("Content-Type", "")
 
         if "application/json" not in content_type:
-            embed = discord.Embed(
-                title="Gelbooru",
-                description="The API returned an unexpected response format.",
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Gelbooru\nThe API returned an unexpected response format.\n-# Content-Type: `{content_type}`"
+                )
             )
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # parse response
         data = response.json()
         posts = data.get("post", [])
 
         if not posts:
-            embed = discord.Embed(
-                title='Gelbooru',
-                description='No images found for the given query.',
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Gelbooru\nNo images found for the given query."
+                )
             )
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
 
         image = random.choice(posts)
         # check if image is valid
         if not image.get('file_url'):
-            embed = discord.Embed(
-                title='Gelbooru',
-                description='An error occurred while fetching the image.',
-                color=discord.Color.red()
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Gelbooru\nAn error occurred while fetching the image.\n-# Invalid image URL"
+                )
             )
-            embed.set_footer(text='Invalid image URL')
-            return await ctx.send(embed=embed)
+            view.add_item(container)
+            return await ctx.send(view=view)
         # send image in an embed with the query and image source
-        embed = discord.Embed(
-            title=f'Gelbooru - {query}',
-            description=f'[Image Source]({image["file_url"]})',
-            color=discord.Color.blue()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### Gelbooru\nQuery: `{query}`\n[Image Source]({image['file_url']})"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=image['file_url']
+                )
+            ),
+            discord.ui.TextDisplay(
+                content=f"-# Requested by {ctx.author.display_name}"
+            )
         )
-        embed.set_image(url=image['file_url'])
-        embed.set_footer(text=f'Requested by {ctx.author.display_name}')
-        await ctx.send(embed=embed)
+        view.add_item(container)
+        await ctx.send(view=view)
 
 
 # setup
