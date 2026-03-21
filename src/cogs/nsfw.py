@@ -20,19 +20,13 @@ class NSFW(commands.Cog):
 
     @commands.command(name='rule34', help='Search for images on rule34.xxx')
     @commands.is_nsfw()
-    async def rule34(self, ctx, *, query: str = None):
+    async def rule34(self, ctx, *, query: str):
         if not ctx.channel.is_nsfw():
             embed = discord.Embed(
                 title='Rule34',
                 description='This command can only be used in NSFW channels.',
                 color=discord.Color.red()
             )
-            return await ctx.send(embed=embed)
-        if not query:
-            embed = discord.Embed(
-                title='Rule34', 
-                description='Please provide a search query.', 
-                color=discord.Color.red())
             return await ctx.send(embed=embed)
 
         # make request to rule34 API with api key and user id
@@ -80,18 +74,11 @@ class NSFW(commands.Cog):
 
     @commands.command(name='gelbooru', help='Search for images on gelbooru.com')
     @commands.is_nsfw()
-    async def gelbooru(self, ctx, *, query: str = None):
+    async def gelbooru(self, ctx, *, query: str):
         if not ctx.channel.is_nsfw():
             embed = discord.Embed(
                 title='Gelbooru',
                 description='This command can only be used in NSFW channels.',
-                color=discord.Color.red()
-            )
-            return await ctx.send(embed=embed)
-        if not query:
-            embed = discord.Embed(
-                title='Gelbooru',
-                description='Please provide a search query.',
                 color=discord.Color.red()
             )
             return await ctx.send(embed=embed)
