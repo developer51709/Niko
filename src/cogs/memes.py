@@ -118,15 +118,22 @@ class Meme(commands.Cog):
         title_prefix = msg(ctx, "meme_title_prefix")
         title = f"{title_prefix}{meme['title']}"
 
-        embed = discord.Embed(
-            title=title,
-            url=meme["postLink"],
-            color=discord.Color.gold() if personality == "cafe" else discord.Color.random()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {title}\n[Source]({meme['postLink']})"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=meme['url']
+                )
+            ),
+            discord.ui.TextDisplay(
+                content=f"-# 👍 {meme['ups']} • r/{meme['subreddit']}"
+            )
         )
-        embed.set_image(url=meme["url"])
-        embed.set_footer(text=f"👍 {meme['ups']} • r/{meme['subreddit']}")
-
-        await ctx.send(embed=embed)
+        view.add_item(container)
+        await ctx.send(view=view)
 
 async def setup(bot):
     await bot.add_cog(Meme(bot))
