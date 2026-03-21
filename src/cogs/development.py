@@ -110,7 +110,18 @@ class Development(commands.Cog):
             await self.bot.load_extension(f"cogs.{cog}")
             await ctx.send(f"Loaded `{cog}`.")
         except Exception as e:
-            await ctx.send(f"Error loading `{cog}`:\n```{e}```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ⚠️ Cog Load Error\nAn error occurred while loading the {cog} cog."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Traceback\n```\n{e}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     @commands.command(name="devunload")
     async def dev_unload(self, ctx, cog: str):
@@ -118,7 +129,18 @@ class Development(commands.Cog):
             await self.bot.unload_extension(f"cogs.{cog}")
             await ctx.send(f"Unloaded `{cog}`.")
         except Exception as e:
-            await ctx.send(f"Error unloading `{cog}`:\n```{e}```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ⚠️ Cog Unload Error\nAn error occurred while unloading the {cog} cog."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Traceback\n```\n{e}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     @commands.command(name="devreload")
     async def dev_reload(self, ctx, cog: str):
@@ -126,7 +148,18 @@ class Development(commands.Cog):
             await self.bot.reload_extension(f"cogs.{cog}")
             await ctx.send(f"Reloaded `{cog}`.")
         except Exception as e:
-            await ctx.send(f"Error reloading `{cog}`:\n```{e}```")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"## ⚠️ Cog Reload Error\nAn error occurred while reloading the {cog} cog."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"### Traceback\n```\n{e}\n```"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     # -------------------------------
     # Diagnostics
@@ -166,16 +199,18 @@ class Development(commands.Cog):
     @commands.command(name="devguild")
     async def dev_guild(self, ctx):
         g = ctx.guild
-        embed = discord.Embed(
-            title=f"Guild Info: {g.name}",
-            color=0x95A5A6
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"## ℹ️ Guild Information\nGuild: {g.name}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"### Details\n\n**ID:** `{g.id}`\n**Members:** `{g.member_count}`\n**Owner:** `{g.owner}`\n**Channels:** `{len(g.channels)}`\n**Roles:** `{len(g.roles)}`\n**Created:** `{g.created_at.strftime('%Y-%m-%d %H:%M:%S')}`"
+            )
         )
-        embed.add_field(name="ID", value=g.id)
-        embed.add_field(name="Members", value=g.member_count)
-        embed.add_field(name="Owner", value=g.owner)
-        embed.add_field(name="Channels", value=len(g.channels))
-        embed.add_field(name="Roles", value=len(g.roles))
-        await ctx.send(embed=embed)
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name="devchannels")
     async def dev_channels(self, ctx):
