@@ -321,10 +321,10 @@ class OwnerCog(commands.Cog):
 
         # List all servers using cv2 LayoutView
         servers = sorted(self.bot.guilds, key=lambda g: g.member_count, reverse=True)
-        lines = [f"**{g.name}**\n→ ID: `{g.id}`\n→ Members: `{g.member_count:,}`" for g in servers]
+        lines = [f"**{g.name}**\n • ID: `{g.id}`\n • Members: {g.member_count:,}" for g in servers]
         pages = paginate(lines, per_page=10)
         view = PaginatedView(
-            title="🏢 Servers",
+            title=f"🏢 Servers\n-# Total: {len(servers)}",
             pages=pages
         )
         await ctx.send(view=view)
