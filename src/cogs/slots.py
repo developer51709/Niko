@@ -110,18 +110,34 @@ class Slots(commands.Cog):
             return total, hits
 
         # SPIN ANIMATION
-        embed = discord.Embed(
-            title="🎰 Slots",
-            description="Spinning...",
-            color=discord.Color.gold()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🎰 Slots"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"Spinning..."
+            )
         )
-        msg = await ctx.send(embed=embed)
+        view.add_item(container)
+        msg = await ctx.send(view=view)
 
         # Fake spinning animation
         for _ in range(3):
             grid = spin_grid()
-            embed.description = grid_to_text(grid)
-            await msg.edit(embed=embed)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🎰 Slots"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{grid_to_text(grid)}"
+                )
+            )
+            view.add_item(container)
+            await msg.edit(view=view)
             await asyncio.sleep(0.5)
 
         # Final result
@@ -143,23 +159,27 @@ class Slots(commands.Cog):
 
         if winnings > 0:
             title = "🎉 You Win!"
-            color = discord.Color.green()
             details = "\n".join(f"{sym} — {desc}" for sym, desc in hits)
             description = f"{result_text}\n\n**{details}**\nYou won **{winnings}** coins."
         else:
             title = "💀 You Lose"
-            color = discord.Color.red()
             description = f"{result_text}\n\nYou lost **{amount}** coins."
 
-        result_embed = discord.Embed(
-            title=title,
-            description=description,
-            color=color
+        result_view = discord.ui.LayoutView()
+        result_container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {title}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"{description}"
+            )
         )
+        result_view.add_item(result_container)
 
         # Spin Again button
         view = SpinAgainView(ctx, amount)
-        await msg.edit(embed=result_embed, view=view)
+        await msg.edit(view=result_view)
 
         await view.wait()
 
