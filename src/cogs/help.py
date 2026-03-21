@@ -68,7 +68,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Economy":      (["EconomyCog"], "💰 **Economy Commands**"),
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**"),
     "Info":         (["InfoCog"], "ℹ️ **Information Commands**"),
-    "Utility":      (["UtilityCog"], "🛠️ **Utility Commands**"),
+    "Utility":      (["UtilityCog", "Snipe"], "🛠️ **Utility Commands**"),
     "AI":           (["AICog"], "🤖 **AI Commands**"),
     "Moderation":   (["Moderation"], "🛡️ **Moderation Commands**"),
     "AutoMod":      (["AutoMod"], "⚔️ **AutoMod Commands**"),
