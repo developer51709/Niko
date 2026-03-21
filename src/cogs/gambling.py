@@ -24,19 +24,19 @@ class GamblingCog(commands.Cog):
         self.economy_data = self.load_economy_data()
 
     # Create a directory for economy data if it doesn't exist
-    if not os.path.exists("economy_data"):
+    if not os.path.exists("data/economy_data"):
         print("economy_data directory not found. Creating directory...")
-        os.makedirs("economy_data")
+        os.makedirs("data/economy_data")
         print("economy_data directory created successfully. Continuing...")
 
     # Load economy data from economy_data directory
     def load_economy_data(self):
         economy_data = {}
-        if os.path.exists("economy_data"):
-            for filename in os.listdir("economy_data"):
+        if os.path.exists("data/economy_data"):
+            for filename in os.listdir("data/economy_data"):
                 if filename.endswith(".json"):
                     try:
-                        with open(os.path.join("economy_data", filename), "r") as f:
+                        with open(os.path.join("data/economy_data", filename), "r") as f:
                             user_id = filename[:-5]
                             economy_data[user_id] = json.load(f)
                     except Exception as e:
@@ -45,10 +45,10 @@ class GamblingCog(commands.Cog):
 
     # Save economy data to economy_data directory per user
     def save_economy_data(self):
-        if not os.path.exists("economy_data"):
-            os.makedirs("economy_data")
+        if not os.path.exists("data/economy_data"):
+            os.makedirs("data/economy_data")
         for user_id, data in self.economy_data.items():
-            with open(os.path.join("economy_data", f"{user_id}.json"), "w") as f:
+            with open(os.path.join("data/economy_data", f"{user_id}.json"), "w") as f:
                 json.dump(data, f, indent=4)
 
     # Get user economy data
