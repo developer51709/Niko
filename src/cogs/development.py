@@ -50,12 +50,9 @@ class Development(commands.Cog):
 
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.Section(
-                    discord.ui.TextDisplay(
-                        content=f"### ⚠️ Unauthorized Access\nThis command is restricted to developers only.\n**Notice:**\nYour attempt has been logged."
-                    ),
-                    accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
-                )
+                discord.ui.TextDisplay(
+                    content=f"### ⚠️ Unauthorized Access\nThis command is restricted to developers only.\n**Notice:**\nYour attempt has been logged."
+                ),
             )
             view.add_item(container)
             await ctx.send(view=view)
@@ -75,11 +72,8 @@ class Development(commands.Cog):
         
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    content="# 🛠 Developer Toolkit\n> Easy-to-use debugging and control commands."
-                ),
-                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            discord.ui.TextDisplay(
+                content="# 🛠 Developer Toolkit\n> Easy-to-use debugging and control commands."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
