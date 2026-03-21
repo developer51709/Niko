@@ -28,6 +28,7 @@ MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MEMORY_FILE = "memory.json"
 
 # AI config
+AI_ENABLED = True
 USE_OPENAI = True
 ANSWER_REPLYS = True
 
@@ -136,12 +137,11 @@ Online as {bot.user}
 # Set the bot's status
 # -----------------------------
 async def set_status():
-    if os.getenv("STATUS_LINK"):
+    status_link = os.getenv("STATUS_LINK")
+    if status_link:
         # Check if the link starts with http:// or https:// and add it if missing
-        if not os.getenv("STATUS_LINK").startswith("http://" or "https://"):
+        if not status_link.startswith("http://" or "https://"):
             status_link = f"https://{os.getenv('status_link')}"
-        else:
-            status_link = os.getenv("STATUS_LINK")
     status = os.getenv("STATUS_MESSAGE")
     if status:
         # Status type
@@ -255,10 +255,13 @@ def get_favorability(user_id: int) -> int:
 # Generate reply
 # -----------------------------
 def generate_reply(user_id, server, message, username):
-    if USE_OPENAI:
-        return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+    if AI_ENABLED:
+        if USE_OPENAI:
+            return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+        else:
+            return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
     else:
-        return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
+        return "ai_disabled"
 
 # -----------------------------
 # Discord bot
@@ -304,6 +307,20 @@ async def on_message(msg):
                 user_input, 
                 msg.author.display_name
             )
+
+            if reply == "ai_disabled":
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"### ⚠️ AI Disabled"
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"The AI is currently disabled by the bot owner."
+                    )
+                )
+                view.add_item(container)
+                return await msg.channel.send(view=view)
 
             if len(reply) > 1800:
                 reply = reply[:1800] + "..."
