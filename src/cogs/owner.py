@@ -7,6 +7,7 @@ import textwrap
 import traceback
 import sys
 import asyncio
+from utils.paginator import PaginatedView, paginate
 
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
@@ -316,33 +317,17 @@ class OwnerCog(commands.Cog):
     @commands.command(name="servers")
     @is_owner()
     async def list_servers(self, ctx):
-        """List all servers the bot is in with multipage embed navigation."""
+        """List all servers the bot is in with multipage navigation."""
 
-        guilds = list(self.bot.guilds)
-        guilds.sort(key=lambda g: g.name.lower())
-
-        pages = []
-        per_page = 10
-
-        for i in range(0, len(guilds), per_page):
-            chunk = guilds[i:i + per_page]
-            embed = discord.Embed(
-                title=f"📜 Server List ({len(guilds)} total)",
-                color=discord.Color.blurple()
-            )
-
-            for g in chunk:
-                embed.add_field(
-                    name=f"{g.name}",
-                    value=f"ID: `{g.id}` • Members: `{g.member_count}`",
-                    inline=False
-                )
-
-            embed.set_footer(text=f"Page {len(pages)+1}/{(len(guilds)-1)//per_page + 1}")
-            pages.append(embed)
-
-        view = ServerListView(pages, ctx.author.id)
-        await ctx.send(embed=pages[0], view=view)
+        # List all servers using cv2 LayoutView
+        servers = sorted(self.bot.guilds, key=lambda g: g.member_count, reverse=True)
+        lines = [f"**{g.name}**\n→ ID: `{g.id}`\n→ Members: `{g.member_count:,}`" for g in servers]
+        pages = paginate(lines, per_page=10)
+        view = PaginatedView(
+            title="🏢 Servers",
+            pages=pages
+        )
+        await ctx.send(view=view)
 
     # -------------------------------
     # Server invite command
