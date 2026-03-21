@@ -5,6 +5,7 @@ import traceback
 import sys
 import datetime
 import asyncio
+import requests
 from colorama import Fore, Style, init as colorama_init
 
 from discord.ext.commands import (
@@ -22,6 +23,10 @@ from discord.ext.commands import (
     DisabledCommand, CommandRegistrationError,
     ExtensionError, ExtensionAlreadyLoaded, ExtensionNotLoaded,
     NoEntryPointError, ExtensionFailed, ExtensionNotFound
+)
+
+from requests.exceptions import (
+    JSONDecodeError
 )
 
 colorama_init(autoreset=True)
@@ -188,6 +193,19 @@ class ErrorHandler(commands.Cog):
             )
             await ctx.reply(view=view)
             self.log("WARN", f"Lookup error: {error}")
+            return
+
+        # --- API Errors ---
+        api_errors = (
+            JSONDecodeError, 
+        )
+        if isinstance(error, api_errors):
+            view = self.error_embed(
+                "API Error",
+                "There was an issue with the API request. Please try again later.\n-# Error: " + str(error)
+            )
+            await ctx.reply(view=view)
+            self.log("ERROR", f"API error: {error}")
             return
 
         # --- Other Known Errors (non-fatal) ---
