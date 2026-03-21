@@ -77,102 +77,102 @@ class ErrorHandler(commands.Cog):
 
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Missing Permissions",
                 f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} tried to use {ctx.command} without permissions")
             return
 
         if isinstance(error, BotMissingPermissions):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Bot Missing Permissions",
                 f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("ERROR", f"Bot missing permissions for {ctx.command}")
             return
 
         if isinstance(error, MissingRole):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Missing Role",
                 f"You must have the `{error.missing_role}` role to use this command."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} missing role {error.missing_role}")
             return
 
         if isinstance(error, MissingAnyRole):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Missing Required Roles",
                 f"You need **one** of these roles: `{', '.join(error.missing_roles)}`"
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} missing any of roles {error.missing_roles}")
             return
 
         if isinstance(error, CommandOnCooldown):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Cooldown Active",
                 f"Try again in `{error.retry_after:.1f}` seconds."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("INFO", f"{ctx.author} hit cooldown on {ctx.command}")
             return
 
         if isinstance(error, MissingRequiredArgument):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Missing Argument",
                 f"You're missing a required argument: `{error.param.name}`"
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} missing argument {error.param.name}")
             return
 
         if isinstance(error, BadArgument):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Invalid Argument",
                 "One or more arguments were invalid. Check your input and try again."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"Bad argument from {ctx.author} in {ctx.command}")
             return
 
         if isinstance(error, NoPrivateMessage):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Not Allowed in DMs",
                 "This command can only be used in a server."
             )
-            await ctx.author.send(view=embed)
+            await ctx.author.send(view=view)
             self.log("INFO", f"{ctx.author} tried using {ctx.command} in DMs")
             return
 
         if isinstance(error, PrivateMessageOnly):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "DM Only Command",
                 "This command can only be used in private messages."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("INFO", f"{ctx.author} tried using DM-only command in a guild")
             return
 
         if isinstance(error, NSFWChannelRequired):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "NSFW Required",
                 "This command can only be used in an NSFW channel."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} attempted NSFW command in non-NSFW channel")
             return
 
         # --- NotOwner ---
         if isinstance(error, NotOwner):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Owner Only",
                 "Only the bot owner can use this command."
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"{ctx.author} attempted owner-only command")
             return
 
@@ -182,11 +182,11 @@ class ErrorHandler(commands.Cog):
             MessageNotFound, GuildNotFound, EmojiNotFound
         )
         if isinstance(error, lookup_errors):
-            embed = self.error_embed(
+            view = self.error_embed(
                 "Not Found",
                 str(error)
             )
-            await ctx.reply(view=embed)
+            await ctx.reply(view=view)
             self.log("WARN", f"Lookup error: {error}")
             return
 
@@ -202,8 +202,11 @@ class ErrorHandler(commands.Cog):
             MaxConcurrencyReached
         )
         if isinstance(error, other_known):
-            embed = self.error_embed("Error", str(error))
-            await ctx.reply(view=embed)
+            view = self.error_embed(
+                "Error", 
+                str(error)
+            )
+            await ctx.reply(view=view)
             self.log("WARN", f"Handled known error: {error}")
             return
 
@@ -211,11 +214,11 @@ class ErrorHandler(commands.Cog):
         self.log("CRITICAL", f"Unexpected error in command {ctx.command}: {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
-        embed = self.error_embed(
+        view = self.error_embed(
             "Unexpected Error",
             "An unexpected error occurred. The developers have been notified."
         )
-        await ctx.reply(view=embed)
+        await ctx.reply(view=view)
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
