@@ -103,15 +103,15 @@ class PaginatedView(discord.ui.LayoutView):
                 discord.ui.TextDisplay(content=footer),
             )
 
-        self.add_item(container)
-
         if total > 1:
-            self.add_item(discord.ui.ActionRow(
+            container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            container.add_item(discord.ui.ActionRow(
                 _PrevButton(disabled=self.current_page == 0),
                 _PageLabel(label=f"{self.current_page + 1} / {total}"),
                 _NextButton(disabled=self.current_page == total - 1),
             ))
 
+        self.add_item(container)
 
 def paginate(items: list[str], per_page: int = 10) -> list[str]:
     """
