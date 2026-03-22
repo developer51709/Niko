@@ -26,12 +26,16 @@ class UtilityCog(commands.Cog):
         """FREE NITRO!!!"""
         rickroll_gif = "https://csyn.me/assets/rickroll.gif"
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### 🎁 Nitro\nNo nitro here! ☕")
-        ))
-        view.add_item(discord.ui.MediaGallery(
-            discord.ui.MediaGalleryItem(url=rickroll_gif)
-        ))
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### 🎁 Nitro\nNo nitro here! ☕"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=rickroll_gif)
+            )
+        )
+        view.add_item(container)
         await ctx.send(view=view)
 
     @commands.command(name="partnership_request")
