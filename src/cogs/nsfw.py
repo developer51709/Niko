@@ -21,6 +21,13 @@ class NSFW(commands.Cog):
     @commands.command(name='rule34', help='Search for images on rule34.xxx')
     @commands.is_nsfw()
     async def rule34(self, ctx, *, query: str):
+        # verify that the query is formatted correctly (must use url encoding for spaces and special characters)
+        if ' ' in query:
+            query = query.replace(' ', '+')
+        if '&' in query:
+            query = query.replace('&', '%26')
+        if '=' in query:
+            query = query.replace('=', '%3D')
         # make request to rule34 API with api key and user id
         RULE34_API_URL = f'https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags={query}&limit=100&pid=0&api_key={RULE34_API_KEY}&user_id={RULE34_USER_ID}'
         response = requests.get(RULE34_API_URL)
@@ -30,6 +37,18 @@ class NSFW(commands.Cog):
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=f"### Rule34\nAn error occurred while fetching images.\n-# Response code: `{response.status_code}`"
+                )
+            )
+            view.add_item(container)
+            return await ctx.send(view=view)
+        # verify that the response is valid json
+        content_type = response.headers.get("Content-Type", "")
+
+        if "application/json" not in content_type:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### Rule34\nThe API returned an unexpected response format.\n-# Content-Type: `{content_type}`"
                 )
             )
             view.add_item(container)
@@ -133,11 +152,11 @@ class NSFW(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### Gelbooru\nQuery: `{query}`\n[Image Source]({image['file_url']})"
+                content=f"### Gelbooru\nTitle: {image['title']}\nQuery: `{query}`\n[Image Source]({image['source']})"
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
-                    media=image['file_url']
+                    media=image['preview_url']
                 )
             ),
             discord.ui.TextDisplay(
