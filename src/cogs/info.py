@@ -505,23 +505,25 @@ class InfoCog(commands.Cog):
             f"-# {msg(ctx, 'about_footer')}"
         )
 
+        invite_url = f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
+        container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(content=text),
                 accessory=discord.ui.Thumbnail(avatar_url) if avatar_url else discord.ui.TextDisplay(content="")
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                discord.ui.Button(label="Invite Niko", style=discord.ButtonStyle.link, url=invite_url),
+                discord.ui.Button(label="GitHub", style=discord.ButtonStyle.link, url="https://github.com/developer51709/Niko"),
+                discord.ui.Button(label="Website", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko"),
+            ),
+            discord.ui.ActionRow(
+                discord.ui.Button(label="ToS", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko/tos.html"),
+                discord.ui.Button(label="Privacy Policy", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko/privacy.html"),
             )
-        ))
-        invite_url = f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
-        view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(label="Invite Niko", style=discord.ButtonStyle.link, url=invite_url),
-            discord.ui.Button(label="GitHub", style=discord.ButtonStyle.link, url="https://github.com/developer51709/Niko"),
-            discord.ui.Button(label="Website", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko"),
-        ))
-        view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(label="ToS", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko/tos.html"),
-            discord.ui.Button(label="Privacy Policy", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko/privacy.html"),
-        ))
+        )
+        view.add_item(container)
         await ctx.send(view=view)
 
     # -------------------------------
@@ -545,17 +547,19 @@ class InfoCog(commands.Cog):
         )
 
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
+        container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(content=text),
                 accessory=discord.ui.Thumbnail(avatar_url) if avatar_url else discord.ui.TextDisplay(content="")
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                discord.ui.Button(label="Discord Profile", style=discord.ButtonStyle.link, url=f"https://discord.com/users/{creator.id}"),
+                discord.ui.Button(label="GitHub", style=discord.ButtonStyle.link, url="https://github.com/developer51709"),
+                discord.ui.Button(label="Website", style=discord.ButtonStyle.link, url="https://developer51709.github.io"),
             )
-        ))
-        view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(label="Discord Profile", style=discord.ButtonStyle.link, url=f"https://discord.com/users/{creator.id}"),
-            discord.ui.Button(label="GitHub", style=discord.ButtonStyle.link, url="https://github.com/developer51709"),
-            discord.ui.Button(label="Website", style=discord.ButtonStyle.link, url="https://developer51709.github.io"),
-        ))
+        )
+        view.add_item(container)
         await ctx.send(view=view)
 
     # -------------------------------
@@ -666,19 +670,20 @@ class InfoCog(commands.Cog):
 
         album_cover = spotify.album_cover_url
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
+        container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(content=text),
                 accessory=discord.ui.Thumbnail(album_cover) if album_cover else discord.ui.TextDisplay(content="")
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="Open in Spotify",
+                    style=discord.ButtonStyle.link,
+                    url=f"https://open.spotify.com/track/{spotify.track_id}"
+                )
             )
-        ))
-        view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(
-                label="Open in Spotify",
-                style=discord.ButtonStyle.link,
-                url=f"https://open.spotify.com/track/{spotify.track_id}"
-            )
-        ))
+        )
         await ctx.send(view=view)
 
     # -------------------------------
