@@ -138,14 +138,28 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
         bank = user_data["bank"]
+        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content=f"### Wallet\nUser: {target.display_name}"
+                ),
+                discord.ui.TextDisplay(
+                    content=f"-# **Tip:** Use `{prefix}deposit` to safely store your coins in the bank! 🏦✨️"
+                ),
+                accessory=discord.ui.Thumbnail(target.display_avatar.url)
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Cash**\n{balance} 🥐\n**Bank**\n{bank} 🏦\n**Total**\n{user_data['net_worth']} ✨"
+            ),
+            accent_colour=discord.Colour(0xFFA500)
+        )
+        view.add_item(container)
         
-        embed = discord.Embed(title=f"Wallet — {target.display_name}", color=discord.Color.gold())
-        embed.set_thumbnail(url=target.display_avatar.url)
-        embed.add_field(name="Cash", value=f"{balance} 🥐", inline=True)
-        embed.add_field(name="Bank", value=f"{bank} 🏦", inline=True)
-        embed.add_field(name="Total", value=f"{user_data['net_worth']} ✨", inline=True)
-        
-        await ctx.send(embed=embed)
+        await ctx.send(view=view)
 
     # !daily command
     @commands.command(name="daily", help="claim your daily treats 🍬✨ | hol dir deine täglichen Belohnungen")
@@ -157,13 +171,35 @@ class EconomyCog(commands.Cog):
             remaining = 86400 - (current_time - user_data["last_daily"])
             hours = remaining // 3600
             minutes = (remaining % 3600) // 60
-            await ctx.send(f"Patience! Your treats are still baking. Try again in {hours}h {minutes}m. ☕🍰")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ⏳️ Daily Reward Cooldown"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"Patience! Your treats are still baking. Try again in {hours}h {minutes}m. ☕🍰"
+                )
+            )
+            view.add_item(container)
+            return await ctx.send(view=view)
         else:
             daily_reward = 1000
             user_data["balance"] += daily_reward
             user_data["last_daily"] = current_time
             self.save_economy_data()
-            await ctx.send(msg(ctx, "daily_success", reward=daily_reward))
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🍬 Daily Reward Claimed!"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=msg(ctx, "daily_success", reward=daily_reward)
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     # !work command
     @commands.command(name="work", help="work a shift at the café ☕ | arbeite eine Schicht im Café")
@@ -174,13 +210,35 @@ class EconomyCog(commands.Cog):
         if current_time - user_data["last_work"] < 3600:
             remaining = 3600 - (current_time - user_data["last_work"])
             minutes = remaining // 60
-            await ctx.send(f"You're on break! Take it easy for another {minutes} minutes. ☕💤")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ⏳️ Work Cooldown"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"You're on break! Take it easy for another {minutes} minutes. ☕💤"
+                )
+            )
+            view.add_item(container)
+            return await ctx.send(view=view)
         else:
             work_reward = random.randint(50, 200)
             user_data["balance"] += work_reward
             user_data["last_work"] = current_time
             self.save_economy_data()
-            await ctx.send(msg(ctx, "work_success", reward=work_reward))
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🍯 Work Shift Complete!"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=msg(ctx, "work_success", reward=work_reward)
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
     # !crime command
     @commands.command(name="crime", help="try to steal some extra treats 😈 | versuch, ein paar extra Leckereien zu stibitzen")
@@ -294,10 +352,22 @@ class EconomyCog(commands.Cog):
             "cake": {"name": "Strawberry Cake", "price": 1200, "description": "A delicious slice of strawberry cake."},
             "badge": {"name": "Café Regular Badge", "price": 5000, "description": "Show everyone you're a regular here!"}
         }
-        embed = discord.Embed(title="Niko's Café Boutique 🛍️✨", color=discord.Color.pink())
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### Niko's Café Boutique 🛍️✨"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            accent_colour=discord.Colour(0xFFA500),
+        )
         for item_id, item_data in shop_items.items():
-            embed.add_field(name=f"{item_data['name']} — {item_data['price']} 🥐", value=item_data['description'], inline=False)
-        await ctx.send(embed=embed)
+            container.add_item(
+                discord.ui.TextDisplay(
+                    content=f"**{item_data['name']} — {item_data['price']} 🥐**\n{item_data['description']}"
+                ),
+            )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # !buy command
     @commands.command(name="buy", help="buy a treat from the shop 🍰✨ | kauf dir eine Leckerei im Shop")
@@ -330,9 +400,23 @@ class EconomyCog(commands.Cog):
         if not user_data["inventory"]:
             return await ctx.send("Your bag is empty! Go buy some treats! 🥐")
             
-        items = ", ".join(user_data["inventory"])
-        embed = discord.Embed(title=f"{ctx.author.display_name}'s Bag 🎒", description=items, color=discord.Color.blue())
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {ctx.author.display_name}'s Bag 🎒"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            # blue accent colour
+            accent_colour=discord.Colour(0x0000FF)
+        )
+        for item in user_data["inventory"]:
+            container.add_item(
+                discord.ui.TextDisplay(
+                    content=f"**→ {item}**"
+                )
+            )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # !sell command
     @commands.command(name="sell", help="sell back a treat for some coins 💰 | verkauf eine Leckerei gegen Münzen")
