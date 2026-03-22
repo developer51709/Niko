@@ -18,10 +18,11 @@ def _make_layout(bot, content_text: str, include_dropdown: bool = True) -> disco
             )
         )
     )
-    view.add_item(container)
-
     if include_dropdown:
-        view.add_item(discord.ui.ActionRow(HelpDropdown(bot)))
+        container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        container.add_item(discord.ui.ActionRow(HelpDropdown(bot)))
+
+    view.add_item(container)
 
     return view
 
@@ -63,20 +64,20 @@ CATEGORIES = [
 # Map category label → (cog names list, header string)
 CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "General":      ([], ""),   # handled specially
-    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals"], "🎉 **Fun Commands**"),
-    "Gambling":     (["Blackjack", "Roulette", "Slots", "GamblingCog"], "🎰 **Casino Commands** — Blackjack, Slots, Roulette"),
-    "Economy":      (["EconomyCog"], "💰 **Economy Commands**"),
-    "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**"),
-    "Info":         (["InfoCog"], "ℹ️ **Information Commands**"),
-    "Utility":      (["UtilityCog", "Snipe"], "🛠️ **Utility Commands**"),
-    "AI":           (["AICog"], "🤖 **AI Commands**"),
-    "Moderation":   (["Moderation"], "🛡️ **Moderation Commands**"),
-    "AutoMod":      (["AutoMod"], "⚔️ **AutoMod Commands**"),
-    "EmojiManager": (["EmojiManagerCog"], "🎨 **Emoji Manager Commands**"),
-    "Onboarding":   (["Onboarding"], "✨ **Onboarding Commands**"),
+    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals"], "🎉 **Fun Commands**\n> Commands for fun and games!"),
+    "Gambling":     (["Blackjack", "Roulette", "Slots", "GamblingCog"], "🎰 **Casino Commands**\n> Play games of chance!"),
+    "Economy":      (["EconomyCog"], "💰 **Economy Commands**\n> Earn and spend virtual currency!"),
+    "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
+    "Info":         (["InfoCog"], "ℹ️ **Information Commands**\n> Get info about users, servers, and more!"),
+    "Utility":      (["UtilityCog", "Snipe"], "🛠️ **Utility Commands**\n> Useful tools and utilities."),
+    "AI":           (["AICog"], "🤖 **AI Commands**\n> Interact with Niko's AI features!"),
+    "Moderation":   (["Moderation"], "🛡️ **Moderation Commands**\n> Moderation tools for server management."),
+    "AutoMod":      (["AutoMod"], "⚔️ **AutoMod Commands**\n> Automated moderation to keep your server safe."),
+    "EmojiManager": (["EmojiManagerCog"], "🎨 **Emoji Manager Commands**\n> Manage custom emojis in your server."),
+    "Onboarding":   (["Onboarding"], "✨ **Onboarding Commands**\n> Set up welcome messages and roles for new members."),
     "NSFW":         (["NSFW"], "🔞 **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
-    "Music":        (["MusicSystem"], "🎵 **Music Commands**"),
-    "Leveling":     (["Leveling"], "🏆 **Leveling Commands**"),
+    "Music":        (["MusicSystem"], "🎵 **Music Commands**\n> Play music in your voice channel!"),
+    "Leveling":     (["Leveling"], "🏆 **Leveling Commands**\n> Level up by chatting and earning XP!"),
 }
 
 
@@ -120,7 +121,7 @@ def _general_text(bot) -> str:
         "Niko is a cozy, AI-powered Discord bot with a café personality — bilingual (EN/DE), "
         "packed with economy, leveling, music, moderation, and more!\n\n"
         "**🔗 Links**\n"
-        f"[GitHub](https://github.com/developer51709/Niko) • "
+        f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website](https://developer51709.github.io/Niko) • "
         f"[Support Server](https://dsc.gg/astral-haven)"
