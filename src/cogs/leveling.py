@@ -36,7 +36,7 @@ MESSAGES = {
     },
     "cafe": {
         "en": {
-            "level_up": "omg {mention}, you leveled up to **{level}** — look at you growing like a lil coffee bean ☕🌱",
+            "level_up": "congratulations {mention}, you leveled up to level **{level}**!",
             "no_xp": "{name} hasn't brewed any XP yet ☕😔",
             "stats_title": "☕ cozy level stats for {name}",
             "stats_level": "vibe-level",
@@ -46,7 +46,7 @@ MESSAGES = {
             "leaderboard_empty": "no one has brewed any xp in this café yet 😭",
         },
         "de": {
-            "level_up": "omg {mention}, du bist auf **{level}** gestiegen — wie eine kleine kaffeebohne die wächst ☕🌱",
+            "level_up": "glückwunsch {mention}, du bist auf Level **{level}** aufgestiegen!",
             "no_xp": "{name} hat noch keine XP aufgebrüht ☕😔",
             "stats_title": "☕ gemütliche level-statistiken für {name}",
             "stats_level": "vibe-level",
@@ -136,9 +136,14 @@ class Leveling(commands.Cog):
             new_level = self.levels[guild_id][user_id]["level"]
 
             try:
-                await message.channel.send(
-                    msg(message, "level_up", mention=message.author.mention, level=new_level)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=msg(message, "level_up", mention=message.author.mention, level=new_level)
+                    )
                 )
+                view.add_item(container)
+                await message.channel.send(view=view)
                 log.info("Leveling", f"User {message.author} leveled up to {new_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass
