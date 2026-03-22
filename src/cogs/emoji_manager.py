@@ -128,8 +128,19 @@ class EmojiManagerCog(commands.Cog):
     @commands.command(name="emojimanager", aliases=["em"], help="show emoji helper menu 🎨✨ | zeige das Emoji-Hilfemenü")
     async def emojimanager_help(self, ctx):
         prefix = self.get_prefix(ctx)
-        embed = discord.Embed(title="Niko's Emoji Studio 🎨✨", color=discord.Color.gold())
-        embed.description = "manage your café's aesthetics! | verwalte die Ästhetik deines Cafés!"
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content="### Niko's Emoji Studio 🎨✨"
+                ),
+                discord.ui.TextDisplay(
+                    content="-# manage your café's aesthetics! | verwalte die Ästhetik deines Cafés!"
+                ),
+                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
         
         commands_list = [
             (f"{prefix}steal <emoji>", "steal an emoji | stiehl ein Emoji"),
@@ -140,8 +151,13 @@ class EmojiManagerCog(commands.Cog):
             (f"{prefix}re <emoji>", "remove emoji | Emoji entfernen")
         ]
         for cmd, desc in commands_list:
-            embed.add_field(name=f"`{cmd}`", value=desc, inline=True)
-        await ctx.send(embed=embed)
+            container.add_item(
+                discord.ui.TextDisplay(
+                    content=f"**`{cmd}`**\n{desc}"
+                )
+            )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name="steal", help="steal a cute emoji 🎨✨ | stiehl ein süßes Emoji")
     @has_permissions(manage_guild=True)
@@ -189,9 +205,20 @@ class EmojiManagerCog(commands.Cog):
         name, data, _, url = await self._get_emoji_info(emoji_string)
         if not url:
             return await ctx.send(msg(ctx, "not_found"))
-        embed = discord.Embed(title=f"🔍 :{name}:", color=discord.Color.blue())
-        embed.set_image(url=url)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🔍 :{name}:"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=url
+                )
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name="emojistats", help="check how many treats you can add 📊✨ | sieh nach, wie viele Emojis noch passen")
     async def emoji_stats(self, ctx):
@@ -199,10 +226,18 @@ class EmojiManagerCog(commands.Cog):
         static = len([e for e in guild.emojis if not e.animated])
         animated = len([e for e in guild.emojis if e.animated])
         limit = guild.emoji_limit
-        embed = discord.Embed(title="Emoji Pantry 📊✨", color=discord.Color.blue())
-        embed.add_field(name="Static", value=f"{static}/{limit} 🥐", inline=True)
-        embed.add_field(name="Animated", value=f"{animated}/{limit} ☕", inline=True)
-        await ctx.send(embed=embed)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### Emoji Pantry 📊✨️"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Static**\n{static}/{limit} 🥐\n**Animated**\n{animated}/{limit} ☕️"
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name="remove-emoji", aliases=["re"], help="remove a treat from the server 🗑️ | entferne ein Emoji vom Server")
     @has_permissions(manage_guild=True)
