@@ -345,7 +345,36 @@ class Onboarding(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="onboarding_setup")
+    # onboarding command group
+    @commands.group(name="onboarding", help="Manage server onboarding")
+    async def onboarding(self, ctx: commands.Context):
+        if ctx.invoked_subcommand is None:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### Server Onboarding"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="Setup onboarding for your server to help new members get started without requiring an entire staff team to welcome them!"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="**Onboarding Commands**"
+                ),
+                discord.ui.TextDisplay(
+                    content=f"**`{self.bot.command_prefix}onboarding setup`** — Setup onboarding for the server.\n**`{self.bot.command_prefix}onboarding role-menu`** — Setup role menu for the server."
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+    # !onboarding setup
+    @onboarding.command(name="setup")
     @commands.has_permissions(administrator=True)
     async def onboarding_setup(self, ctx: commands.Context):
         """Setup onboarding for the server."""
@@ -359,7 +388,7 @@ class Onboarding(commands.Cog):
             view=OnboardingSetupView(ctx.guild.id)
         )
 
-    @commands.command(name="onboarding_role_menu")
+    @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Setup role menu for the server."""
