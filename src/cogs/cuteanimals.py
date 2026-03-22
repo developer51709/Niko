@@ -1,5 +1,6 @@
 from discord.ext import commands
 import requests
+import discord
 import random
 
 # personality mode: "normal" or "cafe"
@@ -138,10 +139,28 @@ class CuteAnimals(commands.Cog):
 
         img_url = self.extract_url(api_type, data)
         if img_url:
-            await ctx.send(msg(ctx, "sending_random", animal=animal))
-            await ctx.send(img_url)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=msg(ctx, "sending_random", animal=animal)
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=img_url
+                    )
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
         else:
-            await ctx.send(msg(ctx, "fetch_fail"))
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=msg(ctx, "fetch_fail")
+                )
+            )
+            await ctx.send(view=view)
 
     # -----------------------------
     # CAT COMMAND
@@ -153,8 +172,20 @@ class CuteAnimals(commands.Cog):
     async def cat(self, ctx):
         """Sends a random cat image."""
         response = requests.get("https://api.thecatapi.com/v1/images/search")
-        await ctx.send(msg(ctx, "sending_cat"))
-        await ctx.send(response.json()[0]["url"])
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=msg(ctx, "sending_cat")
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=response.json()[0]["url"]
+                )
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # -----------------------------
     # DOG COMMAND
@@ -166,8 +197,20 @@ class CuteAnimals(commands.Cog):
     async def dog(self, ctx):
         """Sends a random dog image."""
         response = requests.get("https://dog.ceo/api/breeds/image/random")
-        await ctx.send(msg(ctx, "sending_dog"))
-        await ctx.send(response.json()["message"])
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=msg(ctx, "sending_dog")
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=response.json()["message"]
+                )
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
 
 async def setup(bot):
