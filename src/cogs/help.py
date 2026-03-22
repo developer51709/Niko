@@ -14,7 +14,7 @@ def _make_layout(bot, content_text: str, include_dropdown: bool = True) -> disco
         discord.ui.Section(
             discord.ui.TextDisplay(content=content_text),
             accessory=discord.ui.Thumbnail(
-                bot.user.avatar.url if bot.user.avatar else discord.Embed.Empty
+                bot.user.avatar.url
             )
         )
     )
