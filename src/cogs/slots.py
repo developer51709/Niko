@@ -7,29 +7,32 @@ import os
 
 slots_cooldown = os.getenv("SLOTS_COOLDOWN") or 60
 
-class SpinAgainView(discord.ui.View):
-    def __init__(self, ctx, amount, timeout=None):
-        super().__init__(timeout=timeout)
-        self.ctx = ctx
-        self.amount = amount
-        self.choice = None
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.id == self.ctx.author.id
-
-    @discord.ui.button(label="Spin Again", style=discord.ButtonStyle.green)
-    async def spin_again(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.choice = "spin"
-        self.stop()
-        await interaction.response.defer()
-
-
 class Slots(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="slots")
-    async def slots(self, ctx, amount: int = None):
+    @commands.group(
+        name="slots",
+        help="play a casino-style 3×3 slot machine 🎰 | spiele ein Casino-Slot-Spiel"
+    )
+    async def slots(self, ctx):
+        if ctx.invoked_subcommand is None:
+            prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🎰 Slots Help"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"**{prefix}slots play <amount>** - Play a game of slots.\n**{prefix}slots payouts** - View the slots payout table."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+    @slots.command(name="play")
+    async def slots_play(self, ctx, amount: int = None):
         """Play a casino‑style 3×3 slot machine."""
         # Economy access
         economy = self.bot.get_cog("EconomyCog")
@@ -176,15 +179,33 @@ class Slots(commands.Cog):
             )
         )
         result_view.add_item(result_container)
-
-        # Spin Again button
-        view = SpinAgainView(ctx, amount)
         await msg.edit(view=result_view)
 
-        await view.wait()
-
-        if view.choice == "spin":
-            return await self.slots(ctx, amount)
+    # payouts subcommand (!slots payouts)
+    @slots.command(name="payouts")
+    async def slots_payouts(self, ctx):
+        """View the slots payout table."""
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🎰 Slots Payouts"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Common Symbols (🍒🍋🍊)**\n2× bet\n\n**Uncommon Symbols (🍇🍉🍓)**\n3× bet\n\n**Rare Symbols (🍀💎)**\n5× bet\n\n**Jackpot Symbol (⭐️)**\n25× bet\n\n**Full Board Jackpot**\n100× bet"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Paylines:**\n- Middle row\n- Top row\n- Bottom row\n- Diagonal (top-left to bottom-right)"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# **Notice:** There may be some issues with the slots game. Please report any bugs to the developers."
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
+        
 
 async def setup(bot):
     await bot.add_cog(Slots(bot))
