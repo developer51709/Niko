@@ -29,13 +29,14 @@ def _make_layout(bot, content_text: str, include_dropdown: bool = True) -> disco
 
 def _commands_text(cog_names: list[str], bot, header: str) -> str:
     """Build a markdown string listing commands from one or more cogs."""
+    prefix = bot.command_prefix if isinstance(bot.command_prefix, str) else bot.command_prefix[0]
     lines = [header, ""]
     for cog_name in cog_names:
         cog = bot.get_cog(cog_name)
         if cog:
             for cmd in cog.get_commands():
                 desc = cmd.help or "No description"
-                lines.append(f"**`{cmd.name}`** — {desc}")
+                lines.append(f"**`{prefix}{cmd.name}`** — {desc}")
     return "\n".join(lines) if len(lines) > 2 else header + "\n\n*No commands found.*"
 
 
