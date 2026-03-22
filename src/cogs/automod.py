@@ -312,42 +312,66 @@ def _build_panel(automod_cog, guild_id: int, section: str = "overview") -> disco
 
     # Content container
     text = _section_text(cfg, section)
-    view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=text
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+    )
 
     # Section navigation dropdown
-    view.add_item(discord.ui.ActionRow(SectionSelect(automod_cog, guild_id, section)))
+    container.add_item(
+        discord.ui.ActionRow(
+            SectionSelect(automod_cog, guild_id, section)
+        )
+    )
 
     # Toggle buttons for each section
     if section == "filter":
-        view.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Spam", "antispam", automod_cog, guild_id, section),
-            ToggleButton("Anti-Link", "antilink", automod_cog, guild_id, section),
-        ))
-        view.add_item(discord.ui.ActionRow(
-            ToggleButton("Bad Words", "badwords", automod_cog, guild_id, section),
-            ToggleButton("Mass Mention", "massmention", automod_cog, guild_id, section),
-        ))
-        view.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
-        ))
+        container.add_item(
+            discord.ui.ActionRow(
+            
+                ToggleButton("Anti-Spam", "antispam", automod_cog, guild_id, section),
+                ToggleButton("Anti-Link", "antilink", automod_cog, guild_id, section),
+            )
+        )
+        container.add_item(
+            discord.ui.ActionRow(
+                ToggleButton("Bad Words", "badwords", automod_cog, guild_id, section),
+                ToggleButton("Mass Mention", "massmention", automod_cog, guild_id, section),
+            )
+        )
+        container.add_item(
+            discord.ui.ActionRow(
+                EditThresholdsButton(automod_cog, guild_id, section),
+            )
+        )
 
     elif section == "antinuke":
-        view.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Nuke", "antinuke", automod_cog, guild_id, section),
-        ))
-        view.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
-            _NukeActionButton(automod_cog, guild_id),
-        ))
+        container.add_item(
+            discord.ui.ActionRow(
+                ToggleButton("Anti-Nuke", "antinuke", automod_cog, guild_id, section),
+            )
+        )
+        container.add_item(
+            discord.ui.ActionRow(
+                EditThresholdsButton(automod_cog, guild_id, section),
+                _NukeActionButton(automod_cog, guild_id),
+            )
+        )
 
     elif section == "antiraid":
-        view.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Raid", "antiraid", automod_cog, guild_id, section),
-        ))
-        view.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
-        ))
-
+        container.add_item(
+            discord.ui.ActionRow(
+                ToggleButton("Anti-Raid", "antiraid", automod_cog, guild_id, section),
+            )
+        )
+        container.add_item(
+            discord.ui.ActionRow(
+                EditThresholdsButton(automod_cog, guild_id, section),
+            )
+        )
+    view.add_item(container)
     return view
 
 
