@@ -109,11 +109,14 @@ class TicTacToeButton(discord.ui.Button['TicTacToe']):
         # X turn
         if view.current_player == view.X:
             if interaction.user != player1:
-                embed = discord.Embed(
-                    color=discord.Color.yellow(),
-                    description=msg(interaction, "not_your_turn", mention=interaction.user.mention)
+                nyt_view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=msg(interaction, "not_your_turn", mention=interaction.user.mention)
+                    )
                 )
-                return await interaction.response.send_message(embed=embed, ephemeral=True)
+                nyt_view.add_item(container)
+                return await interaction.response.send_message(view=nyt_view, ephemeral=True)
 
             self.style = discord.ButtonStyle.danger
             self.label = 'X'
@@ -125,11 +128,14 @@ class TicTacToeButton(discord.ui.Button['TicTacToe']):
         # O turn
         else:
             if interaction.user != player2:
-                embed = discord.Embed(
-                    color=discord.Color.yellow(),
-                    description=msg(interaction, "not_your_turn", mention=interaction.user.mention)
+                nyt_view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=msg(interaction, "not_your_turn", mention=interaction.user.mention)
+                    )
                 )
-                return await interaction.response.send_message(embed=embed, ephemeral=True)
+                nyt_view.add_item(container)
+                return await interaction.response.send_message(view=nyt_view, ephemeral=True)
 
             self.style = discord.ButtonStyle.success
             self.label = 'O'
