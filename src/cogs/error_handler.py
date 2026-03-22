@@ -74,7 +74,8 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, CommandNotFound):
             return  # silently ignore unknown commands
         if isinstance(error, CheckFailure):
-            return
+            # process silently
+            pass
 
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
