@@ -176,14 +176,15 @@ class SnipeView(discord.ui.LayoutView):
         else:
             inner = discord.ui.TextDisplay(content=body)
 
-        self.add_item(discord.ui.Container(
+        container = discord.ui.Container(
             inner,
             discord.ui.TextDisplay(content=f"-# {footer}"),
-        ))
+        )
 
         # ── navigation row (only when >1 page) ─────────────
         if total > 1:
-            self.add_item(discord.ui.ActionRow(
+            container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            container.add_item(discord.ui.ActionRow(
                 _SnipePrev(disabled=self.page == 0),
                 _SnipeIndicator(label=f"{self.page + 1} / {total}"),
                 _SnipeNext(disabled=self.page == total - 1),
@@ -192,9 +193,11 @@ class SnipeView(discord.ui.LayoutView):
         # ── attachment images (first page only to avoid spam) ──
         first_image = e.get("first_image_url")
         if first_image:
-            self.add_item(discord.ui.MediaGallery(
-                discord.ui.MediaGalleryItem(url=first_image)
+            container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            container.add_item(discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=first_image)
             ))
+        self.add_item(container)
 
 
 # ─────────────────────────────────────────────────────────────
