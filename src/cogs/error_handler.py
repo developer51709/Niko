@@ -59,12 +59,6 @@ class ErrorHandler(commands.Cog):
         )
         view.add_item(container)
         return view
-        # return discord.Embed(
-        #     title=title,
-        #     description=description,
-        #     color=discord.Color.red(),
-        #     timestamp=datetime.datetime.utcnow()
-        # )
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
@@ -79,6 +73,8 @@ class ErrorHandler(commands.Cog):
         # --- Quiet / Ignored Errors ---
         if isinstance(error, CommandNotFound):
             return  # silently ignore unknown commands
+        if isinstance(error, CheckFailure):
+            return
 
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
