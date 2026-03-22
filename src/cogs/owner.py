@@ -23,36 +23,6 @@ def is_owner():
     return commands.check(predicate)
 
 
-class ServerListView(discord.ui.View):
-    def __init__(self, pages, author_id):
-        super().__init__(timeout=60)
-        self.pages = pages
-        self.index = 0
-        self.author_id = author_id
-
-    async def update(self, interaction):
-        await interaction.response.edit_message(embed=self.pages[self.index], view=self)
-
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.author_id
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.gray)
-    async def previous(self, interaction, button):
-        if self.index > 0:
-            self.index -= 1
-            await self.update(interaction)
-        else:
-            await interaction.response.defer()
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.gray)
-    async def next(self, interaction, button):
-        if self.index < len(self.pages) - 1:
-            self.index += 1
-            await self.update(interaction)
-        else:
-            await interaction.response.defer()
-
-
 class OwnerCog(commands.Cog):
     """Owner-only management commands."""
 
