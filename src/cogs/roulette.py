@@ -377,7 +377,6 @@ class Roulette(commands.Cog):
         view = build_bet_type_view(ctx)
         msg = await ctx.send(view=view)
         await view.wait()
-        await msg.edit(view=discord.ui.LayoutView())
 
         bet_category = view.choice
         if bet_category is None:
@@ -390,42 +389,36 @@ class Roulette(commands.Cog):
             view = build_color_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             bet_type = view.choice
 
         elif bet_category == "parity":
             view = build_parity_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             bet_type = view.choice
 
         elif bet_category == "range":
             view = build_range_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             bet_type = view.choice
 
         elif bet_category == "dozen":
             view = build_dozen_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             bet_type = view.choice
 
         elif bet_category == "column":
             view = build_column_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             bet_type = view.choice
 
         elif bet_category == "inside":
             view = build_inside_view(ctx)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
             inside_type = view.choice
 
             count_map = {"straight": 1, "split": 2, "street": 3, "corner": 4, "line": 6}
@@ -434,7 +427,6 @@ class Roulette(commands.Cog):
             view = build_number_view(ctx, count)
             await msg.edit(view=view)
             await view.wait()
-            await msg.edit(view=discord.ui.LayoutView())
 
             bet_type = inside_type
             numbers = view.choice
@@ -446,7 +438,6 @@ class Roulette(commands.Cog):
         view = build_chip_view(ctx)
         await msg.edit(view=view)
         await view.wait()
-        await msg.edit(view=discord.ui.LayoutView())
 
         amount = view.amount
         if amount is None:

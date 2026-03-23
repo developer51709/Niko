@@ -319,7 +319,6 @@ class Blackjack(commands.Cog):
             await view.wait()
             if view.choice == "insurance":
                 game.take_insurance()
-            await msg.edit(view=discord.ui.LayoutView())
 
         # Dealer blackjack resolution
         if dealer_has_blackjack:
@@ -366,13 +365,10 @@ class Blackjack(commands.Cog):
                 elif view.choice == "insurance":
                     game.take_insurance()
 
-                await msg.edit(view=discord.ui.LayoutView())
-
             if hand_index < len(game.hands) - 1:
                 view = build_next_hand_view(ctx)
                 await msg.edit(view=view)
                 await view.wait()
-                await msg.edit(view=discord.ui.LayoutView())
 
         # DEALER TURN
         game.dealer_play()
