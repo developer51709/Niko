@@ -25,6 +25,10 @@ from discord.ext.commands import (
     NoEntryPointError, ExtensionFailed, ExtensionNotFound
 )
 
+from discord.errors import (
+    Forbidden
+)
+
 from requests.exceptions import (
     JSONDecodeError
 )
@@ -91,6 +95,15 @@ class ErrorHandler(commands.Cog):
             )
             await ctx.reply(view=view)
             self.log("ERROR", f"Bot missing permissions for {ctx.command}")
+            return
+
+        if isinstance(error, Forbidden):
+            view = self.error_embed(
+                "Forbidden Action",
+                f"I don't have permission to perform this action. Please check my roles and permissions."
+            )
+            await ctx.reply(view=view)
+            self.log("ERROR", f"403 Forbidden in {ctx.command}")
             return
 
         if isinstance(error, MissingRole):
