@@ -11,7 +11,9 @@ from utils.paginator import PaginatedView, paginate
 
 # Developer user IDs
 DEVELOPERS = {
-    1479968201319125013,  # Nyxen
+    1479968201319125013, # n.y.x.e.n
+    1435978243160145981, # nyxen_alt2
+    1485732377958416565
 }
 
 

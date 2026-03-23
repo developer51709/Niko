@@ -11,8 +11,8 @@ from utils.paginator import PaginatedView, paginate
 
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
-    123456789012345678, 
-    987654321098765432
+    1435978243160145981, 
+    1485732377958416565
 }
 
 
