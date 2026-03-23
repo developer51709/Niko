@@ -73,9 +73,6 @@ class ErrorHandler(commands.Cog):
         # --- Quiet / Ignored Errors ---
         if isinstance(error, CommandNotFound):
             return  # silently ignore unknown commands
-        if isinstance(error, CheckFailure):
-            # process silently
-            pass
 
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
@@ -223,6 +220,16 @@ class ErrorHandler(commands.Cog):
             )
             await ctx.reply(view=view)
             self.log("WARN", f"Handled known error: {error}")
+            return
+
+        # --- CheckFailure ---
+        if isinstance(error, CheckFailure):
+            view = self.error_embed(
+                "Check Failed",
+                "You don't meet the requirements to use this command."
+            )
+            await ctx.reply(view=view)
+            self.log("WARN", f"Check failed for {ctx.author} in {ctx.command}")
             return
 
         # --- Unexpected / Critical Errors ---

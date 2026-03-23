@@ -23,41 +23,6 @@ class Development(commands.Cog):
         self.start_time = time.time()
 
     # -------------------------------
-    # Error handling
-    # -------------------------------
-    async def cog_command_error(self, ctx, error):
-        if isinstance(error, commands.CheckFailure):
-            # Log the unauthorized access attempt
-            print(colorama.Fore.RED + """╔══════════════════════════════════╗
-║ ALERT:                           ║
-║  Unauthorized dev access attempt ║
-╚══════════════════════════════════╝""" + colorama.Style.RESET_ALL)
-            print(colorama.Fore.RED + f"Username: {ctx.author.name}#{ctx.author.discriminator}" + colorama.Style.RESET_ALL)
-            print(colorama.Fore.RED + f"User ID: {ctx.author.id}" + colorama.Style.RESET_ALL)
-            if ctx.guild:
-                print(colorama.Fore.RED + f"Guild Name: {ctx.guild.name}" + colorama.Style.RESET_ALL)
-                print(colorama.Fore.RED + f"Guild ID: {ctx.guild.id}" + colorama.Style.RESET_ALL)
-                print(colorama.Fore.RED + f"Channel Name: {ctx.channel.name}" + colorama.Style.RESET_ALL)
-                print(colorama.Fore.RED + f"Channel ID: {ctx.channel.id}" + colorama.Style.RESET_ALL)
-            else:
-                print(colorama.Fore.RED + "Used in DMs" + colorama.Style.RESET_ALL)
-            print(colorama.Fore.RED + f"Command: {ctx.command}" + colorama.Style.RESET_ALL)
-            # command args
-            if ctx.args:
-                print(colorama.Fore.RED + f"Args: {ctx.args}" + colorama.Style.RESET_ALL)
-            else:
-                print(colorama.Fore.RED + "No args" + colorama.Style.RESET_ALL)
-
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### ⚠️ Unauthorized Access\nThis command is restricted to developers only.\n**Notice:**\nYour attempt has been logged."
-                ),
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-
-    # -------------------------------
     # Developer-only check
     # -------------------------------
     async def cog_check(self, ctx: commands.Context):
