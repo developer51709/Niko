@@ -139,20 +139,29 @@ class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
 # -------------------- ONBOARDING SETUP BUTTONS --------------------
 
 class SetWelcomeMsgBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Set Welcome Message", style=discord.ButtonStyle.primary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         await interaction.response.send_modal(WelcomeMessageModal(self.guild_id))
 
 
 class SetWelcomeChannelBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Set Welcome Channel", style=discord.ButtonStyle.secondary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        print(interaction.message)
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         cfg = get_config(self.guild_id)
         cfg.welcome_channel = interaction.channel.id
         update_config(self.guild_id, cfg)
@@ -162,20 +171,28 @@ class SetWelcomeChannelBtn(discord.ui.Button):
 
 
 class SetRulesTextBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Set Rules Text", style=discord.ButtonStyle.primary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         await interaction.response.send_modal(RulesModal(self.guild_id))
 
 
 class PostRulesBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Post Rules Message Here", style=discord.ButtonStyle.secondary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         cfg = get_config(self.guild_id)
         cfg.rules_channel = interaction.channel.id
 
@@ -189,11 +206,15 @@ class PostRulesBtn(discord.ui.Button):
 
 
 class SetRulesRoleBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Set Rules Role", style=discord.ButtonStyle.secondary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         await interaction.response.send_message(
             "Reply in this channel with a role mention, ID, or name within 60 seconds.",
             ephemeral=True
@@ -232,20 +253,28 @@ class SetRulesRoleBtn(discord.ui.Button):
 # -------------------- ROLE MENU SETUP BUTTONS --------------------
 
 class AddRoleOptionBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Add Role Option", style=discord.ButtonStyle.primary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         await interaction.response.send_modal(RoleMenuOptionModal(self.guild_id))
 
 
 class PostRoleMenuBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, author: discord.Member):
         super().__init__(label="Post Role Menu Here", style=discord.ButtonStyle.secondary)
         self.guild_id = guild_id
+        self.author = author
 
     async def callback(self, interaction: discord.Interaction):
+        # author check
+        if interaction.user != self.author:
+            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
         cfg = get_config(self.guild_id)
 
         if not cfg.role_menu_options:
@@ -391,7 +420,7 @@ class RoleMenuView(discord.ui.LayoutView):
 # -------------------- SETUP VIEWS --------------------
 
 class OnboardingSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, prefix: str = "."):
+    def __init__(self, guild_id: int, author: discord.Member, prefix: str = "."):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
@@ -403,13 +432,13 @@ class OnboardingSetupView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                SetWelcomeMsgBtn(guild_id),
-                SetWelcomeChannelBtn(guild_id),
+                SetWelcomeMsgBtn(guild_id, author),
+                SetWelcomeChannelBtn(guild_id, author),
             ),
             discord.ui.ActionRow(
-                SetRulesTextBtn(guild_id),
-                PostRulesBtn(guild_id),
-                SetRulesRoleBtn(guild_id),
+                SetRulesTextBtn(guild_id, author),
+                PostRulesBtn(guild_id, author),
+                SetRulesRoleBtn(guild_id, author),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -421,7 +450,7 @@ class OnboardingSetupView(discord.ui.LayoutView):
 
 
 class RoleMenuSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, prefix: str = "."):
+    def __init__(self, guild_id: int, author: discord.Member, prefix: str = "."):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
@@ -431,8 +460,8 @@ class RoleMenuSetupView(discord.ui.LayoutView):
             discord.ui.TextDisplay(content="Add role options then post the menu to a channel."),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                AddRoleOptionBtn(guild_id),
-                PostRoleMenuBtn(guild_id),
+                AddRoleOptionBtn(guild_id, author),
+                PostRoleMenuBtn(guild_id, author),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -478,14 +507,14 @@ class Onboarding(commands.Cog):
     async def onboarding_setup(self, ctx: commands.Context):
         """Setup onboarding for the server."""
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
-        await ctx.send(view=OnboardingSetupView(ctx.guild.id, prefix=prefix))
+        await ctx.send(view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix))
 
     @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Setup role menu for the server."""
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
-        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, prefix=prefix))
+        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix))
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
