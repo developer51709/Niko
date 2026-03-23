@@ -8,7 +8,7 @@ import re
 import random
 from typing import Dict, List, Any
 
-DATA_FILE = "uwulock.json"
+DATA_FILE = "data/uwulock.json"
 
 # personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
