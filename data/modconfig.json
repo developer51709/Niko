@@ -13,7 +13,7 @@
         "blocked_words": []
     },
     "1470878953743974587": {
-        "modlog_channel": null,
+        "modlog_channel": 1470891778948206715,
         "automod": {
             "antispam": true,
             "antilink": true,
@@ -250,8 +250,8 @@
             "antilink": true,
             "badwords": true,
             "massmention": true,
-            "antinuke": false,
-            "antiraid": false
+            "antinuke": true,
+            "antiraid": true
         },
         "spam_threshold": 6,
         "spam_interval": 7,
@@ -384,6 +384,34 @@
         }
     },
     "1469728321217761402": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true,
+            "antinuke": false,
+            "antiraid": false
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": [],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        }
+    },
+    "1482077381845061824": {
         "modlog_channel": null,
         "automod": {
             "antispam": true,
