@@ -11,6 +11,7 @@ from ctransformers import AutoModelForCausalLM
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
 from utils.logging import info, success, warning, error, debug
+from utils.database import init_db
 
 # -----------------------------
 # Config
@@ -382,6 +383,7 @@ async def load_cogs():
 @bot.event
 async def on_ready():
     info("Startup", f"Niko is online as {bot.user}")
+    init_db()
     await load_cogs()
     await set_status()
     print_banner()

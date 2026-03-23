@@ -60,6 +60,7 @@ CATEGORIES = [
     ("NSFW",         "NSFW commands",                     "🔞"),
     ("Music",        "Music commands",                    "🎵"),
     ("Leveling",     "Leveling commands",                 "🏆"),
+    ("Notifier",     "Notifier commands",                "📢"),
 ]
 
 # Map category label → (cog names list, header string)
@@ -79,6 +80,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "NSFW":         (["NSFW"], "🔞 **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
     "Music":        (["MusicSystem"], "🎵 **Music Commands**\n> Play music in your voice channel!"),
     "Leveling":     (["Leveling"], "🏆 **Leveling Commands**\n> Level up by chatting and earning XP!"),
+    "Notifier":     (["Notifier"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
 }
 
 
@@ -137,7 +139,7 @@ def _command_detail_text(bot, cmd) -> str:
         "",
         f"**Description**\n{cmd.help or 'No description provided.'}",
         "",
-        f"**Usage**\n`{prefix}{cmd.name} {signature}`",
+        f"**Usage**\n```\n{prefix}{cmd.name} {signature}\n```",
     ]
     if cmd.aliases:
         lines.append(f"\n**Aliases**\n" + ", ".join(f"`{a}`" for a in cmd.aliases))
