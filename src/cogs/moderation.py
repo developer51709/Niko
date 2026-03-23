@@ -84,7 +84,18 @@ class Moderation(commands.Cog):
             await ctx.send("Please specify a member to warn.")
             return
         utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
-        await ctx.send(f"⚠️ Warned {member} | Reason: {reason}")
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### ⚠️ User Warned"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**{member}** has been warned.\n**Reason:** {reason}"
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
         await utils.log_action(ctx.guild, "Warn", f"{member} was warned by {ctx.author}.\nReason: {reason}")
 
     @commands.command(help="View a member's warnings.")
