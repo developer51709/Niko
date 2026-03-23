@@ -10,13 +10,15 @@ from discord.ext import commands
 from ctransformers import AutoModelForCausalLM
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
-from utils.logging import info, success, warning, error, debug
+from utils import logging
 from utils.database import init_db
+import database
 
 # -----------------------------
 # Config
 # -----------------------------
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+DATABASE_PATH = "data/database.db"
 
 if not os.getenv("DEBUG_MODE"):
     DEBUG_MODE = False
@@ -156,7 +158,7 @@ async def set_status():
         elif status_type == "watching":
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
         else:
-            warning("Startup", "Invalid status type. Defaulting to 'playing'.")
+            logging.warning("Startup", "Invalid status type. Defaulting to 'playing'.")
             await bot.change_presence(activity=discord.Game(name=status))
 
 # -----------------------------
@@ -166,7 +168,7 @@ def ensure_model():
     if os.path.exists(MODEL_PATH):
         return
 
-    warning("Startup", "Downloading model... this may take a while.")
+    logging.warning("Startup", "Downloading model... this may take a while.")
     try:
         r = requests.get(MODEL_URL, stream=True)
         r.raise_for_status()
@@ -176,16 +178,16 @@ def ensure_model():
                 if chunk:
                     f.write(chunk)
 
-        success("Startup", "Model downloaded successfully.")
+        logging.success("Startup", "Model downloaded successfully.")
     except Exception as e:
         if "401" in str(e):
-            error("Startup", "Error 401: Unauthorized. The resource may require authentication.")
+            logging.error("Startup", "Error 401: Unauthorized. The resource may require authentication.")
         elif "403" in str(e):
-            error("Startup", "Error 403: Forbidden. You don't have permission to access this resource.")
+            logging.error("Startup", "Error 403: Forbidden. You don't have permission to access this resource.")
         elif "404" in str(e):
-            error("Startup", "Error 404: Model not found. Please check the MODEL_URL.")
+            logging.error("Startup", "Error 404: Model not found. Please check the MODEL_URL.")
         else:
-            error("Startup", f"Failed to download model: {e}")
+            logging.error("Startup", f"Failed to download model: {e}")
 
 # -----------------------------
 # Load model
@@ -278,6 +280,7 @@ bot = commands.Bot(
     intents=intents
 )
 bot.remove_command("help")
+bot.cxn: database.SQLitePool | None = None
 
 @bot.event
 async def on_message(msg):
@@ -328,7 +331,7 @@ async def on_message(msg):
             elif len(reply) < 1:
                 reply = "An error occured... 🥀"
                 if DEBUG_MODE == "True":
-                    error("AIGeneration", "Error: Empty response generated.")
+                    logging.error("AIGeneration", "Error: Empty response generated.")
 
             await msg.channel.send(reply)
 
@@ -342,6 +345,36 @@ def get_favorability_score(user_id: int) -> int:
 
 def get_memory_content(user_id: int) -> str:
     return get_user_memory(user_id)
+
+# -----------------------------
+# Database tables
+# -----------------------------
+async def _create_tables(bot):
+    if not bot.cxn:
+        return
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS voicemaster_settings (
+            guild_id        INTEGER PRIMARY KEY,
+            join_channel_id INTEGER,
+            category_id     INTEGER,
+            default_name    TEXT DEFAULT '{user}''s Channel',
+            default_limit   INTEGER DEFAULT 0,
+            default_bitrate INTEGER DEFAULT 64000,
+            default_region  TEXT,
+            interface_enabled INTEGER DEFAULT 1,
+            auto_role       INTEGER,
+            join_role       INTEGER
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS voicemaster_channels (
+            channel_id  INTEGER PRIMARY KEY,
+            owner_id    INTEGER NOT NULL,
+            guild_id    INTEGER NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    logging.success("DB", "Database tables verified")
 
 # -----------------------------
 # Load cogs
@@ -377,23 +410,36 @@ async def load_cogs():
             print(colorama.Fore.RED + f"Failed to load cog {filename[:-3]}: {e}" + colorama.Style.RESET_ALL)
 
 # -----------------------------
+# Initialize database
+# -----------------------------
+async def init_database(bot):
+    logging.info("DB", f"Opening database: {DATABASE_PATH}")
+    try:
+        bot.cxn = await database.create_pool(DATABASE_PATH)
+        logging.success("DB", "Database connection established")
+        await _create_tables(bot)
+    except Exception as e:
+        logging.error("DB", f"Failed to open database: {e}")
+
+# -----------------------------
 # Run bot
 # -----------------------------
 
 @bot.event
 async def on_ready():
-    info("Startup", f"Niko is online as {bot.user}")
+    logging.info("Startup", f"Niko is online as {bot.user}")
     init_db()
+    await init_database(bot)
     await load_cogs()
     await set_status()
     print_banner()
 
 if __name__ == "__main__":
     if not TOKEN:
-        error("Startup", "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
+        logging.error("Startup", "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
         exit(1)
-    info("Startup", "Starting bot...")
+    logging.info("Startup", "Starting bot...")
     try:
         bot.run(TOKEN)
     except Exception as e:
-        error("Startup", f"Error connecting to Discord: {e}")
+        logging.error("Startup", f"Error connecting to Discord: {e}")
