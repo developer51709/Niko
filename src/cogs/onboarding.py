@@ -1,12 +1,13 @@
+import asyncio
 import discord
 from discord.ext import commands
-from discord.ui import Modal, TextInput, View, Button, Select
+from discord.ui import Modal, TextInput, Button, Select
 
 from utils.onboarding_utils import (
     get_config,
     update_config,
-    build_welcome_embed,
-    build_rules_embed,
+    build_welcome_view,
+    build_rules_view,
 )
 from utils.onboarding_config import OnboardingConfig
 
@@ -16,11 +17,9 @@ from utils.onboarding_config import OnboardingConfig
 def parse_role_from_text(text: str, guild: discord.Guild) -> discord.Role | None:
     text = text.strip()
 
-    # ID
     if text.isdigit():
         return guild.get_role(int(text))
 
-    # Mention
     if text.startswith("<@&") and text.endswith(">"):
         try:
             rid = int(text[3:-1])
@@ -28,7 +27,6 @@ def parse_role_from_text(text: str, guild: discord.Guild) -> discord.Role | None
         except ValueError:
             return None
 
-    # Name (fallback)
     return discord.utils.get(guild.roles, name=text)
 
 
@@ -90,7 +88,6 @@ class RulesModal(Modal, title="Set Rules Text"):
         cfg = get_config(self.guild_id)
         cfg.rules_text = self.rules_input.value
         update_config(self.guild_id, cfg)
-
         await interaction.response.send_message("Rules updated.", ephemeral=True)
 
 
@@ -144,15 +141,18 @@ class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
         await interaction.response.send_message("Role option added.", ephemeral=True)
 
 
-# -------------------- VIEWS --------------------
+# -------------------- BUTTON / SELECT COMPONENTS --------------------
 
-class RulesAcknowledgeView(View):
+class AgreeButton(discord.ui.Button):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=None)
+        super().__init__(
+            label="I Agree",
+            style=discord.ButtonStyle.success,
+            custom_id=f"rules_agree_{guild_id}"
+        )
         self.guild_id = guild_id
 
-    @discord.ui.button(label="I Agree", style=discord.ButtonStyle.success)
-    async def agree(self, interaction: discord.Interaction, button: Button):
+    async def callback(self, interaction: discord.Interaction):
         cfg = get_config(self.guild_id)
 
         if not cfg.rules_role_id:
@@ -190,6 +190,7 @@ class RoleMenuSelect(Select):
             min_values=0,
             max_values=len(options) if options else 1,
             options=options,
+            custom_id=f"role_menu_select_{guild_id}",
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -220,16 +221,69 @@ class RoleMenuSelect(Select):
         await interaction.response.send_message("Roles updated.", ephemeral=True)
 
 
-class RoleMenuView(View):
-    def __init__(self, guild_id: int):
-        super().__init__(timeout=None)
-        self.add_item(RoleMenuSelect(guild_id))
+# -------------------- PERSISTENT VIEWS --------------------
 
-
-class OnboardingSetupView(View):
-    def __init__(self, guild_id: int):
+class RulesAcknowledgeView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, cfg=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+
+        if cfg is None:
+            cfg = get_config(guild_id)
+
+        rules_text = cfg.rules_text or "No rules have been set yet."
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Server Rules"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=rules_text),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="-# Click the button below to acknowledge the rules."),
+            discord.ui.ActionRow(AgreeButton(guild_id)),
+            accent_colour=discord.Colour(0xED4245)
+        )
+        self.add_item(container)
+
+
+class RoleMenuView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, cfg=None):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+
+        if cfg is None:
+            cfg = get_config(guild_id)
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Role Selection"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="Choose your roles below."),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(RoleMenuSelect(guild_id)),
+            accent_colour=discord.Colour(0x57F287)
+        )
+        self.add_item(container)
+
+
+# -------------------- SETUP VIEWS --------------------
+
+class OnboardingSetupView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, prefix: str = "."):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Onboarding Setup"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="Use the buttons below to configure the onboarding system for your server."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+            ),
+            accent_colour=discord.Colour(0x5865F2)
+        )
+        self.add_item(container)
 
     @discord.ui.button(label="Set Welcome Message", style=discord.ButtonStyle.primary)
     async def welcome_msg(self, interaction: discord.Interaction, button: Button):
@@ -253,9 +307,8 @@ class OnboardingSetupView(View):
         cfg = get_config(self.guild_id)
         cfg.rules_channel = interaction.channel.id
 
-        embed = build_rules_embed(cfg)
-        view = RulesAcknowledgeView(self.guild_id)
-        msg = await interaction.channel.send(embed=embed, view=view)
+        view = RulesAcknowledgeView(self.guild_id, cfg=cfg)
+        msg = await interaction.channel.send(view=view)
 
         cfg.rules_message_id = msg.id
         update_config(self.guild_id, cfg)
@@ -306,10 +359,22 @@ class OnboardingSetupView(View):
         )
 
 
-class RoleMenuSetupView(View):
-    def __init__(self, guild_id: int):
+class RoleMenuSetupView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, prefix: str = "."):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Role Menu Setup"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="Add role options then post the menu to a channel."),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+            ),
+            accent_colour=discord.Colour(0x57F287)
+        )
+        self.add_item(container)
 
     @discord.ui.button(label="Add Role Option", style=discord.ButtonStyle.primary)
     async def add_option(self, interaction: discord.Interaction, button: Button):
@@ -325,13 +390,8 @@ class RoleMenuSetupView(View):
 
         cfg.role_menu_channel = interaction.channel.id
 
-        embed = discord.Embed(
-            title="Role Selection",
-            description="Choose your roles below.",
-            color=0x57F287,
-        )
-        view = RoleMenuView(self.guild_id)
-        msg = await interaction.channel.send(embed=embed, view=view)
+        view = RoleMenuView(self.guild_id, cfg=cfg)
+        msg = await interaction.channel.send(view=view)
 
         cfg.role_menu_message_id = msg.id
         update_config(self.guild_id, cfg)
@@ -345,25 +405,21 @@ class Onboarding(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # onboarding command group
     @commands.group(name="onboarding", help="Manage server onboarding")
     async def onboarding(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
+            prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content="### Server Onboarding"
-                ),
+                discord.ui.TextDisplay(content="### Server Onboarding"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content="Setup onboarding for your server to help new members get started without requiring an entire staff team to welcome them!"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content="**Onboarding Commands**"),
                 discord.ui.TextDisplay(
-                    content="**Onboarding Commands**"
-                ),
-                discord.ui.TextDisplay(
-                    content=f"**`{self.bot.command_prefix}onboarding setup`** — Setup onboarding for the server.\n**`{self.bot.command_prefix}onboarding role-menu`** — Setup role menu for the server."
+                    content=f"**`{prefix}onboarding setup`** — Setup onboarding for the server.\n**`{prefix}onboarding role-menu`** — Setup role menu for the server."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -373,34 +429,19 @@ class Onboarding(commands.Cog):
             view.add_item(container)
             await ctx.send(view=view)
 
-    # !onboarding setup
     @onboarding.command(name="setup")
     @commands.has_permissions(administrator=True)
     async def onboarding_setup(self, ctx: commands.Context):
         """Setup onboarding for the server."""
-        embed = discord.Embed(
-            title="Onboarding Setup",
-            description="Use the buttons below to configure onboarding.",
-            color=0x5865F2,
-        )
-        await ctx.send(
-            embed=embed,
-            view=OnboardingSetupView(ctx.guild.id)
-        )
+        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        await ctx.send(view=OnboardingSetupView(ctx.guild.id, prefix=prefix))
 
     @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Setup role menu for the server."""
-        embed = discord.Embed(
-            title="Role Menu Setup",
-            description="Add role options and post the menu.",
-            color=0x57F287,
-        )
-        await ctx.send(
-            embed=embed,
-            view=RoleMenuSetupView(ctx.guild.id)
-        )
+        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, prefix=prefix))
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -412,8 +453,8 @@ class Onboarding(commands.Cog):
         if not channel:
             return
 
-        embed = build_welcome_embed(cfg, member)
-        await channel.send(embed=embed)
+        view = build_welcome_view(cfg, member)
+        await channel.send(view=view)
 
     @commands.Cog.listener()
     async def on_ready(self):
