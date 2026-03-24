@@ -77,6 +77,7 @@ class NSFW(commands.Cog):
             )
             view.add_item(container)
             return await ctx.send(view=view)
+        query = query.replace('+', '`, `')
         # send image in a cv2 container with the query and image source
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
