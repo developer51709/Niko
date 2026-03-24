@@ -16,31 +16,32 @@ def build_welcome_view(cfg: OnboardingConfig, member: discord.Member | None = No
         desc = desc.replace("{user}", member.mention).replace("{name}", member.name)
 
     title = cfg.welcome_title or "Welcome!"
-    color = discord.Colour(cfg.welcome_color) if cfg.welcome_color else discord.Colour(0x5865F2)
+    color = discord.Colour(cfg.welcome_color) if cfg.welcome_color else None
 
-    if cfg.welcome_image and member:
-        section = discord.ui.Section(
-            discord.ui.TextDisplay(content=f"### {title}"),
-            discord.ui.TextDisplay(content=desc),
-            accessory=discord.ui.Thumbnail(cfg.welcome_image)
-        )
-    elif member:
-        section = discord.ui.Section(
-            discord.ui.TextDisplay(content=f"### {title}"),
-            discord.ui.TextDisplay(content=desc),
-            accessory=discord.ui.Thumbnail(member.display_avatar.url)
-        )
-    else:
-        section = discord.ui.Section(
-            discord.ui.TextDisplay(content=f"### {title}"),
-            discord.ui.TextDisplay(content=desc),
-        )
-
-    container = discord.ui.Container(
-        section,
-        accent_colour=color
-    )
     view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=f"### {title}"
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(
+            content=desc
+        )
+    )
+    if cfg.welcome_image:
+        container.add_item(
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
+        )
+        container.add_item(
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=cfg.welcome_image
+                )
+            )
+        )
+    if color:
+        container.accent_colour = color
+    
     view.add_item(container)
     return view
 
