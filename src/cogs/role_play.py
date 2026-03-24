@@ -117,7 +117,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             ctx,
             "💖 hug",
-            msg(ctx, "hug_desc", author=ctx.author.display_name, target=member.display_name),
+            msg(ctx, "hug_desc", author=ctx.author.mention, target=member.mention),
             random.choice(gifs)
         )
 
@@ -133,7 +133,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             ctx,
             "💀 kill",
-            msg(ctx, "kill_desc", author=ctx.author.display_name, target=member.display_name),
+            msg(ctx, "kill_desc", author=ctx.author.mention, target=member.mention),
             random.choice(gifs),
             footer=msg(ctx, "kill_footer")
         )
@@ -153,7 +153,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             ctx,
             "💋 kiss",
-            msg(ctx, "kiss_desc", author=ctx.author.display_name, target=member.display_name),
+            msg(ctx, "kiss_desc", author=ctx.author.mention, target=member.mention),
             random.choice(gifs)
         )
 
@@ -170,7 +170,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             interaction,
             "💖 hug",
-            msg(ctx, "hug_desc", author=interaction.user.display_name, target=member.display_name),
+            msg(ctx, "hug_desc", author=interaction.user.mention, target=member.mention),
             random.choice(gifs)
         )
 
@@ -180,7 +180,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             interaction,
             "💀 kill",
-            msg(ctx, "kill_desc", author=interaction.user.display_name, target=member.display_name),
+            msg(ctx, "kill_desc", author=interaction.user.mention, target=member.mention),
             random.choice(gifs),
             footer=msg(ctx, "kill_footer")
         )
@@ -196,7 +196,7 @@ class RolePlayCog(commands.Cog):
         await self.send_roleplay(
             interaction,
             "💋 kiss",
-            msg(ctx, "kiss_desc", author=interaction.user.display_name, target=member.display_name),
+            msg(ctx, "kiss_desc", author=interaction.user.mention, target=member.mention),
             random.choice(gifs)
         )
 
