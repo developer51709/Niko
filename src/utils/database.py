@@ -1,7 +1,7 @@
 import sqlite3
 from typing import Optional, List, Tuple
 
-DB_PATH = "follows.db"
+DB_PATH = "data/follows.db"
 
 
 # -----------------------------------
