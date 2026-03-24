@@ -225,10 +225,42 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.command(name="sync")
     @is_owner()
-    async def sync_commands(self, ctx):
-        """Sync slash commands globally."""
-        synced = await self.bot.tree.sync()
-        await ctx.send(f"✅ Synced `{len(synced)}` commands globally.")
+    async def sync_commands(self, ctx, scope: str = "global"):
+        """Sync application commands."""
+        try:
+            if scope.lower() in ["guild", "local", "here"]:
+                synced = await self.bot.tree.sync(guild=ctx.guild)
+                scope_text = f"Synced `{len(synced)}` commands to **this guild only**."
+            else:
+                synced = await self.bot.tree.sync()
+                scope_text = f"Synced `{len(synced)}` commands **globally**."
+
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### ✅ Sync Complete"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=scope_text
+                ),
+                discord.ui.TextDisplay(
+                    content=f"-# Includes slash commands & context menu commands."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+        except Exception as e:
+            view = discord.ui.LayoutView()
+            view.add_item(
+                discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"### ❌ Sync Error\n```\n{e}\n```"
+                    )
+                )
+            )
+            await ctx.send(view=view)
 
     # -------------------------------
     # Eval command
