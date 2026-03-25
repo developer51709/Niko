@@ -374,13 +374,24 @@ async def _create_tables(bot):
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS follows (
+            guild_id     INTEGER,
+            platform     TEXT,
+            username     TEXT,
+            channel_id   INTEGER,
+            template     TEXT,
+            last_post_id TEXT,
+            PRIMARY KEY  (guild_id, platform, username)
+        )
+    """)
     logging.success("DB", "Database tables verified")
 
 # -----------------------------
 # Load cogs
 # -----------------------------
 async def load_cogs():
-    print(colorama.Fore.YELLOW + "Loading cogs..." + colorama.Style.RESET_ALL)
+    print(f"{colorama.Fore.YELLOW}Loading cogs...{colorama.Style.RESET_ALL}")
 
     for filename in os.listdir("./src/cogs"):
         if not filename.endswith(".py"):
@@ -395,19 +406,15 @@ async def load_cogs():
             # Check for DNL flag
             if getattr(module, "DNL", False):
                 reason = getattr(module, "DNL_REASON", "No reason provided")
-                print(
-                    colorama.Fore.YELLOW
-                    + f"Skipped loading cog: {filename[:-3]} (Reason: {reason})"
-                    + colorama.Style.RESET_ALL
-                )
+                print(f"{colorama.Fore.YELLOW}Skipped loading cog: {filename[:-3]} (Reason: {reason}){colorama.Style.RESET_ALL}")
                 continue
 
             # Safe to load
             await bot.load_extension(module_name)
-            print(colorama.Fore.GREEN + f"Loaded cog: {filename[:-3]}" + colorama.Style.RESET_ALL)
+            print(f"{colorama.Fore.GREEN}Loaded cog: {filename[:-3]}{colorama.Style.RESET_ALL}")
 
         except Exception as e:
-            print(colorama.Fore.RED + f"Failed to load cog {filename[:-3]}: {e}" + colorama.Style.RESET_ALL)
+            print(f"{colorama.Fore.RED}Failed to load cog {filename[:-3]}: {e}{colorama.Style.RESET_ALL}")
 
 # -----------------------------
 # Initialize database
