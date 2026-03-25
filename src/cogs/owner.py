@@ -359,7 +359,26 @@ class OwnerCog(commands.Cog):
             unique=True
         )
 
-        await ctx.send(f"🔗 **Single-use invite (24h):**\n{invite.url}")
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🔗 Server Invite"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Guild:**\n-# {guild.name} (`{guild.id}`)\n**Total Users:**\n-# {guild.member_count:,}\n**Bots:**\n-# {sum(1 for m in guild.members if m.bot):,}\n**Humans:**\n-# {sum(1 for m in guild.members if not m.bot):,}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="Server Invite",
+                    style=discord.ButtonStyle.link,
+                    url=invite.url
+                )
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
 
 async def setup(bot):
