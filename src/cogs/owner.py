@@ -375,6 +375,10 @@ class OwnerCog(commands.Cog):
                     style=discord.ButtonStyle.link,
                     url=invite.url
                 )
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# Expires in 24 hours, single-use only."
             )
         )
         view.add_item(container)
