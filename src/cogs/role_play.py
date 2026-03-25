@@ -89,7 +89,7 @@ class RolePlayCog(commands.Cog):
         )
 
         if footer:
-            container.children.append(
+            container.add_item(
                 discord.ui.TextDisplay(content=f"-# {footer}")
             )
 
