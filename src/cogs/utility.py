@@ -14,13 +14,9 @@ class UtilityCog(commands.Cog):
     @commands.command(name="echo")
     async def echo(self, ctx, *, message: str):
         """Echoes the user's message."""
-        await ctx.send(message)
+        await ctx.send(f"{message}\n-# Sent by {ctx.author.display_name}")
 
-    @commands.command(name="uwu")
-    async def uwu(self, ctx):
-        """UwU"""
-        await ctx.send("Nyaa~!")
-
+    
     @commands.command(name="nitro")
     async def nitro(self, ctx):
         """FREE NITRO!!!"""
@@ -28,7 +24,7 @@ class UtilityCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="### 🎁 Nitro\nNo nitro here! ☕"
+                content="### No nitro here! ☕"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.MediaGallery(
@@ -64,7 +60,15 @@ class UtilityCog(commands.Cog):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content="### ☕ What did you expect?\nI bet you thought this command would do something cool, but no. It's just boring."
+                content=f"### ☕ What did you expect?"
+            ),
+            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"I bet you thought this command would do something cool, but no. It's just boring. 😔"
+            ),
+            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# Maybe try `{self.bot.command_prefix}notboring`?"
             )
         ))
         await ctx.send(view=view)
@@ -75,7 +79,15 @@ class UtilityCog(commands.Cog):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content="### ☕ I lied :)\nThis command is actually in fact quite boring."
+                content="### ☕ I lied."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"This command is actually in fact quite boring."
+            ),
+            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# Please forgive me 😭"
             )
         ))
         await ctx.send(view=view)
