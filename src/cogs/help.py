@@ -61,6 +61,7 @@ CATEGORIES = [
     ("Music",        "Music commands",                    "🎵"),
     ("Leveling",     "Leveling commands",                 "🏆"),
     ("Notifier",     "Notifier commands",                "📢"),
+    ("VoiceMaster",  "VoiceMaster commands",              "🎤"),
 ]
 
 # Map category label → (cog names list, header string)
@@ -81,6 +82,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Music":        (["MusicSystem"], "🎵 **Music Commands**\n> Play music in your voice channel!"),
     "Leveling":     (["Leveling"], "🏆 **Leveling Commands**\n> Level up by chatting and earning XP!"),
     "Notifier":     (["Notifier"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
+    "VoiceMaster":  (["VoiceMaster"], "🎤 **VoiceMaster Commands**\n> Create and manage temporary voice channels!"),
 }
 
 
