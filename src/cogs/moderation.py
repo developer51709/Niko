@@ -63,7 +63,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         if not member:
-            await ctx.send("Please specify a member to ban.")
+            await ctx.send(msg(ctx, "no_member", action="ban"))
             return
         await member.ban(reason=reason)
         try:
@@ -113,7 +113,7 @@ class Moderation(commands.Cog):
     async def warn(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         utils = self.utils()
         if not member:
-            await ctx.send("Please specify a member to warn.")
+            await ctx.send(msg(ctx, "no_member", action="warn"))
             return
         utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
         view = discord.ui.LayoutView()
@@ -135,7 +135,7 @@ class Moderation(commands.Cog):
     async def warnings(self, ctx, member: discord.Member = None):
         utils = self.utils()
         if not member:
-            await ctx.send("Please specify a member to view warnings for.")
+            await ctx.send(msg(ctx, "no_member", action="view warnings for"))
             return
         warns = utils.get_warnings(ctx.guild.id, member.id)
         if not warns:
