@@ -452,7 +452,7 @@ class AutoMod(commands.Cog):
                     pass
                 await utils.log_action(
                     message.guild, "Anti-Link",
-                    f"{message.author.mention} posted an invite link in {message.channel.mention}."
+                    f"{message.author.mention} posted an invite link in {message.channel.mention}.\n\n**Message:**\n{content}"
                 )
                 return
 
@@ -552,8 +552,8 @@ class AutoMod(commands.Cog):
         if not cfg["automod"].get("antinuke", False):
             return
 
-        # Don't track bot or guild owner actions
-        if not entry.user or entry.user.bot:
+        # Don't track self or guild owner actions
+        if entry.user.id == self.bot.user.id:
             return
         if entry.user.id == guild.owner_id:
             return
