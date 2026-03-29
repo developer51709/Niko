@@ -189,9 +189,9 @@ class CategorySelect(discord.ui.Select):
 
 # -------------------- VIEWS --------------------
 
-class TicketSetupView(discord.ui.View):
+class TicketSetupRow(discord.ui.ActionRow):
     def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(timeout=None)
+        super().__init__()
         self.add_item(ConfigurePanelBtn(guild_id, author))
         self.add_item(AddCategoryBtn(guild_id, author))
         self.add_item(PostTicketPanelBtn(guild_id, author))
@@ -199,14 +199,27 @@ class TicketSetupView(discord.ui.View):
 
 class TicketPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=None)
+        super().__init__()
         self.add_item(OpenTicketBtn(guild_id))
 
 
 class CategorySelectView(discord.ui.View):
     def __init__(self, guild_id: int, categories: list[str]):
-        super().__init__(timeout=None)
+        super().__init__()
         self.add_item(CategorySelect(guild_id, categories))
+
+
+class TicketSetupView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__()
+        self.container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Ticket System Setup"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="Configure your ticket system below."),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+        self.container.add_item(TicketSetupRow(guild_id, author))
+        self.add_item(self.container)
 
 
 # -------------------- TICKET CREATION LOGIC --------------------
@@ -227,13 +240,19 @@ async def create_ticket(interaction: discord.Interaction, category: str):
         reason=f"Ticket opened by {user}",
     )
 
-    embed = discord.Embed(
-        title=f"{category} Ticket",
-        description=f"{user.mention}, thanks for opening a ticket.",
-        color=0x00FF00,
+    view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=f"### 🎫 {category} Ticket"
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(
+            content=f"Welcome to your ticket {user.mention}! A staff member will be with you shortly."
+        )
     )
+    view.add_item(container)
 
-    await channel.send(embed=embed)
+    await channel.send(view=view)
     await interaction.response.send_message(
         f"Your ticket has been created: {channel.mention}", ephemeral=True
     )
@@ -249,7 +268,7 @@ class Tickets(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def ticketsetup(self, ctx: commands.Context):
         view = TicketSetupView(ctx.guild.id, ctx.author)
-        await ctx.send("Ticket system setup:", view=view)
+        await ctx.send(view=view)
 
 
 async def setup(bot):
