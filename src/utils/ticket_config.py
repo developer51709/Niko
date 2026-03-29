@@ -16,3 +16,6 @@ class TicketConfig:
 
     panel_channel_id: Optional[int] = None
     panel_message_id: Optional[int] = None
+
+    # persistent open tickets
+    open_tickets: List[dict] = field(default_factory=list)

@@ -6,6 +6,7 @@ from discord.ui import Modal, TextInput
 from utils.ticket_utils import (
     get_ticket_config,
     update_ticket_config,
+    get_all_ticket_configs,
 )
 from utils.ticket_config import TicketConfig
 
@@ -18,6 +19,12 @@ def parse_hex_color(text: str) -> int | None:
         return int(text, 16)
     except ValueError:
         return None
+
+
+def color_to_markdown(color: int | None) -> str:
+    if color is None:
+        return ""
+    return f"`#{color:06X}`"
 
 
 # -------------------- MODALS --------------------
@@ -90,7 +97,7 @@ class TicketCategoryModal(Modal, title="Add Ticket Category"):
         await interaction.response.send_message("Category added.", ephemeral=True)
 
 
-# -------------------- BUTTONS --------------------
+# -------------------- ADMIN SETUP BUTTONS --------------------
 
 class ConfigurePanelBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
@@ -134,17 +141,8 @@ class PostTicketPanelBtn(discord.ui.Button):
 
         cfg = get_ticket_config(self.guild_id)
 
-        embed = discord.Embed(
-            title=cfg.panel_title or "Open a Ticket",
-            description=cfg.panel_description or "Select a category or press the button.",
-            color=cfg.panel_color or 0x00FF00
-        )
-
-        if cfg.panel_image:
-            embed.set_image(url=cfg.panel_image)
-
-        view = TicketPanelView(self.guild_id)
-        msg = await interaction.channel.send(embed=embed, view=view)
+        view = TicketPanelView(self.guild_id, cfg)
+        msg = await interaction.channel.send(view=view)
 
         cfg.panel_message_id = msg.id
         cfg.panel_channel_id = interaction.channel.id
@@ -172,6 +170,60 @@ class OpenTicketBtn(discord.ui.Button):
         await create_ticket(interaction, "General")
 
 
+# -------------------- ADMIN CONTROLS INSIDE TICKET --------------------
+
+class CloseTicketBtn(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_channels:
+            return await interaction.response.send_message(
+                "You don't have permission to close tickets.", ephemeral=True
+            )
+
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            return await interaction.response.send_message(
+                "This can only be used in a ticket channel.", ephemeral=True
+            )
+
+        await interaction.response.send_message("Closing ticket...", ephemeral=True)
+
+        # lock channel for everyone except staff
+        overwrites = channel.overwrites
+        for target, perms in list(overwrites.items()):
+            if isinstance(target, discord.Role) and target.is_default():
+                perms.send_messages = False
+                perms.view_channel = False
+                overwrites[target] = perms
+
+        await channel.edit(overwrites=overwrites, name=f"closed-{channel.name}")
+        await channel.send("This ticket has been closed by staff.")
+
+
+class DeleteTicketBtn(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Delete Ticket", style=discord.ButtonStyle.secondary)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_channels:
+            return await interaction.response.send_message(
+                "You don't have permission to delete tickets.", ephemeral=True
+            )
+
+        await interaction.response.send_message("Deleting ticket in 5 seconds...", ephemeral=True)
+        await asyncio.sleep(5)
+        await interaction.channel.delete(reason=f"Ticket deleted by {interaction.user}")
+
+
+class TicketControlRow(discord.ui.ActionRow):
+    def __init__(self):
+        super().__init__()
+        self.add_item(CloseTicketBtn())
+        self.add_item(DeleteTicketBtn())
+
+
 # -------------------- SELECT MENU --------------------
 
 class CategorySelect(discord.ui.Select):
@@ -197,21 +249,50 @@ class TicketSetupRow(discord.ui.ActionRow):
         self.add_item(PostTicketPanelBtn(guild_id, author))
 
 
-class TicketPanelView(discord.ui.View):
-    def __init__(self, guild_id: int):
-        super().__init__()
-        self.add_item(OpenTicketBtn(guild_id))
+class TicketPanelView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, cfg: TicketConfig | None = None):
+        super().__init__(timeout=None)
+        cfg = cfg or get_ticket_config(guild_id)
+
+        title = cfg.panel_title or "Open a Ticket"
+        desc = cfg.panel_description or "Select a category or press the button."
+        color_md = color_to_markdown(cfg.panel_color)
+
+        header = f"### 🎫 {title}"
+        if color_md:
+            header += f" {color_md}"
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=header),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=desc),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+
+        if cfg.panel_image:
+            container.add_item(
+                discord.ui.TextDisplay(content=f"![panel-image]({cfg.panel_image})")
+            )
+
+        # row with the "Create Ticket" button
+        container.add_item(
+            discord.ui.ActionRow(
+                OpenTicketBtn(guild_id)
+            )
+        )
+
+        self.add_item(container)
 
 
 class CategorySelectView(discord.ui.View):
     def __init__(self, guild_id: int, categories: list[str]):
-        super().__init__()
+        super().__init__(timeout=None)
         self.add_item(CategorySelect(guild_id, categories))
 
 
 class TicketSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__()
+        super().__init__(timeout=None)
         self.container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Ticket System Setup"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -220,6 +301,23 @@ class TicketSetupView(discord.ui.LayoutView):
         )
         self.container.add_item(TicketSetupRow(guild_id, author))
         self.add_item(self.container)
+
+
+class TicketView(discord.ui.LayoutView):
+    def __init__(self, category: str, user: discord.Member):
+        super().__init__(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🎫 {category} Ticket"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"Welcome to your ticket {user.mention}! A staff member will be with you shortly."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+        container.add_item(TicketControlRow())
+        self.add_item(container)
 
 
 # -------------------- TICKET CREATION LOGIC --------------------
@@ -240,22 +338,27 @@ async def create_ticket(interaction: discord.Interaction, category: str):
         reason=f"Ticket opened by {user}",
     )
 
-    view = discord.ui.LayoutView()
-    container = discord.ui.Container(
-        discord.ui.TextDisplay(
-            content=f"### 🎫 {category} Ticket"
-        ),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(
-            content=f"Welcome to your ticket {user.mention}! A staff member will be with you shortly."
-        )
-    )
-    view.add_item(container)
+    view = TicketView(category, user)
+    msg = await channel.send(view=view)
 
-    await channel.send(view=view)
-    await interaction.response.send_message(
-        f"Your ticket has been created: {channel.mention}", ephemeral=True
-    )
+    cfg = get_ticket_config(guild.id)
+    cfg.open_tickets.append({
+        "channel_id": channel.id,
+        "message_id": msg.id,
+        "category": category,
+        "opener_id": user.id,
+        "status": "open"
+    })
+    update_ticket_config(guild.id, cfg)
+
+    if interaction.response.is_done():
+        await interaction.followup.send(
+            f"Your ticket has been created: {channel.mention}", ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"Your ticket has been created: {channel.mention}", ephemeral=True
+        )
 
 
 # -------------------- COG --------------------
@@ -273,3 +376,18 @@ class Tickets(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Tickets(bot))
+
+    # reattach persistent ticket panels
+    for cfg in get_all_ticket_configs():
+        if cfg.panel_message_id:
+            bot.add_view(
+                TicketPanelView(cfg.guild_id, cfg),
+                message_id=cfg.panel_message_id
+            )
+
+        # reattach open ticket views
+        for t in cfg.open_tickets:
+            bot.add_view(
+                TicketView(t["category"], opener=None),  # opener not required for UI
+                message_id=t["message_id"]
+            )

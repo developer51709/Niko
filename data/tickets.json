@@ -1,0 +1,21 @@
+{
+  "1482032314014896220": {
+    "guild_id": 1482032314014896220,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": 1482166045354754180,
+    "panel_message_id": 1487909015475458089,
+    "open_tickets": [
+      {
+        "channel_id": 1487909060408905841,
+        "message_id": 1487909062128439296,
+        "category": "General",
+        "opener_id": 1479968201319125013,
+        "status": "open"
+      }
+    ]
+  }
+}
