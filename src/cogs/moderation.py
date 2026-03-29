@@ -187,6 +187,7 @@ class Moderation(commands.Cog):
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(f"🧹 Deleted {len(deleted)} messages.", delete_after=5)
+        await self.utils().log_action(ctx.guild, "Clear", f"{ctx.author} deleted {len(deleted)} messages in {ctx.channel.mention}.")
 
     @commands.command(help="Purge messages from a specific user.")
     @commands.has_permissions(manage_messages=True)
@@ -199,6 +200,7 @@ class Moderation(commands.Cog):
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount, check=check)
         await ctx.send(f"🧹 Deleted {len(deleted)} messages from {member}.", delete_after=5)
+        await self.utils().log_action(ctx.guild, "Purge", f"{ctx.author} purged {len(deleted)} messages from {member} in {ctx.channel.mention}.")
 
     # ---------- SLOWMODE / LOCK / UNLOCK ----------
 
@@ -215,6 +217,7 @@ class Moderation(commands.Cog):
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send("🔒 Channel locked.")
+        await self.utils().log_action(ctx.guild, "Lock", f"{ctx.author} locked {ctx.channel.mention}.")
 
     @commands.command(help="Unlock this channel.")
     @commands.has_permissions(manage_channels=True)
@@ -223,6 +226,7 @@ class Moderation(commands.Cog):
         overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send("🔓 Channel unlocked.")
+        await self.utils().log_action(ctx.guild, "Unlock", f"{ctx.author} unlocked {ctx.channel.mention}.")
 
     # ---------- NICKNAME ----------
 
@@ -237,19 +241,40 @@ class Moderation(commands.Cog):
             return
         await member.edit(nick=nickname)
         await ctx.send(f"✏️ Changed nickname for {member} to `{nickname}`")
+        await self.utils().log_action(ctx.guild, "Nickname Changed", f"{ctx.author} changed {member}'s nickname to `{nickname}`")
 
     # ---------- MODLOG CONFIG ----------
 
     @commands.command(help="Set the mod-log channel. | Setze den Mod-Log-Kanal.")
     @commands.has_permissions(manage_guild=True)
     async def setmodlog(self, ctx, channel: discord.TextChannel = None):
+        prefix = self.bot.command_prefix
         utils = self.utils()
         cid = channel.id if channel else None
         utils.set_modlog_channel(ctx.guild.id, cid)
+        view = discord.ui.LayoutView()
         if channel:
-            await ctx.send(f"✅ Mod-log channel set to {channel.mention} | Mod-Log-Kanal auf {channel.mention} gesetzt.")
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ✅️ Mod-Log Channel Set"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"Mod-Log channel set to {channel.mention}"
+                )
+            )
         else:
-            await ctx.send("✅ Mod-log channel cleared. | Mod-Log-Kanal gelöscht.")
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ❌️ Mod-Log Channel Removed"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"To set a mod-log channel, use `{prefix}setmodlog #channel`"
+                )
+            )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # ---------- BLOCKED WORD LIST COMMANDS ----------
 
