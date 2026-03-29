@@ -3,6 +3,29 @@ from discord.ext import commands
 from utils import logging as log
 from utils.logging import info, success, warning, error, debug
 
+MESSAGES = {
+    "en": {
+        "no_member": "Please specify a member to {action}."
+        
+    },
+    "de": {
+        "no_member": "Bitte gib einen Benutzer an, den du {action} möchtest."
+    }
+}
+
+def get_lang(ctx: commands.Context) -> str:
+    if ctx and ctx.guild and ctx.guild.preferred_locale:
+        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+def msg(ctx: commands.Context, key: str, **kwargs) -> str:
+    lang = get_lang(ctx)
+    message = MESSAGES.get(lang, {}).get(key)
+    # convert to string
+    text = str(message)
+    return text.format(**kwargs) if kwargs else text
+    
 
 class Moderation(commands.Cog):
     """Staff-facing moderation commands."""
@@ -19,7 +42,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         if not member:
-            await ctx.send("Please specify a member to kick.")
+            await ctx.send(msg(ctx, "no_member", action="kick"))
             return
         await member.kick(reason=reason)
         view = discord.ui.LayoutView()
