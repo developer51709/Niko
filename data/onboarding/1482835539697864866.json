@@ -1,8 +1,8 @@
 {
-    "welcome_channel": null,
-    "welcome_title": null,
-    "welcome_description": null,
-    "welcome_color": 5793266,
+    "welcome_channel": 1482835540477874250,
+    "welcome_title": "Welcome to the server!",
+    "welcome_description": "Welcome to the offcial Linavo support server {user}!",
+    "welcome_color": null,
     "welcome_image": null,
     "rules_channel": 1482835540477874250,
     "rules_message_id": 1484920850821025994,
