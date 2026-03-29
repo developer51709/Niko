@@ -23,9 +23,16 @@ class Moderation(commands.Cog):
             return
         await member.kick(reason=reason)
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(discord.ui.TextDisplay(
-            content=f"### 👟 User Kicked\n**{member}** has been kicked.\n**Reason:** {reason}"
-        )))
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 👟 User Kicked"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**{member}** has been kicked.\n**Reason:** {reason}"
+            )
+        )
+        view.add_item(container)
         await ctx.send(view=view)
         await self.utils().log_action(ctx.guild, "Kick", f"{member} was kicked by {ctx.author}.\nReason: {reason}")
 
@@ -37,21 +44,16 @@ class Moderation(commands.Cog):
             return
         await member.ban(reason=reason)
         try:
-            thumb_url = self.bot.user.avatar.url if self.bot.user.avatar else None
             view = discord.ui.LayoutView()
-            if thumb_url:
-                container = discord.ui.Container(
-                    discord.ui.Section(
-                        discord.ui.TextDisplay(
-                            content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
-                        ),
-                        accessory=discord.ui.Thumbnail(thumb_url)
-                    )
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🔨 User Banned"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"**{member}** has been banned.\n**Reason:** {reason}"
                 )
-            else:
-                container = discord.ui.Container(discord.ui.TextDisplay(
-                    content=f"### 🔨 User Banned\n**{member}** has been banned.\n**Reason:** {reason}"
-                ))
+            )
             view.add_item(container)
             await ctx.send(view=view)
         except Exception as e:
@@ -68,9 +70,16 @@ class Moderation(commands.Cog):
         user = await self.bot.fetch_user(user_id)
         await ctx.guild.unban(user)
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(discord.ui.TextDisplay(
-            content=f"### ✅ User Unbanned\n**{user}** has been unbanned."
-        )))
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### ✅ User Unbanned"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**{user}** has been unbanned."
+            )
+        )
+        view.add_item(container)
         await ctx.send(view=view)
         await self.utils().log_action(ctx.guild, "Unban", f"{user} was unbanned by {ctx.author}.")
 
