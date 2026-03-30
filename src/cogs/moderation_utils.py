@@ -13,12 +13,13 @@ CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 DEFAULT_GUILD_CONFIG = {
     "modlog_channel": None,
     "automod": {
-        "antispam": True,
-        "antilink": True,
-        "badwords": True,
-        "massmention": True,
-        "antinuke": False,
-        "antiraid": False,
+        "antispam":     True,
+        "antilink":     True,
+        "badwords":     True,
+        "massmention":  True,
+        "antinuke":     False,
+        "antiraid":     False,
+        "antiraid_ext": False,
     },
     "spam_threshold": 6,
     "spam_interval": 7,
@@ -38,6 +39,13 @@ DEFAULT_GUILD_CONFIG = {
         "join_threshold": 10,
         "join_interval": 10,
         "action": "kick",
+    },
+    "antiraid_ext": {
+        "interaction_threshold": 5,
+        "interaction_window": 30,
+        "join_age_limit": 120,
+        "raider_action": "kick",
+        "operator_action": "notify",
     },
 }
 
@@ -84,6 +92,10 @@ def _migrate_guild_config(cfg: dict) -> dict:
     cfg.setdefault("antiraid", dict(DEFAULT_GUILD_CONFIG["antiraid"]))
     for k, v in DEFAULT_GUILD_CONFIG["antiraid"].items():
         cfg["antiraid"].setdefault(k, v)
+
+    cfg.setdefault("antiraid_ext", dict(DEFAULT_GUILD_CONFIG["antiraid_ext"]))
+    for k, v in DEFAULT_GUILD_CONFIG["antiraid_ext"].items():
+        cfg["antiraid_ext"].setdefault(k, v)
 
     return cfg
 

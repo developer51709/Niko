@@ -63,6 +63,14 @@ Preferred communication style: Simple, everyday language.
 - Full bilingual EN/DE `MESSAGES` table covering all commands in `moderation.py`
 - Commands: kick, ban, unban, warn, warnings, clearwarnings, mute, tempmute, unmute, clear, purge, slowmode, lock, unlock, nick, setmodlog, automod, badwords, whitelist
 
+### External App Raid Protection (`automod.py`)
+- Detects raids driven by external tools (selfbots, raid apps) by tracking `on_interaction` events from recently-joined members
+- Config: `antiraid_ext` — `interaction_threshold`, `interaction_window`, `join_age_limit`, `raider_action`, `operator_action`
+- **Operator identification**: snapshots invite use counts on every `on_member_join`, then diffs against the current counts at detection time to find which invite saw the biggest spike and who created it
+- Invite cache populated on `on_ready`, `on_invite_create`, `on_invite_delete`, and every join event
+- Response: punishes raiding accounts (kick/ban), then takes separate action on the identified operator (notify/kick/ban)
+- Dashboard: "Ext. App Raid" section with toggle + threshold modal accessible from `!automod`
+
 ### Persistent Views (Tickets & Onboarding)
 - All persistent interactive components have `custom_id` set so Discord can re-dispatch interactions after restarts
   - `OpenTicketBtn`: `custom_id=f"open_ticket_{guild_id}"`
