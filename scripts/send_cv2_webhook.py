@@ -60,7 +60,10 @@ try:
                             "type": 2,
                             "style": 5,
                             "label": "Repository",
-                            "emoji": "<:github:1488283491941748736>",
+                            "emoji": {
+                                "id": "1488283491941748736",
+                                "name": "github"
+                            },
                             "disabled": False,
                             "url": repo_url
                         },
@@ -68,7 +71,10 @@ try:
                             "type": 2,
                             "style": 5,
                             "label": "View Commit",
-                            "emoji": "<:github:1488283491941748736>",
+                            "emoji": {
+                                "id": "1488283491941748736",
+                                "name": "github"
+                            },
                             "disabled": False,
                             "url": commit_url
                         }
