@@ -8,7 +8,7 @@ from utils.onboarding_utils import (
     update_config,
     build_welcome_view,
 )
-from utils.onboarding_config import OnboardingConfig
+from utils.onboarding_config import OnboardingConfig, load_all_configs
 
 
 # -------------------- UTILITY FUNCTIONS --------------------
@@ -529,17 +529,12 @@ class Onboarding(commands.Cog):
         view = build_welcome_view(cfg, member)
         await channel.send(view=view)
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        for guild in self.bot.guilds:
-            cfg = get_config(guild.id)
-
-            if cfg.rules_channel and cfg.rules_message_id:
-                self.bot.add_view(RulesAcknowledgeView(guild.id))
-
-            if cfg.role_menu_channel and cfg.role_menu_message_id:
-                self.bot.add_view(RoleMenuView(guild.id))
-
-
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
+
+    for guild_id, cfg in load_all_configs():
+        if cfg.rules_channel and cfg.rules_message_id:
+            bot.add_view(RulesAcknowledgeView(guild_id), message_id=cfg.rules_message_id)
+
+        if cfg.role_menu_channel and cfg.role_menu_message_id:
+            bot.add_view(RoleMenuView(guild_id), message_id=cfg.role_menu_message_id)

@@ -19,6 +19,8 @@ def _build_overview_text(cfg: dict) -> str:
     am = cfg["automod"]
     an = cfg["antinuke"]
     ar = cfg["antiraid"]
+    wu = len(cfg.get("whitelist_users", []))
+    wr = len(cfg.get("whitelist_roles", []))
     return (
         "### 🛡️ AutoMod Dashboard\n"
         "Here's a full snapshot of your server's protection ☕\n\n"
@@ -39,6 +41,8 @@ def _build_overview_text(cfg: dict) -> str:
         f"{_icon(am.get('antiraid'))} Enabled  •  "
         f"Action: `{ar.get('action', 'kick')}`\n"
         f"Threshold: `{ar.get('join_threshold', 10)}` joins / `{ar.get('join_interval', 10)}s`\n\n"
+        "**🔓 Whitelist**\n"
+        f"`{wu}` whitelisted user(s)  •  `{wr}` whitelisted role(s)\n\n"
         "-# Use the dropdown below to navigate and configure each section."
     )
 
@@ -89,13 +93,43 @@ def _build_antiraid_text(cfg: dict) -> str:
     )
 
 
-def _section_text(cfg: dict, section: str) -> str:
+def _build_whitelist_text(cfg: dict, guild: discord.Guild) -> str:
+    user_ids = cfg.get("whitelist_users", [])
+    role_ids = cfg.get("whitelist_roles", [])
+
+    user_lines = []
+    for uid in user_ids:
+        member = guild.get_member(uid) if guild else None
+        user_lines.append(f"• {member.mention if member else f'<@{uid}>'}")
+
+    role_lines = []
+    for rid in role_ids:
+        role = guild.get_role(rid) if guild else None
+        role_lines.append(f"• {role.mention if role else f'<@&{rid}>'}")
+
+    users_text = "\n".join(user_lines) if user_lines else "*None*"
+    roles_text = "\n".join(role_lines) if role_lines else "*None*"
+
+    return (
+        "### 🔓 AutoMod Whitelist\n"
+        "Whitelisted users and roles bypass all automod checks.\n\n"
+        "**Whitelisted Users**\n"
+        f"{users_text}\n\n"
+        "**Whitelisted Roles**\n"
+        f"{roles_text}\n\n"
+        "-# Use `.whitelist add user @user` or `.whitelist add role @role` to manage."
+    )
+
+
+def _section_text(cfg: dict, section: str, guild: discord.Guild = None) -> str:
     if section == "filter":
         return _build_filter_text(cfg)
     if section == "antinuke":
         return _build_antinuke_text(cfg)
     if section == "antiraid":
         return _build_antiraid_text(cfg)
+    if section == "whitelist":
+        return _build_whitelist_text(cfg, guild)
     return _build_overview_text(cfg)
 
 
@@ -120,12 +154,15 @@ class SectionSelect(discord.ui.Select):
             discord.SelectOption(label="Anti-Raid", value="antiraid", emoji="🌊",
                                  description="Stop mass member join attacks",
                                  default=(current_section == "antiraid")),
+            discord.SelectOption(label="Whitelist", value="whitelist", emoji="🔓",
+                                 description="Users and roles exempt from automod",
+                                 default=(current_section == "whitelist")),
         ]
         super().__init__(placeholder="Navigate sections...", options=options,
                          min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        new_panel = _build_panel(self._cog, self._guild_id, self.values[0])
+        new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
         await interaction.response.edit_message(view=new_panel)
 
 
@@ -147,7 +184,7 @@ class ToggleButton(discord.ui.Button):
         cfg = utils.get_guild_config(self._guild_id)
         cfg["automod"][self._key] = not cfg["automod"].get(self._key, False)
         utils.save_config()
-        new_panel = _build_panel(self._cog, self._guild_id, self._section)
+        new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
         await interaction.response.edit_message(view=new_panel)
 
 
@@ -172,7 +209,7 @@ class EditThresholdsButton(discord.ui.Button):
 class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
     spam_msgs = discord.ui.TextInput(label="Spam: max messages", placeholder="e.g. 6")
     spam_secs = discord.ui.TextInput(label="Spam: within seconds", placeholder="e.g. 7")
-    max_ment = discord.ui.TextInput(label="Mass Mention: max mentions", placeholder="e.g. 5")
+    max_ment  = discord.ui.TextInput(label="Mass Mention: max mentions", placeholder="e.g. 5")
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
@@ -180,27 +217,27 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
         self._guild_id = guild_id
         self.spam_msgs.default = str(cfg.get("spam_threshold", 6))
         self.spam_secs.default = str(cfg.get("spam_interval", 7))
-        self.max_ment.default = str(cfg.get("max_mentions", 5))
+        self.max_ment.default  = str(cfg.get("max_mentions", 5))
 
     async def on_submit(self, interaction: discord.Interaction):
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["spam_threshold"] = max(1, int(self.spam_msgs.value))
-            cfg["spam_interval"] = max(1, int(self.spam_secs.value))
-            cfg["max_mentions"] = max(1, int(self.max_ment.value))
+            cfg["spam_interval"]  = max(1, int(self.spam_secs.value))
+            cfg["max_mentions"]   = max(1, int(self.max_ment.value))
             utils.save_config()
-            new_panel = _build_panel(self._cog, self._guild_id, "filter")
+            new_panel = _build_panel(self._cog, self._guild_id, "filter", interaction.guild)
             await interaction.response.edit_message(view=new_panel)
         except ValueError:
             await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
 
 
 class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
-    ban_t = discord.ui.TextInput(label="Ban threshold", placeholder="e.g. 3")
-    kick_t = discord.ui.TextInput(label="Kick threshold", placeholder="e.g. 3")
-    chan_t = discord.ui.TextInput(label="Channel delete threshold", placeholder="e.g. 3")
-    role_t = discord.ui.TextInput(label="Role delete threshold", placeholder="e.g. 3")
+    ban_t    = discord.ui.TextInput(label="Ban threshold", placeholder="e.g. 3")
+    kick_t   = discord.ui.TextInput(label="Kick threshold", placeholder="e.g. 3")
+    chan_t   = discord.ui.TextInput(label="Channel delete threshold", placeholder="e.g. 3")
+    role_t   = discord.ui.TextInput(label="Role delete threshold", placeholder="e.g. 3")
     interval = discord.ui.TextInput(label="Interval (seconds)", placeholder="e.g. 10")
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
@@ -208,23 +245,23 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
         self._cog = automod_cog
         self._guild_id = guild_id
         an = cfg.get("antinuke", {})
-        self.ban_t.default = str(an.get("ban_threshold", 3))
-        self.kick_t.default = str(an.get("kick_threshold", 3))
-        self.chan_t.default = str(an.get("channel_delete_threshold", 3))
-        self.role_t.default = str(an.get("role_delete_threshold", 3))
+        self.ban_t.default    = str(an.get("ban_threshold", 3))
+        self.kick_t.default   = str(an.get("kick_threshold", 3))
+        self.chan_t.default   = str(an.get("channel_delete_threshold", 3))
+        self.role_t.default   = str(an.get("role_delete_threshold", 3))
         self.interval.default = str(an.get("interval", 10))
 
     async def on_submit(self, interaction: discord.Interaction):
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
-            cfg["antinuke"]["ban_threshold"] = max(1, int(self.ban_t.value))
-            cfg["antinuke"]["kick_threshold"] = max(1, int(self.kick_t.value))
-            cfg["antinuke"]["channel_delete_threshold"] = max(1, int(self.chan_t.value))
-            cfg["antinuke"]["role_delete_threshold"] = max(1, int(self.role_t.value))
-            cfg["antinuke"]["interval"] = max(1, int(self.interval.value))
+            cfg["antinuke"]["ban_threshold"]             = max(1, int(self.ban_t.value))
+            cfg["antinuke"]["kick_threshold"]            = max(1, int(self.kick_t.value))
+            cfg["antinuke"]["channel_delete_threshold"]  = max(1, int(self.chan_t.value))
+            cfg["antinuke"]["role_delete_threshold"]     = max(1, int(self.role_t.value))
+            cfg["antinuke"]["interval"]                  = max(1, int(self.interval.value))
             utils.save_config()
-            new_panel = _build_panel(self._cog, self._guild_id, "antinuke")
+            new_panel = _build_panel(self._cog, self._guild_id, "antinuke", interaction.guild)
             await interaction.response.edit_message(view=new_panel)
         except ValueError:
             await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
@@ -254,7 +291,7 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
         cfg = utils.get_guild_config(self._guild_id)
         cfg["antinuke"]["action"] = val
         utils.save_config()
-        new_panel = _build_panel(self._cog, self._guild_id, "antinuke")
+        new_panel = _build_panel(self._cog, self._guild_id, "antinuke", interaction.guild)
         await interaction.response.edit_message(view=new_panel)
 
 
@@ -283,10 +320,10 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
         cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["antiraid"]["join_threshold"] = max(1, int(self.join_t.value))
-            cfg["antiraid"]["join_interval"] = max(1, int(self.join_i.value))
-            cfg["antiraid"]["action"] = val
+            cfg["antiraid"]["join_interval"]  = max(1, int(self.join_i.value))
+            cfg["antiraid"]["action"]         = val
             utils.save_config()
-            new_panel = _build_panel(self._cog, self._guild_id, "antiraid")
+            new_panel = _build_panel(self._cog, self._guild_id, "antiraid", interaction.guild)
             await interaction.response.edit_message(view=new_panel)
         except ValueError:
             await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
@@ -304,40 +341,35 @@ def _build_threshold_modal(cfg, automod_cog, guild_id, section):
 #  PANEL FACTORY
 # ─────────────────────────────────────────────────────────────
 
-def _build_panel(automod_cog, guild_id: int, section: str = "overview") -> discord.ui.LayoutView:
+def _build_panel(automod_cog, guild_id: int, section: str = "overview",
+                 guild: discord.Guild = None) -> discord.ui.LayoutView:
     utils = automod_cog.utils()
     cfg = utils.get_guild_config(guild_id)
 
     view = discord.ui.LayoutView(timeout=300)
 
-    # Content container
-    text = _section_text(cfg, section)
+    text = _section_text(cfg, section, guild)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(
-            content=text
-        ),
+        discord.ui.TextDisplay(content=text),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
     )
 
-    # Section navigation dropdown
     container.add_item(
         discord.ui.ActionRow(
             SectionSelect(automod_cog, guild_id, section)
         )
     )
 
-    # Toggle buttons for each section
     if section == "filter":
         container.add_item(
             discord.ui.ActionRow(
-            
-                ToggleButton("Anti-Spam", "antispam", automod_cog, guild_id, section),
-                ToggleButton("Anti-Link", "antilink", automod_cog, guild_id, section),
+                ToggleButton("Anti-Spam",    "antispam",    automod_cog, guild_id, section),
+                ToggleButton("Anti-Link",    "antilink",    automod_cog, guild_id, section),
             )
         )
         container.add_item(
             discord.ui.ActionRow(
-                ToggleButton("Bad Words", "badwords", automod_cog, guild_id, section),
+                ToggleButton("Bad Words",    "badwords",    automod_cog, guild_id, section),
                 ToggleButton("Mass Mention", "massmention", automod_cog, guild_id, section),
             )
         )
@@ -371,6 +403,7 @@ def _build_panel(automod_cog, guild_id: int, section: str = "overview") -> disco
                 EditThresholdsButton(automod_cog, guild_id, section),
             )
         )
+
     view.add_item(container)
     return view
 
@@ -397,9 +430,9 @@ class AutoMod(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self._msg_history = {}        # guild_id -> user_id -> [timestamps]
-        self._nuke_history = {}       # guild_id -> user_id -> {action_key: [timestamps]}
-        self._join_history = {}       # guild_id -> [timestamps]
+        self._msg_history  = {}   # guild_id -> user_id -> [timestamps]
+        self._nuke_history = {}   # guild_id -> user_id -> {action_key: [timestamps]}
+        self._join_history = {}   # guild_id -> [timestamps]
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
@@ -426,9 +459,16 @@ class AutoMod(commands.Cog):
     async def on_message(self, message: discord.Message):
         if message.author.id == self.bot.user.id:
             return
+        if not message.guild:
+            return
+
         utils = self.utils()
         cfg = self.get_cfg(message.guild.id)
         content = message.content or ""
+
+        # Whitelist check — skip automod entirely for whitelisted users/roles
+        if utils.is_whitelisted(message.guild.id, message.author):
+            return
 
         if cfg["automod"].get("antispam", True):
             count = self._track_message(message)
@@ -493,8 +533,8 @@ class AutoMod(commands.Cog):
 
         ar = cfg.get("antiraid", {})
         threshold = ar.get("join_threshold", 10)
-        interval = ar.get("join_interval", 10)
-        action = ar.get("action", "kick")
+        interval  = ar.get("join_interval", 10)
+        action    = ar.get("action", "kick")
 
         now = time.time()
         cutoff = now - interval
@@ -503,14 +543,13 @@ class AutoMod(commands.Cog):
         self._join_history[guild.id] = [t for t in bucket if t >= cutoff]
 
         if len(self._join_history[guild.id]) >= threshold:
-            self._join_history[guild.id] = []  # reset to avoid repeated triggers
+            self._join_history[guild.id] = []
             log.warning("Anti-Raid", f"Raid detected in {guild.name} — action: {action}")
             await self.utils().log_action(
                 guild, "🌊 Anti-Raid Triggered",
                 f"**{len(bucket)}** members joined within `{interval}s`. Executing `{action}`."
             )
             if action == "kick":
-                # Kick all members who joined in the raid window
                 for m in list(guild.members):
                     joined = m.joined_at
                     if joined and (now - joined.timestamp()) <= interval + 2:
@@ -531,7 +570,6 @@ class AutoMod(commands.Cog):
                     except Exception:
                         pass
 
-            # DM server owner
             try:
                 await guild.owner.send(
                     f"⚠️ **Anti-Raid triggered** in **{guild.name}**!\n"
@@ -552,7 +590,6 @@ class AutoMod(commands.Cog):
         if not cfg["automod"].get("antinuke", False):
             return
 
-        # Don't track self or guild owner actions
         if entry.user.id == self.bot.user.id or guild.owner_id:
             return
 
@@ -560,19 +597,19 @@ class AutoMod(commands.Cog):
         interval = an.get("interval", 10)
 
         action_map = {
-            discord.AuditLogAction.ban: ("ban", an.get("ban_threshold", 3)),
-            discord.AuditLogAction.kick: ("kick", an.get("kick_threshold", 3)),
+            discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
+            discord.AuditLogAction.kick:           ("kick",           an.get("kick_threshold", 3)),
             discord.AuditLogAction.channel_delete: ("channel_delete", an.get("channel_delete_threshold", 3)),
-            discord.AuditLogAction.role_delete: ("role_delete", an.get("role_delete_threshold", 3)),
+            discord.AuditLogAction.role_delete:    ("role_delete",    an.get("role_delete_threshold", 3)),
         }
 
         if entry.action not in action_map:
             return
 
         action_key, threshold = action_map[entry.action]
-        now = time.time()
+        now    = time.time()
         cutoff = now - interval
-        uid = entry.user.id
+        uid    = entry.user.id
 
         user_history = self._nuke_history.setdefault(guild.id, {}).setdefault(uid, {})
         bucket = user_history.setdefault(action_key, [])
@@ -580,10 +617,9 @@ class AutoMod(commands.Cog):
         user_history[action_key] = [t for t in bucket if t >= cutoff]
 
         if len(user_history[action_key]) >= threshold:
-            # Reset to avoid repeat triggers
             user_history[action_key] = []
 
-            offender = entry.user
+            offender    = entry.user
             nuke_action = an.get("action", "strip")
 
             log.warning("Anti-Nuke", f"Nuke detected by {offender} in {guild.name} — action: {nuke_action}")
@@ -608,7 +644,6 @@ class AutoMod(commands.Cog):
                     except Exception:
                         pass
 
-            # DM owner
             try:
                 await guild.owner.send(
                     f"⚠️ **Anti-Nuke triggered** in **{guild.name}**!\n"
@@ -619,7 +654,6 @@ class AutoMod(commands.Cog):
                 pass
 
     async def _strip_dangerous_roles(self, member: discord.Member):
-        """Remove all roles that grant dangerous permissions from a member."""
         dangerous = (
             discord.Permissions.administrator,
             discord.Permissions.ban_members,
@@ -648,7 +682,7 @@ class AutoMod(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def automod_settings(self, ctx):
         """Open the interactive AutoMod settings dashboard."""
-        panel = _build_panel(self, ctx.guild.id, "overview")
+        panel = _build_panel(self, ctx.guild.id, "overview", ctx.guild)
         await ctx.send(view=panel)
 
 

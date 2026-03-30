@@ -24,6 +24,8 @@ DEFAULT_GUILD_CONFIG = {
     "spam_interval": 7,
     "max_mentions": 5,
     "blocked_words": [],
+    "whitelist_users": [],
+    "whitelist_roles": [],
     "antinuke": {
         "ban_threshold": 3,
         "kick_threshold": 3,
@@ -71,7 +73,8 @@ def _migrate_guild_config(cfg: dict) -> dict:
     for key, val in DEFAULT_GUILD_CONFIG["automod"].items():
         am.setdefault(key, val)
 
-    for key in ("spam_threshold", "spam_interval", "max_mentions", "blocked_words"):
+    for key in ("spam_threshold", "spam_interval", "max_mentions", "blocked_words",
+                "whitelist_users", "whitelist_roles"):
         cfg.setdefault(key, DEFAULT_GUILD_CONFIG[key])
 
     cfg.setdefault("antinuke", dict(DEFAULT_GUILD_CONFIG["antinuke"]))
@@ -122,7 +125,7 @@ class ModerationUtils(commands.Cog):
     def save_config(self):
         save_json(CONFIG_FILE, self.config)
 
-    # ---------- LOGGING ----------
+    # ---------- MODLOG ----------
 
     async def log_action(self, guild: discord.Guild, title: str, description: str):
         cfg = self.get_guild_config(guild.id)
@@ -255,6 +258,54 @@ class ModerationUtils(commands.Cog):
         words = self.get_guild_config(guild_id).get("blocked_words", [])
         lowered = content.lower()
         return any(w in lowered for w in words)
+
+    # ---------- WHITELIST ----------
+
+    def is_whitelisted(self, guild_id: int, member: discord.Member) -> bool:
+        """Return True if member is on the automod whitelist (by user ID or role)."""
+        cfg = self.get_guild_config(guild_id)
+        if member.id in cfg.get("whitelist_users", []):
+            return True
+        member_role_ids = {r.id for r in member.roles}
+        for rid in cfg.get("whitelist_roles", []):
+            if rid in member_role_ids:
+                return True
+        return False
+
+    def add_whitelist_user(self, guild_id: int, user_id: int):
+        cfg = self.get_guild_config(guild_id)
+        wl = cfg.setdefault("whitelist_users", [])
+        if user_id not in wl:
+            wl.append(user_id)
+        self.save_config()
+
+    def remove_whitelist_user(self, guild_id: int, user_id: int):
+        cfg = self.get_guild_config(guild_id)
+        wl = cfg.get("whitelist_users", [])
+        if user_id in wl:
+            wl.remove(user_id)
+        self.save_config()
+
+    def add_whitelist_role(self, guild_id: int, role_id: int):
+        cfg = self.get_guild_config(guild_id)
+        wl = cfg.setdefault("whitelist_roles", [])
+        if role_id not in wl:
+            wl.append(role_id)
+        self.save_config()
+
+    def remove_whitelist_role(self, guild_id: int, role_id: int):
+        cfg = self.get_guild_config(guild_id)
+        wl = cfg.get("whitelist_roles", [])
+        if role_id in wl:
+            wl.remove(role_id)
+        self.save_config()
+
+    def get_whitelist(self, guild_id: int) -> dict:
+        cfg = self.get_guild_config(guild_id)
+        return {
+            "users": cfg.get("whitelist_users", []),
+            "roles": cfg.get("whitelist_roles", []),
+        }
 
 
 async def setup(bot):

@@ -49,3 +49,17 @@ def save_config(guild_id: int, cfg: OnboardingConfig):
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(asdict(cfg), f, indent=4)
+
+
+def load_all_configs() -> list[tuple[int, "OnboardingConfig"]]:
+    """Return a list of (guild_id, config) for every saved guild."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    results = []
+    for fname in os.listdir(DATA_DIR):
+        if fname.endswith(".json"):
+            try:
+                gid = int(fname[:-5])
+                results.append((gid, load_config(gid)))
+            except (ValueError, Exception):
+                pass
+    return results

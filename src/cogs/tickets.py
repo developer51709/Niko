@@ -155,7 +155,11 @@ class PostTicketPanelBtn(discord.ui.Button):
 
 class OpenTicketBtn(discord.ui.Button):
     def __init__(self, guild_id: int):
-        super().__init__(label="Create Ticket", style=discord.ButtonStyle.green)
+        super().__init__(
+            label="Create Ticket",
+            style=discord.ButtonStyle.green,
+            custom_id=f"open_ticket_{guild_id}",
+        )
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -174,7 +178,11 @@ class OpenTicketBtn(discord.ui.Button):
 
 class CloseTicketBtn(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger)
+        super().__init__(
+            label="Close Ticket",
+            style=discord.ButtonStyle.danger,
+            custom_id="ticket_close",
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_channels:
@@ -190,7 +198,6 @@ class CloseTicketBtn(discord.ui.Button):
 
         await interaction.response.send_message("Closing ticket...", ephemeral=True)
 
-        # lock channel for everyone except staff
         overwrites = channel.overwrites
         for target, perms in list(overwrites.items()):
             if isinstance(target, discord.Role) and target.is_default():
@@ -204,7 +211,11 @@ class CloseTicketBtn(discord.ui.Button):
 
 class DeleteTicketBtn(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Delete Ticket", style=discord.ButtonStyle.secondary)
+        super().__init__(
+            label="Delete Ticket",
+            style=discord.ButtonStyle.secondary,
+            custom_id="ticket_delete",
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_channels:
@@ -304,15 +315,16 @@ class TicketSetupView(discord.ui.LayoutView):
 
 
 class TicketView(discord.ui.LayoutView):
-    def __init__(self, category: str, user: discord.Member, message_id: int | None = None):
+    def __init__(self, category: str, user: discord.Member | None = None):
         super().__init__(timeout=None)
+        mention = user.mention if user else "a member"
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"### 🎫 {category} Ticket"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"Welcome to your ticket {user.mention}! A staff member will be with you shortly."
+                content=f"Welcome to your ticket {mention}! A staff member will be with you shortly."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -387,10 +399,11 @@ async def setup(bot):
 
         # reattach open ticket views
         for t in cfg.open_tickets:
-            bot.add_view(
-                TicketView(
-                    t["category"], 
-                           user=bot.get_user(t["opener_id"]),
-                    message_id=t["message_id"]
+            if t.get("message_id"):
+                bot.add_view(
+                    TicketView(
+                        t["category"],
+                        user=bot.get_user(t["opener_id"]),
+                    ),
+                    message_id=t["message_id"],
                 )
-            )

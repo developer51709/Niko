@@ -45,14 +45,33 @@ Preferred communication style: Simple, everyday language.
 
 ### Leveling System
 - XP stored in `data/levels.json` per guild/user
-- Random 15–25 XP per message
+- Random 15–25 XP per message (with optional per-guild multiplier and cooldown)
 - XP formula: `5 * level² + 50 * level + 100`
+- Per-guild config in `data/level_config.json`: `xp_enabled`, `xp_multiplier`, `xp_cooldown`, `level_up_channel`, `level_roles`
+- Automatic role assignment on level-up (`level_roles` dict: `{level: role_id}`)
 - Commands: `!level` / `!rank`, `!level-leaderboard` / `!lvl-lb`
+- Config group: `!levelconfig` → subcommands: `toggle`, `multiplier`, `cooldown`, `levelupchannel`, `levelrole`, `resetuser`
 
 ### Moderation
 - Mod log channel stored via `moderation_utils.py`
-- AutoMod config (antispam, antilink, badwords, massmention, thresholds) via `!automod` interactive UI
-- Commands: kick, ban, unban, warn, warnings, clearwarnings, mute, tempmute, unmute, clear, purge, slowmode, lock, unlock, nick, setmodlog, automod, badwords
+- AutoMod config (antispam, antilink, badwords, massmention, thresholds) via `!automod` interactive dashboard
+  - Dashboard sections: Overview, Message Filter, Anti-Nuke, Anti-Raid, Whitelist
+- **AutoMod Whitelist**: Users and roles exempt from all automod checks
+  - `whitelist_users` / `whitelist_roles` stored in `data/modconfig.json` per guild
+  - Commands: `!whitelist` (list), `!whitelist add user/role`, `!whitelist remove user/role`
+  - `is_whitelisted()` check runs at the top of every `on_message` handler
+- Full bilingual EN/DE `MESSAGES` table covering all commands in `moderation.py`
+- Commands: kick, ban, unban, warn, warnings, clearwarnings, mute, tempmute, unmute, clear, purge, slowmode, lock, unlock, nick, setmodlog, automod, badwords, whitelist
+
+### Persistent Views (Tickets & Onboarding)
+- All persistent interactive components have `custom_id` set so Discord can re-dispatch interactions after restarts
+  - `OpenTicketBtn`: `custom_id=f"open_ticket_{guild_id}"`
+  - `CloseTicketBtn`: `custom_id="ticket_close"`
+  - `DeleteTicketBtn`: `custom_id="ticket_delete"`
+  - `AgreeButton` (onboarding): `custom_id=f"rules_agree_{guild_id}"`
+  - `RoleMenuSelect` (onboarding): `custom_id=f"role_menu_select_{guild_id}"`
+- View registration moved to `setup()` functions (not `on_ready`) since cogs load inside bot's `on_ready`
+- Onboarding: `load_all_configs()` in `onboarding_config.py` iterates all guild JSON files to re-register views
 
 ### Music
 - Lavalink-based music via wavelink
