@@ -7,6 +7,9 @@ from utils import logging as log
 
 INVITE_REGEX = re.compile(r"(discord\.gg/|discord\.com/invite/)", re.IGNORECASE)
 
+# this will be used to prevent the bot from pinging every whitelisted user on the server every single time the automod command is used 🫩
+ALLOWED_MENTIONS = discord.AllowedMentions.none()
+
 # AppInstallationType integer keys used in _integration_owners
 _GUILD_INSTALL = 0
 _USER_INSTALL  = 1
@@ -222,7 +225,7 @@ class SectionSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
-        await interaction.response.edit_message(view=new_panel)
+        await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
 
 class ToggleButton(discord.ui.Button):
@@ -244,7 +247,7 @@ class ToggleButton(discord.ui.Button):
         cfg["automod"][self._key] = not cfg["automod"].get(self._key, False)
         utils.save_config()
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
-        await interaction.response.edit_message(view=new_panel)
+        await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
 
 class SubToggleButton(discord.ui.Button):
@@ -269,7 +272,7 @@ class SubToggleButton(discord.ui.Button):
         cfg[self._sub_cfg][self._field] = not cfg[self._sub_cfg].get(self._field, True)
         utils.save_config()
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
-        await interaction.response.edit_message(view=new_panel)
+        await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
 
 class EditThresholdsButton(discord.ui.Button):
@@ -283,7 +286,7 @@ class EditThresholdsButton(discord.ui.Button):
         utils = self._cog.utils()
         cfg   = utils.get_guild_config(self._guild_id)
         modal = _build_threshold_modal(cfg, self._cog, self._guild_id, self._section)
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_modal(modal, allowed_mentions=ALLOWED_MENTIONS)
 
 
 class EditExtAppButton(discord.ui.Button):
@@ -1093,7 +1096,7 @@ class AutoMod(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def automod_settings(self, ctx):
         panel = _build_panel(self, ctx.guild.id, "overview", ctx.guild)
-        await ctx.send(view=panel)
+        await ctx.send(view=panel, allowed_mentions=ALLOWED_MENTIONS)
 
 
 async def setup(bot):
