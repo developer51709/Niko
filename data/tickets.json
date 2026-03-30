@@ -5,14 +5,32 @@
     "panel_description": null,
     "panel_color": null,
     "panel_image": null,
-    "panel_categories": [],
-    "panel_channel_id": 1482166045354754180,
-    "panel_message_id": 1487909015475458089,
+    "panel_categories": [
+      "SelfBot",
+      "RaidBot",
+      "NukeBot"
+    ],
+    "panel_channel_id": 1488008643101065278,
+    "panel_message_id": 1488262594111344772,
     "open_tickets": [
       {
         "channel_id": 1487909060408905841,
         "message_id": 1487909062128439296,
         "category": "General",
+        "opener_id": 1479968201319125013,
+        "status": "open"
+      },
+      {
+        "channel_id": 1488262605062803587,
+        "message_id": 1488262606362775703,
+        "category": "General",
+        "opener_id": 1479968201319125013,
+        "status": "open"
+      },
+      {
+        "channel_id": 1488262830233882684,
+        "message_id": 1488262831823650846,
+        "category": "SelfBot",
         "opener_id": 1479968201319125013,
         "status": "open"
       }
