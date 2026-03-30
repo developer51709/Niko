@@ -64,9 +64,16 @@ Preferred communication style: Simple, everyday language.
 - **discord.py**: Primary bot framework
 - **Requires**: `DISCORD_BOT_TOKEN` environment secret
 
+### AI Integration
+- **OpenAI** via Replit's built-in OpenAI integration (`AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`)
+- Local TinyLlama model is lazy-loaded only if `USE_OPENAI = False` in `bot.py`
+
 ### System Libraries
 - **psutil**: System resource monitoring
 - **requests**: HTTP client
+- **beautifulsoup4**: HTML parsing for notifier cog (Twitter/TikTok scraping)
+- **deep-translator**: Google Translate API wrapper for translate_context cog
+- **langdetect**: Language detection for translator utility
 
 ### Data Storage
 - **Local filesystem**: JSON files only, no external database
@@ -75,3 +82,9 @@ Preferred communication style: Simple, everyday language.
   - `data/levels.json`: Per-guild leveling data
   - `data/mod_config.json`: Per-guild moderation config
   - `data/warnings.json`: Per-guild warning records
+
+## Migration Notes (Replit Import)
+- Removed top-level model loading from `bot.py` (was downloading 600MB TinyLlama on every start)
+- `utils/ai_local.py` now lazy-loads the local model only when actually called
+- Replaced incompatible `googletrans` with `deep-translator` + `langdetect` to avoid httpx version conflicts
+- All 33 cogs load successfully on startup

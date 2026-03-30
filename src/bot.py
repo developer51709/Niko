@@ -7,7 +7,6 @@ import colorama
 import datetime
 import importlib
 from discord.ext import commands
-from ctransformers import AutoModelForCausalLM
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
 from utils import logging
@@ -189,19 +188,6 @@ def ensure_model():
             logging.error("Startup", "Error 404: Model not found. Please check the MODEL_URL.")
         else:
             logging.error("Startup", f"Failed to download model: {e}")
-
-# -----------------------------
-# Load model
-# -----------------------------
-ensure_model()
-llm = AutoModelForCausalLM.from_pretrained(
-    ".",
-    model_file=MODEL_PATH,
-    model_type="llama",
-    context_length=2500,
-    threads=4,
-    gpu_layers=0 # Explicitly set to 0 for local CPU inference
-)
 
 # -----------------------------
 # Memory handling
