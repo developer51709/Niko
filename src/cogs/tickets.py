@@ -304,7 +304,7 @@ class TicketSetupView(discord.ui.LayoutView):
 
 
 class TicketView(discord.ui.LayoutView):
-    def __init__(self, category: str, user: discord.Member):
+    def __init__(self, category: str, user: discord.Member, message_id: int | None = None):
         super().__init__(timeout=None)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -388,6 +388,9 @@ async def setup(bot):
         # reattach open ticket views
         for t in cfg.open_tickets:
             bot.add_view(
-                TicketView(t["category"], opener=None),  # opener not required for UI
-                message_id=t["message_id"]
+                TicketView(
+                    t["category"], 
+                           user=bot.get_user(t["opener_id"]),
+                    message_id=t["message_id"]
+                )
             )
