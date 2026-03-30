@@ -35,10 +35,18 @@ class ContextMenu(commands.Cog):
         flag_emoji = Translator.code_to_flag(analysis)
         translation = await Translator.translate_to_locale(message.content, locale)
 
-        await interaction.response.send_message(f"{flag_emoji} -> {Translator.locale_to_flag(locale)} **:** {translation}", ephemeral=True)
-
-    async def translate_to_english(self, interaction: discord.Interaction, message: discord.Message) -> None:
-        await self.translate(interaction, message, discord.Locale.british_english)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {flag_emoji} -> {Translator.locale_to_flag(locale)}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Original:**\n{content}\n\n**Translation:**\n{translation}"
+            )
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     async def translate_to_your_language(self, interaction: discord.Interaction, message: discord.Message) -> None:
         await self.translate(interaction, message, interaction.locale)
