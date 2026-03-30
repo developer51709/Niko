@@ -261,12 +261,14 @@ class ModerationUtils(commands.Cog):
 
     # ---------- WHITELIST ----------
 
-    def is_whitelisted(self, guild_id: int, member: discord.Member) -> bool:
+    def is_whitelisted(self, guild_id: int, member) -> bool:
         """Return True if member is on the automod whitelist (by user ID or role)."""
         cfg = self.get_guild_config(guild_id)
         if member.id in cfg.get("whitelist_users", []):
             return True
-        member_role_ids = {r.id for r in member.roles}
+        # discord.User (DM context) has no .roles — skip role check safely
+        roles = getattr(member, "roles", [])
+        member_role_ids = {r.id for r in roles}
         for rid in cfg.get("whitelist_roles", []):
             if rid in member_role_ids:
                 return True
