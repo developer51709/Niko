@@ -424,7 +424,7 @@ class AutoMod(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not message.guild or message.author.bot:
+        if message.author.id == self.bot.user.id:
             return
         utils = self.utils()
         cfg = self.get_cfg(message.guild.id)
@@ -553,9 +553,7 @@ class AutoMod(commands.Cog):
             return
 
         # Don't track self or guild owner actions
-        if entry.user.id == self.bot.user.id:
-            return
-        if entry.user.id == guild.owner_id:
+        if entry.user.id == self.bot.user.id or guild.owner_id:
             return
 
         an = cfg.get("antinuke", {})
