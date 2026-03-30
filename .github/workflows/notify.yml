@@ -1,0 +1,22 @@
+name: Send Commit Notification
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Send CV2 Webhook
+        run: |
+          python3 scripts/send_cv2_webhook.py \
+            "${{ secrets.DISCORD_WEBHOOK }}" \
+            "${{ github.event.head_commit.author.name }}" \
+            "${{ github.event.head_commit.message }}" \
+            "${{ github.sha }}" \
+            "${{ github.event.repository.html_url }}" \
+            "${{ github.event.head_commit.url }}"
