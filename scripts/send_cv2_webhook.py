@@ -60,7 +60,7 @@ try:
                             "type": 2,
                             "style": 5,
                             "label": "Repository",
-                            "emoji": None,
+                            "emoji": "<:github:1488283491941748736>",
                             "disabled": False,
                             "url": repo_url
                         },
@@ -68,7 +68,7 @@ try:
                             "type": 2,
                             "style": 5,
                             "label": "View Commit",
-                            "emoji": None,
+                            "emoji": "<:github:1488283491941748736>",
                             "disabled": False,
                             "url": commit_url
                         }
