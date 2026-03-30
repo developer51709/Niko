@@ -57,11 +57,12 @@
         "modlog_channel": null,
         "automod": {
             "antispam": false,
-            "antilink": false,
+            "antilink": true,
             "badwords": false,
             "massmention": false,
             "antinuke": false,
-            "antiraid": false
+            "antiraid": false,
+            "antiraid_ext": false
         },
         "spam_threshold": 6,
         "spam_interval": 7,
@@ -83,7 +84,14 @@
         "whitelist_users": [],
         "whitelist_roles": [
             1482161687728623698
-        ]
+        ],
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify"
+        }
     },
     "1475891013305499678": {
         "modlog_channel": null,

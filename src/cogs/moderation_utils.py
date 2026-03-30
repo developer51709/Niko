@@ -46,6 +46,10 @@ DEFAULT_GUILD_CONFIG = {
         "join_age_limit": 120,
         "raider_action": "kick",
         "operator_action": "notify",
+        "ext_app_detection": True,
+        "ext_app_threshold": 3,
+        "ext_app_window": 15,
+        "ext_app_action": "kick",
     },
 }
 
