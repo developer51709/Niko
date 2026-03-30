@@ -42,7 +42,21 @@ class ContextMenu(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Original:**\n{content}\n\n**Translation:**\n{translation}"
+                content=(
+                    f"**Original:**\n"
+                    f"{content}"
+                )
+            ),
+            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    f"**Translation:**\n"
+                    f"{translation}"
+                )
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# Translated using Google Translate."
             )
         )
         view.add_item(container)
