@@ -50,15 +50,23 @@ Preferred communication style: Simple, everyday language.
 - Per-guild config in `data/level_config.json`: `xp_enabled`, `xp_multiplier`, `xp_cooldown`, `level_up_channel`, `level_roles`
 - Automatic role assignment on level-up (`level_roles` dict: `{level: role_id}`)
 - Commands: `!level` / `!rank`, `!level-leaderboard` / `!lvl-lb`
+- **`!levelpanel`** (aliases: `!lvlpanel`, `!lp`) — interactive cv2 management panel with 4 sections:
+  - **Overview** — all leveling settings at a glance
+  - **XP Settings** — toggle XP, edit multiplier + cooldown via modal
+  - **Announcements** — set level-up channel (ephemeral ChannelSelect) + custom level-up message with `{mention}` `{level}` `{name}` `{guild}` placeholders (modal); reset to default
+  - **Level Roles** — add (two-step: modal → ephemeral RoleSelect) / remove (ephemeral Select of current assignments)
+- **Custom level-up messages**: stored as `level_up_message` in `data/level_config.json`; falls back to the café MESSAGES table if not set
 - Config group: `!levelconfig` → subcommands: `toggle`, `multiplier`, `cooldown`, `levelupchannel`, `levelrole`, `resetuser`
 
 ### Moderation
 - Mod log channel stored via `moderation_utils.py`
 - AutoMod config (antispam, antilink, badwords, massmention, thresholds) via `!automod` interactive dashboard
-  - Dashboard sections: Overview, Message Filter, Anti-Nuke, Anti-Raid, Whitelist
+  - Dashboard sections: Overview, Message Filter, Anti-Nuke, Anti-Raid, Ext. App Raid, Whitelist
+  - All sections use cv2 LayoutView; toggle buttons + modals for all thresholds
 - **AutoMod Whitelist**: Users and roles exempt from all automod checks
+  - Dashboard "Whitelist" section has ➕/➖ buttons that open ephemeral `UserSelect`/`RoleSelect` dropdowns
   - `whitelist_users` / `whitelist_roles` stored in `data/modconfig.json` per guild
-  - Commands: `!whitelist` (list), `!whitelist add user/role`, `!whitelist remove user/role`
+  - Also manageable via `!whitelist add/remove user/role` text commands
   - `is_whitelisted()` check runs at the top of every `on_message` handler
 - Full bilingual EN/DE `MESSAGES` table covering all commands in `moderation.py`
 - Commands: kick, ban, unban, warn, warnings, clearwarnings, mute, tempmute, unmute, clear, purge, slowmode, lock, unlock, nick, setmodlog, automod, badwords, whitelist

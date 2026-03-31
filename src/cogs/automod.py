@@ -506,6 +506,192 @@ def _build_threshold_modal(cfg, automod_cog, guild_id, section):
 
 
 # ─────────────────────────────────────────────────────────────
+#  WHITELIST EPHEMERAL SELECTS & VIEWS
+# ─────────────────────────────────────────────────────────────
+
+class _WLUserSelect(discord.ui.UserSelect):
+    """Ephemeral select — add members to whitelist."""
+    def __init__(self, automod_cog, guild_id: int):
+        super().__init__(
+            placeholder="Choose member(s) to whitelist…",
+            min_values=1, max_values=10,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        for user in self.values:
+            utils.add_whitelist_user(self._guild_id, user.id)
+        utils.save_config()
+        names = " ".join(u.mention for u in self.values)
+        await interaction.response.edit_message(
+            content=f"✅ Added {names} to the automod whitelist.", view=None,
+        )
+
+
+class _WLRoleSelect(discord.ui.RoleSelect):
+    """Ephemeral select — add roles to whitelist."""
+    def __init__(self, automod_cog, guild_id: int):
+        super().__init__(
+            placeholder="Choose role(s) to whitelist…",
+            min_values=1, max_values=10,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        for role in self.values:
+            utils.add_whitelist_role(self._guild_id, role.id)
+        utils.save_config()
+        names = " ".join(r.mention for r in self.values)
+        await interaction.response.edit_message(
+            content=f"✅ Added {names} to the automod whitelist.", view=None,
+        )
+
+
+class _WLUserRemoveSelect(discord.ui.Select):
+    """Ephemeral select — remove users from whitelist."""
+    def __init__(self, automod_cog, guild_id: int, options: list):
+        super().__init__(
+            placeholder="Choose member(s) to remove…",
+            min_values=1, max_values=len(options),
+            options=options,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        for uid_str in self.values:
+            utils.remove_whitelist_user(self._guild_id, int(uid_str))
+        utils.save_config()
+        await interaction.response.edit_message(
+            content=f"✅ Removed `{len(self.values)}` user(s) from the whitelist.", view=None,
+        )
+
+
+class _WLRoleRemoveSelect(discord.ui.Select):
+    """Ephemeral select — remove roles from whitelist."""
+    def __init__(self, automod_cog, guild_id: int, options: list):
+        super().__init__(
+            placeholder="Choose role(s) to remove…",
+            min_values=1, max_values=len(options),
+            options=options,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        for rid_str in self.values:
+            utils.remove_whitelist_role(self._guild_id, int(rid_str))
+        utils.save_config()
+        await interaction.response.edit_message(
+            content=f"✅ Removed `{len(self.values)}` role(s) from the whitelist.", view=None,
+        )
+
+
+class _WLAddUserBtn(discord.ui.Button):
+    def __init__(self, automod_cog, guild_id: int):
+        super().__init__(label="➕ Add User", style=discord.ButtonStyle.green)
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        view = discord.ui.View(timeout=60)
+        view.add_item(_WLUserSelect(self._cog, self._guild_id))
+        await interaction.response.send_message(
+            "Select the members you want to exempt from automod:",
+            view=view, ephemeral=True,
+        )
+
+
+class _WLAddRoleBtn(discord.ui.Button):
+    def __init__(self, automod_cog, guild_id: int):
+        super().__init__(label="➕ Add Role", style=discord.ButtonStyle.green)
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        view = discord.ui.View(timeout=60)
+        view.add_item(_WLRoleSelect(self._cog, self._guild_id))
+        await interaction.response.send_message(
+            "Select the roles you want to exempt from automod:",
+            view=view, ephemeral=True,
+        )
+
+
+class _WLRemoveUserBtn(discord.ui.Button):
+    def __init__(self, automod_cog, guild_id: int, has_users: bool):
+        super().__init__(
+            label="➖ Remove User",
+            style=discord.ButtonStyle.red,
+            disabled=not has_users,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        cfg   = utils.get_guild_config(self._guild_id)
+        user_ids = cfg.get("whitelist_users", [])
+        options = []
+        for uid in user_ids:
+            member = interaction.guild.get_member(uid)
+            label  = member.display_name if member else f"User {uid}"
+            options.append(discord.SelectOption(
+                label=label[:100], value=str(uid),
+                description=f"ID: {uid}",
+            ))
+        if not options:
+            return await interaction.response.send_message(
+                "No users are currently whitelisted.", ephemeral=True,
+            )
+        view = discord.ui.View(timeout=60)
+        view.add_item(_WLUserRemoveSelect(self._cog, self._guild_id, options))
+        await interaction.response.send_message(
+            "Select the members to remove from the whitelist:",
+            view=view, ephemeral=True,
+        )
+
+
+class _WLRemoveRoleBtn(discord.ui.Button):
+    def __init__(self, automod_cog, guild_id: int, has_roles: bool):
+        super().__init__(
+            label="➖ Remove Role",
+            style=discord.ButtonStyle.red,
+            disabled=not has_roles,
+        )
+        self._cog      = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        cfg   = utils.get_guild_config(self._guild_id)
+        role_ids = cfg.get("whitelist_roles", [])
+        options  = []
+        for rid in role_ids:
+            role  = interaction.guild.get_role(rid)
+            label = role.name if role else f"Role {rid}"
+            options.append(discord.SelectOption(
+                label=label[:100], value=str(rid),
+                description=f"ID: {rid}",
+            ))
+        if not options:
+            return await interaction.response.send_message(
+                "No roles are currently whitelisted.", ephemeral=True,
+            )
+        view = discord.ui.View(timeout=60)
+        view.add_item(_WLRoleRemoveSelect(self._cog, self._guild_id, options))
+        await interaction.response.send_message(
+            "Select the roles to remove from the whitelist:",
+            view=view, ephemeral=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────
 #  PANEL FACTORY
 # ─────────────────────────────────────────────────────────────
 
@@ -561,6 +747,19 @@ def _build_panel(automod_cog, guild_id: int, section: str = "overview",
         container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(automod_cog, guild_id, section, label="⚙️ Flood Thresholds"),
             EditExtAppButton(automod_cog, guild_id),
+        ))
+
+    elif section == "whitelist":
+        wl_cfg   = cfg
+        has_u    = bool(wl_cfg.get("whitelist_users", []))
+        has_r    = bool(wl_cfg.get("whitelist_roles", []))
+        container.add_item(discord.ui.ActionRow(
+            _WLAddUserBtn(automod_cog, guild_id),
+            _WLAddRoleBtn(automod_cog, guild_id),
+        ))
+        container.add_item(discord.ui.ActionRow(
+            _WLRemoveUserBtn(automod_cog, guild_id, has_u),
+            _WLRemoveRoleBtn(automod_cog, guild_id, has_r),
         ))
 
     view.add_item(container)
