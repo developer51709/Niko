@@ -3,7 +3,7 @@ from discord.ext import commands
 import json
 import os
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 DATA_DIR = "data"
 WARN_FILE = os.path.join(DATA_DIR, "warns.json")
@@ -205,7 +205,7 @@ class ModerationUtils(commands.Cog):
         uid = str(member.id)
         until = None
         if duration:
-            until = (datetime.utcnow() + timedelta(seconds=duration)).isoformat()
+            until = (datetime.now(timezone.utc) + timedelta(seconds=duration)).isoformat()
         self.mutes.setdefault(gid, {})[uid] = {"until": until, "reason": reason}
         save_json(MUTE_FILE, self.mutes)
 
