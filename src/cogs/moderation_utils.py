@@ -199,7 +199,7 @@ class ModerationUtils(commands.Cog):
         return role
 
     async def mute_member(self, member: discord.Member, duration=None, reason=None):
-        role = await self.ensure_mute_role(member.guild)
+        role = await self.ensure_mute_role(ctx.guild)
         await member.add_roles(role, reason=reason or "Muted")
         gid = str(member.guild.id)
         uid = str(member.id)
