@@ -6,3 +6,6 @@ colorama
 flask
 openai
 wavelink
+aiosqlite
+deep_translate
+langdetect
