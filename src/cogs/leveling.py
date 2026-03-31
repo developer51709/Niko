@@ -10,6 +10,7 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
+from config.emojis import get_emoji
 
 PERSONALITY = "cafe"
 
@@ -149,7 +150,7 @@ def _get_guild_level_cfg(configs: dict, guild_id: str) -> dict:
 # ─────────────────────────────────────────────────────────────
 
 def _lv_icon(val) -> str:
-    return "✅" if val else "❌"
+    return get_emoji("icon_tick") if val else get_emoji("icon_cross")
 
 
 def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
@@ -185,8 +186,7 @@ def _lv_xp_text(cfg: dict) -> str:
     return (
         "### 📊 XP Settings\n"
         "Control how members earn experience in your server.\n\n"
-        f"{_lv_icon(cfg.get('xp_enabled', True))} **XP Tracking** — "
-        f"currently {'active 🟢' if cfg.get('xp_enabled', True) else 'inactive 🔴'}\n\n"
+        f"{get_emoji('enabled') if cfg.get('xp_enabled', True) else get_emoji('disabled')} — **XP Tracking**\n\n"
         f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
         f"Each message earns `15–25 × multiplier` XP at random.\n\n"
         f"**XP Cooldown:** {cd_s}\n"
@@ -228,7 +228,7 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
         "### 🎖️ Level Roles\n"
         "Roles automatically awarded when a member reaches a certain level.\n\n"
         f"{roles_body}\n\n"
-        "-# Click **➕ Add Role** to assign a role to a level.\n"
+        f"-# Click **{get_emoji('icon_plus')} Add Role** to assign a role to a level.\n"
         "-# Click **➖ Remove Role** to remove an assignment."
     )
 
@@ -277,8 +277,9 @@ class _LvXPToggleBtn(discord.ui.Button):
         cfg     = cog._guild_cfg(str(guild_id))
         enabled = cfg.get("xp_enabled", True)
         super().__init__(
-            label=f"{_lv_icon(enabled)} XP Tracking",
+            label=f"XP Tracking",
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
+            emoji=_lv_icon(enabled)
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -319,7 +320,11 @@ class _LvEditXPBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="⚙️ Edit XP Values", style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label="Edit XP Values", 
+            style=discord.ButtonStyle.blurple, 
+            emoji=get_emoji("icon_settings")
+        )
 
     async def callback(self, interaction: discord.Interaction):
         cfg = self._cog._guild_cfg(str(self._guild_id))
@@ -345,7 +350,7 @@ class _LvChannelSelect(discord.ui.ChannelSelect):
         cfg["level_up_channel"] = channel.id
         self._cog._save_configs()
         await interaction.response.edit_message(
-            content=f"✅ Level-up announcements will now go to {channel.mention}.", view=None)
+            content=f"{get_emoji('icon_tick')} Level-up announcements will now go to {channel.mention}.", view=None)
 
 
 class _LvClearChannelBtn(discord.ui.Button):
@@ -360,7 +365,7 @@ class _LvClearChannelBtn(discord.ui.Button):
         cfg["level_up_channel"] = None
         self._cog._save_configs()
         await interaction.response.edit_message(
-            content="✅ Level-up announcements will now appear in the same channel as the message.",
+            content=f"{get_emoji('icon_tick')} Level-up announcements will now appear in the same channel as the message.",
             view=None)
 
 
@@ -451,7 +456,7 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
         cfg.setdefault("level_roles", {})[str(self._level)] = role.id
         self._cog._save_configs()
         await interaction.response.edit_message(
-            content=f"✅ **Level {self._level}** → {role.mention}", view=None)
+            content=f"{get_emoji('icon_tick')} **Level {self._level}** → {role.mention}", view=None)
 
 
 class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
@@ -482,7 +487,11 @@ class _LvAddRoleBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="➕ Add Role", style=discord.ButtonStyle.green)
+        super().__init__(
+            label="Add Role", 
+            style=discord.ButtonStyle.green, 
+            emoji=get_emoji("icon_plus")
+        )
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_LvAddRoleModal(self._cog, self._guild_id))
@@ -506,7 +515,7 @@ class _LvRemoveRoleSelect(discord.ui.Select):
             lr.pop(val, None)
         self._cog._save_configs()
         await interaction.response.edit_message(
-            content=f"✅ Removed `{len(self.values)}` level role assignment(s).", view=None)
+            content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` level role assignment(s).", view=None)
 
 
 class _LvRemoveRoleBtn(discord.ui.Button):
@@ -815,7 +824,7 @@ class Leveling(commands.Cog):
         ) or "  *(none)*"
 
         body = (
-            f"**XP Enabled:** {'✅' if cfg.get('xp_enabled', True) else '❌'}\n"
+            f"**XP Enabled:** {get_emoji('icon_tick') if cfg.get('xp_enabled', True) else get_emoji('icon_cross')}\n"
             f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
             f"**XP Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n"
             f"**Level-Up Channel:** {lu_ch_str}\n"
@@ -834,7 +843,7 @@ class Leveling(commands.Cog):
         cfg = self._guild_cfg(guild_id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
         self._save_configs()
-        state = "✅ enabled" if cfg["xp_enabled"] else "❌ disabled"
+        state = f"{get_emoji('icon_tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('icon_cross')} disabled"
         await ctx.send(f"XP tracking is now **{state}** for this server.")
 
     @levelconfig.command(name="multiplier", aliases=["xpmultiplier"], help="Set XP gain multiplier (e.g. 2.0).")
@@ -897,7 +906,7 @@ class Leveling(commands.Cog):
         if guild_id in self.levels and user_id in self.levels[guild_id]:
             self.levels[guild_id][user_id] = {"xp": 0, "level": 0}
             self._save_levels()
-        await ctx.send(f"✅ Reset XP and level for **{member.display_name}**.")
+        await ctx.send(f"{get_emoji('icon_tick')} Reset XP and level for **{member.display_name}**.")
 
     # ─── LEVELING PANEL ──────────────────────────────────────
 
