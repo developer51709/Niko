@@ -691,7 +691,7 @@ class AutoMod(commands.Cog):
                 await utils.log_action(
                     message.guild, "Anti-Spam",
                     f"{message.author.mention} triggered anti-spam in {message.channel.mention}.")
-                await utils.mute_member(message.author, duration=60, reason="Auto-mute: spam")
+                await utils.mute_member(message.guild, message.author, duration=60, reason="Auto-mute: spam")
                 return
 
         if cfg["automod"].get("antilink", True):
@@ -727,7 +727,7 @@ class AutoMod(commands.Cog):
                 await utils.log_action(
                     message.guild, "Mass Mention",
                     f"{message.author.mention} mass-mentioned `{mentions}` users in {message.channel.mention}.")
-                await utils.mute_member(message.author, duration=120, reason="Auto-mute: mass mention")
+                await utils.mute_member(message.guild, message.author, duration=120, reason="Auto-mute: mass mention")
                 return
 
     # ─── USER-INSTALLED APP ABUSE ─────────────────────────────

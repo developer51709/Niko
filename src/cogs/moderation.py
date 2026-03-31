@@ -245,8 +245,15 @@ class Moderation(commands.Cog):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="mute"))
-        await utils.mute_member(member, duration=None, reason=reason)
-        await ctx.send(msg(ctx, "muted", member=member, reason=reason))
+        await utils.mute_member(ctx.guild, member, duration=None, reason=reason)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=msg(ctx, "muted", member=member, reason=reason)
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
         await utils.log_action(ctx.guild, "Mute", f"{member} was muted by {ctx.author}.\nReason: {reason}")
 
     @commands.command(help="Temporarily mute a member (seconds). | Zeitlich stummschalten.")
@@ -257,8 +264,15 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="tempmute"))
         if not duration:
             return await ctx.send(msg(ctx, "no_duration"))
-        await utils.mute_member(member, duration=duration, reason=reason)
-        await ctx.send(msg(ctx, "tempmuted", member=member, duration=duration, reason=reason))
+        await utils.mute_member(ctx.guild, member, duration=duration, reason=reason)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=msg(ctx, "tempmuted", member=member, duration=duration, reason=reason)
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
         await utils.log_action(ctx.guild, "Tempmute", f"{member} was tempmuted by {ctx.author} for {duration}s.\nReason: {reason}")
 
     @commands.command(help="Unmute a member. | Stummschaltung aufheben.")
