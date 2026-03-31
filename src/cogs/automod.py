@@ -4,6 +4,7 @@ import time
 import re
 import asyncio
 from utils import logging as log
+from config.emojis import get_emoji
 
 INVITE_REGEX = re.compile(r"(discord\.gg/|discord\.com/invite/)", re.IGNORECASE)
 
@@ -38,7 +39,7 @@ def _is_user_installed_app(meta) -> bool:
 # ─────────────────────────────────────────────────────────────
 
 def _icon(enabled: bool) -> str:
-    return "✅" if enabled else "❌"
+    return get_emoji("icon_tick") if enabled else get_emoji("icon_cross")
 
 
 def _build_overview_text(cfg: dict) -> str:
@@ -49,7 +50,7 @@ def _build_overview_text(cfg: dict) -> str:
     wu  = len(cfg.get("whitelist_users", []))
     wr  = len(cfg.get("whitelist_roles", []))
     return (
-        "### 🛡️ AutoMod Dashboard\n"
+        f"### {get_emoji('automod')} AutoMod Dashboard\n"
         "Here's a full snapshot of your server's protection ☕\n\n"
         "**💬 Message Filter**\n"
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
@@ -201,7 +202,7 @@ class SectionSelect(discord.ui.Select):
         self._cog = automod_cog
         self._guild_id = guild_id
         options = [
-            discord.SelectOption(label="Overview",       value="overview",  emoji="🛡️",
+            discord.SelectOption(label="Overview",       value="overview",  emoji=get_emoji("automod"),
                                  description="Full snapshot of all protections",
                                  default=(current_section == "overview")),
             discord.SelectOption(label="Message Filter", value="filter",    emoji="💬",
@@ -237,8 +238,9 @@ class ToggleButton(discord.ui.Button):
         cfg     = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg["automod"].get(key, False)
         super().__init__(
-            label=f"{_icon(enabled)} {label}",
+            label=f"{label}",
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
+            emoji=_icon(enabled)
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -262,8 +264,9 @@ class SubToggleButton(discord.ui.Button):
         cfg     = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg.get(sub_cfg_key, {}).get(field, True)
         super().__init__(
-            label=f"{_icon(enabled)} {label}",
+            label=f"{label}",
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
+            emoji=_icon(enabled)
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -276,11 +279,11 @@ class SubToggleButton(discord.ui.Button):
 
 
 class EditThresholdsButton(discord.ui.Button):
-    def __init__(self, automod_cog, guild_id: int, section: str, label: str = "⚙️ Edit Thresholds"):
+    def __init__(self, automod_cog, guild_id: int, section: str, label: str = "Edit Thresholds"):
         self._cog      = automod_cog
         self._guild_id = guild_id
         self._section  = section
-        super().__init__(label=label, style=discord.ButtonStyle.blurple)
+        super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("icon_settings"))
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
@@ -294,7 +297,11 @@ class EditExtAppButton(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int):
         self._cog      = automod_cog
         self._guild_id = guild_id
-        super().__init__(label="⚙️ Edit App Detection", style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label="Edit App Detection", 
+            style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("icon_settings")
+        )
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
@@ -526,7 +533,7 @@ class _WLUserSelect(discord.ui.UserSelect):
         utils.save_config()
         names = " ".join(u.mention for u in self.values)
         await interaction.response.edit_message(
-            content=f"✅ Added {names} to the automod whitelist.", view=None,
+            content=f"{get_emoji('icon_tick')} Added {names} to the automod whitelist.", view=None,
         )
 
 
@@ -547,7 +554,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         utils.save_config()
         names = " ".join(r.mention for r in self.values)
         await interaction.response.edit_message(
-            content=f"✅ Added {names} to the automod whitelist.", view=None,
+            content=f"{get_emoji('icon_tick')} Added {names} to the automod whitelist.", view=None,
         )
 
 
@@ -568,7 +575,7 @@ class _WLUserRemoveSelect(discord.ui.Select):
             utils.remove_whitelist_user(self._guild_id, int(uid_str))
         utils.save_config()
         await interaction.response.edit_message(
-            content=f"✅ Removed `{len(self.values)}` user(s) from the whitelist.", view=None,
+            content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` user(s) from the whitelist.", view=None,
         )
 
 
@@ -589,13 +596,17 @@ class _WLRoleRemoveSelect(discord.ui.Select):
             utils.remove_whitelist_role(self._guild_id, int(rid_str))
         utils.save_config()
         await interaction.response.edit_message(
-            content=f"✅ Removed `{len(self.values)}` role(s) from the whitelist.", view=None,
+            content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` role(s) from the whitelist.", view=None,
         )
 
 
 class _WLAddUserBtn(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int):
-        super().__init__(label="➕ Add User", style=discord.ButtonStyle.green)
+        super().__init__(
+            label="Add User", 
+            style=discord.ButtonStyle.green,
+            emoji=get_emoji("icon_plus")
+        )
         self._cog      = automod_cog
         self._guild_id = guild_id
 
@@ -610,7 +621,11 @@ class _WLAddUserBtn(discord.ui.Button):
 
 class _WLAddRoleBtn(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int):
-        super().__init__(label="➕ Add Role", style=discord.ButtonStyle.green)
+        super().__init__(
+            label="Add Role", 
+            style=discord.ButtonStyle.green,
+            emoji=get_emoji("icon_plus")
+        )
         self._cog      = automod_cog
         self._guild_id = guild_id
 
@@ -745,7 +760,7 @@ def _build_panel(automod_cog, guild_id: int, section: str = "overview",
                             automod_cog, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section, label="⚙️ Flood Thresholds"),
+            EditThresholdsButton(automod_cog, guild_id, section, label="Flood Thresholds"),
             EditExtAppButton(automod_cog, guild_id),
         ))
 
@@ -1131,7 +1146,7 @@ class AutoMod(commands.Cog):
 
         try:
             await guild.owner.send(
-                f"⚠️ **Interaction Flood Raid** in **{guild.name}**!\n"
+                f"{get_emoji('icon_danger')} **Interaction Flood Raid** detected in **{guild.name}**!\n"
                 f"`{len(raider_ids)}` newly-joined members fired bot interactions at once.\n"
                 f"Suspected operator: {operator or 'unknown'}\n"
                 f"Raider action: `{raider_action}`  •  Operator action: `{op_action}`"
@@ -1189,7 +1204,7 @@ class AutoMod(commands.Cog):
                         pass
             try:
                 await guild.owner.send(
-                    f"⚠️ **Anti-Raid** in **{guild.name}**!\n"
+                    f"{get_emoji('icon_danger')} **Anti-Raid** in **{guild.name}**!\n"
                     f"{len(bucket)} joins in {interval}s. Action: `{action}`.")
             except Exception:
                 pass
@@ -1258,7 +1273,7 @@ class AutoMod(commands.Cog):
                         pass
             try:
                 await guild.owner.send(
-                    f"⚠️ **Anti-Nuke** in **{guild.name}**!\n"
+                    f"{get_emoji('icon_danger')} **Anti-Nuke** in **{guild.name}**!\n"
                     f"{offender} did `{threshold}` `{action_key}` in `{interval}s`.\n"
                     f"Action: `{nuke_action}`.")
             except Exception:

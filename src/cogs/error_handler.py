@@ -7,6 +7,7 @@ import datetime
 import asyncio
 import requests
 from colorama import Fore, Style, init as colorama_init
+from config.emojis import get_emoji
 
 from discord.ext.commands import (
     CommandError, CommandInvokeError, CommandNotFound,
@@ -56,7 +57,7 @@ class ErrorHandler(commands.Cog):
         container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    content=f"### ⚠️ {title}\n{description}"
+                    content=f"### {get_emoji('icon_danger')} {title}\n{description}"
                 ),
                 accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
             )

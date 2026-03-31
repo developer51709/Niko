@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from config.emojis import get_emoji
 
 
 # ============================
@@ -46,45 +47,45 @@ def _commands_text(cog_names: list[str], bot, header: str) -> str:
 
 CATEGORIES = [
     ("General",      "General bot information",           "🌸"),
-    ("Fun",          "Fun commands",                      "🎉"),
+    ("Fun",          "Fun commands",                      f"{get_emoji('icon_games')}"),
     ("Gambling",     "Blackjack, Slots, Roulette",        "🎰"),
-    ("Economy",      "Balance, daily, work, etc.",        "💰"),
+    ("Economy",      "Balance, daily, work, etc.",        f"{get_emoji('icon_economy')}"),
     ("Roleplay",     "RP commands",                       "🎭"),
     ("Info",         "User/server info commands",         "ℹ️"),
-    ("Utility",      "Misc tools and utilities",          "🛠️"),
-    ("AI",           "AI commands",                       "🤖"),
-    ("Moderation",   "Moderation commands",               "🛡️"),
-    ("AutoMod",      "AutoMod commands",                  "⚔️"),
+    ("Utility",      "Misc tools and utilities",          f"{get_emoji('icon_utility')}"),
+    ("AI",           "AI commands",                       f"{get_emoji('icon_ai')}"),
+    ("Moderation",   "Moderation commands",               f"{get_emoji('icon_moderation')}"),
+    ("AutoMod",      "AutoMod commands",                  f"{get_emoji('icon_automod')}"),
     ("EmojiManager", "EmojiManager commands",             "🎨"),
-    ("Onboarding",   "Onboarding commands",               "✨"),
+    ("Onboarding",   "Onboarding commands",               f"{get_emoji('icon_welcome')}"),
     ("NSFW",         "NSFW commands",                     "🔞"),
-    ("Music",        "Music commands",                    "🎵"),
-    ("Leveling",     "Leveling commands",                 "🏆"),
+    ("Music",        "Music commands",                    f"{get_emoji('music')}"),
+    ("Leveling",     "Leveling commands",                 f"{get_emoji('icon_leveling')}"),
     ("Notifier",     "Notifier commands",                "📢"),
     ("VoiceMaster",  "VoiceMaster commands",              "🎤"),
-    ("Ticket",       "Ticket commands",                   "🎫"),
+    ("Ticket",       "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
 ]
 
 # Map category label → (cog names list, header string)
 CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "General":      ([], ""),   # handled specially
-    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals"], "🎉 **Fun Commands**\n> Commands for fun and games!"),
+    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals"], f"{get_emoji('icon_games')} **Fun Commands**\n> Commands for fun and games!"),
     "Gambling":     (["Blackjack", "Roulette", "Slots", "GamblingCog"], "🎰 **Casino Commands**\n> Play games of chance!"),
-    "Economy":      (["EconomyCog"], "💰 **Economy Commands**\n> Earn and spend virtual currency!"),
+    "Economy":      (["EconomyCog"], f"{get_emoji('icon_economy')} **Economy Commands**\n> Earn and spend virtual currency!"),
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
     "Info":         (["InfoCog"], "ℹ️ **Information Commands**\n> Get info about users, servers, and more!"),
-    "Utility":      (["UtilityCog", "Snipe"], "🛠️ **Utility Commands**\n> Useful tools and utilities."),
-    "AI":           (["AICog"], "🤖 **AI Commands**\n> Interact with Niko's AI features!"),
-    "Moderation":   (["Moderation"], "🛡️ **Moderation Commands**\n> Moderation tools for server management."),
-    "AutoMod":      (["AutoMod"], "⚔️ **AutoMod Commands**\n> Automated moderation to keep your server safe."),
+    "Utility":      (["UtilityCog", "Snipe"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
+    "AI":           (["AICog"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
+    "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
+    "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
     "EmojiManager": (["EmojiManagerCog"], "🎨 **Emoji Manager Commands**\n> Manage custom emojis in your server."),
-    "Onboarding":   (["Onboarding"], "✨ **Onboarding Commands**\n> Set up welcome messages and roles for new members."),
+    "Onboarding":   (["Onboarding"], f"{get_emoji('icon_welcome')} **Onboarding Commands**\n> Set up welcome messages and roles for new members."),
     "NSFW":         (["NSFW"], "🔞 **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
-    "Music":        (["MusicSystem"], "🎵 **Music Commands**\n> Play music in your voice channel!"),
-    "Leveling":     (["Leveling"], "🏆 **Leveling Commands**\n> Level up by chatting and earning XP!"),
+    "Music":        (["MusicSystem"], f"{get_emoji('music')} **Music Commands**\n> Play music in your voice channel!"),
+    "Leveling":     (["Leveling"], f"{get_emoji('icon_leveling')} **Leveling Commands**\n> Level up by chatting and earning XP!"),
     "Notifier":     (["Notifier"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
     "VoiceMaster":  (["VoiceMaster"], "🎤 **VoiceMaster Commands**\n> Create and manage temporary voice channels!"),
-    "Ticket":       (["Tickets"], "🎫 **Ticket Commands**\n> Create and manage support tickets.")
+    "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets.")
 }
 
 
@@ -127,7 +128,7 @@ def _general_text(bot) -> str:
         "**About Niko**\n"
         "Niko is a cozy, AI-powered Discord bot with a café personality — bilingual (EN/DE), "
         "packed with economy, leveling, music, moderation, and more!\n\n"
-        "**🔗 Links**\n"
+        f"**{get_emoji('icon_link')} Links**\n"
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website](https://developer51709.github.io/Niko) • "
@@ -169,7 +170,7 @@ class HelpCog(commands.Cog):
             cmd = self.bot.get_command(command_name)
             if not cmd:
                 content = (
-                    f"### ❌ Command Not Found\n"
+                    f"### {get_emoji('icon_cross')} Command Not Found\n"
                     f"No command named `{command_name}` exists.\n"
                     f"Try `!help` for the full menu."
                 )

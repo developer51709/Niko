@@ -8,6 +8,7 @@ import time
 import platform
 import psutil
 import os
+from config.emojis import get_emoji
 
 PERSONALITY = "cafe"
 
@@ -517,19 +518,19 @@ class InfoCog(commands.Cog):
                 discord.ui.Button(
                     label="Invite Niko", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<a:discord:1488569938258952212>", 
+                    emoji=get_emoji("discord"), 
                     url=invite_url
                 ),
                 discord.ui.Button(
                     label="GitHub", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<:github:1488283491941748736>", 
+                    emoji=get_emoji("github"), 
                     url="https://github.com/developer51709/Niko"
                 ),
                 discord.ui.Button(
                     label="Website", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<:website:1488567482007683202>",
+                    emoji=get_emoji("website"),
                     url="https://developer51709.github.io/Niko"),
             ),
             discord.ui.ActionRow(
@@ -579,19 +580,19 @@ class InfoCog(commands.Cog):
                 discord.ui.Button(
                     label="Discord Profile", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<a:discord:1488569938258952212>", 
+                    emoji=get_emoji("discord"), 
                     url=f"https://discord.com/users/{creator.id}"
                 ),
                 discord.ui.Button(
                     label="GitHub", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<:github:1488283491941748736>", 
+                    emoji=get_emoji("github"), 
                     url="https://github.com/developer51709"
                 ),
                 discord.ui.Button(
                     label="Website", 
                     style=discord.ButtonStyle.link, 
-                    emoji="<:website:1488567482007683202>", 
+                    emoji=get_emoji("website"), 
                     url="https://nyxen.is-a.dev"),
             )
         )
@@ -716,6 +717,7 @@ class InfoCog(commands.Cog):
                 discord.ui.Button(
                     label="Open in Spotify",
                     style=discord.ButtonStyle.link,
+                    emoji=get_emoji("spotify"),
                     url=f"https://open.spotify.com/track/{spotify.track_id}"
                 )
             )
@@ -744,8 +746,8 @@ class InfoCog(commands.Cog):
             f"**{msg(ctx, 'debuginfo_model')}:** `{ai_model}`\n"
             f"**{msg(ctx, 'debuginfo_commands')}:** `{command_count}`\n"
             f"**{msg(ctx, 'debuginfo_ping')}:** `{ping_latency}ms`\n"
-            f"**{msg(ctx, 'debuginfo_cpu')}:** `{cpu_usage}%`\n"
-            f"**{msg(ctx, 'debuginfo_ram')}:** `{memory_usage}MB`"
+            f"{get_emoji('cpu')} **{msg(ctx, 'debuginfo_cpu')}:** `{cpu_usage}%`\n"
+            f"{get_emoji('ram')} **{msg(ctx, 'debuginfo_ram')}:** `{memory_usage}MB`"
         )
         await ctx.send(view=cv2_text(text))
 
@@ -766,8 +768,8 @@ class InfoCog(commands.Cog):
             f"### {msg(ctx, 'hostinfo_title')}\n"
             f"**{msg(ctx, 'hostinfo_hostname')}:** `{hostname}`\n"
             f"**{msg(ctx, 'hostinfo_os')}:** `{os_info}`\n"
-            f"**{msg(ctx, 'hostinfo_cpu')}:** `{cpu}`\n"
-            f"**{msg(ctx, 'hostinfo_ram')}:** `{ram}GB`"
+            f"{get_emoji('cpu')} **{msg(ctx, 'hostinfo_cpu')}:** `{cpu}`\n"
+            f"{get_emoji('ram')} **{msg(ctx, 'hostinfo_ram')}:** `{ram}GB`"
         )
         await ctx.send(view=cv2_text(text))
 

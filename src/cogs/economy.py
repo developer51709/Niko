@@ -10,6 +10,7 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
+from config.emojis import get_emoji
 
 # personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
@@ -131,7 +132,7 @@ class EconomyCog(commands.Cog):
     # -----------------------------
 
     # !balance command
-    @commands.command(name="balance", aliases=["bal"], help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
+    @commands.command(name="balance", aliases=["bal", "wallet"], help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
@@ -144,7 +145,7 @@ class EconomyCog(commands.Cog):
         container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    content=f"### Wallet\nUser: {target.display_name}"
+                    content=f"### {get_emoji('credit_card')} Wallet\nUser: {target.display_name}"
                 ),
                 discord.ui.TextDisplay(
                     content=f"-# **Tip:** Use `{prefix}deposit` to safely store your coins in the bank! 🏦✨️"
