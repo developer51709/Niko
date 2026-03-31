@@ -377,6 +377,7 @@ class Moderation(commands.Cog):
         if not words:
             return await ctx.send(msg(ctx, "badwords_none"))
         text = "### 🚫 Blocked Words\n" + "\n".join(f"- {w}" for w in words)
+        text += f"\n\n-# Use `{ctx.prefix}badwords add <word>` to add a word."
         await ctx.send(view=_cv2(text))
 
     @badwords.command(name="add")
