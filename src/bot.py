@@ -246,10 +246,13 @@ def get_favorability(user_id: int) -> int:
 # -----------------------------
 def generate_reply(user_id, server, message, username):
     if AI_ENABLED:
-        if USE_OPENAI:
-            return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
-        else:
-            return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
+        try:
+            if USE_OPENAI:
+                return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+            else:
+                return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
+        except Exception:
+            return "sorry, something went wrong on my end ☕ please try again in a moment~"
     else:
         return "ai_disabled"
 
