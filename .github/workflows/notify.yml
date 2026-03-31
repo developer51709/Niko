@@ -18,6 +18,11 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'scripts/requirements.txt'
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
       - name: Send CV2 Webhook
         run: |
           python3 scripts/send_cv2_webhook.py \
