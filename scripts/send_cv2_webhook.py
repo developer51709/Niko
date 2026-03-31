@@ -10,46 +10,39 @@ import random
 # Utility: Create a nebula-style background
 # -----------------------------------
 def generate_nebula(width=1200, height=450):
-    img = Image.new("RGB", (width, height), (10, 10, 20))
-    draw = ImageDraw.Draw(img)
+    base = Image.new("RGBA", (width, height), (10, 10, 20, 255))
 
-    # Random nebula clouds
     for _ in range(6):
-        # Random cloud center
         cx = random.randint(0, width)
         cy = random.randint(0, height)
-
-        # Random cloud size
         radius = random.randint(200, 500)
 
-        # Nebula colors (purples, blues, magentas)
         color = random.choice([
-            (120, 60, 200),
-            (80, 40, 160),
-            (50, 80, 200),
-            (150, 70, 220),
-            (100, 30, 140)
+            (120, 60, 200, 90),
+            (80, 40, 160, 90),
+            (50, 80, 200, 90),
+            (150, 70, 220, 90),
+            (100, 30, 140, 90)
         ])
 
-        # Draw soft cloud
         cloud = Image.new("RGBA", (width, height))
-        cloud_draw = ImageDraw.Draw(cloud)
-        cloud_draw.ellipse(
+        draw = ImageDraw.Draw(cloud)
+        draw.ellipse(
             (cx - radius, cy - radius, cx + radius, cy + radius),
-            fill=color + (90,)
+            fill=color
         )
         cloud = cloud.filter(ImageFilter.GaussianBlur(radius / 2))
-        img = Image.alpha_composite(img.convert("RGBA"), cloud)
+        base = Image.alpha_composite(base, cloud)
 
-    # Add stars
-    star_draw = ImageDraw.Draw(img)
+    # Stars
+    draw = ImageDraw.Draw(base)
     for _ in range(250):
         x = random.randint(0, width)
         y = random.randint(0, height)
         brightness = random.randint(150, 255)
-        star_draw.point((x, y), fill=(brightness, brightness, brightness))
+        draw.point((x, y), fill=(brightness, brightness, brightness, 255))
 
-    return img.convert("RGB")
+    return base.convert("RGB")
 
 
 # -----------------------------------

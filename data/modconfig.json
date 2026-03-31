@@ -208,25 +208,45 @@
         "blocked_words": []
     },
     "1476077046873460837": {
-        "modlog_channel": null,
+        "modlog_channel": 1488633058260418600,
         "automod": {
             "antispam": true,
             "antilink": true,
             "badwords": true,
             "massmention": true,
-            "antinuke": false,
-            "antiraid": false,
-            "antiraid_ext": false
+            "antinuke": true,
+            "antiraid": true,
+            "antiraid_ext": true
         },
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
         "blocked_words": [
-            "shut up"
+            "shut up",
+            "fuck",
+            "<'s h u t u  p'>",
+            "'s h u t  u p'",
+            "listen here, i will not tolerate you saying the words that consist of the letters 's h u t   u p' being said in this server, so take your own advice and close thine mouth in the name of the christian minecraft server owner",
+            "stfu",
+            "keep your voice down!",
+            "im talking to! im dad!",
+            "hi talking to, i\u2019m dad!",
+            "hi talking to ewdry, i\u2019m dad!",
+            "meme reset ain\u2019t happening",
+            "i love italian brainrot",
+            "six seven!!!!!",
+            "i hate 2016 memes! i love brainrot! brainrot$"
         ],
-        "whitelist_users": [],
+        "whitelist_users": [
+            1479968201319125013,
+            1470919447433711637,
+            1435978243160145981,
+            1414184882917347419
+        ],
         "whitelist_roles": [
-            1482161687728623698
+            1482161687728623698,
+            1476077666280149135,
+            1476077393201332367
         ],
         "antinuke": {
             "ban_threshold": 3,
@@ -250,7 +270,7 @@
             "ext_app_detection": true,
             "ext_app_threshold": 3,
             "ext_app_window": 15,
-            "ext_app_action": "kick"
+            "ext_app_action": "log"
         }
     },
     "1476279255821451425": {
@@ -286,7 +306,7 @@
             "antilink": false,
             "badwords": true,
             "massmention": true,
-            "antinuke": false,
+            "antinuke": true,
             "antiraid": false,
             "antiraid_ext": false
         },
@@ -307,9 +327,15 @@
             "join_interval": 10,
             "action": "kick"
         },
-        "whitelist_users": [],
+        "whitelist_users": [
+            1479968201319125013,
+            1461665163957764201,
+            1320349118102769767
+        ],
         "whitelist_roles": [
-            1482161687728623698
+            1487796338799153295,
+            1487796341513130209,
+            1487796340699172907
         ],
         "antiraid_ext": {
             "interaction_threshold": 5,
@@ -818,6 +844,90 @@
         }
     },
     "1404706181167054868": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true,
+            "antinuke": false,
+            "antiraid": false,
+            "antiraid_ext": false
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        },
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify",
+            "ext_app_detection": true,
+            "ext_app_threshold": 3,
+            "ext_app_window": 15,
+            "ext_app_action": "kick"
+        }
+    },
+    "1487916721192042738": {
+        "modlog_channel": 1488175530544205985,
+        "automod": {
+            "antispam": false,
+            "antilink": false,
+            "badwords": true,
+            "massmention": true,
+            "antinuke": true,
+            "antiraid": false,
+            "antiraid_ext": false
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        },
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify",
+            "ext_app_detection": true,
+            "ext_app_threshold": 3,
+            "ext_app_window": 15,
+            "ext_app_action": "log"
+        }
+    },
+    "1487844828451569666": {
         "modlog_channel": null,
         "automod": {
             "antispam": true,
