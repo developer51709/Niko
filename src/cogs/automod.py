@@ -928,7 +928,8 @@ class AutoMod(commands.Cog):
                     pass
                 await utils.log_action(
                     message.guild, "Bad Word Filter",
-                    f"{message.author.mention} used a blocked word in {message.channel.mention}.")
+                    f"{message.author.mention} used a blocked word in {message.channel.mention}.\n\n"
+                    f"**Message:**\n{content}")
                 return
 
         if cfg["automod"].get("massmention", True):
