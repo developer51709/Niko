@@ -6,39 +6,40 @@ from discord.ext import commands
 
 class InteractionMetadataPatch(commands.Cog):
     """
-    Patches discord.py so that discord.Message.interaction_metadata
-    returns the real metadata from MESSAGE_CREATE raw events.
+    Adds a safe, non-conflicting property to discord.Message:
+        message.interaction_metadata_ex
 
-    This restores the missing 'Triggered by <user>' info that Discord
-    shows in the client but discord.py does not expose.
+    This exposes the hidden 'interaction_metadata' field from raw
+    MESSAGE_CREATE events without conflicting with discord.py internals.
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # message_id -> metadata dict
+        # message_id -> metadata
         self._interaction_meta = {}
 
-        # Attach this cog to the bot state so the patched property can find it
+        # Attach this cog to the bot state so the property can access it
         bot._connection._interaction_metadata_cog = self
 
-        # Monkey‑patch discord.Message only once
-        if not hasattr(discord.Message, "_interaction_metadata_patched"):
+        # Patch the Message class once
+        if not getattr(discord.Message, "_interaction_metadata_ex_patched", False):
             self._patch_message_class()
-            discord.Message._interaction_metadata_patched = True
+            discord.Message._interaction_metadata_ex_patched = True
 
     # ──────────────────────────────────────────────────────────────
-    # Patch discord.Message to expose .interaction_metadata
+    # Patch discord.Message to expose .interaction_metadata_ex
     # ──────────────────────────────────────────────────────────────
     def _patch_message_class(self):
-        def _get_interaction_metadata(msg: discord.Message):
+        def _get_interaction_metadata_ex(msg: discord.Message):
             cog = msg._state._interaction_metadata_cog
             return cog._interaction_meta.get(msg.id)
 
-        discord.Message.interaction_metadata = property(_get_interaction_metadata)
+        # Use a SAFE attribute name discord.py will never touch
+        setattr(discord.Message, "interaction_metadata_ex", property(_get_interaction_metadata_ex))
 
     # ──────────────────────────────────────────────────────────────
-    # Capture raw MESSAGE_CREATE events and store metadata
+    # Capture raw MESSAGE_CREATE events
     # ──────────────────────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_socket_raw_receive(self, raw: str):
