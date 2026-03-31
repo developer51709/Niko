@@ -514,9 +514,21 @@ class InfoCog(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                discord.ui.Button(label="Invite Niko", style=discord.ButtonStyle.link, url=invite_url),
-                discord.ui.Button(label="GitHub", style=discord.ButtonStyle.link, url="https://github.com/developer51709/Niko"),
-                discord.ui.Button(label="Website", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko"),
+                discord.ui.Button(
+                    label="Invite Niko", 
+                    style=discord.ButtonStyle.link, 
+                    url=invite_url
+                ),
+                discord.ui.Button(
+                    label="GitHub", 
+                    style=discord.ButtonStyle.link, 
+                    emoji="<:github:1488283491941748736>", 
+                    url="https://github.com/developer51709/Niko"
+                ),
+                discord.ui.Button(
+                    label="Website", 
+                    style=discord.ButtonStyle.link, 
+                    url="https://developer51709.github.io/Niko"),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(label="ToS", style=discord.ButtonStyle.link, url="https://developer51709.github.io/Niko/tos.html"),
