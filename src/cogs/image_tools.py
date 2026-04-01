@@ -30,7 +30,7 @@ def build_cv2_container(title: str, filename: str, width: int, height: int) -> d
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
-            content=f"*Generated Image Size:* `{width}×{height}`"
+            content=f"-# {width}×{height}"
         )
     )
 
