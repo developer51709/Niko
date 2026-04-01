@@ -949,31 +949,33 @@ class AutoMod(commands.Cog):
 
     async def _check_user_installed_app(self, message: discord.Message, cfg: dict, utils):
         """
-        Detect messages that are responses to slash commands fired from a
-        user-installed application (not a guild-installed bot).
+        Detect messages created by user-installed applications (external apps)
+        triggered via slash commands.
 
         Detection criteria:
-        1. message.interaction_metadata is set (message is an interaction response)
-        2. message.application_id is set and != our bot's application_id
-        3. _integration_owners has key 1 (user install) but NOT key 0 (guild install)
-
-        The human attacker is message.interaction_metadata.user.
+        1. message.application_id is set and != our bot's application_id
+        2. message.integration_owners_ex exists
+        3. integration_owners_ex contains key "1" (user-installed)
+        4. triggering user = message.trigger_user_ex
         """
-        meta = message.interaction_metadata
-        if not meta:
-            return
 
-        # Only examine messages from external applications
+        # Must be an application-generated message
         if not message.application_id:
             return
         if message.application_id == self.bot.application_id:
             return
 
-        # Confirm it's a user-installed app, not a normal guild bot
-        if not _is_user_installed_app(meta):
+        # Integration owners (the real indicator)
+        owners = message.integration_owners_ex
+        if not owners:
             return
 
-        triggering_user = meta.user
+        # User-installed apps have key "1"
+        if "1" not in owners:
+            return  # not a user-installed app
+
+        # The user who triggered the app
+        triggering_user = message.trigger_user_ex
         if not triggering_user:
             return
 
@@ -981,22 +983,26 @@ class AutoMod(commands.Cog):
         if utils.is_whitelisted(message.guild.id, triggering_user):
             return
 
+        # Config
         are       = cfg.get("antiraid_ext", {})
         threshold = are.get("ext_app_threshold", 3)
         window    = are.get("ext_app_window", 15)
         action    = are.get("ext_app_action", "kick")
 
-        now    = time.time()
+        now = time.time()
         bucket = self._ext_app_history \
                      .setdefault(message.guild.id, {}) \
                      .setdefault(triggering_user.id, [])
+
         bucket.append(now)
+
+        # Keep only timestamps within the window
         self._ext_app_history[message.guild.id][triggering_user.id] = [
             t for t in bucket if now - t <= window
         ]
         count = len(self._ext_app_history[message.guild.id][triggering_user.id])
 
-        # Always log first detection for visibility
+        # Log first detection
         if count == 1:
             log.warning(
                 "Ext-App",
@@ -1008,11 +1014,11 @@ class AutoMod(commands.Cog):
                 "🤖 User-Installed App Detected",
                 f"{triggering_user.mention} used a **user-installed** external application "
                 f"command in {message.channel.mention}.\n"
-                f"App ID: `{message.application_id}`  •  "
-                f"Command type: `{meta.type}`\n"
+                f"App ID: `{message.application_id}`\n"
                 f"-# Count: {count}/{threshold} before action is taken."
             )
 
+        # Threshold reached → take action
         if count >= threshold:
             self._ext_app_history[message.guild.id][triggering_user.id] = []
             member = message.guild.get_member(triggering_user.id)
@@ -1045,7 +1051,6 @@ class AutoMod(commands.Cog):
                             message.guild.id, member.id, self.bot.user.id,
                             "AutoMod: user-installed app raid abuse"
                         )
-                    # "log" = already logged above, no further action
                 except Exception as e:
                     log.error("Ext-App", f"Failed to action {triggering_user}: {e}")
 

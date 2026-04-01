@@ -1,42 +1,55 @@
-# interaction_metadata_patch.py
+# interaction_patch.py
 import json
 import discord
 from discord.ext import commands
 
 
-class InteractionMetadataPatch(commands.Cog):
+class InteractionPatch(commands.Cog):
     """
-    Adds a safe, non-conflicting property to discord.Message:
-        message.interaction_metadata_ex
+    Restores Discord's hidden interaction + integration metadata to discord.Message.
 
-    This exposes the hidden 'interaction_metadata' field from raw
-    MESSAGE_CREATE events without conflicting with discord.py internals.
+    Exposes:
+        message.interaction_metadata_ex     -> raw interaction_metadata
+        message.integration_owners_ex       -> raw integration_owners
+        message.trigger_user_ex             -> the user who triggered the app
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
         # message_id -> metadata
-        self._interaction_meta = {}
+        self._interaction_metadata = {}
+        self._integration_owners = {}
+        self._trigger_users = {}
 
-        # Attach this cog to the bot state so the property can access it
-        bot._connection._interaction_metadata_cog = self
+        # Attach this cog to bot state so patched properties can find it
+        bot._connection._interaction_patch_cog = self
 
-        # Patch the Message class once
-        if not getattr(discord.Message, "_interaction_metadata_ex_patched", False):
+        # Patch Message class once
+        if not getattr(discord.Message, "_interaction_patch_applied", False):
             self._patch_message_class()
-            discord.Message._interaction_metadata_ex_patched = True
+            discord.Message._interaction_patch_applied = True
 
     # ──────────────────────────────────────────────────────────────
-    # Patch discord.Message to expose .interaction_metadata_ex
+    # Patch discord.Message with safe, non-conflicting properties
     # ──────────────────────────────────────────────────────────────
     def _patch_message_class(self):
-        def _get_interaction_metadata_ex(msg: discord.Message):
-            cog = msg._state._interaction_metadata_cog
-            return cog._interaction_meta.get(msg.id)
 
-        # Use a SAFE attribute name discord.py will never touch
-        setattr(discord.Message, "interaction_metadata_ex", property(_get_interaction_metadata_ex))
+        def _get_interaction_metadata(msg: discord.Message):
+            cog = msg._state._interaction_patch_cog
+            return cog._interaction_metadata.get(msg.id)
+
+        def _get_integration_owners(msg: discord.Message):
+            cog = msg._state._interaction_patch_cog
+            return cog._integration_owners.get(msg.id)
+
+        def _get_trigger_user(msg: discord.Message):
+            cog = msg._state._interaction_patch_cog
+            return cog._trigger_users.get(msg.id)
+
+        setattr(discord.Message, "interaction_metadata_ex", property(_get_interaction_metadata))
+        setattr(discord.Message, "integration_owners_ex", property(_get_integration_owners))
+        setattr(discord.Message, "trigger_user_ex", property(_get_trigger_user))
 
     # ──────────────────────────────────────────────────────────────
     # Capture raw MESSAGE_CREATE events
@@ -52,13 +65,33 @@ class InteractionMetadataPatch(commands.Cog):
             return
 
         payload = data["d"]
-        meta = payload.get("interaction_metadata")
-        if not meta:
-            return
+        msg_id = int(payload["id"])
 
-        message_id = int(payload["id"])
-        self._interaction_meta[message_id] = meta
+        # 1. Newer field: interaction_metadata
+        if "interaction_metadata" in payload:
+            self._interaction_metadata[msg_id] = payload["interaction_metadata"]
+
+            # Extract trigger user if present
+            user = payload["interaction_metadata"].get("user")
+            if user:
+                self._trigger_users[msg_id] = discord.Object(id=int(user["id"]))
+
+        # 2. Older field: interaction.user
+        if "interaction" in payload and payload["interaction"]:
+            user = payload["interaction"].get("user")
+            if user:
+                self._trigger_users[msg_id] = discord.Object(id=int(user["id"]))
+
+        # 3. The important one: application.integration_owners
+        app = payload.get("application")
+        if app and "integration_owners" in app:
+            owners = app["integration_owners"]
+            self._integration_owners[msg_id] = owners
+
+            # If user-installed app → key "1" is the user ID
+            if "1" in owners:
+                self._trigger_users[msg_id] = discord.Object(id=int(owners["1"]))
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(InteractionMetadataPatch(bot))
+    await bot.add_cog(InteractionPatch(bot))
