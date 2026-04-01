@@ -53,26 +53,73 @@ def pixelate_image(raw: BytesIO, factor: int = 12) -> BytesIO:
 
 def deepfry_image(raw: BytesIO) -> BytesIO:
     img = _open_rgba(raw).convert("RGB")
-
-    # Over-saturate, over-contrast, oversharpen
-    img = ImageEnhance.Color(img).enhance(3.0)
-    img = ImageEnhance.Contrast(img).enhance(2.5)
-    img = ImageEnhance.Sharpness(img).enhance(3.0)
-
-    # Add noise
-    pixels = img.load()
     w, h = img.size
-    noise_pixels = int(w * h * 0.05)
-    for _ in range(noise_pixels):
+
+    # 1. MASSIVE saturation, contrast, sharpness
+    img = ImageEnhance.Color(img).enhance(5.0)
+    img = ImageEnhance.Contrast(img).enhance(4.0)
+    img = ImageEnhance.Sharpness(img).enhance(10.0)
+
+    # 2. Warm/orange tint
+    r, g, b = img.split()
+    r = r.point(lambda i: min(255, i + 40))
+    g = g.point(lambda i: min(255, i + 10))
+    img = Image.merge("RGB", (r, g, b))
+
+    pixels = img.load()
+
+    # 3. Pixel burnouts
+    burnout_count = int(w * h * 0.08)
+    for _ in range(burnout_count):
+        x = random.randint(0, w - 1)
+        y = random.randint(0, h - 1)
+        pixels[x, y] = (
+            random.randint(200, 255),
+            random.randint(180, 255),
+            random.randint(0, 80),
+        )
+
+    # 4. Noise
+    noise_count = int(w * h * 0.15)
+    for _ in range(noise_count):
         x = random.randint(0, w - 1)
         y = random.randint(0, h - 1)
         r, g, b = pixels[x, y]
-        n = random.randint(-80, 80)
+        n = random.randint(-50, 50)
         pixels[x, y] = (
             max(0, min(255, r + n)),
             max(0, min(255, g + n)),
             max(0, min(255, b + n)),
         )
+
+    # 5. RGB glitch (channel shifts)
+    r, g, b = img.split()
+
+    def shift_channel(channel: Image.Image, dx: int, dy: int) -> Image.Image:
+        return channel.transform(
+            (w, h),
+            Image.AFFINE,
+            (1, 0, dx, 0, 1, dy),
+            resample=Image.BICUBIC,
+        )
+
+    r_shift = shift_channel(r, random.randint(-4, 4), random.randint(-2, 2))
+    g_shift = shift_channel(g, random.randint(-3, 3), random.randint(-2, 2))
+    b_shift = shift_channel(b, random.randint(-5, 5), random.randint(-3, 3))
+
+    img = Image.merge("RGB", (r_shift, g_shift, b_shift))
+
+    # 6. Scanlines
+    draw = ImageDraw.Draw(img)
+    line_color = (0, 0, 0, 40)
+    spacing = 3  # distance between lines
+
+    for y in range(0, h, spacing):
+        draw.line([(0, y), (w, y)], fill=line_color, width=1)
+
+    # 7. Halo/glow
+    halo = img.filter(ImageFilter.GaussianBlur(radius=3))
+    img = Image.blend(img, halo, alpha=0.25)
 
     buf = BytesIO()
     img.convert("RGBA").save(buf, format="PNG")
