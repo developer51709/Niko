@@ -169,7 +169,7 @@ class ModerationUtils(commands.Cog):
         self.warns[gid][uid].append({
             "mod": moderator_id,
             "reason": reason,
-            "time": datetime.utcnow().isoformat(),
+            "time": datetime.now(timezone.utc).isoformat(),
         })
         save_json(WARN_FILE, self.warns)
 
@@ -221,7 +221,7 @@ class ModerationUtils(commands.Cog):
     async def mute_watcher(self):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             changed = False
             for gid, users in list(self.mutes.items()):
                 guild = self.bot.get_guild(int(gid))
