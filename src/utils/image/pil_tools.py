@@ -90,36 +90,63 @@ def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
 
 def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> Image.Image:
     width, height = img.size
-    font = _get_font(width)
-    wrapped = textwrap.fill(text, width=25)
+    font_size = max(45, int(width * 0.09))
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        font = ImageFont.load_default(font_size)
+
+    wrapped = textwrap.fill(text, width=int(width / (font_size * 0.6)))
 
     dummy = ImageDraw.Draw(img)
-    text_w, text_h = dummy.multiline_textsize(wrapped, font=font)
+    bbox = dummy.multiline_textbbox((0, 0), wrapped, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
 
-    padding = 30
-    new_height = height + text_h + padding
-    canvas = Image.new("RGBA", (width, new_height), (0, 0, 0, 0))
+    # padding for the caption bar
+    padding_y = int(text_h * 0.18)
+    block_height = text_h + padding_y * 2
+
+    # New canvas with extra space
+    new_height = height + block_height
+    canvas = Image.new("RGBA", (width, new_height), (255, 255, 255, 0))
     draw = ImageDraw.Draw(canvas)
 
     if position == "top":
-        text_y = padding // 2
-        img_y = text_h + padding
-    else:  # bottom
-        text_y = height + padding // 2
-        img_y = 0
+        # White bar
+        draw.rectangle([0, 0, width, block_height], fill="white")
 
-    draw.multiline_text(
-        (width // 2, text_y),
-        wrapped,
-        font=font,
-        fill="white",
-        anchor="ma",
-        align="center",
-        stroke_width=3,
-        stroke_fill="black",
-    )
+        # Centered text
+        draw.multiline_text(
+            (width // 2, block_height // 2),
+            wrapped,
+            font=font,
+            fill="black",
+            anchor="mm",
+            align="center",
+            stroke_width=6,
+            stroke_fill="white",
+        )
 
-    canvas.paste(img, (0, img_y))
+        # Paste original image below
+        canvas.paste(img, (0, block_height))
+
+    else:  # bottom caption
+        canvas.paste(img, (0, 0))
+
+        draw.rectangle([0, height, width, height + block_height], fill="white")
+
+        draw.multiline_text(
+            (width // 2, height + block_height // 2),
+            wrapped,
+            font=font,
+            fill="black",
+            anchor="mm",
+            align="center",
+            stroke_width=6,
+            stroke_fill="white",
+        )
+
     return canvas
 
 
