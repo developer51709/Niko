@@ -64,6 +64,7 @@ CATEGORIES = [
     ("Notifier",     "Notifier commands",                "📢"),
     ("VoiceMaster",  "VoiceMaster commands",              "🎤"),
     ("Ticket",       "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
+    ("Image Tools",  "Image manipulation commands",       f"{get_emoji('icon_image')}"),
 ]
 
 # Map category label → (cog names list, header string)
@@ -85,7 +86,8 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Leveling":     (["Leveling"], f"{get_emoji('icon_leveling')} **Leveling Commands**\n> Level up by chatting and earning XP!"),
     "Notifier":     (["Notifier"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
     "VoiceMaster":  (["VoiceMaster"], "🎤 **VoiceMaster Commands**\n> Create and manage temporary voice channels!"),
-    "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets.")
+    "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets."),
+    "Image Tools":  (["ImageTools"], f"{get_emoji('icon_image')} **Image Tools**\n> Manipulate images with these commands!"),
 }
 
 

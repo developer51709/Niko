@@ -8,6 +8,7 @@ import traceback
 import sys
 import asyncio
 from utils.paginator import PaginatedView, paginate
+from config.emojis import get_emoji
 
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
@@ -53,7 +54,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="# Owner Commands\n> These commands are restricted to bot owners only."
+                content=f"# {get_emoji('bot_owner')} Owner Commands\n> These commands are restricted to bot owners only."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -61,7 +62,7 @@ class OwnerCog(commands.Cog):
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
         cog = self.bot.get_cog("OwnerCog")
         if not cog:
-            return await ctx.send("❌ OwnerCog not loaded.")
+            return await ctx.send(f"{get_emoji('icon_cross')} OwnerCog not loaded.")
 
         for cmd in cog.get_commands():
             container.add_item(discord.ui.TextDisplay(
@@ -85,13 +86,13 @@ class OwnerCog(commands.Cog):
 
         data = await self.fetch_bytes(url)
         if not data:
-            return await ctx.send("❌ Failed to download image.")
+            return await ctx.send(f"{get_emoji('icon_cross')} Failed to download image.")
 
         try:
             await self.bot.user.edit(avatar=data)
-            await ctx.send("✅ Profile picture updated.")
+            await ctx.send(f"{get_emoji('icon_tick')} Profile picture updated.")
         except discord.HTTPException as e:
-            await ctx.send(f"❌ Failed to update avatar:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to update avatar:\n`{e}`")
 
     # -------------------------------
     # Set bot banner
@@ -104,13 +105,13 @@ class OwnerCog(commands.Cog):
 
         data = await self.fetch_bytes(url)
         if not data:
-            return await ctx.send("❌ Failed to download banner.")
+            return await ctx.send(f"{get_emoji('icon_cross')} Failed to download banner.")
 
         try:
             await self.bot.user.edit(banner=data)
-            await ctx.send("✅ Banner updated.")
+            await ctx.send(f"{get_emoji('icon_tick')} Banner updated.")
         except discord.HTTPException as e:
-            await ctx.send(f"❌ Failed to update banner:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to update banner:\n`{e}`")
 
     # -------------------------------
     # Set bot username
@@ -121,9 +122,9 @@ class OwnerCog(commands.Cog):
         """Set the bot's username."""
         try:
             await self.bot.user.edit(username=name)
-            await ctx.send(f"✅ Username changed to **{name}**")
+            await ctx.send(f"{get_emoji('icon_tick')} Username changed to **{name}**")
         except discord.HTTPException as e:
-            await ctx.send(f"❌ Failed to update username:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to update username:\n`{e}`")
 
     # -------------------------------
     # Set bot status text
@@ -133,7 +134,7 @@ class OwnerCog(commands.Cog):
     async def set_status(self, ctx, *, text: str):
         """Set the bot's status text."""
         await self.bot.change_presence(activity=discord.Game(name=text))
-        await ctx.send(f"✅ Status updated to: **{text}**")
+        await ctx.send(f"{get_emoji('icon_tick')} Status updated to: **{text}**")
 
     # -------------------------------
     # Set bot activity type
@@ -156,10 +157,10 @@ class OwnerCog(commands.Cog):
         elif activity_type == "competing":
             activity = discord.Activity(type=discord.ActivityType.competing, name=text)
         else:
-            return await ctx.send("❌ Invalid activity type.")
+            return await ctx.send(f"{get_emoji('icon_cross')} Invalid activity type.")
 
         await self.bot.change_presence(activity=activity)
-        await ctx.send(f"✅ Activity updated: **{activity_type.title()} {text}**")
+        await ctx.send(f"{get_emoji('icon_tick')} Activity updated: **{activity_type.title()} {text}**")
 
     # -------------------------------
     # Reload a cog
@@ -172,7 +173,7 @@ class OwnerCog(commands.Cog):
             await self.bot.reload_extension(cog)
             await ctx.send(f"🔄 Reloaded `{cog}`")
         except Exception as e:
-            await ctx.send(f"❌ Failed to reload `{cog}`:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to reload `{cog}`:\n`{e}`")
 
     # -------------------------------
     # Load a cog
@@ -185,7 +186,7 @@ class OwnerCog(commands.Cog):
             await self.bot.load_extension(cog)
             await ctx.send(f"📥 Loaded `{cog}`")
         except Exception as e:
-            await ctx.send(f"❌ Failed to load `{cog}`:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to load `{cog}`:\n`{e}`")
 
     # -------------------------------
     # Unload a cog
@@ -198,7 +199,7 @@ class OwnerCog(commands.Cog):
             await self.bot.unload_extension(cog)
             await ctx.send(f"📤 Unloaded `{cog}`")
         except Exception as e:
-            await ctx.send(f"❌ Failed to unload `{cog}`:\n`{e}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Failed to unload `{cog}`:\n`{e}`")
 
     # -------------------------------
     # Restart bot
@@ -238,7 +239,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content="### ✅ Sync Complete"
+                    content=f"### {get_emoji('icon_tick')} Sync Complete"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -256,7 +257,7 @@ class OwnerCog(commands.Cog):
             view.add_item(
                 discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### ❌ Sync Error\n```\n{e}\n```"
+                        content=f"### {get_emoji('icon_cross')} Sync Error\n```\n{e}\n```"
                     )
                 )
             )
@@ -311,7 +312,7 @@ class OwnerCog(commands.Cog):
 
             await ctx.send(f"🧪 **Eval Result:**\n```\n{result}\n```")
         except Exception as e:
-            await ctx.send(f"❌ Error:\n```\n{e}\n```")
+            await ctx.send(f"{get_emoji('icon_cross')} Error:\n```\n{e}\n```")
 
     # -------------------------------
     # Server list command
@@ -341,7 +342,7 @@ class OwnerCog(commands.Cog):
 
         guild = self.bot.get_guild(server_id)
         if not guild:
-            return await ctx.send("❌ Bot is not in that server.")
+            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not in that server.")
 
         # Find a text channel the bot can create invites in
         channel = None
@@ -351,7 +352,7 @@ class OwnerCog(commands.Cog):
                 break
 
         if not channel:
-            return await ctx.send("❌ No channel found where I can create invites.")
+            return await ctx.send(f"{get_emoji('icon_cross')} No channel found where I can create invites.")
 
         invite = await channel.create_invite(
             max_age=86400,  # 24 hours
@@ -362,7 +363,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### 🔗 Server Invite"
+                content=f"### {get_emoji('icon_link')} Server Invite"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
