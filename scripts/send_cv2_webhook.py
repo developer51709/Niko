@@ -152,12 +152,14 @@ def create_commit_card(author, message, sha):
     # Sanitize markdown
     safe_message = sanitize_markdown(message)
 
-    # Wrap text
-    wrapped = textwrap.wrap(safe_message, width=40)
+    # Preserve real newlines and wrap each line
+    lines = safe_message.split("\n")
 
-    # Draw wrapped message with Twemoji
-    for line in wrapped:
-        y = draw_text_with_twemoji(img, 70, y, line, font_body, (230, 230, 230))
+    for raw_line in lines:
+        wrapped_lines = textwrap.wrap(raw_line, width=40) or [""]
+
+        for line in wrapped_lines:
+            y = draw_text_with_twemoji(img, 70, y, line, font_body, (230, 230, 230))
 
     # Watermark glow
     watermark = "Astral Haven Development"
