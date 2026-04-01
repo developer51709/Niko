@@ -279,6 +279,9 @@ async def on_message(msg):
 
     content = msg.content.lower()
     called_by_name = "niko" in content
+    # ignore commands such as the image tools
+    if content.startswith(CMD_PREFIX):
+        return await bot.process_commands(msg) 
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions
     else:
