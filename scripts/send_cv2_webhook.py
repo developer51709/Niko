@@ -119,7 +119,7 @@ def draw_text_with_twemoji(base_img, x, y, text, font, fill):
 # Main commit card generator
 # -----------------------------------
 def create_commit_card(author, message, sha):
-    width, height = 1200, 450
+    width, height = 1200, 600
     img = generate_nebula(width, height)
     draw = ImageDraw.Draw(img)
 
