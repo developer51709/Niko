@@ -1226,7 +1226,7 @@ class AutoMod(commands.Cog):
         cfg = self.get_cfg(guild.id)
         if not cfg["automod"].get("antinuke", False):
             return
-        if entry.user.id == self.bot.user.id or guild.owner_id:
+        if entry.user == self.bot.user or guild.owner:
             return
 
         an       = cfg.get("antinuke", {})
