@@ -4,6 +4,47 @@ import random
 import textwrap
 
 
+def process_image_animated(raw: BytesIO, effect_fn):
+    img = Image.open(raw)
+
+    # Not animated → just process normally
+    if not getattr(img, "is_animated", False):
+        return effect_fn(raw)
+
+    frames = []
+    durations = []
+
+    for frame_index in range(img.n_frames):
+        img.seek(frame_index)
+        frame = img.convert("RGBA")
+
+        # Convert frame to BytesIO for your existing effect functions
+        buf = BytesIO()
+        frame.save(buf, format="PNG")
+        buf.seek(0)
+
+        # Apply the effect to this frame
+        processed = Image.open(effect_fn(buf)).convert("RGBA")
+
+        frames.append(processed)
+        durations.append(img.info.get("duration", 50))
+
+    # Reassemble GIF
+    out = BytesIO()
+    frames[0].save(
+        out,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        loop=0,
+        duration=durations,
+        disposal=2,
+        transparency=0,
+    )
+    out.seek(0)
+    return out
+
+
 def _open_rgba(raw: BytesIO) -> Image.Image:
     raw.seek(0)
     return Image.open(raw).convert("RGBA")
