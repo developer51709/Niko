@@ -141,7 +141,7 @@ def msg(ctx: commands.Context, key: str, **kwargs) -> str:
 
 AJIE_ALL = "https://lavalink-list.ajieblogs.eu.org/All"
 PROBE_TIMEOUT = 3.0    # seconds for HTTP health-check
-CONNECT_TIMEOUT = 8.0  # seconds for wavelink handshake
+CONNECT_TIMEOUT = 20.0  # seconds for wavelink handshake
 MAX_PROBE_WORKERS = 8  # concurrent HTTP probes
 
 
