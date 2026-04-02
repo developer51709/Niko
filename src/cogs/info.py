@@ -720,8 +720,10 @@ class InfoCog(commands.Cog):
                     emoji=get_emoji("spotify"),
                     url=f"https://open.spotify.com/track/{spotify.track_id}"
                 )
-            )
+            ),
+            accent_colour=discord.Color.green()
         )
+        view.add_item(container)
         await ctx.send(view=view)
 
     # -------------------------------
