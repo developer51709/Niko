@@ -287,7 +287,7 @@ async def on_message(msg):
     else:
         # Respond to direct pings only and ignore replies
         called_by_ping = bot.user in msg.mentions and not msg.reference
-    is_ai_command = content.startswith("!ai ")
+    is_ai_command = content.startswith(f"{CMD_PREFIX}ai ")
 
     if called_by_name or called_by_ping or is_ai_command:
         user_input = msg.content.replace("!ai", "").strip()
