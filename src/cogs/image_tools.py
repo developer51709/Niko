@@ -210,7 +210,10 @@ class ImageTools(commands.Cog):
 
     # ---------- prefix commands ----------
 
-    @commands.command(name="grayscale")
+    @commands.command(
+        name="grayscale",
+        help="Convert an image to grayscale."
+    )
     async def grayscale_prefix(self, ctx):
         msg = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(msg)
@@ -218,7 +221,10 @@ class ImageTools(commands.Cog):
             return await ctx.reply("No image found.")
         await self._process_and_send_prefix(ctx, raw, "Grayscale", "grayscale.gif", grayscale)
 
-    @commands.command(name="invert")
+    @commands.command(
+        name="invert",
+        help="Invert the colors of an image."
+    )
     async def invert_prefix(self, ctx):
         msg = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(msg)
@@ -226,7 +232,10 @@ class ImageTools(commands.Cog):
             return await ctx.reply("No image found.")
         await self._process_and_send_prefix(ctx, raw, "Invert", "invert.gif", invert_colors)
 
-    @commands.command(name="blur")
+    @commands.command(
+        name="blur",
+        help="Apply a soft blur to an image."
+    )
     async def blur_prefix(self, ctx):
         msg = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(msg)
@@ -234,7 +243,10 @@ class ImageTools(commands.Cog):
             return await ctx.reply("No image found.")
         await self._process_and_send_prefix(ctx, raw, "Blur", "blur.gif", blur_image)
 
-    @commands.command(name="pixelate")
+    @commands.command(
+        name="pixelate",
+        help="Pixelate an image for a retro/blocky look."
+    )
     async def pixelate_prefix(self, ctx):
         msg = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(msg)
@@ -242,13 +254,42 @@ class ImageTools(commands.Cog):
             return await ctx.reply("No image found.")
         await self._process_and_send_prefix(ctx, raw, "Pixelate", "pixelate.gif", pixelate_image)
 
-    @commands.command(name="deepfry")
+    @commands.command(
+        name="deepfry",
+        help="Deepfry an image with heavy saturation, contrast, and noise."
+    )
     async def deepfry_prefix(self, ctx):
         msg = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(msg)
         if not raw:
             return await ctx.reply("No image found.")
         await self._process_and_send_prefix(ctx, raw, "Deepfry", "deepfry.gif", deepfry_image)
+
+    @commands.command(
+        name="caption",
+        help="Add a caption to the top of an image."
+    )
+    async def caption_prefix(self, ctx: commands.Context, *, text: str):
+        message = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(message)
+        if not raw:
+            return await ctx.reply("No image found in that message.")
+
+        processor = lambda r: caption_top(r, text)
+        await self._process_and_send_prefix(ctx, raw, f"Caption (Top): {text}", "caption_top.gif", processor)
+
+    @commands.command(
+        name="captionbottom",
+        help="Add a caption to the bottom of an image."
+    )
+    async def caption_bottom_prefix(self, ctx: commands.Context, *, text: str):
+        message = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(message)
+        if not raw:
+            return await ctx.reply("No image found in that message.")
+
+        processor = lambda r: caption_bottom(r, text)
+        await self._process_and_send_prefix(ctx, raw, f"Caption (Bottom): {text}", "caption_bottom.gif", processor)
 
     # ---------- context menu ----------
 
