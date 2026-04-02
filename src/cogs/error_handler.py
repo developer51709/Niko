@@ -254,7 +254,10 @@ class ErrorHandler(commands.Cog):
             "Unexpected Error",
             "An unexpected error occurred. The developers have been notified."
         )
-        await ctx.reply(view=view)
+        try:
+            await ctx.reply(view=view)
+        except discord.HTTPException:
+            pass
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
