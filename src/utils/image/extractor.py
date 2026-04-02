@@ -32,6 +32,8 @@ async def extract_image_from_message(message: discord.Message):
         for row in raw.get("components", []):
             if row.get("type") == 17:  # LayoutView
                 for comp in row.get("components", []):
+
+                    # --- A) MediaGallery (full-size images) ---
                     if comp.get("type") == 12:  # MediaGallery
                         for item in comp.get("items", []):
                             media = item.get("media")
@@ -39,6 +41,15 @@ async def extract_image_from_message(message: discord.Message):
                                 url = media.get("url")
                                 if url:
                                     return await _fetch_url(url)
+
+                    # --- B) Accessory thumbnails (type 11) ---
+                    accessory = comp.get("accessory")
+                    if accessory and accessory.get("type") == 11:
+                        media = accessory.get("media")
+                        if isinstance(media, dict):
+                            url = media.get("url")
+                            if url:
+                                return await _fetch_url(url)
 
     # 4. Embeds (normal)
     for embed in message.embeds:
