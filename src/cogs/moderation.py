@@ -375,7 +375,7 @@ class Moderation(commands.Cog):
         utils = self.utils()
         words = utils.get_blocked_words(ctx.guild.id)
         if not words:
-            return await ctx.send(msg(ctx, "badwords_none"))
+            return await ctx.send(f"{msg(ctx, 'badwords_none')}\n-# Use `{ctx.prefix}badwords add <word>` to add a word.")
         text = "### 🚫 Blocked Words\n" + "\n".join(f"- {w}" for w in words)
         text += f"\n\n-# Use `{ctx.prefix}badwords add <word>` to add a word."
         await ctx.send(view=_cv2(text))
