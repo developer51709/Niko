@@ -2,6 +2,67 @@ from io import BytesIO
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance, ImageDraw, ImageFont
 import random
 import textwrap
+import re
+import requests
+
+
+# Regex to detect emoji codepoints
+EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002700-\U000027BF\U0001F300-\U0001F5FF]+"
+)
+
+def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
+    cursor_x = x
+    cursor_y = y
+    font_size = font.size
+
+    tokens = EMOJI_RE.split(text)
+    emojis = EMOJI_RE.findall(text)
+
+    for i, token in enumerate(tokens):
+        # Draw normal text
+        if token:
+            draw.text(
+                (cursor_x, cursor_y),
+                token,
+                font=font,
+                fill=fill,
+                stroke_width=stroke_width,
+                stroke_fill=stroke_fill,
+                anchor="lm",
+            )
+            cursor_x += draw.textlength(token, font=font)
+
+        # Draw emoji
+        if i < len(emojis):
+            emoji = emojis[i]
+
+            # Convert emoji → Twemoji filename
+            codepoints = "-".join(f"{ord(c):x}" for c in emoji)
+            url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{codepoints}.png"
+
+            try:
+                r = requests.get(url, timeout=5)
+                tw = Image.open(BytesIO(r.content)).convert("RGBA")
+                tw = tw.resize((font_size, font_size), Image.LANCZOS)
+
+                # PASTE ONTO CANVAS, NOT draw.im
+                canvas.paste(tw, (int(cursor_x), int(cursor_y - font_size * 0.8)), tw)
+
+                cursor_x += font_size
+
+            except:
+                # fallback: draw emoji as text
+                draw.text(
+                    (cursor_x, cursor_y),
+                    emoji,
+                    font=font,
+                    fill=fill,
+                    stroke_width=stroke_width,
+                    stroke_fill=stroke_fill,
+                    anchor="lm",
+                )
+                cursor_x += draw.textlength(emoji, font=font)
 
 
 def process_image_animated(raw: BytesIO, effect_fn):
@@ -173,7 +234,7 @@ def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
     try:
         return ImageFont.truetype("arial.ttf", size)
     except Exception:
-        return ImageFont.load_default()
+        return ImageFont.load_default(size)
 
 
 def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> Image.Image:
@@ -191,49 +252,40 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
 
-    # padding for the caption bar
     padding_y = int(text_h * 0.18)
     block_height = text_h + padding_y * 2
 
-    # New canvas with extra space
     new_height = height + block_height
-    canvas = Image.new("RGBA", (width, new_height), (255, 255, 255, 0))
+    canvas = Image.new("RGBA", (width, int(new_height)), (255, 255, 255, 0))
     draw = ImageDraw.Draw(canvas)
 
     if position == "top":
-        # White bar
         draw.rectangle([0, 0, width, block_height], fill="white")
-
-        # Centered text
-        draw.multiline_text(
-            (width // 2, block_height // 2),
-            wrapped,
-            font=font,
-            fill="black",
-            anchor="mm",
-            align="center",
-            stroke_width=6,
-            stroke_fill="white",
-        )
-
-        # Paste original image below
-        canvas.paste(img, (0, block_height))
-
-    else:  # bottom caption
+        text_y = block_height // 2
+        paste_y = block_height
+    else:
         canvas.paste(img, (0, 0))
-
         draw.rectangle([0, height, width, height + block_height], fill="white")
+        text_y = height + block_height // 2
+        paste_y = 0
 
-        draw.multiline_text(
-            (width // 2, height + block_height // 2),
-            wrapped,
-            font=font,
-            fill="black",
-            anchor="mm",
-            align="center",
-            stroke_width=6,
-            stroke_fill="white",
-        )
+    _draw_twemoji_text(
+        canvas,
+        draw,
+        width // 2 - text_w // 2,
+        text_y,
+        wrapped,
+        font,
+        fill="black",
+        stroke_width=6,
+        stroke_fill="white",
+    )
+
+    # Paste original image
+    if position == "top":
+        canvas.paste(img, (0, int(paste_y)))
+    else:
+        pass
 
     return canvas
 
