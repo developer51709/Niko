@@ -103,7 +103,10 @@ class RolePlayCog(commands.Cog):
     # -----------------------------
     # PREFIX COMMANDS
     # -----------------------------
-    @commands.command(name="hug")
+    @commands.command(
+        name="hug",
+        help="Give someone a hug! 💖"
+    )
     async def hug(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))
@@ -121,7 +124,10 @@ class RolePlayCog(commands.Cog):
             random.choice(gifs)
         )
 
-    @commands.command(name="kill")
+    @commands.command(
+        name="kill",
+        help="Playfully kill someone! 💀"
+    )
     async def kill(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))
@@ -138,7 +144,10 @@ class RolePlayCog(commands.Cog):
             footer=msg(ctx, "kill_footer")
         )
 
-    @commands.command(name="kiss")
+    @commands.command(
+        name="kiss",
+        help="Give someone a kiss! 💋"
+    )
     async def kiss(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))

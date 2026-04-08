@@ -382,6 +382,7 @@ class Tickets(commands.Cog):
     @commands.command(name="ticketsetup")
     @commands.has_permissions(administrator=True)
     async def ticketsetup(self, ctx: commands.Context):
+        """Open the ticket system setup panel."""
         view = TicketSetupView(ctx.guild.id, ctx.author)
         await ctx.send(view=view)
 

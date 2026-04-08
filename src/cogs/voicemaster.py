@@ -442,6 +442,7 @@ class VoiceMaster(commands.Cog):
         name="voicemaster",
         aliases=["j2c", "vm", "join2create"],
         brief="Make temporary voice channels in your server",
+        help="Create and manage temporary voice channels in your server."
     )
     @checks.cooldown()
     async def _voicemaster(self, ctx):
