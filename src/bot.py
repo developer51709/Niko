@@ -378,6 +378,32 @@ async def _create_tables(bot):
             PRIMARY KEY  (guild_id, platform, username)
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS levels (
+            user_id INTEGER PRIMARY KEY,
+            xp INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 0
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS youtube (
+            channel_id TEXT PRIMARY KEY,
+            last_video TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS youtube_history (
+            channel_id TEXT,
+            video_id TEXT,
+            PRIMARY KEY (channel_id, video_id)
+        )
+    """)
+
+    # Migrate existing last_video to history to avoid re-notifying
+    await bot.cxn.execute("""
+        INSERT OR IGNORE INTO youtube_history (channel_id, video_id)
+        SELECT channel_id, last_video FROM youtube WHERE last_video IS NOT NULL
+    """)
     logging.success("DB", "Database tables verified")
 
 # -----------------------------
