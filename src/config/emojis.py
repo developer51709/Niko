@@ -32,6 +32,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_games:1484520778798989415>"
     if emoji_name == "icon_edit":
         return "<:icon_edit:1484522084188033097>"
+    if emoji_name == "icon_giveaway":
+        return "<:icon_giveaway:1484520743214780557>"
     if emoji_name == "icon_image":
         return "<:icon_image:1484520768271286342>"
     if emoji_name == "icon_leveling":
