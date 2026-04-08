@@ -7,6 +7,7 @@ from discord.ext import commands
 import requests
 import random
 import os
+from utils.realbooru import search_realbooru, get_post_details
 
 # get api keys and user ids from environment variables
 RULE34_API_KEY = os.getenv('RULE34_API_KEY')
@@ -18,7 +19,11 @@ class NSFW(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='rule34', help='Search for images on rule34.xxx')
+    @commands.command(
+        name='rule34', 
+        aliases=['r34'],
+        help='Search for images on rule34.xxx'
+    )
     @commands.is_nsfw()
     async def rule34(self, ctx, *, query: str):
         # verify that the query is formatted correctly (must use url encoding for spaces and special characters)
@@ -96,7 +101,10 @@ class NSFW(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name='gelbooru', help='Search for images on gelbooru.com')
+    @commands.command(
+        name='gelbooru', 
+        help='Search for images on gelbooru.com'
+    )
     @commands.is_nsfw()
     async def gelbooru(self, ctx, *, query: str):
         # make request to gelbooru API with api key and user id
@@ -166,6 +174,63 @@ class NSFW(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
+
+
+    @commands.command(
+        name='realbooru',
+        aliases=['realb'],
+        help='Search for images on realbooru.com'
+    )
+    @commands.is_nsfw()
+    async def realbooru(self, ctx, *, query: str):
+        posts = search_realbooru(query)
+
+        if not posts:
+            return await self._send_error(
+                ctx,
+                f"No images found for query `{query}`."
+            )
+
+        # Pick a random post
+        post = random.choice(posts)
+        details = get_post_details(post["id"])
+
+        if not details["media_url"]:
+            return await self._send_error(
+                ctx,
+                "Failed to fetch full image from Realbooru."
+            )
+
+        # Build UI
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    f"### Realbooru\n"
+                    f"Query: `{query}`"
+                )
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=details["media_url"]
+                )
+            ),
+            discord.ui.TextDisplay(
+                content=f"-# Requested by {ctx.author.display_name}"
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
+
+    async def _send_error(self, ctx, message: str):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### Realbooru\n{message}"
+            )
+        )
+        view.add_item(container)
+        return await ctx.send(view=view)
 
 
 # setup
