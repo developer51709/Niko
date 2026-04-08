@@ -65,6 +65,7 @@ CATEGORIES = [
     ("VoiceMaster",  "VoiceMaster commands",              "🎤"),
     ("Ticket",       "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
     ("Image Tools",  "Image manipulation commands",       f"{get_emoji('icon_image')}"),
+    ("Giveaway",     "Giveaway commands",                 f"{get_emoji('icon_giveaway')}"),
 ]
 
 # Map category label → (cog names list, header string)
@@ -84,10 +85,11 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "NSFW":         (["NSFW"], "🔞 **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
     "Music":        (["MusicSystem"], f"{get_emoji('music')} **Music Commands**\n> Play music in your voice channel!"),
     "Leveling":     (["Leveling"], f"{get_emoji('icon_leveling')} **Leveling Commands**\n> Level up by chatting and earning XP!"),
-    "Notifier":     (["Notifier"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
+    "Notifier":     (["Notifier", "YouTube"], "📢 **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
     "VoiceMaster":  (["VoiceMaster"], "🎤 **VoiceMaster Commands**\n> Create and manage temporary voice channels!"),
     "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets."),
     "Image Tools":  (["ImageTools"], f"{get_emoji('icon_image')} **Image Tools**\n> Manipulate images with these commands!"),
+    "Giveaway":     (["Giveaway"], f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n> Host and manage giveaways in your server!"),
 }
 
 
