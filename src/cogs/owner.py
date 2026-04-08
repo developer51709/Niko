@@ -116,7 +116,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot username
     # -------------------------------
-    @commands.command(name="setname")
+    @commands.command(name="setusername")
     @is_owner()
     async def set_name(self, ctx, *, name: str):
         """Set the bot's username."""
