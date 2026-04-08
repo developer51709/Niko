@@ -15,9 +15,9 @@ from colorama import Fore, Style, init as colorama_init
 
 colorama_init(autoreset=True)
 
-# ------------------------------------
+# -----------------------------------
 # Colors
-# ------------------------------------
+# -----------------------------------
 GRAY = Fore.LIGHTBLACK_EX
 CYAN = Fore.CYAN
 BOLD = Style.BRIGHT
@@ -30,9 +30,9 @@ LEVEL_COLORS = {
     "ERROR":   Fore.RED,
 }
 
-# ------------------------------------
+# -----------------------------------
 # Register SUCCESS log level
-# ------------------------------------
+# -----------------------------------
 SUCCESS_LEVEL = 25  # Between INFO (20) and WARNING (30)
 logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
 
@@ -43,9 +43,9 @@ def _success_method(self, message, *args, **kwargs):
 logging.Logger.success = _success_method
 
 
-# ------------------------------------
+# -----------------------------------
 # Console formatter (colourised)
-# ------------------------------------
+# -----------------------------------
 class ConsoleFormatter(logging.Formatter):
     def format(self, record):
         level = record.levelname.upper()
@@ -61,9 +61,9 @@ class ConsoleFormatter(logging.Formatter):
         return f"{level_str} {module_str} {timestamp_str}: {record.getMessage()}"
 
 
-# ------------------------------------
+# -----------------------------------
 # File formatter (plain text)
-# ------------------------------------
+# -----------------------------------
 class FileFormatter(logging.Formatter):
     def format(self, record):
         level = record.levelname.upper()
@@ -73,9 +73,9 @@ class FileFormatter(logging.Formatter):
         )
 
 
-# ------------------------------------
+# -----------------------------------
 # Read config from environment
-# ------------------------------------
+# -----------------------------------
 def _parse_level(name: str, default: int) -> int:
     mapping = {
         "DEBUG":   logging.DEBUG,
@@ -94,9 +94,9 @@ _max_bytes     = int(os.getenv("LOG_MAX_BYTES", str(5 * 1024 * 1024)))
 _backup_count  = int(os.getenv("LOG_BACKUP_COUNT", "3"))
 
 
-# ------------------------------------
+# -----------------------------------
 # Root logger setup
-# ------------------------------------
+# -----------------------------------
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)           # capture everything; handlers filter
 
@@ -121,10 +121,16 @@ if _file_enabled:
     _file_handler.setFormatter(FileFormatter())
     root.addHandler(_file_handler)
 
+# Optional webhook logging
+webhook_url = os.getenv("LOGGING_WEBHOOK")
+if webhook_url:
+    # TODO: Implement webhook logging
+    pass
 
-# ------------------------------------
+
+# -----------------------------------
 # Runtime configuration helpers
-# ------------------------------------
+# -----------------------------------
 def set_console_level(level: str):
     """Dynamically change the console log level (e.g. 'DEBUG', 'WARNING')."""
     _console_handler.setLevel(_parse_level(level, logging.INFO))
@@ -145,9 +151,9 @@ def enable_file_logging(path: str = "logs/niko.log",
     root.addHandler(fh)
 
 
-# ------------------------------------
+# -----------------------------------
 # Public logging API
-# ------------------------------------
+# -----------------------------------
 def debug(module: str, message: str):
     logging.getLogger(module).debug(message)
 
