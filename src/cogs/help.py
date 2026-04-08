@@ -76,7 +76,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
     "Info":         (["InfoCog"], "ℹ️ **Information Commands**\n> Get info about users, servers, and more!"),
     "Utility":      (["UtilityCog", "Snipe"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
-    "AI":           (["AICog"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
+    "AI":           (["AICog", "AIConfig"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
     "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
     "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
     "EmojiManager": (["EmojiManagerCog"], "🎨 **Emoji Manager Commands**\n> Manage custom emojis in your server."),
