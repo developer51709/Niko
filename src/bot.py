@@ -145,6 +145,8 @@ async def set_status():
         # Check if the link starts with http:// or https:// and add it if missing
         if not status_link.startswith("http://" or "https://"):
             status_link = f"https://{os.getenv('status_link')}"
+    else:
+        status_link = "https://twitch.tv/niko"
     status = os.getenv("STATUS_MESSAGE")
     if status:
         # Status type
@@ -152,7 +154,7 @@ async def set_status():
         if status_type == "playing":
             await bot.change_presence(activity=discord.Game(name=status))
         elif status_type == "streaming":
-            await bot.change_presence(activity=discord.Streaming(name=status, url=f"{status_link}"))
+            await bot.change_presence(activity=discord.Streaming(name=status, url=str(status_link)))
         elif status_type == "listening":
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=status))
         elif status_type == "watching":
