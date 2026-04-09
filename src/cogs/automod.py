@@ -809,6 +809,7 @@ class AutoMod(commands.Cog):
         self._interaction_history = {}   # guild_id -> [(user_id, timestamp)]
         self._ext_app_history     = {}   # guild_id -> user_id -> [timestamps]
         self._invite_cache        = {}   # guild_id -> {invite_code: uses}
+        self._missing_perms_warned = set()  # guild_ids where we've already logged a missing-perm warning
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
@@ -905,7 +906,15 @@ class AutoMod(commands.Cog):
                 await utils.log_action(
                     message.guild, "Anti-Spam",
                     f"{message.author.mention} triggered anti-spam in {message.channel.mention}.")
-                await utils.mute_member(message.guild, message.author, duration=60, reason="Auto-mute: spam")
+                try:
+                    await utils.mute_member(message.guild, message.author, duration=60, reason="Auto-mute: spam")
+                except discord.Forbidden:
+                    if message.guild.id not in self._missing_perms_warned:
+                        self._missing_perms_warned.add(message.guild.id)
+                        log.warning("Anti-Spam",
+                                    f"Missing permissions to mute in {message.guild.name} — mute skipped silently.")
+                except discord.HTTPException:
+                    pass
                 return
 
         if cfg["automod"].get("antilink", True):
@@ -942,7 +951,15 @@ class AutoMod(commands.Cog):
                 await utils.log_action(
                     message.guild, "Mass Mention",
                     f"{message.author.mention} mass-mentioned `{mentions}` users in {message.channel.mention}.")
-                await utils.mute_member(message.guild, message.author, duration=120, reason="Auto-mute: mass mention")
+                try:
+                    await utils.mute_member(message.guild, message.author, duration=120, reason="Auto-mute: mass mention")
+                except discord.Forbidden:
+                    if message.guild.id not in self._missing_perms_warned:
+                        self._missing_perms_warned.add(message.guild.id)
+                        log.warning("AutoMod",
+                                    f"Missing permissions to mute in {message.guild.name} — mute skipped silently.")
+                except discord.HTTPException:
+                    pass
                 return
 
     # ─── USER-INSTALLED APP ABUSE ─────────────────────────────
@@ -954,28 +971,28 @@ class AutoMod(commands.Cog):
 
         Detection criteria:
         1. message.application_id is set and != our bot's application_id
-        2. message.integration_owners_ex exists
-        3. integration_owners_ex contains key "1" (user-installed)
-        4. triggering user = message.trigger_user_ex
+        2. message.interaction_metadata exists (discord.py MessageInteractionMetadata)
+        3. _is_user_installed_app() returns True (key 1 in _integration_owners, key 0 absent)
+        4. triggering user = interaction_metadata.user
         """
 
-        # Must be an application-generated message
+        # Must be an application-generated message that isn't our own bot
         if not message.application_id:
             return
         if message.application_id == self.bot.application_id:
             return
 
-        # Integration owners (the real indicator)
-        owners = message.integration_owners_ex
-        if not owners:
+        # Requires interaction metadata (only present on app-command responses)
+        meta = getattr(message, "interaction_metadata", None)
+        if meta is None:
             return
 
-        # User-installed apps have key "1"
-        if "1" not in owners:
-            return  # not a user-installed app
+        # Only flag user-installed apps (integration_owners key 1 present, key 0 absent)
+        if not _is_user_installed_app(meta):
+            return
 
         # The user who triggered the app
-        triggering_user = message.trigger_user_ex
+        triggering_user = getattr(meta, "user", None)
         if not triggering_user:
             return
 
