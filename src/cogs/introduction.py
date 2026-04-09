@@ -31,7 +31,7 @@ class Introduction(commands.Cog):
         # 1. Prefer channels with common "main chat" names
         for name in MAIN_CHANNEL_NAMES:
             for channel in guild.text_channels:
-                if channel.name.lower() == name.lower():
+                if name.lower() in channel.name.lower():
                     perms = channel.permissions_for(guild.me)
                     if perms.send_messages:
                         debug("Introduction", f"Preferred channel found: #{channel.name}")
