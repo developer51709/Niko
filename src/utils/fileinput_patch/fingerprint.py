@@ -39,8 +39,8 @@ def fingerprint_library():
     # --------------------------------
     # Detect Pycord
     # --------------------------------
-    # Pycord uses the discord namespace but adds unique modules
-    if hasattr(discord, "commands") or "pycord" in version.lower():
+    # Pycord exposes SlashCommand/ApplicationCommand at the top level; discord.py does not
+    if hasattr(discord, "SlashCommand") or hasattr(discord, "ApplicationCommand") or "pycord" in version.lower():
         return {
             "lib": "pycord",
             "version": version,

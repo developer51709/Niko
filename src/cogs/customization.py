@@ -1,6 +1,7 @@
+import asyncio
 import discord
 from discord.ext import commands
-import requests
+import aiohttp
 import json
 import os
 import base64
@@ -22,14 +23,13 @@ DISCORD_BOTCLIENT_UA = (
     "DiscordBot (https://github.com/aiko-chan-ai/DiscordBotClient, 1.0)"
 )
 
-# Try combinations of headers and endpoints until one succeeds.
-def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, timeout=10):
+async def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, timeout=10):
     """
     urls: list of URL strings to try in order
     token: raw token string from env
     payload: dict to send as JSON
     extra_headers: dict of additional headers to include
-    Returns: (response, attempted_details) where attempted_details is list of dicts tried
+    Returns: (success: bool, attempts: list of dicts)
     """
     attempted = []
     headers_base = {
@@ -40,45 +40,49 @@ def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, timeout=1
     if extra_headers:
         headers_base.update(extra_headers)
 
-    # Two common auth formats: raw token (DiscordBotClient style) and "Bot <token>" (public API)
     auth_variants = [
         ("raw", token),
         ("bot_prefix", f"Bot {token}" if token else ""),
     ]
 
-    for url in urls:
-        for auth_name, auth_value in auth_variants:
-            headers = dict(headers_base)
-            if auth_value:
-                headers["Authorization"] = auth_value
-            else:
-                # If no token, still try without Authorization header (will 401)
-                headers.pop("Authorization", None)
+    async with aiohttp.ClientSession() as session:
+        for url in urls:
+            for auth_name, auth_value in auth_variants:
+                headers = dict(headers_base)
+                if auth_value:
+                    headers["Authorization"] = auth_value
+                else:
+                    headers.pop("Authorization", None)
 
-            try:
-                r = requests.patch(url, headers=headers, data=json.dumps(payload), timeout=timeout)
-            except Exception as exc:
-                attempted.append({
-                    "url": url,
-                    "auth": auth_name,
-                    "status": "request_error",
-                    "error": str(exc),
-                })
-                continue
+                try:
+                    async with session.patch(
+                        url,
+                        headers=headers,
+                        data=json.dumps(payload),
+                        timeout=aiohttp.ClientTimeout(total=timeout)
+                    ) as r:
+                        status = r.status
+                        text = await r.text()
+                        attempted.append({
+                            "url": url,
+                            "auth": auth_name,
+                            "status_code": status,
+                            "response_text": text[:1000],
+                        })
+                        if status in (200, 204):
+                            return True, attempted
+                except Exception as exc:
+                    attempted.append({
+                        "url": url,
+                        "auth": auth_name,
+                        "status": "request_error",
+                        "error": str(exc),
+                    })
+                    continue
 
-            attempted.append({
-                "url": url,
-                "auth": auth_name,
-                "status_code": r.status_code,
-                "response_text": r.text[:1000],  # cap length
-            })
+    return False, attempted
 
-            if r.status_code in (200, 204):
-                return r, attempted
-
-    return None, attempted
-
-# ---------- Views and Modals (unchanged behavior) ----------
+# ---------- Views and Modals ----------
 
 class DisplayNameModal(discord.ui.Modal, title="Set Display Name"):
     name = discord.ui.TextInput(label="New Display Name", max_length=32)
@@ -110,12 +114,15 @@ class FileUploadModal(discord.ui.Modal):
         self.view = view
         self.target = target
 
-        # If your runtime patch provides FileInput, this will work; otherwise fallback UI is needed.
         self.file = discord.ui.FileInput(label="Upload Image")
         self.add_item(self.file)
 
     async def on_submit(self, interaction: discord.Interaction):
         attachment = self.file.value
+        if attachment is None:
+            return await interaction.response.send_message(
+                "No file received. File upload may not be supported in this context.", ephemeral=True
+            )
         file_bytes = await attachment.read()
 
         if self.target == "pfp":
@@ -159,7 +166,7 @@ class ColorSelect(discord.ui.Select):
             self.view.color2 = int(self.values[0])
         await interaction.response.defer()
 
-# ---------- Main Views with robust apply logic ----------
+# ---------- Main Views ----------
 
 class SetNameView(discord.ui.LayoutView):
     def __init__(self, guild_id):
@@ -200,6 +207,8 @@ class SetNameView(discord.ui.LayoutView):
         if not all([self.display_name, self.font_id, self.color1, self.color2]):
             return await interaction.response.send_message("Missing fields.", ephemeral=True)
 
+        await interaction.response.defer(ephemeral=True)
+
         token = os.getenv("DISCORD_BOT_TOKEN")
         guild_id = self.guild_id
 
@@ -212,7 +221,7 @@ class SetNameView(discord.ui.LayoutView):
         }
 
         headers = {
-            "Authorization": token,  # RAW TOKEN
+            "Authorization": token,
             "Content-Type": "application/json",
             "Origin": "https://discord.com",
             "Referer": f"https://discord.com/channels/{guild_id}/{interaction.channel_id}",
@@ -223,13 +232,17 @@ class SetNameView(discord.ui.LayoutView):
             )
         }
 
-        r = requests.patch(url, headers=headers, data=json.dumps(payload))
+        success, _ = await try_patch_with_fallbacks([url], token, payload, extra_headers={
+            "Origin": headers["Origin"],
+            "Referer": headers["Referer"],
+            "User-Agent": headers["User-Agent"],
+        })
 
-        if r.status_code in (200, 204):
-            return await interaction.response.send_message("Updated successfully.", ephemeral=True)
-
-        logging.error("customization", f"API Error: {r.status_code} - {r.text}")
-        return await interaction.response.send_message("Failed to update.", ephemeral=True)
+        if success:
+            await interaction.followup.send("Updated successfully.", ephemeral=True)
+        else:
+            logging.error("customization", f"Failed to update display name for guild {guild_id}")
+            await interaction.followup.send("Failed to update.", ephemeral=True)
 
 
 class SetProfileView(discord.ui.LayoutView):
@@ -280,8 +293,10 @@ class SetProfileView(discord.ui.LayoutView):
     async def apply_callback(self, interaction: discord.Interaction):
         token = os.getenv("DISCORD_BOT_TOKEN")
         if not token:
-            logging.error("customization", "DISCORD_TOKEN is not set in environment.")
+            logging.error("customization", "DISCORD_BOT_TOKEN is not set in environment.")
             return await interaction.response.send_message("Internal configuration error.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
 
         bot_id = str(interaction.client.user.id)
         urls = [
@@ -300,11 +315,11 @@ class SetProfileView(discord.ui.LayoutView):
             body["bio"] = self.bio
 
         if not body:
-            return await interaction.response.send_message("Nothing to update.", ephemeral=True)
+            return await interaction.followup.send("Nothing to update.", ephemeral=True)
 
-        r, attempts = try_patch_with_fallbacks(urls, token, body)
-        if r:
-            return await interaction.response.send_message("Profile updated.", ephemeral=True)
+        success, attempts = await try_patch_with_fallbacks(urls, token, body)
+        if success:
+            return await interaction.followup.send("Profile updated.", ephemeral=True)
 
         msg_lines = ["Failed to update profile. Attempts:"]
         for a in attempts:
@@ -316,7 +331,7 @@ class SetProfileView(discord.ui.LayoutView):
                 msg_lines.append(f"- {a['url']} auth={a['auth']} status={code} body={body_text}")
 
         logging.error("customization", " | ".join(msg_lines))
-        return await interaction.response.send_message(
+        return await interaction.followup.send(
             "Failed to update profile. Check logs for details.", ephemeral=True
         )
 
