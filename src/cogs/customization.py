@@ -108,29 +108,33 @@ class BioModal(discord.ui.Modal, title="Set Bio"):
         await interaction.response.send_message("Bio updated.", ephemeral=True)
 
 
-class FileUploadModal(discord.ui.Modal):
-    def __init__(self, view, title, target):
-        super().__init__(title=title)
-        self.view = view
-        self.target = target
+async def collect_image_attachment(interaction: discord.Interaction, profile_view, target: str):
+    """Wait for the user to send a message with an image attachment in the channel."""
+    await interaction.response.send_message(
+        "📎 Please send your image as a message in this channel within **60 seconds**.",
+        ephemeral=True,
+    )
 
-        self.file = discord.ui.FileInput(label="Upload Image")
-        self.add_item(self.file)
+    def check(m):
+        return (
+            m.author.id == interaction.user.id
+            and m.channel.id == interaction.channel_id
+            and len(m.attachments) > 0
+        )
 
-    async def on_submit(self, interaction: discord.Interaction):
-        attachment = self.file.value
-        if attachment is None:
-            return await interaction.response.send_message(
-                "No file received. File upload may not be supported in this context.", ephemeral=True
-            )
+    try:
+        msg = await interaction.client.wait_for("message", check=check, timeout=60.0)
+        attachment = msg.attachments[0]
+        if not attachment.content_type or not attachment.content_type.startswith("image/"):
+            return await interaction.followup.send("❌ That file doesn't look like an image. Please try again.", ephemeral=True)
         file_bytes = await attachment.read()
-
-        if self.target == "pfp":
-            self.view.pfp_bytes = file_bytes
+        if target == "pfp":
+            profile_view.pfp_bytes = file_bytes
         else:
-            self.view.banner_bytes = file_bytes
-
-        await interaction.response.send_message("Image uploaded successfully.", ephemeral=True)
+            profile_view.banner_bytes = file_bytes
+        await interaction.followup.send("✅ Image received! Click **Apply** when you're ready.", ephemeral=True)
+    except asyncio.TimeoutError:
+        await interaction.followup.send("❌ Timed out — no image received.", ephemeral=True)
 
 
 class FontSelect(discord.ui.Select):
@@ -282,10 +286,10 @@ class SetProfileView(discord.ui.LayoutView):
         return interaction.user.guild_permissions.administrator
 
     async def pfp_callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(FileUploadModal(self, "Upload PFP", "pfp"))
+        await collect_image_attachment(interaction, self, "pfp")
 
     async def banner_callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(FileUploadModal(self, "Upload Banner", "banner"))
+        await collect_image_attachment(interaction, self, "banner")
 
     async def bio_callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(BioModal(self))
