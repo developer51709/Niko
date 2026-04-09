@@ -114,7 +114,8 @@ class RolePlayCog(commands.Cog):
         gifs = [
             "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
             "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
-            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
+            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp",
+            "https://nekos.best/api/v2/hug/c8fee249-64d4-4041-895c-0dcacb821c10.gif"
         ]
 
         await self.send_roleplay(
@@ -174,7 +175,8 @@ class RolePlayCog(commands.Cog):
         gifs = [
             "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
             "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
-            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
+            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp",
+            "https://nekos.best/api/v2/hug/c8fee249-64d4-4041-895c-0dcacb821c10.gif"
         ]
         await self.send_roleplay(
             interaction,
