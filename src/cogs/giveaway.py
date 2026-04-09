@@ -54,3 +54,7 @@ class Giveaway(commands.Cog):
                     await asyncio.sleep(0.1)
         except Exception as e:
             print(f"[Giveaway Task Error] Processing failed: {e}")
+
+
+async def setup(bot):
+    await bot.add_cog(Giveaway(bot))
