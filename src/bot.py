@@ -327,7 +327,10 @@ async def on_message(msg):
                 if DEBUG_MODE == "True":
                     logging.error("AIGeneration", "Error: Empty response generated.")
 
-            await msg.channel.send(reply)
+            try:
+                await msg.reply(reply)
+            except Exception as e:
+                await msg.channel.send(reply)
 
     await bot.process_commands(msg)
 
