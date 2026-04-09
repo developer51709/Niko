@@ -35,5 +35,27 @@
         "status": "open"
       }
     ]
+  },
+  "1470878953743974587": {
+    "guild_id": 1470878953743974587,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "Community support",
+      "Bot support"
+    ],
+    "panel_channel_id": 1472038470313705675,
+    "panel_message_id": 1491898738359275643,
+    "open_tickets": [
+      {
+        "channel_id": 1491898748438057093,
+        "message_id": 1491898749306540233,
+        "category": "General",
+        "opener_id": 1479968201319125013,
+        "status": "open"
+      }
+    ]
   }
 }
