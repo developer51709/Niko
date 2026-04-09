@@ -1,0 +1,14 @@
+{
+    "welcome_channel": 1487796430918652055,
+    "welcome_title": "Welcome to Void Sentinel",
+    "welcome_description": "Welcome to the server {user}!",
+    "welcome_color": 5793266,
+    "welcome_image": "https://cdn.discordapp.com/avatars/1487788701827469392/7436b0a984aa375fcdb3a2854ca2e790.png?size=1024",
+    "rules_channel": null,
+    "rules_message_id": null,
+    "rules_text": null,
+    "rules_role_id": null,
+    "role_menu_channel": null,
+    "role_menu_message_id": null,
+    "role_menu_options": null
+}

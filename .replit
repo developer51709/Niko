@@ -42,7 +42,7 @@ args = "python src/website.py"
 [userenv]
 
 [userenv.shared]
-STATUS_TYPE = "playing"
+STATUS_TYPE = "streaming"
 STATUS_LINK = ""
 DEBUG_MODE = "True"
 ROULETTE_COOLDOWN = ""

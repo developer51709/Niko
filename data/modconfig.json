@@ -5,12 +5,49 @@
             "antispam": true,
             "antilink": false,
             "badwords": true,
-            "massmention": true
+            "massmention": true,
+            "antinuke": true,
+            "antiraid": true,
+            "antiraid_ext": false
         },
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
-        "blocked_words": []
+        "blocked_words": [],
+        "whitelist_users": [
+            1484653109576732692,
+            1479968201319125013,
+            1470919447433711637,
+            1440159933776527463,
+            1435974392810307604
+        ],
+        "whitelist_roles": [
+            1443339408282489056
+        ],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        },
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify",
+            "ext_app_detection": true,
+            "ext_app_threshold": 3,
+            "ext_app_window": 15,
+            "ext_app_action": "kick"
+        }
     },
     "1470878953743974587": {
         "modlog_channel": 1470891778948206715,
@@ -68,12 +105,12 @@
         "blocked_words": []
     },
     "1436901011179569298": {
-        "modlog_channel": null,
+        "modlog_channel": 1477457788467937353,
         "automod": {
-            "antispam": false,
+            "antispam": true,
             "antilink": true,
-            "badwords": false,
-            "massmention": false,
+            "badwords": true,
+            "massmention": true,
             "antinuke": false,
             "antiraid": false,
             "antiraid_ext": false
@@ -81,7 +118,9 @@
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
-        "blocked_words": [],
+        "blocked_words": [
+            "niggers"
+        ],
         "antinuke": {
             "ban_threshold": 3,
             "kick_threshold": 3,
@@ -95,9 +134,17 @@
             "join_interval": 10,
             "action": "kick"
         },
-        "whitelist_users": [],
+        "whitelist_users": [
+            1477866152721121300,
+            1471192472745934848,
+            765961813144633385,
+            1484653109576732692,
+            1435978243160145981,
+            1479968201319125013
+        ],
         "whitelist_roles": [
-            1482161687728623698
+            1480949028031172771,
+            1479676798425104420
         ],
         "antiraid_ext": {
             "interaction_threshold": 5,
@@ -391,7 +438,7 @@
         }
     },
     "1482032314014896220": {
-        "modlog_channel": null,
+        "modlog_channel": 1482165987787804897,
         "automod": {
             "antispam": true,
             "antilink": true,
@@ -928,6 +975,48 @@
         }
     },
     "1487844828451569666": {
+        "modlog_channel": null,
+        "automod": {
+            "antispam": true,
+            "antilink": true,
+            "badwords": true,
+            "massmention": true,
+            "antinuke": false,
+            "antiraid": false,
+            "antiraid_ext": false
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        },
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify",
+            "ext_app_detection": true,
+            "ext_app_threshold": 3,
+            "ext_app_window": 15,
+            "ext_app_action": "kick"
+        }
+    },
+    "1482399344337485874": {
         "modlog_channel": null,
         "automod": {
             "antispam": true,
