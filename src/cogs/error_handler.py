@@ -8,6 +8,7 @@ import asyncio
 import requests
 from colorama import Fore, Style, init as colorama_init
 from config.emojis import get_emoji
+from utils import logging
 
 from discord.ext.commands import (
     CommandError, CommandInvokeError, CommandNotFound,
@@ -36,20 +37,44 @@ from requests.exceptions import (
 
 colorama_init(autoreset=True)
 
+
+# Optional: Add your owner IDs here if you want multiple owners
+OWNER_IDS = {
+    1435978243160145981, 
+    1485732377958416565
+}
+
+
+def is_owner():
+    """Custom owner check to support multiple owners."""
+    async def predicate(ctx):
+        return ctx.author.id in OWNER_IDS or await ctx.bot.is_owner(ctx.author)
+    return commands.check(predicate)
+
+
 class ErrorHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     # Utility: clean colored logging
     def log(self, level, message):
-        colors = {
-            "INFO": Fore.CYAN,
-            "WARN": Fore.YELLOW,
-            "ERROR": Fore.RED,
-            "CRITICAL": Fore.MAGENTA,
-        }
-        color = colors.get(level, Fore.WHITE)
-        print(f"{color}[{level}] {Style.RESET_ALL}{message}")
+        # colors = {
+        #     "INFO": Fore.CYAN,
+        #     "WARN": Fore.YELLOW,
+        #     "ERROR": Fore.RED,
+        #     "CRITICAL": Fore.MAGENTA,
+        # }
+        # color = colors.get(level, Fore.WHITE)
+        # print(f"{color}[{level}] {Style.RESET_ALL}{message}")
+        if level == "CRITICAL":
+            return logging.error("error_handler", message)
+        if level == "ERROR":
+            return logging.error("error_handler", message)
+        if level == "WARN":
+            return logging.warning("error_handler", message)
+        if level == "INFO":
+            return logging.info("error_handler", message)
+        return logging.info("error_handler", message)
 
     # Utility: embed generator
     def error_embed(self, title, description):
@@ -81,6 +106,12 @@ class ErrorHandler(commands.Cog):
 
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
+            # owner bypass
+            if await is_owner().predicate(ctx):
+                # trigger the command function manually with the command's original kwargs to bypass checks
+                await ctx.command.callback(self.bot, ctx, **ctx.kwargs)
+                logging.warning("error_handler", f"Permission check bypassed for trusted owner {ctx.author}")
+                return
             view = self.error_embed(
                 "Missing Permissions",
                 f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
