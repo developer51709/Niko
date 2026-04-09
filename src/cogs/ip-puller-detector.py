@@ -14,8 +14,6 @@ class IPPullerDetector(commands.Cog):
             "ip logger",
             "tracking link",
             "trackip",
-            "webresolver",
-            "logger",
             "ip-grabber",
             "ip grabber",
         ]
