@@ -5,13 +5,13 @@ import datetime
 import random
 import asyncio
 
-class JoinGiveawayView(discord.ui.View):
+class JoinGiveawayView(discord.ui.ActionRow):
     def __init__(self, bot):
-        super().__init__(timeout=None)
+        super().__init__()
         self.bot = bot
 
-    @discord.ui.button(label="Join", style=discord.ButtonStyle.primary, emoji="🎉", custom_id="giveaway_system:join")
-    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Join", style=discord.ButtonStyle.primary, emoji="🎉", custom_id="giveaway_system_join")
+    async def giveaway_system_join_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         message_id = interaction.message.id
         user_id = interaction.user.id
 
@@ -40,8 +40,8 @@ class JoinGiveawayView(discord.ui.View):
 
         await interaction.response.send_message("🎉 You have successfully joined the giveaway! Good luck!", ephemeral=True)
 
-    @discord.ui.button(label="End", style=discord.ButtonStyle.danger, emoji="🛑", custom_id="giveaway_system:end")
-    async def end_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="End", style=discord.ButtonStyle.danger, emoji="🛑", custom_id="giveaway_system_end")
+    async def giveaway_system_end_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         giveaway = await self.bot.cxn.fetchone("SELECT host_id, ended, prize, winners_count FROM giveaways WHERE message_id = $1", interaction.message.id)
 
         if not giveaway:
@@ -64,8 +64,8 @@ class JoinGiveawayView(discord.ui.View):
         if giveaway_cog:
             await giveaway_cog.end_giveaway(interaction.message.id, interaction.channel.id, interaction.guild.id, prize, winners_count, host_id)
 
-    @discord.ui.button(label="Select", style=discord.ButtonStyle.secondary, emoji="🎲", custom_id="giveaway_system:select")
-    async def select_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Select", style=discord.ButtonStyle.secondary, emoji="🎲", custom_id="giveaway_system_select")
+    async def giveaway_system_select_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         giveaway = await self.bot.cxn.fetchone("SELECT host_id FROM giveaways WHERE message_id = $1", interaction.message.id)
 
         if not giveaway:
@@ -92,7 +92,7 @@ class Giveaway(commands.Cog):
         self.check_giveaways.start()
 
     async def cog_load(self):
-        self.bot.add_view(JoinGiveawayView(self.bot))
+        # self.bot.add_view(JoinGiveawayView(self.bot))
 
         await self.bot.cxn.execute('''
             CREATE TABLE IF NOT EXISTS giveaways (
@@ -158,15 +158,22 @@ class Giveaway(commands.Cog):
         end_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=seconds)
         end_timestamp = int(end_time.timestamp())
 
-        embed = discord.Embed(title="🎉 Giveaway", color=discord.Color.purple())
-        embed.add_field(name="Prize", value=prize, inline=False)
-        embed.add_field(name="Ends in", value=f"<t:{end_timestamp}:R> (<t:{end_timestamp}:f>)", inline=False)
-        embed.add_field(name="Hosted by", value=ctx.author.mention, inline=False)
-        embed.set_footer(text=f"{winners_count} Winner{'s' if winners_count > 1 else ''} | Ends at")
-        embed.timestamp = end_time
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### 🎉 Giveaway"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=f"**Prize:** {prize}"),
+            discord.ui.TextDisplay(content=f"**Ends in:** <t:{end_timestamp}:R> (<t:{end_timestamp}:f>)"),
+            discord.ui.TextDisplay(content=f"**Hosted by:** {ctx.author.mention}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+        container.add_item(JoinGiveawayView(self.bot))
+        container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        container.add_item(discord.ui.TextDisplay(content=f"-# {winners_count} Winner{'s' if winners_count > 1 else ''} | Ends at <t:{end_timestamp}:f>"))
+        container.accent_colour = discord.Color.purple()
 
-        view = JoinGiveawayView(self.bot)
-        msg = await ctx.send(embed=embed, view=view)
+        view.add_item(container)
+        msg = await ctx.send(view=view)
 
         await self.bot.cxn.execute(
             '''INSERT INTO giveaways (message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id)
