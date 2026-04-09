@@ -9,19 +9,7 @@ import sys
 import asyncio
 from utils.paginator import PaginatedView, paginate
 from config.emojis import get_emoji
-
-# Optional: Add your owner IDs here if you want multiple owners
-OWNER_IDS = {
-    1435978243160145981, 
-    1485732377958416565
-}
-
-
-def is_owner():
-    """Custom owner check to support multiple owners."""
-    async def predicate(ctx):
-        return ctx.author.id in OWNER_IDS or await ctx.bot.is_owner(ctx.author)
-    return commands.check(predicate)
+from .error_handler import is_owner
 
 
 class OwnerCog(commands.Cog):
