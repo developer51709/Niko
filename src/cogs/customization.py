@@ -202,7 +202,7 @@ class SetNameView(discord.ui.LayoutView):
         self.add_item(container)
 
     async def interaction_check(self, interaction):
-        return interaction.user.guild_permissions.administrator
+        return interaction.user.guild_permissions.administrator or await interaction.client.is_owner(interaction.user)
 
     async def set_name_callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(DisplayNameModal(self))
@@ -283,7 +283,7 @@ class SetProfileView(discord.ui.LayoutView):
         self.add_item(container)
 
     async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.guild_permissions.administrator
+        return interaction.user.guild_permissions.administrator or await interaction.client.is_owner(interaction.user)
 
     async def pfp_callback(self, interaction: discord.Interaction):
         await collect_image_attachment(interaction, self, "pfp")
