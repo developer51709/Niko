@@ -73,7 +73,7 @@ class JoinGiveawayView(discord.ui.ActionRow):
 
         host_id = giveaway["host_id"]
 
-        if interaction.user.id != host_id and (not self.bot.owner_ids or interaction.user.id not in self.bot.owner_ids):
+        if interaction.user.id != host_id or interaction.user.id not in self.bot.owner_ids:
             return await interaction.response.send_message("❌ Only the giveaway host or a bot owner can select users.", ephemeral=True)
 
         rows = await self.bot.cxn.fetch("SELECT user_id FROM participants WHERE message_id = $1", interaction.message.id)
@@ -140,7 +140,7 @@ class Giveaway(commands.Cog):
         await ctx.send_help(ctx.command)
 
     @giveaway.command(name="start")
-    @commands.is_owner()
+    @commands.has_permissions(manage_guild=True) or commands.is_owner()
     async def start(self, ctx, duration: str, winners: str, *, prize: str):
         """Start a new giveaway."""
         seconds = self.parse_duration(duration)
@@ -182,7 +182,7 @@ class Giveaway(commands.Cog):
         )
 
     @giveaway.command(name="reroll")
-    @commands.is_owner()
+    @commands.has_permissions(manage_guild=True) or commands.is_owner()
     async def reroll(self, ctx, message_id: int):
         """Reroll a specific giveaway to pick new winners."""
         giveaway = await self.bot.cxn.fetchone("SELECT prize, winners_count, ended FROM giveaways WHERE message_id = $1", message_id)
