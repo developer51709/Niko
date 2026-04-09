@@ -1,16 +1,8 @@
 import asyncio
 from discord import Locale
 from discord.enums import _UNICODE_LANG_MAP
-
-try:
-    from deep_translator import GoogleTranslator
-except ImportError:
-    GoogleTranslator = None
-
-try:
-    from langdetect import detect as langdetect_detect
-except ImportError:
-    langdetect_detect = None
+from deep_translator import GoogleTranslator
+from langdetect import detect as langdetect_detect
 
 SUPPORTED_LANGUAGES = GoogleTranslator().get_supported_languages(as_dict=True) if GoogleTranslator else {}
 
