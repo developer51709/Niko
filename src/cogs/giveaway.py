@@ -15,7 +15,7 @@ class Giveaway(commands.Cog):
 
     async def end_giveaway(self, message_id, channel_id, guild_id, prize, winners_count, host_id):
         """Ends the giveaway by choosing a winner, modifying embed, and announcing it."""
-        await self.bot.cxn.execute("UPDATE giveaways SET ended = 1 WHERE message_id = ?", (message_id,))
+        await self.bot.cxn.execute("UPDATE giveaways SET ended = 1 WHERE message_id = ?", message_id)
 
         channel = self.bot.get_channel(channel_id)
         if not channel:
@@ -46,7 +46,7 @@ class Giveaway(commands.Cog):
                     end_time = datetime.datetime.fromisoformat(str(end_time_str))
                 except (TypeError, ValueError):
                     print(f"[Giveaway Task Error] Skipping giveaway {message_id}: invalid end_time {end_time_str!r}")
-                    await self.bot.cxn.execute("UPDATE giveaways SET ended = 1 WHERE message_id = ?", (message_id,))
+                    await self.bot.cxn.execute("UPDATE giveaways SET ended = 1 WHERE message_id = ?", message_id)
                     continue
 
                 if now >= end_time:
