@@ -34,21 +34,21 @@ def _is_user_installed_app(meta) -> bool:
     return _USER_INSTALL in owners and _GUILD_INSTALL not in owners
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  SECTION TEXT BUILDERS
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 def _icon(enabled: bool) -> str:
     return get_emoji("icon_tick") if enabled else get_emoji("icon_cross")
 
 
 def _build_overview_text(cfg: dict) -> str:
-    am  = cfg["automod"]
-    an  = cfg["antinuke"]
-    ar  = cfg["antiraid"]
+    am = cfg["automod"]
+    an = cfg["antinuke"]
+    ar = cfg["antiraid"]
     are = cfg["antiraid_ext"]
-    wu  = len(cfg.get("whitelist_users", []))
-    wr  = len(cfg.get("whitelist_roles", []))
+    wu = len(cfg.get("whitelist_users", []))
+    wr = len(cfg.get("whitelist_roles", []))
     return (
         f"### {get_emoji('automod')} AutoMod Dashboard\n"
         "Here's a full snapshot of your server's protection ☕\n\n"
@@ -124,7 +124,7 @@ def _build_antiraid_text(cfg: dict) -> str:
 
 
 def _build_ext_raid_text(cfg: dict) -> str:
-    am  = cfg["automod"]
+    am = cfg["automod"]
     are = cfg["antiraid_ext"]
     return (
         "### 🤖 External App Raid Protection\n\n"
@@ -193,36 +193,59 @@ def _section_text(cfg: dict, section: str, guild: discord.Guild = None) -> str:
     return _build_overview_text(cfg)
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  INTERACTIVE COMPONENTS
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class SectionSelect(discord.ui.Select):
     def __init__(self, automod_cog, guild_id: int, current_section: str):
         self._cog = automod_cog
         self._guild_id = guild_id
         options = [
-            discord.SelectOption(label="Overview",       value="overview",  emoji=get_emoji("automod"),
-                                 description="Full snapshot of all protections",
-                                 default=(current_section == "overview")),
-            discord.SelectOption(label="Message Filter", value="filter",    emoji="💬",
-                                 description="Spam, links, bad words, mass mention",
-                                 default=(current_section == "filter")),
-            discord.SelectOption(label="Anti-Nuke",      value="antinuke",  emoji="💣",
-                                 description="Stop rogue mods from mass-deleting",
-                                 default=(current_section == "antinuke")),
-            discord.SelectOption(label="Anti-Raid",      value="antiraid",  emoji="🌊",
-                                 description="Stop mass member join attacks",
-                                 default=(current_section == "antiraid")),
-            discord.SelectOption(label="Ext. App Raid",  value="ext_raid",  emoji="🤖",
-                                 description="User-installed app abuse & interaction floods",
-                                 default=(current_section == "ext_raid")),
-            discord.SelectOption(label="Whitelist",      value="whitelist", emoji="🔓",
-                                 description="Users and roles exempt from automod",
-                                 default=(current_section == "whitelist")),
+            discord.SelectOption(
+                label="Overview", 
+                value="overview", 
+                emoji=get_emoji("automod"),
+                description="Full snapshot of all protections",
+                default=(current_section == "overview")
+            ),
+            discord.SelectOption(
+                label="Message Filter", 
+                value="filter", 
+                emoji="💬",
+                description="Spam, links, bad words, mass mention",
+                default=(current_section == "filter")
+            ),
+            discord.SelectOption(
+                label="Anti-Nuke", 
+                value="antinuke", 
+                emoji="💣",
+                description="Stop rogue mods from mass-deleting",
+                default=(current_section == "antinuke")
+            ),
+            discord.SelectOption(
+                label="Anti-Raid", 
+                value="antiraid", 
+                emoji="🌊",
+                description="Stop mass member join attacks",
+                default=(current_section == "antiraid")
+            ),
+            discord.SelectOption(
+                label="Ext. App Raid", 
+                value="ext_raid", 
+                emoji="🤖",
+                description="User-installed app abuse & interaction floods",
+                default=(current_section == "ext_raid")
+            ),
+            discord.SelectOption(
+                label="Whitelist", 
+                value="whitelist", 
+                emoji="🔓",
+                description="Users and roles exempt from automod",
+                default=(current_section == "whitelist")
+            ),
         ]
-        super().__init__(placeholder="Navigate sections...", options=options,
-                         min_values=1, max_values=1)
+        super().__init__(placeholder="Navigate sections...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
@@ -231,11 +254,11 @@ class SectionSelect(discord.ui.Select):
 
 class ToggleButton(discord.ui.Button):
     def __init__(self, label: str, key: str, automod_cog, guild_id: int, section: str):
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
-        self._key      = key
-        self._section  = section
-        cfg     = automod_cog.utils().get_guild_config(guild_id)
+        self._key = key
+        self._section = section
+        cfg = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg["automod"].get(key, False)
         super().__init__(
             label=f"{label}",
@@ -245,7 +268,7 @@ class ToggleButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         cfg["automod"][self._key] = not cfg["automod"].get(self._key, False)
         utils.save_config()
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
@@ -254,14 +277,13 @@ class ToggleButton(discord.ui.Button):
 
 class SubToggleButton(discord.ui.Button):
     """Toggles a boolean inside a sub-config dict (e.g. antiraid_ext.ext_app_detection)."""
-    def __init__(self, label: str, sub_cfg_key: str, field: str,
-                 automod_cog, guild_id: int, section: str):
-        self._cog        = automod_cog
-        self._guild_id   = guild_id
-        self._sub_cfg    = sub_cfg_key
-        self._field      = field
-        self._section    = section
-        cfg     = automod_cog.utils().get_guild_config(guild_id)
+    def __init__(self, label: str, sub_cfg_key: str, field: str, automod_cog, guild_id: int, section: str):
+        self._cog = automod_cog
+        self._guild_id = guild_id
+        self._sub_cfg = sub_cfg_key
+        self._field = field
+        self._section = section
+        cfg = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg.get(sub_cfg_key, {}).get(field, True)
         super().__init__(
             label=f"{label}",
@@ -271,7 +293,7 @@ class SubToggleButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         cfg[self._sub_cfg][self._field] = not cfg[self._sub_cfg].get(self._field, True)
         utils.save_config()
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
@@ -280,14 +302,14 @@ class SubToggleButton(discord.ui.Button):
 
 class EditThresholdsButton(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int, section: str, label: str = "Edit Thresholds"):
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
-        self._section  = section
+        self._section = section
         super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("icon_settings"))
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         modal = _build_threshold_modal(cfg, self._cog, self._guild_id, self._section)
         await interaction.response.send_modal(modal, allowed_mentions=ALLOWED_MENTIONS)
 
@@ -295,7 +317,7 @@ class EditThresholdsButton(discord.ui.Button):
 class EditExtAppButton(discord.ui.Button):
     """Opens the modal for user-installed app detection settings."""
     def __init__(self, automod_cog, guild_id: int):
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         super().__init__(
             label="Edit App Detection", 
@@ -305,34 +327,34 @@ class EditExtAppButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(ExtAppThresholdModal(self._cog, self._guild_id, cfg))
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  THRESHOLD MODALS
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
-    spam_msgs = discord.ui.TextInput(label="Spam: max messages",         placeholder="e.g. 6")
-    spam_secs = discord.ui.TextInput(label="Spam: within seconds",       placeholder="e.g. 7")
-    max_ment  = discord.ui.TextInput(label="Mass Mention: max mentions", placeholder="e.g. 5")
+    spam_msgs = discord.ui.TextInput(label="Spam: max messages", placeholder="e.g. 6")
+    spam_secs = discord.ui.TextInput(label="Spam: within seconds", placeholder="e.g. 7")
+    max_ment = discord.ui.TextInput(label="Mass Mention: max mentions", placeholder="e.g. 5")
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         self.spam_msgs.default = str(cfg.get("spam_threshold", 6))
         self.spam_secs.default = str(cfg.get("spam_interval", 7))
-        self.max_ment.default  = str(cfg.get("max_mentions", 5))
+        self.max_ment.default = str(cfg.get("max_mentions", 5))
 
     async def on_submit(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["spam_threshold"] = max(1, int(self.spam_msgs.value))
-            cfg["spam_interval"]  = max(1, int(self.spam_secs.value))
-            cfg["max_mentions"]   = max(1, int(self.max_ment.value))
+            cfg["spam_interval"] = max(1, int(self.spam_secs.value))
+            cfg["max_mentions"] = max(1, int(self.max_ment.value))
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "filter", interaction.guild))
@@ -341,32 +363,32 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
 
 
 class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
-    ban_t    = discord.ui.TextInput(label="Ban threshold",            placeholder="e.g. 3")
-    kick_t   = discord.ui.TextInput(label="Kick threshold",           placeholder="e.g. 3")
-    chan_t   = discord.ui.TextInput(label="Channel delete threshold", placeholder="e.g. 3")
-    role_t   = discord.ui.TextInput(label="Role delete threshold",    placeholder="e.g. 3")
-    interval = discord.ui.TextInput(label="Interval (seconds)",       placeholder="e.g. 10")
+    ban_t = discord.ui.TextInput(label="Ban threshold", placeholder="e.g. 3")
+    kick_t = discord.ui.TextInput(label="Kick threshold", placeholder="e.g. 3")
+    chan_t = discord.ui.TextInput(label="Channel delete threshold", placeholder="e.g. 3")
+    role_t = discord.ui.TextInput(label="Role delete threshold", placeholder="e.g. 3")
+    interval = discord.ui.TextInput(label="Interval (seconds)", placeholder="e.g. 10")
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         an = cfg.get("antinuke", {})
-        self.ban_t.default    = str(an.get("ban_threshold", 3))
-        self.kick_t.default   = str(an.get("kick_threshold", 3))
-        self.chan_t.default   = str(an.get("channel_delete_threshold", 3))
-        self.role_t.default   = str(an.get("role_delete_threshold", 3))
+        self.ban_t.default = str(an.get("ban_threshold", 3))
+        self.kick_t.default = str(an.get("kick_threshold", 3))
+        self.chan_t.default = str(an.get("channel_delete_threshold", 3))
+        self.role_t.default = str(an.get("role_delete_threshold", 3))
         self.interval.default = str(an.get("interval", 10))
 
     async def on_submit(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         try:
-            cfg["antinuke"]["ban_threshold"]            = max(1, int(self.ban_t.value))
-            cfg["antinuke"]["kick_threshold"]           = max(1, int(self.kick_t.value))
+            cfg["antinuke"]["ban_threshold"] = max(1, int(self.ban_t.value))
+            cfg["antinuke"]["kick_threshold"] = max(1, int(self.kick_t.value))
             cfg["antinuke"]["channel_delete_threshold"] = max(1, int(self.chan_t.value))
-            cfg["antinuke"]["role_delete_threshold"]    = max(1, int(self.role_t.value))
-            cfg["antinuke"]["interval"]                 = max(1, int(self.interval.value))
+            cfg["antinuke"]["role_delete_threshold"] = max(1, int(self.role_t.value))
+            cfg["antinuke"]["interval"] = max(1, int(self.interval.value))
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
@@ -379,7 +401,7 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         self.action.default = cfg.get("antinuke", {}).get("action", "strip")
 
@@ -389,7 +411,7 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
             return await interaction.response.send_message(
                 "Invalid action. Choose: `strip`, `kick`, or `ban`.", ephemeral=True)
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         cfg["antinuke"]["action"] = val
         utils.save_config()
         await interaction.response.edit_message(
@@ -398,12 +420,12 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
 
 class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
     join_t = discord.ui.TextInput(label="Join threshold (members)", placeholder="e.g. 10")
-    join_i = discord.ui.TextInput(label="Time window (seconds)",    placeholder="e.g. 10")
+    join_i = discord.ui.TextInput(label="Time window (seconds)", placeholder="e.g. 10")
     action = discord.ui.TextInput(label="Action (kick / lockdown)", placeholder="kick", max_length=10)
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         ar = cfg.get("antiraid", {})
         self.join_t.default = str(ar.get("join_threshold", 10))
@@ -416,11 +438,11 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
             return await interaction.response.send_message(
                 "Invalid action. Choose: `kick` or `lockdown`.", ephemeral=True)
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["antiraid"]["join_threshold"] = max(1, int(self.join_t.value))
-            cfg["antiraid"]["join_interval"]  = max(1, int(self.join_i.value))
-            cfg["antiraid"]["action"]         = val
+            cfg["antiraid"]["join_interval"] = max(1, int(self.join_i.value))
+            cfg["antiraid"]["action"] = val
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antiraid", interaction.guild))
@@ -430,24 +452,24 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
 
 class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction Flood Settings"):
     int_threshold = discord.ui.TextInput(label="Interaction threshold (unique users)", placeholder="e.g. 5")
-    int_window    = discord.ui.TextInput(label="Detection window (seconds)",           placeholder="e.g. 30")
-    join_age      = discord.ui.TextInput(label="Max member age to count (seconds)",    placeholder="e.g. 120")
-    raider_act    = discord.ui.TextInput(label="Raider action (kick / ban)",           placeholder="kick",   max_length=10)
-    operator_act  = discord.ui.TextInput(label="Operator action (notify / kick / ban)",placeholder="notify", max_length=10)
+    int_window = discord.ui.TextInput(label="Detection window (seconds)", placeholder="e.g. 30")
+    join_age = discord.ui.TextInput(label="Max member age to count (seconds)", placeholder="e.g. 120")
+    raider_act = discord.ui.TextInput(label="Raider action (kick / ban)", placeholder="kick", max_length=10)
+    operator_act = discord.ui.TextInput(label="Operator action (notify / kick / ban)", placeholder="notify", max_length=10)
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         are = cfg.get("antiraid_ext", {})
         self.int_threshold.default = str(are.get("interaction_threshold", 5))
-        self.int_window.default    = str(are.get("interaction_window", 30))
-        self.join_age.default      = str(are.get("join_age_limit", 120))
-        self.raider_act.default    = are.get("raider_action", "kick")
-        self.operator_act.default  = are.get("operator_action", "notify")
+        self.int_window.default = str(are.get("interaction_window", 30))
+        self.join_age.default = str(are.get("join_age_limit", 120))
+        self.raider_act.default = are.get("raider_action", "kick")
+        self.operator_act.default = are.get("operator_action", "notify")
 
     async def on_submit(self, interaction: discord.Interaction):
-        raider_val   = self.raider_act.value.lower().strip()
+        raider_val = self.raider_act.value.lower().strip()
         operator_val = self.operator_act.value.lower().strip()
         if raider_val not in ("kick", "ban"):
             return await interaction.response.send_message(
@@ -456,13 +478,13 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
             return await interaction.response.send_message(
                 "Invalid operator action. Choose: `notify`, `kick`, or `ban`.", ephemeral=True)
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["antiraid_ext"]["interaction_threshold"] = max(1, int(self.int_threshold.value))
-            cfg["antiraid_ext"]["interaction_window"]    = max(5, int(self.int_window.value))
-            cfg["antiraid_ext"]["join_age_limit"]        = max(10, int(self.join_age.value))
-            cfg["antiraid_ext"]["raider_action"]         = raider_val
-            cfg["antiraid_ext"]["operator_action"]       = operator_val
+            cfg["antiraid_ext"]["interaction_window"] = max(5, int(self.int_window.value))
+            cfg["antiraid_ext"]["join_age_limit"] = max(10, int(self.join_age.value))
+            cfg["antiraid_ext"]["raider_action"] = raider_val
+            cfg["antiraid_ext"]["operator_action"] = operator_val
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
@@ -472,17 +494,17 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
 
 class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed App Settings"):
     threshold = discord.ui.TextInput(label="Commands per user before action", placeholder="e.g. 3")
-    window    = discord.ui.TextInput(label="Time window (seconds)",           placeholder="e.g. 15")
-    action    = discord.ui.TextInput(label="Action (kick / ban / warn / log)",placeholder="kick", max_length=10)
+    window = discord.ui.TextInput(label="Time window (seconds)", placeholder="e.g. 15")
+    action = discord.ui.TextInput(label="Action (kick / ban / warn / log)", placeholder="kick", max_length=10)
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
         are = cfg.get("antiraid_ext", {})
         self.threshold.default = str(are.get("ext_app_threshold", 3))
-        self.window.default    = str(are.get("ext_app_window", 15))
-        self.action.default    = are.get("ext_app_action", "kick")
+        self.window.default = str(are.get("ext_app_window", 15))
+        self.action.default = are.get("ext_app_action", "kick")
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.action.value.lower().strip()
@@ -490,11 +512,11 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
             return await interaction.response.send_message(
                 "Invalid action. Choose: `kick`, `ban`, `warn`, or `log`.", ephemeral=True)
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         try:
             cfg["antiraid_ext"]["ext_app_threshold"] = max(1, int(self.threshold.value))
-            cfg["antiraid_ext"]["ext_app_window"]    = max(5, int(self.window.value))
-            cfg["antiraid_ext"]["ext_app_action"]    = val
+            cfg["antiraid_ext"]["ext_app_window"] = max(5, int(self.window.value))
+            cfg["antiraid_ext"]["ext_app_action"] = val
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
@@ -512,10 +534,9 @@ def _build_threshold_modal(cfg, automod_cog, guild_id, section):
     return FilterThresholdModal(automod_cog, guild_id, cfg)
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  WHITELIST EPHEMERAL SELECTS & VIEWS
-# ─────────────────────────────────────────────────────────────
-
+# ──────────────────────────────────────────────────
 class _WLUserSelect(discord.ui.UserSelect):
     """Ephemeral select — add members to whitelist."""
     def __init__(self, automod_cog, guild_id: int):
@@ -523,7 +544,7 @@ class _WLUserSelect(discord.ui.UserSelect):
             placeholder="Choose member(s) to whitelist…",
             min_values=1, max_values=10,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -544,7 +565,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
             placeholder="Choose role(s) to whitelist…",
             min_values=1, max_values=10,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -566,7 +587,7 @@ class _WLUserRemoveSelect(discord.ui.Select):
             min_values=1, max_values=len(options),
             options=options,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -587,7 +608,7 @@ class _WLRoleRemoveSelect(discord.ui.Select):
             min_values=1, max_values=len(options),
             options=options,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -607,7 +628,7 @@ class _WLAddUserBtn(discord.ui.Button):
             style=discord.ButtonStyle.green,
             emoji=get_emoji("icon_plus")
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -626,7 +647,7 @@ class _WLAddRoleBtn(discord.ui.Button):
             style=discord.ButtonStyle.green,
             emoji=get_emoji("icon_plus")
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -645,17 +666,17 @@ class _WLRemoveUserBtn(discord.ui.Button):
             style=discord.ButtonStyle.red,
             disabled=not has_users,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         user_ids = cfg.get("whitelist_users", [])
         options = []
         for uid in user_ids:
             member = interaction.guild.get_member(uid)
-            label  = member.display_name if member else f"User {uid}"
+            label = member.display_name if member else f"User {uid}"
             options.append(discord.SelectOption(
                 label=label[:100], value=str(uid),
                 description=f"ID: {uid}",
@@ -679,16 +700,16 @@ class _WLRemoveRoleBtn(discord.ui.Button):
             style=discord.ButtonStyle.red,
             disabled=not has_roles,
         )
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         role_ids = cfg.get("whitelist_roles", [])
-        options  = []
+        options = []
         for rid in role_ids:
-            role  = interaction.guild.get_role(rid)
+            role = interaction.guild.get_role(rid)
             label = role.name if role else f"Role {rid}"
             options.append(discord.SelectOption(
                 label=label[:100], value=str(rid),
@@ -706,75 +727,73 @@ class _WLRemoveRoleBtn(discord.ui.Button):
         )
 
 
-# ─────────────────────────────────────────────────────────────
-#  PANEL FACTORY
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
+#  PANEL BUILDER
+# ──────────────────────────────────────────────────
 
-def _build_panel(automod_cog, guild_id: int, section: str = "overview",
-                 guild: discord.Guild = None) -> discord.ui.LayoutView:
-    utils = automod_cog.utils()
-    cfg   = utils.get_guild_config(guild_id)
+def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.Guild = None) -> discord.ui.LayoutView:
+    utils = self.utils()
+    cfg = utils.get_guild_config(guild_id)
 
-    view      = discord.ui.LayoutView(timeout=300)
-    text      = _section_text(cfg, section, guild)
+    view = discord.ui.LayoutView(timeout=300)
+    text = _section_text(cfg, section, guild)
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=text),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
     )
-    container.add_item(discord.ui.ActionRow(SectionSelect(automod_cog, guild_id, section)))
+    container.add_item(discord.ui.ActionRow(SectionSelect(self, guild_id, section)))
 
     if section == "filter":
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Spam",    "antispam",    automod_cog, guild_id, section),
-            ToggleButton("Anti-Link",    "antilink",    automod_cog, guild_id, section),
+            ToggleButton("Anti-Spam", "antispam", self, guild_id, section),
+            ToggleButton("Anti-Link", "antilink", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Bad Words",    "badwords",    automod_cog, guild_id, section),
-            ToggleButton("Mass Mention", "massmention", automod_cog, guild_id, section),
+            ToggleButton("Bad Words", "badwords", self, guild_id, section),
+            ToggleButton("Mass Mention", "massmention", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
+            EditThresholdsButton(self, guild_id, section),
         ))
 
     elif section == "antinuke":
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Nuke", "antinuke", automod_cog, guild_id, section),
+            ToggleButton("Anti-Nuke", "antinuke", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
-            _NukeActionButton(automod_cog, guild_id),
+            EditThresholdsButton(self, guild_id, section),
+            _NukeActionButton(self, guild_id),
         ))
 
     elif section == "antiraid":
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Anti-Raid", "antiraid", automod_cog, guild_id, section),
+            ToggleButton("Anti-Raid", "antiraid", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section),
+            EditThresholdsButton(self, guild_id, section),
         ))
 
     elif section == "ext_raid":
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Interaction Flood", "antiraid_ext", automod_cog, guild_id, section),
-            SubToggleButton("User-App Detection", "antiraid_ext", "ext_app_detection",
-                            automod_cog, guild_id, section),
+            ToggleButton("Interaction Flood", "antiraid_ext", self, guild_id, section),
+            SubToggleButton("User-App Detection", "antiraid_ext", "ext_app_detection", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            EditThresholdsButton(automod_cog, guild_id, section, label="Flood Thresholds"),
-            EditExtAppButton(automod_cog, guild_id),
+            EditThresholdsButton(self, guild_id, section, label="Flood Thresholds"),
+            EditExtAppButton(self, guild_id),
         ))
 
     elif section == "whitelist":
-        wl_cfg   = cfg
-        has_u    = bool(wl_cfg.get("whitelist_users", []))
-        has_r    = bool(wl_cfg.get("whitelist_roles", []))
+        wl_cfg = cfg
+        has_u = bool(wl_cfg.get("whitelist_users", []))
+        has_r = bool(wl_cfg.get("whitelist_roles", []))
         container.add_item(discord.ui.ActionRow(
-            _WLAddUserBtn(automod_cog, guild_id),
-            _WLAddRoleBtn(automod_cog, guild_id),
+            _WLAddUserBtn(self, guild_id),
+            _WLAddRoleBtn(self, guild_id),
         ))
         container.add_item(discord.ui.ActionRow(
-            _WLRemoveUserBtn(automod_cog, guild_id, has_u),
-            _WLRemoveRoleBtn(automod_cog, guild_id, has_r),
+            _WLRemoveUserBtn(self, guild_id, has_u),
+            _WLRemoveRoleBtn(self, guild_id, has_r),
         ))
 
     view.add_item(container)
@@ -784,18 +803,18 @@ def _build_panel(automod_cog, guild_id: int, section: str = "overview",
 class _NukeActionButton(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int):
         super().__init__(label="🎯 Set Action", style=discord.ButtonStyle.gray)
-        self._cog      = automod_cog
+        self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         utils = self._cog.utils()
-        cfg   = utils.get_guild_config(self._guild_id)
+        cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(AntiNukeActionModal(self._cog, self._guild_id, cfg))
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  AUTOMOD COG
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class AutoMod(commands.Cog):
     """Automatic moderation: spam, links, badwords, mass mention,
@@ -803,12 +822,12 @@ class AutoMod(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self._msg_history         = {}   # guild_id -> user_id -> [timestamps]
-        self._nuke_history        = {}   # guild_id -> user_id -> {action_key: [ts]}
-        self._join_history        = {}   # guild_id -> [timestamps]
-        self._interaction_history = {}   # guild_id -> [(user_id, timestamp)]
-        self._ext_app_history     = {}   # guild_id -> user_id -> [timestamps]
-        self._invite_cache        = {}   # guild_id -> {invite_code: uses}
+        self._msg_history = {}  # guild_id -> user_id -> [timestamps]
+        self._nuke_history = {}  # guild_id -> user_id -> {action_key: [ts]}
+        self._join_history = {}  # guild_id -> [timestamps]
+        self._interaction_history = {}  # guild_id -> [(user_id, timestamp)]
+        self._ext_app_history = {}  # guild_id -> user_id -> [timestamps]
+        self._invite_cache = {}  # guild_id -> {invite_code: uses}
         self._missing_perms_warned = set()  # guild_ids where we've already logged a missing-perm warning
 
     def utils(self):
@@ -817,7 +836,7 @@ class AutoMod(commands.Cog):
     def get_cfg(self, guild_id: int):
         return self.utils().get_guild_config(guild_id)
 
-    # ─── INVITE CACHE ────────────────────────────────────────
+    # ─── INVITE CACHE ─────────────────────────────
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -848,31 +867,31 @@ class AutoMod(commands.Cog):
         except (discord.Forbidden, discord.HTTPException):
             return None
         best_invite = None
-        best_delta  = 0
+        best_delta = 0
         for inv in current_invites:
             delta = inv.uses - cached.get(inv.code, 0)
             if delta > best_delta:
-                best_delta  = delta
+                best_delta = delta
                 best_invite = inv
         self._invite_cache[guild.id] = {inv.code: inv.uses for inv in current_invites}
         if best_invite and best_delta >= 2 and best_invite.inviter:
             return guild.get_member(best_invite.inviter.id)
         return None
 
-    # ─── MESSAGE TRACKING ────────────────────────────────────
+    # ─── MESSAGE TRACKING ─────────────────────────
 
     def _track_message(self, message: discord.Message) -> int:
         gid, uid = message.guild.id, message.author.id
-        now      = time.time()
-        cfg      = self.get_cfg(gid)
+        now = time.time()
+        cfg = self.get_cfg(gid)
         interval = cfg.get("spam_interval", 7)
-        cutoff   = now - interval
-        bucket   = self._msg_history.setdefault(gid, {}).setdefault(uid, [])
+        cutoff = now - interval
+        bucket = self._msg_history.setdefault(gid, {}).setdefault(uid, [])
         bucket.append(now)
         self._msg_history[gid][uid] = [t for t in bucket if t >= cutoff]
         return len(self._msg_history[gid][uid])
 
-    # ─── MESSAGE FILTER + USER-APP DETECTION ─────────────────
+    # ─── MESSAGE FILTER + USER-APP DETECTION ──────
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -882,12 +901,12 @@ class AutoMod(commands.Cog):
             return
 
         utils = self.utils()
-        cfg   = self.get_cfg(message.guild.id)
+        cfg = self.get_cfg(message.guild.id)
 
         if utils.is_whitelisted(message.guild.id, message.author):
             return
 
-        # ── User-installed application abuse detection ──
+        # ── User-installed app abuse detection ────
         # Must run before content filters because the message author here is the
         # external app (a webhook/system user), not the human attacker.
         if (cfg["automod"].get("antiraid_ext", False)
@@ -962,7 +981,7 @@ class AutoMod(commands.Cog):
                     pass
                 return
 
-    # ─── USER-INSTALLED APP ABUSE ─────────────────────────────
+    # ─── USER-INSTALLED APP ABUSE ─────────────────
 
     async def _check_user_installed_app(self, message: discord.Message, cfg: dict, utils):
         """
@@ -1001,15 +1020,15 @@ class AutoMod(commands.Cog):
             return
 
         # Config
-        are       = cfg.get("antiraid_ext", {})
+        are = cfg.get("antiraid_ext", {})
         threshold = are.get("ext_app_threshold", 3)
-        window    = are.get("ext_app_window", 15)
-        action    = are.get("ext_app_action", "kick")
+        window = are.get("ext_app_window", 15)
+        action = are.get("ext_app_action", "kick")
 
         now = time.time()
         bucket = self._ext_app_history \
-                     .setdefault(message.guild.id, {}) \
-                     .setdefault(triggering_user.id, [])
+            .setdefault(message.guild.id, {}) \
+            .setdefault(triggering_user.id, [])
 
         bucket.append(now)
 
@@ -1071,7 +1090,7 @@ class AutoMod(commands.Cog):
                 except Exception as e:
                     log.error("Ext-App", f"Failed to action {triggering_user}: {e}")
 
-    # ─── INTERACTION FLOOD DETECTION ──────────────────────────
+    # ─── INTERACTION FLOOD DETECTION ──────────────
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
@@ -1083,7 +1102,7 @@ class AutoMod(commands.Cog):
         if not interaction.guild:
             return
 
-        guild  = interaction.guild
+        guild = interaction.guild
         member = interaction.user
 
         cfg = self.get_cfg(guild.id)
@@ -1095,7 +1114,7 @@ class AutoMod(commands.Cog):
         if self.utils().is_whitelisted(guild.id, member):
             return
 
-        are           = cfg.get("antiraid_ext", {})
+        are = cfg.get("antiraid_ext", {})
         join_age_limit = are.get("join_age_limit", 120)
 
         joined_at = getattr(member, "joined_at", None)
@@ -1114,7 +1133,7 @@ class AutoMod(commands.Cog):
         ]
 
         unique_users = len({uid for uid, _ in self._interaction_history[guild.id]})
-        threshold    = are.get("interaction_threshold", 5)
+        threshold = are.get("interaction_threshold", 5)
 
         if unique_users >= threshold:
             raider_ids = list({uid for uid, _ in self._interaction_history[guild.id]})
@@ -1127,13 +1146,13 @@ class AutoMod(commands.Cog):
             await self._handle_ext_raid(guild, cfg, raider_ids)
 
     async def _handle_ext_raid(self, guild: discord.Guild, cfg: dict, raider_ids: list):
-        are           = cfg.get("antiraid_ext", {})
+        are = cfg.get("antiraid_ext", {})
         raider_action = are.get("raider_action", "kick")
-        op_action     = are.get("operator_action", "notify")
+        op_action = are.get("operator_action", "notify")
 
         operator = await self._identify_operator(guild)
 
-        op_mention      = operator.mention if operator else "*could not be determined*"
+        op_mention = operator.mention if operator else "*could not be determined*"
         raider_mentions = ", ".join(f"<@{uid}>" for uid in raider_ids)
         await self.utils().log_action(
             guild,
@@ -1177,7 +1196,7 @@ class AutoMod(commands.Cog):
         except Exception:
             pass
 
-    # ─── ANTI-RAID (JOIN FLOOD) ───────────────────────────────
+    # ─── ANTI-RAID (JOIN FLOOD) ───────────────────
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -1188,12 +1207,12 @@ class AutoMod(commands.Cog):
         if not cfg["automod"].get("antiraid", False):
             return
 
-        ar        = cfg.get("antiraid", {})
+        ar = cfg.get("antiraid", {})
         threshold = ar.get("join_threshold", 10)
-        interval  = ar.get("join_interval", 10)
-        action    = ar.get("action", "kick")
+        interval = ar.get("join_interval", 10)
+        action = ar.get("action", "kick")
 
-        now    = time.time()
+        now = time.time()
         cutoff = now - interval
         bucket = self._join_history.setdefault(guild.id, [])
         bucket.append(now)
@@ -1232,7 +1251,7 @@ class AutoMod(commands.Cog):
             except Exception:
                 pass
 
-    # ─── ANTI-NUKE ───────────────────────────────────────────
+    # ─── ANTI-NUKE ────────────────────────────────
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
@@ -1246,22 +1265,22 @@ class AutoMod(commands.Cog):
         if entry.user == self.bot.user or guild.owner:
             return
 
-        an       = cfg.get("antinuke", {})
+        an = cfg.get("antinuke", {})
         interval = an.get("interval", 10)
 
         action_map = {
-            discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
-            discord.AuditLogAction.kick:           ("kick",           an.get("kick_threshold", 3)),
+            discord.AuditLogAction.ban: ("ban", an.get("ban_threshold", 3)),
+            discord.AuditLogAction.kick: ("kick", an.get("kick_threshold", 3)),
             discord.AuditLogAction.channel_delete: ("channel_delete", an.get("channel_delete_threshold", 3)),
-            discord.AuditLogAction.role_delete:    ("role_delete",    an.get("role_delete_threshold", 3)),
+            discord.AuditLogAction.role_delete: ("role_delete", an.get("role_delete_threshold", 3)),
         }
         if entry.action not in action_map:
             return
 
         action_key, threshold = action_map[entry.action]
-        now    = time.time()
+        now = time.time()
         cutoff = now - interval
-        uid    = entry.user.id
+        uid = entry.user.id
 
         user_history = self._nuke_history.setdefault(guild.id, {}).setdefault(uid, {})
         bucket       = user_history.setdefault(action_key, [])
@@ -1326,7 +1345,7 @@ class AutoMod(commands.Cog):
             except Exception:
                 pass
 
-    # ─── SETTINGS COMMAND ────────────────────────────────────
+    # ─── SETTINGS COMMAND ─────────────────────────
 
     @commands.command(name="automod",
                       help="Open the AutoMod settings panel ☕🛡️ | AutoMod-Einstellungen")
