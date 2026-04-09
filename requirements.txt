@@ -7,5 +7,5 @@ flask
 openai
 wavelink
 aiosqlite
-deep_translate
+deep-translator
 langdetect

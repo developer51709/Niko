@@ -2,10 +2,17 @@ import asyncio
 from discord import Locale
 from discord.enums import _UNICODE_LANG_MAP
 
-from deep_translator import GoogleTranslator
-from langdetect import detect as langdetect_detect
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    GoogleTranslator = None
 
-SUPPORTED_LANGUAGES = GoogleTranslator().get_supported_languages(as_dict=True)
+try:
+    from langdetect import detect as langdetect_detect
+except ImportError:
+    langdetect_detect = None
+
+SUPPORTED_LANGUAGES = GoogleTranslator().get_supported_languages(as_dict=True) if GoogleTranslator else {}
 
 class Translator:
     """Supported languages are correlated to supported discord.Locale."""
@@ -43,6 +50,8 @@ class Translator:
 
     @staticmethod
     async def translate(text: str, dest: str = "en", src: str = "auto") -> str:
+        if GoogleTranslator is None:
+            raise RuntimeError("Translation support is unavailable.")
         loop = asyncio.get_event_loop()
         def _translate():
             translator = GoogleTranslator(source=src, target=dest)
@@ -54,7 +63,7 @@ class Translator:
 
     @staticmethod
     async def translate_to_locale(text: str, locale: Locale, src: str = "auto") -> str:
-        dest = Translator.LOCALE_TO_LANGCODE.get(locale.language_code, None)
+        dest = Translator.LOCALE_TO_LANGCODE.get(locale.language_code, "en")
         return await Translator.translate(text, dest=dest, src=src)
 
     @staticmethod
