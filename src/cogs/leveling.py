@@ -1,7 +1,3 @@
-# leveling.py
-# Bilingual EN/DE, café personality, cv2 LayoutView responses.
-# Supports per-guild config: XP toggle, multiplier, cooldown, level-up channel, level roles.
-
 import discord
 from discord.ext import commands
 import random
@@ -104,10 +100,8 @@ def msg(ctx, key, **kwargs):
 
 
 # ─────────────────────────────────────────────────────────────
-#  GUILD CONFIG
+#  DEFAULTS
 # ─────────────────────────────────────────────────────────────
-
-LEVEL_CONFIG_PATH = "data/level_config.json"
 
 DEFAULT_GUILD_LEVEL_CONFIG = {
     "xp_enabled":       True,
@@ -119,34 +113,8 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
 }
 
 
-def _load_level_config() -> dict:
-    if os.path.exists(LEVEL_CONFIG_PATH):
-        try:
-            with open(LEVEL_CONFIG_PATH, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-def _save_level_config(data: dict):
-    os.makedirs("data", exist_ok=True)
-    with open(LEVEL_CONFIG_PATH, "w") as f:
-        json.dump(data, f, indent=4)
-
-
-def _get_guild_level_cfg(configs: dict, guild_id: str) -> dict:
-    if guild_id not in configs:
-        import copy
-        configs[guild_id] = copy.deepcopy(DEFAULT_GUILD_LEVEL_CONFIG)
-    else:
-        for k, v in DEFAULT_GUILD_LEVEL_CONFIG.items():
-            configs[guild_id].setdefault(k, v)
-    return configs[guild_id]
-
-
 # ─────────────────────────────────────────────────────────────
-#  PANEL TEXT BUILDERS
+#  PANEL TEXT BUILDERS  (purely sync, receive cfg dict)
 # ─────────────────────────────────────────────────────────────
 
 def _lv_icon(val) -> str:
@@ -154,10 +122,10 @@ def _lv_icon(val) -> str:
 
 
 def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
-    lu_ch    = guild.get_channel(cfg.get("level_up_channel") or 0)
-    lu_ch_s  = lu_ch.mention if lu_ch else "*(same channel)*"
-    lr       = cfg.get("level_roles", {})
-    lr_s     = ", ".join(
+    lu_ch   = guild.get_channel(cfg.get("level_up_channel") or 0)
+    lu_ch_s = lu_ch.mention if lu_ch else "*(same channel)*"
+    lr      = cfg.get("level_roles", {})
+    lr_s    = ", ".join(
         f"Lv.{lvl}→{(guild.get_role(int(rid)) or discord.Object(rid)).mention}"
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0]))
     ) or "*none*"
@@ -195,8 +163,8 @@ def _lv_xp_text(cfg: dict) -> str:
 
 
 def _lv_announcements_text(cfg: dict, guild: discord.Guild) -> str:
-    lu_ch   = guild.get_channel(cfg.get("level_up_channel") or 0)
-    lu_ch_s = lu_ch.mention if lu_ch else "*(same channel as the message)*"
+    lu_ch      = guild.get_channel(cfg.get("level_up_channel") or 0)
+    lu_ch_s    = lu_ch.mention if lu_ch else "*(same channel as the message)*"
     custom_msg = cfg.get("level_up_message")
     default_msg = "congratulations {mention}, you leveled up to level **{level}**! ☕✨"
     msg_display = custom_msg if custom_msg else default_msg
@@ -234,14 +202,14 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
 
 
 def _lv_section_text(cfg: dict, section: str, guild: discord.Guild) -> str:
-    if section == "xp":             return _lv_xp_text(cfg)
-    if section == "announcements":  return _lv_announcements_text(cfg, guild)
-    if section == "level_roles":    return _lv_roles_text(cfg, guild)
+    if section == "xp":            return _lv_xp_text(cfg)
+    if section == "announcements": return _lv_announcements_text(cfg, guild)
+    if section == "level_roles":   return _lv_roles_text(cfg, guild)
     return _lv_overview_text(cfg, guild)
 
 
 # ─────────────────────────────────────────────────────────────
-#  PANEL INTERACTIVE COMPONENTS
+#  PANEL INTERACTIVE COMPONENTS  (all receive cfg where needed)
 # ─────────────────────────────────────────────────────────────
 
 class _LvSectionSelect(discord.ui.Select):
@@ -249,16 +217,16 @@ class _LvSectionSelect(discord.ui.Select):
         self._cog      = cog
         self._guild_id = guild_id
         options = [
-            discord.SelectOption(label="Overview",        value="overview",       emoji="☕",
+            discord.SelectOption(label="Overview",       value="overview",      emoji="☕",
                                  description="All leveling settings at a glance",
                                  default=(current == "overview")),
-            discord.SelectOption(label="XP Settings",     value="xp",             emoji="📊",
+            discord.SelectOption(label="XP Settings",    value="xp",            emoji="📊",
                                  description="Toggle XP, multiplier, cooldown",
                                  default=(current == "xp")),
-            discord.SelectOption(label="Announcements",   value="announcements",  emoji="📣",
+            discord.SelectOption(label="Announcements",  value="announcements", emoji="📣",
                                  description="Level-up channel and custom message",
                                  default=(current == "announcements")),
-            discord.SelectOption(label="Level Roles",     value="level_roles",    emoji="🎖️",
+            discord.SelectOption(label="Level Roles",    value="level_roles",   emoji="🎖️",
                                  description="Roles awarded on level-up",
                                  default=(current == "level_roles")),
         ]
@@ -266,28 +234,27 @@ class _LvSectionSelect(discord.ui.Select):
                          min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        panel = _build_level_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
+        panel = await _build_level_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
         await interaction.response.edit_message(view=panel)
 
 
 class _LvXPToggleBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, cfg: dict):
         self._cog      = cog
         self._guild_id = guild_id
-        cfg     = cog._guild_cfg(str(guild_id))
         enabled = cfg.get("xp_enabled", True)
         super().__init__(
-            label=f"XP Tracking",
+            label="XP Tracking",
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
-            emoji=_lv_icon(enabled)
+            emoji=_lv_icon(enabled),
         )
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
-        self._cog._save_configs()
-        await interaction.response.edit_message(
-            view=_build_level_panel(self._cog, self._guild_id, "xp", interaction.guild))
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "xp", interaction.guild)
+        await interaction.response.edit_message(view=panel)
 
 
 class _LvXPSettingsModal(discord.ui.Modal, title="XP Settings"):
@@ -306,35 +273,30 @@ class _LvXPSettingsModal(discord.ui.Modal, title="XP Settings"):
             mult = round(max(0.1, float(self.multiplier.value)), 2)
             cd   = max(0, int(self.cooldown.value))
         except ValueError:
-            return await interaction.response.send_message(
-                "Please enter valid numbers.", ephemeral=True)
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+            return await interaction.response.send_message("Please enter valid numbers.", ephemeral=True)
+        cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["xp_multiplier"] = mult
         cfg["xp_cooldown"]   = cd
-        self._cog._save_configs()
-        await interaction.response.edit_message(
-            view=_build_level_panel(self._cog, self._guild_id, "xp", interaction.guild))
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "xp", interaction.guild)
+        await interaction.response.edit_message(view=panel)
 
 
 class _LvEditXPBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(
-            label="Edit XP Values", 
-            style=discord.ButtonStyle.blurple, 
-            emoji=get_emoji("icon_settings")
-        )
+        super().__init__(label="Edit XP Values", style=discord.ButtonStyle.blurple,
+                         emoji=get_emoji("icon_settings"))
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         await interaction.response.send_modal(_LvXPSettingsModal(self._cog, self._guild_id, cfg))
 
 
 # ── Announcements ──────────────────────────────────────────
 
 class _LvChannelSelect(discord.ui.ChannelSelect):
-    """Ephemeral select — set the level-up channel."""
     def __init__(self, cog, guild_id: int):
         super().__init__(
             placeholder="Choose a text channel…",
@@ -346,24 +308,23 @@ class _LvChannelSelect(discord.ui.ChannelSelect):
 
     async def callback(self, interaction: discord.Interaction):
         channel = self.values[0]
-        cfg     = self._cog._guild_cfg(str(self._guild_id))
+        cfg     = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_channel"] = channel.id
-        self._cog._save_configs()
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
             content=f"{get_emoji('icon_tick')} Level-up announcements will now go to {channel.mention}.", view=None)
 
 
 class _LvClearChannelBtn(discord.ui.Button):
-    """Inside the ephemeral channel picker — resets to same-channel."""
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
         super().__init__(label="Clear (use same channel)", style=discord.ButtonStyle.red)
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_channel"] = None
-        self._cog._save_configs()
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
             content=f"{get_emoji('icon_tick')} Level-up announcements will now appear in the same channel as the message.",
             view=None)
@@ -396,19 +357,18 @@ class _LvMessageModal(discord.ui.Modal, title="Custom Level-Up Message"):
         super().__init__()
         self._cog      = cog
         self._guild_id = guild_id
-        current = cfg.get("level_up_message") or ""
-        self.message.default = current
+        self.message.default = cfg.get("level_up_message") or ""
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.message.value.strip()
         if not val:
             return await interaction.response.send_message(
                 "Message cannot be empty. Use the Reset button to restore the default.", ephemeral=True)
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_message"] = val
-        self._cog._save_configs()
-        await interaction.response.edit_message(
-            view=_build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild))
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild)
+        await interaction.response.edit_message(view=panel)
 
 
 class _LvEditMessageBtn(discord.ui.Button):
@@ -418,7 +378,7 @@ class _LvEditMessageBtn(discord.ui.Button):
         super().__init__(label="✏️ Edit Message", style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         await interaction.response.send_modal(_LvMessageModal(self._cog, self._guild_id, cfg))
 
 
@@ -426,24 +386,19 @@ class _LvResetMessageBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, has_custom: bool):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(
-            label="↩️ Reset Message",
-            style=discord.ButtonStyle.red,
-            disabled=not has_custom,
-        )
+        super().__init__(label="↩️ Reset Message", style=discord.ButtonStyle.red, disabled=not has_custom)
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_message"] = None
-        self._cog._save_configs()
-        await interaction.response.edit_message(
-            view=_build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild))
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild)
+        await interaction.response.edit_message(view=panel)
 
 
 # ── Level Roles ─────────────────────────────────────────────
 
 class _LvRoleAssignSelect(discord.ui.RoleSelect):
-    """Step 2 of adding a level role — picks the role after the level was entered."""
     def __init__(self, cog, guild_id: int, level: int):
         super().__init__(placeholder="Choose a role to award…", min_values=1, max_values=1)
         self._cog      = cog
@@ -452,9 +407,9 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
 
     async def callback(self, interaction: discord.Interaction):
         role = self.values[0]
-        cfg  = self._cog._guild_cfg(str(self._guild_id))
+        cfg  = await self._cog._guild_cfg(self._guild_id)
         cfg.setdefault("level_roles", {})[str(self._level)] = role.id
-        self._cog._save_configs()
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
             content=f"{get_emoji('icon_tick')} **Level {self._level}** → {role.mention}", view=None)
 
@@ -487,18 +442,13 @@ class _LvAddRoleBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(
-            label="Add Role", 
-            style=discord.ButtonStyle.green, 
-            emoji=get_emoji("icon_plus")
-        )
+        super().__init__(label="Add Role", style=discord.ButtonStyle.green, emoji=get_emoji("icon_plus"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_LvAddRoleModal(self._cog, self._guild_id))
 
 
 class _LvRemoveRoleSelect(discord.ui.Select):
-    """Ephemeral select — remove a level role assignment."""
     def __init__(self, cog, guild_id: int, options: list):
         super().__init__(
             placeholder="Choose level role(s) to remove…",
@@ -509,11 +459,11 @@ class _LvRemoveRoleSelect(discord.ui.Select):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
+        cfg = await self._cog._guild_cfg(self._guild_id)
         lr  = cfg.setdefault("level_roles", {})
         for val in self.values:
             lr.pop(val, None)
-        self._cog._save_configs()
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
             content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` level role assignment(s).", view=None)
 
@@ -522,15 +472,11 @@ class _LvRemoveRoleBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, has_roles: bool):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(
-            label="➖ Remove Role",
-            style=discord.ButtonStyle.red,
-            disabled=not has_roles,
-        )
+        super().__init__(label="➖ Remove Role", style=discord.ButtonStyle.red, disabled=not has_roles)
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = self._cog._guild_cfg(str(self._guild_id))
-        lr  = cfg.get("level_roles", {})
+        cfg   = await self._cog._guild_cfg(self._guild_id)
+        lr    = cfg.get("level_roles", {})
         guild = interaction.guild
         options = []
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0])):
@@ -552,12 +498,12 @@ class _LvRemoveRoleBtn(discord.ui.Button):
 
 
 # ─────────────────────────────────────────────────────────────
-#  PANEL FACTORY
+#  PANEL FACTORY  (async — fetches cfg from DB)
 # ─────────────────────────────────────────────────────────────
 
-def _build_level_panel(cog, guild_id: int, section: str = "overview",
-                       guild: discord.Guild = None) -> discord.ui.LayoutView:
-    cfg  = cog._guild_cfg(str(guild_id))
+async def _build_level_panel(cog, guild_id: int, section: str = "overview",
+                              guild: discord.Guild = None) -> discord.ui.LayoutView:
+    cfg  = await cog._guild_cfg(guild_id)
     text = _lv_section_text(cfg, section, guild)
 
     view      = discord.ui.LayoutView(timeout=300)
@@ -569,7 +515,7 @@ def _build_level_panel(cog, guild_id: int, section: str = "overview",
 
     if section == "xp":
         container.add_item(discord.ui.ActionRow(
-            _LvXPToggleBtn(cog, guild_id),
+            _LvXPToggleBtn(cog, guild_id, cfg),
             _LvEditXPBtn(cog, guild_id),
         ))
 
@@ -603,80 +549,171 @@ class Leveling(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.data_path = "data/levels.json"
-        self.levels = self._load_levels()
-        self.level_configs = _load_level_config()
-        self._cooldown_cache: dict[str, float] = {}
+        self._cooldown_cache: dict = {}
 
-    def _load_levels(self):
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        if os.path.exists(self.data_path):
-            with open(self.data_path, "r") as f:
-                return json.load(f)
-        return {}
+    async def cog_load(self):
+        """Migrate legacy JSON data into the central database (one-time)."""
+        await self._migrate_levels_json()
+        await self._migrate_level_config_json()
 
-    def _save_levels(self):
-        with open(self.data_path, "w") as f:
-            json.dump(self.levels, f, indent=4)
+    # ── DB HELPERS ───────────────────────────────────────────
 
-    def _save_configs(self):
-        _save_level_config(self.level_configs)
+    async def _guild_cfg(self, guild_id) -> dict:
+        """Return the level config dict for a guild, falling back to defaults."""
+        gid = int(guild_id)
+        row = await self.bot.cxn.fetchrow(
+            "SELECT * FROM level_config WHERE guild_id = $1", gid
+        )
+        cfg = dict(DEFAULT_GUILD_LEVEL_CONFIG)
+        if row:
+            cfg["xp_enabled"]       = bool(row["xp_enabled"])
+            cfg["xp_multiplier"]    = row["xp_multiplier"]
+            cfg["xp_cooldown"]      = row["xp_cooldown"]
+            cfg["level_up_channel"] = row["level_up_channel"]
+            cfg["level_up_message"] = row["level_up_message"]
+            try:
+                cfg["level_roles"] = json.loads(row["level_roles"] or "{}")
+            except Exception:
+                cfg["level_roles"] = {}
+        return cfg
 
-    def _guild_cfg(self, guild_id: str) -> dict:
-        return _get_guild_level_cfg(self.level_configs, guild_id)
+    async def _save_guild_cfg(self, guild_id, cfg: dict):
+        gid = int(guild_id)
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO level_config "
+            "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, "
+            " level_up_channel, level_up_message, level_roles) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            gid,
+            int(cfg.get("xp_enabled", True)),
+            cfg.get("xp_multiplier", 1.0),
+            cfg.get("xp_cooldown", 0),
+            cfg.get("level_up_channel"),
+            cfg.get("level_up_message"),
+            json.dumps(cfg.get("level_roles", {})),
+        )
+
+    async def _get_user_data(self, guild_id, user_id) -> dict:
+        row = await self.bot.cxn.fetchrow(
+            "SELECT xp, level FROM levels WHERE guild_id = $1 AND user_id = $2",
+            int(guild_id), int(user_id)
+        )
+        return {"xp": row["xp"], "level": row["level"]} if row else {"xp": 0, "level": 0}
+
+    async def _save_user_data(self, guild_id, user_id, xp: int, level: int):
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO levels (guild_id, user_id, xp, level) VALUES ($1, $2, $3, $4)",
+            int(guild_id), int(user_id), xp, level
+        )
+
+    async def _get_guild_leaderboard(self, guild_id) -> list:
+        return await self.bot.cxn.fetch(
+            "SELECT user_id, xp, level FROM levels "
+            "WHERE guild_id = $1 ORDER BY level DESC, xp DESC",
+            int(guild_id)
+        )
+
+    async def _get_user_rank(self, guild_id, user_id) -> int:
+        rows = await self.bot.cxn.fetch(
+            "SELECT user_id FROM levels WHERE guild_id = $1 ORDER BY level DESC, xp DESC",
+            int(guild_id)
+        )
+        for i, row in enumerate(rows, 1):
+            if row["user_id"] == int(user_id):
+                return i
+        return len(rows) or 1
+
+    # ── MIGRATION HELPERS ────────────────────────────────────
+
+    async def _migrate_levels_json(self):
+        path = "data/levels.json"
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            count = 0
+            for guild_id, users in data.items():
+                for user_id, ud in users.items():
+                    existing = await self.bot.cxn.fetchval(
+                        "SELECT 1 FROM levels WHERE guild_id = $1 AND user_id = $2",
+                        int(guild_id), int(user_id)
+                    )
+                    if not existing:
+                        await self._save_user_data(guild_id, user_id,
+                                                   ud.get("xp", 0), ud.get("level", 0))
+                        count += 1
+            if count:
+                log.info("Leveling", f"Migrated {count} records from levels.json → database.db")
+            os.rename(path, path + ".migrated")
+        except Exception as e:
+            log.warning("Leveling", f"Could not migrate levels.json: {e}")
+
+    async def _migrate_level_config_json(self):
+        path = "data/level_config.json"
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r") as f:
+                configs = json.load(f)
+            count = 0
+            for guild_id, cfg in configs.items():
+                existing = await self.bot.cxn.fetchval(
+                    "SELECT 1 FROM level_config WHERE guild_id = $1", int(guild_id)
+                )
+                if not existing:
+                    await self._save_guild_cfg(guild_id, cfg)
+                    count += 1
+            if count:
+                log.info("Leveling", f"Migrated {count} guild configs from level_config.json → database.db")
+            os.rename(path, path + ".migrated")
+        except Exception as e:
+            log.warning("Leveling", f"Could not migrate level_config.json: {e}")
+
+    # ── XP FORMULA ───────────────────────────────────────────
 
     def get_xp_for_level(self, level: int) -> int:
         return 5 * (level ** 2) + (50 * level) + 100
 
-    # ─── XP EVENT ────────────────────────────────────────────
+    # ── XP EVENT ─────────────────────────────────────────────
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
             return
 
-        guild_id = str(message.guild.id)
-        user_id  = str(message.author.id)
-        cfg      = self._guild_cfg(guild_id)
+        guild_id = message.guild.id
+        user_id  = message.author.id
+        cfg      = await self._guild_cfg(guild_id)
 
         if not cfg.get("xp_enabled", True):
             return
 
-        # Cooldown check
+        # Cooldown check (in-memory)
         cooldown = cfg.get("xp_cooldown", 0)
         if cooldown > 0:
             cache_key = f"{guild_id}:{user_id}"
-            last_xp = self._cooldown_cache.get(cache_key, 0)
-            now = time.time()
+            last_xp   = self._cooldown_cache.get(cache_key, 0)
+            now       = time.time()
             if now - last_xp < cooldown:
                 return
             self._cooldown_cache[cache_key] = now
 
-        if guild_id not in self.levels:
-            self.levels[guild_id] = {}
-        if user_id not in self.levels[guild_id]:
-            self.levels[guild_id][user_id] = {"xp": 0, "level": 0}
-
-        multiplier = cfg.get("xp_multiplier", 1.0)
-        xp_gain = int(random.randint(15, 25) * multiplier)
-        self.levels[guild_id][user_id]["xp"] += xp_gain
-
-        current_xp    = self.levels[guild_id][user_id]["xp"]
-        current_level = self.levels[guild_id][user_id]["level"]
+        user_data     = await self._get_user_data(guild_id, user_id)
+        multiplier    = cfg.get("xp_multiplier", 1.0)
+        xp_gain       = int(random.randint(15, 25) * multiplier)
+        current_xp    = user_data["xp"] + xp_gain
+        current_level = user_data["level"]
         next_level_xp = self.get_xp_for_level(current_level)
 
         if current_xp >= next_level_xp:
-            self.levels[guild_id][user_id]["level"] += 1
-            self.levels[guild_id][user_id]["xp"] = 0
-            new_level = self.levels[guild_id][user_id]["level"]
+            current_level += 1
+            current_xp     = 0
+            await self._save_user_data(guild_id, user_id, current_xp, current_level)
 
-            # Determine level-up channel
             lu_channel_id = cfg.get("level_up_channel")
-            lu_channel = (
-                message.guild.get_channel(lu_channel_id)
-                if lu_channel_id
-                else message.channel
+            lu_channel    = (
+                message.guild.get_channel(lu_channel_id) if lu_channel_id else message.channel
             )
 
             try:
@@ -684,38 +721,35 @@ class Leveling(commands.Cog):
                 if custom_template:
                     lu_text = custom_template.format(
                         mention=message.author.mention,
-                        level=new_level,
+                        level=current_level,
                         name=message.author.display_name,
                         guild=message.guild.name,
                     )
                 else:
                     lu_text = msg(message, "level_up",
-                                  mention=message.author.mention, level=new_level)
+                                  mention=message.author.mention, level=current_level)
                 view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(content=lu_text)
-                )
-                view.add_item(container)
+                view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
                     await lu_channel.send(view=view)
-                log.info("Leveling", f"User {message.author} leveled up to {new_level} in {message.guild.name}")
+                log.info("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass
 
-            # Assign level roles if configured
+            # Assign level roles
             level_roles = cfg.get("level_roles", {})
-            role_id = level_roles.get(str(new_level))
+            role_id = level_roles.get(str(current_level))
             if role_id:
                 role = message.guild.get_role(int(role_id))
                 if role:
                     try:
-                        await message.author.add_roles(role, reason=f"Level-up reward: level {new_level}")
+                        await message.author.add_roles(role, reason=f"Level-up reward: level {current_level}")
                     except Exception:
                         pass
+        else:
+            await self._save_user_data(guild_id, user_id, current_xp, current_level)
 
-        self._save_levels()
-
-    # ─── RANK COMMAND ────────────────────────────────────────
+    # ── RANK COMMAND ─────────────────────────────────────────
 
     @commands.command(
         name="level",
@@ -724,27 +758,26 @@ class Leveling(commands.Cog):
     )
     async def level(self, ctx, member: discord.Member = None):
         member   = member or ctx.author
-        guild_id = str(ctx.guild.id)
-        user_id  = str(member.id)
+        guild_id = ctx.guild.id
+        user_id  = member.id
 
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(guild_id)
         if not cfg.get("xp_enabled", True):
             return await ctx.send(msg(ctx, "xp_disabled"))
 
-        if guild_id not in self.levels or user_id not in self.levels[guild_id]:
-            return await ctx.send(msg(ctx, "no_xp", name=member.display_name))
+        user_data = await self._get_user_data(guild_id, user_id)
+        if user_data["xp"] == 0 and user_data["level"] == 0:
+            existing = await self.bot.cxn.fetchval(
+                "SELECT 1 FROM levels WHERE guild_id = $1 AND user_id = $2",
+                int(guild_id), int(user_id)
+            )
+            if not existing:
+                return await ctx.send(msg(ctx, "no_xp", name=member.display_name))
 
-        user_data     = self.levels[guild_id][user_id]
         current_level = user_data["level"]
         current_xp    = user_data["xp"]
         next_level_xp = self.get_xp_for_level(current_level)
-
-        sorted_users = sorted(
-            self.levels[guild_id].items(),
-            key=lambda x: (x[1]["level"], x[1]["xp"]),
-            reverse=True
-        )
-        rank = next((i for i, (uid, _) in enumerate(sorted_users, 1) if uid == user_id), 1)
+        rank          = await self._get_user_rank(guild_id, user_id)
 
         text = (
             f"### {msg(ctx, 'stats_title', name=member.display_name)}\n"
@@ -762,7 +795,7 @@ class Leveling(commands.Cog):
         ))
         await ctx.send(view=view)
 
-    # ─── LEADERBOARD COMMAND ──────────────────────────────────
+    # ── LEADERBOARD ──────────────────────────────────────────
 
     @commands.command(
         name="level-leaderboard",
@@ -770,37 +803,32 @@ class Leveling(commands.Cog):
         help="View the cozy leaderboard ☕ | Zeigt die Level-Bestenliste."
     )
     async def leaderboard(self, ctx):
-        guild_id = str(ctx.guild.id)
+        guild_id = ctx.guild.id
 
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(guild_id)
         if not cfg.get("xp_enabled", True):
             return await ctx.send(msg(ctx, "xp_disabled"))
 
-        if guild_id not in self.levels or not self.levels[guild_id]:
+        rows = await self._get_guild_leaderboard(guild_id)
+        if not rows:
             return await ctx.send(msg(ctx, "leaderboard_empty"))
 
-        sorted_users = sorted(
-            self.levels[guild_id].items(),
-            key=lambda x: (x[1]["level"], x[1]["xp"]),
-            reverse=True
-        )
-
         lines = []
-        for i, (user_id, data) in enumerate(sorted_users, start=1):
-            user   = self.bot.get_user(int(user_id))
-            name   = user.display_name if user else f"User {user_id}"
-            medal  = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
-            lines.append(f"{medal} {name} — Level {data['level']} ({data['xp']} XP)")
+        for i, row in enumerate(rows, start=1):
+            user  = self.bot.get_user(row["user_id"])
+            name  = user.display_name if user else f"User {row['user_id']}"
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
+            lines.append(f"{medal} {name} — Level {row['level']} ({row['xp']} XP)")
 
         pages = paginate(lines, per_page=10)
-        view = PaginatedView(
+        view  = PaginatedView(
             title=msg(ctx, "leaderboard_title", guild=ctx.guild.name),
             pages=pages,
             icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
         )
         await ctx.send(view=view)
 
-    # ─── LEVELCONFIG COMMAND GROUP ────────────────────────────
+    # ── LEVELCONFIG COMMAND GROUP ─────────────────────────────
 
     @commands.group(
         name="levelconfig",
@@ -810,15 +838,13 @@ class Leveling(commands.Cog):
     )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig(self, ctx):
-        """Show current leveling config for this server."""
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
+        guild_id = ctx.guild.id
+        cfg      = await self._guild_cfg(guild_id)
 
-        lu_ch = ctx.guild.get_channel(cfg.get("level_up_channel") or 0)
+        lu_ch     = ctx.guild.get_channel(cfg.get("level_up_channel") or 0)
         lu_ch_str = lu_ch.mention if lu_ch else "*(same channel)*"
-
-        lr = cfg.get("level_roles", {})
-        lr_lines = "\n".join(
+        lr        = cfg.get("level_roles", {})
+        lr_lines  = "\n".join(
             f"  Level {lvl}: {ctx.guild.get_role(int(rid)).mention if ctx.guild.get_role(int(rid)) else rid}"
             for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0]))
         ) or "  *(none)*"
@@ -839,61 +865,60 @@ class Leveling(commands.Cog):
     @levelconfig.command(name="toggle", help="Enable or disable XP for this server.")
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_toggle(self, ctx):
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
-        self._save_configs()
+        await self._save_guild_cfg(ctx.guild.id, cfg)
         state = f"{get_emoji('icon_tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('icon_cross')} disabled"
         await ctx.send(f"XP tracking is now **{state}** for this server.")
 
-    @levelconfig.command(name="multiplier", aliases=["xpmultiplier"], help="Set XP gain multiplier (e.g. 2.0).")
+    @levelconfig.command(name="multiplier", aliases=["xpmultiplier"],
+                         help="Set XP gain multiplier (e.g. 2.0).")
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_multiplier(self, ctx, value: float = None):
         if value is None or value <= 0:
             return await ctx.send("Please provide a positive multiplier (e.g. `1.5`).")
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_multiplier"] = round(value, 2)
-        self._save_configs()
+        await self._save_guild_cfg(ctx.guild.id, cfg)
         await ctx.send(msg(ctx, "cfg_updated") + f" XP multiplier → `{cfg['xp_multiplier']}x`")
 
-    @levelconfig.command(name="cooldown", help="Set XP cooldown between gains in seconds (0 = off).")
+    @levelconfig.command(name="cooldown",
+                         help="Set XP cooldown between gains in seconds (0 = off).")
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_cooldown(self, ctx, seconds: int = None):
         if seconds is None or seconds < 0:
             return await ctx.send("Please provide a non-negative number of seconds.")
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_cooldown"] = seconds
-        self._save_configs()
+        await self._save_guild_cfg(ctx.guild.id, cfg)
         status = f"`{seconds}s`" if seconds > 0 else "off"
         await ctx.send(msg(ctx, "cfg_updated") + f" XP cooldown → {status}")
 
-    @levelconfig.command(name="levelupchannel", aliases=["luchannel"], help="Set the level-up announcement channel.")
+    @levelconfig.command(name="levelupchannel", aliases=["luchannel"],
+                         help="Set the level-up announcement channel.")
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_channel(self, ctx, channel: discord.TextChannel = None):
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
+        cfg = await self._guild_cfg(ctx.guild.id)
         cfg["level_up_channel"] = channel.id if channel else None
-        self._save_configs()
+        await self._save_guild_cfg(ctx.guild.id, cfg)
         dest = channel.mention if channel else "*(same channel)*"
         await ctx.send(msg(ctx, "cfg_updated") + f" Level-up channel → {dest}")
 
-    @levelconfig.command(name="levelrole", aliases=["role"], help="Assign a role when a level is reached. Usage: .levelconfig levelrole <level> @role")
+    @levelconfig.command(name="levelrole", aliases=["role"],
+                         help="Assign a role when a level is reached.")
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_levelrole(self, ctx, level: int = None, role: discord.Role = None):
         if level is None or level < 1:
             return await ctx.send("Please specify a valid level (e.g. `5`).")
-        guild_id = str(ctx.guild.id)
-        cfg = self._guild_cfg(guild_id)
-        lr = cfg.setdefault("level_roles", {})
+        cfg = await self._guild_cfg(ctx.guild.id)
+        lr  = cfg.setdefault("level_roles", {})
         if role is None:
             lr.pop(str(level), None)
-            self._save_configs()
+            await self._save_guild_cfg(ctx.guild.id, cfg)
             await ctx.send(msg(ctx, "cfg_updated") + f" Removed level role for level {level}.")
         else:
             lr[str(level)] = role.id
-            self._save_configs()
+            await self._save_guild_cfg(ctx.guild.id, cfg)
             await ctx.send(msg(ctx, "cfg_updated") + f" Level {level} → {role.mention}")
 
     @levelconfig.command(name="resetuser", help="Reset XP and level for a member.")
@@ -901,14 +926,10 @@ class Leveling(commands.Cog):
     async def levelconfig_resetuser(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send("Please specify a member.")
-        guild_id = str(ctx.guild.id)
-        user_id  = str(member.id)
-        if guild_id in self.levels and user_id in self.levels[guild_id]:
-            self.levels[guild_id][user_id] = {"xp": 0, "level": 0}
-            self._save_levels()
+        await self._save_user_data(ctx.guild.id, member.id, 0, 0)
         await ctx.send(f"{get_emoji('icon_tick')} Reset XP and level for **{member.display_name}**.")
 
-    # ─── LEVELING PANEL ──────────────────────────────────────
+    # ── LEVELING PANEL ────────────────────────────────────────
 
     @commands.command(
         name="levelpanel",
@@ -917,8 +938,7 @@ class Leveling(commands.Cog):
     )
     @commands.has_permissions(manage_guild=True)
     async def levelpanel(self, ctx):
-        """Open the interactive leveling management panel."""
-        panel = _build_level_panel(self, ctx.guild.id, "overview", ctx.guild)
+        panel = await _build_level_panel(self, ctx.guild.id, "overview", ctx.guild)
         await ctx.send(view=panel)
 
 
