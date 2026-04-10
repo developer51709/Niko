@@ -121,7 +121,9 @@ class ErrorHandler(commands.Cog):
                         # if it is a subcommand we need to strip the subcommand name from the args
                         if ctx.command.parent:
                             args = args[1:]
-                await ctx.command.callback(self, ctx, *args, **kwargs)
+                # some commands require other functions from the cog they are in meaning we need to pass it as the first argument in the callback
+                command_cog = ctx.command.cog
+                await ctx.command.callback(command_cog, ctx, *args, **kwargs)
                 logging.warning("error_handler", f"Permission check bypassed for trusted owner {ctx.author}")
                 return
             view = self.error_embed(
