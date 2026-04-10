@@ -8,8 +8,18 @@ import requests
 
 # Regex to detect emoji codepoints
 EMOJI_RE = re.compile(
-    "[\U0001F000-\U0001FAFF\U00002700-\U000027BF\U0001F300-\U0001F5FF]+"
+    "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F900-\U0001F9FF\U0001F638-\U0001F63A\U0001F47E]+"
 )
+
+# experimental discord custom emoji support
+DISCORD_EMOJI_RE = re.compile(r"<a?:[a-zA-Z0-9_]+:(\d+)>")
+
+def get_emoji_url(emoji_id: str) -> str:
+    return f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
+
+def _draw_custom_emoji(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, emoji_id: str, font_size: int):
+    url = get_emoji_url(emoji_id)
+    # TODO: finish this function 🫩
 
 def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
     cursor_x = x
