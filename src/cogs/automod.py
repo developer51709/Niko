@@ -926,7 +926,8 @@ class AutoMod(commands.Cog):
                     message.guild, "Anti-Spam",
                     f"{message.author.mention} triggered anti-spam in {message.channel.mention}.")
                 try:
-                    await utils.mute_member(message.guild, message.author, duration=60, reason="Auto-mute: spam")
+                    user = message.guild.get_member(message.author.id)
+                    await utils.mute_member(message.guild, user, duration=60, reason="Auto-mute: spam")
                 except discord.Forbidden:
                     if message.guild.id not in self._missing_perms_warned:
                         self._missing_perms_warned.add(message.guild.id)
