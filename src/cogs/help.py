@@ -143,12 +143,18 @@ def _general_text(bot) -> str:
 def _command_detail_text(bot, cmd) -> str:
     prefix = bot.command_prefix if isinstance(bot.command_prefix, str) else bot.command_prefix[0]
     signature = cmd.signature or ""
+    # if it is a subcommand, we need to include the parent command name
+    if hasattr(cmd, "parent") and cmd.parent:
+        parent = cmd.parent.name
+        usage = f"{prefix}{parent} {cmd.name} {signature}"
+    else:
+        usage = f"{prefix}{cmd.name} {signature}"
     lines = [
         f"### 📘 `{cmd.name}`",
         "",
         f"**Description**\n{cmd.help or 'No description provided.'}",
         "",
-        f"**Usage**\n```\n{prefix}{cmd.name} {signature}\n```",
+        f"**Usage**\n```\n{usage}\n```",
     ]
     # add command aliases if they exist
     if cmd.aliases:
@@ -157,7 +163,10 @@ def _command_detail_text(bot, cmd) -> str:
     if hasattr(cmd, "commands"):
         lines.append("\n**Subcommands**")
         for subcommand in cmd.commands:
-            lines.append(f"- `{prefix}{cmd.name} {subcommand.name}` — {subcommand.help or 'No description provided.'}")
+            if parent:
+                lines.append(f"- `{prefix}{parent} {cmd.name} {subcommand.name}` — {subcommand.help or 'No description provided.'}")
+            else:
+                lines.append(f"- `{prefix}{cmd.name} {subcommand.name}` — {subcommand.help or 'No description provided.'}")
     # add the cog name if it exists
     if cmd.cog_name:
         lines.append(f"\n**Category**\n{cmd.cog_name}")
