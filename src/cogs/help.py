@@ -76,7 +76,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Economy":      (["EconomyCog"], f"{get_emoji('icon_economy')} **Economy Commands**\n> Earn and spend virtual currency!"),
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
     "Info":         (["InfoCog"], "ℹ️ **Information Commands**\n> Get info about users, servers, and more!"),
-    "Utility":      (["UtilityCog", "Snipe"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
+    "Utility":      (["UtilityCog", "Snipe", "Define"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
     "AI":           (["AICog", "AIConfig"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
     "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
     "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
@@ -150,8 +150,15 @@ def _command_detail_text(bot, cmd) -> str:
         "",
         f"**Usage**\n```\n{prefix}{cmd.name} {signature}\n```",
     ]
+    # add command aliases if they exist
     if cmd.aliases:
         lines.append(f"\n**Aliases**\n" + ", ".join(f"`{a}`" for a in cmd.aliases))
+    # add the subcommands and their formatting/descriptions is they exist
+    if hasattr(cmd, "commands"):
+        lines.append("\n**Subcommands**")
+        for subcommand in cmd.commands:
+            lines.append(f"- `{prefix}{cmd.name} {subcommand.name}` — {subcommand.help or 'No description provided.'}")
+    # add the cog name if it exists
     if cmd.cog_name:
         lines.append(f"\n**Category**\n{cmd.cog_name}")
     return "\n".join(lines)
