@@ -4,6 +4,7 @@ import random
 import textwrap
 import re
 import requests
+from utils import logging
 
 
 # Regex to detect emoji codepoints
@@ -17,9 +18,13 @@ DISCORD_EMOJI_RE = re.compile(r"<a?:[a-zA-Z0-9_]+:(\d+)>")
 def get_emoji_url(emoji_id: str) -> str:
     return f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
 
-def _draw_custom_emoji(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, emoji_id: str, font_size: int):
-    url = get_emoji_url(emoji_id)
-    # TODO: finish this function 🫩
+def _draw_custom_emojis(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_film):
+    cursor_x = x
+    cursor_y = y
+    width, height = canvas.size
+    font_size = max(45, int(width * 0.05))
+    # print notice
+    return logging.warning("pil_tools", "Custom emoji support is not yet implemented.")
 
 def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
     cursor_x = x
@@ -108,7 +113,7 @@ def _open_rgba(raw: BytesIO) -> Image.Image:
     return Image.open(raw).convert("RGBA")
 
 
-# ───────────────────── existing effects ─────────────────────
+# ───────────────────── existing effects ────────────
 
 def grayscale(raw: BytesIO) -> BytesIO:
     img = _open_rgba(raw)
@@ -324,7 +329,7 @@ def meme_top_bottom(raw: BytesIO, top: str, bottom: str) -> BytesIO:
     return buf
 
 
-# ───────────────────── new effects ─────────────────────
+# ───────────────────── new effects ─────────────────
 
 def sepia(raw: BytesIO) -> BytesIO:
     """Classic warm brown sepia tone."""
