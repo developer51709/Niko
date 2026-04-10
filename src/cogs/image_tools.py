@@ -144,7 +144,7 @@ class EffectSelectView(discord.ui.View):
         self.add_item(EffectSelect(cog, message))
 
 
-# ──────────────────────── modals ────────────────────────
+# ──────────────────────── modals ───────────────────
 
 class CaptionModal(discord.ui.Modal):
     def __init__(self, cog: "ImageTools", message: discord.Message, position: str):
@@ -253,7 +253,7 @@ class RotateModal(discord.ui.Modal):
         await interaction.response.send_message(view=view, file=file, ephemeral=True)
 
 
-# ──────────────────────── cog ────────────────────────
+# ──────────────────────── cog ──────────────────────
 
 class ImageTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -282,9 +282,12 @@ class ImageTools(commands.Cog):
 
         file = discord.File(output, filename=filename)
         view = build_cv2_container(effect_name, filename, width, height)
-        await ctx.send(view=view, file=file)
+        try:
+            await ctx.reply(view=view, file=file)
+        except Exception as e:
+            await ctx.send(view=view, file=file)
 
-    # ──────────── original prefix commands ────────────
+    # ──────────── original prefix commands ─────────
 
     @commands.command(name="grayscale", help="Convert an image to grayscale.")
     async def grayscale_prefix(self, ctx):
