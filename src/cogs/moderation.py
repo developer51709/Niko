@@ -4,9 +4,9 @@ from utils import logging as log
 from utils.logging import info, success, warning, error, debug
 from config.emojis import get_emoji
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  BILINGUAL MESSAGE TABLE
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 MESSAGES = {
     "en": {
@@ -152,9 +152,9 @@ def _cv2(text: str) -> discord.ui.LayoutView:
     return view
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  MODERATION COG
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class Moderation(commands.Cog):
     """Staff-facing moderation commands."""
@@ -165,7 +165,7 @@ class Moderation(commands.Cog):
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
 
-    # ──── KICK / BAN / UNBAN ────────────────────────────────
+    # ──── KICK / BAN / UNBAN ───────────────────────
 
     @commands.command(help="Kick a member from the server. | Mitglied kicken.")
     @commands.has_permissions(kick_members=True)
@@ -191,7 +191,7 @@ class Moderation(commands.Cog):
 
     @commands.command(help="Unban a user by ID. | Benutzer per ID entbannen.")
     @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id: int = None):
+    async def unban(self, ctx, user_id = None):
         if not user_id:
             return await ctx.send(msg(ctx, "no_user_id"))
         user = await self.bot.fetch_user(user_id)
@@ -199,7 +199,7 @@ class Moderation(commands.Cog):
         await ctx.send(view=_cv2(msg(ctx, "unbanned", user=user)))
         await self.utils().log_action(ctx.guild, "Unban", f"{user} was unbanned by {ctx.author}.")
 
-    # ──── WARN ──────────────────────────────────────────────
+    # ──── WARN ─────────────────────────────────────
 
     @commands.command(help="Warn a member. | Mitglied verwarnen.")
     @commands.has_permissions(moderate_members=True)
@@ -238,7 +238,7 @@ class Moderation(commands.Cog):
         await ctx.send(msg(ctx, "warnings_cleared", member=member))
         await utils.log_action(ctx.guild, "Clear Warnings", f"{ctx.author} cleared warnings for {member}.")
 
-    # ──── MUTE / UNMUTE / TEMPMUTE ──────────────────────────
+    # ──── MUTE / UNMUTE / TEMPMUTE ─────────────────
 
     @commands.command(help="Mute a member. | Mitglied stummschalten.")
     @commands.has_permissions(moderate_members=True)
@@ -259,7 +259,7 @@ class Moderation(commands.Cog):
 
     @commands.command(help="Temporarily mute a member (seconds). | Zeitlich stummschalten.")
     @commands.has_permissions(moderate_members=True)
-    async def tempmute(self, ctx, member: discord.Member = None, duration: int = None, *, reason: str = "No reason provided"):
+    async def tempmute(self, ctx, member: discord.Member = None, duration = None, *, reason: str = "No reason provided"):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="tempmute"))
@@ -286,11 +286,11 @@ class Moderation(commands.Cog):
         await ctx.send(msg(ctx, "unmuted", member=member))
         await utils.log_action(ctx.guild, "Unmute", f"{member} was unmuted by {ctx.author}.")
 
-    # ──── CLEAR / PURGE ─────────────────────────────────────
+    # ──── CLEAR / PURGE ────────────────────────────
 
     @commands.command(help="Clear messages in this channel. | Nachrichten löschen.")
     @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx, amount: int = None):
+    async def clear(self, ctx, amount = None):
         if not amount:
             return await ctx.send(msg(ctx, "no_amount"))
         await ctx.message.delete()
@@ -310,7 +310,7 @@ class Moderation(commands.Cog):
         await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
         await self.utils().log_action(ctx.guild, "Purge", f"{ctx.author} purged {len(deleted)} messages from {member} in {ctx.channel.mention}.")
 
-    # ──── SLOWMODE / LOCK / UNLOCK ──────────────────────────
+    # ──── SLOWMODE / LOCK / UNLOCK ─────────────────
 
     @commands.command(help="Set slowmode in this channel (seconds). | Langsammodus setzen.")
     @commands.has_permissions(manage_channels=True)
@@ -336,11 +336,11 @@ class Moderation(commands.Cog):
         await ctx.send(msg(ctx, "unlocked"))
         await self.utils().log_action(ctx.guild, "Unlock", f"{ctx.author} unlocked {ctx.channel.mention}.")
 
-    # ──── NICKNAME ───────────────────────────────────────────
+    # ──── NICKNAME ─────────────────────────────────
 
     @commands.command(help="Change a member's nickname. | Spitznamen ändern.")
     @commands.has_permissions(manage_nicknames=True)
-    async def nick(self, ctx, member: discord.Member = None, *, nickname: str = None):
+    async def nick(self, ctx, member: discord.Member = None, *, nickname = None):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="rename"))
         if not nickname:
@@ -349,7 +349,7 @@ class Moderation(commands.Cog):
         await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname))
         await self.utils().log_action(ctx.guild, "Nickname Changed", f"{ctx.author} changed {member}'s nickname to `{nickname}`")
 
-    # ──── MODLOG CONFIG ──────────────────────────────────────
+    # ──── MODLOG CONFIG ────────────────────────────
 
     @commands.command(help="Set the mod-log channel. | Mod-Log-Kanal setzen.")
     @commands.has_permissions(manage_guild=True)
@@ -366,7 +366,7 @@ class Moderation(commands.Cog):
             text = msg(ctx, "modlog_removed", prefix=prefix, emoji=emoji)
         await ctx.send(view=_cv2(text))
 
-    # ──── BLOCKED WORD LIST ──────────────────────────────────
+    # ──── BLOCKED WORD LIST ────────────────────────
 
     @commands.group(name="badwords", invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
@@ -382,7 +382,7 @@ class Moderation(commands.Cog):
 
     @badwords.command(name="add")
     @commands.has_permissions(manage_guild=True)
-    async def badwords_add(self, ctx, *, word: str = None):
+    async def badwords_add(self, ctx, *, word = None):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -391,7 +391,7 @@ class Moderation(commands.Cog):
 
     @badwords.command(name="remove")
     @commands.has_permissions(manage_guild=True)
-    async def badwords_remove(self, ctx, *, word: str = None):
+    async def badwords_remove(self, ctx, *, word = None):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -405,7 +405,7 @@ class Moderation(commands.Cog):
         utils.clear_blocked_words(ctx.guild.id)
         await ctx.send(msg(ctx, "badwords_cleared"))
 
-    # ──── WHITELIST ──────────────────────────────────────────
+    # ──── WHITELIST ────────────────────────────────
 
     @commands.group(name="whitelist", aliases=["wl"], invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
@@ -439,7 +439,7 @@ class Moderation(commands.Cog):
 
     @whitelist.command(name="add")
     @commands.has_permissions(manage_guild=True)
-    async def whitelist_add(self, ctx, target_type: str = None, target: str = None):
+    async def whitelist_add(self, ctx, target_type = None, target = None):
         """Add a user or role to the automod whitelist.
         Usage: .whitelist add user @member | .whitelist add role @role
         """
@@ -471,7 +471,7 @@ class Moderation(commands.Cog):
 
     @whitelist.command(name="remove", aliases=["rm"])
     @commands.has_permissions(manage_guild=True)
-    async def whitelist_remove(self, ctx, target_type: str = None, target: str = None):
+    async def whitelist_remove(self, ctx, target_type = None, target = None):
         """Remove a user or role from the automod whitelist.
         Usage: .whitelist remove user @member | .whitelist remove role @role
         """
