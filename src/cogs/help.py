@@ -71,7 +71,7 @@ CATEGORIES = [
 # Map category label → (cog names list, header string)
 CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "General":      ([], ""),   # handled specially
-    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals"], f"{get_emoji('icon_games')} **Fun Commands**\n> Commands for fun and games!"),
+    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals", "FunCog"], f"{get_emoji('icon_games')} **Fun Commands**\n> Commands for fun and games!"),
     "Gambling":     (["Blackjack", "Roulette", "Slots", "GamblingCog"], "🎰 **Casino Commands**\n> Play games of chance!"),
     "Economy":      (["EconomyCog"], f"{get_emoji('icon_economy')} **Economy Commands**\n> Earn and spend virtual currency!"),
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
