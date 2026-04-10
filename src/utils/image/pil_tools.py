@@ -14,7 +14,8 @@ EMOJI_RE = re.compile(
 def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
     cursor_x = x
     cursor_y = y
-    font_size = font.size
+    width, height = canvas.size
+    font_size = max(45, int(width * 0.05))
 
     tokens = EMOJI_RE.split(text)
     emojis = EMOJI_RE.findall(text)
@@ -41,7 +42,7 @@ def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y
                 r = requests.get(url, timeout=5)
                 tw = Image.open(BytesIO(r.content)).convert("RGBA")
                 tw = tw.resize((font_size, font_size), Image.LANCZOS)
-                canvas.paste(tw, (int(cursor_x), int(cursor_y - font_size * 0.8)), tw)
+                canvas.paste(tw, (int(cursor_x), int(cursor_y - font_size * 0.5)), tw)
                 cursor_x += font_size
             except Exception:
                 draw.text(
