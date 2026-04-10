@@ -293,6 +293,7 @@ class Moderation(commands.Cog):
     async def clear(self, ctx, amount = None):
         if not amount:
             return await ctx.send(msg(ctx, "no_amount"))
+        amount = int(amount)
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
