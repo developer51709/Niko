@@ -91,7 +91,8 @@ class ErrorHandler(commands.Cog):
         return view
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
+    # we need the full context of ctx for debugging purposes
+    async def on_command_error(self: commands.Cog, ctx: commands.Context, error: commands.CommandError, *args, **kwargs):
 
         # Ignore errors already handled locally
         if hasattr(ctx.command, "on_error"):
@@ -108,8 +109,19 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, MissingPermissions):
             # owner bypass
             if await is_owner().predicate(ctx):
-                # trigger the command function manually with the command's original kwargs to bypass checks
-                await ctx.command.callback(self.bot, ctx, **ctx.kwargs)
+                # trigger the command function manually with the command's original args to bypass checks
+                if not args:
+                    # check message content for args
+                    args = ctx.message.content.split()[1:]
+                    if args:
+                        # convert to a usable format
+                        args = [arg for arg in args]
+                        # ensure args are valid strings and integers
+                        args = [int(arg) if arg.isdigit() else arg for arg in args]
+                        # if it is a subcommand we need to strip the subcommand name from the args
+                        if ctx.command.parent:
+                            args = args[1:]
+                await ctx.command.callback(self, ctx, *args, **kwargs)
                 logging.warning("error_handler", f"Permission check bypassed for trusted owner {ctx.author}")
                 return
             view = self.error_embed(
