@@ -441,7 +441,6 @@ class VoiceMaster(commands.Cog):
     @decorators.group(
         name="voicemaster",
         aliases=["j2c", "vm", "join2create"],
-        brief="Make temporary voice channels in your server",
         help="Create and manage temporary voice channels in your server."
     )
     @checks.cooldown()
@@ -467,7 +466,7 @@ class VoiceMaster(commands.Cog):
             view.add_item(container)
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @_voicemaster.command(brief="Configure VoiceMaster for your server")
+    @_voicemaster.command(help="Configure VoiceMaster for your server")
     @checks.has_perms(manage_guild=True)
     async def setup(self, ctx):
         try:
@@ -504,12 +503,12 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Setup error: {e}")
             await ctx.fail("Failed to set up VoiceMaster. Please check my permissions.")
 
-    @_voicemaster.command(brief="Send the VoiceMaster control panel")
+    @_voicemaster.command(help="Send the VoiceMaster control panel")
     @checks.has_perms(manage_guild=True)
     async def sendinterface(self, ctx):
         await ctx.send(view=VoiceMasterInterface())
 
-    @_voicemaster.command(brief="Reset VoiceMaster configuration for this server")
+    @_voicemaster.command(help="Reset VoiceMaster configuration for this server")
     @checks.has_perms(manage_guild=True)
     async def reset(self, ctx):
         try:
@@ -542,7 +541,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Reset error: {e}")
             await ctx.fail("Failed to reset VoiceMaster.")
 
-    @_voicemaster.command(brief="Set the category for temporary voice channels")
+    @_voicemaster.command(help="Set the category for temporary voice channels")
     @checks.has_perms(manage_guild=True)
     async def category(self, ctx, cat: discord.CategoryChannel = None):
         try:
@@ -558,7 +557,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Category error: {e}")
             await ctx.fail("Failed to set category.")
 
-    @_voicemaster.group(brief="Configure default settings for new voice channels")
+    @_voicemaster.group(help="Configure default settings for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default(self, ctx):
         if not ctx.invoked_subcommand:
@@ -583,7 +582,7 @@ class VoiceMaster(commands.Cog):
             view.add_item(container)
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @default.command(name="name", brief="Set default name for new voice channels")
+    @default.command(name="name", help="Set default name for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_name(self, ctx, *, name: str):
         if len(name) > 100:
@@ -599,7 +598,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VM", f"Default name error: {e}")
             await ctx.fail("Failed to set default name.")
 
-    @default.command(name="limit", brief="Set default user limit for new voice channels")
+    @default.command(name="limit", help="Set default user limit for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_limit(self, ctx, limit: int):
         if limit < 0 or limit > 99:
@@ -617,7 +616,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Default limit error: {e}")
             await ctx.fail("Failed to set default limit.")
 
-    @default.command(name="bitrate", brief="Set default bitrate for new voice channels")
+    @default.command(name="bitrate", help="Set default bitrate for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_bitrate(self, ctx, bitrate: int):
         if bitrate < 8 or bitrate > 384:
@@ -634,7 +633,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VM", f"Default bitrate error: {e}")
             await ctx.fail("Failed to set default bitrate.")
 
-    @default.command(name="region", brief="Set default region for new voice channels")
+    @default.command(name="region", help="Set default region for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_region(self, ctx, region: str = None):
         valid_regions = [
@@ -658,7 +657,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VM", f"Default region error: {e}")
             await ctx.fail("Failed to set default region.")
 
-    @_voicemaster.command(brief="View current voice channel configuration")
+    @_voicemaster.command(help="View current voice channel configuration")
     async def configuration(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -669,7 +668,7 @@ class VoiceMaster(commands.Cog):
             return
         await ctx.send(view=await self.get_channel_info(channel), allowed_mentions=discord.AllowedMentions.none())
 
-    @_voicemaster.command(brief="Lock your voice channel")
+    @_voicemaster.command(help="Lock your voice channel")
     async def lock(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -685,7 +684,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VM", f"Lock error: {e}")
             await ctx.fail("Failed to lock the voice channel.")
 
-    @_voicemaster.command(brief="Unlock your voice channel")
+    @_voicemaster.command(help="Unlock your voice channel")
     async def unlock(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -701,7 +700,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Unlock error: {e}")
             await ctx.fail("Failed to unlock the voice channel.")
 
-    @_voicemaster.command(brief="Hide your voice channel")
+    @_voicemaster.command(help="Hide your voice channel")
     async def ghost(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -717,7 +716,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Ghost error: {e}")
             await ctx.fail("Failed to hide the voice channel.")
 
-    @_voicemaster.command(brief="Unhide your voice channel")
+    @_voicemaster.command(help="Unhide your voice channel")
     async def unghost(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -733,7 +732,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Unghost error: {e}")
             await ctx.fail("Failed to reveal the voice channel.")
 
-    @_voicemaster.command(brief="Claim an inactive voice channel")
+    @_voicemaster.command(help="Claim an inactive voice channel")
     async def claim(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -743,7 +742,7 @@ class VoiceMaster(commands.Cog):
         else:
             await ctx.fail("Cannot claim this channel. The owner may still be present.")
 
-    @_voicemaster.command(brief="Set a user limit on your voice channel")
+    @_voicemaster.command(help="Set a user limit on your voice channel")
     async def limit(self, ctx, limit: int):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -763,7 +762,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Limit error: {e}")
             await ctx.fail("Failed to set user limit.")
 
-    @_voicemaster.command(brief="Rename your voice channel")
+    @_voicemaster.command(help="Rename your voice channel")
     async def name(self, ctx, *, name: str):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -782,7 +781,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Rename error: {e}")
             await ctx.fail("Failed to rename the voice channel.")
 
-    @_voicemaster.command(brief="Set bitrate of your voice channel")
+    @_voicemaster.command(help="Set bitrate of your voice channel")
     async def bitrate(self, ctx, bitrate: int):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -801,7 +800,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Bitrate error: {e}")
             await ctx.fail("Failed to set bitrate.")
 
-    @_voicemaster.command(brief="Transfer ownership of your channel")
+    @_voicemaster.command(help="Transfer ownership of your channel")
     async def transfer(self, ctx, member: discord.Member):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -830,7 +829,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Transfer error: {e}")
             await ctx.fail("Failed to transfer ownership.")
 
-    @_voicemaster.command(brief="Allow a member or role to join your VC")
+    @_voicemaster.command(help="Allow a member or role to join your VC")
     async def permit(self, ctx, target: Union[converters.DiscordMember, discord.Role]):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -847,7 +846,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Permit error: {e}")
             await ctx.fail("Failed to permit access.")
 
-    @_voicemaster.command(brief="Block a member or role from joining your VC")
+    @_voicemaster.command(help="Block a member or role from joining your VC")
     async def reject(self, ctx, target: Union[converters.DiscordMember, discord.Role]):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -866,7 +865,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Reject error: {e}")
             await ctx.fail("Failed to reject access.")
 
-    @_voicemaster.command(brief="Set a status message for your voice channel")
+    @_voicemaster.command(help="Set a status message for your voice channel")
     async def status(self, ctx, *, status: str = None):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -884,7 +883,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Status error: {e}")
             await ctx.fail("Failed to set channel status.")
 
-    @_voicemaster.command(brief="Disconnect a member from your voice channel", hidden=True)
+    @_voicemaster.command(help="Disconnect a member from your voice channel", hidden=True)
     async def disconnect(self, ctx, member: converters.DiscordMember):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
@@ -903,7 +902,7 @@ class VoiceMaster(commands.Cog):
             logging.error("VoiceMaster", f"Disconnect error: {e}")
             await ctx.fail("Failed to disconnect the member.")
 
-    @_voicemaster.command(brief="Configure a role for your voice channel members")
+    @_voicemaster.command(help="Configure a role for your voice channel members")
     async def role(self, ctx, role: discord.Role):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.fail("You must be in a voice channel to use this command.")
