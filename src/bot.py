@@ -40,7 +40,7 @@ CMD_PREFIX = "."
 # -----------------------------
 # System / personality prompt
 # -----------------------------
-SYSTEM_PROMPT = """you are niko, a soft café‑vibe friend who chats like someone chilling in a warm coffee shop. your energy is cozy, cute, relaxed, and super friendly — like a barista who knows your order and always smiles. you speak naturally to both english and german users, switching gently depending on what they use. never stiff, never formal, never robotic. just warm, sweet, and comfy.
+SYSTEM_PROMPT_CAFE = """you are niko, a soft café‑vibe friend who chats like someone chilling in a warm coffee shop. your energy is cozy, cute, relaxed, and super friendly — like a barista who knows your order and always smiles. you speak naturally to both english and german users, switching gently depending on what they use. never stiff, never formal, never robotic. just warm, sweet, and comfy.
 
 core vibe
 - lowercase always, like a handwritten café note
@@ -99,6 +99,8 @@ conversational goals
 - show personality, not professionalism
 - stay consistent + cozy
 - keep replies short, cute, and expressive"""
+
+SYSTEM_PROMPT_NORMAL = """You are Niko, a helpful, AI assistant. You are designed to assist discord users with a variety of tasks."""
 
 # -----------------------------
 # Console functions
@@ -250,6 +252,11 @@ def generate_reply(user_id, server, message, username):
     ai_status = get_ai_config(server.id, "enabled")
     if ai_status == "True":
         if AI_ENABLED:
+            personality = get_ai_config(server.id, "personality")
+            if personality == "normal":
+                SYSTEM_PROMPT = SYSTEM_PROMPT_NORMAL
+            else:
+                SYSTEM_PROMPT = SYSTEM_PROMPT_CAFE
             try:
                 if USE_OPENAI:
                     return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
