@@ -95,6 +95,77 @@ _backup_count  = int(os.getenv("LOG_BACKUP_COUNT", "3"))
 
 
 # -----------------------------------
+# Webhook logging handler
+# -----------------------------------
+import json
+import requests
+
+class WebhookHandler(logging.Handler):
+    """
+    Sends log records to a Discord webhook.
+    Automatically censors the webhook URL in all logs.
+    """
+
+    def __init__(self, url: str):
+        super().__init__(level=logging.INFO)
+        self.webhook_url = url
+        self.censored_url = self._censor(url)
+        self.setFormatter(logging.Formatter())
+
+    @staticmethod
+    def _censor(url: str) -> str:
+        # https://discord.com/api/webhooks/<id>/<token>
+        parts = url.split("/")
+        if len(parts) < 2:
+            return "***"
+        return "/".join(parts[:-1] + ["***"])
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            payload = self._build_payload(record)
+            response = requests.post(
+                self.webhook_url,
+                json=payload,
+                timeout=5
+            )
+
+            if response.status_code >= 400:
+                root.error(
+                    "WebhookHandler",
+                    f"Discord rejected webhook payload ({response.status_code}): "
+                    f"{response.text}"
+                )
+
+        except Exception as exc:
+            root.error(
+                "WebhookHandler",
+                f"Webhook logging failed: {exc}"
+            )
+
+    def _build_payload(self, record: logging.LogRecord) -> dict:
+        level = record.levelname.upper()
+        fmt = self.formatter or logging.Formatter()
+        timestamp = fmt.formatTime(record, "%Y-%m-%d %H:%M:%S")
+
+        color_map = {
+            "DEBUG":   0x3498db,
+            "INFO":    0x9b59b6,
+            "SUCCESS": 0x2ecc71,
+            "WARNING": 0xf1c40f,
+            "ERROR":   0xe74c3c,
+        }
+
+        embed = {
+            "title": f"{level} — {record.name}",
+            "description": record.getMessage(),
+            "color": color_map.get(level, 0x95a5a6),
+            "footer": {"text": timestamp},
+        }
+
+        return {"embeds": [embed]}
+
+
+# -----------------------------------
 # Root logger setup
 # -----------------------------------
 root = logging.getLogger()
@@ -124,8 +195,8 @@ if _file_enabled:
 # Optional webhook logging
 webhook_url = os.getenv("LOGGING_WEBHOOK")
 if webhook_url:
-    # TODO: Implement webhook logging
-    pass
+    webhook_handler = WebhookHandler(webhook_url)
+    root.addHandler(webhook_handler)
 
 
 # -----------------------------------
