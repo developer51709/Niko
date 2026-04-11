@@ -51,6 +51,25 @@ def is_owner():
         return ctx.author.id in OWNER_IDS or await ctx.bot.is_owner(ctx.author)
     return commands.check(predicate)
 
+def under_development(feature = None):
+    async def predicate(ctx):
+        if not is_owner():
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_settings')} Under Development"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="This feature is currently under development. Please feel free to check back later for updates or send some suggestions in the support server."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+            return False
+        return True
+    return commands.check(predicate)
+
 
 class ErrorHandler(commands.Cog):
     def __init__(self, bot):
