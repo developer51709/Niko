@@ -46,26 +46,27 @@ def _commands_text(cog_names: list[str], bot, header: str) -> str:
 # ============================
 
 CATEGORIES = [
-    ("General",      "General bot information",           "🌸"),
-    ("Fun",          "Fun commands",                      f"{get_emoji('icon_games')}"),
-    ("Gambling",     "Blackjack, Slots, Roulette",        "🎰"),
-    ("Economy",      "Balance, daily, work, etc.",        f"{get_emoji('icon_economy')}"),
-    ("Roleplay",     "RP commands",                       "🎭"),
-    ("Info",         "User/server info commands",         "ℹ️"),
-    ("Utility",      "Misc tools and utilities",          f"{get_emoji('icon_utility')}"),
-    ("AI",           "AI commands",                       f"{get_emoji('icon_ai')}"),
-    ("Moderation",   "Moderation commands",               f"{get_emoji('icon_moderation')}"),
-    ("AutoMod",      "AutoMod commands",                  f"{get_emoji('icon_automod')}"),
-    ("EmojiManager", "EmojiManager commands",             "🎨"),
-    ("Onboarding",   "Onboarding commands",               f"{get_emoji('icon_welcome')}"),
-    ("NSFW",         "NSFW commands",                     "🔞"),
-    ("Music",        "Music commands",                    f"{get_emoji('music')}"),
-    ("Leveling",     "Leveling commands",                 f"{get_emoji('icon_leveling')}"),
-    ("Notifier",     "Notifier commands",                "📢"),
-    ("VoiceMaster",  "VoiceMaster commands",              "🎤"),
-    ("Ticket",       "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
-    ("Image Tools",  "Image manipulation commands",       f"{get_emoji('icon_image')}"),
-    ("Giveaway",     "Giveaway commands",                 f"{get_emoji('icon_giveaway')}"),
+    ("General",       "General bot information",           "🌸"),
+    ("Fun",           "Fun commands",                      f"{get_emoji('icon_games')}"),
+    ("Gambling",      "Blackjack, Slots, Roulette",        "🎰"),
+    ("Economy",       "Balance, daily, work, etc.",        f"{get_emoji('icon_economy')}"),
+    ("Roleplay",      "RP commands",                       "🎭"),
+    ("Info",          "User/server info commands",         "ℹ️"),
+    ("Utility",       "Misc tools and utilities",          f"{get_emoji('icon_utility')}"),
+    ("AI",            "AI commands",                       f"{get_emoji('icon_ai')}"),
+    ("Moderation",    "Moderation commands",               f"{get_emoji('icon_moderation')}"),
+    ("AutoMod",       "AutoMod commands",                  f"{get_emoji('icon_automod')}"),
+    ("EmojiManager",  "EmojiManager commands",             "🎨"),
+    ("Onboarding",    "Onboarding commands",               f"{get_emoji('icon_welcome')}"),
+    ("NSFW",          "NSFW commands",                     "🔞"),
+    ("Music",         "Music commands",                    f"{get_emoji('music')}"),
+    ("Leveling",      "Leveling commands",                 f"{get_emoji('icon_leveling')}"),
+    ("Notifier",      "Notifier commands",                "📢"),
+    ("VoiceMaster",   "VoiceMaster commands",              "🎤"),
+    ("Ticket",        "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
+    ("Image Tools",   "Image manipulation commands",       f"{get_emoji('icon_image')}"),
+    ("Giveaway",      "Giveaway commands",                 f"{get_emoji('icon_giveaway')}"),
+    ("Customization", "Customization commands",           f"{get_emoji('icon_edit')}"),
 ]
 
 # Map category label → (cog names list, header string)
@@ -90,6 +91,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets."),
     "Image Tools":  (["ImageTools"], f"{get_emoji('icon_image')} **Image Tools**\n> Manipulate images with these commands!"),
     "Giveaway":     (["Giveaway"], f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n> Host and manage giveaways in your server!"),
+    "Customization": (["Customization"], f"{get_emoji('icon_edit')} **Customization Commands**\n> Customize Niko's pfp, banner, and more!"),
 }
 
 
