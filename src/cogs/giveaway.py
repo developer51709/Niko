@@ -5,6 +5,7 @@ import datetime
 import random
 import asyncio
 
+from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 
 PERSONALITY = "cafe"
@@ -556,7 +557,19 @@ class Giveaway(commands.Cog):
     @commands.group(name="giveaway", aliases=["g"], invoke_without_command=True)
     async def giveaway(self, ctx):
         """Manage giveaways."""
-        await ctx.send_help(ctx.command)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_giveaway')} Giveaway Commands"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"Use `{ctx.clean_prefix}giveaway start <duration> <winners> <prize>` to start a new giveaway."
+            ),
+            accent_colour=discord.Color.purple()
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @giveaway.command(name="start")
     @commands.has_permissions(manage_guild=True)
