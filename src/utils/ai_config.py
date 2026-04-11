@@ -7,7 +7,7 @@ AI_CONFIG_FILE = "data/ai_config.json"
 
 DEFAULT_CONFIG = {
     "personality": "cafe",
-    "enabled": True,
+    "enabled": "True",
 }
 
 

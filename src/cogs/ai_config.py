@@ -139,6 +139,9 @@ class AIConfig(commands.Cog):
     )
     @commands.has_permissions(manage_guild=True)
     async def ai_config(self, ctx: commands.Context):
+        # this function will ensure that the guild has a config entry in the ai_config.json file
+        get_ai_config(ctx.guild.id, "enabled")
+        # send the panel
         view = AIConfigPanel(ctx, self.bot)
         await ctx.send(view=view)
 
