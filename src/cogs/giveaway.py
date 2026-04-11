@@ -33,9 +33,7 @@ MESSAGES = {
             "join_bot":               "❌ Bots cannot participate in giveaways!",
             "no_exist":               "❌ This giveaway doesn't exist anymore.",
             "no_perm_manage":         "❌ Only the giveaway host or a server admin can manage this giveaway.",
-            "ending_early":           "✅ Giveaway ended! Winners have been announced.",
-            "no_perm_end":            "❌ Only the giveaway host or a bot owner can end this giveaway early.",
-            "no_perm_select":         "❌ Only the giveaway host or a bot owner can select users.",
+            "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
             "no_participants_yet":    "Nobody has joined the giveaway yet.",
             "reroll_no_participants": "❌ Nobody participated in this giveaway, so no one can be rerolled!",
             "reroll_not_ended":       "❌ This giveaway hasn't ended yet! You can only reroll ended giveaways.",
@@ -48,7 +46,6 @@ MESSAGES = {
             "manage_info":            "Use the buttons below to manage this giveaway.",
             "select_result":          "🎲 Randomly selected: {mention}",
             "select_no_entries":      "Nobody has entered the giveaway yet, so no one can be selected.",
-            "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
             "participants_title":     "👥 Participants",
             "participants_empty":     "Nobody has joined the giveaway yet.",
         },
@@ -70,12 +67,10 @@ MESSAGES = {
             "join_bot":               "❌ Bots können nicht an Gewinnspielen teilnehmen!",
             "no_exist":               "❌ Dieses Gewinnspiel existiert nicht mehr.",
             "no_perm_manage":         "❌ Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
-            "ending_early":           "✅ Gewinnspiel beendet! Gewinner wurden bekannt gegeben.",
-            "no_perm_end":            "❌ Nur der Veranstalter oder ein Bot-Besitzer kann das Gewinnspiel vorzeitig beenden.",
-            "no_perm_select":         "❌ Nur der Veranstalter oder ein Bot-Besitzer kann Nutzer auswählen.",
+            "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
             "no_participants_yet":    "Noch niemand hat am Gewinnspiel teilgenommen.",
             "reroll_no_participants": "❌ Niemand hat teilgenommen, daher kann niemand erneut gezogen werden!",
-            "reroll_not_ended":       "❌ Dieses Gewinnspiel ist noch nicht beendet! Rerolls sind nur für beendete Gewinnspiele.",
+            "reroll_not_ended":       "❌ Dieses Gewinnspiel ist noch nicht beendet!",
             "reroll_not_found":       "❌ Kein Gewinnspiel mit dieser Nachrichten-ID gefunden.",
             "invalid_duration":       "❌ Ungültige Dauer! Benutze Zahlen mit `s`, `m`, `h` oder `d` (z.B. `30s`, `10m`, `2h`, `1d`).",
             "invalid_winners":        "❌ Ungültige Gewinneranzahl! Muss eine Zahl sein (z.B. `2`).",
@@ -84,8 +79,7 @@ MESSAGES = {
             "manage_title":           "⚙️ Gewinnspiel-Verwaltung",
             "manage_info":            "Nutze die Schaltflächen unten, um das Gewinnspiel zu verwalten.",
             "select_result":          "🎲 Zufällig ausgewählt: {mention}",
-            "select_no_entries":      "Noch niemand hat am Gewinnspiel teilgenommen, daher kann niemand ausgewählt werden.",
-            "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
+            "select_no_entries":      "Noch niemand ist dabei, daher kann niemand ausgewählt werden.",
             "participants_title":     "👥 Teilnehmer",
             "participants_empty":     "Noch niemand hat am Gewinnspiel teilgenommen.",
         },
@@ -109,9 +103,7 @@ MESSAGES = {
             "join_bot":               "🤖 bots can't join giveaways, sorry!",
             "no_exist":               "😔 this giveaway doesn't exist anymore.",
             "no_perm_manage":         "☕ only the giveaway host or a server admin can manage this.",
-            "ending_early":           "✅ giveaway ended! winners have been announced~",
-            "no_perm_end":            "☕ only the host or a bot owner can end this early.",
-            "no_perm_select":         "☕ only the host or a bot owner can pick someone.",
+            "end_confirmed":          "✅ giveaway ended~ winners have been announced in the channel ☕",
             "no_participants_yet":    "nobody has joined yet 😔",
             "reroll_no_participants": "😔 nobody joined, so there's no one to reroll!",
             "reroll_not_ended":       "😔 this giveaway isn't over yet! rerolls are only for ended ones~",
@@ -124,7 +116,6 @@ MESSAGES = {
             "manage_info":            "use the buttons below to manage this giveaway ☕",
             "select_result":          "🎲 randomly picked: {mention}",
             "select_no_entries":      "nobody has entered yet, so there's no one to pick 😔",
-            "end_confirmed":          "✅ giveaway ended~ winners have been announced in the channel ☕",
             "participants_title":     "☕ participants",
             "participants_empty":     "nobody has joined yet 😔",
         },
@@ -146,12 +137,10 @@ MESSAGES = {
             "join_bot":               "🤖 bots können leider nicht mitmachen!",
             "no_exist":               "😔 dieses gewinnspiel existiert nicht mehr.",
             "no_perm_manage":         "☕ nur der veranstalter oder ein server-admin kann das verwalten.",
-            "ending_early":           "✅ gewinnspiel beendet~ gewinner wurden bekannt gegeben ☕",
-            "no_perm_end":            "☕ nur der veranstalter oder ein bot-besitzer kann das früh beenden.",
-            "no_perm_select":         "☕ nur der veranstalter oder ein bot-besitzer kann jemanden auswählen.",
+            "end_confirmed":          "✅ gewinnspiel beendet~ gewinner wurden im channel bekannt gegeben ☕",
             "no_participants_yet":    "noch niemand hat mitgemacht 😔",
             "reroll_no_participants": "😔 niemand war dabei, also gibt's niemanden zum rerolln!",
-            "reroll_not_ended":       "😔 das gewinnspiel ist noch nicht vorbei! rerolls gibt's nur für beendete.",
+            "reroll_not_ended":       "😔 das gewinnspiel ist noch nicht vorbei!",
             "reroll_not_found":       "😔 kein gewinnspiel mit dieser nachrichten-id gefunden.",
             "invalid_duration":       "❌ ungültige dauer! benutze zahlen mit `s`, `m`, `h` oder `d` (z.b. `30s`, `10m`, `2h`, `1d`)",
             "invalid_winners":        "❌ ungültige gewinneranzahl! muss eine zahl sein (z.b. `2`).",
@@ -161,7 +150,6 @@ MESSAGES = {
             "manage_info":            "nutze die schaltflächen unten, um das gewinnspiel zu verwalten ☕",
             "select_result":          "🎲 zufällig ausgewählt: {mention}",
             "select_no_entries":      "noch niemand ist dabei, also kann niemand ausgewählt werden 😔",
-            "end_confirmed":          "✅ gewinnspiel beendet~ gewinner wurden im channel bekannt gegeben ☕",
             "participants_title":     "☕ teilnehmer",
             "participants_empty":     "noch niemand hat mitgemacht 😔",
         },
@@ -199,12 +187,198 @@ def _guild_msg(guild, key: str, **kwargs) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
+#  MAIN MESSAGE BUTTONS  (per-giveaway custom_id for isolation)
+# ─────────────────────────────────────────────────────────────
+
+class _GiveawayJoinBtn(discord.ui.Button):
+    """Join button — custom_id encodes the giveaway message_id."""
+
+    def __init__(self, bot, message_id: int):
+        super().__init__(
+            label="Join",
+            style=discord.ButtonStyle.primary,
+            emoji="🎉",
+            custom_id=f"giveaway_join_{message_id}",
+        )
+        self._bot = bot
+
+    async def callback(self, interaction: discord.Interaction):
+        message_id = interaction.message.id
+        user_id    = interaction.user.id
+
+        giveaway = await self._bot.cxn.fetchrow(
+            "SELECT host_id, ended FROM giveaways WHERE message_id = $1", message_id
+        )
+        if not giveaway:
+            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
+        if giveaway["ended"]:
+            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+        if user_id == giveaway["host_id"]:
+            return await interaction.response.send_message(msg(interaction, "join_host"), ephemeral=True)
+        if interaction.user.bot:
+            return await interaction.response.send_message(msg(interaction, "join_bot"), ephemeral=True)
+
+        existing = await self._bot.cxn.fetchval(
+            "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
+            message_id, user_id
+        )
+        if existing:
+            return await interaction.response.send_message(msg(interaction, "join_already"), ephemeral=True)
+
+        await self._bot.cxn.execute(
+            "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
+        )
+        await interaction.response.send_message(msg(interaction, "join_success"), ephemeral=True)
+
+
+class _GiveawayManageBtn(discord.ui.Button):
+    """Manage button — opens ephemeral panel for host / server admins."""
+
+    def __init__(self, bot, message_id: int):
+        super().__init__(
+            label="Manage",
+            style=discord.ButtonStyle.secondary,
+            emoji="⚙️",
+            custom_id=f"giveaway_manage_{message_id}",
+        )
+        self._bot = bot
+
+    async def callback(self, interaction: discord.Interaction):
+        message_id = interaction.message.id
+
+        giveaway = await self._bot.cxn.fetchrow(
+            "SELECT message_id, channel_id, guild_id, prize, winners_count, host_id, ended "
+            "FROM giveaways WHERE message_id = $1", message_id
+        )
+        if not giveaway:
+            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
+        if giveaway["ended"]:
+            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+
+        is_host  = interaction.user.id == giveaway["host_id"]
+        is_admin = interaction.user.guild_permissions.manage_guild
+        if not (is_host or is_admin):
+            return await interaction.response.send_message(
+                msg(interaction, "no_perm_manage"), ephemeral=True
+            )
+
+        panel = _build_manage_panel(self._bot, giveaway, interaction.guild)
+        await interaction.response.send_message(view=panel, ephemeral=True)
+
+
+def _make_persistent_view(bot, message_id: int) -> discord.ui.View:
+    """
+    A timeout=None View registered with bot.add_view(view, message_id=...).
+    Each active giveaway gets its own registered view, keyed by message_id,
+    so button interactions from different giveaway messages never interfere.
+    """
+    view = discord.ui.View(timeout=None)
+    view.add_item(_GiveawayJoinBtn(bot, message_id))
+    view.add_item(_GiveawayManageBtn(bot, message_id))
+    return view
+
+
+# ─────────────────────────────────────────────────────────────
+#  MANAGEMENT PANEL BUTTONS  (ephemeral — no persistence needed)
+# ─────────────────────────────────────────────────────────────
+
+class _MgmtEndBtn(discord.ui.Button):
+    def __init__(self, bot, message_id, prize, winners_count, channel_id, guild_id, host_id):
+        super().__init__(label="End Giveaway", style=discord.ButtonStyle.danger, emoji="🛑")
+        self._bot           = bot
+        self._message_id    = message_id
+        self._prize         = prize
+        self._winners_count = winners_count
+        self._channel_id    = channel_id
+        self._guild_id      = guild_id
+        self._host_id       = host_id
+
+    async def callback(self, interaction: discord.Interaction):
+        confirm_view = discord.ui.LayoutView()
+        confirm_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(interaction, "end_confirmed")),
+            accent_colour=discord.Color.green()
+        ))
+        await interaction.response.edit_message(view=confirm_view)
+
+        giveaway_cog = self._bot.get_cog("Giveaway")
+        if giveaway_cog:
+            await giveaway_cog.end_giveaway(
+                self._message_id, self._channel_id, self._guild_id,
+                self._prize, self._winners_count, self._host_id,
+            )
+
+
+class _MgmtSelectBtn(discord.ui.Button):
+    def __init__(self, bot, message_id):
+        super().__init__(label="Select Random", style=discord.ButtonStyle.secondary, emoji="🎲")
+        self._bot        = bot
+        self._message_id = message_id
+
+    async def callback(self, interaction: discord.Interaction):
+        rows = await self._bot.cxn.fetch(
+            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
+        )
+        participants = [row["user_id"] for row in rows]
+
+        if not participants:
+            empty_view = discord.ui.LayoutView()
+            empty_view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=msg(interaction, "select_no_entries")),
+                accent_colour=discord.Color.orange()
+            ))
+            return await interaction.response.edit_message(view=empty_view)
+
+        winner      = random.choice(participants)
+        result_view = discord.ui.LayoutView()
+        result_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(interaction, "select_result", mention=f"<@{winner}>")),
+            accent_colour=discord.Color.green()
+        ))
+        await interaction.response.edit_message(view=result_view)
+
+
+class _MgmtParticipantsBtn(discord.ui.Button):
+    def __init__(self, bot, message_id):
+        super().__init__(label="Participants", style=discord.ButtonStyle.blurple, emoji="👥")
+        self._bot        = bot
+        self._message_id = message_id
+
+    async def callback(self, interaction: discord.Interaction):
+        rows = await self._bot.cxn.fetch(
+            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
+        )
+        if not rows:
+            empty_view = discord.ui.LayoutView()
+            empty_view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {msg(interaction, 'participants_title')}\n"
+                            f"{msg(interaction, 'participants_empty')}"
+                ),
+                accent_colour=discord.Color.blurple()
+            ))
+            return await interaction.response.edit_message(view=empty_view)
+
+        lines             = [f"**{i}.** <@{row['user_id']}>" for i, row in enumerate(rows, 1)]
+        pages             = paginate(lines, per_page=15)
+        participants_view = PaginatedView(
+            title=msg(interaction, "participants_title"),
+            pages=pages,
+            icon_url=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+        )
+        await interaction.response.edit_message(view=participants_view)
+
+
+# ─────────────────────────────────────────────────────────────
 #  VIEW BUILDERS
 # ─────────────────────────────────────────────────────────────
 
-def _build_active_view(bot, prize: str, end_timestamp: int,
-                       winners_count: int, author_mention: str,
-                       guild=None) -> discord.ui.LayoutView:
+def _build_content_view(prize: str, end_timestamp: int, winners_count: int,
+                        author_mention: str, guild=None) -> discord.ui.LayoutView:
+    """
+    Layout-only view (no buttons).  Sent first so we can obtain the message_id,
+    then immediately edited to add interactive buttons.
+    """
     s      = "s" if winners_count > 1 else ""
     footer = _guild_msg(guild, "footer_active", count=winners_count, s=s)
 
@@ -220,9 +394,35 @@ def _build_active_view(bot, prize: str, end_timestamp: int,
             )
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=f"-# {footer} <t:{end_timestamp}:f>"),
+        accent_colour=discord.Color.purple()
+    )
+    view.add_item(container)
+    return view
+
+
+def _build_active_view(bot, message_id: int, prize: str, end_timestamp: int,
+                       winners_count: int, author_mention: str,
+                       guild=None) -> discord.ui.LayoutView:
+    """Full active giveaway view with interactive Join + Manage buttons."""
+    s      = "s" if winners_count > 1 else ""
+    footer = _guild_msg(guild, "footer_active", count=winners_count, s=s)
+
+    view      = discord.ui.LayoutView(timeout=None)
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {_guild_msg(guild, 'giveaway_title')}"),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(
+            content=(
+                f"**{_guild_msg(guild, 'label_prize')}:** {prize}\n"
+                f"**{_guild_msg(guild, 'label_ends')}:** <t:{end_timestamp}:R> (<t:{end_timestamp}:f>)\n"
+                f"**{_guild_msg(guild, 'label_hosted_by')}:** {author_mention}"
+            )
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            JoinGiveawayBtn(bot),
-            ManageGiveawayBtn(bot),
+            _GiveawayJoinBtn(bot, message_id),
+            _GiveawayManageBtn(bot, message_id),
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=f"-# {footer} <t:{end_timestamp}:f>"),
@@ -260,7 +460,6 @@ def _build_ended_view(guild, prize: str, host_id: int,
 
 
 def _build_manage_panel(bot, giveaway_row, guild=None) -> discord.ui.LayoutView:
-    """Build the ephemeral management panel shown only to host/admins."""
     message_id    = giveaway_row["message_id"]
     prize         = giveaway_row["prize"]
     winners_count = giveaway_row["winners_count"]
@@ -292,190 +491,6 @@ def _build_manage_panel(bot, giveaway_row, guild=None) -> discord.ui.LayoutView:
 
 
 # ─────────────────────────────────────────────────────────────
-#  MANAGEMENT PANEL BUTTONS  (ephemeral — no persistent custom_id needed)
-# ─────────────────────────────────────────────────────────────
-
-class _MgmtEndBtn(discord.ui.Button):
-    def __init__(self, bot, message_id, prize, winners_count, channel_id, guild_id, host_id):
-        super().__init__(label="End Giveaway", style=discord.ButtonStyle.danger, emoji="🛑")
-        self._bot          = bot
-        self._message_id   = message_id
-        self._prize        = prize
-        self._winners_count = winners_count
-        self._channel_id   = channel_id
-        self._guild_id     = guild_id
-        self._host_id      = host_id
-
-    async def callback(self, interaction: discord.Interaction):
-        # Edit the ephemeral panel first so the interaction is acknowledged
-        confirm_view = discord.ui.LayoutView()
-        confirm_view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=msg(interaction, "end_confirmed")),
-            accent_colour=discord.Color.green()
-        ))
-        await interaction.response.edit_message(view=confirm_view)
-
-        # End the giveaway
-        giveaway_cog = self._bot.get_cog("Giveaway")
-        if giveaway_cog:
-            await giveaway_cog.end_giveaway(
-                self._message_id, self._channel_id, self._guild_id,
-                self._prize, self._winners_count, self._host_id,
-            )
-
-
-class _MgmtSelectBtn(discord.ui.Button):
-    def __init__(self, bot, message_id):
-        super().__init__(label="Select Random", style=discord.ButtonStyle.secondary, emoji="🎲")
-        self._bot        = bot
-        self._message_id = message_id
-
-    async def callback(self, interaction: discord.Interaction):
-        rows = await self._bot.cxn.fetch(
-            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
-        )
-        participants = [row["user_id"] for row in rows]
-
-        if not participants:
-            result_view = discord.ui.LayoutView()
-            result_view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=msg(interaction, "select_no_entries")),
-                accent_colour=discord.Color.orange()
-            ))
-            return await interaction.response.edit_message(view=result_view)
-
-        winner = random.choice(participants)
-        result_view = discord.ui.LayoutView()
-        result_view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=msg(interaction, "select_result", mention=f"<@{winner}>")),
-            accent_colour=discord.Color.green()
-        ))
-        await interaction.response.edit_message(view=result_view)
-
-
-class _MgmtParticipantsBtn(discord.ui.Button):
-    def __init__(self, bot, message_id):
-        super().__init__(label="Participants", style=discord.ButtonStyle.blurple, emoji="👥")
-        self._bot        = bot
-        self._message_id = message_id
-
-    async def callback(self, interaction: discord.Interaction):
-        rows = await self._bot.cxn.fetch(
-            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
-        )
-
-        if not rows:
-            empty_view = discord.ui.LayoutView()
-            empty_view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {msg(interaction, 'participants_title')}\n"
-                            f"{msg(interaction, 'participants_empty')}"
-                ),
-                accent_colour=discord.Color.blurple()
-            ))
-            return await interaction.response.edit_message(view=empty_view)
-
-        lines = [f"**{i}.** <@{row['user_id']}>" for i, row in enumerate(rows, 1)]
-        pages = paginate(lines, per_page=15)
-        participants_view = PaginatedView(
-            title=msg(interaction, "participants_title"),
-            pages=pages,
-            icon_url=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-        )
-        await interaction.response.edit_message(view=participants_view)
-
-
-# ─────────────────────────────────────────────────────────────
-#  MAIN GIVEAWAY BUTTONS  (persistent — survive restarts)
-# ─────────────────────────────────────────────────────────────
-
-class JoinGiveawayBtn(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(
-            label="Join",
-            style=discord.ButtonStyle.primary,
-            emoji="🎉",
-            custom_id="giveaway_system_join",
-        )
-        self._bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        message_id = interaction.message.id
-        user_id    = interaction.user.id
-
-        giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id, ended FROM giveaways WHERE message_id = $1", message_id
-        )
-        if not giveaway:
-            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
-        if giveaway["ended"]:
-            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
-        if user_id == giveaway["host_id"]:
-            return await interaction.response.send_message(msg(interaction, "join_host"), ephemeral=True)
-        if interaction.user.bot:
-            return await interaction.response.send_message(msg(interaction, "join_bot"), ephemeral=True)
-
-        existing = await self._bot.cxn.fetchval(
-            "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
-            message_id, user_id
-        )
-        if existing:
-            return await interaction.response.send_message(msg(interaction, "join_already"), ephemeral=True)
-
-        await self._bot.cxn.execute(
-            "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
-        )
-        await interaction.response.send_message(msg(interaction, "join_success"), ephemeral=True)
-
-
-class ManageGiveawayBtn(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(
-            label="Manage",
-            style=discord.ButtonStyle.secondary,
-            emoji="⚙️",
-            custom_id="giveaway_system_manage",
-        )
-        self._bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        message_id = interaction.message.id
-
-        giveaway = await self._bot.cxn.fetchrow(
-            "SELECT message_id, channel_id, guild_id, prize, winners_count, host_id, ended "
-            "FROM giveaways WHERE message_id = $1", message_id
-        )
-        if not giveaway:
-            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
-        if giveaway["ended"]:
-            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
-
-        # Gate: host or server admin only
-        is_host  = interaction.user.id == giveaway["host_id"]
-        is_admin = interaction.user.guild_permissions.manage_guild
-        if not (is_host or is_admin):
-            return await interaction.response.send_message(
-                msg(interaction, "no_perm_manage"), ephemeral=True
-            )
-
-        panel = _build_manage_panel(self._bot, giveaway, interaction.guild)
-        await interaction.response.send_message(view=panel, ephemeral=True)
-
-
-# ─────────────────────────────────────────────────────────────
-#  PERSISTENT VIEW — registered on startup for post-restart dispatch
-# ─────────────────────────────────────────────────────────────
-
-class GiveawayPersistentView(discord.ui.View):
-    """Holds only the two main-message buttons — registered with bot.add_view()."""
-
-    def __init__(self, bot):
-        super().__init__(timeout=None)
-        self.add_item(JoinGiveawayBtn(bot))
-        self.add_item(ManageGiveawayBtn(bot))
-
-
-# ─────────────────────────────────────────────────────────────
 #  GIVEAWAY COG
 # ─────────────────────────────────────────────────────────────
 
@@ -485,9 +500,6 @@ class Giveaway(commands.Cog):
         self.check_giveaways.start()
 
     async def cog_load(self):
-        # Register persistent view so Discord re-dispatches button clicks after restart
-        self.bot.add_view(GiveawayPersistentView(self.bot))
-
         await self.bot.cxn.execute("""
             CREATE TABLE IF NOT EXISTS giveaways (
                 message_id    INTEGER PRIMARY KEY,
@@ -508,10 +520,20 @@ class Giveaway(commands.Cog):
             )
         """)
 
-        # Sanitise any rows with unparseable end_time left by old bugs
+        # Sanitise rows with unparseable end_time
         await self.bot.cxn.execute(
             "UPDATE giveaways SET ended = 1 WHERE ended = 0 AND end_time NOT LIKE '____-%'"
         )
+
+        # Re-register a unique persistent view for every active giveaway so that
+        # button interactions survive restarts and never bleed between messages.
+        active = await self.bot.cxn.fetch(
+            "SELECT message_id FROM giveaways WHERE ended = 0"
+        )
+        for row in active:
+            mid  = row["message_id"]
+            view = _make_persistent_view(self.bot, mid)
+            self.bot.add_view(view, message_id=mid)
 
     async def cog_unload(self):
         self.check_giveaways.cancel()
@@ -554,12 +576,20 @@ class Giveaway(commands.Cog):
         end_time      = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=seconds)
         end_timestamp = int(end_time.timestamp())
 
-        view = _build_active_view(
-            self.bot, prize, end_timestamp, winners_count,
-            ctx.author.mention, ctx.guild
-        )
-        sent = await ctx.send(view=view)
+        # Step 1: send content without buttons to obtain the message_id
+        content_view = _build_content_view(prize, end_timestamp, winners_count,
+                                           ctx.author.mention, ctx.guild)
+        sent = await ctx.send(view=content_view)
 
+        # Step 2: build the interactive view now that we know the message_id,
+        #         register the persistent handler, then edit in the buttons
+        active_view     = _build_active_view(self.bot, sent.id, prize, end_timestamp,
+                                             winners_count, ctx.author.mention, ctx.guild)
+        persistent_view = _make_persistent_view(self.bot, sent.id)
+        self.bot.add_view(persistent_view, message_id=sent.id)
+        await sent.edit(view=active_view)
+
+        # Step 3: persist to DB
         await self.bot.cxn.execute(
             "INSERT INTO giveaways "
             "(message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id) "
@@ -626,7 +656,6 @@ class Giveaway(commands.Cog):
     # ─── END GIVEAWAY ─────────────────────────────────────────
 
     async def end_giveaway(self, message_id, channel_id, guild_id, prize, winners_count, host_id):
-        # Mark as ended first to prevent double-triggering
         await self.bot.cxn.execute(
             "UPDATE giveaways SET ended = 1 WHERE message_id = $1", message_id
         )
