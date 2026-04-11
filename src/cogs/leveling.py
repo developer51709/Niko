@@ -6,6 +6,7 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
+from utils.ai_config import get_ai_config
 from config.emojis import get_emoji
 
 PERSONALITY = "cafe"
@@ -81,12 +82,17 @@ def get_lang(ctx):
     return "en"
 
 
-def get_personality():
+def get_personality(ctx):
+    if ctx and ctx.guild:
+        guild_id = ctx.guild.id
+        personality = get_ai_config(guild_id, "personality")
+        if personality:
+            return personality
     return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 
 def msg(ctx, key, **kwargs):
-    personality = get_personality()
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     block = MESSAGES.get(personality, {}).get(lang, {})
     text = block.get(key)

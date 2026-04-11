@@ -9,6 +9,7 @@ from typing import Optional
 import zipfile
 import asyncio
 from utils import logging as log
+from utils.ai_config import get_ai_config
 
 # personality mode: "normal" or "cafe"
 PERSONALITY = "cafe"
@@ -66,8 +67,16 @@ def get_lang(ctx):
             return "de"
     return "en"
 
+def get_personality(ctx):
+    if ctx and ctx.guild:
+        guild_id = ctx.guild.id
+        personality = get_ai_config(guild_id, "personality")
+        if personality:
+            return personality
+    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
+
 def msg(ctx, key, **kwargs):
-    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
     if text is None:

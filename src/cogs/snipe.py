@@ -5,6 +5,7 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
+from utils.ai_config import get_ai_config
 
 PERSONALITY = "cafe"
 
@@ -62,18 +63,23 @@ def get_lang(ctx: commands.Context) -> str:
     return "en"
 
 
-def get_personality() -> str:
+def get_personality(ctx):
+    if ctx and ctx.guild:
+        guild_id = ctx.guild.id
+        personality = get_ai_config(guild_id, "personality")
+        if personality:
+            return personality
     return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 
-def msg_raw(lang: str, key: str, **kwargs) -> str:
-    p = get_personality()
+def msg_raw(ctx, key: str, **kwargs) -> str:
+    p = get_personality(ctx)
     base = MESSAGES.get(p, {})
-    text = base.get(lang, {}).get(key)
+    text = base.get(get_lang(ctx), {}).get(key)
     if text is None:
         text = base.get("en", {}).get(key)
     if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key)
+        text = MESSAGES["normal"].get(ctx.lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
     return text.format(**kwargs) if kwargs else text
@@ -119,10 +125,10 @@ class SnipeView(discord.ui.LayoutView):
     Pages run newest-first so page 0 is the most recently deleted.
     """
 
-    def __init__(self, entries: list[dict], lang: str, timeout: float = 120):
+    def __init__(self, entries: list[dict], ctx, timeout: float = 120):
         super().__init__(timeout=timeout)
         self.entries = entries
-        self.lang = lang
+        self.ctx = ctx
         self.page = 0
         self._build()
 
@@ -134,15 +140,15 @@ class SnipeView(discord.ui.LayoutView):
         # ── assemble body text ──────────────────────────────
         content = e.get("content", "").strip()
         if not content and e.get("has_embeds"):
-            content = msg_raw(self.lang, "embed_msg")
+            content = msg_raw(self.ctx, "embed_msg")
         if not content:
-            content = msg_raw(self.lang, "no_text")
+            content = msg_raw(self.ctx, "no_text")
         elif len(content) > MAX_CONTENT:
             content = content[:MAX_CONTENT] + "…"
 
         # Stickers
         sticker_lines = [
-            msg_raw(self.lang, "sticker", name=s)
+            msg_raw(self.ctx, "sticker", name=s)
             for s in e.get("stickers", [])
         ]
         if sticker_lines:
@@ -151,14 +157,14 @@ class SnipeView(discord.ui.LayoutView):
         # Attachments note
         attach_count = e.get("attachment_count", 0)
         if attach_count:
-            content += "\n" + msg_raw(self.lang, "attach", n=attach_count)
+            content += "\n" + msg_raw(self.ctx, "attach", n=attach_count)
 
         # Timestamp
         ts: datetime = e["deleted_at"]
         ts_str = f"<t:{int(ts.timestamp())}:R>"
 
-        header = msg_raw(self.lang, "header")
-        footer = msg_raw(self.lang, "footer", cur=self.page + 1, total=total)
+        header = msg_raw(self.ctx, "header")
+        footer = msg_raw(self.ctx, "footer", cur=self.page + 1, total=total)
 
         body = (
             f"### {header}\n"
@@ -252,17 +258,16 @@ class Snipe(commands.Cog):
     )
     async def snipe(self, ctx: commands.Context):
         """Show the last deleted messages in this channel."""
-        lang = get_lang(ctx)
         history = self._history.get(ctx.channel.id, [])
 
         if not history:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=msg_raw(lang, "empty"))
+                discord.ui.TextDisplay(content=msg_raw(ctx, "empty"))
             ))
             return await ctx.send(view=view)
 
-        view = SnipeView(entries=history, lang=lang)
+        view = SnipeView(entries=history, ctx=ctx)
         await ctx.send(view=view)
 
 
