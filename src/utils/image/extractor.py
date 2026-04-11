@@ -64,7 +64,14 @@ async def extract_image_from_message(message: discord.Message):
         if match:
             return await _fetch_url(match.group(1))
 
-    # 6. Reply fallback
+    # 6. Stickers
+    if message.stickers:
+        # only get the first sticker
+        sticker = message.stickers[0]
+        if sticker.url:
+            return await _fetch_url(sticker.url)
+
+    # 7. Reply fallback
     if message.reference:
         try:
             ref = await message.channel.fetch_message(message.reference.message_id)
