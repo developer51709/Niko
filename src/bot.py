@@ -9,6 +9,7 @@ import importlib
 from discord.ext import commands
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
+from utils.ai_config import get_ai_config
 from utils import logging
 import database
 
@@ -246,16 +247,20 @@ def get_favorability(user_id: int) -> int:
 # Generate reply
 # -----------------------------
 def generate_reply(user_id, server, message, username):
-    if AI_ENABLED:
-        try:
-            if USE_OPENAI:
-                return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
-            else:
-                return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
-        except Exception:
-            return "sorry, something went wrong on my end ☕ please try again in a moment~"
+    ai_status = get_ai_config(server.id, "enabled")
+    if ai_status == "True":
+        if AI_ENABLED:
+            try:
+                if USE_OPENAI:
+                    return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+                else:
+                    return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
+            except Exception:
+                return "sorry, something went wrong on my end ☕ please try again in a moment~"
+        else:
+            return "ai_disabled_global"
     else:
-        return "ai_disabled"
+        return "ai_disabled_guild"
 
 # -----------------------------
 # Discord bot
@@ -306,7 +311,7 @@ async def on_message(msg):
                 msg.author.display_name
             )
 
-            if reply == "ai_disabled":
+            if reply == "ai_disabled_global":
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -319,6 +324,9 @@ async def on_message(msg):
                 )
                 view.add_item(container)
                 return await msg.channel.send(view=view)
+
+            if reply == "ai_disabled_guild":
+                return
 
             if len(reply) > 1800:
                 reply = reply[:1800] + "..."
@@ -403,7 +411,7 @@ async def _create_tables(bot):
         SELECT channel_id, last_video FROM youtube WHERE last_video IS NOT NULL
     """)
 
-    # ── Levels table (guild-aware schema) ────────────────────────
+    # ── Levels table (guild-aware schema) ──────────
     # If the old schema exists (user_id-only PK, no guild_id), recreate it.
     # Data is migrated from levels.json by the leveling cog on load.
     try:
@@ -434,7 +442,7 @@ async def _create_tables(bot):
     except Exception as e:
         logging.warning("DB", f"levels table migration warning: {e}")
 
-    # ── Level config table ────────────────────────────────────────
+    # ── Level config table ─────────────────────────
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS level_config (
             guild_id         INTEGER PRIMARY KEY,
@@ -447,7 +455,7 @@ async def _create_tables(bot):
         )
     """)
 
-    # ── Migrate follows.db → database.db (one-time) ──────────────
+    # ── Migrate follows.db → database.db (one-time) 
     import sqlite3 as _sqlite3, os as _os
     old_follows = "data/follows.db"
     if _os.path.exists(old_follows):
