@@ -122,8 +122,7 @@ class UwULock(commands.Cog):
         if guild_id not in self.data:
             self.data[guild_id] = {}
 
-        key = f"{user_id}:{channel_id}"
-        existing = self.data[guild_id].get(key)
+        existing = self.data[guild_id].get(channel_id, {}).get(user_id)
 
         # -----------------------------
         # UN‑UWULOCK
@@ -138,14 +137,14 @@ class UwULock(commands.Cog):
                 except Exception:
                     pass
 
-            del self.data[guild_id][key]
+            del self.data[guild_id][channel_id][user_id]
             self.save_data()
             return await ctx.send(msg(ctx, "uwu_unlocked", mention=user.mention))
 
         # -----------------------------
         # UWULOCK
         # -----------------------------
-        self.data[guild_id] = {}
+        self.data[guild_id][user_id] = {}
 
         try:
             webhook = await ctx.channel.create_webhook(
@@ -163,9 +162,7 @@ class UwULock(commands.Cog):
                 reason=f"uwulocked by {ctx.author}",
             )
 
-        self.data[guild_id][key] = {
-            "user_id": user_id,
-            "channel_id": channel_id,
+        self.data[guild_id].setdefault(channel_id, {})[user_id] = {
             "webhook": webhook.url,
         }
         self.save_data()
@@ -224,8 +221,7 @@ class UwULock(commands.Cog):
         if guild_id not in self.data:
             return
 
-        key = f"{user_id}:{channel_id}"
-        entry = self.data[guild_id].get(key)
+        entry = self.data[guild_id].get(channel_id, {}).get(user_id)
 
         if not entry:
             return
