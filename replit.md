@@ -79,6 +79,14 @@ Preferred communication style: Simple, everyday language.
 - Response: punishes raiding accounts (kick/ban), then takes separate action on the identified operator (notify/kick/ban)
 - Dashboard: "Ext. App Raid" section with toggle + threshold modal accessible from `!automod`
 
+### Giveaway System
+- Tables: `giveaways` (message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id) and `participants` (message_id, user_id) in `data/database.db` via `bot.cxn`
+- Persistent across restarts: `GiveawayPersistentView` registered via `bot.add_view()` in `cog_load` — buttons use fixed `custom_id`s (`giveaway_system_join`, `giveaway_system_end`, `giveaway_system_select`)
+- Buttons are subclasses of `discord.ui.Button` (not ActionRow). Active giveaway messages use `_build_active_view()` (LayoutView + buttons inside ActionRow inside Container); ended messages use `_build_ended_view()` (LayoutView, no buttons)
+- Full bilingual EN/DE + normal/cafe personality MESSAGES table; `msg(ctx_or_interaction, key)` and `_guild_msg(guild, key)` helpers for task callbacks
+- Commands: `.giveaway start <duration> <winners> <prize>`, `.giveaway reroll <message_id>`
+- Background task (`check_giveaways`) fires every 15 s; `end_giveaway()` edits the original message with the ended view
+
 ### Persistent Views (Tickets & Onboarding)
 - All persistent interactive components have `custom_id` set so Discord can re-dispatch interactions after restarts
   - `OpenTicketBtn`: `custom_id=f"open_ticket_{guild_id}"`
