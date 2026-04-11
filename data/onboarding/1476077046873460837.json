@@ -1,0 +1,14 @@
+{
+    "welcome_channel": null,
+    "welcome_title": null,
+    "welcome_description": null,
+    "welcome_color": 5793266,
+    "welcome_image": null,
+    "rules_channel": 1476078137845612585,
+    "rules_message_id": 1492342596075257928,
+    "rules_text": "1. No groser\u00edas\n2. Nada +18\n3. No m\u00e1s raid",
+    "rules_role_id": null,
+    "role_menu_channel": null,
+    "role_menu_message_id": null,
+    "role_menu_options": null
+}

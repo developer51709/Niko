@@ -33,6 +33,13 @@
         "category": "SelfBot",
         "opener_id": 1479968201319125013,
         "status": "open"
+      },
+      {
+        "channel_id": 1492361644460871791,
+        "message_id": 1492361645920358482,
+        "category": "RaidBot",
+        "opener_id": 1479968201319125013,
+        "status": "open"
       }
     ]
   },

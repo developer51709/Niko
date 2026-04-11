@@ -1,0 +1,21 @@
+{
+    "balance": 100,
+    "inventory": [],
+    "bank": 0,
+    "net_worth": 600,
+    "daily_streak": 0,
+    "last_daily": 1775875529,
+    "last_work": 0,
+    "last_crime": 0,
+    "last_rob": 0,
+    "last_heist": 0,
+    "last_slots": 0,
+    "last_blackjack": 0,
+    "last_roulette": 1775875636.185751,
+    "last_casino": 0,
+    "last_gamble": 0,
+    "last_bet": 0,
+    "last_race": 0,
+    "last_fight": 0,
+    "last_duel": 0
+}
