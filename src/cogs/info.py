@@ -35,6 +35,9 @@ MESSAGES = {
 
             "avatar_title": "{user}'s Avatar",
 
+            "banner_title": "{user}'s Banner",
+            "banner_none": "{user} does not have a banner.",
+
             "about_title": "About Niko",
             "about_desc": (
                 "Niko is a friendly, playful, and very social AI designed to be an engaging "
@@ -118,6 +121,9 @@ MESSAGES = {
             "userinfo_roles": "Rollen",
 
             "avatar_title": "{user}s Avatar",
+
+            "banner_title": "{user}s Banner",
+            "banner_none": "{user} hat kein Banner.",
 
             "about_title": "Über Niko",
             "about_desc": (
@@ -204,6 +210,9 @@ MESSAGES = {
 
             "avatar_title": "{user}'s cute lil avatar ☕",
 
+            "banner_title": "{user}'s banner ✨️",
+            "banner_none": "{user} doesn't have a banner yet 😔",
+
             "about_title": "☕ about niko",
             "about_desc": (
                 "Niko is your cozy café companion — warm, social, and always ready to chat "
@@ -286,6 +295,9 @@ MESSAGES = {
             "userinfo_roles": "rollen",
 
             "avatar_title": "{user}s süßer avatar ☕",
+
+            "banner_title": "{user}s banner ✨️",
+            "banner_none": "{user} hat noch kein banner 😔",
 
             "about_title": "☕ über niko",
             "about_desc": (
@@ -376,6 +388,8 @@ def msg(ctx, key, **kwargs):
         text = MESSAGES["normal"].get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
+    if text == key:
+        text = "-# 𝙴𝚛𝚛𝚘𝚛: 𝚝𝚎𝚡𝚝 𝚘𝚛 𝚝𝚛𝚊𝚗𝚜𝚕𝚊𝚝𝚒𝚘𝚗 𝚗𝚘𝚝 𝚏𝚘𝚞𝚗𝚍"
 
     return text.format(**kwargs) if kwargs else text
 
@@ -485,6 +499,22 @@ class InfoCog(commands.Cog):
         avatar_url = target.avatar.url if target.avatar else None
         text = f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
         await ctx.send(view=cv2_image(text, image_url=avatar_url))
+
+    # -------------------------------
+    # BANNER
+    # -------------------------------
+    @commands.command(
+        name="banner",
+        help="see someone's banner 🖼 | banner anzeigen"
+    )
+    async def banner(self, ctx, member: discord.Member = None):
+        target = member or ctx.author
+        target = await self.bot.fetch_user(target.id)
+        banner_url = target.banner.url if target.banner else None
+        if not banner_url:
+            return await ctx.send(msg(ctx, "banner_none", user=target.display_name))
+        text = f"### {msg(ctx, 'banner_title', user=target.display_name)}"
+        await ctx.send(view=cv2_image(text, image_url=banner_url))
 
     # -------------------------------
     # ABOUT
