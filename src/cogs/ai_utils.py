@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
 from config.emojis import get_emoji
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -38,7 +37,7 @@ def get_lang(ctx):
     return "en"
 
 def msg(ctx, key, **kwargs):
-    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
     if text is None:

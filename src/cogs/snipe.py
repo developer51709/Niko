@@ -5,9 +5,7 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
-from utils.ai_config import get_ai_config
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MAX_HISTORY = 10   # deleted messages kept per channel
 MAX_CONTENT = 900  # characters shown before truncation
@@ -61,15 +59,6 @@ def get_lang(ctx: commands.Context) -> str:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
     return "en"
-
-
-def get_personality(ctx):
-    if ctx and ctx.guild:
-        guild_id = ctx.guild.id
-        personality = get_ai_config(guild_id, "personality")
-        if personality:
-            return personality
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 
 def msg_raw(ctx, key: str, **kwargs) -> str:

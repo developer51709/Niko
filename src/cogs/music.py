@@ -6,10 +6,7 @@ from discord.ext import commands
 import discord
 import random
 from utils import logging as log
-from utils.ai_config import get_ai_config
-
-# personality mode: "normal" or "cafe"
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -116,15 +113,6 @@ def get_lang(ctx: commands.Context) -> str:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
     return "en"
-
-
-def get_personality(ctx):
-    if ctx and ctx.guild:
-        guild_id = ctx.guild.id
-        personality = get_ai_config(guild_id, "personality")
-        if personality:
-            return personality
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 
 def msg(ctx: commands.Context, key: str, **kwargs) -> str:

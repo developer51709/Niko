@@ -40,6 +40,15 @@ def _save_all(data: dict) -> None:
         logging.error("ai_config", f"Failed to save AI config: {e}")
 
 
+def get_personality(ctx):
+    if ctx and ctx.guild:
+        guild_id = ctx.guild.id
+        personality = get_ai_config(guild_id, "personality")
+        if personality:
+            return personality
+    return "normal"
+
+
 # ----------------------------------------------------
 # Public API
 # ----------------------------------------------------

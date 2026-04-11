@@ -1,9 +1,7 @@
 import discord
 import random
 from discord.ext import commands
-from utils.ai_config import get_ai_config
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -45,14 +43,6 @@ def get_lang(ctx):
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
     return "en"
-
-def get_personality(ctx):
-    if ctx and ctx.guild:
-        guild_id = ctx.guild.id
-        personality = get_ai_config(guild_id, "personality")
-        if personality:
-            return personality
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 def msg(ctx, key, **kwargs):
     personality = get_personality(ctx)

@@ -7,9 +7,7 @@ import asyncio
 
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
-from utils.ai_config import get_ai_config
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 # ─────────────────────────────────────────────────────────────
 #  MESSAGE TABLE
@@ -165,14 +163,6 @@ def _get_lang(obj) -> str:
         if str(guild.preferred_locale).lower().startswith("de"):
             return "de"
     return "en"
-
-def get_personality(ctx):
-    if ctx and ctx.guild:
-        guild_id = ctx.guild.id
-        personality = get_ai_config(guild_id, "personality")
-        if personality:
-            return personality
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
 
 
 def msg(obj, key: str, **kwargs) -> str:
