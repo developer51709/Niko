@@ -5,6 +5,8 @@ import datetime
 import random
 import asyncio
 
+from utils.paginator import PaginatedView, paginate
+
 PERSONALITY = "cafe"
 
 # ─────────────────────────────────────────────────────────────
@@ -30,18 +32,25 @@ MESSAGES = {
             "join_host":              "❌ You cannot join your own giveaway!",
             "join_bot":               "❌ Bots cannot participate in giveaways!",
             "no_exist":               "❌ This giveaway doesn't exist anymore.",
-            "ending_early":           "✅ Ending giveaway early...",
+            "no_perm_manage":         "❌ Only the giveaway host or a server admin can manage this giveaway.",
+            "ending_early":           "✅ Giveaway ended! Winners have been announced.",
             "no_perm_end":            "❌ Only the giveaway host or a bot owner can end this giveaway early.",
             "no_perm_select":         "❌ Only the giveaway host or a bot owner can select users.",
-            "no_participants_yet":    "❌ Nobody has joined the giveaway yet!",
+            "no_participants_yet":    "Nobody has joined the giveaway yet.",
             "reroll_no_participants": "❌ Nobody participated in this giveaway, so no one can be rerolled!",
             "reroll_not_ended":       "❌ This giveaway hasn't ended yet! You can only reroll ended giveaways.",
             "reroll_not_found":       "❌ Could not find a giveaway with that message ID.",
             "invalid_duration":       "❌ Invalid duration! Use numbers followed by `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`).",
             "invalid_winners":        "❌ Invalid winners count! Must be a number (e.g. `2`).",
             "min_one_winner":         "❌ You must have at least 1 winner!",
-            "random_selected":        "🎲 Randomly selected user: {mention}",
             "footer_active":          "{count} Winner{s} | Ends at",
+            "manage_title":           "⚙️ Giveaway Management",
+            "manage_info":            "Use the buttons below to manage this giveaway.",
+            "select_result":          "🎲 Randomly selected: {mention}",
+            "select_no_entries":      "Nobody has entered the giveaway yet, so no one can be selected.",
+            "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
+            "participants_title":     "👥 Participants",
+            "participants_empty":     "Nobody has joined the giveaway yet.",
         },
         "de": {
             "giveaway_title":         "🎉 Gewinnspiel",
@@ -60,18 +69,25 @@ MESSAGES = {
             "join_host":              "❌ Du kannst nicht an deinem eigenen Gewinnspiel teilnehmen!",
             "join_bot":               "❌ Bots können nicht an Gewinnspielen teilnehmen!",
             "no_exist":               "❌ Dieses Gewinnspiel existiert nicht mehr.",
-            "ending_early":           "✅ Gewinnspiel wird vorzeitig beendet...",
+            "no_perm_manage":         "❌ Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
+            "ending_early":           "✅ Gewinnspiel beendet! Gewinner wurden bekannt gegeben.",
             "no_perm_end":            "❌ Nur der Veranstalter oder ein Bot-Besitzer kann das Gewinnspiel vorzeitig beenden.",
             "no_perm_select":         "❌ Nur der Veranstalter oder ein Bot-Besitzer kann Nutzer auswählen.",
-            "no_participants_yet":    "❌ Noch niemand hat am Gewinnspiel teilgenommen!",
+            "no_participants_yet":    "Noch niemand hat am Gewinnspiel teilgenommen.",
             "reroll_no_participants": "❌ Niemand hat teilgenommen, daher kann niemand erneut gezogen werden!",
             "reroll_not_ended":       "❌ Dieses Gewinnspiel ist noch nicht beendet! Rerolls sind nur für beendete Gewinnspiele.",
             "reroll_not_found":       "❌ Kein Gewinnspiel mit dieser Nachrichten-ID gefunden.",
             "invalid_duration":       "❌ Ungültige Dauer! Benutze Zahlen mit `s`, `m`, `h` oder `d` (z.B. `30s`, `10m`, `2h`, `1d`).",
             "invalid_winners":        "❌ Ungültige Gewinneranzahl! Muss eine Zahl sein (z.B. `2`).",
             "min_one_winner":         "❌ Es muss mindestens 1 Gewinner geben!",
-            "random_selected":        "🎲 Zufällig ausgewählt: {mention}",
             "footer_active":          "{count} Gewinner | Endet um",
+            "manage_title":           "⚙️ Gewinnspiel-Verwaltung",
+            "manage_info":            "Nutze die Schaltflächen unten, um das Gewinnspiel zu verwalten.",
+            "select_result":          "🎲 Zufällig ausgewählt: {mention}",
+            "select_no_entries":      "Noch niemand hat am Gewinnspiel teilgenommen, daher kann niemand ausgewählt werden.",
+            "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
+            "participants_title":     "👥 Teilnehmer",
+            "participants_empty":     "Noch niemand hat am Gewinnspiel teilgenommen.",
         },
     },
     "cafe": {
@@ -92,18 +108,25 @@ MESSAGES = {
             "join_host":              "☕ can't join your own giveaway, silly~",
             "join_bot":               "🤖 bots can't join giveaways, sorry!",
             "no_exist":               "😔 this giveaway doesn't exist anymore.",
-            "ending_early":           "✅ ending the giveaway early...",
+            "no_perm_manage":         "☕ only the giveaway host or a server admin can manage this.",
+            "ending_early":           "✅ giveaway ended! winners have been announced~",
             "no_perm_end":            "☕ only the host or a bot owner can end this early.",
             "no_perm_select":         "☕ only the host or a bot owner can pick someone.",
-            "no_participants_yet":    "😔 nobody has joined yet!",
+            "no_participants_yet":    "nobody has joined yet 😔",
             "reroll_no_participants": "😔 nobody joined, so there's no one to reroll!",
             "reroll_not_ended":       "😔 this giveaway isn't over yet! rerolls are only for ended ones~",
             "reroll_not_found":       "😔 couldn't find a giveaway with that message id.",
             "invalid_duration":       "❌ invalid duration! use numbers with `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`)",
             "invalid_winners":        "❌ invalid winner count! needs to be a number (e.g. `2`).",
             "min_one_winner":         "❌ at least 1 winner is needed!",
-            "random_selected":        "🎲 randomly picked: {mention}",
             "footer_active":          "{count} winner{s} | ends at",
+            "manage_title":           "⚙️ giveaway management",
+            "manage_info":            "use the buttons below to manage this giveaway ☕",
+            "select_result":          "🎲 randomly picked: {mention}",
+            "select_no_entries":      "nobody has entered yet, so there's no one to pick 😔",
+            "end_confirmed":          "✅ giveaway ended~ winners have been announced in the channel ☕",
+            "participants_title":     "☕ participants",
+            "participants_empty":     "nobody has joined yet 😔",
         },
         "de": {
             "giveaway_title":         "🎉 Gewinnspiel",
@@ -122,18 +145,25 @@ MESSAGES = {
             "join_host":              "☕ du kannst nicht am eigenen gewinnspiel teilnehmen~",
             "join_bot":               "🤖 bots können leider nicht mitmachen!",
             "no_exist":               "😔 dieses gewinnspiel existiert nicht mehr.",
-            "ending_early":           "✅ gewinnspiel wird vorzeitig beendet...",
+            "no_perm_manage":         "☕ nur der veranstalter oder ein server-admin kann das verwalten.",
+            "ending_early":           "✅ gewinnspiel beendet~ gewinner wurden bekannt gegeben ☕",
             "no_perm_end":            "☕ nur der veranstalter oder ein bot-besitzer kann das früh beenden.",
             "no_perm_select":         "☕ nur der veranstalter oder ein bot-besitzer kann jemanden auswählen.",
-            "no_participants_yet":    "😔 noch niemand hat mitgemacht!",
+            "no_participants_yet":    "noch niemand hat mitgemacht 😔",
             "reroll_no_participants": "😔 niemand war dabei, also gibt's niemanden zum rerolln!",
             "reroll_not_ended":       "😔 das gewinnspiel ist noch nicht vorbei! rerolls gibt's nur für beendete.",
             "reroll_not_found":       "😔 kein gewinnspiel mit dieser nachrichten-id gefunden.",
             "invalid_duration":       "❌ ungültige dauer! benutze zahlen mit `s`, `m`, `h` oder `d` (z.b. `30s`, `10m`, `2h`, `1d`)",
             "invalid_winners":        "❌ ungültige gewinneranzahl! muss eine zahl sein (z.b. `2`).",
             "min_one_winner":         "❌ es braucht mindestens 1 gewinner!",
-            "random_selected":        "🎲 zufällig ausgewählt: {mention}",
             "footer_active":          "{count} gewinner | endet um",
+            "manage_title":           "⚙️ gewinnspiel-verwaltung",
+            "manage_info":            "nutze die schaltflächen unten, um das gewinnspiel zu verwalten ☕",
+            "select_result":          "🎲 zufällig ausgewählt: {mention}",
+            "select_no_entries":      "noch niemand ist dabei, also kann niemand ausgewählt werden 😔",
+            "end_confirmed":          "✅ gewinnspiel beendet~ gewinner wurden im channel bekannt gegeben ☕",
+            "participants_title":     "☕ teilnehmer",
+            "participants_empty":     "noch niemand hat mitgemacht 😔",
         },
     },
 }
@@ -148,7 +178,6 @@ def _get_lang(obj) -> str:
 
 
 def msg(obj, key: str, **kwargs) -> str:
-    """Look up a message string for the given context object (ctx or interaction)."""
     p    = PERSONALITY if PERSONALITY in MESSAGES else "normal"
     lang = _get_lang(obj)
     text = MESSAGES.get(p, {}).get(lang, {}).get(key)
@@ -162,11 +191,8 @@ def msg(obj, key: str, **kwargs) -> str:
 
 
 def _guild_msg(guild, key: str, **kwargs) -> str:
-    """Look up a message string using a Guild object (for tasks / end_giveaway)."""
-
     class _Wrap:
         pass
-
     w = _Wrap()
     w.guild = guild
     return msg(w, key, **kwargs)
@@ -179,8 +205,8 @@ def _guild_msg(guild, key: str, **kwargs) -> str:
 def _build_active_view(bot, prize: str, end_timestamp: int,
                        winners_count: int, author_mention: str,
                        guild=None) -> discord.ui.LayoutView:
-    s       = "s" if winners_count > 1 else ""
-    footer  = _guild_msg(guild, "footer_active", count=winners_count, s=s)
+    s      = "s" if winners_count > 1 else ""
+    footer = _guild_msg(guild, "footer_active", count=winners_count, s=s)
 
     view      = discord.ui.LayoutView()
     container = discord.ui.Container(
@@ -196,8 +222,7 @@ def _build_active_view(bot, prize: str, end_timestamp: int,
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
             JoinGiveawayBtn(bot),
-            EndGiveawayBtn(bot),
-            SelectGiveawayBtn(bot),
+            ManageGiveawayBtn(bot),
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=f"-# {footer} <t:{end_timestamp}:f>"),
@@ -234,8 +259,134 @@ def _build_ended_view(guild, prize: str, host_id: int,
     return view
 
 
+def _build_manage_panel(bot, giveaway_row, guild=None) -> discord.ui.LayoutView:
+    """Build the ephemeral management panel shown only to host/admins."""
+    message_id    = giveaway_row["message_id"]
+    prize         = giveaway_row["prize"]
+    winners_count = giveaway_row["winners_count"]
+    channel_id    = giveaway_row["channel_id"]
+    guild_id      = giveaway_row["guild_id"]
+    host_id       = giveaway_row["host_id"]
+
+    view      = discord.ui.LayoutView(timeout=180)
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {_guild_msg(guild, 'manage_title')}"),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(
+            content=(
+                f"**{_guild_msg(guild, 'label_prize')}:** {prize}\n"
+                f"**{_guild_msg(guild, 'label_hosted_by')}:** <@{host_id}>\n\n"
+                f"{_guild_msg(guild, 'manage_info')}"
+            )
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.ActionRow(
+            _MgmtEndBtn(bot, message_id, prize, winners_count, channel_id, guild_id, host_id),
+            _MgmtSelectBtn(bot, message_id),
+            _MgmtParticipantsBtn(bot, message_id),
+        ),
+        accent_colour=discord.Color.purple()
+    )
+    view.add_item(container)
+    return view
+
+
 # ─────────────────────────────────────────────────────────────
-#  PERSISTENT BUTTONS  (subclass discord.ui.Button)
+#  MANAGEMENT PANEL BUTTONS  (ephemeral — no persistent custom_id needed)
+# ─────────────────────────────────────────────────────────────
+
+class _MgmtEndBtn(discord.ui.Button):
+    def __init__(self, bot, message_id, prize, winners_count, channel_id, guild_id, host_id):
+        super().__init__(label="End Giveaway", style=discord.ButtonStyle.danger, emoji="🛑")
+        self._bot          = bot
+        self._message_id   = message_id
+        self._prize        = prize
+        self._winners_count = winners_count
+        self._channel_id   = channel_id
+        self._guild_id     = guild_id
+        self._host_id      = host_id
+
+    async def callback(self, interaction: discord.Interaction):
+        # Edit the ephemeral panel first so the interaction is acknowledged
+        confirm_view = discord.ui.LayoutView()
+        confirm_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(interaction, "end_confirmed")),
+            accent_colour=discord.Color.green()
+        ))
+        await interaction.response.edit_message(view=confirm_view)
+
+        # End the giveaway
+        giveaway_cog = self._bot.get_cog("Giveaway")
+        if giveaway_cog:
+            await giveaway_cog.end_giveaway(
+                self._message_id, self._channel_id, self._guild_id,
+                self._prize, self._winners_count, self._host_id,
+            )
+
+
+class _MgmtSelectBtn(discord.ui.Button):
+    def __init__(self, bot, message_id):
+        super().__init__(label="Select Random", style=discord.ButtonStyle.secondary, emoji="🎲")
+        self._bot        = bot
+        self._message_id = message_id
+
+    async def callback(self, interaction: discord.Interaction):
+        rows = await self._bot.cxn.fetch(
+            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
+        )
+        participants = [row["user_id"] for row in rows]
+
+        if not participants:
+            result_view = discord.ui.LayoutView()
+            result_view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=msg(interaction, "select_no_entries")),
+                accent_colour=discord.Color.orange()
+            ))
+            return await interaction.response.edit_message(view=result_view)
+
+        winner = random.choice(participants)
+        result_view = discord.ui.LayoutView()
+        result_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(interaction, "select_result", mention=f"<@{winner}>")),
+            accent_colour=discord.Color.green()
+        ))
+        await interaction.response.edit_message(view=result_view)
+
+
+class _MgmtParticipantsBtn(discord.ui.Button):
+    def __init__(self, bot, message_id):
+        super().__init__(label="Participants", style=discord.ButtonStyle.blurple, emoji="👥")
+        self._bot        = bot
+        self._message_id = message_id
+
+    async def callback(self, interaction: discord.Interaction):
+        rows = await self._bot.cxn.fetch(
+            "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
+        )
+
+        if not rows:
+            empty_view = discord.ui.LayoutView()
+            empty_view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {msg(interaction, 'participants_title')}\n"
+                            f"{msg(interaction, 'participants_empty')}"
+                ),
+                accent_colour=discord.Color.blurple()
+            ))
+            return await interaction.response.edit_message(view=empty_view)
+
+        lines = [f"**{i}.** <@{row['user_id']}>" for i, row in enumerate(rows, 1)]
+        pages = paginate(lines, per_page=15)
+        participants_view = PaginatedView(
+            title=msg(interaction, "participants_title"),
+            pages=pages,
+            icon_url=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+        )
+        await interaction.response.edit_message(view=participants_view)
+
+
+# ─────────────────────────────────────────────────────────────
+#  MAIN GIVEAWAY BUTTONS  (persistent — survive restarts)
 # ─────────────────────────────────────────────────────────────
 
 class JoinGiveawayBtn(discord.ui.Button):
@@ -277,92 +428,51 @@ class JoinGiveawayBtn(discord.ui.Button):
         await interaction.response.send_message(msg(interaction, "join_success"), ephemeral=True)
 
 
-class EndGiveawayBtn(discord.ui.Button):
+class ManageGiveawayBtn(discord.ui.Button):
     def __init__(self, bot):
         super().__init__(
-            label="End",
-            style=discord.ButtonStyle.danger,
-            emoji="🛑",
-            custom_id="giveaway_system_end",
+            label="Manage",
+            style=discord.ButtonStyle.secondary,
+            emoji="⚙️",
+            custom_id="giveaway_system_manage",
         )
         self._bot = bot
 
     async def callback(self, interaction: discord.Interaction):
+        message_id = interaction.message.id
+
         giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id, ended, prize, winners_count FROM giveaways WHERE message_id = $1",
-            interaction.message.id
+            "SELECT message_id, channel_id, guild_id, prize, winners_count, host_id, ended "
+            "FROM giveaways WHERE message_id = $1", message_id
         )
         if not giveaway:
             return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
         if giveaway["ended"]:
             return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
 
+        # Gate: host or server admin only
         is_host  = interaction.user.id == giveaway["host_id"]
-        is_owner = bool(self._bot.owner_ids) and interaction.user.id in self._bot.owner_ids
-        if not (is_host or is_owner):
-            return await interaction.response.send_message(msg(interaction, "no_perm_end"), ephemeral=True)
-
-        await interaction.response.send_message(msg(interaction, "ending_early"), ephemeral=True)
-
-        giveaway_cog = self._bot.get_cog("Giveaway")
-        if giveaway_cog:
-            await giveaway_cog.end_giveaway(
-                interaction.message.id,
-                interaction.channel.id,
-                interaction.guild.id,
-                giveaway["prize"],
-                giveaway["winners_count"],
-                giveaway["host_id"],
+        is_admin = interaction.user.guild_permissions.manage_guild
+        if not (is_host or is_admin):
+            return await interaction.response.send_message(
+                msg(interaction, "no_perm_manage"), ephemeral=True
             )
 
-
-class SelectGiveawayBtn(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(
-            label="Select",
-            style=discord.ButtonStyle.secondary,
-            emoji="🎲",
-            custom_id="giveaway_system_select",
-        )
-        self._bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id FROM giveaways WHERE message_id = $1", interaction.message.id
-        )
-        if not giveaway:
-            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
-
-        is_host  = interaction.user.id == giveaway["host_id"]
-        is_owner = bool(self._bot.owner_ids) and interaction.user.id in self._bot.owner_ids
-        if not (is_host or is_owner):
-            return await interaction.response.send_message(msg(interaction, "no_perm_select"), ephemeral=True)
-
-        rows = await self._bot.cxn.fetch(
-            "SELECT user_id FROM participants WHERE message_id = $1", interaction.message.id
-        )
-        participants = [row["user_id"] for row in rows]
-        if not participants:
-            return await interaction.response.send_message(msg(interaction, "no_participants_yet"), ephemeral=True)
-
-        winner = random.choice(participants)
-        await interaction.response.send_message(
-            msg(interaction, "random_selected", mention=f"<@{winner}>"), ephemeral=True
-        )
+        panel = _build_manage_panel(self._bot, giveaway, interaction.guild)
+        await interaction.response.send_message(view=panel, ephemeral=True)
 
 
 # ─────────────────────────────────────────────────────────────
-#  PERSISTENT VIEW — registered on startup for post-restart
+#  PERSISTENT VIEW — registered on startup for post-restart dispatch
 # ─────────────────────────────────────────────────────────────
 
 class GiveawayPersistentView(discord.ui.View):
-    """Registered with bot.add_view() so button interactions survive restarts."""
+    """Holds only the two main-message buttons — registered with bot.add_view()."""
 
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.add_item(JoinGiveawayBtn(bot))
-        self.add_item(EndGiveawayBtn(bot))
-        self.add_item(SelectGiveawayBtn(bot))
+        self.add_item(ManageGiveawayBtn(bot))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -419,7 +529,7 @@ class Giveaway(commands.Cog):
         except ValueError:
             return -1
 
-    # ─── GIVEAWAY COMMAND GROUP ───────────────────────────────
+    # ─── COMMANDS ─────────────────────────────────────────────
 
     @commands.group(name="giveaway", aliases=["g"], invoke_without_command=True)
     async def giveaway(self, ctx):
@@ -486,8 +596,8 @@ class Giveaway(commands.Cog):
     @tasks.loop(seconds=15)
     async def check_giveaways(self):
         try:
-            now      = datetime.datetime.now(datetime.timezone.utc)
-            rows     = await self.bot.cxn.fetch(
+            now  = datetime.datetime.now(datetime.timezone.utc)
+            rows = await self.bot.cxn.fetch(
                 "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id "
                 "FROM giveaways WHERE ended = 0"
             )
@@ -516,6 +626,7 @@ class Giveaway(commands.Cog):
     # ─── END GIVEAWAY ─────────────────────────────────────────
 
     async def end_giveaway(self, message_id, channel_id, guild_id, prize, winners_count, host_id):
+        # Mark as ended first to prevent double-triggering
         await self.bot.cxn.execute(
             "UPDATE giveaways SET ended = 1 WHERE message_id = $1", message_id
         )
@@ -529,7 +640,6 @@ class Giveaway(commands.Cog):
 
         guild = self.bot.get_guild(guild_id) or getattr(channel, "guild", None)
 
-        # Fetch the original giveaway message
         try:
             giveaway_msg = await channel.fetch_message(message_id)
         except Exception:

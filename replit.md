@@ -81,11 +81,14 @@ Preferred communication style: Simple, everyday language.
 
 ### Giveaway System
 - Tables: `giveaways` (message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id) and `participants` (message_id, user_id) in `data/database.db` via `bot.cxn`
-- Persistent across restarts: `GiveawayPersistentView` registered via `bot.add_view()` in `cog_load` — buttons use fixed `custom_id`s (`giveaway_system_join`, `giveaway_system_end`, `giveaway_system_select`)
-- Buttons are subclasses of `discord.ui.Button` (not ActionRow). Active giveaway messages use `_build_active_view()` (LayoutView + buttons inside ActionRow inside Container); ended messages use `_build_ended_view()` (LayoutView, no buttons)
+- Persistent across restarts: `GiveawayPersistentView` registered via `bot.add_view()` in `cog_load` — only the two main-message buttons have fixed `custom_id`s (`giveaway_system_join`, `giveaway_system_manage`)
+- Active giveaway messages show **Join** + **Manage** buttons. Manage opens an ephemeral management panel (host or server admin only) containing: End Giveaway, Select Random, and Participants buttons
+- Management panel buttons are NOT persistent (ephemeral, created fresh per click); they use `interaction.response.edit_message` to update the panel in-place
+- Participants button edits the ephemeral panel to a `PaginatedView` (15 per page, ◀/▶ nav)
+- Ended messages use `_build_ended_view()` (LayoutView, no buttons); `end_giveaway()` edits the original public message
 - Full bilingual EN/DE + normal/cafe personality MESSAGES table; `msg(ctx_or_interaction, key)` and `_guild_msg(guild, key)` helpers for task callbacks
 - Commands: `.giveaway start <duration> <winners> <prize>`, `.giveaway reroll <message_id>`
-- Background task (`check_giveaways`) fires every 15 s; `end_giveaway()` edits the original message with the ended view
+- Background task (`check_giveaways`) fires every 15 s
 
 ### Persistent Views (Tickets & Onboarding)
 - All persistent interactive components have `custom_id` set so Discord can re-dispatch interactions after restarts
