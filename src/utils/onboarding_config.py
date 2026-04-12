@@ -28,6 +28,12 @@ class OnboardingConfig:
     # Autoroles — assigned immediately when a member joins
     autorole_ids: list[int] | None = None  # list of role IDs
 
+    # Captcha verification
+    captcha_enabled: bool = False
+    captcha_channel_id: int | None = None      # channel where the captcha is posted
+    captcha_verified_role_id: int | None = None  # role assigned on success
+    captcha_kick_on_fail: bool = False           # kick member after 3 wrong answers
+
 
 def _get_path(guild_id: int) -> str:
     return os.path.join(DATA_DIR, f"{guild_id}.json")

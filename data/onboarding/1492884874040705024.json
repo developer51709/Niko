@@ -10,5 +10,8 @@
     "rules_role_id": null,
     "role_menu_channel": null,
     "role_menu_message_id": null,
-    "role_menu_options": null
+    "role_menu_options": null,
+    "autorole_ids": [
+        1492887171894612110
+    ]
 }
