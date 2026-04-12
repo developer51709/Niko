@@ -32,6 +32,8 @@ class Introduction(commands.Cog):
         for name in MAIN_CHANNEL_NAMES:
             for channel in guild.text_channels:
                 if name.lower() in channel.name.lower():
+                    if "unverified" in channel.name.lower():
+                        continue
                     perms = channel.permissions_for(guild.me)
                     if perms.send_messages:
                         debug("Introduction", f"Preferred channel found: #{channel.name}")
