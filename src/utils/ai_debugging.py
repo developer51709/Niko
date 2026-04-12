@@ -153,11 +153,11 @@ def _ai_fix(error_type: str, traceback_str: str, cog_name: str, code: str) -> st
 # ──────────────────────────────────────────────
 # Discord Views
 # ──────────────────────────────────────────────
-class _AnalysisView(discord.ui.View):
+class _AnalysisView(discord.ui.ActionRow):
     """View shown after the AI has analyzed the error — offers 'Fix with AI'."""
 
     def __init__(self, bot: commands.Bot, error_type: str, traceback_str: str, cog_name: str | None, analysis: str):
-        super().__init__(timeout=300)
+        super().__init__()
         self.bot = bot
         self.error_type = error_type
         self.traceback_str = traceback_str
@@ -301,6 +301,7 @@ class _DebugReportView(discord.ui.View):
             discord.ui.TextDisplay(content="### 🤖 AI Analysis"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=display_analysis),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
 
         analysis_view = _AnalysisView(
@@ -310,7 +311,9 @@ class _DebugReportView(discord.ui.View):
             cog_name=self.cog_name,
             analysis=analysis,
         )
-        await interaction.followup.send(view=layout, components=analysis_view)
+        if analysis_view.children:
+            layout.add_item(analysis_view)
+        await interaction.followup.send(view=layout)
 
 
 # ──────────────────────────────────────────────
@@ -378,7 +381,8 @@ async def send_debug_report(
     )
 
     try:
-        await channel.send(view=layout, components=view)
+        await channel.send(view=layout)
+        await channel.send(view=view)
         logging.info("AIDebugging", f"Debug report sent for {error_type} in {cog_name or 'unknown'}")
     except discord.HTTPException as exc:
         logging.error("AIDebugging", f"Failed to send debug report: {exc}")
