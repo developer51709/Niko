@@ -9,6 +9,7 @@ import requests
 from colorama import Fore, Style, init as colorama_init
 from config.emojis import get_emoji
 from utils import logging
+from utils.ai_debugging import send_debug_report
 
 from discord.ext.commands import (
     CommandError, CommandInvokeError, CommandNotFound,
@@ -318,6 +319,16 @@ class ErrorHandler(commands.Cog):
             await ctx.reply(view=view)
         except discord.HTTPException:
             pass
+
+        # Send to AI debug channel if configured
+        cog_name = ctx.command.cog.__class__.__name__.lower() if ctx.command and ctx.command.cog else None
+        # Try to match cog class name to a cog file name
+        if cog_name:
+            import os as _os
+            cog_files = [f[:-3] for f in _os.listdir("src/cogs") if f.endswith(".py")]
+            if cog_name not in cog_files:
+                cog_name = None
+        asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
