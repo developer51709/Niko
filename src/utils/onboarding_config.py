@@ -25,6 +25,9 @@ class OnboardingConfig:
     role_menu_message_id: int | None = None
     role_menu_options: list[dict] | None = None  # [{role_id, label, description, emoji}]
 
+    # Autoroles — assigned immediately when a member joins
+    autorole_ids: list[int] | None = None  # list of role IDs
+
 
 def _get_path(guild_id: int) -> str:
     return os.path.join(DATA_DIR, f"{guild_id}.json")

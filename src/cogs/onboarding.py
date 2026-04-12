@@ -250,6 +250,214 @@ class SetRulesRoleBtn(discord.ui.Button):
         await interaction.followup.send(f"Rules role set to {role.mention}.", ephemeral=True)
 
 
+# -------------------- AUTOROLE SETUP COMPONENTS --------------------
+
+class AddAutoroleSelect(discord.ui.RoleSelect):
+    """Ephemeral role picker — adds chosen roles to the autorole list."""
+    def __init__(self, guild_id: int):
+        super().__init__(
+            placeholder="Choose roles to add as autoroles…",
+            min_values=1,
+            max_values=10,
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = get_config(self.guild_id)
+        if cfg.autorole_ids is None:
+            cfg.autorole_ids = []
+
+        added = []
+        for role in self.values:
+            if role.id not in cfg.autorole_ids:
+                cfg.autorole_ids.append(role.id)
+                added.append(role.mention)
+
+        update_config(self.guild_id, cfg)
+        if added:
+            await interaction.response.send_message(
+                f"Added {', '.join(added)} as autorole(s).", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "Those roles are already in the autorole list.", ephemeral=True
+            )
+
+
+class AddAutoroleView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=60)
+        self.add_item(AddAutoroleSelect(guild_id))
+
+
+class RemoveAutoroleSelect(discord.ui.Select):
+    """Ephemeral select of current autoroles — removes chosen ones."""
+    def __init__(self, guild_id: int, guild: discord.Guild):
+        self.guild_id = guild_id
+        cfg = get_config(guild_id)
+        options = []
+        for rid in (cfg.autorole_ids or []):
+            role = guild.get_role(rid)
+            label = role.name if role else f"Unknown Role ({rid})"
+            options.append(discord.SelectOption(label=label, value=str(rid)))
+
+        if not options:
+            options = [discord.SelectOption(label="No autoroles configured", value="none")]
+
+        super().__init__(
+            placeholder="Choose autoroles to remove…",
+            min_values=1,
+            max_values=len(options),
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = get_config(self.guild_id)
+        if cfg.autorole_ids is None:
+            cfg.autorole_ids = []
+
+        removed = []
+        for val in self.values:
+            if val == "none":
+                continue
+            rid = int(val)
+            if rid in cfg.autorole_ids:
+                cfg.autorole_ids.remove(rid)
+                removed.append(f"<@&{rid}>")
+
+        update_config(self.guild_id, cfg)
+        if removed:
+            await interaction.response.send_message(
+                f"Removed {', '.join(removed)} from autoroles.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "Nothing was removed.", ephemeral=True
+            )
+
+
+class RemoveAutoroleView(discord.ui.View):
+    def __init__(self, guild_id: int, guild: discord.Guild):
+        super().__init__(timeout=60)
+        self.add_item(RemoveAutoroleSelect(guild_id, guild))
+
+
+class AddAutoroleBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Add Autorole", style=discord.ButtonStyle.primary, emoji="➕")
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message(
+                "This button can only be used by the person that triggered the command.", ephemeral=True
+            )
+        await interaction.response.send_message(
+            "Select one or more roles to automatically assign to new members:",
+            view=AddAutoroleView(self.guild_id),
+            ephemeral=True,
+        )
+
+
+class RemoveAutoroleBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
+        super().__init__(label="Remove Autorole", style=discord.ButtonStyle.secondary, emoji="➖")
+        self.guild_id = guild_id
+        self.author = author
+        self.guild = guild
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message(
+                "This button can only be used by the person that triggered the command.", ephemeral=True
+            )
+        cfg = get_config(self.guild_id)
+        if not cfg.autorole_ids:
+            return await interaction.response.send_message(
+                "No autoroles are configured yet.", ephemeral=True
+            )
+        await interaction.response.send_message(
+            "Select autoroles to remove:",
+            view=RemoveAutoroleView(self.guild_id, self.guild),
+            ephemeral=True,
+        )
+
+
+class ClearAutorolesBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji="🗑️")
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message(
+                "This button can only be used by the person that triggered the command.", ephemeral=True
+            )
+        cfg = get_config(self.guild_id)
+        cfg.autorole_ids = []
+        update_config(self.guild_id, cfg)
+        await interaction.response.send_message("All autoroles cleared.", ephemeral=True)
+
+
+class AutoroleSetupView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+
+        cfg = get_config(guild_id)
+        role_ids = cfg.autorole_ids or []
+
+        if role_ids:
+            role_lines = "\n".join(
+                f"• {guild.get_role(rid).mention if guild.get_role(rid) else f'Unknown role `{rid}`'}"
+                for rid in role_ids
+            )
+            current_text = f"**Current autoroles ({len(role_ids)}):**\n{role_lines}"
+        else:
+            current_text = "No autoroles configured yet.\nAdd roles with the buttons below."
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Autorole Configuration"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="Autoroles are assigned to every new member the moment they join the server."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=current_text),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                AddAutoroleBtn(guild_id, author),
+                RemoveAutoroleBtn(guild_id, author, guild),
+                ClearAutorolesBtn(guild_id, author),
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+            ),
+            accent_colour=discord.Colour(0xFEE75C),
+        )
+        self.add_item(container)
+
+
+class ConfigureAutorolesBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Configure Autoroles", style=discord.ButtonStyle.secondary, emoji="🎭")
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message(
+                "This button can only be used by the person that triggered the command.", ephemeral=True
+            )
+        await interaction.response.send_message(
+            view=AutoroleSetupView(self.guild_id, self.author, interaction.guild),
+            ephemeral=False,
+        )
+
+
 # -------------------- ROLE MENU SETUP BUTTONS --------------------
 
 class AddRoleOptionBtn(discord.ui.Button):
@@ -440,6 +648,9 @@ class OnboardingSetupView(discord.ui.LayoutView):
                 PostRulesBtn(guild_id, author),
                 SetRulesRoleBtn(guild_id, author),
             ),
+            discord.ui.ActionRow(
+                ConfigureAutorolesBtn(guild_id, author),
+            ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
@@ -516,9 +727,30 @@ class Onboarding(commands.Cog):
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
         await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix))
 
+    @onboarding.command(name="autoroles")
+    @commands.has_permissions(administrator=True)
+    async def onboarding_autoroles(self, ctx: commands.Context):
+        """Configure which roles are automatically given to new members on join."""
+        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild))
+
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         cfg = get_config(member.guild.id)
+
+        # ── Autoroles ────────────────────────────────────────────────────────
+        if cfg.autorole_ids:
+            roles_to_add = [
+                member.guild.get_role(rid)
+                for rid in cfg.autorole_ids
+                if member.guild.get_role(rid)
+            ]
+            if roles_to_add:
+                try:
+                    await member.add_roles(*roles_to_add, reason="Onboarding autoroles")
+                except discord.Forbidden:
+                    pass  # bot lacks permission — silently skip
+
+        # ── Welcome message ───────────────────────────────────────────────────
         if not cfg.welcome_channel:
             return
 
