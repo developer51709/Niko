@@ -60,6 +60,9 @@ class Development(commands.Cog):
             discord.ui.TextDisplay(
                 content=f"### Bot Control\n`{prefix}devsay <msg>`\n`{prefix}devshutdown`"
             ),
+            discord.ui.TextDisplay(
+                content=f"### Emoji Sync\n`{prefix}syncemojis`\n`{prefix}appemojis`\n`{prefix}emojistatus`"
+            )
         )
         view.add_item(container)
 
