@@ -311,7 +311,7 @@ class EditThresholdsButton(discord.ui.Button):
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         modal = _build_threshold_modal(cfg, self._cog, self._guild_id, self._section)
-        await interaction.response.send_modal(modal, allowed_mentions=ALLOWED_MENTIONS)
+        await interaction.response.send_modal(modal)
 
 
 class EditExtAppButton(discord.ui.Button):
