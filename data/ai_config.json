@@ -8,7 +8,55 @@
         "enabled": "True"
     },
     "1443314822182732010": {
-        "personality": "normal",
-        "enabled": "False"
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1491207178848309370": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1487916721192042738": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1470154675394314393": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1475891013305499678": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1487540573870100661": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1487511954925944883": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1482399344337485874": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1492727245708722246": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1469755303926169602": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1492884874040705024": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1470878953743974587": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1492593475021963316": {
+        "personality": "cafe",
+        "enabled": "True"
     }
 }

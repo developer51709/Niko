@@ -64,5 +64,24 @@
         "status": "open"
       }
     ]
+  },
+  "1487540573870100661": {
+    "guild_id": 1487540573870100661,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": 1492596494719520922,
+    "panel_message_id": 1492750423814049813,
+    "open_tickets": [
+      {
+        "channel_id": 1492750512120922264,
+        "message_id": 1492750514063016078,
+        "category": "General",
+        "opener_id": 1477125396339097723,
+        "status": "open"
+      }
+    ]
   }
 }
