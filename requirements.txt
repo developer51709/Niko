@@ -9,3 +9,13 @@ wavelink
 aiosqlite
 deep-translator
 langdetect
+aiosqlite
+colorama
+deep-translator
+discord.py
+flask
+langdetect
+openai
+psutil
+requests
+wavelink
