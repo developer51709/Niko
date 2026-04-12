@@ -193,7 +193,7 @@ class ModerationUtils(commands.Cog):
         # verify perms every time in case the role was modified
         for channel in guild.channels:
             try:
-                await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False)
+                await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False, use_application_commands=False, use_external_apps=False, reason="Verify mute role permissions")
             except Exception:
                 continue
         return role
