@@ -187,10 +187,10 @@ class ModerationUtils(commands.Cog):
 
     async def ensure_mute_role(self, guild: discord.Guild) -> discord.Role:
         role = discord.utils.get(guild.roles, name="Muted")
-        if role:
-            return role
-        perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
-        role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
+        if not role:
+            perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
+            role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
+        # verify perms every time in case the role was modified
         for channel in guild.channels:
             try:
                 await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False)
@@ -200,7 +200,12 @@ class ModerationUtils(commands.Cog):
 
     async def mute_member(self, guild: discord.Guild, member: discord.Member, duration=None, reason=None):
         role = await self.ensure_mute_role(guild)
-        await member.add_roles(role, reason=reason or "Muted")
+        try:
+            await member.add_roles(role, reason=reason or "Muted")
+        except Exception:
+            # sometime it says member has no attribute add_roles in this case we need to attach a specific guild before trying to add the role
+            member = guild.get_member(member.id)
+            await member.add_roles(role, reason=reason or "Muted")
         gid = str(member.guild.id)
         uid = str(member.id)
         until = None
