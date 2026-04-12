@@ -9,11 +9,18 @@
 #   LOG_BACKUP_COUNT – number of rotated backups to keep                   (default: 3)
 
 import os
+import requests
+import json
 import logging
 import logging.handlers
 from colorama import Fore, Style, init as colorama_init
 
 colorama_init(autoreset=True)
+
+LOG_LEVEL = {
+    "FILE": logging.DEBUG,
+    "WEBHOOK": logging.WARNING
+}
 
 # -----------------------------------
 # Colors
@@ -97,9 +104,6 @@ _backup_count  = int(os.getenv("LOG_BACKUP_COUNT", "3"))
 # -----------------------------------
 # Webhook logging handler
 # -----------------------------------
-import json
-import requests
-
 class WebhookHandler(logging.Handler):
     """
     Sends log records to a Discord webhook.
@@ -188,7 +192,7 @@ if _file_enabled:
         backupCount=_backup_count,
         encoding="utf-8",
     )
-    _file_handler.setLevel(logging.DEBUG)
+    _file_handler.setLevel(LOG_LEVEL["FILE"])
     _file_handler.setFormatter(FileFormatter())
     root.addHandler(_file_handler)
 
@@ -196,6 +200,7 @@ if _file_enabled:
 webhook_url = os.getenv("LOGGING_WEBHOOK")
 if webhook_url:
     webhook_handler = WebhookHandler(webhook_url)
+    webhook_handler.setLevel(LOG_LEVEL["WEBHOOK"])
     root.addHandler(webhook_handler)
 
 
