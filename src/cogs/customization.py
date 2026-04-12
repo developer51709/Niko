@@ -140,9 +140,14 @@ async def collect_image_attachment(interaction: discord.Interaction, profile_vie
 class FontSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Font 11", value="11"),
-            discord.SelectOption(label="Font 12", value="12"),
-            discord.SelectOption(label="Font 13", value="13"),
+            discord.SelectOption(label="Sakura", value="3"),
+            discord.SelectOption(label="Jellybean", value="4"),
+            discord.SelectOption(label="Modern", value="6"),
+            discord.SelectOption(label="Medieval", value="7"),
+            discord.SelectOption(label="8Bit", value="8"),
+            discord.SelectOption(label="Vampyre", value="10"),
+            discord.SelectOption(label="gg sans (Default)", value="11"),
+            discord.SelectOption(label="Tempo", value="12"),
         ]
         super().__init__(placeholder="Select Font", options=options)
 
@@ -208,45 +213,53 @@ class SetNameView(discord.ui.LayoutView):
         await interaction.response.send_modal(DisplayNameModal(self))
 
     async def apply_callback(self, interaction: discord.Interaction):
-        if not all([self.display_name, self.font_id, self.color1, self.color2]):
-            return await interaction.response.send_message("Missing fields.", ephemeral=True)
-
         await interaction.response.defer(ephemeral=True)
 
         token = os.getenv("DISCORD_BOT_TOKEN")
         guild_id = self.guild_id
+        bot_id = str(interaction.client.user.id)
 
-        url = f"https://discord.com/api/v10/guilds/{guild_id}/members/@me"
+        urls = [
+            f"https://canary.discord.com/api/v9/guilds/{self.guild_id}/members/@me",
+            f"https://canary.discord.com/api/v9/guilds/{self.guild_id}/members/{bot_id}",
+            f"https://discord.com/api/v9/guilds/{self.guild_id}/members/@me",
+            f"https://discord.com/api/v9/guilds/{self.guild_id}/members/{bot_id}",
+        ]
 
-        payload = {
-            "display_name_font_id": self.font_id,
-            "display_name_effect_id": 2,
-            "display_name_colors": [self.color1, self.color2]
-        }
+        body = {}
+        if self.display_name:
+            body["nick"] = self.display_name
+        if self.font_id:
+            body["display_name_font_id"] = self.font_id
+            body["display_name_effect_id"] = 2
+        if self.color1 and self.color2:
+            body["display_name_colors"] = [self.color1, self.color2]
+        elif self.color1:
+            body["display_name_colors"] = [self.color1]
+        elif self.color2:
+            body["display_name_colors"] = [self.color2]
 
-        headers = {
-            "Authorization": token,
-            "Content-Type": "application/json",
-            "Origin": "https://discord.com",
-            "Referer": f"https://discord.com/channels/{guild_id}/{interaction.channel_id}",
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/123.0.0.0 Safari/537.36"
-            )
-        }
+        if not body:
+            return await interaction.followup.send("Nothing to update.", ephemeral=True)
 
-        success, _ = await try_patch_with_fallbacks([url], token, payload, extra_headers={
-            "Origin": headers["Origin"],
-            "Referer": headers["Referer"],
-            "User-Agent": headers["User-Agent"],
-        })
+        success, attempts = await try_patch_with_fallbacks(urls, token, body)
 
         if success:
             await interaction.followup.send("Updated successfully.", ephemeral=True)
         else:
-            logging.error("customization", f"Failed to update display name for guild {guild_id}")
-            await interaction.followup.send("Failed to update.", ephemeral=True)
+            msg_lines = ["Failed to update profile. Attempts:"]
+            for a in attempts:
+                if a.get("status") == "request_error":
+                    msg_lines.append(f"- {a['url']} auth={a['auth']} error={a['error']}")
+                else:
+                    code = a.get("status_code")
+                    body_text = a.get("response_text", "")
+                    msg_lines.append(f"- {a['url']} auth={a['auth']} status={code} body={body_text}")
+
+            logging.error("customization", " | ".join(msg_lines))
+            return await interaction.followup.send(
+                "Failed to update profile. Please try again later.", ephemeral=True
+            )
 
 
 class SetProfileView(discord.ui.LayoutView):
@@ -336,7 +349,7 @@ class SetProfileView(discord.ui.LayoutView):
 
         logging.error("customization", " | ".join(msg_lines))
         return await interaction.followup.send(
-            "Failed to update profile. Check logs for details.", ephemeral=True
+            "Failed to update profile. Please try again later.", ephemeral=True
         )
 
 # ---------- Cog ----------
