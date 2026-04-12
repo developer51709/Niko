@@ -5,9 +5,11 @@ import textwrap
 import time
 import os
 import psutil
+import aiohttp
 from discord.ext import commands
 import colorama
 from utils.paginator import PaginatedView, paginate
+from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
 
 # Developer user IDs
 DEVELOPERS = {
@@ -296,6 +298,91 @@ class Development(commands.Cog):
     async def dev_shutdown(self, ctx):
         await ctx.send("Shutting down…")
         await self.bot.close()
+
+    # -------------------------------
+    # Emoji Sync
+    # -------------------------------
+    @commands.command(name="syncemojis", help="Sync bot emojis as application emojis and download assets")
+    async def sync_emojis(self, ctx):
+        """Manually trigger the application emoji sync."""
+        status_msg = await ctx.send("⏳ Syncing application emojis…")
+        async with ctx.typing():
+            try:
+                async with aiohttp.ClientSession() as session:
+                    stats = await sync_application_emojis(self.bot, session=session)
+            except Exception as exc:
+                await status_msg.edit(content=f"❌ Sync failed: `{exc}`")
+                return
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### 🎨 Application Emoji Sync — Complete"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    f"**Emojis in config:** `{stats['parsed']}`\n"
+                    f"**Images downloaded/cached:** `{stats['downloaded']}`\n"
+                    f"**Already registered:** `{stats['already']}`\n"
+                    f"**Newly uploaded:** `{stats['uploaded']}`\n"
+                    f"**Failed:** `{stats['failed']}`\n"
+                    f"**Config updated:** `{stats['config_updated']}`"
+                )
+            ),
+        )
+        view.add_item(container)
+        await status_msg.delete()
+        await ctx.send(view=view)
+
+    @commands.command(name="appemojis", help="List all registered application emojis")
+    async def list_app_emojis(self, ctx):
+        """Show all emojis registered to this application."""
+        try:
+            emojis = await list_application_emojis(self.bot)
+        except Exception as exc:
+            await ctx.send(f"❌ Could not fetch application emojis: `{exc}`")
+            return
+
+        if not emojis:
+            await ctx.send("No application emojis registered yet. Run `.syncemojis` to upload them.")
+            return
+
+        lines = [f"{e} `:{e.name}:` — `{e.id}`" for e in sorted(emojis, key=lambda e: e.name.lower())]
+        from utils.paginator import PaginatedView, paginate
+        pages = paginate(lines, per_page=15)
+        view = PaginatedView(title=f"🎨 Application Emojis ({len(emojis)} total)", pages=pages)
+        await ctx.send(view=view)
+
+    @commands.command(name="emojistatus", help="Show which config emojis are/aren't uploaded as application emojis")
+    async def emoji_status(self, ctx):
+        """Compare config emojis vs registered application emojis."""
+        try:
+            app_emojis = await list_application_emojis(self.bot)
+        except Exception as exc:
+            await ctx.send(f"❌ Could not fetch application emojis: `{exc}`")
+            return
+
+        config_emojis = parse_config()
+        app_names = {e.name.lower() for e in app_emojis}
+
+        synced   = [pe for pe in config_emojis if pe.discord_name.lower() in app_names]
+        missing  = [pe for pe in config_emojis if pe.discord_name.lower() not in app_names]
+
+        synced_list  = ", ".join(f"`:{pe.discord_name}:`" for pe in synced)  or "none"
+        missing_list = ", ".join(f"`:{pe.discord_name}:`" for pe in missing) or "none"
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### 🎨 Emoji Sync Status"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    f"**✅ Synced ({len(synced)}):**\n{synced_list}\n\n"
+                    f"**⚠️ Missing ({len(missing)}):**\n{missing_list}"
+                )
+            ),
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
 
 async def setup(bot):

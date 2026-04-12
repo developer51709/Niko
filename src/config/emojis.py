@@ -5,71 +5,71 @@
 # emojis for the bot
 def get_emoji(emoji_name: str):
     if emoji_name == "automod":
-        return "<:Automod:1484537188245835821>"
+        return "<:Automod:1492967599586152448>"
     if emoji_name == "bot_owner":
-        return "<:bot_owner:1484522179034087579>"
+        return "<:bot_owner:1492967602929143818>"
     if emoji_name == "cpu":
-        return "<:cpu:1488576145518755880>"
+        return "<:cpu:1492967605911289866>"
     if emoji_name == "credit_card":
-        return "<a:credit_card:1488611287545151562>"
+        return "<a:credit_card:1492967609061081171>"
     if emoji_name == "discord":
-        return "<a:discord:1488569938258952212>"
+        return "<a:discord:1492967612290961428>"
     if emoji_name == "github":
-        return "<:github:1488283491941748736>"
+        return "<:github:1492967615243489330>"
     if emoji_name == "icon_ai":
-        return "<:icon_ai:1484520738345189500>"
+        return "<:icon_ai:1492967617600684245>"
     if emoji_name == "icon_automod":
-        return "<:icon_automod:1484520751624360017>"
+        return "<:icon_automod:1492967621128359936>"
     if emoji_name == "icon_categories":
-        return "<:icon_categories:1484522112202051734>"
+        return "<:icon_categories:1492967623619645584>"
     if emoji_name == "icon_cross":
-        return "<:icon_cross:1484520758452686930>"
+        return "<:icon_cross:1492967626320646315>"
     if emoji_name == "icon_danger":
-        return "<:icon_danger:1484522107802095829>"
+        return "<:icon_danger:1492967630024474684>"
     if emoji_name == "icon_economy":
-        return "<:icon_economy:1484520797585408113>"
+        return "<:icon_economy:1492967632586936333>"
     if emoji_name == "icon_games":
-        return "<:icon_games:1484520778798989415>"
+        return "<:icon_games:1492967635258966279>"
     if emoji_name == "icon_edit":
-        return "<:icon_edit:1484522084188033097>"
+        return "<:icon_edit:1492967638484385982>"
     if emoji_name == "icon_giveaway":
-        return "<:icon_giveaway:1484520743214780557>"
+        return "<:icon_giveaway:1492967641374265514>"
     if emoji_name == "icon_image":
-        return "<:icon_image:1484520768271286342>"
+        return "<:icon_image:1492967644121530459>"
     if emoji_name == "icon_leveling":
-        return "<:icon_leveling:1488609621319876639>"
+        return "<:icon_leveling:1492967646910484480>"
     if emoji_name == "icon_link":
-        return "<:icon_link:1484520754362974420>"
+        return "<:icon_link:1492967649641107496>"
     if emoji_name == "icon_moderation":
-        return "<:icon_moderation:1484520749434802187>"
+        return "<:icon_moderation:1492967655819317388>"
     if emoji_name == "icon_plus":
-        return "<:icon_plus:1484520793768591411>"
+        return "<:icon_plus:1492967658759393331>"
     if emoji_name == "icon_settings":
-        return "<:icon_settings:1484520784402583613>"
+        return "<:icon_settings:1492967661670502590>"
     if emoji_name == "icon_tick":
-        return "<:icon_tick:1484520756216987738>"
+        return "<:icon_tick:1492967664442933540>"
     if emoji_name == "icon_ticket":
-        return "<:icon_ticket:1484520746771415040>"
+        return "<:icon_ticket:1492967666829496353>"
     if emoji_name == "icon_utility":
-        return "<:icon_utility:1484520721718706306>"
+        return "<:icon_utility:1492967669547274502>"
     if emoji_name == "icon_welcome":
-        return "<:icon_welcome:1484520744812806205>"
+        return "<:icon_welcome:1492967672902717622>"
     if emoji_name == "music":
-        return "<:music:1484522123383931010>"
+        return "<:music:1492967675742261248>"
     if emoji_name == "owner_icon":
-        return "<:owner_icon:1484537185578389666>"
+        return "<:owner_icon:1492967678573416609>"
     if emoji_name == "ram":
-        return "<:ram:1488576025247092887>"
+        return "<:ram:1492967681341788291>"
     if emoji_name == "spotify":
-        return "<:spotify:1488574224997027963>"
+        return "<:spotify:1492967684122349648>"
     if emoji_name == "vm_lock":
-        return "<:vm_lock:1488954833019998359>"
+        return "<:vm_lock:1492967686932529283>"
     if emoji_name == "vm_unlock":
-        return "<:vm_unlock:1488954649904939158>"
+        return "<:vm_unlock:1492967689637986547>"
     if emoji_name == "website":
-        return "<:website:1488567482007683202>"
+        return "<:website:1492967699548999851>"
     # these use two emojis instead of just returning one
     if emoji_name == "enabled":
-        return "<:disable_no:1484520728190517401><:enable_yes:1484520730711298190>"
+        return "<:disable_no:1492967702409642126><:enable_yes:1492967705240797204>"
     if emoji_name == "disabled":
-        return "<:disable_yes:1484520726550544486><:enable_no:1484520729444614144>"
+        return "<:disable_yes:1492967708592177382><:enable_no:1492967711863603330>"

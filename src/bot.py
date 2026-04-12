@@ -12,6 +12,7 @@ from utils.ai_openai import generate_reply_openai
 from utils.ai_config import get_ai_config
 from utils import logging
 import database
+from utils.emoji_sync import sync_application_emojis
 
 # -----------------------------
 # Config
@@ -536,6 +537,14 @@ async def on_ready():
     await load_cogs()
     await set_status()
     print_banner()
+    # Sync application emojis in the background so startup isn't blocked
+    asyncio.create_task(_run_emoji_sync())
+
+async def _run_emoji_sync():
+    try:
+        await sync_application_emojis(bot)
+    except Exception as exc:
+        logging.error("EmojiSync", f"Startup emoji sync failed: {exc}")
 
 if __name__ == "__main__":
     if not TOKEN:

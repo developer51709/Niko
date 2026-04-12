@@ -33,9 +33,29 @@ Preferred communication style: Simple, everyday language.
 - `discord.ui.LayoutView` and `discord.ui.View` cannot be mixed in the same message send.
 - `discord.ui.Section` requires an accessory — if no image, use a plain `TextDisplay` as fallback.
 
+### Emoji System — Application Emojis
+- All bot emojis are registered as **Application Emojis** (owned by the bot itself, not any guild). No emoji server needed.
+- `src/utils/emoji_sync.py` handles the full lifecycle:
+  1. Parses `src/config/emojis.py` to find all `<:name:id>` / `<a:name:id>` references
+  2. Downloads each image to `src/assets/emojis/` (cached — skips if already on disk)
+  3. Fetches the bot's existing application emojis via `bot.fetch_application_emojis()`
+  4. Uploads any missing ones via `bot.create_application_emoji()`
+  5. Rewrites `src/config/emojis.py` with the live application-emoji IDs
+- Runs automatically in the background on every `on_ready` (non-blocking)
+- Dev commands (developer-only, accessible in any guild):
+  - `.syncemojis` — manual re-sync with a stats report
+  - `.appemojis` — paginated list of all registered application emojis
+  - `.emojistatus` — diff between config emojis and registered application emojis
+
 ### AI/LLM Integration
 - **OpenAI API** via Replit integration (`python_openai_ai_integrations`)
 - Memory stored in `memory.json` with `users`, `favorability`, `conversations` keys.
+
+### AI Debugging System
+- `src/utils/ai_debugging.py` — automatic error reporting + AI-assisted fixes
+- On unexpected command errors, posts to `AI_DEBUG_CHANNEL` (set as env var) with full traceback
+- Buttons: **AI Debug** (explains root cause) → **Fix with AI** (rewrites cog, reloads it, saves backup) → **Revert Fix** (restores backup)
+- Backups stored in `data/ai_debug_backups/`
 
 ### Economy System
 - **Per-user JSON files**: `economy_data/{user_id}.json`
