@@ -19,3 +19,7 @@ openai
 psutil
 requests
 wavelink
+feedparser
+pillow
+davey
+PyNaCl
