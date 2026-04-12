@@ -177,6 +177,43 @@ class ColorSelect(discord.ui.Select):
 
 # ---------- Main Views ----------
 
+class GlobalOrGuildView(discord.ui.LayoutView):
+    def __init__(self, guild_id):
+        super().__init__(timeout=180)
+        self.guild_id = guild_id
+
+        self.choice = None
+
+        global_btn = discord.ui.Button(label="Global", style=discord.ButtonStyle.primary, custom_id="global_btn")
+        global_btn.callback = self.global_callback
+
+        guild_btn = discord.ui.Button(label="Guild", style=discord.ButtonStyle.primary, custom_id="guild_btn")
+        guild_btn.callback = self.guild_callback
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Customize Display Name"),
+            discord.ui.Separator(),
+            discord.ui.ActionRow(global_btn),
+            discord.ui.ActionRow(guild_btn),
+            accent_colour=discord.Colour(0x5865F2)
+        )
+
+        self.add_item(container)
+
+    async def interaction_check(self, interaction):
+        return interaction.user.guild_permissions.administrator or await interaction.client.is_owner(interaction.user)
+
+    async def global_callback(self, interaction: discord.Interaction):
+        self.choice = "global"
+        await interaction.response.defer()
+        self.stop()
+
+    async def guild_callback(self, interaction: discord.Interaction):
+        self.choice = "guild"
+        await interaction.response.defer()
+        self.stop()
+
+
 class SetNameView(discord.ui.LayoutView):
     def __init__(self, guild_id):
         super().__init__(timeout=180)
@@ -242,10 +279,29 @@ class SetNameView(discord.ui.LayoutView):
         if not body:
             return await interaction.followup.send("Nothing to update.", ephemeral=True)
 
+        # if bot owner, ask if they want to set guild or global
+        if await interaction.client.is_owner(interaction.user):
+            owner = True
+            view = GlobalOrGuildView(guild_id)
+            await interaction.followup.send(view=view, ephemeral=True)
+            await view.wait()
+            choice = view.choice
+            
+            if choice == "global":
+                urls = [
+                    f"https://canary.discord.com/api/v9/users/@me",
+                    f"https://canary.discord.com/api/v9/users/{bot_id}",
+                    f"https://discord.com/api/v9/users/@me",
+                    f"https://discord.com/api/v9/users/{bot_id}"
+                ]
+                
         success, attempts = await try_patch_with_fallbacks(urls, token, body)
 
         if success:
-            await interaction.followup.send("Updated successfully.", ephemeral=True)
+            if owner:
+                await interaction.followup.send(f"Updated successfully in {choice} settings.", ephemeral=True)
+            else:
+                await interaction.followup.send("Updated successfully.", ephemeral=True)
         else:
             msg_lines = ["Failed to update profile. Attempts:"]
             for a in attempts:
@@ -260,6 +316,13 @@ class SetNameView(discord.ui.LayoutView):
             return await interaction.followup.send(
                 "Failed to update profile. Please try again later.", ephemeral=True
             )
+
+    async def on_timeout(self):
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+            elif isinstance(item, discord.ui.Select):
+                item.disabled = True
 
 
 class SetProfileView(discord.ui.LayoutView):
@@ -334,9 +397,29 @@ class SetProfileView(discord.ui.LayoutView):
         if not body:
             return await interaction.followup.send("Nothing to update.", ephemeral=True)
 
+        # if bot owner, ask if they want to set guild or global
+        if await interaction.client.is_owner(interaction.user):
+            owner = True
+            view = GlobalOrGuildView(guild_id)
+            await interaction.followup.send(view=view, ephemeral=True)
+            await view.wait()
+            choice = view.choice
+
+            if choice == "global":
+                urls = [
+                    f"https://canary.discord.com/api/v9/users/@me",
+                    f"https://canary.discord.com/api/v9/users/{bot_id}",
+                    f"https://discord.com/api/v9/users/@me",
+                    f"https://discord.com/api/v9/users/{bot_id}"
+                ]
+
         success, attempts = await try_patch_with_fallbacks(urls, token, body)
+
         if success:
-            return await interaction.followup.send("Profile updated.", ephemeral=True)
+            if owner:
+                await interaction.followup.send(f"Updated successfully in {choice} settings.", ephemeral=True)
+            else:
+                await interaction.followup.send("Updated successfully.", ephemeral=True)
 
         msg_lines = ["Failed to update profile. Attempts:"]
         for a in attempts:
