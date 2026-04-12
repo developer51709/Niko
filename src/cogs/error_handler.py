@@ -127,24 +127,20 @@ class ErrorHandler(commands.Cog):
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
             # owner bypass
-            if await is_owner().predicate(ctx):
-                # trigger the command function manually with the command's original args to bypass checks
-                if not args:
-                    # check message content for args
-                    args = ctx.message.content.split()[1:]
-                    if args:
-                        # convert to a usable format
-                        args = [arg for arg in args]
-                        # ensure args are valid strings and integers
-                        args = [int(arg) if arg.isdigit() else arg for arg in args]
-                        # if it is a subcommand we need to strip the subcommand name from the args
-                        if ctx.command.parent:
-                            args = args[1:]
-                # some commands require other functions from the cog they are in meaning we need to pass it as the first argument in the callback
-                command_cog = ctx.command.cog
-                await ctx.command.callback(command_cog, ctx, *args, **kwargs)
-                logging.warning("error_handler", f"Permission check bypassed for trusted owner {ctx.author}")
-                return
+            owner_bypass = True
+            if owner_bypass:
+                if await is_owner().predicate(ctx):
+                    if not args:
+                        args = ctx.message.content.split()[1:]
+                        if args:
+                            args = [arg for arg in args]
+                            args = [int(arg) if arg.isdigit() else arg for arg in args]
+                            if ctx.command.parent:
+                                args = args[1:]
+                    command_cog = ctx.command.cog
+                    await ctx.command.callback(command_cog, ctx, *args, **kwargs)
+                    logging.warning("error_handler", f"Permission check bypassed for trusted owner {ctx.author}")
+                    return
             view = self.error_embed(
                 "Missing Permissions",
                 f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
