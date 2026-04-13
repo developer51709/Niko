@@ -23,20 +23,11 @@ import textwrap
 import traceback
 import datetime
 from pathlib import Path
-from openai import OpenAI
+from utils.ai_nikoapi import generate_reply_nikoapi
 
 import discord
 from discord.ext import commands
 from utils import logging
-
-# ──────────────────────────────────────────────
-# OpenAI client (uses Replit AI Integrations)
-# ──────────────────────────────────────────────
-def _get_openai_client() -> OpenAI:
-    return OpenAI(
-        api_key=os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"),
-        base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"),
-    )
 
 # ──────────────────────────────────────────────
 # Config
@@ -50,8 +41,6 @@ DEBUG_CHANNEL_ID: int | None = (
 COGS_DIR = Path("src/cogs")
 BACKUP_DIR = Path("data/ai_debug_backups")
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-
-MODEL = "gpt-4o-mini"
 
 # ──────────────────────────────────────────────
 # Helpers
@@ -103,7 +92,6 @@ def _container(*items) -> discord.ui.LayoutView:
 # AI calls (sync — run in executor)
 # ──────────────────────────────────────────────
 def _ai_analyze(error_type: str, traceback_str: str, cog_name: str | None, code: str) -> str:
-    client = _get_openai_client()
     code_section = f"\n\nRelevant source code ({cog_name}.py):\n```python\n{code}\n```" if code else ""
 
     prompt = (
@@ -117,17 +105,17 @@ def _ai_analyze(error_type: str, traceback_str: str, cog_name: str | None, code:
         f"{code_section}"
     )
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=600,
-        temperature=0.2,
-    )
-    return response.choices[0].message.content.strip()
+    # use the nikoapi to generate the response
+    bot = commands.bot
+    user_id = int(1484653109576732692)
+    server = "Internal AI Debugging"
+    username = "System Debug Handler"
+    response = generate_reply_nikoapi(bot, user_id, server, prompt, username, prompt)
+    
+    return response
 
 
 def _ai_fix(error_type: str, traceback_str: str, cog_name: str, code: str) -> str:
-    client = _get_openai_client()
     prompt = (
         "You are an expert Python / discord.py engineer.\n"
         "Fix the bug described below by rewriting the COMPLETE source file.\n"
@@ -141,13 +129,14 @@ def _ai_fix(error_type: str, traceback_str: str, cog_name: str, code: str) -> st
         f"Full source of {cog_name}.py:\n```python\n{code}\n```"
     )
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=3000,
-        temperature=0.1,
-    )
-    return response.choices[0].message.content.strip()
+    # use the nikoapi to generate the response
+    bot = commands.bot
+    user_id = int(1484653109576732692)
+    server = "Internal AI Debugging"
+    username = "System Debug Handler"
+    response = generate_reply_nikoapi(bot, user_id, server, prompt, username, prompt)
+    
+    return response
 
 
 # ──────────────────────────────────────────────
