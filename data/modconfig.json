@@ -1540,7 +1540,9 @@
         "max_mentions": 5,
         "blocked_words": [],
         "whitelist_users": [],
-        "whitelist_roles": [],
+        "whitelist_roles": [
+            1492884965136797898
+        ],
         "antinuke": {
             "ban_threshold": 3,
             "kick_threshold": 3,
