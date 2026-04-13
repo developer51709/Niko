@@ -477,6 +477,21 @@ class Moderation(commands.Cog):
             utils.remove_whitelist_role(ctx.guild.id, role.id)
             await ctx.send(msg(ctx, "wl_role_removed", target=role.mention))
 
+    @commands.command(name="setmodlog", help="Set the moderation log channel. | Moderationslog-Kanal setzen.")
+    async def setmodlog(self, ctx):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### Important Notice"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="This command has been moved to the new logging system and is scheduled for removal in a future update. Please use `.logging` instead."
+            )
+        )
+        view.add_item(container)
+        await ctx.reply(view=view)
+
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
