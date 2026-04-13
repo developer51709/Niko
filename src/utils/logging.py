@@ -10,14 +10,17 @@
 
 import os
 import requests
+import asyncio
 import json
 import logging
 import logging.handlers
 from colorama import Fore, Style, init as colorama_init
+from utils.ai_debugging import send_debug_report
 
 colorama_init(autoreset=True)
 
 LOG_LEVEL = {
+    "AI_DEBUG": logging.ERROR,
     "FILE": logging.DEBUG,
     "WEBHOOK": logging.WARNING
 }
@@ -170,6 +173,28 @@ class WebhookHandler(logging.Handler):
 
 
 # -----------------------------------
+# AI Debugging Handler
+# -----------------------------------
+class AIDebugHandler(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.setFormatter(logging.Formatter())
+        self.bot = None
+
+    def emit(self, record: logging.LogRecord):
+        if self.bot is None:
+            from main import bot
+            self.bot = bot
+        try:
+            # pass the full exception
+            error = record.exc_info[1] if record.exc_info else record.getMessage
+            asyncio.create_task(send_debug_report(self.bot, error))
+        except Exception:
+            pass
+        
+
+
+# -----------------------------------
 # Root logger setup
 # -----------------------------------
 root = logging.getLogger()
@@ -180,6 +205,12 @@ _console_handler = logging.StreamHandler()
 _console_handler.setLevel(_console_level)
 _console_handler.setFormatter(ConsoleFormatter())
 root.handlers = [_console_handler]
+
+# AI debugging handler
+# uses the send_debug_report function to send logs to the AI debug channel
+ai_debug_handler = AIDebugHandler()
+ai_debug_handler.setLevel(LOG_LEVEL["AI_DEBUG"])
+ai_debug_handler.setFormatter(logging.Formatter())
 
 # Optional file handler
 if _file_enabled:

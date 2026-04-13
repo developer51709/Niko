@@ -263,11 +263,11 @@ class _RevertView(discord.ui.View):
         logging.success("AIDebugging", f"Reverted AI fix on {self.cog_name}.py")
 
 
-class _DebugReportView(discord.ui.View):
+class _DebugReportView(discord.ui.ActionRow):
     """Initial report view — has a single 'AI Debug' button."""
 
     def __init__(self, bot: commands.Bot, error_type: str, traceback_str: str, cog_name: str | None):
-        super().__init__(timeout=600)
+        super().__init__()
         self.bot = bot
         self.error_type = error_type
         self.traceback_str = traceback_str
@@ -360,6 +360,13 @@ async def send_debug_report(
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     cog_line = f"`{cog_name}.py`" if cog_name else "*(unknown cog)*"
 
+    button = _DebugReportView(
+        bot=bot,
+        error_type=error_type,
+        traceback_str=traceback_str,
+        cog_name=cog_name,
+    )
+
     layout = _container(
         discord.ui.TextDisplay(content=f"### ⚠️ Bot Error Detected"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -371,18 +378,11 @@ async def send_debug_report(
                 f"```\n{short_tb}\n```"
             )
         ),
-    )
-
-    view = _DebugReportView(
-        bot=bot,
-        error_type=error_type,
-        traceback_str=traceback_str,
-        cog_name=cog_name,
+        button,
     )
 
     try:
         await channel.send(view=layout)
-        await channel.send(view=view)
         logging.info("AIDebugging", f"Debug report sent for {error_type} in {cog_name or 'unknown'}")
     except discord.HTTPException as exc:
         logging.error("AIDebugging", f"Failed to send debug report: {exc}")

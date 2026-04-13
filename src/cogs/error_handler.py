@@ -29,7 +29,7 @@ from discord.ext.commands import (
 )
 
 from discord.errors import (
-    Forbidden
+    Forbidden, HTTPException
 )
 
 from requests.exceptions import (
@@ -111,7 +111,6 @@ class ErrorHandler(commands.Cog):
         return view
 
     @commands.Cog.listener()
-    # we need the full context of ctx for debugging purposes
     async def on_command_error(self: commands.Cog, ctx: commands.Context, error: commands.CommandError, *args, **kwargs):
 
         # Ignore errors already handled locally
@@ -329,6 +328,24 @@ class ErrorHandler(commands.Cog):
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
+
+
+    # send other errors to the AI debug channel
+    @commands.Cog.listener()
+    async def on_error(self, event, *args, **kwargs):
+        error = sys.exc_info()[1]
+        self.log("CRITICAL", f"Unexpected error in {event}: {error}")
+        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        # Send to AI debug channel if configured
+        cog_name = args[0].command.cog.__class__.__name__.lower() if args and args[0].command and args[0].command.cog else None
+        # Try to match cog class name to a cog file name
+        if cog_name:
+            import os as _os
+            cog_files = [f[:-3] for f in _os.listdir("src/cogs") if f.endswith(".py")]
+            if cog_name not in cog_files:
+                cog_name = None
+        asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
+        
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))

@@ -205,11 +205,19 @@ class GlobalOrGuildView(discord.ui.LayoutView):
 
     async def global_callback(self, interaction: discord.Interaction):
         self.choice = "global"
+        try:
+            await interaction.message.delete()
+        except Exception:
+            pass
         await interaction.response.defer()
         self.stop()
 
     async def guild_callback(self, interaction: discord.Interaction):
         self.choice = "guild"
+        try:
+            await interaction.message.delete()
+        except Exception:
+            pass
         await interaction.response.defer()
         self.stop()
 
