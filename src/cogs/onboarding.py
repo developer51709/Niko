@@ -538,7 +538,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             await dm.send(
                 content=(
                     "**Human Verification**\n"
-                    "Please type the code shown in the image below to verify you are human.\n"
+                    "Type the code shown in the image below to verify you are human.\n"
                     "-# The code is **case-insensitive**. You have **3 attempts**."
                 ),
                 file=file,
@@ -1137,13 +1137,23 @@ class Onboarding(commands.Cog):
                         except discord.Forbidden:
                             pass
 
-            parts = ["✅ **Verification complete!** You have been verified."]
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### ✅ Verification complete!"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="You have been verified."
+                )
+            )
             if applied:
-                parts.append(f"Roles added: {', '.join(applied)}")
+                container.add_item(discord.ui.TextDisplay(f"Roles added: {', '.join(applied)}"))
             if removed:
-                parts.append(f"Roles removed: {', '.join(removed)}")
+                container.add_item(discord.ui.TextDisplay(f"Roles removed: {', '.join(removed)}"))
+            view.add_item(container)
 
-            await message.channel.send("\n".join(parts))
+            await message.channel.send(view=view)
 
         else:
             pending["attempts"] += 1
@@ -1155,10 +1165,22 @@ class Onboarding(commands.Cog):
                 guild = self.bot.get_guild(guild_id)
                 cfg = get_config(guild_id) if guild else None
 
-                await message.channel.send(
-                    "❌ Incorrect code. You have used all 3 attempts.\n"
-                    "Return to the server and click **Verify** again to get a new captcha."
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content="### ❌️ Verification failed!"
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content="You have failed the captcha verification."
+                    )
                 )
+                if cfg and cfg.captcha_kick_on_fail:
+                    container.add_item(discord.ui.TextDisplay("You have been kicked from the server."))
+                else:
+                    container.add_item(discord.ui.TextDisplay(content="Return to the server and click **Verify** again to get a new captcha."))
+                view.add_item(container)
+                await message.channel.send(view=view)
 
                 if guild and cfg and cfg.captcha_kick_on_fail:
                     member = guild.get_member(user_id)
@@ -1171,16 +1193,29 @@ class Onboarding(commands.Cog):
                 code, img_bytes = generate_captcha()
                 pending["code"] = code
                 file = discord.File(img_bytes, filename="captcha.png")
-                await message.channel.send(
-                    f"❌ Incorrect. You have **{attempts_left}** attempt(s) left. Here is a new captcha:",
-                    file=file,
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content="### ❌️ Incorrect."
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"You have **{attempts_left}** attempt(s) left. Here is a new captcha:"
+                    ),
+                    discord.ui.MediaGallery(
+                        discord.MediaGalleryItem(
+                            media=file
+                        )
+                    )
                 )
+                view.add_item(container)
+                await message.channel.send(view=view)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         cfg = get_config(member.guild.id)
 
-        # ── Autoroles ────────────────────────────────────────────────────────
+        # ── Autoroles ─────────────────────────────
         if cfg.autorole_ids:
             roles_to_add = [
                 member.guild.get_role(rid)
@@ -1193,7 +1228,7 @@ class Onboarding(commands.Cog):
                 except discord.Forbidden:
                     pass  # bot lacks permission — silently skip
 
-        # ── Welcome message ───────────────────────────────────────────────────
+        # ── Welcome message ───────────────────────
         if not cfg.welcome_channel:
             return
 

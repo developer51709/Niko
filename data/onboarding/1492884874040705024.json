@@ -14,8 +14,14 @@
     "autorole_ids": [
         1492887171894612110
     ],
-    "captcha_enabled": false,
-    "captcha_channel_id": null,
-    "captcha_verified_role_id": null,
+    "captcha_enabled": true,
+    "captcha_channel_id": 1493052012823183420,
+    "captcha_panel_message_id": 1493052104837824514,
+    "captcha_add_role_ids": [
+        1492886986917285978
+    ],
+    "captcha_remove_role_ids": [
+        1492887171894612110
+    ],
     "captcha_kick_on_fail": false
 }
