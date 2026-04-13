@@ -12,36 +12,7 @@
     ],
     "panel_channel_id": 1488008643101065278,
     "panel_message_id": 1488262594111344772,
-    "open_tickets": [
-      {
-        "channel_id": 1487909060408905841,
-        "message_id": 1487909062128439296,
-        "category": "General",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      },
-      {
-        "channel_id": 1488262605062803587,
-        "message_id": 1488262606362775703,
-        "category": "General",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      },
-      {
-        "channel_id": 1488262830233882684,
-        "message_id": 1488262831823650846,
-        "category": "SelfBot",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      },
-      {
-        "channel_id": 1492361644460871791,
-        "message_id": 1492361645920358482,
-        "category": "RaidBot",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      }
-    ]
+    "open_tickets": []
   },
   "1470878953743974587": {
     "guild_id": 1470878953743974587,
@@ -51,19 +22,12 @@
     "panel_image": null,
     "panel_categories": [
       "Community support",
-      "Bot support"
+      "Bot support",
+      "NikoAPI support"
     ],
     "panel_channel_id": 1472038470313705675,
     "panel_message_id": 1491898738359275643,
-    "open_tickets": [
-      {
-        "channel_id": 1491898748438057093,
-        "message_id": 1491898749306540233,
-        "category": "General",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      }
-    ]
+    "open_tickets": []
   },
   "1487540573870100661": {
     "guild_id": 1487540573870100661,
