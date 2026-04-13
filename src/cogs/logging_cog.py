@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import discord
 from discord.ext import commands
 
+from utils import logging
 from config.emojis import get_emoji
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Tempmute": "moderation",
     "Unmute": "moderation",
     "Nickname Changed": "moderation",
-    "Clear": "messages",
+    "Clear": "moderation",
     "Purge": "messages",
     "Lock": "channels",
     "Unlock": "channels",
@@ -277,18 +278,21 @@ def _build_log_view(
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 
-    container_items = [
+    container = discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {emoji} {title}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=body),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=f"-# {timestamp}"),
-    ]
+        accent_colour=color,
+    )
 
     if buttons:
-        container_items.append(discord.ui.ActionRow(*buttons))
-
-    container = discord.ui.Container(*container_items, accent_colour=color)
+        container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        button_row = discord.ui.ActionRow()
+        for btn in buttons:
+            button_row.add_item(btn)
+        container.add_item(button_row)
 
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(container)
@@ -538,8 +542,9 @@ class ServerLogger(commands.Cog):
             channel_id=channel_id,
         )
         try:
-            await channel.send(view=view)
-        except Exception:
+            await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+        except Exception as e:
+            logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")
             pass
 
     #Backward-compat wrapper used by moderation_utils
