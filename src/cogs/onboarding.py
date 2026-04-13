@@ -535,14 +535,26 @@ class CaptchaVerifyButton(discord.ui.Button):
         try:
             dm = await user.create_dm()
             file = discord.File(img_bytes, filename="captcha.png")
-            await dm.send(
-                content=(
-                    "**Human Verification**\n"
-                    "Type the code shown in the image below to verify you are human.\n"
-                    "-# The code is **case-insensitive**. You have **3 attempts**."
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### Human Verification"
                 ),
-                file=file,
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="Type the code shown in the image below to verify you are human."
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=file
+                    )
+                ),
+                discord.ui.TextDisplay(
+                    content="-# The code is **case-insensitive**. You have **3 attempts**."
+                )
             )
+            view.add_item(container)
+            await dm.send(view=view, file=file)
             await interaction.response.send_message(
                 "A captcha has been sent to your DMs. Please check and reply with the code.",
                 ephemeral=True,
@@ -1209,7 +1221,7 @@ class Onboarding(commands.Cog):
                     )
                 )
                 view.add_item(container)
-                await message.channel.send(view=view)
+                await message.channel.send(view=view, file=file)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
