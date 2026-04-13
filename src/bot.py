@@ -9,6 +9,7 @@ import importlib
 from discord.ext import commands
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
+from utils.ai_nikoapi import generate_reply_nikoapi
 from utils.ai_config import get_ai_config
 from utils import logging
 import database
@@ -32,7 +33,8 @@ MEMORY_FILE = "memory.json"
 
 # AI config
 AI_ENABLED = True
-USE_OPENAI = True
+# LOCAL, OPENAI, or NIKOAPI
+AI_MODE = "NIKOAPI"
 ANSWER_REPLYS = True
 
 # Other config
@@ -110,10 +112,7 @@ def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_banner():
-    if USE_OPENAI:
-        CURRENT_MODEL = "OpenAI"
-    else:
-        CURRENT_MODEL = "TinyLlama-1.1B-Chat-v1.0"
+    CURRENT_MODEL = AI_MODE
     if not DEBUG_MODE == "True":
        clear_console()
     print(colorama.Fore.MAGENTA + """
@@ -259,7 +258,9 @@ def generate_reply(user_id, server, message, username):
             else:
                 SYSTEM_PROMPT = SYSTEM_PROMPT_CAFE
             try:
-                if USE_OPENAI:
+                if AI_MODE == "NIKOAPI":
+                    return generate_reply_nikoapi(bot, user_id, server, message, username, SYSTEM_PROMPT)
+                if AI_MODE == "OPENAI":
                     return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
                 else:
                     return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
