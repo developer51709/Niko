@@ -9,6 +9,9 @@ from utils.onboarding_utils import (
     build_welcome_view,
 )
 from utils.onboarding_config import OnboardingConfig, load_all_configs
+from utils.captcha_gen import generate_captcha
+
+_pending_verifications: dict[int, dict] = {}
 
 
 # -------------------- UTILITY FUNCTIONS --------------------
@@ -500,6 +503,342 @@ class PostRoleMenuBtn(discord.ui.Button):
         await interaction.response.send_message("Role menu posted.", ephemeral=True)
 
 
+# -------------------- CAPTCHA VERIFY BUTTON & PANEL --------------------
+
+class CaptchaVerifyButton(discord.ui.Button):
+    def __init__(self, guild_id: int):
+        super().__init__(
+            label="Verify",
+            style=discord.ButtonStyle.success,
+            emoji="✅",
+            custom_id=f"captcha_verify_{guild_id}",
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        user = interaction.user
+        guild_id = self.guild_id
+
+        if user.id in _pending_verifications:
+            await interaction.response.send_message(
+                "You already have a captcha pending. Please check your DMs.", ephemeral=True
+            )
+            return
+
+        code, img_bytes = generate_captcha()
+        _pending_verifications[user.id] = {
+            "guild_id": guild_id,
+            "code": code,
+            "attempts": 0,
+        }
+
+        try:
+            dm = await user.create_dm()
+            file = discord.File(img_bytes, filename="captcha.png")
+            await dm.send(
+                content=(
+                    "**Human Verification**\n"
+                    "Please type the code shown in the image below to verify you are human.\n"
+                    "-# The code is **case-insensitive**. You have **3 attempts**."
+                ),
+                file=file,
+            )
+            await interaction.response.send_message(
+                "A captcha has been sent to your DMs. Please check and reply with the code.",
+                ephemeral=True,
+            )
+        except discord.Forbidden:
+            _pending_verifications.pop(user.id, None)
+            await interaction.response.send_message(
+                "I couldn't send you a DM. Please enable DMs from server members and try again.",
+                ephemeral=True,
+            )
+
+
+class CaptchaPanelView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Human Verification"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    "Before you can access this server, you need to prove you're human.\n\n"
+                    "Click **Verify** below and the bot will send you a DM with a captcha image. "
+                    "Reply to the DM with the code shown in the image."
+                )
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(CaptchaVerifyButton(guild_id)),
+            accent_colour=discord.Colour(0x57F287),
+        )
+        self.add_item(container)
+
+
+# -------------------- CAPTCHA SETUP COMPONENTS --------------------
+
+class CaptchaAddRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, guild_id: int):
+        super().__init__(
+            placeholder="Choose roles to ADD after verification…",
+            min_values=1,
+            max_values=10,
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = get_config(self.guild_id)
+        if cfg.captcha_add_role_ids is None:
+            cfg.captcha_add_role_ids = []
+        added = []
+        for role in self.values:
+            if role.id not in cfg.captcha_add_role_ids:
+                cfg.captcha_add_role_ids.append(role.id)
+                added.append(role.mention)
+        update_config(self.guild_id, cfg)
+        if added:
+            await interaction.response.send_message(
+                f"Will **add** {', '.join(added)} on verification.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message("Those roles are already configured.", ephemeral=True)
+
+
+class CaptchaAddRolesView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=60)
+        self.add_item(CaptchaAddRolesSelect(guild_id))
+
+
+class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, guild_id: int):
+        super().__init__(
+            placeholder="Choose roles to REMOVE after verification…",
+            min_values=1,
+            max_values=10,
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = get_config(self.guild_id)
+        if cfg.captcha_remove_role_ids is None:
+            cfg.captcha_remove_role_ids = []
+        added = []
+        for role in self.values:
+            if role.id not in cfg.captcha_remove_role_ids:
+                cfg.captcha_remove_role_ids.append(role.id)
+                added.append(role.mention)
+        update_config(self.guild_id, cfg)
+        if added:
+            await interaction.response.send_message(
+                f"Will **remove** {', '.join(added)} on verification.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message("Those roles are already configured.", ephemeral=True)
+
+
+class CaptchaRemoveRolesView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=60)
+        self.add_item(CaptchaRemoveRolesSelect(guild_id))
+
+
+class CaptchaSetupView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        self.author = author
+        self.guild = guild
+
+        cfg = get_config(guild_id)
+
+        status = "✅ Enabled" if cfg.captcha_enabled else "❌ Disabled"
+        channel_text = (
+            f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
+        )
+        add_roles = (
+            ", ".join(f"<@&{r}>" for r in cfg.captcha_add_role_ids)
+            if cfg.captcha_add_role_ids
+            else "None"
+        )
+        remove_roles = (
+            ", ".join(f"<@&{r}>" for r in cfg.captcha_remove_role_ids)
+            if cfg.captcha_remove_role_ids
+            else "None"
+        )
+        kick_text = "Yes" if cfg.captcha_kick_on_fail else "No"
+
+        info = (
+            f"**Status:** {status}\n"
+            f"**Channel:** {channel_text}\n"
+            f"**Roles to add:** {add_roles}\n"
+            f"**Roles to remove:** {remove_roles}\n"
+            f"**Kick on 3 failed attempts:** {kick_text}"
+        )
+
+        toggle_label = "Disable Captcha" if cfg.captcha_enabled else "Enable Captcha"
+        toggle_style = discord.ButtonStyle.danger if cfg.captcha_enabled else discord.ButtonStyle.success
+
+        class ToggleCaptchaBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label=toggle_label, style=toggle_style, emoji="🔒")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                c = get_config(self_inner.guild_id)
+                c.captcha_enabled = not c.captcha_enabled
+                update_config(self_inner.guild_id, c)
+                state = "enabled" if c.captcha_enabled else "disabled"
+                await interaction.response.send_message(f"Captcha verification **{state}**.", ephemeral=True)
+
+        class PostPanelBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Post Verify Panel Here", style=discord.ButtonStyle.primary, emoji="📌")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                c = get_config(self_inner.guild_id)
+                c.captcha_channel_id = interaction.channel.id
+                panel_view = CaptchaPanelView(self_inner.guild_id)
+                msg = await interaction.channel.send(view=panel_view)
+                c.captcha_panel_message_id = msg.id
+                update_config(self_inner.guild_id, c)
+                interaction.client.add_view(panel_view, message_id=msg.id)
+                await interaction.response.send_message(
+                    "Verification panel posted in this channel.", ephemeral=True
+                )
+
+        class SetAddRolesBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Set Roles to Add", style=discord.ButtonStyle.secondary, emoji="➕")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                await interaction.response.send_message(
+                    "Select roles to **add** to members after they pass verification:",
+                    view=CaptchaAddRolesView(self_inner.guild_id),
+                    ephemeral=True,
+                )
+
+        class SetRemoveRolesBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Set Roles to Remove", style=discord.ButtonStyle.secondary, emoji="➖")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                await interaction.response.send_message(
+                    "Select roles to **remove** from members after they pass verification:",
+                    view=CaptchaRemoveRolesView(self_inner.guild_id),
+                    ephemeral=True,
+                )
+
+        class ToggleKickBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Toggle Kick on Fail", style=discord.ButtonStyle.secondary, emoji="🚫")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                c = get_config(self_inner.guild_id)
+                c.captcha_kick_on_fail = not c.captcha_kick_on_fail
+                update_config(self_inner.guild_id, c)
+                state = "enabled" if c.captcha_kick_on_fail else "disabled"
+                await interaction.response.send_message(
+                    f"Kick on failed captcha **{state}**.", ephemeral=True
+                )
+
+        class ClearAddRolesBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji="🗑️")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                c = get_config(self_inner.guild_id)
+                c.captcha_add_role_ids = []
+                update_config(self_inner.guild_id, c)
+                await interaction.response.send_message("Cleared all roles to add.", ephemeral=True)
+
+        class ClearRemoveRolesBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji="🗑️")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    return await interaction.response.send_message(
+                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    )
+                c = get_config(self_inner.guild_id)
+                c.captcha_remove_role_ids = []
+                update_config(self_inner.guild_id, c)
+                await interaction.response.send_message("Cleared all roles to remove.", ephemeral=True)
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Captcha Verification Setup"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=info),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(ToggleCaptchaBtn(), PostPanelBtn()),
+            discord.ui.ActionRow(SetAddRolesBtn(), SetRemoveRolesBtn()),
+            discord.ui.ActionRow(ToggleKickBtn(), ClearAddRolesBtn(), ClearRemoveRolesBtn()),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+            ),
+            accent_colour=discord.Colour(0x57F287),
+        )
+        self.add_item(container)
+
+
+class ConfigureCaptchaBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Configure Captcha", style=discord.ButtonStyle.secondary, emoji="🔐")
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message(
+                "This button can only be used by the person that triggered the command.", ephemeral=True
+            )
+        await interaction.response.send_message(
+            view=CaptchaSetupView(self.guild_id, self.author, interaction.guild),
+            ephemeral=False,
+        )
+
+
 # -------------------- AGREE BUTTON & ROLE SELECT --------------------
 
 class AgreeButton(discord.ui.Button):
@@ -650,6 +989,7 @@ class OnboardingSetupView(discord.ui.LayoutView):
             ),
             discord.ui.ActionRow(
                 ConfigureAutorolesBtn(guild_id, author),
+                ConfigureCaptchaBtn(guild_id, author),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -703,7 +1043,12 @@ class Onboarding(commands.Cog):
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content="**Onboarding Commands**"),
                 discord.ui.TextDisplay(
-                    content=f"**`{prefix}onboarding setup`** — Setup onboarding for the server.\n**`{prefix}onboarding role-menu`** — Setup role menu for the server."
+                    content=(
+                        f"**`{prefix}onboarding setup`** — Setup onboarding for the server.\n"
+                        f"**`{prefix}onboarding role-menu`** — Setup role menu for the server.\n"
+                        f"**`{prefix}onboarding autoroles`** — Configure auto-assigned roles on join.\n"
+                        f"**`{prefix}onboarding captcha`** — Configure captcha human verification."
+                    )
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -732,6 +1077,104 @@ class Onboarding(commands.Cog):
     async def onboarding_autoroles(self, ctx: commands.Context):
         """Configure which roles are automatically given to new members on join."""
         await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild))
+
+    @onboarding.command(name="captcha")
+    @commands.has_permissions(administrator=True)
+    async def onboarding_captcha(self, ctx: commands.Context):
+        """Configure captcha verification for the server."""
+        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild))
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.guild is not None:
+            return
+        if message.author.bot:
+            return
+
+        user_id = message.author.id
+        pending = _pending_verifications.get(user_id)
+        if pending is None:
+            return
+
+        guess = message.content.strip().upper()
+        correct = pending["code"].upper()
+
+        if guess == correct:
+            _pending_verifications.pop(user_id, None)
+            guild_id = pending["guild_id"]
+            guild = self.bot.get_guild(guild_id)
+            cfg = get_config(guild_id)
+
+            if guild is None:
+                await message.channel.send("Verification passed! However, I could not find the server to apply roles.")
+                return
+
+            member = guild.get_member(user_id)
+            if member is None:
+                await message.channel.send("Verification passed! However, I could not find you in the server.")
+                return
+
+            applied = []
+            removed = []
+
+            if cfg.captcha_add_role_ids:
+                for rid in cfg.captcha_add_role_ids:
+                    role = guild.get_role(rid)
+                    if role:
+                        try:
+                            await member.add_roles(role, reason="Captcha verification passed")
+                            applied.append(role.name)
+                        except discord.Forbidden:
+                            pass
+
+            if cfg.captcha_remove_role_ids:
+                for rid in cfg.captcha_remove_role_ids:
+                    role = guild.get_role(rid)
+                    if role and role in member.roles:
+                        try:
+                            await member.remove_roles(role, reason="Captcha verification passed")
+                            removed.append(role.name)
+                        except discord.Forbidden:
+                            pass
+
+            parts = ["✅ **Verification complete!** You have been verified."]
+            if applied:
+                parts.append(f"Roles added: {', '.join(applied)}")
+            if removed:
+                parts.append(f"Roles removed: {', '.join(removed)}")
+
+            await message.channel.send("\n".join(parts))
+
+        else:
+            pending["attempts"] += 1
+            attempts_left = 3 - pending["attempts"]
+
+            if attempts_left <= 0:
+                _pending_verifications.pop(user_id, None)
+                guild_id = pending["guild_id"]
+                guild = self.bot.get_guild(guild_id)
+                cfg = get_config(guild_id) if guild else None
+
+                await message.channel.send(
+                    "❌ Incorrect code. You have used all 3 attempts.\n"
+                    "Return to the server and click **Verify** again to get a new captcha."
+                )
+
+                if guild and cfg and cfg.captcha_kick_on_fail:
+                    member = guild.get_member(user_id)
+                    if member:
+                        try:
+                            await member.kick(reason="Failed captcha verification (3 wrong attempts)")
+                        except discord.Forbidden:
+                            pass
+            else:
+                code, img_bytes = generate_captcha()
+                pending["code"] = code
+                file = discord.File(img_bytes, filename="captcha.png")
+                await message.channel.send(
+                    f"❌ Incorrect. You have **{attempts_left}** attempt(s) left. Here is a new captcha:",
+                    file=file,
+                )
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -770,3 +1213,6 @@ async def setup(bot):
 
         if cfg.role_menu_channel and cfg.role_menu_message_id:
             bot.add_view(RoleMenuView(guild_id), message_id=cfg.role_menu_message_id)
+
+        if cfg.captcha_channel_id and cfg.captcha_panel_message_id:
+            bot.add_view(CaptchaPanelView(guild_id), message_id=cfg.captcha_panel_message_id)

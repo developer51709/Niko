@@ -24,3 +24,4 @@ pillow
 davey
 PyNaCl
 openai
+Pillow
