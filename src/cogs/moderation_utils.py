@@ -11,7 +11,6 @@ MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 
 DEFAULT_GUILD_CONFIG = {
-    "modlog_channel": None,
     "automod": {
         "antispam":     True,
         "antilink":     True,
@@ -133,32 +132,23 @@ class ModerationUtils(commands.Cog):
     def save_mod_config(self):
         self.save_config()
 
-    def set_modlog_channel(self, guild_id: int, channel_id):
-        cfg = self.get_guild_config(guild_id)
-        cfg["modlog_channel"] = channel_id
-        self.save_config()
-
     def save_config(self):
         save_json(CONFIG_FILE, self.config)
 
     # ---------- MODLOG ----------
 
-    async def log_action(self, guild: discord.Guild, title: str, description: str):
-        cfg = self.get_guild_config(guild.id)
-        channel_id = cfg.get("modlog_channel")
-        if not channel_id:
-            return
-        channel = guild.get_channel(channel_id)
-        if not channel:
-            return
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### 🔔 {title}\n{description}")
-        ))
-        try:
-            await channel.send(view=view)
-        except Exception:
-            pass
+    async def log_action(
+        self,
+        guild: discord.Guild,
+        title: str,
+        description: str,
+        target: discord.Member | discord.User | None = None,
+        moderator: discord.Member | None = None,
+    ):
+        """Delegate to the ServerLogger cog for structured, categorised logging."""
+        logger = self.bot.get_cog("ServerLogger")
+        if logger:
+            await logger.log_action(guild, title, description, target=target, moderator=moderator)
 
     # ---------- WARN SYSTEM ----------
 

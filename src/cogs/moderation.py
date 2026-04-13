@@ -48,10 +48,6 @@ MESSAGES = {
         # nick
         "nick_changed":     "✏️ Changed nickname for **{member}** to `{nickname}`.",
 
-        # modlog
-        "modlog_set":       "### {emoji} Mod-Log Channel Set\nMod-Log channel set to {channel}",
-        "modlog_removed":   "### {emoji} Mod-Log Channel Removed\nTo set a mod-log channel, use `{prefix}setmodlog #channel`",
-
         # badwords
         "badwords_none":    "No blocked words set for this server.",
         "badwords_added":   "Added `{word}` to the blocked words list.",
@@ -107,10 +103,6 @@ MESSAGES = {
 
         # nick
         "nick_changed":     "✏️ Spitzname von **{member}** zu `{nickname}` geändert.",
-
-        # modlog
-        "modlog_set":       "### {emoji} Mod-Log-Kanal gesetzt\nMod-Log-Kanal wurde auf {channel} gesetzt.",
-        "modlog_removed":   "### {emoji} Mod-Log-Kanal entfernt\nVerwende `{prefix}setmodlog #kanal`, um einen Kanal zu setzen.",
 
         # badwords
         "badwords_none":    "Keine gesperrten Wörter für diesen Server.",
@@ -349,23 +341,6 @@ class Moderation(commands.Cog):
         await member.edit(nick=nickname)
         await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname))
         await self.utils().log_action(ctx.guild, "Nickname Changed", f"{ctx.author} changed {member}'s nickname to `{nickname}`")
-
-    # ──── MODLOG CONFIG ────────────────────────────
-
-    @commands.command(help="Set the mod-log channel. | Mod-Log-Kanal setzen.")
-    @commands.has_permissions(manage_guild=True)
-    async def setmodlog(self, ctx, channel: discord.TextChannel = None):
-        prefix = self.bot.command_prefix
-        utils = self.utils()
-        cid = channel.id if channel else None
-        utils.set_modlog_channel(ctx.guild.id, cid)
-        if channel:
-            emoji = get_emoji("icon_tick")
-            text = msg(ctx, "modlog_set", channel=channel.mention, emoji=emoji)
-        else:
-            emoji = get_emoji("icon_cross")
-            text = msg(ctx, "modlog_removed", prefix=prefix, emoji=emoji)
-        await ctx.send(view=_cv2(text))
 
     # ──── BLOCKED WORD LIST ────────────────────────
 
