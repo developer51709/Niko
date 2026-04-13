@@ -89,7 +89,7 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
 _AUTOMOD_DEFAULT_BUTTONS = ["kick", "ban"]
 
 
-# ── Config helpers ────────────────────────────────────────────────────────────
+# ── Config helpers ─────────────────────────────────
 
 def _load_log_config() -> dict:
     if not os.path.exists(LOG_CONFIG_FILE):
@@ -119,7 +119,7 @@ def _guild_config(data: dict, guild_id: int) -> dict:
     return data[gid]
 
 
-# ── Quick-action buttons ──────────────────────────────────────────────────────
+# ── Quick-action buttons ───────────────────────────
 
 class KickButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
@@ -259,7 +259,7 @@ def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None,
     return btns
 
 
-# ── Log entry view builder ────────────────────────────────────────────────────
+# ── Log entry view builder ─────────────────────────
 
 def _build_log_view(
     category: str,
@@ -295,10 +295,10 @@ def _build_log_view(
     return view
 
 
-# ── Settings Panel ────────────────────────────────────────────────────────────
+# ── Settings Panel ─────────────────────────────────
 
 class LoggingSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member):
+    def __init__(self, guild_id: int, author: discord.Member, category: str | None = None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.author = author
@@ -308,6 +308,8 @@ class LoggingSetupView(discord.ui.LayoutView):
 
         # shared mutable state — the currently-selected category
         _sel: list[str | None] = [None]
+        if category and category in CATEGORIES:
+            _sel[0] = category
 
         lines = []
         for key, info in CATEGORIES.items():
@@ -367,6 +369,8 @@ class LoggingSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(
                     f"{get_emoji('icon_tick')} **{CATEGORIES[cat]['label']}** logs → {interaction.channel.mention}", ephemeral=True
                 )
+                # update the panel
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ClearChannelBtn(discord.ui.Button):
             def __init__(s):
@@ -387,6 +391,8 @@ class LoggingSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(
                     f"{get_emoji('icon_cross')} Cleared channel for **{CATEGORIES[cat]['label']}** logs.", ephemeral=True
                 )
+                # update the panel
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ToggleBtn(discord.ui.Button):
             def __init__(s):
@@ -413,6 +419,8 @@ class LoggingSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(
                     f"{e} **{CATEGORIES[cat]['label']}** logging {state}.", ephemeral=True
                 )
+                # update the panel
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _SetAllBtn(discord.ui.Button):
             def __init__(s):
@@ -431,6 +439,8 @@ class LoggingSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(
                     f"{get_emoji('icon_tick')} All log categories → {interaction.channel.mention}", ephemeral=True
                 )
+                # update the panel
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ClearAllBtn(discord.ui.Button):
             def __init__(s):
@@ -449,6 +459,8 @@ class LoggingSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(
                     f"{get_emoji('icon_cross')} Cleared all logging channels.", ephemeral=True
                 )
+                # update the panel
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=f"### {icon} Server Logging"),
@@ -474,7 +486,7 @@ class LoggingSetupView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-# ── The Cog ──────────────────────────────────────────────────────────────────
+# ── The Cog ────────────────────────────────────────
 
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
@@ -489,7 +501,7 @@ class ServerLogger(commands.Cog):
     def _reload(self):
         self._config = _load_log_config()
 
-    # ── Core logging method ───────────────────────────────────────────────
+    # ── Core logging method ────────────────────────
 
     async def log_event(
         self,
@@ -530,7 +542,7 @@ class ServerLogger(commands.Cog):
         except Exception:
             pass
 
-    # ── Backward-compat wrapper used by moderation_utils ─────────────────
+    #Backward-compat wrapper used by moderation_utils
 
     async def log_action(
         self,
@@ -556,7 +568,7 @@ class ServerLogger(commands.Cog):
         target_id = target.id if target else None
         await self.log_event(guild, category, title, body, target_id=target_id, action_key=title)
 
-    # ── Gateway event listeners ───────────────────────────────────────────
+    # ── Gateway event listeners ────────────────────
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
