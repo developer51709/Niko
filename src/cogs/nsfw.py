@@ -95,11 +95,11 @@ class NSFW(commands.Cog):
                 )
             ),
             discord.ui.TextDisplay(
-                content=f"-# Requested by {ctx.author.display_name}"
+                content=f"-# Requested by {ctx.author.mention}"
             )
         )
         view.add_item(container)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @commands.command(
         name='gelbooru', 
@@ -169,11 +169,11 @@ class NSFW(commands.Cog):
                 )
             ),
             discord.ui.TextDisplay(
-                content=f"-# Requested by {ctx.author.display_name}"
+                content=f"-# Requested by {ctx.author.mention}"
             )
         )
         view.add_item(container)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
 
     @commands.command(
@@ -216,11 +216,11 @@ class NSFW(commands.Cog):
                 )
             ),
             discord.ui.TextDisplay(
-                content=f"-# Requested by {ctx.author.display_name}"
+                content=f"-# Requested by {ctx.author.mention}"
             )
         )
         view.add_item(container)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     async def _send_error(self, ctx, message: str):
         view = discord.ui.LayoutView()

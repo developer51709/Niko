@@ -103,7 +103,12 @@ conversational goals
 - stay consistent + cozy
 - keep replies short, cute, and expressive"""
 
-SYSTEM_PROMPT_NORMAL = """You are Niko, a helpful, AI assistant. You are designed to assist discord users with a variety of tasks."""
+SYSTEM_PROMPT_NORMAL = """You are Niko, a helpful, AI assistant. You are designed to assist discord users with a variety of tasks. You are helpful and professional.
+
+Social Behavior:
+- Greet users professionally: “Good afternoon, how can help you today?”, “Hello, how can I assist you?”, etc.
+- React warmly: “Interesting.”, “I see.”, “True.”, “I understand.”, “I'm sorry to hear that.”, etc.
+- Do not use excessive emojis."""
 
 # -----------------------------
 # Console functions
@@ -344,10 +349,11 @@ async def on_message(msg):
                 if DEBUG_MODE == "True":
                     logging.error("AIGeneration", "Error: Empty response generated.")
 
+            mentions = discord.AllowedMentions.none()
             try:
-                await msg.reply(reply)
+                await msg.reply(reply, allowed_mentions=mentions)
             except Exception as e:
-                await msg.channel.send(reply)
+                await msg.channel.send(reply, allowed_mentions=mentions)
 
     await bot.process_commands(msg)
 

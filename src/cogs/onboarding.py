@@ -279,7 +279,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
         update_config(self.guild_id, cfg)
         if added:
             await interaction.response.send_message(
-                f"Added {', '.join(added)} as autorole(s).", ephemeral=True
+                f"Added {', '.join(added)} as autorole(s).", ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
             )
         else:
             await interaction.response.send_message(
@@ -331,7 +331,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
         update_config(self.guild_id, cfg)
         if removed:
             await interaction.response.send_message(
-                f"Removed {', '.join(removed)} from autoroles.", ephemeral=True
+                f"Removed {', '.join(removed)} from autoroles.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
             )
         else:
             await interaction.response.send_message(
@@ -1068,33 +1068,33 @@ class Onboarding(commands.Cog):
                 )
             )
             view.add_item(container)
-            await ctx.send(view=view)
+            await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="setup")
     @commands.has_permissions(administrator=True)
     async def onboarding_setup(self, ctx: commands.Context):
         """Setup onboarding for the server."""
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
-        await ctx.send(view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix))
+        await ctx.send(view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Setup role menu for the server."""
         prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
-        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix))
+        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="autoroles")
     @commands.has_permissions(administrator=True)
     async def onboarding_autoroles(self, ctx: commands.Context):
         """Configure which roles are automatically given to new members on join."""
-        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild))
+        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="captcha")
     @commands.has_permissions(administrator=True)
     async def onboarding_captcha(self, ctx: commands.Context):
         """Configure captcha verification for the server."""
-        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild))
+        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -1249,7 +1249,9 @@ class Onboarding(commands.Cog):
             return
 
         view = build_welcome_view(cfg, member)
-        await channel.send(view=view)
+        # allow user and role mentions but not everyone and here
+        welcome_mentions = discord.AllowedMentions(everyone=False, roles=True, users=True)
+        await channel.send(view=view, allowed_mentions=welcome_mentions)
 
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))

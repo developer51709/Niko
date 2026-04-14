@@ -411,7 +411,7 @@ class Moderation(commands.Cog):
             + msg(ctx, "wl_users", users=users_text)
             + msg(ctx, "wl_roles", roles=roles_text)
         )
-        await ctx.send(view=_cv2(text))
+        await ctx.send(view=_cv2(text), allowed_mentions=discord.AllowedMentions.none())
 
     @whitelist.command(name="add")
     @commands.has_permissions(manage_guild=True)
@@ -432,7 +432,7 @@ class Moderation(commands.Cog):
             if not member:
                 return await ctx.send(msg(ctx, "no_member", action="whitelist"))
             utils.add_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_added", target=member.mention))
+            await ctx.send(msg(ctx, "wl_user_added", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
 
         else:  # role
             role = None
@@ -443,7 +443,7 @@ class Moderation(commands.Cog):
             if not role:
                 return await ctx.send("Could not find that role.")
             utils.add_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_added", target=role.mention))
+            await ctx.send(msg(ctx, "wl_role_added", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @whitelist.command(name="remove", aliases=["rm"])
     @commands.has_permissions(manage_guild=True)
@@ -464,7 +464,7 @@ class Moderation(commands.Cog):
             if not member:
                 return await ctx.send(msg(ctx, "no_member", action="remove from whitelist"))
             utils.remove_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_removed", target=member.mention))
+            await ctx.send(msg(ctx, "wl_user_removed", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
 
         else:  # role
             role = None
@@ -475,7 +475,7 @@ class Moderation(commands.Cog):
             if not role:
                 return await ctx.send("Could not find that role.")
             utils.remove_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_removed", target=role.mention))
+            await ctx.send(msg(ctx, "wl_role_removed", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @commands.command(name="setmodlog", help="Set the moderation log channel. | Moderationslog-Kanal setzen.")
     async def setmodlog(self, ctx):

@@ -257,7 +257,7 @@ class Snipe(commands.Cog):
             return await ctx.send(view=view)
 
         view = SnipeView(entries=history, ctx=ctx)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
 
 async def setup(bot):
