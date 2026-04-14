@@ -34,7 +34,7 @@ MEMORY_FILE = "memory.json"
 # AI config
 AI_ENABLED = True
 # LOCAL, OPENAI, or NIKOAPI
-AI_MODE = "NIKOAPI"
+AI_MODE = "OPENAI"
 ANSWER_REPLYS = True
 
 # Other config
