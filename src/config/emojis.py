@@ -36,10 +36,16 @@ def get_emoji(emoji_name: str):
         return "<:icon_giveaway:1492967641374265514>"
     if emoji_name == "icon_image":
         return "<:icon_image:1492967644121530459>"
+    if emoji_name == "icon_join":
+        return "<:icon_join:1493403603166035968>"
+    if emoji_name == "icon_leave":
+        return "<:icon_leave:1493403606240723044>"
     if emoji_name == "icon_leveling":
         return "<:icon_leveling:1492967646910484480>"
     if emoji_name == "icon_link":
         return "<:icon_link:1492967649641107496>"
+    if emoji_name == "icon_loading":
+        return "<a:icon_loading:1493402982883000582>"
     if emoji_name == "icon_moderation":
         return "<:icon_moderation:1492967655819317388>"
     if emoji_name == "icon_plus":

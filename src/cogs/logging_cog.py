@@ -274,7 +274,15 @@ def _build_log_view(
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
     emoji = get_emoji(cat_info["emoji_key"])
     color = discord.Colour(cat_info["color"])
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    # discord timestamp types
+    # relative: <t:1711234567:R> → "2 months ago"
+    # full: <t:1711234567:F> → "March 23, 2024 12:36 AM"
+    timestamp = f"-# <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n-# <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
+    # set join and leave emojis
+    if title == "Member Joined":
+        emoji = get_emoji("icon_join")
+    if title == "Member Left":
+        emoji = get_emoji("icon_leave")
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 
@@ -283,7 +291,7 @@ def _build_log_view(
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=body),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=f"-# {timestamp}"),
+        discord.ui.TextDisplay(content=timestamp),
         accent_colour=color,
     )
 

@@ -10,6 +10,8 @@ import asyncio
 from utils.paginator import PaginatedView, paginate
 from config.emojis import get_emoji
 from .error_handler import is_owner
+# image extractor used for setpfp and setbanner
+from utils.image.extractor import extract_image_from_message
 
 
 class OwnerCog(commands.Cog):
@@ -68,17 +70,56 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.command(name="setpfp")
     @is_owner()
-    async def set_pfp(self, ctx, url: str):
+    async def set_pfp(self, ctx, url: str | None):
         """Set the bot's profile picture."""
-        await ctx.send("📥 Downloading image...")
+        downloading_view = discord.ui.LayoutView()
+        downloading_container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Set PFP"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Downloading pfp..."
+            )
+        )
+        downloading_view.add_item(downloading_container)
+        message = await ctx.send(view=downloading_view)
 
-        data = await self.fetch_bytes(url)
+        data = await extract_image_from_message(ctx.message)
         if not data:
-            return await ctx.send(f"{get_emoji('icon_cross')} Failed to download image.")
+            failed_view = discord.ui.LayoutView()
+            failed_container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_image')} Set PFP"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Failed to download image."
+                )
+            )
+            failed_view.add_item(failed_container)
+            return await message.edit(view=failed_view)
+
+        if isinstance(data, bytes):
+            data = io.BytesIO(data)
+        else:
+            data.seek(0)
+        data = data.read()
 
         try:
             await self.bot.user.edit(avatar=data)
-            await ctx.send(f"{get_emoji('icon_tick')} Profile picture updated.")
+            success_view = discord.ui.LayoutView()
+            success_container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_image')} Set PFP"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Successfully updated pfp."
+                )
+            )
+            success_view.add_item(success_container)
+            await message.edit(view=success_view)
         except discord.HTTPException as e:
             await ctx.send(f"{get_emoji('icon_cross')} Failed to update avatar:\n`{e}`")
 
@@ -87,17 +128,57 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.command(name="setbanner")
     @is_owner()
-    async def set_banner(self, ctx, url: str):
+    async def set_banner(self, ctx, url: str | None):
         """Set the bot's profile banner."""
-        await ctx.send("📥 Downloading banner...")
+        downloading_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Set Banner"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Downloading banner..."
+            )
+        )
+        downloading_view.add_item(container)
+        message = await ctx.send(view=downloading_view)
 
-        data = await self.fetch_bytes(url)
+        data = await extract_image_from_message(ctx.message)
         if not data:
-            return await ctx.send(f"{get_emoji('icon_cross')} Failed to download banner.")
+            failed_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_image')} Set Banner"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Failed to download image."
+                )
+            )
+            failed_view.add_item(container)
+            return await message.edit(view=failed_view)
+
+        if isinstance(data, bytes):
+            data = io.BytesIO(data)
+        else:
+            data.seek(0)
+        data = data.read()
 
         try:
             await self.bot.user.edit(banner=data)
-            await ctx.send(f"{get_emoji('icon_tick')} Banner updated.")
+            success_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_image')} Set Banner"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Successfully updated banner."
+                )
+            )
+            success_view.add_item(container)
+            # edit the original response
+            await message.edit(view=success_view)
         except discord.HTTPException as e:
             await ctx.send(f"{get_emoji('icon_cross')} Failed to update banner:\n`{e}`")
 
