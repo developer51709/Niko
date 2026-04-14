@@ -55,8 +55,7 @@ class IPPullerDetector(commands.Cog):
                         return True
 
         except Exception:
-            # If the site blocks scanning or errors out, treat as suspicious
-            return True
+            return False
 
         return False
 
@@ -87,7 +86,11 @@ class IPPullerDetector(commands.Cog):
 
         for url in urls:
             if await self.scan_url_and_root(url):
-                await message.reply(random.choice(self.sarcasm))
+                try:
+                    await message.reply(random.choice(self.sarcasm))
+                except Exception:
+                    # Sometimes the message is deleted before the bot can reply
+                    pass
                 break
 
 async def setup(bot):
