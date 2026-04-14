@@ -39,6 +39,9 @@ class AiImageTools(commands.Cog):
         async with self.session.post(url, headers=headers, json=data) as resp:
             response = await resp.json()
 
+        if "text" not in response and "images" not in response:
+            return response
+
         text = response["text"]
         image_b64 = response["images"][0].split(",")[1]
 
@@ -51,9 +54,6 @@ class AiImageTools(commands.Cog):
 
         async with self.session.post(url, headers=headers, json=data) as resp:
             response = await resp.json()
-
-        # Log the full response for debugging
-        print("[AiImageTools/EditImage] API Response:", response)
 
         if "text" not in response or "images" not in response:
             return response
@@ -113,7 +113,26 @@ class AiImageTools(commands.Cog):
             return await ctx.send(view=view)
 
         async with ctx.typing():
-            text, image = await self.GenerateImage(prompt)
+            response = await self.GenerateImage(prompt)
+            # check if the error value contains a response
+            if response and "error" in response:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"### {get_emoji('icon_danger')} NikoAPI Error"
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"API Response:\n```\n{response}\n```"
+                    )
+                )
+                view.add_item(container)
+                try:
+                    return await ctx.reply(view=view)
+                except Exception:
+                    return await ctx.send(view=view)
+            else:
+                text, image = response
             file = discord.File(image, filename="generated_image.png")
             view = self.build_cv2_container("Generated Image", text, file)
 
@@ -147,7 +166,7 @@ class AiImageTools(commands.Cog):
         # extract image from message
         image_bytes = await extract_image_from_message(ctx.message)
         if image_bytes is None:
-            view = discord.ui.LayoutView()
+            view = discord.ui.LayoutView()          
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=f"### {get_emoji('icon_danger')} No Image Found"
