@@ -294,18 +294,18 @@ async def on_message(msg):
 
     content = msg.content.lower()
     called_by_name = "niko" in content
+    is_ai_command = content.startswith(f"{CMD_PREFIX}ai ")
     # ignore commands such as the image tools
-    if content.startswith(CMD_PREFIX):
+    if content.startswith(CMD_PREFIX) and not is_ai_command:
         return await bot.process_commands(msg) 
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions
     else:
         # Respond to direct pings only and ignore replies
         called_by_ping = bot.user in msg.mentions and not msg.reference
-    is_ai_command = content.startswith(f"{CMD_PREFIX}ai ")
 
     if called_by_name or called_by_ping or is_ai_command:
-        user_input = msg.content.replace("!ai", "").strip()
+        user_input = msg.content.replace(f"{CMD_PREFIX}ai ", "").strip()
         if not user_input:
             user_input = "Someone called your name or pinged you. Respond naturally."
 
