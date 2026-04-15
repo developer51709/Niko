@@ -91,7 +91,7 @@ CATEGORY_MAP: dict[str, tuple[list[str], str]] = {
     "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets."),
     "Image Tools":  (["ImageTools", "AiImageTools"], f"{get_emoji('icon_image')} **Image Tools**\n> Manipulate images with these commands!"),
     "Giveaway":     (["Giveaway"], f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n> Host and manage giveaways in your server!"),
-    "Customization": (["Customization"], f"{get_emoji('icon_edit')} **Customization Commands**\n> Customize Niko's pfp, banner, and more!"),
+    "Customization": (["Customization", "PrefixConfig"], f"{get_emoji('icon_edit')} **Customization Commands**\n> Customize Niko's pfp, banner, and more!"),
 }
 
 

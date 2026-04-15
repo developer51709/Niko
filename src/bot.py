@@ -11,9 +11,10 @@ from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
 from utils.ai_nikoapi import generate_reply_nikoapi
 from utils.ai_config import get_ai_config
+from utils.prefix_manager import get_prefixes
+from utils.emoji_sync import sync_application_emojis
 from utils import logging
 import database
-from utils.emoji_sync import sync_application_emojis
 
 # -----------------------------
 # Config
@@ -38,7 +39,7 @@ AI_MODE = "OPENAI"
 ANSWER_REPLYS = True
 
 # Other config
-CMD_PREFIX = "."
+# CMD_PREFIX = "." # Replaced with dynamic prefixes
 
 # -----------------------------
 # System / personality prompt
@@ -277,6 +278,15 @@ def generate_reply(user_id, server, message, username):
         return "ai_disabled_guild"
 
 # -----------------------------
+# Get prefix
+# -----------------------------
+def dynamic_prefix(bot, message):
+    if not message.guild:
+        return ["."]  # fallback for DMs
+
+    return get_prefixes(message.guild.id)
+
+# -----------------------------
 # Discord bot
 # -----------------------------
 intents = discord.Intents.default()
@@ -286,76 +296,114 @@ intents.members = True
 intents.moderation = True
 
 bot = commands.Bot(
-    command_prefix=CMD_PREFIX,
+    command_prefix=dynamic_prefix,
     intents=intents
 )
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | None = None
 
 @bot.event
-async def on_message(msg):
+async def on_message(msg: discord.Message):
     if msg.author.bot:
         return
 
     content = msg.content.lower()
+    guild = msg.guild
+
+    # -----------------------------
+    # 1. Load prefixes for this guild
+    # -----------------------------
+    prefixes = dynamic_prefix(bot, msg)  # returns list
+    is_ai_command = False
+    used_prefix = None
+
+    # -----------------------------
+    # 2. Detect prefix usage
+    # -----------------------------
+    for p in prefixes:
+        if content.startswith(p.lower()):
+            used_prefix = p
+            # Check if it's an AI command
+            if content.startswith(f"{p.lower()}ai "):
+                is_ai_command = True
+            else:
+                # Normal command → let discord.py handle it
+                return await bot.process_commands(msg)
+            break
+
+    # -----------------------------
+    # 3. Detect name or ping triggers
+    # -----------------------------
     called_by_name = "niko" in content
-    is_ai_command = content.startswith(f"{CMD_PREFIX}ai ")
-    # ignore commands such as the image tools
-    if content.startswith(CMD_PREFIX) and not is_ai_command:
-        return await bot.process_commands(msg) 
+
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions
     else:
-        # Respond to direct pings only and ignore replies
+        # Only respond to direct pings, not replies
         called_by_ping = bot.user in msg.mentions and not msg.reference
 
-    if called_by_name or called_by_ping or is_ai_command:
-        user_input = msg.content.replace(f"{CMD_PREFIX}ai ", "").strip()
-        if not user_input:
-            user_input = "Someone called your name or pinged you. Respond naturally."
+    # -----------------------------
+    # 4. If nothing triggered the AI, stop
+    # -----------------------------
+    if not (called_by_name or called_by_ping or is_ai_command):
+        return
 
-        loop = asyncio.get_event_loop()
-        async with msg.channel.typing():
-            reply = await loop.run_in_executor(
-                None, 
-                generate_reply, 
-                msg.author.id, 
-                msg.guild,
-                user_input, 
-                msg.author.display_name
-            )
+    # -----------------------------
+    # 5. Extract user input
+    # -----------------------------
+    if is_ai_command:
+        # Remove ONLY the prefix+ai part
+        user_input = msg.content[len(f"{used_prefix}ai "):].strip()
+    else:
+        user_input = msg.content.strip()
 
-            if reply == "ai_disabled_global":
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"### ⚠️ AI Disabled"
-                    ),
-                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content=f"The AI is currently disabled by the bot owner."
-                    )
+    if not user_input:
+        user_input = "Someone called your name or pinged you. Respond naturally."
+
+    # -----------------------------
+    # 6. Generate AI reply
+    # -----------------------------
+    loop = asyncio.get_event_loop()
+
+    async with msg.channel.typing():
+        reply = await loop.run_in_executor(
+            None,
+            generate_reply,
+            msg.author.id,
+            guild,
+            user_input,
+            msg.author.display_name
+        )
+
+        if reply == "ai_disabled_global":
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ⚠️ AI Disabled"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"The AI is currently disabled by the bot owner."
                 )
-                view.add_item(container)
-                return await msg.channel.send(view=view)
+            )
+            view.add_item(container)
+            return await msg.channel.send(view=view)
 
-            if reply == "ai_disabled_guild":
-                return
+        if reply == "ai_disabled_guild":
+            return
 
-            if len(reply) > 1800:
-                reply = reply[:1800] + "..."
-            elif len(reply) < 1:
-                reply = "An error occured... 🥀"
-                if DEBUG_MODE == "True":
-                    logging.error("AIGeneration", "Error: Empty response generated.")
+        if len(reply) > 1800:
+            reply = reply[:1800] + "..."
+        elif len(reply) < 1:
+            reply = "An error occured... 🥀"
+            if DEBUG_MODE == "True":
+                logging.error("AIGeneration", "Error: Empty response generated.")
 
-            mentions = discord.AllowedMentions.none()
-            try:
-                await msg.reply(reply, allowed_mentions=mentions)
-            except Exception as e:
-                await msg.channel.send(reply, allowed_mentions=mentions)
-
-    await bot.process_commands(msg)
+        mentions = discord.AllowedMentions.none()
+        try:
+            await msg.reply(reply, allowed_mentions=mentions)
+        except Exception as e:
+            await msg.channel.send(reply, allowed_mentions=mentions)
 
 # -----------------------------
 # AI State Access (for Cogs)
@@ -559,6 +607,6 @@ if __name__ == "__main__":
         exit(1)
     logging.info("Startup", "Starting bot...")
     try:
-        bot.run(TOKEN)
+        bot.run(str(TOKEN))
     except Exception as e:
         logging.error("Startup", f"Error connecting to Discord: {e}")
