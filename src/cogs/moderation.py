@@ -157,6 +157,9 @@ class Moderation(commands.Cog):
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
 
+    def logger(self):
+        return self.bot.get_cog("ServerLogger")
+
     # ──── KICK / BAN / UNBAN ───────────────────────
 
     @commands.command(help="Kick a member from the server. | Mitglied kicken.")
@@ -178,17 +181,39 @@ class Moderation(commands.Cog):
                 
         await ctx.guild.ban(member, reason=reason, delete_message_days=7)
         await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
-        await self.utils().log_action(ctx.guild, "Ban", f"{member} was banned by {ctx.author}.\nReason: {reason}")
+        guild = ctx.guild
+        moderator = ctx.author
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Ban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.logger().log_event(
+            guild, "moderation", "Ban", body, 
+            target_id=member.id, action_key="Ban"
+        )
 
     @commands.command(help="Unban a user by ID. | Benutzer per ID entbannen.")
     @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id = None):
+    async def unban(self, ctx, user_id = None, reason = None):
         if not user_id:
             return await ctx.send(msg(ctx, "no_user_id"))
         user = await self.bot.fetch_user(user_id)
         await ctx.guild.unban(user)
         await ctx.send(view=_cv2(msg(ctx, "unbanned", user=user)))
-        await self.utils().log_action(ctx.guild, "Unban", f"{user} was unbanned by {ctx.author}.")
+        guild = ctx.guild
+        moderator = ctx.author
+        body = (
+            f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
+            f"**Action:** Unban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.logger().log_event(
+            guild, "moderation", "Unban", body, 
+            target_id=user.id, action_key="Unban"
+        )
 
     # ──── WARN ─────────────────────────────────────
 

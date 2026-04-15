@@ -78,6 +78,7 @@ _AUTOMOD_SUBSTRINGS = ("Anti-Nuke", "Anti-Raid", "User-Installed", "Interaction 
 _ACTION_BUTTONS: dict[str, list[str]] = {
     "Kick": ["ban"],
     "Ban": ["unban"],
+    "Unban": ["ban"],
     "Warn": ["kick", "ban"],
     "Mute": ["unmute"],
     "Tempmute": ["unmute"],
@@ -685,7 +686,10 @@ class ServerLogger(commands.Cog):
         await self.log_event(channel.guild, "channels", "Channel Deleted", body)
 
     @commands.Cog.listener()
-    async def on_member_ban(self, guild: discord.Guild, user: discord.User, moderator: discord.Member | None = None, reason: str | None = None):
+    # update: discord.py does not support the moderator parameter so we must use the audit log to get the moderator.
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User, reason: str | None = None):
+        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
+            moderator = entry.user
         if moderator == self.bot.user:
             return
         body = (
@@ -694,7 +698,27 @@ class ServerLogger(commands.Cog):
             f"**Reason:** {reason or 'No reason provided'}\n"
             f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
         )
-        await self.log_event(guild, "moderation", "Ban", body, target_id=user.id)
+        await self.log_event(
+            guild, "moderation", "Ban", body, 
+            target_id=user.id, action_key="Ban"
+        )
+
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User, reason: str | None = None):
+        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.unban):
+            moderator = entry.user
+        if moderator == self.bot.user:
+            return
+        body = (
+            f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
+            f"**Action:** Unban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.log_event(
+            guild, "moderation", "Unban", body,
+            target_id=user.id, action_key="Unban"
+        )
 
     # ── Commands ───────────────────────────────────
 
