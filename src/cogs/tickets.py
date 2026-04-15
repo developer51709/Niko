@@ -35,18 +35,38 @@ class TicketPanelModal(Modal, title="Configure Ticket Panel"):
         super().__init__()
         self.guild_id = guild_id
 
-        self.title_input = TextInput(label="Panel Title", required=False)
+        cfg = get_ticket_config(guild_id)
+        title = cfg.panel_title or ""
+        description = cfg.panel_description or ""
+        color = cfg.panel_color or ""
+        categories = ", ".join(cfg.panel_categories) if cfg.panel_categories else ""
+        image = cfg.panel_image or ""
+        self.title_input = TextInput(
+            label="Panel Title", 
+            required=False,
+            default=title
+        )
         self.desc_input = TextInput(
             label="Panel Description",
             style=discord.TextStyle.long,
             required=False,
+            default=description
         )
-        self.color_input = TextInput(label="Color (hex)", required=False)
+        self.color_input = TextInput(
+            label="Color (hex)", 
+            required=False,
+            default=str(color)
+        )
         self.categories_input = TextInput(
             label="Categories (comma-separated)",
-            required=False
+            required=False,
+            default=categories
         )
-        self.image_input = TextInput(label="Image URL", required=False)
+        self.image_input = TextInput(
+            label="Image URL", 
+            required=False,
+            default=image
+        )
 
         self.add_item(self.title_input)
         self.add_item(self.desc_input)
