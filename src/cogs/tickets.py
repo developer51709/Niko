@@ -9,6 +9,7 @@ from utils.ticket_utils import (
     get_all_ticket_configs,
 )
 from utils.ticket_config import TicketConfig
+from config.emojis import get_emoji
 
 
 # -------------------- UTILITY FUNCTIONS --------------------
@@ -74,6 +75,16 @@ class TicketPanelModal(Modal, title="Configure Ticket Panel"):
         cfg.panel_image = self.image_input.value or None
 
         update_ticket_config(self.guild_id, cfg)
+        # if there is a ticket panel message, update it
+        if cfg.panel_message_id:
+            view = TicketPanelView(self.guild_id, cfg)
+            channel = interaction.guild.get_channel(cfg.panel_channel_id)
+            if channel:
+                try:
+                    msg = await channel.fetch_message(cfg.panel_message_id)
+                    await msg.edit(view=view)
+                except Exception:
+                    pass
         await interaction.response.send_message("Ticket panel updated.", ephemeral=True)
 
 
@@ -165,10 +176,20 @@ class OpenTicketBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         cfg = get_ticket_config(self.guild_id)
 
-        if cfg.panel_categories:
-            view = CategorySelectView(self.guild_id, cfg.panel_categories)
+        categories = cfg.panel_categories
+        guild_id = self.guild_id
+        if categories:
+            view = discord.ui.LayoutView(timeout=None)
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### Select a Category:"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                CategorySelectView(guild_id, categories),
+            )
+            view.add_item(container)
             return await interaction.response.send_message(
-                "Choose a category:", view=view, ephemeral=True
+                view=view, ephemeral=True
             )
 
         await create_ticket(interaction, "General")
@@ -196,7 +217,7 @@ class CloseTicketBtn(discord.ui.Button):
                 "This can only be used in a ticket channel.", ephemeral=True
             )
 
-        await interaction.response.send_message("Closing ticket...", ephemeral=True)
+        message = await channel.send(f"{get_emoji('icon_loading')} Closing ticket...")
 
         overwrites = channel.overwrites
         for target, perms in list(overwrites.items()):
@@ -204,9 +225,20 @@ class CloseTicketBtn(discord.ui.Button):
                 perms.send_messages = False
                 perms.view_channel = False
                 overwrites[target] = perms
+            elif isinstance(target, discord.Member | discord.User):
+                try:
+                    perms.send_messages = False
+                    perms.view_channel = False
+                    overwrites[target] = perms
+                except Exception as e:
+                    pass
+            # slight delay to prevent rate limits
+            await asyncio.sleep(0.5)
 
         await channel.edit(overwrites=overwrites, name=f"closed-{channel.name}")
-        await channel.send("This ticket has been closed by staff.")
+        self.disabled = True
+        await interaction.response.edit_message(view=self.view)
+        await message.edit(content="This ticket has been closed by staff.")
 
 
 class DeleteTicketBtn(discord.ui.Button):
@@ -241,10 +273,10 @@ class CategorySelect(discord.ui.Select):
     def __init__(self, guild_id: int, categories: list[str]):
         self.guild_id = guild_id
         options = [
-            discord.SelectOption(label=c, description=f"Open a {c} ticket")
+            discord.SelectOption(label=c, description=f"Open a {c} ticket", value=c)
             for c in categories
         ]
-        super().__init__(placeholder="Select category...", options=options)
+        super().__init__(placeholder="Select category...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         await create_ticket(interaction, self.values[0])
@@ -269,7 +301,7 @@ class TicketPanelView(discord.ui.LayoutView):
         desc = cfg.panel_description or "Select a category or press the button."
         color_md = color_to_markdown(cfg.panel_color)
 
-        header = f"### 🎫 {title}"
+        header = f"### {get_emoji('icon_ticket')} {title}"
         if color_md:
             header += f" {color_md}"
 
@@ -295,9 +327,9 @@ class TicketPanelView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-class CategorySelectView(discord.ui.View):
+class CategorySelectView(discord.ui.ActionRow):
     def __init__(self, guild_id: int, categories: list[str]):
-        super().__init__(timeout=None)
+        super().__init__()
         self.add_item(CategorySelect(guild_id, categories))
 
 
@@ -320,7 +352,7 @@ class TicketView(discord.ui.LayoutView):
         mention = user.mention if user else "a member"
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### 🎫 {category} Ticket"
+                content=f"### {get_emoji('icon_ticket')} {category} Ticket"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
