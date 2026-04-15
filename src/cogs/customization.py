@@ -408,6 +408,7 @@ class SetProfileView(discord.ui.LayoutView):
         # if bot owner, ask if they want to set guild or global
         if await interaction.client.is_owner(interaction.user):
             owner = True
+            guild_id = interaction.guild_id
             view = GlobalOrGuildView(guild_id)
             await interaction.followup.send(view=view, ephemeral=True)
             await view.wait()
