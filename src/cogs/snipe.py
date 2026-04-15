@@ -74,9 +74,9 @@ def msg_raw(ctx, key: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  PAGINATED SNIPE VIEW
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class _SnipePrev(discord.ui.Button):
     def __init__(self, disabled: bool):
@@ -126,7 +126,7 @@ class SnipeView(discord.ui.LayoutView):
         total = len(self.entries)
         e = self.entries[self.page]
 
-        # ── assemble body text ──────────────────────────────
+        # ── assemble body text ─────────────────────
         content = e.get("content", "").strip()
         if not content and e.get("has_embeds"):
             content = msg_raw(self.ctx, "embed_msg")
@@ -161,7 +161,7 @@ class SnipeView(discord.ui.LayoutView):
             f"{content}"
         )
 
-        # ── build cv2 container ─────────────────────────────
+        # ── build cv2 container ────────────────────
         avatar = e.get("author_avatar")
         if avatar:
             inner = discord.ui.Section(
@@ -176,7 +176,7 @@ class SnipeView(discord.ui.LayoutView):
             discord.ui.TextDisplay(content=f"-# {footer}"),
         )
 
-        # ── navigation row (only when >1 page) ─────────────
+        # ── navigation row (only when >1 page) ─────
         if total > 1:
             container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             container.add_item(discord.ui.ActionRow(
@@ -195,9 +195,9 @@ class SnipeView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  COG
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class Snipe(commands.Cog):
     """Stores recently deleted messages and lets users snipe them."""
@@ -207,7 +207,7 @@ class Snipe(commands.Cog):
         # {channel_id: [entry, ...]}  newest-first, max MAX_HISTORY entries
         self._history: dict[int, list[dict]] = {}
 
-    # ── listener ────────────────────────────────────────────
+    # ── listener ───────────────────────────────────
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
@@ -216,7 +216,7 @@ class Snipe(commands.Cog):
             return
 
         entry = {
-            "author_name":    message.author.display_name,
+            "author_name":    message.author.mention,
             "author_avatar":  str(message.author.display_avatar.url),
             "content":        message.content or "",
             "has_embeds":     bool(message.embeds),
@@ -238,7 +238,7 @@ class Snipe(commands.Cog):
         if len(history) > MAX_HISTORY:
             history.pop()
 
-    # ── command ─────────────────────────────────────────────
+    # ── command ────────────────────────────────────
 
     @commands.command(
         name="snipe",
