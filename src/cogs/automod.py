@@ -160,11 +160,11 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild) -> str:
     role_ids = cfg.get("whitelist_roles", [])
 
     user_lines = [
-        f"• {(guild.get_member(uid) or discord.Object(uid))}"
+        f"・ {(guild.get_member(uid) or discord.Object(uid))}"
         for uid in user_ids
     ]
     role_lines = [
-        f"• {(guild.get_role(rid) or discord.Object(rid))}"
+        f"・ {(guild.get_role(rid) or discord.Object(rid))}"
         for rid in role_ids
     ]
 

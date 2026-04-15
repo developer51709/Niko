@@ -15,7 +15,7 @@ from discord.ext import commands
 from utils import logging
 from config.emojis import get_emoji
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────
 
 LOG_CONFIG_FILE = "data/logging_config.json"
 
@@ -684,7 +684,19 @@ class ServerLogger(commands.Cog):
         )
         await self.log_event(channel.guild, "channels", "Channel Deleted", body)
 
-    # ── Commands ──────────────────────────────────────────────────────────
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User, moderator: discord.Member | None = None, reason: str | None = None):
+        if moderator == self.bot.user:
+            return
+        body = (
+            f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
+            f"**Action:** Ban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.log_event(guild, "moderation", "Ban", body, target_id=user.id)
+
+    # ── Commands ───────────────────────────────────
 
     @commands.group(name="logging", invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
