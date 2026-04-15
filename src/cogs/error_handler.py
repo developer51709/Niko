@@ -76,35 +76,17 @@ class ErrorHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # Utility: clean colored logging
-    def log(self, level, message):
-        # colors = {
-        #     "INFO": Fore.CYAN,
-        #     "WARN": Fore.YELLOW,
-        #     "ERROR": Fore.RED,
-        #     "CRITICAL": Fore.MAGENTA,
-        # }
-        # color = colors.get(level, Fore.WHITE)
-        # print(f"{color}[{level}] {Style.RESET_ALL}{message}")
-        if level == "CRITICAL":
-            return logging.error("error_handler", message)
-        if level == "ERROR":
-            return logging.error("error_handler", message)
-        if level == "WARN":
-            return logging.warning("error_handler", message)
-        if level == "INFO":
-            return logging.info("error_handler", message)
-        return logging.info("error_handler", message)
 
     # Utility: embed generator
     def error_embed(self, title, description):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} {title}\n{description}"
-                ),
-                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_danger')} {title}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=description
             )
         )
         view.add_item(container)
@@ -127,7 +109,7 @@ class ErrorHandler(commands.Cog):
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
             # owner bypass
-            owner_bypass = True
+            owner_bypass = False
             if owner_bypass:
                 if await is_owner().predicate(ctx):
                     if not args:
@@ -146,7 +128,7 @@ class ErrorHandler(commands.Cog):
                 f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} tried to use {ctx.command} without permissions")
+            logging.warning("error_handler", f"{ctx.author} tried to use {ctx.command} without permissions")
             return
 
         if isinstance(error, BotMissingPermissions):
@@ -155,7 +137,7 @@ class ErrorHandler(commands.Cog):
                 f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
             )
             await ctx.reply(view=view)
-            self.log("ERROR", f"Bot missing permissions for {ctx.command}")
+            logging.warning("error_handler", f"Bot missing permissions for {ctx.command}")
             return
 
         if isinstance(error, Forbidden):
@@ -164,7 +146,7 @@ class ErrorHandler(commands.Cog):
                 f"I don't have permission to perform this action. Please check my roles and permissions."
             )
             await ctx.reply(view=view)
-            self.log("ERROR", f"403 Forbidden in {ctx.command}")
+            logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
             return
 
         if isinstance(error, MissingRole):
@@ -173,7 +155,7 @@ class ErrorHandler(commands.Cog):
                 f"You must have the `{error.missing_role}` role to use this command."
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} missing role {error.missing_role}")
+            logging.warning("error_handler", f"{ctx.author} missing role {error.missing_role}")
             return
 
         if isinstance(error, MissingAnyRole):
@@ -182,7 +164,7 @@ class ErrorHandler(commands.Cog):
                 f"You need **one** of these roles: `{', '.join(error.missing_roles)}`"
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} missing any of roles {error.missing_roles}")
+            logging.warning("error_handler", f"{ctx.author} missing any of roles {error.missing_roles}")
             return
 
         if isinstance(error, CommandOnCooldown):
@@ -191,7 +173,7 @@ class ErrorHandler(commands.Cog):
                 f"Try again in `{error.retry_after:.1f}` seconds."
             )
             await ctx.reply(view=view)
-            self.log("INFO", f"{ctx.author} hit cooldown on {ctx.command}")
+            logging.info("error_handler", f"{ctx.author} hit cooldown on {ctx.command}")
             return
 
         if isinstance(error, MissingRequiredArgument):
@@ -200,7 +182,7 @@ class ErrorHandler(commands.Cog):
                 f"You're missing a required argument: `{error.param.name}`"
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} missing argument {error.param.name}")
+            logging.warning("error_handler", f"{ctx.author} missing argument {error.param.name}")
             return
 
         if isinstance(error, BadArgument):
@@ -209,7 +191,7 @@ class ErrorHandler(commands.Cog):
                 "One or more arguments were invalid. Check your input and try again."
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"Bad argument from {ctx.author} in {ctx.command}")
+            logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}")
             return
 
         if isinstance(error, NoPrivateMessage):
@@ -218,7 +200,7 @@ class ErrorHandler(commands.Cog):
                 "This command can only be used in a server."
             )
             await ctx.author.send(view=view)
-            self.log("INFO", f"{ctx.author} tried using {ctx.command} in DMs")
+            logging.info("error_handler", f"{ctx.author} tried using {ctx.command} in DMs")
             return
 
         if isinstance(error, PrivateMessageOnly):
@@ -227,7 +209,7 @@ class ErrorHandler(commands.Cog):
                 "This command can only be used in private messages."
             )
             await ctx.reply(view=view)
-            self.log("INFO", f"{ctx.author} tried using DM-only command in a guild")
+            logging.info("error_handler", f"{ctx.author} tried using DM-only command in a guild")
             return
 
         if isinstance(error, NSFWChannelRequired):
@@ -236,7 +218,7 @@ class ErrorHandler(commands.Cog):
                 "This command can only be used in an NSFW channel."
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} attempted NSFW command in non-NSFW channel")
+            logging.warning("error_handler", f"{ctx.author} attempted NSFW command in non-NSFW channel")
             return
 
         # --- NotOwner ---
@@ -246,7 +228,7 @@ class ErrorHandler(commands.Cog):
                 "Only the bot owner can use this command."
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"{ctx.author} attempted owner-only command")
+            logging.warning("error_handler", f"{ctx.author} attempted owner-only command")
             return
 
         # --- Lookup Errors (Member/Role/Channel/etc.) ---
@@ -260,7 +242,7 @@ class ErrorHandler(commands.Cog):
                 str(error)
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"Lookup error: {error}")
+            logging.warning("error_handler", f"Lookup error: {error}")
             return
 
         # --- API Errors ---
@@ -273,7 +255,7 @@ class ErrorHandler(commands.Cog):
                 "There was an issue with the API request. Please try again later.\n-# Error: " + str(error)
             )
             await ctx.reply(view=view)
-            self.log("ERROR", f"API error: {error}")
+            logging.error("error_handler", f"API error: {error}")
             return
 
         # --- Other Known Errors (non-fatal) ---
@@ -293,7 +275,7 @@ class ErrorHandler(commands.Cog):
                 str(error)
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"Handled known error: {error}")
+            logging.warning("error_handler", f"Handled known error: {error}")
             return
 
         # --- CheckFailure ---
@@ -303,11 +285,11 @@ class ErrorHandler(commands.Cog):
                 "You don't meet the requirements to use this command."
             )
             await ctx.reply(view=view)
-            self.log("WARN", f"Check failed for {ctx.author} in {ctx.command}")
+            logging.warning("error_handler", f"Check failed for {ctx.author} in {ctx.command}")
             return
 
         # --- Unexpected / Critical Errors ---
-        self.log("CRITICAL", f"Unexpected error in command {ctx.command}: {error}")
+        logging.error("error_handler", f"Unexpected error in command {ctx.command}: {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
         view = self.error_embed(

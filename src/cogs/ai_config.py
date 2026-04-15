@@ -51,7 +51,11 @@ class BotPersonalityButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error\nYou need the `manage_guild` permission to use this button."
+                    content=f"### {get_emoji('icon_danger')} Error"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to use this button."
                 ),
                 accent_colour=discord.Color.yellow()
             )
@@ -92,7 +96,11 @@ class ToggleAIButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error\nYou need the `manage_guild` permission to use this button."
+                    content=f"### {get_emoji('icon_danger')} Error"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to use this button."
                 ),
                 accent_colour=discord.Color.yellow()
             )
