@@ -170,15 +170,14 @@ class Moderation(commands.Cog):
 
     @commands.command(help="Ban a member from the server. | Mitglied bannen.")
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
+    async def ban(self, ctx, member: discord.Member | int = None, *, reason: str = "No reason provided"):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
-        await member.ban(reason=reason)
-        try:
-            await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
-        except Exception as e:
-            error("moderation", f"Error sending ban message: {e}")
-            await ctx.send(f"{get_emoji('icon_tick')} Banned {member} | Reason: {reason}")
+        if isinstance(member, int):
+            member = await self.bot.fetch_user(member)
+                
+        await ctx.guild.ban(member, reason=reason, delete_message_days=7)
+        await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
         await self.utils().log_action(ctx.guild, "Ban", f"{member} was banned by {ctx.author}.\nReason: {reason}")
 
     @commands.command(help="Unban a user by ID. | Benutzer per ID entbannen.")
