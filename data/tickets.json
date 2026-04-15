@@ -12,12 +12,41 @@
     ],
     "panel_channel_id": 1488008643101065278,
     "panel_message_id": 1488262594111344772,
-    "open_tickets": []
+    "open_tickets": [
+      {
+        "channel_id": 1494039330987970681,
+        "message_id": 1494039332321755278,
+        "category": "SelfBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494040146973294623,
+        "message_id": 1494040149011468308,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494043388528562366,
+        "message_id": 1494043393863581908,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494045023149363241,
+        "message_id": 1494045024697061446,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      }
+    ]
   },
   "1470878953743974587": {
     "guild_id": 1470878953743974587,
-    "panel_title": null,
-    "panel_description": null,
+    "panel_title": "\ud835\udc76\ud835\udc91\ud835\udc86\ud835\udc8f \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95",
+    "panel_description": "\ud835\udc7b\ud835\udc90 \ud835\udc90\ud835\udc91\ud835\udc86\ud835\udc8f \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95 \ud835\udc91\ud835\udc8d\ud835\udc86\ud835\udc82\ud835\udc94\ud835\udc86 \ud835\udc84\ud835\udc8d\ud835\udc8a\ud835\udc84\ud835\udc8c \ud835\udc95\ud835\udc89\ud835\udc86 \ud835\udc83\ud835\udc96\ud835\udc95\ud835\udc95\ud835\udc90\ud835\udc8f \ud835\udc83\ud835\udc86\ud835\udc8d\ud835\udc90\ud835\udc98 \ud835\udc82\ud835\udc8f\ud835\udc85 \ud835\udc94\ud835\udc86\ud835\udc8d\ud835\udc86\ud835\udc84\ud835\udc95 \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95 \ud835\udc84\ud835\udc82\ud835\udc95\ud835\udc86\ud835\udc88\ud835\udc90\ud835\udc93\ud835\udc9a.",
     "panel_color": null,
     "panel_image": null,
     "panel_categories": [
@@ -44,6 +73,29 @@
         "message_id": 1492750514063016078,
         "category": "General",
         "opener_id": 1477125396339097723,
+        "status": "open"
+      }
+    ]
+  },
+  "1492884874040705024": {
+    "guild_id": 1492884874040705024,
+    "panel_title": "\ud835\ude74\ud835\ude8c\ud835\ude95\ud835\ude92\ud835\ude99\ud835\ude9d\ud835\udea2\ud835\udea1 \ud835\ude7b\ud835\ude7b\ud835\ude72 \ud835\ude83\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d\ud835\ude9c",
+    "panel_description": "\ud835\ude7e\ud835\ude99\ud835\ude8e\ud835\ude97 \ud835\ude8a \ud835\ude9d\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d \ud835\ude8b\ud835\ude8e\ud835\ude95\ud835\ude98\ud835\udea0 \ud835\ude8f\ud835\ude98\ud835\ude9b \ud835\ude91\ud835\ude8e\ud835\ude95\ud835\ude99 \ud835\udea0\ud835\ude92\ud835\ude9d\ud835\ude91 \ud835\ude9d\ud835\ude91\ud835\ude8e \ud835\ude8b\ud835\ude98\ud835\ude9d\ud835\ude9c.",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "Raidbot",
+      "Moderation bot",
+      "Other"
+    ],
+    "panel_channel_id": 1493962341249843392,
+    "panel_message_id": 1493962990385631303,
+    "open_tickets": [
+      {
+        "channel_id": 1494029539620163614,
+        "message_id": 1494029540677259396,
+        "category": "Moderation bot",
+        "opener_id": 1469774231121301546,
         "status": "open"
       }
     ]
