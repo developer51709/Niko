@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from config.emojis import get_emoji
 
 
 class UtilityCog(commands.Cog):
@@ -8,13 +9,28 @@ class UtilityCog(commands.Cog):
 
     @commands.command(name="ping")
     async def ping(self, ctx):
-        """Pong!"""
-        await ctx.send("Pong!")
+        """Check the bot's latency."""
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### 🏓 Pong!"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**Latency:** {round(self.bot.latency * 1000)}ms"
+            )
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(name="echo")
+    @commands.has_permissions(manage_messages=True)
     async def echo(self, ctx, *, message: str):
         """Echoes the user's message."""
-        await ctx.send(f"{message}\n-# Sent by {ctx.author.display_name}")
+        try:
+            await ctx.send(f"{message}\n-# Sent by {ctx.author.mention}", allowed_mentions=discord.AllowedMentions.none())
+        except discord.Forbidden:
+            pass
 
     @commands.command(name="partnership_request")
     async def partnership_request(self, ctx, invite: str = None):
