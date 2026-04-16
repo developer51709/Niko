@@ -161,8 +161,8 @@ class Moderation(commands.Cog):
         return self.bot.get_cog("ServerLogger")
 
     # ──── KICK / BAN / UNBAN ───────────────────────
-
-    @commands.command(help="Kick a member from the server. | Mitglied kicken.")
+    # help command uses json for multilangual help
+    @commands.command(help="{ 'en': 'Kick a member from the server.', 'de': 'Mitglied kicken.' }")
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         if not member:
@@ -180,7 +180,7 @@ class Moderation(commands.Cog):
             target_id=member.id, action_key="Kick"
         )
 
-    @commands.command(help="Ban a member from the server. | Mitglied bannen.")
+    @commands.command(help="{ 'en': 'Ban a member from the server.', 'de': 'Mitglied bannen.' }")
     @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, member: discord.Member | int = None, *, reason: str = "No reason provided"):
         if not member:
@@ -203,7 +203,7 @@ class Moderation(commands.Cog):
             target_id=member.id, action_key="Ban"
         )
 
-    @commands.command(help="Unban a user by ID. | Benutzer per ID entbannen.")
+    @commands.command(help="{ 'en': 'Unban a member from the server.', 'de': 'Mitglied entbannen.' }")
     @commands.has_permissions(ban_members=True)
     async def unban(self, ctx, user_id = None, reason = None):
         if not user_id:
@@ -226,7 +226,7 @@ class Moderation(commands.Cog):
 
     # ──── WARN ─────────────────────────────────────
 
-    @commands.command(help="Warn a member. | Mitglied verwarnen.")
+    @commands.command(help="{ 'en': 'Warn a member.', 'de': 'Mitglied verwarnen.' }")
     @commands.has_permissions(moderate_members=True)
     async def warn(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         utils = self.utils()
@@ -245,7 +245,7 @@ class Moderation(commands.Cog):
             target_id=member.id, action_key="Warn"
         )
 
-    @commands.command(help="View a member's warnings. | Verwarnungen anzeigen.")
+    @commands.command(help="{ 'en': 'View a members warnings.', 'de': 'Verwarnungen anzeigen.' }")
     @commands.has_permissions(moderate_members=True)
     async def warnings(self, ctx, member: discord.Member = None):
         utils = self.utils()
@@ -262,7 +262,7 @@ class Moderation(commands.Cog):
 
         await ctx.send(view=_cv2(lines))
 
-    @commands.command(help="Clear all warnings for a member. | Verwarnungen löschen.")
+    @commands.command(help="{ 'en': 'Clear all warnings for a member.', 'de': 'Verwarnungen löschen.' }")
     @commands.has_permissions(moderate_members=True)
     async def clearwarnings(self, ctx, member: discord.Member = None):
         utils = self.utils()
@@ -282,7 +282,7 @@ class Moderation(commands.Cog):
 
     # ──── MUTE / UNMUTE / TEMPMUTE ─────────────────
 
-    @commands.command(help="Mute a member. | Mitglied stummschalten.")
+    @commands.command(help="{ 'en': 'Mute a member.', 'de': 'Mitglied stummschalten.' }")
     @commands.has_permissions(moderate_members=True)
     async def mute(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         utils = self.utils()
@@ -308,7 +308,7 @@ class Moderation(commands.Cog):
             target_id=member.id, action_key="Mute"
         )
 
-    @commands.command(help="Temporarily mute a member (seconds). | Zeitlich stummschalten.")
+    @commands.command(help="{ 'en': 'Temporarily mute a member (seconds).', 'de': 'Zeitlich stummschalten.' }")
     @commands.has_permissions(moderate_members=True)
     async def tempmute(self, ctx, member: discord.Member = None, duration = None, *, reason: str = "No reason provided"):
         utils = self.utils()
@@ -337,7 +337,7 @@ class Moderation(commands.Cog):
             target_id=member.id, action_key="Tempmute"
         )
 
-    @commands.command(help="Unmute a member. | Stummschaltung aufheben.")
+    @commands.command(help="{ 'en': 'Unmute a member.', 'de': 'Stummschaltung aufheben.' }")
     @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx, member: discord.Member = None):
         utils = self.utils()
@@ -357,7 +357,7 @@ class Moderation(commands.Cog):
 
     # ──── CLEAR / PURGE ────────────────────────────
 
-    @commands.command(help="Clear messages in this channel. | Nachrichten löschen.")
+    @commands.command(help="{ 'en': 'Clear messages in this channel.', 'de': 'Nachrichten löschen.' }")
     @commands.has_permissions(manage_messages=True)
     async def clear(self, ctx, amount = None):
         if not amount:
@@ -376,7 +376,7 @@ class Moderation(commands.Cog):
             action_key="Clear"
         )
 
-    @commands.command(help="Purge messages from a specific user. | Nachrichten eines Nutzers löschen.")
+    @commands.command(help="{ 'en': 'Purge messages from a specific user.', 'de': 'Nachrichten eines Nutzers löschen.' }")
     @commands.has_permissions(manage_messages=True)
     async def purge(self, ctx, member: discord.Member = None, amount: int = 100):
         if not member:
@@ -399,13 +399,13 @@ class Moderation(commands.Cog):
 
     # ──── SLOWMODE / LOCK / UNLOCK ─────────────────
 
-    @commands.command(help="Set slowmode in this channel (seconds). | Langsammodus setzen.")
+    @commands.command(help="{ 'en': 'Set slowmode in this channel (seconds).', 'de': 'Langsammodus setzen.' }")
     @commands.has_permissions(manage_channels=True)
     async def slowmode(self, ctx, seconds: int = 0):
         await ctx.channel.edit(slowmode_delay=seconds)
         await ctx.send(msg(ctx, "slowmode_set", seconds=seconds))
 
-    @commands.command(help="Lock this channel. | Kanal sperren.")
+    @commands.command(help="{ 'en': 'Lock this channel.', 'de': 'Kanal sperren.' }")
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
@@ -421,7 +421,7 @@ class Moderation(commands.Cog):
             channel_id=ctx.channel.id, action_key="Lock"
         )
 
-    @commands.command(help="Unlock this channel. | Kanal entsperren.")
+    @commands.command(help="{ 'en': 'Unlock this channel.', 'de': 'Kanal entsperren.' }")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
@@ -439,7 +439,7 @@ class Moderation(commands.Cog):
 
     # ──── NICKNAME ─────────────────────────────────
 
-    @commands.command(help="Change a member's nickname. | Spitznamen ändern.")
+    @commands.command(help="{ 'en': 'Change a members nickname.', 'de': 'Spitznamen ändern.' }")
     @commands.has_permissions(manage_nicknames=True)
     async def nick(self, ctx, member: discord.Member = None, *, nickname = None):
         if not member:
@@ -593,7 +593,7 @@ class Moderation(commands.Cog):
             utils.remove_whitelist_role(ctx.guild.id, role.id)
             await ctx.send(msg(ctx, "wl_role_removed", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
-    @commands.command(name="setmodlog", help="Set the moderation log channel. | Moderationslog-Kanal setzen.")
+    @commands.command(name="setmodlog", help="{ 'en': 'Set the moderation log channel.', 'de': 'Moderationslog-Kanal setzen.' }")
     async def setmodlog(self, ctx):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
