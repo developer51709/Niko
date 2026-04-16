@@ -62,6 +62,24 @@ CATEGORIES: dict[str, dict] = {
         "emoji_key": "icon_utility",
         "color": 0x5865F2,
     },
+    "roles": {
+        "label": "Roles",
+        "description": "Role creation, deletion, and permission/name updates",
+        "emoji_key": "icon_utility",
+        "color": 0xFEE75C,
+    },
+    "server": {
+        "label": "Server",
+        "description": "Server settings, emoji, and sticker changes",
+        "emoji_key": "icon_settings",
+        "color": 0xEB459E,
+    },
+    "voice": {
+        "label": "Voice",
+        "description": "Voice channel joins, leaves, and moves",
+        "emoji_key": "icon_utility",
+        "color": 0x1ABC9C,
+    },
 }
 
 # Map log action titles to categories (used by the backward-compat log_action wrapper)
@@ -91,6 +109,16 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Invite Created": "invites",
     "Invite Deleted": "invites",
     "Invite Used": "invites",
+    "Channel Updated": "channels",
+    "Role Created": "roles",
+    "Role Deleted": "roles",
+    "Role Updated": "roles",
+    "Server Updated": "server",
+    "Emoji Updated": "server",
+    "Sticker Updated": "server",
+    "Voice Join": "voice",
+    "Voice Leave": "voice",
+    "Voice Move": "voice",
 }
 _AUTOMOD_SUBSTRINGS = ("Anti-Nuke", "Anti-Raid", "User-Installed", "Interaction Flood", "Nuke", "Raid")
 
@@ -860,19 +888,284 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        responsible = None
+        try:
+            async for entry in channel.guild.audit_logs(limit=3, action=discord.AuditLogAction.channel_create):
+                if entry.target.id == channel.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
         body = (
             f"**Channel:** {channel.mention} (`{channel.name}`)\n"
-            f"**Type:** {str(channel.type).replace('_', ' ').title()}"
+            f"**Type:** {str(channel.type).replace('_', ' ').title()}\n"
+            f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
         )
         await self.log_event(channel.guild, "channels", "Channel Created", body)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        responsible = None
+        try:
+            async for entry in channel.guild.audit_logs(limit=3, action=discord.AuditLogAction.channel_delete):
+                if entry.target.id == channel.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
         body = (
             f"**Channel:** `#{channel.name}`\n"
-            f"**Type:** {str(channel.type).replace('_', ' ').title()}"
+            f"**Type:** {str(channel.type).replace('_', ' ').title()}\n"
+            f"**Deleted By:** {responsible.mention if responsible else 'Unknown'}"
         )
         await self.log_event(channel.guild, "channels", "Channel Deleted", body)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+        changes = []
+
+        if before.name != after.name:
+            changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+
+        if isinstance(after, discord.TextChannel) or isinstance(after, discord.ForumChannel):
+            if getattr(before, "topic", None) != getattr(after, "topic", None):
+                b_topic = getattr(before, "topic", None) or "*None*"
+                a_topic = getattr(after, "topic", None) or "*None*"
+                changes.append(f"**Topic:** {b_topic} → {a_topic}")
+            if getattr(before, "slowmode_delay", 0) != getattr(after, "slowmode_delay", 0):
+                changes.append(f"**Slowmode:** `{getattr(before, 'slowmode_delay', 0)}s` → `{getattr(after, 'slowmode_delay', 0)}s`")
+            if getattr(before, "nsfw", False) != getattr(after, "nsfw", False):
+                changes.append(f"**NSFW:** `{getattr(before, 'nsfw', False)}` → `{getattr(after, 'nsfw', False)}`")
+
+        if isinstance(after, discord.VoiceChannel):
+            if getattr(before, "bitrate", None) != getattr(after, "bitrate", None):
+                changes.append(f"**Bitrate:** `{getattr(before, 'bitrate', 0) // 1000}kbps` → `{getattr(after, 'bitrate', 0) // 1000}kbps`")
+            if getattr(before, "user_limit", 0) != getattr(after, "user_limit", 0):
+                b_lim = getattr(before, "user_limit", 0) or "Unlimited"
+                a_lim = getattr(after, "user_limit", 0) or "Unlimited"
+                changes.append(f"**User Limit:** `{b_lim}` → `{a_lim}`")
+
+        if not changes:
+            return
+
+        responsible = None
+        try:
+            async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_update):
+                if entry.target.id == after.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        body = (
+            f"**Channel:** {after.mention} (`{after.name}`)\n"
+            f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
+            + "\n".join(changes)
+        )
+        await self.log_event(after.guild, "channels", "Channel Updated", body)
+
+    @commands.Cog.listener()
+    async def on_guild_role_create(self, role: discord.Role):
+        responsible = None
+        try:
+            async for entry in role.guild.audit_logs(limit=3, action=discord.AuditLogAction.role_create):
+                if entry.target.id == role.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        color_text = str(role.color) if role.color.value else "Default"
+        body = (
+            f"**Role:** {role.mention} (`{role.name}`)\n"
+            f"**Color:** `{color_text}`\n"
+            f"**Hoisted:** `{role.hoist}` | **Mentionable:** `{role.mentionable}`\n"
+            f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
+        )
+        await self.log_event(role.guild, "roles", "Role Created", body)
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role: discord.Role):
+        responsible = None
+        try:
+            async for entry in role.guild.audit_logs(limit=3, action=discord.AuditLogAction.role_delete):
+                if entry.target.id == role.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        body = (
+            f"**Role:** `{role.name}` (ID: `{role.id}`)\n"
+            f"**Deleted By:** {responsible.mention if responsible else 'Unknown'}"
+        )
+        await self.log_event(role.guild, "roles", "Role Deleted", body)
+
+    @commands.Cog.listener()
+    async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
+        changes = []
+
+        if before.name != after.name:
+            changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+        if before.color != after.color:
+            changes.append(f"**Color:** `{before.color}` → `{after.color}`")
+        if before.hoist != after.hoist:
+            changes.append(f"**Hoisted:** `{before.hoist}` → `{after.hoist}`")
+        if before.mentionable != after.mentionable:
+            changes.append(f"**Mentionable:** `{before.mentionable}` → `{after.mentionable}`")
+        if before.permissions != after.permissions:
+            perm_changes = []
+            for perm, value in iter(after.permissions):
+                if getattr(before.permissions, perm) != value:
+                    symbol = "✅" if value else "❌"
+                    perm_changes.append(f"{symbol} `{perm.replace('_', ' ').title()}`")
+            if perm_changes:
+                changes.append("**Permissions Changed:**\n" + " ".join(perm_changes))
+
+        if not changes:
+            return
+
+        responsible = None
+        try:
+            async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_update):
+                if entry.target.id == after.id:
+                    responsible = entry.user
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        body = (
+            f"**Role:** {after.mention} (`{after.name}`)\n"
+            f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
+            + "\n".join(changes)
+        )
+        await self.log_event(after.guild, "roles", "Role Updated", body)
+
+    @commands.Cog.listener()
+    async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
+        changes = []
+
+        if before.name != after.name:
+            changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+        if before.description != after.description:
+            b_desc = before.description or "*None*"
+            a_desc = after.description or "*None*"
+            changes.append(f"**Description:** {b_desc} → {a_desc}")
+        if before.verification_level != after.verification_level:
+            changes.append(f"**Verification Level:** `{before.verification_level}` → `{after.verification_level}`")
+        if before.explicit_content_filter != after.explicit_content_filter:
+            changes.append(f"**Explicit Content Filter:** `{before.explicit_content_filter}` → `{after.explicit_content_filter}`")
+        if before.default_notifications != after.default_notifications:
+            changes.append(f"**Default Notifications:** `{before.default_notifications}` → `{after.default_notifications}`")
+        if before.afk_channel != after.afk_channel:
+            b_afk = before.afk_channel.name if before.afk_channel else "None"
+            a_afk = after.afk_channel.name if after.afk_channel else "None"
+            changes.append(f"**AFK Channel:** `{b_afk}` → `{a_afk}`")
+        if before.icon != after.icon:
+            changes.append("**Server Icon:** changed")
+        if before.banner != after.banner:
+            changes.append("**Server Banner:** changed")
+
+        if not changes:
+            return
+
+        responsible = None
+        try:
+            async for entry in after.audit_logs(limit=5, action=discord.AuditLogAction.guild_update):
+                responsible = entry.user
+                break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        body = (
+            f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
+            + "\n".join(changes)
+        )
+        await self.log_event(after, "server", "Server Updated", body)
+
+    @commands.Cog.listener()
+    async def on_guild_emojis_update(self, guild: discord.Guild, before: list, after: list):
+        before_ids = {e.id for e in before}
+        after_ids = {e.id for e in after}
+
+        added = [e for e in after if e.id not in before_ids]
+        removed = [e for e in before if e.id not in after_ids]
+
+        if not added and not removed:
+            return
+
+        lines = []
+        if added:
+            lines.append("**Added:** " + ", ".join(f"`:{e.name}:`" for e in added))
+        if removed:
+            lines.append("**Removed:** " + ", ".join(f"`:{e.name}:`" for e in removed))
+
+        responsible = None
+        try:
+            action = discord.AuditLogAction.emoji_create if added else discord.AuditLogAction.emoji_delete
+            async for entry in guild.audit_logs(limit=3, action=action):
+                responsible = entry.user
+                break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        body = (
+            f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
+            + "\n".join(lines)
+        )
+        await self.log_event(guild, "server", "Emoji Updated", body)
+
+    @commands.Cog.listener()
+    async def on_guild_stickers_update(self, guild: discord.Guild, before: list, after: list):
+        before_ids = {s.id for s in before}
+        after_ids = {s.id for s in after}
+
+        added = [s for s in after if s.id not in before_ids]
+        removed = [s for s in before if s.id not in after_ids]
+
+        if not added and not removed:
+            return
+
+        lines = []
+        if added:
+            lines.append("**Added:** " + ", ".join(f"`{s.name}`" for s in added))
+        if removed:
+            lines.append("**Removed:** " + ", ".join(f"`{s.name}`" for s in removed))
+
+        body = "\n".join(lines)
+        await self.log_event(guild, "server", "Sticker Updated", body)
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        guild = member.guild
+
+        if before.channel is None and after.channel is not None:
+            body = (
+                f"**Member:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Joined:** {after.channel.mention}"
+            )
+            await self.log_event(guild, "voice", "Voice Join", body, target_id=member.id)
+
+        elif before.channel is not None and after.channel is None:
+            body = (
+                f"**Member:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Left:** {before.channel.mention}"
+            )
+            await self.log_event(guild, "voice", "Voice Leave", body, target_id=member.id)
+
+        elif (
+            before.channel is not None
+            and after.channel is not None
+            and before.channel.id != after.channel.id
+        ):
+            body = (
+                f"**Member:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**From:** {before.channel.mention}\n"
+                f"**To:** {after.channel.mention}"
+            )
+            await self.log_event(guild, "voice", "Voice Move", body, target_id=member.id)
 
     @commands.Cog.listener()
     # update: discord.py does not support the moderator parameter so we must use the audit log to get the moderator.
