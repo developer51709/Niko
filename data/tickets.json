@@ -82,11 +82,12 @@
     "panel_title": "\ud835\ude74\ud835\ude8c\ud835\ude95\ud835\ude92\ud835\ude99\ud835\ude9d\ud835\udea2\ud835\udea1 \ud835\ude7b\ud835\ude7b\ud835\ude72 \ud835\ude83\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d\ud835\ude9c",
     "panel_description": "\ud835\ude7e\ud835\ude99\ud835\ude8e\ud835\ude97 \ud835\ude8a \ud835\ude9d\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d \ud835\ude8b\ud835\ude8e\ud835\ude95\ud835\ude98\ud835\udea0 \ud835\ude8f\ud835\ude98\ud835\ude9b \ud835\ude91\ud835\ude8e\ud835\ude95\ud835\ude99 \ud835\udea0\ud835\ude92\ud835\ude9d\ud835\ude91 \ud835\ude9d\ud835\ude91\ud835\ude8e \ud835\ude8b\ud835\ude98\ud835\ude9d\ud835\ude9c.",
     "panel_color": null,
-    "panel_image": null,
+    "panel_image": "https://cdn.discordapp.com/icons/1492884874040705024/f1095f27b697bd98a2889d144f2fe8ed.png?size=1024",
     "panel_categories": [
       "Raidbot",
+      "Nukebot",
       "Moderation bot",
-      "Other"
+      "General"
     ],
     "panel_channel_id": 1493962341249843392,
     "panel_message_id": 1493962990385631303,

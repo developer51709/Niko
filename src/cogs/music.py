@@ -328,7 +328,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="musicstatus",
-        help="check if niko is connected to a music server ☕ | prüfe ob niko verbunden ist"
+        help="{ 'en': 'check if niko is connected to a music server ☕', 'de': 'prüfe ob niko verbunden ist' }"
     )
     async def music_status(self, ctx: commands.Context):
         if not self.connected:
@@ -338,7 +338,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="play",
         aliases=["p"],
-        help="brew a cozy track for your ears ☕🎶 | spiele einen track ab"
+        help="{ 'en': 'brew a cozy track for your ears ☕🎶', 'de': 'spiele einen track ab' }"
     )
     async def play(self, ctx: commands.Context, *, search: str):
         player = await self.get_player(ctx)
@@ -362,7 +362,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="pause",
-        help="gently pause the current vibes 🌿 | pausiert den aktuellen track"
+        help="{ 'en': 'gently pause the current vibes 🌿', 'de': 'pausiert den aktuellen track' }"
     )
     async def pause(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -373,7 +373,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="resume",
-        help="bring the cozy vibes back ☕🎶 | setzt den pausierten track fort"
+        help="{ 'en': 'bring the cozy vibes back ☕🎶', 'de': 'setzt den pausierten track fort' }"
     )
     async def resume(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -385,7 +385,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="skip",
         aliases=["s"],
-        help="skip to the next flavor on the playlist 🍰 | springt zum nächsten track"
+        help="{ 'en': 'skip to the next flavor on the playlist 🍰', 'de': 'springt zum nächsten track' }"
     )
     async def skip(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -396,7 +396,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="stop",
-        help="stop playback and clear the queue ☕ | stoppt die wiedergabe"
+        help="{ 'en': 'stop playback and clear the queue ☕', 'de': 'stoppt die wiedergabe' }"
     )
     async def stop(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -409,7 +409,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="queue",
         aliases=["q"],
-        help="see what's on the cozy playlist ☕📜 | zeigt die warteschlange"
+        help="{ 'en': 'see whats on the cozy playlist ☕📜', 'de': 'zeigt die warteschlange' }"
     )
     async def queue(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -430,7 +430,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="nowplaying",
         aliases=["np"],
-        help="see what's brewing right now ☕🎵 | zeigt den aktuellen track"
+        help="{ 'en': 'see whats brewing right now ☕🎵', 'de': 'zeigt den aktuellen track' }"
     )
     async def nowplaying(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -461,7 +461,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="volume",
         aliases=["vol"],
-        help="adjust the café ambiance volume ✨ | passt die lautstärke an"
+        help="{ 'en': 'adjust the café ambiance volume ✨', 'de': 'passt die lautstärke an' }"
     )
     async def volume(self, ctx: commands.Context, vol: int):
         player = ctx.voice_client
@@ -474,7 +474,7 @@ class MusicSystem(commands.Cog):
     @commands.command(
         name="disconnect",
         aliases=["dc", "leave"],
-        help="have niko leave the voice channel softly ☕ | trennt niko vom sprachkanal"
+        help="{ 'en': 'have niko leave the voice channel softly ☕', 'de': 'trennt niko vom sprachkanal' }"
     )
     async def disconnect(self, ctx: commands.Context):
         player = ctx.voice_client

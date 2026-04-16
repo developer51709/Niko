@@ -130,7 +130,7 @@ class EconomyCog(commands.Cog):
     # -----------------------------
 
     # !balance command
-    @commands.command(name="balance", aliases=["bal", "wallet"], help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
+    @commands.command(name="balance", aliases=["bal", "wallet"], help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh nach, wie viele Münzen du hast' }")
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
@@ -161,7 +161,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !daily command
-    @commands.command(name="daily", help="claim your daily treats 🍬✨ | hol dir deine täglichen Belohnungen")
+    @commands.command(name="daily", help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen' }")
     async def daily(self, ctx):
         '''Claim your daily reward.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -201,7 +201,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(view=view)
 
     # !work command
-    @commands.command(name="work", help="work a shift at the café ☕ | arbeite eine Schicht im Café")
+    @commands.command(name="work", help="{ 'en': 'work a shift at the café ☕', 'de': 'arbeite eine Schicht im Café' }")
     async def work(self, ctx):
         '''Work to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -240,7 +240,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(view=view)
 
     # !crime command
-    @commands.command(name="crime", help="try to steal some extra treats 😈 | versuch, ein paar extra Leckereien zu stibitzen")
+    @commands.command(name="crime", help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, ein paar extra Leckereien zu stibitzen' }")
     async def crime(self, ctx):
         '''Commit a crime to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -262,7 +262,7 @@ class EconomyCog(commands.Cog):
             self.save_economy_data()
 
     # !rob command
-    @commands.command(name="rob", help="try to rob another user 🔫 | versuch, einen anderen Nutzer auszurauben")
+    @commands.command(name="rob", help="{ 'en': 'try to rob another user 🔫', 'de': 'versuch, einen anderen Nutzer auszurauben' }")
     async def rob(self, ctx, member: discord.Member):
         '''Rob another user to earn money.'''
         if member.id == ctx.author.id:
@@ -296,7 +296,7 @@ class EconomyCog(commands.Cog):
         self.save_economy_data()
 
     # !pay command
-    @commands.command(name="pay", help="share some treats with a friend 💸🥐 | teile deine Leckereien mit einem Freund")
+    @commands.command(name="pay", help="{ 'en': 'share some treats with a friend 💸🥐', 'de': 'teile deine Leckereien mit einem Freund' }")
     async def pay(self, ctx, member: discord.Member = None, amount: int = None):
         '''pay another user 💸💰 | bezahl einen anderen Nutzer'''
         if not member:
@@ -314,7 +314,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"You gave {member.display_name} {amount} coins! 💸✨")
 
     # !leaderboard command
-    @commands.command(name="leaderboard", aliases=["lb", "top"], help="see who has the most treats 🏆🥐 | sieh nach, wer die meisten Leckereien hat")
+    @commands.command(name="leaderboard", aliases=["lb", "top"], help="{ 'en': 'see who has the most treats 🏆🥐', 'de': 'sieh nach, wer die meisten Leckereien hat' }")
     async def leaderboard(self, ctx):
         '''View the economy leaderboard.'''
         sorted_users = sorted(
@@ -343,7 +343,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !shop command
-    @commands.command(name="shop", help="browse the café boutique 🛍️✨ | stöbere in der Café-Boutique")
+    @commands.command(name="shop", help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Café-Boutique' }")
     async def shop(self, ctx):
         '''View the shop.'''
         shop_items = {
@@ -369,7 +369,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !buy command
-    @commands.command(name="buy", help="buy a treat from the shop 🍰✨ | kauf dir eine Leckerei im Shop")
+    @commands.command(name="buy", help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf dir eine Leckerei im Shop' }")
     async def buy(self, ctx, item_id: str = None):
         '''Buy an item from the shop.'''
         if not item_id:
@@ -392,7 +392,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"You bought a {shop_items[item_id]['name']}! Enjoy! 🍰✨")
 
     # !inventory command
-    @commands.command(name="inventory", aliases=["inv"], help="check your collection of treats 🎒✨ | sieh dir deine gesammelten Leckereien an")
+    @commands.command(name="inventory", aliases=["inv"], help="{ 'en': 'check your collection of treats 🎒✨', 'de': 'sieh dir deine gesammelten Leckereien an' }")
     async def inventory(self, ctx):
         '''View your inventory.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -418,7 +418,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !sell command
-    @commands.command(name="sell", help="sell back a treat for some coins 💰 | verkauf eine Leckerei gegen Münzen")
+    @commands.command(name="sell", help="{ 'en': 'sell back a treat for some coins 💰', 'de': 'verkauf eine Leckerei gegen Münzen' }")
     async def sell(self, ctx, item_id: str = None):
         '''Sell an item from your inventory.'''
         if not item_id:
@@ -440,14 +440,14 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"Sold your {item_id} for {sell_price} coins! 💰")
 
     # !bank command (Handled by balance embed, but kept for legacy)
-    @commands.command(name="bank", help="check your vault balance 🏦 | sieh dir dein Tresorguthaben an")
+    @commands.command(name="bank", help="{ 'en': 'check your vault balance 🏦', 'de': 'sieh dir dein Tresorguthaben an' }")
     async def bank(self, ctx):
         '''View your bank balance.'''
         user_data = self.get_user_economy_data(ctx.author.id)
         await ctx.send(f"You have {user_data['bank']} coins safely tucked away in your vault! 🏦✨")
 
     # !deposit command
-    @commands.command(name="deposit", aliases=["dep"], help="put coins in the safety vault 🏦 | zahl Münzen in den Safe ein")
+    @commands.command(name="deposit", aliases=["dep"], help="{ 'en': 'put coins in the safety vault 🏦', 'de': 'zahl Münzen in den Safe ein' }")
     async def deposit(self, ctx, amount: str):
         '''Deposit money into the bank.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -471,7 +471,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"Deposited {amount} coins into your vault! 🏦✨")
 
     # !withdraw command
-    @commands.command(name="withdraw", aliases=["with"], help="take coins from the vault 🥐 | nimm Münzen aus dem Safe")
+    @commands.command(name="withdraw", aliases=["with"], help="{ 'en': 'take coins from the vault 🥐', 'de': 'nimm Münzen aus dem Safe' }")
     async def withdraw(self, ctx, amount: str):
         '''Withdraw money from the bank.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -495,7 +495,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"Withdrew {amount} coins from your vault! 🥐✨")
 
     # !networth command
-    @commands.command(name="networth", aliases=["nw"], help="calculate your total café fortune 📊🥐 | berechne dein gesamtes Café-Vermögen")
+    @commands.command(name="networth", aliases=["nw"], help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Café-Vermögen' }")
     async def networth(self, ctx):
         '''View your net worth.'''
         user_data = self.get_user_economy_data(ctx.author.id)

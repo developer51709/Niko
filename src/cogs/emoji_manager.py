@@ -123,7 +123,7 @@ class EmojiManagerCog(commands.Cog):
             await ctx.send(msg(ctx, "error", error=str(e)))
         return False
 
-    @commands.command(name="emojimanager", aliases=["em"], help="show emoji helper menu 🎨✨ | zeige das Emoji-Hilfemenü")
+    @commands.command(name="emojimanager", aliases=["em"], help="{ 'en': 'show emoji helper menu 🎨✨', 'de': 'zeige das Emoji-Hilfemenü' }")
     async def emojimanager_help(self, ctx):
         prefix = self.get_prefix(ctx)
         view = discord.ui.LayoutView()
@@ -157,7 +157,7 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="steal", help="steal a cute emoji 🎨✨ | stiehl ein süßes Emoji")
+    @commands.command(name="steal", help="{ 'en': 'steal a cute emoji 🎨✨', 'de': 'stiehl ein süßes Emoji' }")
     @has_permissions(manage_guild=True)
     async def steal_emoji(self, ctx, emoji_string: str):
         await ctx.typing()
@@ -166,7 +166,7 @@ class EmojiManagerCog(commands.Cog):
             return await ctx.send(msg(ctx, "not_found"))
         await self._add_emoji(ctx, name, image_data)
 
-    @commands.command(name="steal-multiple", aliases=["sm", "stealall"], help="steal many cute emojis 🎨✨ | stiehl viele süße Emojis")
+    @commands.command(name="steal-multiple", aliases=["sm", "stealall"], help="{ 'en': 'steal many cute emojis 🎨✨', 'de': 'stiehl viele süße Emojis' }")
     @has_permissions(manage_guild=True)
     async def steal_multiple_emojis(self, ctx, *emoji_strings: str):
         if not emoji_strings:
@@ -180,7 +180,7 @@ class EmojiManagerCog(commands.Cog):
         if added:
             log.success("Emoji", f"Stole {len(added)} emojis in {ctx.guild.name}")
 
-    @commands.command(name="steal-from-url", aliases=["surl"], help="add emoji from a link 🔗✨ | Emoji von einem Link hinzufügen")
+    @commands.command(name="steal-from-url", aliases=["surl"], help="{ 'en': 'add emoji from a link 🔗✨', 'de': 'Emoji von einem Link hinzufügen' }")
     @has_permissions(manage_guild=True)
     async def steal_from_url(self, ctx, url: str, name: Optional[str] = None):
         if not URL_REGEX.match(url):
@@ -198,7 +198,7 @@ class EmojiManagerCog(commands.Cog):
         except Exception as e:
             await ctx.send(msg(ctx, "error", error=str(e)))
 
-    @commands.command(name="enlarge", help="see an emoji in big size 🔍✨ | sieh ein Emoji in groß an")
+    @commands.command(name="enlarge", help="{ 'en': 'see an emoji in big size 🔍✨', 'de': 'sieh ein Emoji in groß an' }")
     async def enlarge_emoji(self, ctx, emoji_string: str):
         name, data, _, url = await self._get_emoji_info(emoji_string)
         if not url:
@@ -218,7 +218,7 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="emojistats", help="check how many treats you can add 📊✨ | sieh nach, wie viele Emojis noch passen")
+    @commands.command(name="emojistats", help="{ 'en': 'check how many treats you can add 📊✨', 'de': 'sieh nach, wie viele Emojis noch passen' }")
     async def emoji_stats(self, ctx):
         guild = ctx.guild
         static = len([e for e in guild.emojis if not e.animated])
@@ -237,7 +237,7 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="remove-emoji", aliases=["re"], help="remove a treat from the server 🗑️ | entferne ein Emoji vom Server")
+    @commands.command(name="remove-emoji", aliases=["re"], help="{ 'en': 'remove a treat from the server 🗑️', 'de': 'entferne ein Emoji vom Server' }")
     @has_permissions(manage_guild=True)
     async def remove_emoji(self, ctx, emoji: discord.Emoji):
         try:

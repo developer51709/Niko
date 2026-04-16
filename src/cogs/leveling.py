@@ -9,9 +9,9 @@ from utils.paginator import PaginatedView, paginate
 from utils.ai_config import get_personality
 from config.emojis import get_emoji
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  MESSAGE TABLE
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 MESSAGES = {
     "normal": {
@@ -94,9 +94,9 @@ def msg(ctx, key, **kwargs):
     return text.format(**kwargs) if kwargs else text
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  DEFAULTS
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 DEFAULT_GUILD_LEVEL_CONFIG = {
     "xp_enabled":       True,
@@ -108,9 +108,9 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
 }
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  PANEL TEXT BUILDERS  (purely sync, receive cfg dict)
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 def _lv_icon(val) -> str:
     return get_emoji("icon_tick") if val else get_emoji("icon_cross")
@@ -203,9 +203,9 @@ def _lv_section_text(cfg: dict, section: str, guild: discord.Guild) -> str:
     return _lv_overview_text(cfg, guild)
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  PANEL INTERACTIVE COMPONENTS  (all receive cfg where needed)
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class _LvSectionSelect(discord.ui.Select):
     def __init__(self, cog, guild_id: int, current: str):
@@ -289,7 +289,7 @@ class _LvEditXPBtn(discord.ui.Button):
         await interaction.response.send_modal(_LvXPSettingsModal(self._cog, self._guild_id, cfg))
 
 
-# ── Announcements ──────────────────────────────────────────
+# ── Announcements ──────────────────────────────────
 
 class _LvChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, cog, guild_id: int):
@@ -391,7 +391,7 @@ class _LvResetMessageBtn(discord.ui.Button):
         await interaction.response.edit_message(view=panel)
 
 
-# ── Level Roles ─────────────────────────────────────────────
+# ── Level Roles ────────────────────────────────────
 
 class _LvRoleAssignSelect(discord.ui.RoleSelect):
     def __init__(self, cog, guild_id: int, level: int):
@@ -492,9 +492,9 @@ class _LvRemoveRoleBtn(discord.ui.Button):
             view=view, ephemeral=True)
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  PANEL FACTORY  (async — fetches cfg from DB)
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 async def _build_level_panel(cog, guild_id: int, section: str = "overview",
                               guild: discord.Guild = None) -> discord.ui.LayoutView:
@@ -535,9 +535,9 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
     return view
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  LEVELING COG
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class Leveling(commands.Cog):
     """Cozy bilingual leveling system with guild config support."""
@@ -551,7 +551,7 @@ class Leveling(commands.Cog):
         await self._migrate_levels_json()
         await self._migrate_level_config_json()
 
-    # ── DB HELPERS ───────────────────────────────────────────
+    # ── DB HELPERS ─────────────────────────────────
 
     async def _guild_cfg(self, guild_id) -> dict:
         """Return the level config dict for a guild, falling back to defaults."""
@@ -618,7 +618,7 @@ class Leveling(commands.Cog):
                 return i
         return len(rows) or 1
 
-    # ── MIGRATION HELPERS ────────────────────────────────────
+    # ── MIGRATION HELPERS ──────────────────────────
 
     async def _migrate_levels_json(self):
         path = "data/levels.json"
@@ -665,12 +665,12 @@ class Leveling(commands.Cog):
         except Exception as e:
             log.warning("Leveling", f"Could not migrate level_config.json: {e}")
 
-    # ── XP FORMULA ───────────────────────────────────────────
+    # ── XP FORMULA ─────────────────────────────────
 
     def get_xp_for_level(self, level: int) -> int:
         return 5 * (level ** 2) + (50 * level) + 100
 
-    # ── XP EVENT ─────────────────────────────────────────────
+    # ── XP EVENT ───────────────────────────────────
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -744,12 +744,12 @@ class Leveling(commands.Cog):
         else:
             await self._save_user_data(guild_id, user_id, current_xp, current_level)
 
-    # ── RANK COMMAND ─────────────────────────────────────────
+    # ── RANK COMMAND ───────────────────────────────
 
     @commands.command(
         name="level",
         aliases=["rank"],
-        help="Check your cozy level stats ☕ | Zeigt deine Level-Statistiken."
+        help="{ 'en': 'Check your cozy level stats ☕', 'de': 'Zeigt deine Level-Statistiken.' }"
     )
     async def level(self, ctx, member: discord.Member = None):
         member   = member or ctx.author
@@ -790,12 +790,12 @@ class Leveling(commands.Cog):
         ))
         await ctx.send(view=view)
 
-    # ── LEADERBOARD ──────────────────────────────────────────
+    # ── LEADERBOARD ────────────────────────────────
 
     @commands.command(
         name="level-leaderboard",
         aliases=["lvl-lb"],
-        help="View the cozy leaderboard ☕ | Zeigt die Level-Bestenliste."
+        help="{ 'en': 'View the cozy leaderboard ☕', 'de': 'Zeigt die Level-Bestenliste.' }"
     )
     async def leaderboard(self, ctx):
         guild_id = ctx.guild.id
@@ -823,13 +823,13 @@ class Leveling(commands.Cog):
         )
         await ctx.send(view=view)
 
-    # ── LEVELCONFIG COMMAND GROUP ─────────────────────────────
+    # ── LEVELCONFIG COMMAND GROUP ──────────────────
 
     @commands.group(
         name="levelconfig",
         aliases=["lvlcfg"],
         invoke_without_command=True,
-        help="View or configure the leveling system. | Level-Einstellungen anzeigen / bearbeiten."
+        help="{ 'en': 'View or configure the leveling system.', 'de': 'Level-Einstellungen anzeigen / bearbeiten.' }"
     )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig(self, ctx):
@@ -857,7 +857,10 @@ class Leveling(commands.Cog):
         view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
         await ctx.send(view=view)
 
-    @levelconfig.command(name="toggle", help="Enable or disable XP for this server.")
+    @levelconfig.command(
+        name="toggle", 
+        help="{ 'en': 'Enable or disable XP for this server.', 'de': 'XP für diesen Server aktivieren/deaktivieren.' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_toggle(self, ctx):
         cfg = await self._guild_cfg(ctx.guild.id)
@@ -866,8 +869,11 @@ class Leveling(commands.Cog):
         state = f"{get_emoji('icon_tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('icon_cross')} disabled"
         await ctx.send(f"XP tracking is now **{state}** for this server.")
 
-    @levelconfig.command(name="multiplier", aliases=["xpmultiplier"],
-                         help="Set XP gain multiplier (e.g. 2.0).")
+    @levelconfig.command(
+        name="multiplier", 
+        aliases=["xpmultiplier"],
+        help="{ 'en': 'Set XP gain multiplier (e.g. 2.0).', 'de': 'XP-Verstärkung einstellen (z.B. 2.0).' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_multiplier(self, ctx, value: float = None):
         if value is None or value <= 0:
@@ -877,8 +883,10 @@ class Leveling(commands.Cog):
         await self._save_guild_cfg(ctx.guild.id, cfg)
         await ctx.send(msg(ctx, "cfg_updated") + f" XP multiplier → `{cfg['xp_multiplier']}x`")
 
-    @levelconfig.command(name="cooldown",
-                         help="Set XP cooldown between gains in seconds (0 = off).")
+    @levelconfig.command(
+        name="cooldown",
+        help="{ 'en': 'Set XP cooldown between gains in seconds (0 = off).', 'de': 'XP-Cooldown in Sekunden einstellen (0 = aus).' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_cooldown(self, ctx, seconds: int = None):
         if seconds is None or seconds < 0:
@@ -889,8 +897,11 @@ class Leveling(commands.Cog):
         status = f"`{seconds}s`" if seconds > 0 else "off"
         await ctx.send(msg(ctx, "cfg_updated") + f" XP cooldown → {status}")
 
-    @levelconfig.command(name="levelupchannel", aliases=["luchannel"],
-                         help="Set the level-up announcement channel.")
+    @levelconfig.command(
+        name="levelupchannel", 
+        aliases=["luchannel"],
+        help="{ 'en': 'Set the level-up announcement channel.', 'de': 'Level-Up-Benachrichtigungs-Kanal einstellen.' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_channel(self, ctx, channel: discord.TextChannel = None):
         cfg = await self._guild_cfg(ctx.guild.id)
@@ -899,8 +910,11 @@ class Leveling(commands.Cog):
         dest = channel.mention if channel else "*(same channel)*"
         await ctx.send(msg(ctx, "cfg_updated") + f" Level-up channel → {dest}")
 
-    @levelconfig.command(name="levelrole", aliases=["role"],
-                         help="Assign a role when a level is reached.")
+    @levelconfig.command(
+        name="levelrole", 
+        aliases=["role"],
+        help="{ 'en': 'Assign a role when a level is reached.', 'de': 'Rolle bei Erreichen eines Levels zuweisen.' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_levelrole(self, ctx, level: int = None, role: discord.Role = None):
         if level is None or level < 1:
@@ -916,7 +930,10 @@ class Leveling(commands.Cog):
             await self._save_guild_cfg(ctx.guild.id, cfg)
             await ctx.send(msg(ctx, "cfg_updated") + f" Level {level} → {role.mention}")
 
-    @levelconfig.command(name="resetuser", help="Reset XP and level for a member.")
+    @levelconfig.command(
+        name="resetuser", 
+        help="{ 'en': 'Reset XP and level for a member.', 'de': 'XP und Level eines Mitglieds zurücksetzen.' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def levelconfig_resetuser(self, ctx, member: discord.Member = None):
         if not member:
@@ -924,12 +941,12 @@ class Leveling(commands.Cog):
         await self._save_user_data(ctx.guild.id, member.id, 0, 0)
         await ctx.send(f"{get_emoji('icon_tick')} Reset XP and level for **{member.display_name}**.")
 
-    # ── LEVELING PANEL ────────────────────────────────────────
+    # ── LEVELING PANEL ─────────────────────────────
 
     @commands.command(
         name="levelpanel",
         aliases=["lvlpanel", "lp"],
-        help="Open the interactive leveling management panel ☕ | Leveling-Dashboard öffnen."
+        help="{ 'en': 'Open the interactive leveling management panel ☕', 'de': 'Leveling-Dashboard öffnen.' }"
     )
     @commands.has_permissions(manage_guild=True)
     async def levelpanel(self, ctx):

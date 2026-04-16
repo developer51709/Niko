@@ -110,7 +110,7 @@ class UwULock(commands.Cog):
     # -----------------------------
     @commands.command(
         name="uwulock",
-        help="uwu‑lock a user so their messages become uwu‑ified ☕ | uwu‑lockt einen nutzer"
+        help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified ☕', 'de': 'uwu‑lockt einen nutzer' }"
     )
     @commands.bot_has_permissions(administrator=True)
     @commands.has_permissions(administrator=True)

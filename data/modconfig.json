@@ -1541,7 +1541,9 @@
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
-        "blocked_words": [],
+        "blocked_words": [
+            "nigger"
+        ],
         "whitelist_users": [
             1492310425348608170,
             1492265835140743384,

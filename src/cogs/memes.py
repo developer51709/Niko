@@ -81,7 +81,7 @@ class Meme(commands.Cog):
 
     @commands.command(
         name="meme",
-        help="get a cozy random meme ☕✨ | holt ein zufälliges meme"
+        help="{ 'en': 'get a cozy random meme ☕✨', 'de': 'holt ein zufälliges meme' }"
     )
     async def meme(self, ctx):
         """Fetch a random meme using meme-api.com"""

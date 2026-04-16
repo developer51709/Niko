@@ -249,13 +249,13 @@ async def _command_detail_text(
         for subcommand in cmd.commands:
             if parent:
                 lines.append(
-                    f"- `{prefix}{parent} {cmd.name} {subcommand.name}` — "
-                    f"{get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
+                    f"`{prefix}{parent} {cmd.name} {subcommand.name}`\n"
+                    f"-# {get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
                 )
             else:
                 lines.append(
-                    f"- `{prefix}{cmd.name} {subcommand.name}` — "
-                    f"{get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
+                    f"`{prefix}{cmd.name} {subcommand.name}`\n"
+                    f"-# {get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
                 )
 
     if cmd.cog_name:
@@ -510,7 +510,7 @@ class HelpCog(commands.Cog):
 
     @commands.command(
         name="help",
-        help="show the help menu 📘☕ | zeige das Hilfemenü",
+        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü' }",
     )
     async def help(self, ctx: commands.Context, *, command_name: str = None):
         """

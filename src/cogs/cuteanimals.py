@@ -123,7 +123,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cuteanimal",
-        help="get a cozy random animal pic ☕✨ | zeigt ein zufälliges süßes tier"
+        help="{ 'en': 'get a cozy random animal pic ☕✨', 'de': 'zeigt ein zufälliges süßes tier' }"
     )
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
@@ -161,7 +161,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cat",
-        help="get a cozy lil kitty ☕🐱 | zeigt ein süßes kätzchen"
+        help="{ 'en': 'get a cozy lil kitty ☕🐱', 'de': 'zeigt ein süßes kätzchen' }"
     )
     async def cat(self, ctx):
         """Sends a random cat image."""
@@ -186,7 +186,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="dog",
-        help="get a warm fluffy doggo ☕🐶 | zeigt einen süßen hund"
+        help="{ 'en': 'get a warm fluffy doggo ☕🐶', 'de': 'zeigt einen süßen hund' }"
     )
     async def dog(self, ctx):
         """Sends a random dog image."""

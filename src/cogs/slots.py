@@ -13,7 +13,7 @@ class Slots(commands.Cog):
 
     @commands.group(
         name="slots",
-        help="play a casino-style 3×3 slot machine 🎰 | spiele ein Casino-Slot-Spiel"
+        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel' }"
     )
     async def slots(self, ctx):
         if ctx.invoked_subcommand is None:

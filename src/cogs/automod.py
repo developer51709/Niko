@@ -1761,8 +1761,10 @@ class AutoMod(commands.Cog):
 
     # ─── SETTINGS COMMAND ─────────────────────────
 
-    @commands.command(name="automod",
-                      help="Open the AutoMod settings panel ☕🛡️ | AutoMod-Einstellungen")
+    @commands.command(
+        name="automod",
+        help="{ 'en': 'Open the AutoMod settings panel ☕🛡️', 'de': 'AutoMod-Einstellungen' }"
+    )
     @commands.has_permissions(manage_guild=True)
     async def automod_settings(self, ctx):
         panel = _build_panel(self, ctx.guild.id, "overview", ctx.guild)

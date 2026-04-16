@@ -243,7 +243,7 @@ class Snipe(commands.Cog):
     @commands.command(
         name="snipe",
         aliases=["sn"],
-        help="see recently deleted messages ☕🔍 | sieh kürzlich gelöschte nachrichten"
+        help="{ 'en': 'see recently deleted messages ☕🔍', 'de': 'sieh kürzlich gelöschte nachrichten' }"
     )
     async def snipe(self, ctx: commands.Context):
         """Show the last deleted messages in this channel."""

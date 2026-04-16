@@ -222,7 +222,7 @@ class tictactoe(commands.Cog):
 
     @commands.command(
         aliases=["ttt"],
-        help="play a cozy tic‑tac‑toe match ☕ | spiele tictactoe mit einem nutzer"
+        help="{ 'en': 'play a cozy tic‑tac‑toe match ☕', 'de': 'spiele tictactoe mit einem nutzer' }"
     )
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def tictactoe(self, ctx, member: discord.Member = None):
