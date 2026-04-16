@@ -25,3 +25,17 @@ davey
 PyNaCl
 openai
 Pillow
+aiosqlite
+colorama
+ctransformers
+deep-translator
+discord.py
+feedparser
+flask
+langdetect
+openai
+Pillow
+psutil
+PyNaCl
+requests
+wavelink
