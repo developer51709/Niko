@@ -169,7 +169,16 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="kick"))
         await member.kick(reason=reason)
         await ctx.send(view=_cv2(msg(ctx, "kicked", member=member, reason=reason)))
-        await self.utils().log_action(ctx.guild, "Kick", f"{member} was kicked by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Kick\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Kick", body,
+            target_id=member.id, action_key="Kick"
+        )
 
     @commands.command(help="Ban a member from the server. | Mitglied bannen.")
     @commands.has_permissions(ban_members=True)
@@ -225,7 +234,16 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="warn"))
         utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
         await ctx.send(view=_cv2(msg(ctx, "warned", member=member, reason=reason)))
-        await utils.log_action(ctx.guild, "Warn", f"{member} was warned by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Warn\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Warn", body,
+            target_id=member.id, action_key="Warn"
+        )
 
     @commands.command(help="View a member's warnings. | Verwarnungen anzeigen.")
     @commands.has_permissions(moderate_members=True)
@@ -252,7 +270,15 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member_warns"))
         utils.clear_warnings(ctx.guild.id, member.id)
         await ctx.send(msg(ctx, "warnings_cleared", member=member))
-        await utils.log_action(ctx.guild, "Clear Warnings", f"{ctx.author} cleared warnings for {member}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Clear Warnings\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Clear Warnings", body,
+            target_id=member.id
+        )
 
     # ──── MUTE / UNMUTE / TEMPMUTE ─────────────────
 
@@ -271,7 +297,16 @@ class Moderation(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
-        await utils.log_action(ctx.guild, "Mute", f"{member} was muted by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Mute\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Mute", body,
+            target_id=member.id, action_key="Mute"
+        )
 
     @commands.command(help="Temporarily mute a member (seconds). | Zeitlich stummschalten.")
     @commands.has_permissions(moderate_members=True)
@@ -290,7 +325,17 @@ class Moderation(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
-        await utils.log_action(ctx.guild, "Tempmute", f"{member} was tempmuted by {ctx.author} for {duration}s.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Tempmute\n"
+            f"**Duration:** {duration}s\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Tempmute", body,
+            target_id=member.id, action_key="Tempmute"
+        )
 
     @commands.command(help="Unmute a member. | Stummschaltung aufheben.")
     @commands.has_permissions(moderate_members=True)
@@ -300,7 +345,15 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
         await utils.unmute_member(member, reason=f"Unmuted by {ctx.author}")
         await ctx.send(msg(ctx, "unmuted", member=member))
-        await utils.log_action(ctx.guild, "Unmute", f"{member} was unmuted by {ctx.author}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Unmute\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Unmute", body,
+            target_id=member.id
+        )
 
     # ──── CLEAR / PURGE ────────────────────────────
 
@@ -313,7 +366,15 @@ class Moderation(commands.Cog):
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
-        await self.utils().log_action(ctx.guild, "Clear", f"{ctx.author} deleted {len(deleted)} messages in {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Messages Deleted:** {len(deleted)}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Clear", body,
+            action_key="Clear"
+        )
 
     @commands.command(help="Purge messages from a specific user. | Nachrichten eines Nutzers löschen.")
     @commands.has_permissions(manage_messages=True)
@@ -325,7 +386,16 @@ class Moderation(commands.Cog):
         await ctx.message.delete()
         deleted = await ctx.channel.purge(limit=amount, check=check)
         await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
-        await self.utils().log_action(ctx.guild, "Purge", f"{ctx.author} purged {len(deleted)} messages from {member} in {ctx.channel.mention}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Messages Deleted:** {len(deleted)}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "messages", "Purge", body,
+            target_id=member.id, action_key="Purge"
+        )
 
     # ──── SLOWMODE / LOCK / UNLOCK ─────────────────
 
@@ -342,7 +412,14 @@ class Moderation(commands.Cog):
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send(msg(ctx, "locked"))
-        await self.utils().log_action(ctx.guild, "Lock", f"{ctx.author} locked {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "channels", "Lock", body,
+            channel_id=ctx.channel.id, action_key="Lock"
+        )
 
     @commands.command(help="Unlock this channel. | Kanal entsperren.")
     @commands.has_permissions(manage_channels=True)
@@ -351,7 +428,14 @@ class Moderation(commands.Cog):
         overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send(msg(ctx, "unlocked"))
-        await self.utils().log_action(ctx.guild, "Unlock", f"{ctx.author} unlocked {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "channels", "Unlock", body,
+            channel_id=ctx.channel.id, action_key="Unlock"
+        )
 
     # ──── NICKNAME ─────────────────────────────────
 
@@ -364,7 +448,15 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_nickname"))
         await member.edit(nick=nickname)
         await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname))
-        await self.utils().log_action(ctx.guild, "Nickname Changed", f"{ctx.author} changed {member}'s nickname to `{nickname}`")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**New Nickname:** `{nickname}`\n"
+            f"**Changed By:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Nickname Changed", body,
+            target_id=member.id
+        )
 
     # ──── BLOCKED WORD LIST ────────────────────────
 

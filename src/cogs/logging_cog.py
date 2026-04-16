@@ -50,6 +50,18 @@ CATEGORIES: dict[str, dict] = {
         "emoji_key": "icon_welcome",
         "color": 0x9B59B6,
     },
+    "captcha": {
+        "label": "Captcha",
+        "description": "Captcha verifications — passes, failures, and kicks",
+        "emoji_key": "icon_moderation",
+        "color": 0x57F287,
+    },
+    "invites": {
+        "label": "Invites",
+        "description": "Invite creation, deletion, and usage tracking",
+        "emoji_key": "icon_utility",
+        "color": 0x5865F2,
+    },
 }
 
 # Map log action titles to categories (used by the backward-compat log_action wrapper)
@@ -62,6 +74,8 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Mute": "moderation",
     "Tempmute": "moderation",
     "Unmute": "moderation",
+    "Timeout": "moderation",
+    "Timeout Removed": "moderation",
     "Nickname Changed": "moderation",
     "Clear": "moderation",
     "Purge": "messages",
@@ -71,6 +85,12 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Anti-Link": "automod",
     "Bad Word Filter": "automod",
     "Mass Mention": "automod",
+    "Captcha Passed": "captcha",
+    "Captcha Failed": "captcha",
+    "Captcha Kicked": "captcha",
+    "Invite Created": "invites",
+    "Invite Deleted": "invites",
+    "Invite Used": "invites",
 }
 _AUTOMOD_SUBSTRINGS = ("Anti-Nuke", "Anti-Raid", "User-Installed", "Interaction Flood", "Nuke", "Raid")
 
@@ -82,11 +102,14 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
     "Warn": ["kick", "ban"],
     "Mute": ["unmute"],
     "Tempmute": ["unmute"],
+    "Timeout": ["kick", "ban"],
     "Anti-Spam": ["kick", "ban"],
     "Anti-Link": ["kick", "ban"],
     "Bad Word Filter": ["kick", "ban"],
     "Mass Mention": ["kick", "ban"],
     "member_join": ["kick", "ban"],
+    "Captcha Failed": ["kick", "ban"],
+    "Captcha Kicked": ["ban"],
 }
 _AUTOMOD_DEFAULT_BUTTONS = ["kick", "ban"]
 
@@ -507,6 +530,18 @@ class ServerLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._config: dict = _load_log_config()
+        # guild_id → {invite_code: uses_count}
+        self._invite_cache: dict[int, dict[str, int]] = {}
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Populate invite cache for all guilds on startup."""
+        for guild in self.bot.guilds:
+            try:
+                invites = await guild.invites()
+                self._invite_cache[guild.id] = {inv.code: inv.uses for inv in invites}
+            except (discord.Forbidden, discord.HTTPException):
+                pass
 
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
@@ -591,6 +626,32 @@ class ServerLogger(commands.Cog):
         account_age = (datetime.now(timezone.utc) - member.created_at).days
         age_warn = f"\n-# ⚠️ New account — only **{account_age}d** old" if account_age < 7 else ""
 
+        # ── Detect which invite was used ───────────
+        used_invite = None
+        try:
+            current_invites = await guild.invites()
+            cached = self._invite_cache.get(guild.id, {})
+            for inv in current_invites:
+                if inv.uses > cached.get(inv.code, 0):
+                    used_invite = inv
+                    break
+            self._invite_cache[guild.id] = {inv.code: inv.uses for inv in current_invites}
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        # Log invite usage to the invites category
+        if used_invite:
+            inv_body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Invite Code:** `{used_invite.code}`\n"
+                f"**Created By:** {used_invite.inviter.mention if used_invite.inviter else 'Unknown'}\n"
+                f"**Total Uses:** {used_invite.uses}"
+            )
+            await self.log_event(
+                guild, "invites", "Invite Used", inv_body,
+                target_id=member.id
+            )
+
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Account Created:** {created} ({account_age} days ago){age_warn}"
@@ -603,6 +664,29 @@ class ServerLogger(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
+
+        # ── Check audit log for an external kick ──
+        kick_entry = None
+        try:
+            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
+                if entry.target.id == member.id:
+                    kick_entry = entry
+                    break
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+        if kick_entry and kick_entry.user != self.bot.user:
+            kick_body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Action:** Kick\n"
+                f"**Reason:** {kick_entry.reason or 'No reason provided'}\n"
+                f"**Moderator:** {kick_entry.user.mention if kick_entry.user else 'Unknown'}"
+            )
+            await self.log_event(
+                guild, "moderation", "Kick", kick_body,
+                target_id=member.id, action_key="Kick"
+            )
+
         roles = [r.mention for r in member.roles if r != guild.default_role]
         roles_text = ", ".join(roles) if roles else "None"
         body = (
@@ -625,8 +709,67 @@ class ServerLogger(commands.Cog):
             changes.append(f"**Roles Added:** {', '.join(r.mention for r in added)}")
         if removed:
             changes.append(f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
+
+        # ── Nick change — attribute to moderator via audit log ──
         if before.nick != after.nick:
+            nick_moderator = None
+            try:
+                async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == after.id:
+                        nick_moderator = entry.user
+                        break
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+            if nick_moderator and nick_moderator != self.bot.user:
+                nick_body = (
+                    f"**Member:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
+                    f"**Old Nickname:** `{before.nick or before.name}`\n"
+                    f"**New Nickname:** `{after.nick or after.name}`\n"
+                    f"**Changed By:** {nick_moderator.mention}"
+                )
+                await self.log_event(
+                    guild, "moderation", "Nickname Changed", nick_body,
+                    target_id=after.id
+                )
+
             changes.append(f"**Nickname:** `{before.nick or before.name}` → `{after.nick or after.name}`")
+
+        # ── Discord native timeout detection ──────
+        before_timeout = getattr(before, "timed_out_until", None)
+        after_timeout = getattr(after, "timed_out_until", None)
+        if before_timeout != after_timeout:
+            timeout_mod = None
+            try:
+                async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == after.id:
+                        timeout_mod = entry.user
+                        break
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+            if timeout_mod and timeout_mod != self.bot.user:
+                if after_timeout:
+                    timeout_body = (
+                        f"**User:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
+                        f"**Action:** Timeout applied\n"
+                        f"**Until:** <t:{int(after_timeout.timestamp())}:F> (<t:{int(after_timeout.timestamp())}:R>)\n"
+                        f"**Moderator:** {timeout_mod.mention}"
+                    )
+                    await self.log_event(
+                        guild, "moderation", "Timeout", timeout_body,
+                        target_id=after.id, action_key="Timeout"
+                    )
+                else:
+                    timeout_body = (
+                        f"**User:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
+                        f"**Action:** Timeout removed\n"
+                        f"**Moderator:** {timeout_mod.mention}"
+                    )
+                    await self.log_event(
+                        guild, "moderation", "Timeout Removed", timeout_body,
+                        target_id=after.id
+                    )
 
         if not changes:
             return
@@ -668,6 +811,52 @@ class ServerLogger(commands.Cog):
             f"-# [Jump to message]({after.jump_url})"
         )
         await self.log_event(after.guild, "messages", "Message Edited", body, target_id=after.author.id)
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        """Cache invites when the bot joins a new guild."""
+        try:
+            invites = await guild.invites()
+            self._invite_cache[guild.id] = {inv.code: inv.uses for inv in invites}
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    @commands.Cog.listener()
+    async def on_invite_create(self, invite: discord.Invite):
+        guild = invite.guild
+        if not guild:
+            return
+        # Update cache
+        cached = self._invite_cache.setdefault(guild.id, {})
+        cached[invite.code] = invite.uses
+
+        expires_text = (
+            f"<t:{int(invite.expires_at.timestamp())}:R>" if invite.expires_at else "Never"
+        )
+        max_uses_text = str(invite.max_uses) if invite.max_uses else "Unlimited"
+        body = (
+            f"**Invite Code:** `{invite.code}`\n"
+            f"**Created By:** {invite.inviter.mention if invite.inviter else 'Unknown'}\n"
+            f"**Channel:** {invite.channel.mention if invite.channel else 'Unknown'}\n"
+            f"**Max Uses:** {max_uses_text}\n"
+            f"**Expires:** {expires_text}"
+        )
+        await self.log_event(guild, "invites", "Invite Created", body)
+
+    @commands.Cog.listener()
+    async def on_invite_delete(self, invite: discord.Invite):
+        guild = invite.guild
+        if not guild:
+            return
+        # Remove from cache
+        cached = self._invite_cache.get(guild.id, {})
+        cached.pop(invite.code, None)
+
+        body = (
+            f"**Invite Code:** `{invite.code}`\n"
+            f"**Channel:** {invite.channel.mention if invite.channel else 'Unknown'}"
+        )
+        await self.log_event(guild, "invites", "Invite Deleted", body)
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):

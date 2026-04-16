@@ -1167,6 +1167,20 @@ class Onboarding(commands.Cog):
 
             await message.channel.send(view=view)
 
+            # Log captcha pass
+            logger = self.bot.get_cog("ServerLogger")
+            if logger and guild and member:
+                pass_body = (
+                    f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                    f"**Result:** Passed\n"
+                    f"**Roles Added:** {', '.join(applied) if applied else 'None'}\n"
+                    f"**Roles Removed:** {', '.join(removed) if removed else 'None'}"
+                )
+                await logger.log_event(
+                    guild, "captcha", "Captcha Passed", pass_body,
+                    target_id=member.id
+                )
+
         else:
             pending["attempts"] += 1
             attempts_left = 3 - pending["attempts"]
@@ -1194,7 +1208,22 @@ class Onboarding(commands.Cog):
                 view.add_item(container)
                 await message.channel.send(view=view)
 
-                if guild and cfg and cfg.captcha_kick_on_fail:
+                will_kick = guild and cfg and cfg.captcha_kick_on_fail
+
+                # Log captcha fail / kick
+                logger = self.bot.get_cog("ServerLogger")
+                if logger and guild:
+                    log_title = "Captcha Kicked" if will_kick else "Captcha Failed"
+                    fail_body = (
+                        f"**User:** <@{user_id}> (ID: `{user_id}`)\n"
+                        f"**Result:** {'Failed all 3 attempts and kicked' if will_kick else 'Failed all 3 attempts'}"
+                    )
+                    await logger.log_event(
+                        guild, "captcha", log_title, fail_body,
+                        target_id=user_id, action_key=log_title
+                    )
+
+                if will_kick:
                     member = guild.get_member(user_id)
                     if member:
                         try:
