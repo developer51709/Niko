@@ -682,7 +682,7 @@ class InfoCog(commands.Cog):
     async def booststats(self, ctx):
         server = ctx.guild
         text = (
-            f"### {msg(ctx, 'booststats_title')}\n"
+            f"### {get_emoji('icon_boost')} {msg(ctx, 'booststats_title')}\n"
             f"**{msg(ctx, 'booststats_count')}:** `{server.premium_subscription_count}`\n"
             f"**{msg(ctx, 'booststats_tier')}:** `{server.premium_tier}`\n"
             f"**{msg(ctx, 'booststats_boosters')}:** `{len(server.premium_subscribers)}`"

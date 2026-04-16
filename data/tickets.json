@@ -56,7 +56,15 @@
     ],
     "panel_channel_id": 1472038470313705675,
     "panel_message_id": 1491898738359275643,
-    "open_tickets": []
+    "open_tickets": [
+      {
+        "channel_id": 1494389983551819836,
+        "message_id": 1494389989063000155,
+        "category": "Community support",
+        "opener_id": 1256296452045668382,
+        "status": "open"
+      }
+    ]
   },
   "1487540573870100661": {
     "guild_id": 1487540573870100661,

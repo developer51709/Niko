@@ -91,7 +91,7 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
         pass
 
     # Fallback prefix if everything else fails
-    return "!"
+    return "."
 
 
 # ===================================================
@@ -109,7 +109,7 @@ CATEGORIES: List[Tuple[str, str, str]] = [
     ("AI",            "AI commands",                       f"{get_emoji('icon_ai')}"),
     ("Moderation",    "Moderation commands",               f"{get_emoji('icon_moderation')}"),
     ("AutoMod",       "AutoMod commands",                  f"{get_emoji('icon_automod')}"),
-    ("EmojiManager",  "EmojiManager commands",             "🎨"),
+    ("EmojiManager",  "EmojiManager commands",             f"{get_emoji('icon_paint')}"),
     ("Onboarding",    "Onboarding commands",               f"{get_emoji('icon_welcome')}"),
     ("NSFW",          "NSFW commands",                     "🔞"),
     ("Music",         "Music commands",                    f"{get_emoji('music')}"),
@@ -134,7 +134,7 @@ CATEGORY_MAP: dict = {
     "AI":           (["AICog", "AIConfig"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
     "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
     "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
-    "EmojiManager": (["EmojiManagerCog"], "🎨 **Emoji Manager Commands**\n> Manage custom emojis in your server."),
+    "EmojiManager": (["EmojiManagerCog"], f"{get_emoji('icon_paint')} **Emoji Manager Commands**\n> Manage custom emojis in your server."),
     "Onboarding":   (["Onboarding"], f"{get_emoji('icon_welcome')} **Onboarding Commands**\n> Set up welcome messages and roles for new members."),
     "NSFW":         (["NSFW"], "🔞 **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
     "Music":        (["MusicSystem"], f"{get_emoji('music')} **Music Commands**\n> Play music in your voice channel!"),

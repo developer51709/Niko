@@ -49,7 +49,7 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
             msg = ctx_or_interaction.message
 
         if msg is None:
-            return "!"
+            return "."
 
         prefixes = raw(bot, msg)
         if isinstance(prefixes, (list, tuple)) and prefixes:

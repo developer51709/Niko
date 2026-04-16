@@ -10,6 +10,7 @@ from discord.ext import commands
 import colorama
 from utils.paginator import PaginatedView, paginate
 from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
+from config.emojis import get_emoji
 
 # Developer user IDs
 DEVELOPERS = {
@@ -17,6 +18,46 @@ DEVELOPERS = {
     1435978243160145981, # nyxen_alt2
     1485732377958416565
 }
+
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
 
 
 class Development(commands.Cog):
@@ -37,7 +78,7 @@ class Development(commands.Cog):
     # -------------------------------
     @commands.command(name="devhelp")
     async def dev_help(self, ctx):
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        prefix = await _resolve_prefix(self.bot, ctx)
         
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -308,18 +349,18 @@ class Development(commands.Cog):
     @commands.command(name="syncemojis", help="Sync bot emojis as application emojis and download assets")
     async def sync_emojis(self, ctx):
         """Manually trigger the application emoji sync."""
-        status_msg = await ctx.send("⏳ Syncing application emojis…")
+        status_msg = await ctx.send(f"{get_emoji('icon_loading')} Syncing application emojis…")
         async with ctx.typing():
             try:
                 async with aiohttp.ClientSession() as session:
                     stats = await sync_application_emojis(self.bot, session=session)
             except Exception as exc:
-                await status_msg.edit(content=f"❌ Sync failed: `{exc}`")
+                await status_msg.edit(content=f"{get_emoji('icon_cross')} Sync failed: `{exc}`")
                 return
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### 🎨 Application Emoji Sync — Complete"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_paint')} Application Emoji Sync — Complete"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
@@ -342,7 +383,7 @@ class Development(commands.Cog):
         try:
             emojis = await list_application_emojis(self.bot)
         except Exception as exc:
-            await ctx.send(f"❌ Could not fetch application emojis: `{exc}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Could not fetch application emojis: `{exc}`")
             return
 
         if not emojis:
@@ -352,7 +393,7 @@ class Development(commands.Cog):
         lines = [f"{e} `:{e.name}:` — `{e.id}`" for e in sorted(emojis, key=lambda e: e.name.lower())]
         from utils.paginator import PaginatedView, paginate
         pages = paginate(lines, per_page=15)
-        view = PaginatedView(title=f"🎨 Application Emojis ({len(emojis)} total)", pages=pages)
+        view = PaginatedView(title=f"{get_emoji('icon_paint')} Application Emojis ({len(emojis)} total)", pages=pages)
         await ctx.send(view=view)
 
     @commands.command(name="emojistatus", help="Show which config emojis are/aren't uploaded as application emojis")
@@ -361,7 +402,7 @@ class Development(commands.Cog):
         try:
             app_emojis = await list_application_emojis(self.bot)
         except Exception as exc:
-            await ctx.send(f"❌ Could not fetch application emojis: `{exc}`")
+            await ctx.send(f"{get_emoji('icon_cross')} Could not fetch application emojis: `{exc}`")
             return
 
         config_emojis = parse_config()
@@ -375,12 +416,12 @@ class Development(commands.Cog):
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### 🎨 Emoji Sync Status"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_paint')} Emoji Sync Status"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
-                    f"**✅ Synced ({len(synced)}):**\n{synced_list}\n\n"
-                    f"**⚠️ Missing ({len(missing)}):**\n{missing_list}"
+                    f"**{get_emoji('icon_tick')} Synced ({len(synced)}):**\n{synced_list}\n\n"
+                    f"**{get_emoji('icon_danger')} Missing ({len(missing)}):**\n{missing_list}"
                 )
             ),
         )
