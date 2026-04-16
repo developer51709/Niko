@@ -121,7 +121,7 @@ def print_banner():
     CURRENT_MODEL = AI_MODE
     if not DEBUG_MODE == "True":
        clear_console()
-    print(colorama.Fore.MAGENTA + """
+    print(f"""{colorama.Fore.MAGENTA}
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
 ░░░░░░░▓▓░░▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
@@ -129,12 +129,12 @@ def print_banner():
 ░░░░░░░▓░░▓▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
 ░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-    """ + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"""
+    {colorama.Style.RESET_ALL}""")
+    print(f"""{colorama.Fore.MAGENTA}
 Niko - A cute, playful, and very social AI companion for your Discord server.
 
 Made by Nyxen:
-    Discord - @.n.y.x.e.n.
+    Discord - @n.y.x.e.n
     GitHub - @developer51709
 
 Version: 1.0
@@ -142,7 +142,7 @@ Version: 1.0
 Model: {CURRENT_MODEL}
 
 Online as {bot.user}
-    """ + colorama.Style.RESET_ALL)
+    {colorama.Style.RESET_ALL}""")
 
 # -----------------------------
 # Set the bot's status
@@ -416,6 +416,10 @@ def get_memory_content(user_id: int) -> str:
 
 # -----------------------------
 # Database tables
+# -----------------------------
+# Note: This will be moved to a
+# seperate file in a future
+# update.
 # -----------------------------
 async def _create_tables(bot):
     if not bot.cxn:
