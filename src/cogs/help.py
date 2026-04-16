@@ -2,6 +2,7 @@ from typing import List, Tuple
 
 import discord
 from discord.ext import commands
+import json
 from config.emojis import get_emoji
 
 
@@ -13,6 +14,41 @@ from config.emojis import get_emoji
 PAGE_SIZE = 8
 
 
+# ===================================================
+#  LANGUAGE UTILITY
+# ===================================================
+
+def get_lang(ctx_or_guild=None) -> str:
+    """Return 'de' when the guild's preferred locale is German, else 'en'."""
+    guild = None
+    if isinstance(ctx_or_guild, commands.Context):
+        guild = ctx_or_guild.guild
+    elif isinstance(ctx_or_guild, discord.Guild):
+        guild = ctx_or_guild
+    if guild and guild.preferred_locale:
+        if str(guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+# get_command_help will be used to fetch localized command descriptions where available.
+# this requires commands to use a json formatted help string with language keys.
+# Example formatting:
+# help = "{ 'en': 'English help text', 'de': 'Deutscher Hilfetext' }"
+def get_command_help(ctx: commands.Context, cmd: commands.Command):
+    lang = get_lang(ctx)
+    if cmd.help:
+        try:
+            help_dict = cmd.help.replace("'", '"')
+            help_dict = json.loads(help_dict)
+            text = help_dict.get(lang)
+            return text
+        except json.JSONDecodeError:
+            return cmd.help or "Error reading help text."
+    else:
+        return cmd.help or "No help text available."
+    
+
+    
 # ===================================================
 #  PREFIX RESOLVER (supports dynamic multi-prefix functions)
 # ===================================================
@@ -172,8 +208,8 @@ async def _commands_text(
 
     lines: List[str] = []
     for cmd in page_commands:
-        desc = cmd.help or "No description"
-        lines.append(f"**`{prefix}{cmd.name}`** — {desc}")
+        desc = get_command_help(ctx_or_interaction, cmd) or "No description provided."
+        lines.append(f"**`{prefix}{cmd.name}`**\n-# {desc}")
 
     return "\n".join(lines), total_pages
 
@@ -200,7 +236,7 @@ async def _command_detail_text(
     lines = [
         f"### 📘 `{cmd.name}`",
         "",
-        f"**Description**\n{cmd.help or 'No description provided.'}",
+        f"**Description**\n{get_command_help(ctx_or_interaction, cmd) or 'No description provided.'}",
         "",
         f"**Usage**\n```\n{usage}\n```",
     ]
@@ -214,12 +250,12 @@ async def _command_detail_text(
             if parent:
                 lines.append(
                     f"- `{prefix}{parent} {cmd.name} {subcommand.name}` — "
-                    f"{subcommand.help or 'No description provided.'}"
+                    f"{get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
                 )
             else:
                 lines.append(
                     f"- `{prefix}{cmd.name} {subcommand.name}` — "
-                    f"{subcommand.help or 'No description provided.'}"
+                    f"{get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
                 )
 
     if cmd.cog_name:
