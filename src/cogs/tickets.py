@@ -334,7 +334,11 @@ class TicketPanelView(discord.ui.LayoutView):
 
         if cfg.panel_image:
             container.add_item(
-                discord.ui.TextDisplay(content=f"![panel-image]({cfg.panel_image})")
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=cfg.panel_image
+                    )
+                )
             )
 
         # row with the "Create Ticket" button
