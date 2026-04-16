@@ -35,6 +35,230 @@ def _is_user_installed_app(meta) -> bool:
 
 
 # ──────────────────────────────────────────────────
+#  BILINGUAL MESSAGE TABLE
+# ──────────────────────────────────────────────────
+
+MESSAGES = {
+    "en": {
+        # ── Overview panel ──
+        "overview_title":    "### {emoji} AutoMod Dashboard",
+        "overview_desc":     "Here's a full snapshot of your server's protection ☕",
+        "section_msgfilter": "**💬 Message Filter**",
+        "section_antinuke":  "**💣 Anti-Nuke**",
+        "section_antiraid":  "**🌊 Anti-Raid** *(join flood)*",
+        "section_extraid":   "**🤖 Ext. App Raid**",
+        "section_whitelist": "**🔓 Whitelist**",
+        "wl_summary":        "`{wu}` whitelisted user(s)  •  `{wr}` whitelisted role(s)",
+        "nav_hint":          "-# Use the dropdown below to navigate and configure each section.",
+        # ── Filter panel ──
+        "filter_title":      "### 💬 Message Filter Settings",
+        "filter_desc":       "Toggle each protection and adjust the thresholds below.",
+        "antispam_desc":     "**Anti-Spam** — mutes members who send messages too fast",
+        "antispam_thresh":   "  Threshold: `{msgs}` msgs / `{secs}s`",
+        "antilink_desc":     "**Anti-Link** — deletes Discord invite links",
+        "badwords_desc":     "**Bad Words** — deletes blocked words (manage with `!badwords`)",
+        "massmention_desc":  "**Mass Mention** — mutes members who mass-mention",
+        "massmention_max":   "  Max mentions: `{max}`",
+        # ── Anti-Nuke panel ──
+        "nuke_title":        "### 💣 Anti-Nuke Settings",
+        "nuke_desc":         "Protects your server against rogue moderators performing mass destructive actions.",
+        "nuke_status_on":    "active 🟢",
+        "nuke_status_off":   "inactive 🔴",
+        "nuke_thresholds":   "**Tracked Actions & Thresholds** *(within interval)*",
+        "nuke_bans":         "🔨 Bans: ≥ `{t}`",
+        "nuke_kicks":        "👟 Kicks: ≥ `{t}`",
+        "nuke_chandel":      "🗑️ Channel Deletes: ≥ `{t}`",
+        "nuke_roledel":      "🗑️ Role Deletes: ≥ `{t}`",
+        "nuke_chancreate":   "➕ Channel Creates: ≥ `{t}`",
+        "nuke_webhookdel":   "🔗 Webhook Deletes: ≥ `{t}`",
+        "nuke_interval":     "**Interval:** `{t}s`",
+        "nuke_action":       "**Action on trigger:** `{action}`",
+        "nuke_actions_hint": "-# Actions: `strip` (remove dangerous roles), `kick`, `ban`",
+        # ── Anti-Raid panel ──
+        "raid_title":        "### 🌊 Anti-Raid Settings *(Join Flood)*",
+        "raid_desc":         "Detects and responds to mass member join events.",
+        "raid_status_on":    "active 🟢",
+        "raid_status_off":   "inactive 🔴",
+        "raid_threshold":    "**Join Threshold:** `{t}` members",
+        "raid_window":       "**Time Window:** `{t}` seconds",
+        "raid_action":       "**Action on trigger:** `{action}`",
+        "raid_newacct":      "**New Account Filter:** accounts < `{days}` day(s) old get actioned first",
+        "raid_newacct_off":  "**New Account Filter:** disabled (all recent joiners actioned)",
+        "raid_actions_hint": "-# Actions: `kick`, `ban`, `softban` (ban+unban), `slowmode`, `lockdown`",
+        # ── Ext. Raid panel ──
+        "ext_title":         "### 🤖 External App Raid Protection",
+        "ext_mode1":         "**Mode 1 — Interaction Flood Detection**",
+        "ext_mode1_desc":    ("Detects raids driven by external tools by tracking how many recently-joined "
+                              "members fire bot interactions in quick succession, then identifies the operator "
+                              "via invite-use diff."),
+        "ext_mode2":         "**Mode 2 — User-Installed App Detection**",
+        "ext_mode2_desc":    ("Detects slash commands fired by apps installed on a **user's account** "
+                              "rather than the server. Catches raid bots that never join the server and "
+                              "that most anti-raid tools miss."),
+        "ext_threshold":     "Threshold: `{t}` unique new members / `{w}s`",
+        "ext_newmember":     "'New member' = joined within `{s}s`",
+        "ext_raiderop":      "Raider action: `{ra}`  •  Operator action: `{oa}`",
+        "ext_app_threshold": "Threshold: `{t}` commands / `{w}s`",
+        "ext_app_action":    "Action: `{a}`",
+        "ext_hint":          ("-# Raider/operator actions: `kick`, `ban`\n"
+                              "-# Operator-only: `notify` (log + DM owner)\n"
+                              "-# User-app action: `kick`, `ban`, `warn`, `log`"),
+        # ── Whitelist panel ──
+        "wl_title":          "### 🔓 AutoMod Whitelist",
+        "wl_desc":           "Whitelisted users and roles bypass all automod checks.",
+        "wl_users_hdr":      "**Whitelisted Users**",
+        "wl_roles_hdr":      "**Whitelisted Roles**",
+        "wl_hint":           "-# Use `.whitelist add user @user` or `.whitelist add role @role` to manage.",
+        # ── Modal validation errors ──
+        "invalid_nuke_action":     "Invalid action. Choose: `strip`, `kick`, or `ban`.",
+        "invalid_raid_action":     "Invalid action. Choose: `kick`, `ban`, `softban`, `slowmode`, or `lockdown`.",
+        "invalid_raider_action":   "Invalid raider action. Choose: `kick` or `ban`.",
+        "invalid_operator_action": "Invalid operator action. Choose: `notify`, `kick`, or `ban`.",
+        "invalid_ext_action":      "Invalid action. Choose: `kick`, `ban`, `warn`, or `log`.",
+        "invalid_numbers":         "Please enter valid whole numbers.",
+        # ── DM alerts to server owner ──
+        "raid_dm":    ("🚨 **Anti-Raid** in **{guild}**!\n"
+                       "`{count}` joins in `{interval}s`. Action: `{action}`."),
+        "nuke_dm":    ("🚨 **Anti-Nuke** in **{guild}**!\n"
+                       "`{offender}` performed `{threshold}` `{action_key}` within `{interval}s`.\n"
+                       "Action: `{action}`."),
+        "extraid_dm": ("🚨 **Interaction Flood Raid** detected in **{guild}**!\n"
+                       "`{count}` newly-joined members fired bot interactions simultaneously.\n"
+                       "Suspected operator: {operator}\n"
+                       "Raider action: `{ra}`  •  Operator action: `{oa}`"),
+        # ── WL ephemeral prompts ──
+        "wl_add_user_prompt":    "Select the members you want to exempt from automod:",
+        "wl_add_role_prompt":    "Select the roles you want to exempt from automod:",
+        "wl_remove_user_prompt": "Select the members to remove from the whitelist:",
+        "wl_remove_role_prompt": "Select the roles to remove from the whitelist:",
+        "wl_added_users":        "{emoji} Added {names} to the automod whitelist.",
+        "wl_added_roles":        "{emoji} Added {names} to the automod whitelist.",
+        "wl_removed_users":      "{emoji} Removed `{count}` user(s) from the whitelist.",
+        "wl_removed_roles":      "{emoji} Removed `{count}` role(s) from the whitelist.",
+        "wl_no_users":           "No users are currently whitelisted.",
+        "wl_no_roles":           "No roles are currently whitelisted.",
+    },
+    "de": {
+        # ── Overview panel ──
+        "overview_title":    "### {emoji} AutoMod-Dashboard",
+        "overview_desc":     "Hier ist eine vollständige Übersicht des Serverschutzes ☕",
+        "section_msgfilter": "**💬 Nachrichtenfilter**",
+        "section_antinuke":  "**💣 Anti-Nuke**",
+        "section_antiraid":  "**🌊 Anti-Raid** *(Beitrittsflut)*",
+        "section_extraid":   "**🤖 Ext. App-Raid**",
+        "section_whitelist": "**🔓 Whitelist**",
+        "wl_summary":        "`{wu}` befreite(r) Nutzer  •  `{wr}` befreite(r) Rolle(n)",
+        "nav_hint":          "-# Nutze das Dropdown unten zur Navigation und Konfiguration.",
+        # ── Filter panel ──
+        "filter_title":      "### 💬 Nachrichtenfilter-Einstellungen",
+        "filter_desc":       "Aktiviere/deaktiviere jeden Schutz und passe die Schwellenwerte an.",
+        "antispam_desc":     "**Anti-Spam** — stummt Mitglieder, die zu schnell Nachrichten senden",
+        "antispam_thresh":   "  Schwellenwert: `{msgs}` Nachrichten / `{secs}s`",
+        "antilink_desc":     "**Anti-Link** — löscht Discord-Einladungslinks",
+        "badwords_desc":     "**Verbotene Wörter** — löscht gesperrte Wörter (verwalten mit `!badwords`)",
+        "massmention_desc":  "**Massen-Erwähnung** — stummt Mitglieder bei Massen-Mentions",
+        "massmention_max":   "  Max. Erwähnungen: `{max}`",
+        # ── Anti-Nuke panel ──
+        "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
+        "nuke_desc":         "Schützt deinen Server vor böswilligen Moderatoren, die Massenaktionen durchführen.",
+        "nuke_status_on":    "aktiv 🟢",
+        "nuke_status_off":   "inaktiv 🔴",
+        "nuke_thresholds":   "**Überwachte Aktionen & Schwellenwerte** *(innerhalb des Intervalls)*",
+        "nuke_bans":         "🔨 Bans: ≥ `{t}`",
+        "nuke_kicks":        "👟 Kicks: ≥ `{t}`",
+        "nuke_chandel":      "🗑️ Kanal-Löschungen: ≥ `{t}`",
+        "nuke_roledel":      "🗑️ Rollen-Löschungen: ≥ `{t}`",
+        "nuke_chancreate":   "➕ Kanal-Erstellungen: ≥ `{t}`",
+        "nuke_webhookdel":   "🔗 Webhook-Löschungen: ≥ `{t}`",
+        "nuke_interval":     "**Intervall:** `{t}s`",
+        "nuke_action":       "**Aktion bei Auslösung:** `{action}`",
+        "nuke_actions_hint": "-# Aktionen: `strip` (gefährliche Rollen entfernen), `kick`, `ban`",
+        # ── Anti-Raid panel ──
+        "raid_title":        "### 🌊 Anti-Raid-Einstellungen *(Beitrittsflut)*",
+        "raid_desc":         "Erkennt Massen-Beitritte und reagiert darauf.",
+        "raid_status_on":    "aktiv 🟢",
+        "raid_status_off":   "inaktiv 🔴",
+        "raid_threshold":    "**Beitritts-Schwellenwert:** `{t}` Mitglieder",
+        "raid_window":       "**Zeitfenster:** `{t}` Sekunden",
+        "raid_action":       "**Aktion bei Auslösung:** `{action}`",
+        "raid_newacct":      "**Neukonto-Filter:** Konten < `{days}` Tag(e) alt werden bevorzugt behandelt",
+        "raid_newacct_off":  "**Neukonto-Filter:** deaktiviert (alle aktuellen Beitritte werden behandelt)",
+        "raid_actions_hint": "-# Aktionen: `kick`, `ban`, `softban` (ban+unban), `slowmode`, `lockdown`",
+        # ── Ext. Raid panel ──
+        "ext_title":         "### 🤖 Schutz vor externen App-Raids",
+        "ext_mode1":         "**Modus 1 — Interaktionsflut-Erkennung**",
+        "ext_mode1_desc":    ("Erkennt Raids durch externe Tools, indem verfolgt wird, wie viele kürzlich "
+                              "beigetretene Mitglieder gleichzeitig Bot-Interaktionen auslösen, und identifiziert "
+                              "den Operator über Einladungs-Diffs."),
+        "ext_mode2":         "**Modus 2 — Nutzer-installierte App-Erkennung**",
+        "ext_mode2_desc":    ("Erkennt Slash-Commands, die von Apps auf dem **Nutzerkonto** (nicht dem Server) "
+                              "ausgeführt werden. Erfasst Raid-Bots, die dem Server nie beitreten."),
+        "ext_threshold":     "Schwellenwert: `{t}` neue Mitglieder / `{w}s`",
+        "ext_newmember":     "'Neues Mitglied' = beigetreten innerhalb `{s}s`",
+        "ext_raiderop":      "Raider-Aktion: `{ra}`  •  Operator-Aktion: `{oa}`",
+        "ext_app_threshold": "Schwellenwert: `{t}` Befehle / `{w}s`",
+        "ext_app_action":    "Aktion: `{a}`",
+        "ext_hint":          ("-# Raider/Operator-Aktionen: `kick`, `ban`\n"
+                              "-# Nur Operator: `notify` (Protokoll + DM an Eigentümer)\n"
+                              "-# Nutzer-App-Aktion: `kick`, `ban`, `warn`, `log`"),
+        # ── Whitelist panel ──
+        "wl_title":          "### 🔓 AutoMod-Whitelist",
+        "wl_desc":           "Befreite Nutzer und Rollen umgehen alle AutoMod-Prüfungen.",
+        "wl_users_hdr":      "**Befreite Nutzer**",
+        "wl_roles_hdr":      "**Befreite Rollen**",
+        "wl_hint":           "-# Nutze `.whitelist add user @user` oder `.whitelist add role @role` zur Verwaltung.",
+        # ── Modal validation errors ──
+        "invalid_nuke_action":     "Ungültige Aktion. Wähle: `strip`, `kick` oder `ban`.",
+        "invalid_raid_action":     "Ungültige Aktion. Wähle: `kick`, `ban`, `softban`, `slowmode` oder `lockdown`.",
+        "invalid_raider_action":   "Ungültige Raider-Aktion. Wähle: `kick` oder `ban`.",
+        "invalid_operator_action": "Ungültige Operator-Aktion. Wähle: `notify`, `kick` oder `ban`.",
+        "invalid_ext_action":      "Ungültige Aktion. Wähle: `kick`, `ban`, `warn` oder `log`.",
+        "invalid_numbers":         "Bitte gib gültige ganze Zahlen ein.",
+        # ── DM alerts to server owner ──
+        "raid_dm":    ("🚨 **Anti-Raid** in **{guild}**!\n"
+                       "`{count}` Beitritte in `{interval}s`. Aktion: `{action}`."),
+        "nuke_dm":    ("🚨 **Anti-Nuke** in **{guild}**!\n"
+                       "`{offender}` hat `{threshold}` `{action_key}` in `{interval}s` ausgeführt.\n"
+                       "Aktion: `{action}`."),
+        "extraid_dm": ("🚨 **Interaktionsflut-Raid** in **{guild}**!\n"
+                       "`{count}` kürzlich beigetretene Mitglieder lösten gleichzeitig Bot-Interaktionen aus.\n"
+                       "Vermuteter Operator: {operator}\n"
+                       "Raider-Aktion: `{ra}`  •  Operator-Aktion: `{oa}`"),
+        # ── WL ephemeral prompts ──
+        "wl_add_user_prompt":    "Wähle die Mitglieder aus, die von AutoMod ausgenommen werden sollen:",
+        "wl_add_role_prompt":    "Wähle die Rollen aus, die von AutoMod ausgenommen werden sollen:",
+        "wl_remove_user_prompt": "Wähle die Mitglieder aus, die von der Whitelist entfernt werden sollen:",
+        "wl_remove_role_prompt": "Wähle die Rollen aus, die von der Whitelist entfernt werden sollen:",
+        "wl_added_users":        "{emoji} {names} zur AutoMod-Whitelist hinzugefügt.",
+        "wl_added_roles":        "{emoji} {names} zur AutoMod-Whitelist hinzugefügt.",
+        "wl_removed_users":      "{emoji} `{count}` Nutzer von der Whitelist entfernt.",
+        "wl_removed_roles":      "{emoji} `{count}` Rolle(n) von der Whitelist entfernt.",
+        "wl_no_users":           "Aktuell sind keine Nutzer auf der Whitelist.",
+        "wl_no_roles":           "Aktuell sind keine Rollen auf der Whitelist.",
+    },
+}
+
+
+def get_lang(ctx_or_guild=None) -> str:
+    """Return 'de' when the guild's preferred locale is German, else 'en'."""
+    guild = None
+    if isinstance(ctx_or_guild, commands.Context):
+        guild = ctx_or_guild.guild
+    elif isinstance(ctx_or_guild, discord.Guild):
+        guild = ctx_or_guild
+    if guild and guild.preferred_locale:
+        if str(guild.preferred_locale).lower().startswith("de"):
+            return "de"
+    return "en"
+
+
+def _t(lang: str, key: str, **kwargs) -> str:
+    """Look up a localised string and apply format kwargs."""
+    text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
+
+# ──────────────────────────────────────────────────
 #  SECTION TEXT BUILDERS
 # ──────────────────────────────────────────────────
 
@@ -42,7 +266,7 @@ def _icon(enabled: bool) -> str:
     return get_emoji("icon_tick") if enabled else get_emoji("icon_cross")
 
 
-def _build_overview_text(cfg: dict) -> str:
+def _build_overview_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     an = cfg["antinuke"]
     ar = cfg["antiraid"]
@@ -50,112 +274,110 @@ def _build_overview_text(cfg: dict) -> str:
     wu = len(cfg.get("whitelist_users", []))
     wr = len(cfg.get("whitelist_roles", []))
     return (
-        f"### {get_emoji('automod')} AutoMod Dashboard\n"
-        "Here's a full snapshot of your server's protection ☕\n\n"
-        "**💬 Message Filter**\n"
+        f"{_t(lang, 'overview_title', emoji=get_emoji('automod'))}\n"
+        f"{_t(lang, 'overview_desc')}\n\n"
+        f"{_t(lang, 'section_msgfilter')}\n"
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
         f"{_icon(am.get('antilink'))} Anti-Link\n"
         f"{_icon(am.get('badwords'))} Bad Words  •  "
         f"{_icon(am.get('massmention'))} Mass Mention\n\n"
-        "**💣 Anti-Nuke**\n"
+        f"{_t(lang, 'section_antinuke')}\n"
         f"{_icon(am.get('antinuke'))} Enabled  •  "
         f"Action: `{an.get('action', 'strip')}`  •  "
         f"Interval: `{an.get('interval', 10)}s`\n\n"
-        "**🌊 Anti-Raid** *(join flood)*\n"
+        f"{_t(lang, 'section_antiraid')}\n"
         f"{_icon(am.get('antiraid'))} Enabled  •  "
         f"Action: `{ar.get('action', 'kick')}`\n"
         f"Threshold: `{ar.get('join_threshold', 10)}` joins / `{ar.get('join_interval', 10)}s`\n\n"
-        "**🤖 Ext. App Raid**\n"
+        f"{_t(lang, 'section_extraid')}\n"
         f"{_icon(am.get('antiraid_ext'))} Interaction flood  •  "
         f"{_icon(are.get('ext_app_detection', True))} User-installed apps\n"
         f"Raider: `{are.get('raider_action', 'kick')}`  •  "
         f"Operator: `{are.get('operator_action', 'notify')}`  •  "
         f"App abuse: `{are.get('ext_app_action', 'kick')}`\n\n"
-        "**🔓 Whitelist**\n"
-        f"`{wu}` whitelisted user(s)  •  `{wr}` whitelisted role(s)\n\n"
-        "-# Use the dropdown below to navigate and configure each section."
+        f"{_t(lang, 'section_whitelist')}\n"
+        f"{_t(lang, 'wl_summary', wu=wu, wr=wr)}\n\n"
+        f"{_t(lang, 'nav_hint')}"
     )
 
 
-def _build_filter_text(cfg: dict) -> str:
+def _build_filter_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     return (
-        "### 💬 Message Filter Settings\n"
-        "Toggle each protection and adjust the thresholds below.\n\n"
-        f"{_icon(am.get('antispam'))} **Anti-Spam** — mutes members who send messages too fast\n"
-        f"  Threshold: `{cfg.get('spam_threshold', 6)}` msgs / `{cfg.get('spam_interval', 7)}s`\n\n"
-        f"{_icon(am.get('antilink'))} **Anti-Link** — deletes Discord invite links\n\n"
-        f"{_icon(am.get('badwords'))} **Bad Words** — deletes blocked words (manage with `!badwords`)\n\n"
-        f"{_icon(am.get('massmention'))} **Mass Mention** — mutes members who mass-mention\n"
-        f"  Max mentions: `{cfg.get('max_mentions', 5)}`"
+        f"{_t(lang, 'filter_title')}\n"
+        f"{_t(lang, 'filter_desc')}\n\n"
+        f"{_icon(am.get('antispam'))} {_t(lang, 'antispam_desc')}\n"
+        f"{_t(lang, 'antispam_thresh', msgs=cfg.get('spam_threshold', 6), secs=cfg.get('spam_interval', 7))}\n\n"
+        f"{_icon(am.get('antilink'))} {_t(lang, 'antilink_desc')}\n\n"
+        f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n\n"
+        f"{_icon(am.get('massmention'))} {_t(lang, 'massmention_desc')}\n"
+        f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}"
     )
 
 
-def _build_antinuke_text(cfg: dict) -> str:
+def _build_antinuke_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     an = cfg["antinuke"]
+    status = _t(lang, "nuke_status_on") if am.get("antinuke") else _t(lang, "nuke_status_off")
     return (
-        "### 💣 Anti-Nuke Settings\n"
-        "Protects your server against rogue moderators performing mass actions.\n\n"
-        f"{_icon(am.get('antinuke'))} **Anti-Nuke** — currently {'active 🟢' if am.get('antinuke') else 'inactive 🔴'}\n\n"
-        "**Tracked Actions & Thresholds** *(within interval)*\n"
-        f"🔨 Bans: ≥ `{an.get('ban_threshold', 3)}`\n"
-        f"👟 Kicks: ≥ `{an.get('kick_threshold', 3)}`\n"
-        f"🗑️ Channel Deletes: ≥ `{an.get('channel_delete_threshold', 3)}`\n"
-        f"🗑️ Role Deletes: ≥ `{an.get('role_delete_threshold', 3)}`\n\n"
-        f"**Interval:** `{an.get('interval', 10)}s`\n"
-        f"**Action on trigger:** `{an.get('action', 'strip')}`\n"
-        "-# Actions: `strip` (remove dangerous roles), `kick`, `ban`"
+        f"{_t(lang, 'nuke_title')}\n"
+        f"{_t(lang, 'nuke_desc')}\n\n"
+        f"{_icon(am.get('antinuke'))} **Anti-Nuke** — currently {status}\n\n"
+        f"{_t(lang, 'nuke_thresholds')}\n"
+        f"{_t(lang, 'nuke_bans',      t=an.get('ban_threshold', 3))}\n"
+        f"{_t(lang, 'nuke_kicks',     t=an.get('kick_threshold', 3))}\n"
+        f"{_t(lang, 'nuke_chandel',   t=an.get('channel_delete_threshold', 3))}\n"
+        f"{_t(lang, 'nuke_roledel',   t=an.get('role_delete_threshold', 3))}\n"
+        f"{_t(lang, 'nuke_chancreate',t=an.get('channel_create_threshold', 5))}\n"
+        f"{_t(lang, 'nuke_webhookdel',t=an.get('webhook_delete_threshold', 3))}\n\n"
+        f"{_t(lang, 'nuke_interval',  t=an.get('interval', 10))}\n"
+        f"{_t(lang, 'nuke_action',    action=an.get('action', 'strip'))}\n"
+        f"{_t(lang, 'nuke_actions_hint')}"
     )
 
 
-def _build_antiraid_text(cfg: dict) -> str:
+def _build_antiraid_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     ar = cfg["antiraid"]
+    status = _t(lang, "raid_status_on") if am.get("antiraid") else _t(lang, "raid_status_off")
+    new_days = ar.get("new_account_days", 0)
+    acct_line = (
+        _t(lang, "raid_newacct", days=new_days) if new_days > 0
+        else _t(lang, "raid_newacct_off")
+    )
     return (
-        "### 🌊 Anti-Raid Settings *(Join Flood)*\n"
-        "Detects and responds to mass member join events.\n\n"
-        f"{_icon(am.get('antiraid'))} **Anti-Raid** — currently {'active 🟢' if am.get('antiraid') else 'inactive 🔴'}\n\n"
-        f"**Join Threshold:** `{ar.get('join_threshold', 10)}` members\n"
-        f"**Time Window:** `{ar.get('join_interval', 10)}` seconds\n"
-        f"**Action on trigger:** `{ar.get('action', 'kick')}`\n\n"
-        "-# Actions: `kick` (kick all recent joiners), `lockdown` (lock all channels)"
+        f"{_t(lang, 'raid_title')}\n"
+        f"{_t(lang, 'raid_desc')}\n\n"
+        f"{_icon(am.get('antiraid'))} **Anti-Raid** — currently {status}\n\n"
+        f"{_t(lang, 'raid_threshold', t=ar.get('join_threshold', 10))}\n"
+        f"{_t(lang, 'raid_window',    t=ar.get('join_interval', 10))}\n"
+        f"{_t(lang, 'raid_action',    action=ar.get('action', 'kick'))}\n"
+        f"{acct_line}\n\n"
+        f"{_t(lang, 'raid_actions_hint')}"
     )
 
 
-def _build_ext_raid_text(cfg: dict) -> str:
+def _build_ext_raid_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     are = cfg["antiraid_ext"]
     return (
-        "### 🤖 External App Raid Protection\n\n"
-
-        "**Mode 1 — Interaction Flood Detection**\n"
-        "Detects raids driven by external tools by tracking how many recently-joined "
-        "members fire bot interactions in quick succession, then identifies the operator "
-        "via invite-use diff.\n\n"
+        f"{_t(lang, 'ext_title')}\n\n"
+        f"{_t(lang, 'ext_mode1')}\n"
+        f"{_t(lang, 'ext_mode1_desc')}\n\n"
         f"{_icon(am.get('antiraid_ext'))} **Enabled**\n"
-        f"Threshold: `{are.get('interaction_threshold', 5)}` unique new members / "
-        f"`{are.get('interaction_window', 30)}s`\n"
-        f"'New member' = joined within `{are.get('join_age_limit', 120)}s`\n"
-        f"Raider action: `{are.get('raider_action', 'kick')}`  •  "
-        f"Operator action: `{are.get('operator_action', 'notify')}`\n\n"
-
-        "**Mode 2 — User-Installed App Detection**\n"
-        "Detects slash commands fired by apps that are installed on a **user's account** "
-        "rather than the server. This catches raid bots that never join the server and "
-        "that most anti-raid tools miss. The triggering user is identified from the "
-        "message's `interaction_metadata` and actioned directly.\n\n"
+        f"{_t(lang, 'ext_threshold', t=are.get('interaction_threshold', 5), w=are.get('interaction_window', 30))}\n"
+        f"{_t(lang, 'ext_newmember', s=are.get('join_age_limit', 120))}\n"
+        f"{_t(lang, 'ext_raiderop', ra=are.get('raider_action', 'kick'), oa=are.get('operator_action', 'notify'))}\n\n"
+        f"{_t(lang, 'ext_mode2')}\n"
+        f"{_t(lang, 'ext_mode2_desc')}\n\n"
         f"{_icon(are.get('ext_app_detection', True))} **Enabled**\n"
-        f"Threshold: `{are.get('ext_app_threshold', 3)}` commands / "
-        f"`{are.get('ext_app_window', 15)}s`\n"
-        f"Action: `{are.get('ext_app_action', 'kick')}`\n\n"
-        "-# Raider/operator actions: `kick`, `ban`\n"
-        "-# Operator-only: `notify` (log + DM owner)\n"
-        "-# User-app action: `kick`, `ban`, `warn`, `log`"
+        f"{_t(lang, 'ext_app_threshold', t=are.get('ext_app_threshold', 3), w=are.get('ext_app_window', 15))}\n"
+        f"{_t(lang, 'ext_app_action', a=are.get('ext_app_action', 'kick'))}\n\n"
+        f"{_t(lang, 'ext_hint')}"
     )
 
 
-def _build_whitelist_text(cfg: dict, guild: discord.Guild) -> str:
+def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> str:
     user_ids = cfg.get("whitelist_users", [])
     role_ids = cfg.get("whitelist_roles", [])
 
@@ -169,28 +391,28 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild) -> str:
     ]
 
     return (
-        "### 🔓 AutoMod Whitelist\n"
-        "Whitelisted users and roles bypass all automod checks.\n\n"
-        "**Whitelisted Users**\n"
+        f"{_t(lang, 'wl_title')}\n"
+        f"{_t(lang, 'wl_desc')}\n\n"
+        f"{_t(lang, 'wl_users_hdr')}\n"
         f"{chr(10).join(user_lines) or '*None*'}\n\n"
-        "**Whitelisted Roles**\n"
+        f"{_t(lang, 'wl_roles_hdr')}\n"
         f"{chr(10).join(role_lines) or '*None*'}\n\n"
-        "-# Use `.whitelist add user @user` or `.whitelist add role @role` to manage."
+        f"{_t(lang, 'wl_hint')}"
     )
 
 
-def _section_text(cfg: dict, section: str, guild: discord.Guild = None) -> str:
+def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: str = "en") -> str:
     if section == "filter":
-        return _build_filter_text(cfg)
+        return _build_filter_text(cfg, lang)
     if section == "antinuke":
-        return _build_antinuke_text(cfg)
+        return _build_antinuke_text(cfg, lang)
     if section == "antiraid":
-        return _build_antiraid_text(cfg)
+        return _build_antiraid_text(cfg, lang)
     if section == "ext_raid":
-        return _build_ext_raid_text(cfg)
+        return _build_ext_raid_text(cfg, lang)
     if section == "whitelist":
-        return _build_whitelist_text(cfg, guild)
-    return _build_overview_text(cfg)
+        return _build_whitelist_text(cfg, guild, lang)
+    return _build_overview_text(cfg, lang)
 
 
 # ──────────────────────────────────────────────────
@@ -250,6 +472,8 @@ class SectionSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
         await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
+
+
 
 
 class ToggleButton(discord.ui.Button):
@@ -349,6 +573,7 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
         self.max_ment.default = str(cfg.get("max_mentions", 5))
 
     async def on_submit(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
@@ -359,7 +584,7 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "filter", interaction.guild))
         except ValueError:
-            await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
 
 
 class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
@@ -381,6 +606,7 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
         self.interval.default = str(an.get("interval", 10))
 
     async def on_submit(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
@@ -393,7 +619,7 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
         except ValueError:
-            await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
 
 
 class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
@@ -407,9 +633,10 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.action.value.lower().strip()
+        lang = get_lang(interaction.guild)
         if val not in ("strip", "kick", "ban"):
             return await interaction.response.send_message(
-                "Invalid action. Choose: `strip`, `kick`, or `ban`.", ephemeral=True)
+                _t(lang, "invalid_nuke_action"), ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         cfg["antinuke"]["action"] = val
@@ -419,35 +646,49 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
 
 
 class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
-    join_t = discord.ui.TextInput(label="Join threshold (members)", placeholder="e.g. 10")
-    join_i = discord.ui.TextInput(label="Time window (seconds)", placeholder="e.g. 10")
-    action = discord.ui.TextInput(label="Action (kick / lockdown)", placeholder="kick", max_length=10)
+    join_t    = discord.ui.TextInput(label="Join threshold (members)", placeholder="e.g. 10")
+    join_i    = discord.ui.TextInput(label="Time window (seconds)", placeholder="e.g. 10")
+    action    = discord.ui.TextInput(
+        label="Action (kick / ban / softban / slowmode / lockdown)",
+        placeholder="kick", max_length=10)
+    new_days  = discord.ui.TextInput(
+        label="New account filter (days, 0 = off)",
+        placeholder="e.g. 7  — only action accounts younger than N days",
+        required=False)
+    slow_secs = discord.ui.TextInput(
+        label="Slowmode seconds (only used by 'slowmode' action)",
+        placeholder="e.g. 30", required=False)
 
     def __init__(self, automod_cog, guild_id: int, cfg: dict):
         super().__init__()
         self._cog = automod_cog
         self._guild_id = guild_id
         ar = cfg.get("antiraid", {})
-        self.join_t.default = str(ar.get("join_threshold", 10))
-        self.join_i.default = str(ar.get("join_interval", 10))
-        self.action.default = ar.get("action", "kick")
+        self.join_t.default    = str(ar.get("join_threshold", 10))
+        self.join_i.default    = str(ar.get("join_interval", 10))
+        self.action.default    = ar.get("action", "kick")
+        self.new_days.default  = str(ar.get("new_account_days", 0))
+        self.slow_secs.default = str(ar.get("lockdown_slowmode", 30))
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.action.value.lower().strip()
-        if val not in ("kick", "lockdown"):
+        lang = get_lang(interaction.guild)
+        if val not in ("kick", "ban", "softban", "slowmode", "lockdown"):
             return await interaction.response.send_message(
-                "Invalid action. Choose: `kick` or `lockdown`.", ephemeral=True)
+                _t(lang, "invalid_raid_action"), ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
-            cfg["antiraid"]["join_threshold"] = max(1, int(self.join_t.value))
-            cfg["antiraid"]["join_interval"] = max(1, int(self.join_i.value))
-            cfg["antiraid"]["action"] = val
+            cfg["antiraid"]["join_threshold"]   = max(1, int(self.join_t.value))
+            cfg["antiraid"]["join_interval"]    = max(1, int(self.join_i.value))
+            cfg["antiraid"]["action"]           = val
+            cfg["antiraid"]["new_account_days"] = max(0, int(self.new_days.value or 0))
+            cfg["antiraid"]["lockdown_slowmode"]= max(1, int(self.slow_secs.value or 30))
             utils.save_config()
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antiraid", interaction.guild))
         except ValueError:
-            await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
 
 
 class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction Flood Settings"):
@@ -471,12 +712,13 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
     async def on_submit(self, interaction: discord.Interaction):
         raider_val = self.raider_act.value.lower().strip()
         operator_val = self.operator_act.value.lower().strip()
+        lang = get_lang(interaction.guild)
         if raider_val not in ("kick", "ban"):
             return await interaction.response.send_message(
-                "Invalid raider action. Choose: `kick` or `ban`.", ephemeral=True)
+                _t(lang, "invalid_raider_action"), ephemeral=True)
         if operator_val not in ("notify", "kick", "ban"):
             return await interaction.response.send_message(
-                "Invalid operator action. Choose: `notify`, `kick`, or `ban`.", ephemeral=True)
+                _t(lang, "invalid_operator_action"), ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
@@ -489,7 +731,7 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
         except ValueError:
-            await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
 
 
 class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed App Settings"):
@@ -508,9 +750,10 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.action.value.lower().strip()
+        lang = get_lang(interaction.guild)
         if val not in ("kick", "ban", "warn", "log"):
             return await interaction.response.send_message(
-                "Invalid action. Choose: `kick`, `ban`, `warn`, or `log`.", ephemeral=True)
+                _t(lang, "invalid_ext_action"), ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         try:
@@ -521,7 +764,7 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
         except ValueError:
-            await interaction.response.send_message("Please enter valid whole numbers.", ephemeral=True)
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
 
 
 def _build_threshold_modal(cfg, automod_cog, guild_id, section):
@@ -532,6 +775,46 @@ def _build_threshold_modal(cfg, automod_cog, guild_id, section):
     if section == "ext_raid":
         return ExtRaidThresholdModal(automod_cog, guild_id, cfg)
     return FilterThresholdModal(automod_cog, guild_id, cfg)
+
+
+class AntiNukeExtThresholdModal(discord.ui.Modal, title="Anti-Nuke — Extended Thresholds"):
+    chan_create = discord.ui.TextInput(label="Channel create threshold", placeholder="e.g. 5")
+    webhook_del = discord.ui.TextInput(label="Webhook delete threshold", placeholder="e.g. 3")
+
+    def __init__(self, automod_cog, guild_id: int, cfg: dict):
+        super().__init__()
+        self._cog = automod_cog
+        self._guild_id = guild_id
+        an = cfg.get("antinuke", {})
+        self.chan_create.default = str(an.get("channel_create_threshold", 5))
+        self.webhook_del.default = str(an.get("webhook_delete_threshold", 3))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
+        utils = self._cog.utils()
+        cfg = utils.get_guild_config(self._guild_id)
+        try:
+            cfg["antinuke"]["channel_create_threshold"] = max(1, int(self.chan_create.value))
+            cfg["antinuke"]["webhook_delete_threshold"] = max(1, int(self.webhook_del.value))
+            utils.save_config()
+            await interaction.response.edit_message(
+                view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
+        except ValueError:
+            await interaction.response.send_message(_t(lang, "invalid_numbers"), ephemeral=True)
+
+
+class _NukeExtThresholdButton(discord.ui.Button):
+    """Opens extended nuke threshold modal (channel_create, webhook_delete)."""
+    def __init__(self, automod_cog, guild_id: int):
+        super().__init__(label="Extended Thresholds", style=discord.ButtonStyle.gray,
+                         emoji=get_emoji("icon_settings"))
+        self._cog = automod_cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        utils = self._cog.utils()
+        cfg = utils.get_guild_config(self._guild_id)
+        await interaction.response.send_modal(AntiNukeExtThresholdModal(self._cog, self._guild_id, cfg))
 
 
 # ──────────────────────────────────────────────────
@@ -549,6 +832,7 @@ class _WLUserSelect(discord.ui.UserSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for user in self.values:
             utils.add_whitelist_user(self._guild_id, user.id)
@@ -557,7 +841,7 @@ class _WLUserSelect(discord.ui.UserSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Added {names} to the automod whitelist."
+                content=_t(lang, "wl_added_users", emoji=get_emoji("icon_tick"), names=names)
             )
         )
         view.add_item(container)
@@ -581,6 +865,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for role in self.values:
             utils.add_whitelist_role(self._guild_id, role.id)
@@ -589,7 +874,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Added {names} to the automod whitelist."
+                content=_t(lang, "wl_added_roles", emoji=get_emoji("icon_tick"), names=names)
             )
         )
         view.add_item(container)
@@ -614,6 +899,7 @@ class _WLUserRemoveSelect(discord.ui.Select):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for uid_str in self.values:
             utils.remove_whitelist_user(self._guild_id, int(uid_str))
@@ -621,13 +907,11 @@ class _WLUserRemoveSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` user(s) from the whitelist."
+                content=_t(lang, "wl_removed_users", emoji=get_emoji("icon_tick"), count=len(self.values))
             )
         )
         view.add_item(container)
-        await interaction.response.edit_message(
-            view=view,
-        )
+        await interaction.response.edit_message(view=view)
         await self.message.edit(
             view=_build_panel(self._cog, self._guild_id, "whitelist", interaction.guild)
         )
@@ -646,6 +930,7 @@ class _WLRoleRemoveSelect(discord.ui.Select):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for rid_str in self.values:
             utils.remove_whitelist_role(self._guild_id, int(rid_str))
@@ -653,13 +938,11 @@ class _WLRoleRemoveSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` role(s) from the whitelist."
+                content=_t(lang, "wl_removed_roles", emoji=get_emoji("icon_tick"), count=len(self.values))
             )
         )
         view.add_item(container)
-        await interaction.response.edit_message(
-            view=view,
-        )
+        await interaction.response.edit_message(view=view)
         await self.message.edit(
             view=_build_panel(self._cog, self._guild_id, "whitelist", interaction.guild)
         )
@@ -676,11 +959,12 @@ class _WLAddUserBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="Select the members you want to exempt from automod:"
+                content=_t(lang, "wl_add_user_prompt")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
@@ -704,11 +988,12 @@ class _WLAddRoleBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="Select the roles you want to exempt from automod:"
+                content=_t(lang, "wl_add_role_prompt")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
@@ -732,6 +1017,7 @@ class _WLRemoveUserBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         user_ids = cfg.get("whitelist_users", [])
@@ -745,13 +1031,13 @@ class _WLRemoveUserBtn(discord.ui.Button):
             ))
         if not options:
             return await interaction.response.send_message(
-                "No users are currently whitelisted.", ephemeral=True,
+                _t(lang, "wl_no_users"), ephemeral=True,
             )
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="Select the members to remove from the whitelist:"
+                content=_t(lang, "wl_remove_user_prompt")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
@@ -775,6 +1061,7 @@ class _WLRemoveRoleBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         role_ids = cfg.get("whitelist_roles", [])
@@ -788,13 +1075,13 @@ class _WLRemoveRoleBtn(discord.ui.Button):
             ))
         if not options:
             return await interaction.response.send_message(
-                "No roles are currently whitelisted.", ephemeral=True,
+                _t(lang, "wl_no_roles"), ephemeral=True,
             )
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="Select the roles to remove from the whitelist:"
+                content=_t(lang, "wl_remove_role_prompt")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
@@ -814,9 +1101,10 @@ class _WLRemoveRoleBtn(discord.ui.Button):
 def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.Guild = None) -> discord.ui.LayoutView:
     utils = self.utils()
     cfg = utils.get_guild_config(guild_id)
+    lang = get_lang(guild)
 
     view = discord.ui.LayoutView(timeout=300)
-    text = _section_text(cfg, section, guild)
+    text = _section_text(cfg, section, guild, lang)
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=text),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -843,6 +1131,7 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(self, guild_id, section),
             _NukeActionButton(self, guild_id),
+            _NukeExtThresholdButton(self, guild_id),
         ))
 
     elif section == "antiraid":
@@ -1267,12 +1556,14 @@ class AutoMod(commands.Cog):
             except Exception:
                 pass
 
+        lang = get_lang(guild)
         try:
             await guild.owner.send(
-                f"{get_emoji('icon_danger')} **Interaction Flood Raid** detected in **{guild.name}**!\n"
-                f"`{len(raider_ids)}` newly-joined members fired bot interactions at once.\n"
-                f"Suspected operator: {operator or 'unknown'}\n"
-                f"Raider action: `{raider_action}`  •  Operator action: `{op_action}`"
+                f"{get_emoji('icon_danger')} "
+                + _t(lang, "extraid_dm",
+                     guild=guild.name, count=len(raider_ids),
+                     operator=str(operator) if operator else "unknown",
+                     ra=raider_action, oa=op_action)
             )
         except Exception:
             pass
@@ -1301,20 +1592,48 @@ class AutoMod(commands.Cog):
 
         if len(self._join_history[guild.id]) >= threshold:
             self._join_history[guild.id] = []
+            lang = get_lang(guild)
             log.warning("Anti-Raid", f"Join flood in {guild.name} — action: {action}")
             await self.utils().log_action(
                 guild, "🌊 Anti-Raid Triggered",
                 f"**{len(bucket)}** members joined within `{interval}s`. Executing `{action}`.")
 
-            if action == "kick":
-                for m in list(guild.members):
-                    joined = m.joined_at
-                    if joined and (now - joined.timestamp()) <= interval + 2:
-                        try:
+            new_account_days  = ar.get("new_account_days", 0)
+            lockdown_slowmode = ar.get("lockdown_slowmode", 30)
+
+            # Collect recent joiners; optionally filter to new accounts only
+            recent_members = []
+            for m in list(guild.members):
+                joined = m.joined_at
+                if not joined or (now - joined.timestamp()) > interval + 2:
+                    continue
+                if new_account_days > 0:
+                    account_age_days = (discord.utils.utcnow() - m.created_at).days
+                    if account_age_days >= new_account_days:
+                        continue  # old account — skip actioning
+                recent_members.append(m)
+
+            if action in ("kick", "ban", "softban"):
+                for m in recent_members:
+                    try:
+                        if action == "ban":
+                            await guild.ban(m, reason="Anti-Raid: mass join")
+                        elif action == "softban":
+                            await guild.ban(m, reason="Anti-Raid: mass join (softban)",
+                                            delete_message_days=1)
+                            await guild.unban(m, reason="Anti-Raid: softban removal")
+                        else:
                             await m.kick(reason="Anti-Raid: mass join")
-                            await asyncio.sleep(0.5)
-                        except Exception:
-                            pass
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        pass
+            elif action == "slowmode":
+                for channel in guild.text_channels:
+                    try:
+                        await channel.edit(slowmode_delay=lockdown_slowmode,
+                                           reason=f"Anti-Raid: slowmode {lockdown_slowmode}s")
+                    except Exception:
+                        pass
             elif action == "lockdown":
                 for channel in guild.text_channels:
                     try:
@@ -1327,8 +1646,11 @@ class AutoMod(commands.Cog):
                         pass
             try:
                 await guild.owner.send(
-                    f"{get_emoji('icon_danger')} **Anti-Raid** in **{guild.name}**!\n"
-                    f"{len(bucket)} joins in {interval}s. Action: `{action}`.")
+                    f"{get_emoji('icon_danger')} "
+                    + _t(lang, "raid_dm",
+                         guild=guild.name, count=len(bucket),
+                         interval=interval, action=action)
+                )
             except Exception:
                 pass
 
@@ -1343,17 +1665,23 @@ class AutoMod(commands.Cog):
         cfg = self.get_cfg(guild.id)
         if not cfg["automod"].get("antinuke", False):
             return
-        if entry.user == self.bot.user or guild.owner:
+        if entry.user is None:
+            return
+        if entry.user == self.bot.user or entry.user == guild.owner:
+            return
+        if self.utils().is_whitelisted(guild.id, entry.user):
             return
 
         an = cfg.get("antinuke", {})
         interval = an.get("interval", 10)
 
         action_map = {
-            discord.AuditLogAction.ban: ("ban", an.get("ban_threshold", 3)),
-            discord.AuditLogAction.kick: ("kick", an.get("kick_threshold", 3)),
+            discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
+            discord.AuditLogAction.kick:           ("kick",           an.get("kick_threshold", 3)),
             discord.AuditLogAction.channel_delete: ("channel_delete", an.get("channel_delete_threshold", 3)),
-            discord.AuditLogAction.role_delete: ("role_delete", an.get("role_delete_threshold", 3)),
+            discord.AuditLogAction.role_delete:    ("role_delete",    an.get("role_delete_threshold", 3)),
+            discord.AuditLogAction.channel_create: ("channel_create", an.get("channel_create_threshold", 5)),
+            discord.AuditLogAction.webhook_delete: ("webhook_delete", an.get("webhook_delete_threshold", 3)),
         }
         if entry.action not in action_map:
             return
@@ -1372,13 +1700,15 @@ class AutoMod(commands.Cog):
             user_history[action_key] = []
             offender    = entry.user
             nuke_action = an.get("action", "strip")
+            lang        = get_lang(guild)
 
             log.warning("Anti-Nuke",
-                        f"Nuke by {offender} in {guild.name} — action: {nuke_action}")
+                        f"Nuke by {offender} in {guild.name} — "
+                        f"{threshold}x {action_key} — action: {nuke_action}")
             await self.utils().log_action(
                 guild, "💣 Anti-Nuke Triggered",
                 f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
-                f"within `{interval}s`. Action: `{nuke_action}`.")
+                f"within `{interval}s`.\n**Action:** `{nuke_action}`")
 
             member = guild.get_member(uid)
             if member:
@@ -1396,9 +1726,12 @@ class AutoMod(commands.Cog):
                         pass
             try:
                 await guild.owner.send(
-                    f"{get_emoji('icon_danger')} **Anti-Nuke** in **{guild.name}**!\n"
-                    f"{offender} did `{threshold}` `{action_key}` in `{interval}s`.\n"
-                    f"Action: `{nuke_action}`.")
+                    f"{get_emoji('icon_danger')} "
+                    + _t(lang, "nuke_dm",
+                         guild=guild.name, offender=str(offender),
+                         threshold=threshold, action_key=action_key,
+                         interval=interval, action=nuke_action)
+                )
             except Exception:
                 pass
 
