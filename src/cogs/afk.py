@@ -245,7 +245,10 @@ class AFKCog(commands.Cog):
 
             view = _afk_ping_view(user, state)
             try:
-                await message.channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+                try:
+                    await message.reply(view=view, allowed_mentions=discord.AllowedMentions.none())
+                except Exception:
+                    await message.channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException:
                 pass
 

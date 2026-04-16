@@ -42,7 +42,8 @@ colorama_init(autoreset=True)
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
     1435978243160145981, 
-    1485732377958416565
+    1485732377958416565,
+    1492310425348608170
 }
 
 
