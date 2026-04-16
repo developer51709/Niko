@@ -94,7 +94,7 @@ CATEGORY_MAP: dict = {
     "Economy":      (["EconomyCog"], f"{get_emoji('icon_economy')} **Economy Commands**\n> Earn and spend virtual currency!"),
     "Roleplay":     (["RolePlayCog"], "🎭 **Roleplay Commands**\n> Fun roleplay commands!"),
     "Info":         (["InfoCog"], "ℹ️ **Information Commands**\n> Get info about users, servers, and more!"),
-    "Utility":      (["UtilityCog", "Snipe", "Define"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
+    "Utility":      (["UtilityCog", "Snipe", "Define", "AFKCog"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
     "AI":           (["AICog", "AIConfig"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
     "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
     "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
