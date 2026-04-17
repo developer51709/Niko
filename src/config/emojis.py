@@ -84,8 +84,6 @@ def get_emoji(emoji_name: str):
         return "<:icon_idle:1494421805333479475>"
     if emoji_name == "icon_image":
         return "<:icon_image:1492967644121530459>"
-    if emoji_name == "icon_info":
-        return "<:icon_info:1494521375325683792>"
     if emoji_name == "icon_important":
         return "<:icon_important:1494438794760552611>"
     if emoji_name == "icon_invite":
