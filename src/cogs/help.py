@@ -1,27 +1,32 @@
+"""
+Help System — fully bilingual (EN / DE)
+────────────────────────────────────────
+All UI strings, category descriptions, category headers, pagination labels,
+and command detail labels are localised to the guild's preferred locale.
+Command help strings use the existing { 'en': '…', 'de': '…' } JSON format.
+"""
+
 from typing import List, Tuple
+import json
 
 import discord
 from discord.ext import commands
-import json
+
 from config.emojis import get_emoji
 
-
-# ===================================================
-#  CONFIGURATION
-# ===================================================
-
-# Number of commands shown per page in category views.
 PAGE_SIZE = 8
 
 
 # ===================================================
-#  LANGUAGE UTILITY
+#  LANGUAGE UTILITIES
 # ===================================================
 
 def get_lang(ctx_or_guild=None) -> str:
     """Return 'de' when the guild's preferred locale is German, else 'en'."""
     guild = None
     if isinstance(ctx_or_guild, commands.Context):
+        guild = ctx_or_guild.guild
+    elif isinstance(ctx_or_guild, discord.Interaction):
         guild = ctx_or_guild.guild
     elif isinstance(ctx_or_guild, discord.Guild):
         guild = ctx_or_guild
@@ -30,142 +35,411 @@ def get_lang(ctx_or_guild=None) -> str:
             return "de"
     return "en"
 
-# get_command_help will be used to fetch localized command descriptions where available.
-# this requires commands to use a json formatted help string with language keys.
-# Example formatting:
-# help = "{ 'en': 'English help text', 'de': 'Deutscher Hilfetext' }"
-def get_command_help(ctx: commands.Context, cmd: commands.Command):
-    lang = get_lang(ctx)
+
+def get_command_help(ctx_or_interaction, cmd: commands.Command) -> str:
+    """
+    Return the localised help string for a command.
+    Commands store help as JSON: { 'en': '…', 'de': '…' }
+    Falls back to the raw help string if it isn't JSON.
+    """
+    lang = get_lang(ctx_or_interaction)
     if cmd.help:
         try:
-            help_dict = cmd.help.replace("'", '"')
-            help_dict = json.loads(help_dict)
-            text = help_dict.get(lang)
-            return text
-        except json.JSONDecodeError:
-            return cmd.help or "Error reading help text."
-    else:
-        return cmd.help or "No help text available."
-    
+            help_dict = json.loads(cmd.help.replace("'", '"'))
+            text = help_dict.get(lang) or help_dict.get("en")
+            return text or cmd.help
+        except (json.JSONDecodeError, AttributeError):
+            return cmd.help
+    return ""
 
-    
+
+def _ui(lang: str, key: str, **kwargs) -> str:
+    """Shorthand for pulling a UI string in the given language."""
+    text = _UI_STRINGS.get(lang, _UI_STRINGS["en"]).get(key)
+    if text is None:
+        text = _UI_STRINGS["en"][key]
+    return text.format(**kwargs) if kwargs else text
+
+
 # ===================================================
-#  PREFIX RESOLVER (supports dynamic multi-prefix functions)
+#  LOCALISED UI STRINGS
 # ===================================================
 
-async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
-    """
-    Resolve the primary prefix for the current context/interaction.
-
-    Supports:
-    - Static string prefix
-    - Static list/tuple of prefixes
-    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
-    """
-    raw = bot.command_prefix
-
-    # Static prefix (string)
-    if isinstance(raw, str):
-        return raw
-
-    # Static list/tuple of prefixes
-    if isinstance(raw, (list, tuple)):
-        return raw[0]
-
-    # Dynamic prefix function
-    try:
-        # Context: has .message
-        msg = getattr(ctx_or_interaction, "message", None)
-
-        # Interaction: use the original message if present
-        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
-            msg = ctx_or_interaction.message
-
-        if msg is None:
-            return "!"
-
-        prefixes = raw(bot, msg)
-        if isinstance(prefixes, (list, tuple)) and prefixes:
-            return prefixes[0]
-    except Exception:
-        pass
-
-    # Fallback prefix if everything else fails
-    return "."
+_UI_STRINGS: dict[str, dict] = {
+    "en": {
+        "dropdown_placeholder": "☕ Pick a category…",
+        "no_commands":          "*No commands found.*",
+        "no_desc":              "No description provided.",
+        "cmd_not_found_title":  "Command Not Found",
+        "cmd_not_found_body":   "No command named `{name}` exists.\nUse the help menu to browse available commands.",
+        "detail_description":   "Description",
+        "detail_usage":         "Usage",
+        "detail_aliases":       "Aliases",
+        "detail_subcommands":   "Subcommands",
+        "detail_category":      "Category",
+        "btn_prev":             "◀ Prev",
+        "btn_next":             "Next ▶",
+        "btn_page":             "Page {page}/{total}",
+        "general_title":        "### 🌸 Welcome to Niko's Help Menu",
+        "general_intro":        "Use the dropdown below to browse commands by category.",
+        "general_about_title":  "**About Niko**",
+        "general_about_body": (
+            "Niko is a cozy, AI-powered Discord bot with a café personality — "
+            "bilingual (EN/DE), packed with economy, leveling, music, moderation, and more!"
+        ),
+        "general_links_title":  "**{icon} Links**",
+    },
+    "de": {
+        "dropdown_placeholder": "☕ Kategorie auswählen…",
+        "no_commands":          "*Keine Befehle gefunden.*",
+        "no_desc":              "Keine Beschreibung verfügbar.",
+        "cmd_not_found_title":  "Befehl nicht gefunden",
+        "cmd_not_found_body":   "Kein Befehl namens `{name}` gefunden.\nNutze das Hilfemenü, um Befehle zu durchsuchen.",
+        "detail_description":   "Beschreibung",
+        "detail_usage":         "Verwendung",
+        "detail_aliases":       "Aliase",
+        "detail_subcommands":   "Unterbefehle",
+        "detail_category":      "Kategorie",
+        "btn_prev":             "◀ Zurück",
+        "btn_next":             "Weiter ▶",
+        "btn_page":             "Seite {page}/{total}",
+        "general_title":        "### 🌸 Willkommen bei Nikos Hilfemenü",
+        "general_intro":        "Nutze das Dropdown unten, um Befehle nach Kategorie zu durchsuchen.",
+        "general_about_title":  "**Über Niko**",
+        "general_about_body": (
+            "Niko ist ein gemütlicher, KI-gestützter Discord-Bot mit Café-Persönlichkeit — "
+            "zweisprachig (DE/EN), vollgepackt mit Wirtschaft, Leveling, Musik, Moderation und mehr!"
+        ),
+        "general_links_title":  "**{icon} Links**",
+    },
+}
 
 
 # ===================================================
 #  CATEGORY DEFINITIONS
 # ===================================================
 
-CATEGORIES: List[Tuple[str, str, str]] = [
-    ("General",       "General bot information",           f"{get_emoji('icon_general')}"),
-    ("Fun",           "Fun commands",                      f"{get_emoji('icon_games')}"),
-    ("Gambling",      "Blackjack, Slots, Roulette",        f"{get_emoji('icon_gambling')}"),
-    ("Economy",       "Balance, daily, work, etc.",        f"{get_emoji('icon_economy')}"),
-    ("Roleplay",      "RP commands",                       f"{get_emoji('icon_roleplay')}"),
-    ("Info",          "User/server info commands",         f"{get_emoji('icon_stats')}"),
-    ("Utility",       "Misc tools and utilities",          f"{get_emoji('icon_utility')}"),
-    ("AI",            "AI commands",                       f"{get_emoji('icon_ai')}"),
-    ("Moderation",    "Moderation commands",               f"{get_emoji('icon_moderation')}"),
-    ("AutoMod",       "AutoMod commands",                  f"{get_emoji('icon_automod')}"),
-    ("EmojiManager",  "EmojiManager commands",             f"{get_emoji('icon_paint')}"),
-    ("Onboarding",    "Onboarding commands",               f"{get_emoji('icon_welcome')}"),
-    ("NSFW",          "NSFW commands",                     f"{get_emoji('icon_nsfw')}"),
-    ("Music",         "Music commands",                    f"{get_emoji('music')}"),
-    ("Leveling",      "Leveling commands",                 f"{get_emoji('icon_leveling')}"),
-    ("Notifier",      "Notifier commands",                 f"{get_emoji('icon_megaphone')}"),
-    ("VoiceMaster",   "VoiceMaster commands",              f"{get_emoji('icon_voicemaster')}"),
-    ("Ticket",        "Ticket commands",                   f"{get_emoji('icon_ticket')}"),
-    ("Image Tools",   "Image manipulation commands",       f"{get_emoji('icon_image')}"),
-    ("Giveaway",      "Giveaway commands",                 f"{get_emoji('icon_giveaway')}"),
-    ("Customization", "Customization commands",            f"{get_emoji('icon_edit')}"),
+# (label, emoji) — descriptions are pulled from CATEGORY_DESCS per lang
+_CATEGORY_LIST: List[Tuple[str, str]] = [
+    ("General",        f"{get_emoji('icon_general')}"),
+    ("Fun",            f"{get_emoji('icon_games')}"),
+    ("Gambling",       f"{get_emoji('icon_gambling')}"),
+    ("Economy",        f"{get_emoji('icon_economy')}"),
+    ("Roleplay",       f"{get_emoji('icon_roleplay')}"),
+    ("Info",           f"{get_emoji('icon_stats')}"),
+    ("Utility",        f"{get_emoji('icon_utility')}"),
+    ("AI",             f"{get_emoji('icon_ai')}"),
+    ("Moderation",     f"{get_emoji('icon_moderation')}"),
+    ("AutoMod",        f"{get_emoji('icon_automod')}"),
+    ("EmojiManager",   f"{get_emoji('icon_paint')}"),
+    ("Onboarding",     f"{get_emoji('icon_welcome')}"),
+    ("NSFW",           f"{get_emoji('icon_nsfw')}"),
+    ("Music",          f"{get_emoji('music')}"),
+    ("Leveling",       f"{get_emoji('icon_leveling')}"),
+    ("Notifier",       f"{get_emoji('icon_megaphone')}"),
+    ("VoiceMaster",    f"{get_emoji('icon_voicemaster')}"),
+    ("Ticket",         f"{get_emoji('icon_ticket')}"),
+    ("Image Tools",    f"{get_emoji('icon_image')}"),
+    ("Giveaway",       f"{get_emoji('icon_giveaway')}"),
+    ("Customization",  f"{get_emoji('icon_edit')}"),
 ]
 
-# Map category label → (cog names list, header string)
-CATEGORY_MAP: dict = {
-    "General":      ([], ""),
-    "Fun":          (["UwULock", "Meme", "tictactoe", "CuteAnimals", "FunCog"], f"{get_emoji('icon_games')} **Fun Commands**\n> Commands for fun and games!"),
-    "Gambling":     (["Blackjack", "Roulette", "Slots", "GamblingCog"], f"{get_emoji('icon_gambling')} **Casino Commands**\n> Play games of chance!"),
-    "Economy":      (["EconomyCog"], f"{get_emoji('icon_economy')} **Economy Commands**\n> Earn and spend virtual currency!"),
-    "Roleplay":     (["RolePlayCog"], f"{get_emoji('icon_roleplay')} **Roleplay Commands**\n> Fun roleplay commands!"),
-    "Info":         (["InfoCog"], f"{get_emoji('icon_stats')} **Information Commands**\n> Get info about users, servers, and more!"),
-    "Utility":      (["UtilityCog", "Snipe", "Define", "AFKCog"], f"{get_emoji('icon_utility')} **Utility Commands**\n> Useful tools and utilities."),
-    "AI":           (["AICog", "AIConfig"], f"{get_emoji('icon_ai')} **AI Commands**\n> Interact with Niko's AI features!"),
-    "Moderation":   (["Moderation"], f"{get_emoji('icon_moderation')} **Moderation Commands**\n> Moderation tools for server management."),
-    "AutoMod":      (["AutoMod"], f"{get_emoji('icon_automod')} **AutoMod Commands**\n> Automated moderation to keep your server safe."),
-    "EmojiManager": (["EmojiManagerCog"], f"{get_emoji('icon_paint')} **Emoji Manager Commands**\n> Manage custom emojis in your server."),
-    "Onboarding":   (["Onboarding"], f"{get_emoji('icon_welcome')} **Onboarding Commands**\n> Set up welcome messages and roles for new members."),
-    "NSFW":         (["NSFW"], f"{get_emoji('icon_nsfw')} **NSFW Commands**\n> These commands only work in NSFW-marked channels."),
-    "Music":        (["MusicSystem"], f"{get_emoji('music')} **Music Commands**\n> Play music in your voice channel!"),
-    "Leveling":     (["Leveling"], f"{get_emoji('icon_leveling')} **Leveling Commands**\n> Level up by chatting and earning XP!"),
-    "Notifier":     (["Notifier", "YouTube"], f"{get_emoji('icon_megaphone')} **Notifier Commands**\n> Get notified about new posts from your favorite creators!"),
-    "VoiceMaster":  (["VoiceMaster"], f"{get_emoji('icon_voicemaster')} **VoiceMaster Commands**\n> Create and manage temporary voice channels!"),
-    "Ticket":       (["Tickets"], f"{get_emoji('icon_ticket')} **Ticket Commands**\n> Create and manage support tickets."),
-    "Image Tools":  (["ImageTools", "AiImageTools"], f"{get_emoji('icon_image')} **Image Tools**\n> Manipulate images with these commands!"),
-    "Giveaway":     (["Giveaway"], f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n> Host and manage giveaways in your server!"),
-    "Customization": (["Customization", "PrefixConfig"], f"{get_emoji('icon_edit')} **Customization Commands**\n> Customize Niko's pfp, banner, and more!"),
+CATEGORY_DESCS: dict[str, dict[str, str]] = {
+    "en": {
+        "General":       "General bot information",
+        "Fun":           "Fun commands",
+        "Gambling":      "Blackjack, Slots, Roulette",
+        "Economy":       "Balance, daily, work, etc.",
+        "Roleplay":      "RP commands",
+        "Info":          "User/server info commands",
+        "Utility":       "Misc tools and utilities",
+        "AI":            "AI commands",
+        "Moderation":    "Moderation commands",
+        "AutoMod":       "AutoMod commands",
+        "EmojiManager":  "Emoji manager commands",
+        "Onboarding":    "Onboarding commands",
+        "NSFW":          "NSFW commands",
+        "Music":         "Music commands",
+        "Leveling":      "Leveling commands",
+        "Notifier":      "Social media notifier",
+        "VoiceMaster":   "Voice channel management",
+        "Ticket":        "Ticket commands",
+        "Image Tools":   "Image manipulation commands",
+        "Giveaway":      "Giveaway commands",
+        "Customization": "Customization commands",
+    },
+    "de": {
+        "General":       "Allgemeine Bot-Informationen",
+        "Fun":           "Spaßbefehle",
+        "Gambling":      "Blackjack, Slots, Roulette",
+        "Economy":       "Guthaben, tägl. Belohnung, Arbeit usw.",
+        "Roleplay":      "Rollenspiel-Befehle",
+        "Info":          "Nutzer-/Server-Informationen",
+        "Utility":       "Nützliche Hilfswerkzeuge",
+        "AI":            "KI-Befehle",
+        "Moderation":    "Moderationsbefehle",
+        "AutoMod":       "Automatische Moderation",
+        "EmojiManager":  "Emoji-Verwaltung",
+        "Onboarding":    "Willkommens-Einrichtung",
+        "NSFW":          "NSFW-Befehle",
+        "Music":         "Musikbefehle",
+        "Leveling":      "Leveling-Befehle",
+        "Notifier":      "Social-Media-Benachrichtigungen",
+        "VoiceMaster":   "Sprachkanal-Verwaltung",
+        "Ticket":        "Ticket-Befehle",
+        "Image Tools":   "Bildbearbeitungsbefehle",
+        "Giveaway":      "Gewinnspiel-Befehle",
+        "Customization": "Anpassungsbefehle",
+    },
 }
+
+# Category header strings shown above the command list — localised.
+# Keyed by lang → category label → header markdown string.
+CATEGORY_HEADERS: dict[str, dict[str, str]] = {
+    "en": {
+        "General": "",
+        "Fun": (
+            f"{get_emoji('icon_games')} **Fun Commands**\n"
+            "> Commands for fun and games!"
+        ),
+        "Gambling": (
+            f"{get_emoji('icon_gambling')} **Casino Commands**\n"
+            "> Play games of chance!"
+        ),
+        "Economy": (
+            f"{get_emoji('icon_economy')} **Economy Commands**\n"
+            "> Earn and spend virtual currency!"
+        ),
+        "Roleplay": (
+            f"{get_emoji('icon_roleplay')} **Roleplay Commands**\n"
+            "> Fun roleplay commands!"
+        ),
+        "Info": (
+            f"{get_emoji('icon_stats')} **Information Commands**\n"
+            "> Get info about users, servers, and more!"
+        ),
+        "Utility": (
+            f"{get_emoji('icon_utility')} **Utility Commands**\n"
+            "> Useful tools and utilities."
+        ),
+        "AI": (
+            f"{get_emoji('icon_ai')} **AI Commands**\n"
+            "> Interact with Niko's AI features!"
+        ),
+        "Moderation": (
+            f"{get_emoji('icon_moderation')} **Moderation Commands**\n"
+            "> Moderation tools for server management."
+        ),
+        "AutoMod": (
+            f"{get_emoji('icon_automod')} **AutoMod Commands**\n"
+            "> Automated moderation to keep your server safe."
+        ),
+        "EmojiManager": (
+            f"{get_emoji('icon_paint')} **Emoji Manager Commands**\n"
+            "> Manage custom emojis in your server."
+        ),
+        "Onboarding": (
+            f"{get_emoji('icon_welcome')} **Onboarding Commands**\n"
+            "> Set up welcome messages and roles for new members."
+        ),
+        "NSFW": (
+            f"{get_emoji('icon_nsfw')} **NSFW Commands**\n"
+            "> These commands only work in NSFW-marked channels."
+        ),
+        "Music": (
+            f"{get_emoji('music')} **Music Commands**\n"
+            "> Play music in your voice channel!"
+        ),
+        "Leveling": (
+            f"{get_emoji('icon_leveling')} **Leveling Commands**\n"
+            "> Level up by chatting and earning XP!"
+        ),
+        "Notifier": (
+            f"{get_emoji('icon_megaphone')} **Notifier Commands**\n"
+            "> Get notified about new posts from your favourite creators!"
+        ),
+        "VoiceMaster": (
+            f"{get_emoji('icon_voicemaster')} **VoiceMaster Commands**\n"
+            "> Create and manage temporary voice channels!"
+        ),
+        "Ticket": (
+            f"{get_emoji('icon_ticket')} **Ticket Commands**\n"
+            "> Create and manage support tickets."
+        ),
+        "Image Tools": (
+            f"{get_emoji('icon_image')} **Image Tools**\n"
+            "> Manipulate images with these commands!"
+        ),
+        "Giveaway": (
+            f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n"
+            "> Host and manage giveaways in your server!"
+        ),
+        "Customization": (
+            f"{get_emoji('icon_edit')} **Customization Commands**\n"
+            "> Customize Niko's pfp, banner, and more!"
+        ),
+    },
+    "de": {
+        "General": "",
+        "Fun": (
+            f"{get_emoji('icon_games')} **Spaßbefehle**\n"
+            "> Befehle für Spaß und Spiele!"
+        ),
+        "Gambling": (
+            f"{get_emoji('icon_gambling')} **Casino-Befehle**\n"
+            "> Spiele Glücksspiele!"
+        ),
+        "Economy": (
+            f"{get_emoji('icon_economy')} **Wirtschaftsbefehle**\n"
+            "> Verdiene und gib virtuelle Währung aus!"
+        ),
+        "Roleplay": (
+            f"{get_emoji('icon_roleplay')} **Rollenspiel-Befehle**\n"
+            "> Spaßige Rollenspiel-Befehle!"
+        ),
+        "Info": (
+            f"{get_emoji('icon_stats')} **Informationsbefehle**\n"
+            "> Informationen zu Nutzern, Servern und mehr!"
+        ),
+        "Utility": (
+            f"{get_emoji('icon_utility')} **Hilfswerkzeuge**\n"
+            "> Nützliche Tools und Dienstprogramme."
+        ),
+        "AI": (
+            f"{get_emoji('icon_ai')} **KI-Befehle**\n"
+            "> Interagiere mit Nikos KI-Funktionen!"
+        ),
+        "Moderation": (
+            f"{get_emoji('icon_moderation')} **Moderationsbefehle**\n"
+            "> Moderationstools für die Serververwaltung."
+        ),
+        "AutoMod": (
+            f"{get_emoji('icon_automod')} **AutoMod-Befehle**\n"
+            "> Automatische Moderation für deinen Server."
+        ),
+        "EmojiManager": (
+            f"{get_emoji('icon_paint')} **Emoji-Manager-Befehle**\n"
+            "> Verwalte benutzerdefinierte Emojis auf deinem Server."
+        ),
+        "Onboarding": (
+            f"{get_emoji('icon_welcome')} **Onboarding-Befehle**\n"
+            "> Richte Willkommensnachrichten und Rollen für neue Mitglieder ein."
+        ),
+        "NSFW": (
+            f"{get_emoji('icon_nsfw')} **NSFW-Befehle**\n"
+            "> Diese Befehle funktionieren nur in als NSFW markierten Kanälen."
+        ),
+        "Music": (
+            f"{get_emoji('music')} **Musikbefehle**\n"
+            "> Musik in deinem Sprachkanal abspielen!"
+        ),
+        "Leveling": (
+            f"{get_emoji('icon_leveling')} **Leveling-Befehle**\n"
+            "> Steige durch Chatten und XP-Sammeln auf!"
+        ),
+        "Notifier": (
+            f"{get_emoji('icon_megaphone')} **Benachrichtigungs-Befehle**\n"
+            "> Werde über neue Beiträge deiner Lieblings-Ersteller benachrichtigt!"
+        ),
+        "VoiceMaster": (
+            f"{get_emoji('icon_voicemaster')} **VoiceMaster-Befehle**\n"
+            "> Temporäre Sprachkanäle erstellen und verwalten!"
+        ),
+        "Ticket": (
+            f"{get_emoji('icon_ticket')} **Ticket-Befehle**\n"
+            "> Support-Tickets erstellen und verwalten."
+        ),
+        "Image Tools": (
+            f"{get_emoji('icon_image')} **Bildbearbeitungs-Befehle**\n"
+            "> Bilder mit diesen Befehlen bearbeiten!"
+        ),
+        "Giveaway": (
+            f"{get_emoji('icon_giveaway')} **Gewinnspiel-Befehle**\n"
+            "> Gewinnspiele auf deinem Server veranstalten und verwalten!"
+        ),
+        "Customization": (
+            f"{get_emoji('icon_edit')} **Anpassungsbefehle**\n"
+            "> Nikos Profilbild, Banner und mehr anpassen!"
+        ),
+    },
+}
+
+# Map category label → list of cog names that contribute to it.
+CATEGORY_COGS: dict[str, List[str]] = {
+    "General":       [],
+    "Fun":           ["UwULock", "Meme", "tictactoe", "CuteAnimals", "FunCog"],
+    "Gambling":      ["Blackjack", "Roulette", "Slots", "GamblingCog"],
+    "Economy":       ["EconomyCog"],
+    "Roleplay":      ["RolePlayCog"],
+    "Info":          ["InfoCog"],
+    "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog"],
+    "AI":            ["AICog", "AIConfig"],
+    "Moderation":    ["Moderation"],
+    "AutoMod":       ["AutoMod"],
+    "EmojiManager":  ["EmojiManagerCog"],
+    "Onboarding":    ["Onboarding"],
+    "NSFW":          ["NSFW"],
+    "Music":         ["MusicSystem"],
+    "Leveling":      ["Leveling"],
+    "Notifier":      ["Notifier", "YouTube"],
+    "VoiceMaster":   ["VoiceMaster"],
+    "Ticket":        ["Tickets"],
+    "Image Tools":   ["ImageTools", "AiImageTools"],
+    "Giveaway":      ["Giveaway"],
+    "Customization": ["Customization", "PrefixConfig"],
+}
+
+
+def _category_header(lang: str, category: str) -> str:
+    return CATEGORY_HEADERS.get(lang, CATEGORY_HEADERS["en"]).get(
+        category,
+        CATEGORY_HEADERS["en"].get(category, ""),
+    )
+
+
+def _category_desc(lang: str, category: str) -> str:
+    return CATEGORY_DESCS.get(lang, CATEGORY_DESCS["en"]).get(
+        category,
+        CATEGORY_DESCS["en"].get(category, ""),
+    )
+
+
+# ===================================================
+#  PREFIX RESOLVER
+# ===================================================
+
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    raw = bot.command_prefix
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+    try:
+        msg = getattr(ctx_or_interaction, "message", None)
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+        if msg is None:
+            return "."
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+    return "."
 
 
 # ===================================================
 #  CONTENT BUILDERS
 # ===================================================
 
-def _general_text(bot: commands.Bot) -> str:
-    """
-    Build the static general help text.
-
-    This page is non-paginated and shows the thumbnail.
-    """
+def _general_text(bot: commands.Bot, lang: str) -> str:
     invite = f"https://discord.com/oauth2/authorize?client_id={bot.user.id}&scope=bot&permissions=8"
     return (
-        "### 🌸 Welcome to Niko's Help Menu\n"
-        "Use the dropdown below to browse commands by category.\n\n"
-        "**About Niko**\n"
-        "Niko is a cozy, AI-powered Discord bot with a café personality — bilingual (EN/DE), "
-        "packed with economy, leveling, music, moderation, and more!\n\n"
-        f"**{get_emoji('icon_link')} Links**\n"
+        f"{_ui(lang, 'general_title')}\n"
+        f"{_ui(lang, 'general_intro')}\n\n"
+        f"{_ui(lang, 'general_about_title')}\n"
+        f"{_ui(lang, 'general_about_body')}\n\n"
+        f"{_ui(lang, 'general_links_title', icon=get_emoji('icon_link'))}\n"
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website](https://developer51709.github.io/Niko) • "
@@ -181,34 +455,31 @@ async def _commands_text(
 ) -> Tuple[str, int]:
     """
     Build a paginated markdown string listing commands from one or more cogs.
-
-    Returns:
-        (commands_only_content, total_pages)
+    Returns (content, total_pages).
     """
+    lang   = get_lang(ctx_or_interaction)
     prefix = await _resolve_prefix(bot, ctx_or_interaction)
 
-    # Collect all commands from the given cogs
     commands_list: List[commands.Command] = []
     for cog_name in cog_names:
         cog = bot.get_cog(cog_name)
         if cog:
-            for cmd in cog.get_commands():
-                commands_list.append(cmd)
+            commands_list.extend(cog.get_commands())
 
     if not commands_list:
-        return "*No commands found.*", 1
+        return _ui(lang, "no_commands"), 1
 
-    total = len(commands_list)
+    total       = len(commands_list)
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-    page = max(1, min(page, total_pages))
+    page        = max(1, min(page, total_pages))
 
-    start = (page - 1) * PAGE_SIZE
-    end = start + PAGE_SIZE
-    page_commands = commands_list[start:end]
+    start         = (page - 1) * PAGE_SIZE
+    page_commands = commands_list[start: start + PAGE_SIZE]
 
-    lines: List[str] = []
+    no_desc = _ui(lang, "no_desc")
+    lines   = []
     for cmd in page_commands:
-        desc = get_command_help(ctx_or_interaction, cmd) or "No description provided."
+        desc = get_command_help(ctx_or_interaction, cmd) or no_desc
         lines.append(f"**`{prefix}{cmd.name}`**\n-# {desc}")
 
     return "\n".join(lines), total_pages
@@ -219,107 +490,99 @@ async def _command_detail_text(
     cmd: commands.Command,
     ctx_or_interaction,
 ) -> str:
-    """
-    Build a detailed help view for a single command, including usage,
-    aliases, subcommands, and category.
-    """
+    lang   = get_lang(ctx_or_interaction)
     prefix = await _resolve_prefix(bot, ctx_or_interaction)
-    signature = cmd.signature or ""
 
     if hasattr(cmd, "parent") and cmd.parent:
         parent = cmd.parent.name
-        usage = f"{prefix}{parent} {cmd.name} {signature}"
+        usage  = f"{prefix}{parent} {cmd.name} {cmd.signature or ''}"
     else:
         parent = None
-        usage = f"{prefix}{cmd.name} {signature}"
+        usage  = f"{prefix}{cmd.name} {cmd.signature or ''}"
 
-    lines = [
+    no_desc = _ui(lang, "no_desc")
+    lines   = [
         f"### 📘 `{cmd.name}`",
         "",
-        f"**Description**\n{get_command_help(ctx_or_interaction, cmd) or 'No description provided.'}",
+        f"**{_ui(lang, 'detail_description')}**\n"
+        f"{get_command_help(ctx_or_interaction, cmd) or no_desc}",
         "",
-        f"**Usage**\n```\n{usage}\n```",
+        f"**{_ui(lang, 'detail_usage')}**\n```\n{usage.strip()}\n```",
     ]
 
     if cmd.aliases:
-        lines.append(f"\n**Aliases**\n" + ", ".join(f"`{a}`" for a in cmd.aliases))
+        lines.append(
+            f"\n**{_ui(lang, 'detail_aliases')}**\n"
+            + ", ".join(f"`{a}`" for a in cmd.aliases)
+        )
 
     if hasattr(cmd, "commands"):
-        lines.append("\n**Subcommands**")
-        for subcommand in cmd.commands:
+        lines.append(f"\n**{_ui(lang, 'detail_subcommands')}**")
+        for sub in cmd.commands:
+            sub_desc = get_command_help(ctx_or_interaction, sub) or no_desc
             if parent:
-                lines.append(
-                    f"`{prefix}{parent} {cmd.name} {subcommand.name}`\n"
-                    f"-# {get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
-                )
+                sub_usage = f"`{prefix}{parent} {cmd.name} {sub.name}`"
             else:
-                lines.append(
-                    f"`{prefix}{cmd.name} {subcommand.name}`\n"
-                    f"-# {get_command_help(ctx_or_interaction, subcommand) or 'No description provided.'}"
-                )
+                sub_usage = f"`{prefix}{cmd.name} {sub.name}`"
+            lines.append(f"{sub_usage}\n-# {sub_desc}")
 
     if cmd.cog_name:
-        lines.append(f"\n**Category**\n{cmd.cog_name}")
+        lines.append(f"\n**{_ui(lang, 'detail_category')}**\n{cmd.cog_name}")
 
     return "\n".join(lines)
 
 
 # ===================================================
-#  DROPDOWN SELECT MENU
+#  DROPDOWN
 # ===================================================
 
 class HelpDropdown(discord.ui.Select):
-    """
-    Category dropdown for the help menu.
+    """Category dropdown — options are localised per guild locale."""
 
-    - "General" shows the static general help page.
-    - Other categories show a paginated list of commands.
-    """
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        options = [
-            discord.SelectOption(label=label, description=desc, emoji=emoji)
-            for label, desc, emoji in CATEGORIES
+    def __init__(self, bot: commands.Bot, lang: str = "en"):
+        self.bot  = bot
+        self.lang = lang
+        options   = [
+            discord.SelectOption(
+                label=label,
+                description=_category_desc(lang, label),
+                emoji=emoji,
+            )
+            for label, emoji in _CATEGORY_LIST
         ]
         super().__init__(
-            placeholder="☕ Pick a category…",
+            placeholder=_ui(lang, "dropdown_placeholder"),
             min_values=1,
             max_values=1,
             options=options,
         )
 
     async def callback(self, interaction: discord.Interaction):
+        lang     = get_lang(interaction)
         category = self.values[0]
-        cog_names, header = CATEGORY_MAP[category]
+        cog_names = CATEGORY_COGS.get(category, [])
 
-        # General page: static, non-paginated, with thumbnail
         if category == "General":
-            content = _general_text(self.bot)
-            view = _make_layout(self.bot, content, include_dropdown=True, general_page=True)
+            content = _general_text(self.bot, lang)
+            view    = _make_layout(self.bot, content, lang, include_dropdown=True, general_page=True)
             return await interaction.response.edit_message(view=view)
 
-        # Category page: paginated, no Section, header persists
-        page = 1
+        page                      = 1
         commands_content, total_pages = await _commands_text(
-            cog_names,
-            self.bot,
-            interaction,
-            page,
+            cog_names, self.bot, interaction, page
         )
+        header = _category_header(lang, category)
 
         view = HelpPagination(
             bot=self.bot,
             category=category,
             cog_names=cog_names,
-            header=header,
+            lang=lang,
             ctx_or_interaction=interaction,
             page=page,
             total_pages=total_pages,
         )
-
-        # Set header + commands content
-        view.header_display.content = header
+        view.header_display.content   = header
         view.commands_display.content = commands_content
 
         await interaction.response.edit_message(view=view)
@@ -331,15 +594,14 @@ class HelpDropdown(discord.ui.Select):
 
 class HelpPagination(discord.ui.LayoutView):
     """
-    View that holds pagination state for a specific category.
+    Paginated category view.
 
-    Structure (no Section, to avoid accessory requirement):
-    - Container
-      - TextDisplay (header)
-      - TextDisplay (commands list)
-      - ActionRow(Prev, Page, Next) [only if total_pages > 1]
-      - Separator
-      - ActionRow(HelpDropdown)
+    Container:
+      TextDisplay (header — persists across pages)
+      TextDisplay (commands list — updates on page change)
+      ActionRow   (Prev · Page X/Y · Next) — only if total_pages > 1
+      Separator
+      ActionRow   (HelpDropdown)
     """
 
     def __init__(
@@ -347,97 +609,85 @@ class HelpPagination(discord.ui.LayoutView):
         bot: commands.Bot,
         category: str,
         cog_names: List[str],
-        header: str,
+        lang: str,
         ctx_or_interaction,
         page: int = 1,
         total_pages: int = 1,
     ):
         super().__init__(timeout=None)
-        self.bot = bot
-        self.category = category
-        self.cog_names = cog_names
-        self.header = header
-        self.page = page
-        self.total_pages = total_pages
+        self.bot                = bot
+        self.category           = category
+        self.cog_names          = cog_names
+        self.lang               = lang
+        self.page               = page
+        self.total_pages        = total_pages
         self.ctx_or_interaction = ctx_or_interaction
 
-        self.header_display: discord.ui.TextDisplay
+        self.header_display:   discord.ui.TextDisplay
         self.commands_display: discord.ui.TextDisplay
-        self.prev_button: discord.ui.Button | None = None
-        self.next_button: discord.ui.Button | None = None
-        self.page_indicator: discord.ui.Button | None = None
+        self.prev_button:      discord.ui.Button | None = None
+        self.next_button:      discord.ui.Button | None = None
+        self.page_indicator:   discord.ui.Button | None = None
 
         self._build_layout()
 
     def _build_layout(self):
         container = discord.ui.Container()
 
-        # Header TextDisplay (header persists across pages)
-        self.header_display = discord.ui.TextDisplay(content=self.header)
+        self.header_display = discord.ui.TextDisplay(content="")
         container.add_item(self.header_display)
 
-        # Commands TextDisplay (updated on page changes)
         self.commands_display = discord.ui.TextDisplay(content="")
         container.add_item(self.commands_display)
 
-        # Pagination row (only if multiple pages)
         if self.total_pages > 1:
-            pagination_row = discord.ui.ActionRow()
+            row = discord.ui.ActionRow()
 
             self.prev_button = discord.ui.Button(
-                label="◀ Prev",
+                label=_ui(self.lang, "btn_prev"),
                 style=discord.ButtonStyle.secondary,
                 disabled=(self.page <= 1),
             )
             self.prev_button.callback = self._prev_page
-            pagination_row.add_item(self.prev_button)
+            row.add_item(self.prev_button)
 
             self.page_indicator = discord.ui.Button(
-                label=f"Page {self.page}/{self.total_pages}",
+                label=_ui(self.lang, "btn_page", page=self.page, total=self.total_pages),
                 style=discord.ButtonStyle.secondary,
                 disabled=True,
             )
-            pagination_row.add_item(self.page_indicator)
+            row.add_item(self.page_indicator)
 
             self.next_button = discord.ui.Button(
-                label="Next ▶",
+                label=_ui(self.lang, "btn_next"),
                 style=discord.ButtonStyle.secondary,
                 disabled=(self.page >= self.total_pages),
             )
             self.next_button.callback = self._next_page
-            pagination_row.add_item(self.next_button)
+            row.add_item(self.next_button)
 
-            container.add_item(pagination_row)
+            container.add_item(row)
 
-        # Separator above dropdown
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
         )
-
-        # Dropdown row
-        container.add_item(discord.ui.ActionRow(HelpDropdown(self.bot)))
-
+        container.add_item(discord.ui.ActionRow(HelpDropdown(self.bot, self.lang)))
         self.add_item(container)
 
     async def _update_content(self, interaction: discord.Interaction):
-        """
-        Rebuild the commands text for the current page and update the view.
-        Header persists; only commands + pagination state change.
-        """
+        lang = get_lang(interaction)
         commands_content, total_pages = await _commands_text(
-            self.cog_names,
-            self.bot,
-            interaction,
-            self.page,
+            self.cog_names, self.bot, interaction, self.page
         )
-        self.total_pages = total_pages
-
-        self.commands_display.content = commands_content
+        self.total_pages                = total_pages
+        self.commands_display.content   = commands_content
 
         if self.total_pages > 1 and self.prev_button and self.next_button and self.page_indicator:
-            self.prev_button.disabled = self.page <= 1
-            self.next_button.disabled = self.page >= self.total_pages
-            self.page_indicator.label = f"Page {self.page}/{self.total_pages}"
+            self.prev_button.disabled    = self.page <= 1
+            self.next_button.disabled    = self.page >= self.total_pages
+            self.prev_button.label       = _ui(lang, "btn_prev")
+            self.next_button.label       = _ui(lang, "btn_next")
+            self.page_indicator.label    = _ui(lang, "btn_page", page=self.page, total=self.total_pages)
 
         await interaction.response.edit_message(view=self)
 
@@ -459,16 +709,11 @@ class HelpPagination(discord.ui.LayoutView):
 def _make_layout(
     bot: commands.Bot,
     content_text: str,
+    lang: str = "en",
     include_dropdown: bool = True,
     general_page: bool = False,
 ) -> discord.ui.LayoutView:
-    """
-    Build the base LayoutView for non-paginated pages.
-
-    - General page: Section + Thumbnail + dropdown.
-    - Detail pages: no Section (no accessory), just TextDisplay (+ optional dropdown).
-    """
-    view = discord.ui.LayoutView()
+    view      = discord.ui.LayoutView()
     container = discord.ui.Container()
 
     if general_page:
@@ -484,7 +729,7 @@ def _make_layout(
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
         )
-        container.add_item(discord.ui.ActionRow(HelpDropdown(bot)))
+        container.add_item(discord.ui.ActionRow(HelpDropdown(bot, lang)))
 
     view.add_item(container)
     return view
@@ -495,47 +740,34 @@ def _make_layout(
 # ===================================================
 
 class HelpCog(commands.Cog):
-    """
-    Custom help system for Niko.
-
-    Features:
-    - Dynamic multi-prefix support
-    - CV2-based UI with dropdown categories
-    - Paginated category views
-    - Thumbnail only on the General page
-    """
+    """Custom help system — fully bilingual (EN / DE)."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @commands.command(
         name="help",
-        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü' }",
+        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü 📘☕' }",
     )
     async def help(self, ctx: commands.Context, *, command_name: str = None):
-        """
-        Show the main help menu or detailed info about a specific command.
+        lang = get_lang(ctx)
 
-        - Without arguments: shows the General help page with dropdown.
-        - With a command name: shows detailed info for that command.
-        """
         if command_name:
             cmd = self.bot.get_command(command_name)
             if not cmd:
                 content = (
-                    f"### {get_emoji('icon_cross')} Command Not Found\n"
-                    f"No command named `{command_name}` exists.\n"
-                    f"Use the help menu to browse available commands."
+                    f"### {get_emoji('icon_cross')} {_ui(lang, 'cmd_not_found_title')}\n"
+                    f"{_ui(lang, 'cmd_not_found_body', name=command_name)}"
                 )
-                view = _make_layout(self.bot, content, include_dropdown=False, general_page=False)
+                view = _make_layout(self.bot, content, lang, include_dropdown=False)
                 return await ctx.send(view=view)
 
             content = await _command_detail_text(self.bot, cmd, ctx)
-            view = _make_layout(self.bot, content, include_dropdown=False, general_page=False)
+            view    = _make_layout(self.bot, content, lang, include_dropdown=False)
             return await ctx.send(view=view)
 
-        content = _general_text(self.bot)
-        view = _make_layout(self.bot, content, include_dropdown=True, general_page=True)
+        content = _general_text(self.bot, lang)
+        view    = _make_layout(self.bot, content, lang, include_dropdown=True, general_page=True)
         await ctx.send(view=view)
 
 
