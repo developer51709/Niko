@@ -6,6 +6,7 @@ import json
 import os
 import base64
 from utils import logging
+from .error_handler import is_owner
 
 # ---------- Helpers ----------
 
@@ -302,6 +303,15 @@ class SetNameView(discord.ui.LayoutView):
                     f"https://discord.com/api/v9/users/@me",
                     f"https://discord.com/api/v9/users/{bot_id}"
                 ]
+        else:
+            """
+            Note:
+             we must assign a value or it will send 
+             an error in the console everytime a 
+             non-owner uses the command even though 
+             the command will still work properly
+            """
+            owner = False
                 
         success, attempts = await try_patch_with_fallbacks(urls, token, body)
 
