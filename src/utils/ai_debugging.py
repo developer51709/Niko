@@ -7,27 +7,24 @@ How it works:
    channel with an "AI Debug" button
 3. The developer clicks "AI Debug" — the AI analyzes the error and the
    relevant source file and replies with an explanation + fix suggestion
-4. The developer clicks "Fix with AI" — the AI rewrites the affected cog
-   file, a backup is saved, and the cog is hot-reloaded
+4. The developer clicks "Fix with AI" — the AI rewrites the affected file,
+   a backup is saved, and the cog is hot-reloaded
 5. If the fix is wrong the developer clicks "Revert Fix" to restore the
    backup instantly
 """
 
 import os
 import re
-import sys
 import shutil
 import asyncio
-import inspect
-import textwrap
 import traceback
 import datetime
 from pathlib import Path
-from utils.ai_nikoapi import generate_reply_nikoapi
 
 import discord
 from discord.ext import commands
-from utils import logging
+from openai import OpenAI
+from utils import logging as log
 
 # ──────────────────────────────────────────────
 # Config
@@ -38,145 +35,214 @@ DEBUG_CHANNEL_ID: int | None = (
     else None
 )
 
-COGS_DIR = Path("src/cogs")
+COGS_DIR  = Path("src/cogs")
+UTILS_DIR = Path("src/utils")
 BACKUP_DIR = Path("data/ai_debug_backups")
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
+_MAX_FILE_CHARS = 8000
+
 # ──────────────────────────────────────────────
-# Helpers
+# OpenAI client — direct technical call (no personality layer)
 # ──────────────────────────────────────────────
-def _cog_file_for(cog_name: str) -> Path | None:
-    """Return the source Path for a cog name, or None if unknown."""
-    candidate = COGS_DIR / f"{cog_name}.py"
-    return candidate if candidate.exists() else None
+def _openai_client() -> OpenAI:
+    return OpenAI(
+        api_key=os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"),
+        base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"),
+    )
 
 
-def _read_file_safe(path: Path, max_chars: int = 6000) -> str:
+def _call_ai(system: str, user: str, *, max_tokens: int = 1200) -> str:
+    """Synchronous OpenAI call — run this inside asyncio.to_thread()."""
+    try:
+        client = _openai_client()
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.1,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        return f"[AI call failed: {exc}]"
+
+
+# ──────────────────────────────────────────────
+# File helpers
+# ──────────────────────────────────────────────
+def _find_source_file(name: str) -> Path | None:
+    """Search cogs/ then utils/ for a matching .py file."""
+    for directory in (COGS_DIR, UTILS_DIR):
+        candidate = directory / f"{name}.py"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_file(path: Path) -> str:
     try:
         text = path.read_text(encoding="utf-8")
-        if len(text) > max_chars:
-            text = text[:max_chars] + f"\n... [truncated — {len(text)} chars total]"
+        if len(text) > _MAX_FILE_CHARS:
+            text = text[:_MAX_FILE_CHARS] + f"\n... [truncated — {len(text)} total chars]"
         return text
     except Exception as exc:
-        return f"<could not read file: {exc}>"
+        return f"<could not read {path}: {exc}>"
 
 
-def _backup_cog(cog_name: str) -> Path | None:
-    src = _cog_file_for(cog_name)
-    if src is None:
-        return None
-    ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    dest = BACKUP_DIR / f"{cog_name}_{ts}.py.bak"
-    shutil.copy2(src, dest)
+def _backup(file_path: Path) -> Path:
+    ts   = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    name = file_path.stem
+    dest = BACKUP_DIR / f"{name}_{ts}.py.bak"
+    shutil.copy2(file_path, dest)
     return dest
 
 
-def _latest_backup(cog_name: str) -> Path | None:
-    backups = sorted(BACKUP_DIR.glob(f"{cog_name}_*.py.bak"), reverse=True)
+def _latest_backup(name: str) -> Path | None:
+    backups = sorted(BACKUP_DIR.glob(f"{name}_*.py.bak"), reverse=True)
     return backups[0] if backups else None
 
 
 def _extract_code_block(text: str) -> str | None:
-    """Pull the first ```python … ``` block from AI output."""
     match = re.search(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else None
 
 
-def _container(*items) -> discord.ui.LayoutView:
+def _infer_file_from_tb(traceback_str: str) -> str | None:
+    """Try to detect which cog/util file is named in the traceback."""
+    matches = re.findall(r"src/(?:cogs|utils)/(\w+)\.py", traceback_str)
+    return matches[-1] if matches else None
+
+
+# ──────────────────────────────────────────────
+# AI prompts
+# ──────────────────────────────────────────────
+_ANALYZE_SYSTEM = (
+    "You are an expert Python and discord.py debugging assistant. "
+    "Be precise, technical, and concise. Format with markdown. "
+    "Do NOT add unnecessary caveats or filler text."
+)
+
+def _analyze_prompt(error_type: str, tb: str, file_name: str | None, code: str) -> str:
+    code_block = (
+        f"\n\n**Source — {file_name}.py** (relevant excerpt):\n```python\n{code}\n```"
+        if code else ""
+    )
+    return (
+        f"**Error:** `{error_type}`\n\n"
+        f"**Traceback:**\n```\n{tb}\n```"
+        f"{code_block}\n\n"
+        "Explain:\n"
+        "1. **Root cause** — exactly what went wrong and why\n"
+        "2. **Fix** — specific code change to resolve it (show a before/after snippet)\n"
+        "3. **Prevention** — one-line note on avoiding this in future\n"
+    )
+
+
+_FIX_SYSTEM = (
+    "You are an expert Python and discord.py engineer. "
+    "Output ONLY a single ```python ... ``` code block containing the COMPLETE fixed file. "
+    "No explanations outside the code block. "
+    "Preserve all existing functionality; change only what is necessary to fix the bug. "
+    "Keep the async setup() function at the bottom of cogs."
+)
+
+def _fix_prompt(error_type: str, tb: str, file_name: str, code: str) -> str:
+    return (
+        f"Fix the bug below by rewriting the complete source of **{file_name}.py**.\n\n"
+        f"**Error:** `{error_type}`\n\n"
+        f"**Traceback:**\n```\n{tb}\n```\n\n"
+        f"**Full source of {file_name}.py:**\n```python\n{code}\n```"
+    )
+
+
+# ──────────────────────────────────────────────
+# CV2 helpers
+# ──────────────────────────────────────────────
+def _make_view(*items) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(*items))
     return view
 
 
 # ──────────────────────────────────────────────
-# AI calls (sync — run in executor)
+# Buttons
 # ──────────────────────────────────────────────
-def _ai_analyze(error_type: str, traceback_str: str, cog_name: str | None, code: str) -> str:
-    code_section = f"\n\nRelevant source code ({cog_name}.py):\n```python\n{code}\n```" if code else ""
-
-    prompt = (
-        "You are an expert Python / discord.py debugging assistant.\n"
-        "Analyze this error and explain:\n"
-        "1. What caused it (be specific about the line / root cause)\n"
-        "2. How to fix it (provide a clear, actionable solution)\n"
-        "Keep the response concise — under 400 words.\n\n"
-        f"Error type: {error_type}\n\n"
-        f"Traceback:\n```\n{traceback_str}\n```"
-        f"{code_section}"
-    )
-
-    # use the nikoapi to generate the response
-    bot = commands.bot
-    user_id = int(1484653109576732692)
-    server = "Internal AI Debugging"
-    username = "System Debug Handler"
-    response = generate_reply_nikoapi(bot, user_id, server, prompt, username, prompt)
-    
-    return response
-
-
-def _ai_fix(error_type: str, traceback_str: str, cog_name: str, code: str) -> str:
-    prompt = (
-        "You are an expert Python / discord.py engineer.\n"
-        "Fix the bug described below by rewriting the COMPLETE source file.\n"
-        "Rules:\n"
-        "- Output ONLY the fixed Python code inside a single ```python … ``` block.\n"
-        "- Do NOT add explanations outside the code block.\n"
-        "- Preserve all existing functionality; change only what is necessary.\n"
-        "- Keep the async setup() function at the bottom.\n\n"
-        f"Error type: {error_type}\n\n"
-        f"Traceback:\n```\n{traceback_str}\n```\n\n"
-        f"Full source of {cog_name}.py:\n```python\n{code}\n```"
-    )
-
-    # use the nikoapi to generate the response
-    bot = commands.bot
-    user_id = int(1484653109576732692)
-    server = "Internal AI Debugging"
-    username = "System Debug Handler"
-    response = generate_reply_nikoapi(bot, user_id, server, prompt, username, prompt)
-    
-    return response
-
-
-# ──────────────────────────────────────────────
-# Discord Views
-# ──────────────────────────────────────────────
-class _AnalysisView(discord.ui.ActionRow):
-    """View shown after the AI has analyzed the error — offers 'Fix with AI'."""
-
-    def __init__(self, bot: commands.Bot, error_type: str, traceback_str: str, cog_name: str | None, analysis: str):
-        super().__init__()
-        self.bot = bot
+class _AiDebugBtn(discord.ui.Button):
+    def __init__(self, bot: commands.Bot, error_type: str, tb: str, file_name: str | None):
+        super().__init__(label="AI Debug", style=discord.ButtonStyle.primary, emoji="🤖")
+        self.bot       = bot
         self.error_type = error_type
-        self.traceback_str = traceback_str
-        self.cog_name = cog_name
-        self.analysis = analysis
+        self.tb        = tb
+        self.file_name = file_name
 
-        if cog_name and _cog_file_for(cog_name):
-            fix_btn = discord.ui.Button(
-                label="Fix with AI",
-                style=discord.ButtonStyle.danger,
-                emoji="🔧",
-                custom_id="fix_with_ai",
-            )
-            fix_btn.callback = self._fix_callback
-            self.add_item(fix_btn)
-
-    async def _fix_callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
-        cog_name = self.cog_name
-        cog_file = _cog_file_for(cog_name)
-        if cog_file is None:
-            await interaction.followup.send("⚠️ Could not locate the cog source file.", ephemeral=True)
+
+        code = ""
+        file_path = _find_source_file(self.file_name) if self.file_name else None
+        if file_path:
+            code = _read_file(file_path)
+
+        try:
+            analysis = await asyncio.to_thread(
+                _call_ai,
+                _ANALYZE_SYSTEM,
+                _analyze_prompt(self.error_type, self.tb, self.file_name, code),
+                max_tokens=1200,
+            )
+        except Exception as exc:
+            await interaction.followup.send(f"❌ AI call failed: `{exc}`", ephemeral=True)
             return
 
-        code = _read_file_safe(cog_file)
+        display = analysis[:1900] + ("…" if len(analysis) > 1900 else "")
 
-        loop = asyncio.get_event_loop()
+        view = _make_view(
+            discord.ui.TextDisplay(content="### 🤖 AI Analysis"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=display),
+        )
+
+        if file_path:
+            view.add_item(discord.ui.Container(
+                discord.ui.ActionRow(
+                    _FixWithAiBtn(self.bot, self.error_type, self.tb, self.file_name, file_path)
+                ),
+            ))
+
+        await interaction.followup.send(view=view)
+        log.info("AIDebugging", f"Analysis sent for {self.error_type} in {self.file_name or 'unknown'}")
+
+
+class _FixWithAiBtn(discord.ui.Button):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        error_type: str,
+        tb: str,
+        file_name: str,
+        file_path: Path,
+    ):
+        super().__init__(label="Fix with AI", style=discord.ButtonStyle.danger, emoji="🔧")
+        self.bot        = bot
+        self.error_type = error_type
+        self.tb         = tb
+        self.file_name  = file_name
+        self.file_path  = file_path
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+
+        code = _read_file(self.file_path)
+
         try:
-            ai_output = await loop.run_in_executor(
-                None, _ai_fix, self.error_type, self.traceback_str, cog_name, code
+            ai_output = await asyncio.to_thread(
+                _call_ai,
+                _FIX_SYSTEM,
+                _fix_prompt(self.error_type, self.tb, self.file_name, code),
+                max_tokens=3000,
             )
         except Exception as exc:
             await interaction.followup.send(f"❌ AI call failed: `{exc}`", ephemeral=True)
@@ -185,124 +251,80 @@ class _AnalysisView(discord.ui.ActionRow):
         fixed_code = _extract_code_block(ai_output)
         if not fixed_code:
             await interaction.followup.send(
-                f"⚠️ The AI didn't return a valid code block. Raw output:\n```\n{ai_output[:1500]}\n```",
+                f"⚠️ The AI didn't return a valid code block.\n```\n{ai_output[:1000]}\n```",
                 ephemeral=True,
             )
             return
 
-        backup_path = _backup_cog(cog_name)
+        backup_path = _backup(self.file_path)
+
         try:
-            cog_file.write_text(fixed_code, encoding="utf-8")
+            self.file_path.write_text(fixed_code, encoding="utf-8")
         except Exception as exc:
             await interaction.followup.send(f"❌ Failed to write fix: `{exc}`", ephemeral=True)
             return
 
-        try:
-            await self.bot.reload_extension(f"cogs.{cog_name}")
-            reload_status = f"✅ Cog `{cog_name}` reloaded successfully."
-        except Exception as exc:
-            reload_status = f"⚠️ Fix applied but cog reload failed: `{exc}`"
+        # Hot-reload if it's a cog
+        reload_status = ""
+        if self.file_path.parent == COGS_DIR:
+            try:
+                await self.bot.reload_extension(f"cogs.{self.file_name}")
+                reload_status = f"\n✅ Cog `{self.file_name}` hot-reloaded successfully."
+            except Exception as exc:
+                reload_status = f"\n⚠️ Fix written but cog reload failed: `{exc}`"
 
-        view = _container(
-            discord.ui.TextDisplay(content=f"### 🔧 Fix Applied — `{cog_name}.py`"),
+        view = _make_view(
+            discord.ui.TextDisplay(content=f"### 🔧 Fix Applied — `{self.file_name}.py`"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=f"{reload_status}\n-# Backup saved to `{backup_path.name}`"),
+            discord.ui.TextDisplay(
+                content=f"{reload_status}\n-# Backup: `{backup_path.name}`".strip()
+            ),
+            discord.ui.ActionRow(
+                _RevertBtn(self.bot, self.file_name, self.file_path, backup_path)
+            ),
         )
-
-        revert_view = _RevertView(cog_name=cog_name, backup_path=backup_path, bot=self.bot)
-        await interaction.followup.send(view=view, components=revert_view)
-        logging.success("AIDebugging", f"Applied AI fix to {cog_name}.py")
+        await interaction.followup.send(view=view)
+        log.success("AIDebugging", f"Applied AI fix to {self.file_name}.py")
 
 
-class _RevertView(discord.ui.View):
-    """Standalone view with a Revert button attached to the fix-applied message."""
-
-    def __init__(self, cog_name: str, backup_path: Path, bot: commands.Bot):
-        super().__init__(timeout=600)
-        self.cog_name = cog_name
+class _RevertBtn(discord.ui.Button):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        file_name: str,
+        file_path: Path,
+        backup_path: Path,
+    ):
+        super().__init__(label="Revert Fix", style=discord.ButtonStyle.secondary, emoji="↩️")
+        self.bot         = bot
+        self.file_name   = file_name
+        self.file_path   = file_path
         self.backup_path = backup_path
-        self.bot = bot
 
-        btn = discord.ui.Button(label="Revert Fix", style=discord.ButtonStyle.secondary, emoji="↩️")
-        btn.callback = self._revert_callback
-        self.add_item(btn)
-
-    async def _revert_callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
-        cog_file = _cog_file_for(self.cog_name)
-        if cog_file is None or not self.backup_path.exists():
+
+        if not self.backup_path.exists():
             await interaction.followup.send("⚠️ Backup file not found.", ephemeral=True)
             return
 
-        shutil.copy2(self.backup_path, cog_file)
+        shutil.copy2(self.backup_path, self.file_path)
 
-        try:
-            await self.bot.reload_extension(f"cogs.{self.cog_name}")
-            reload_status = f"✅ Cog `{self.cog_name}` reverted and reloaded."
-        except Exception as exc:
-            reload_status = f"⚠️ Reverted but reload failed: `{exc}`"
+        reload_status = ""
+        if self.file_path.parent == COGS_DIR:
+            try:
+                await self.bot.reload_extension(f"cogs.{self.file_name}")
+                reload_status = f"✅ `{self.file_name}` reverted and reloaded."
+            except Exception as exc:
+                reload_status = f"⚠️ Reverted but reload failed: `{exc}`"
 
-        view = _container(
-            discord.ui.TextDisplay(content=f"### ↩️ Fix Reverted — `{self.cog_name}.py`"),
+        view = _make_view(
+            discord.ui.TextDisplay(content=f"### ↩️ Reverted — `{self.file_name}.py`"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=reload_status),
+            discord.ui.TextDisplay(content=reload_status or "File restored from backup."),
         )
         await interaction.followup.send(view=view)
-        self.stop()
-        logging.success("AIDebugging", f"Reverted AI fix on {self.cog_name}.py")
-
-
-class _DebugReportView(discord.ui.ActionRow):
-    """Initial report view — has a single 'AI Debug' button."""
-
-    def __init__(self, bot: commands.Bot, error_type: str, traceback_str: str, cog_name: str | None):
-        super().__init__()
-        self.bot = bot
-        self.error_type = error_type
-        self.traceback_str = traceback_str
-        self.cog_name = cog_name
-
-        btn = discord.ui.Button(label="AI Debug", style=discord.ButtonStyle.primary, emoji="🤖")
-        btn.callback = self._debug_callback
-        self.add_item(btn)
-
-    async def _debug_callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
-        code = ""
-        if self.cog_name:
-            f = _cog_file_for(self.cog_name)
-            if f:
-                code = _read_file_safe(f)
-
-        loop = asyncio.get_event_loop()
-        try:
-            analysis = await loop.run_in_executor(
-                None, _ai_analyze, self.error_type, self.traceback_str, self.cog_name, code
-            )
-        except Exception as exc:
-            await interaction.followup.send(f"❌ AI call failed: `{exc}`", ephemeral=True)
-            return
-
-        # Trim for Discord's 2000-char limit inside a TextDisplay
-        display_analysis = analysis[:1800] + ("…" if len(analysis) > 1800 else "")
-
-        layout = _container(
-            discord.ui.TextDisplay(content="### 🤖 AI Analysis"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=display_analysis),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        )
-
-        analysis_view = _AnalysisView(
-            bot=self.bot,
-            error_type=self.error_type,
-            traceback_str=self.traceback_str,
-            cog_name=self.cog_name,
-            analysis=analysis,
-        )
-        if analysis_view.children:
-            layout.add_item(analysis_view)
-        await interaction.followup.send(view=layout)
+        log.success("AIDebugging", f"Reverted AI fix on {self.file_name}.py")
 
 
 # ──────────────────────────────────────────────
@@ -322,56 +344,53 @@ async def send_debug_report(
     ----------
     bot:        The running bot instance.
     error:      The caught exception.
-    cog_name:   Name of the cog where the error occurred (without .py).
-                If None the AI Debug button will still appear but won't
-                offer a code fix.
+    cog_name:   Name of the cog/util file where the error occurred (without .py).
+                Auto-detected from the traceback if not provided.
     channel_id: Override the AI_DEBUG_CHANNEL env var for this call.
     """
     target_id = channel_id or DEBUG_CHANNEL_ID
     if target_id is None:
-        logging.warning(
+        log.warning(
             "AIDebugging",
-            "AI_DEBUG_CHANNEL is not set — skipping debug report. "
-            "Set this env var to a channel ID to enable AI debugging.",
+            "AI_DEBUG_CHANNEL is not set — debug reports are disabled. "
+            "Set AI_DEBUG_CHANNEL to a channel ID to enable them.",
         )
         return
 
     channel = bot.get_channel(target_id)
     if channel is None:
-        logging.warning("AIDebugging", f"Channel {target_id} not found in cache.")
+        log.warning("AIDebugging", f"Debug channel {target_id} not found in cache.")
         return
 
-    error_type = type(error).__name__
-    tb_lines = traceback.format_exception(type(error), error, error.__traceback__)
+    error_type   = type(error).__name__
+    tb_lines     = traceback.format_exception(type(error), error, error.__traceback__)
     traceback_str = "".join(tb_lines)
-    short_tb = traceback_str[-1500:] if len(traceback_str) > 1500 else traceback_str
 
+    # Auto-detect which file is involved
+    file_name = cog_name or _infer_file_from_tb(traceback_str)
+
+    short_tb = traceback_str[-2000:] if len(traceback_str) > 2000 else traceback_str
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    cog_line = f"`{cog_name}.py`" if cog_name else "*(unknown cog)*"
+    file_label = f"`{file_name}.py`" if file_name else "*(unknown file)*"
 
-    button = _DebugReportView(
-        bot=bot,
-        error_type=error_type,
-        traceback_str=traceback_str,
-        cog_name=cog_name,
-    )
-
-    layout = _container(
-        discord.ui.TextDisplay(content=f"### ⚠️ Bot Error Detected"),
+    view = _make_view(
+        discord.ui.TextDisplay(content="### ⚠️ Bot Error Detected"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
                 f"**Type:** `{error_type}`\n"
-                f"**Cog:** {cog_line}\n"
+                f"**File:** {file_label}\n"
                 f"**Time:** {timestamp}\n\n"
                 f"```\n{short_tb}\n```"
             )
         ),
-        button,
+        discord.ui.ActionRow(
+            _AiDebugBtn(bot, error_type, traceback_str, file_name)
+        ),
     )
 
     try:
-        await channel.send(view=layout)
-        logging.info("AIDebugging", f"Debug report sent for {error_type} in {cog_name or 'unknown'}")
+        await channel.send(view=view)
+        log.info("AIDebugging", f"Debug report sent — {error_type} in {file_name or 'unknown'}")
     except discord.HTTPException as exc:
-        logging.error("AIDebugging", f"Failed to send debug report: {exc}")
+        log.error("AIDebugging", f"Failed to send debug report: {exc}")

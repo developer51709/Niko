@@ -196,7 +196,7 @@ class ModerationUtils(commands.Cog):
             # sometime it says member has no attribute add_roles in this case we need to attach a specific guild before trying to add the role
             member = guild.get_member(member.id)
             await member.add_roles(role, reason=reason or "Muted")
-        gid = str(member.guild.id)
+        gid = str(guild.id)
         uid = str(member.id)
         until = None
         if duration:
