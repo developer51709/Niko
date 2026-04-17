@@ -18,6 +18,7 @@ from discord import MediaGalleryItem, UnfurledMediaItem
 from discord.ext import commands, tasks
 from discord.ui import Modal, TextInput
 
+from config.emojis import get_emoji
 from utils.youtube  import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
 from utils.twitter  import fetch_latest_tweet, validate_twitter_username
 from utils.tiktok   import fetch_latest_tiktok, validate_tiktok_username
@@ -30,7 +31,7 @@ from utils.reddit   import fetch_latest_reddit, validate_reddit
 
 PLATFORMS: dict[str, dict] = {
     "youtube": {
-        "icon":    "🎥",
+        "icon":    get_emoji("youtube"),
         "color":   discord.Colour(0xFF0000),
         "label":   "YouTube Channel",
         "btn_style": discord.ButtonStyle.danger,
@@ -163,7 +164,7 @@ def build_notification_view(
     post: dict,
 ) -> discord.ui.LayoutView:
     meta      = PLATFORMS.get(platform, {})
-    icon      = meta.get("icon", "📢")
+    icon      = meta.get("icon", get_emoji("icon_megaphone"))
     color     = meta.get("color", discord.Colour(0x5865F2))
     dname     = _display(platform, username)
     url       = post.get("url", "")
@@ -275,7 +276,7 @@ class AddFollowModal(Modal):
             meta = PLATFORMS[self.platform]
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="### ❌ Not Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=(
@@ -302,7 +303,7 @@ class AddFollowModal(Modal):
         dname = _display(self.platform, stored)
         success = discord.ui.LayoutView()
         success.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ✅ Now Following"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Now Following"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
@@ -362,7 +363,7 @@ class _RemoveFollowSelect(discord.ui.Select):
             platform   = row["platform"]
             username   = row["username"]
             channel_id = row["channel_id"]
-            icon = PLATFORMS.get(platform, {}).get("icon", "📢")
+            icon = PLATFORMS.get(platform, {}).get("icon", get_emoji("icon_megaphone"))
             dname = _display(platform, username)
             options.append(discord.SelectOption(
                 label=f"{dname} ({platform.capitalize()})",
@@ -381,7 +382,7 @@ class _RemoveFollowSelect(discord.ui.Select):
         dname = _display(platform, username)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ✅ Unfollowed"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Unfollowed"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"Stopped tracking **{dname}** on **{platform.capitalize()}**."
@@ -406,7 +407,7 @@ def build_setup_view(
 
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content="### 📢 Social Media Notifier"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('icon_megaphone')} Social Media Notifier"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
@@ -457,7 +458,7 @@ def _build_follows_list_view(guild: discord.Guild, follows: list) -> discord.ui.
         platform   = row["platform"]
         username   = row["username"]
         channel_id = row["channel_id"]
-        icon  = PLATFORMS.get(platform, {}).get("icon", "📢")
+        icon  = PLATFORMS.get(platform, {}).get("icon", get_emoji("icon_megaphone"))
         dname = _display(platform, username)
         ch    = guild.get_channel(channel_id)
         ch_text = ch.mention if ch else f"<#{channel_id}>"
@@ -532,7 +533,7 @@ class Notifier(commands.Cog):
         if not ok:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="### ❌ Account Not Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Account Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"Could not validate **{query}** on **{platform.capitalize()}**."
@@ -560,7 +561,7 @@ class Notifier(commands.Cog):
         preview = (post.get("text") or post.get("title") or "")[:200]
         result  = discord.ui.LayoutView()
         result.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### ✅ Fetch Successful — {dname}"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Fetch Successful — {dname}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"**Latest:** {preview}\n**Link:** {post['url']}"
@@ -591,7 +592,7 @@ class Notifier(commands.Cog):
 
         status = discord.ui.LayoutView()
         status.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### ⏳ Checking…"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_loading')} Checking…"),
             discord.ui.TextDisplay(content="Validating the account, one moment…"),
             accent_colour=discord.Colour(0xFEE75C),
         ))
@@ -601,7 +602,7 @@ class Notifier(commands.Cog):
         if not ok:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="### ❌ Not Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"Could not find **{username}** on **{platform.capitalize()}**."
@@ -625,7 +626,7 @@ class Notifier(commands.Cog):
         dname   = _display(platform, stored)
         success = discord.ui.LayoutView()
         success.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ✅ Now Following"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Now Following"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
@@ -660,7 +661,7 @@ class Notifier(commands.Cog):
         if target is None:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="### ❌ Not Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"No follow found for **{username}** on **{platform.capitalize()}**."
@@ -677,7 +678,7 @@ class Notifier(commands.Cog):
         dname = _display(platform, target)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ✅ Unfollowed"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Unfollowed"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"Stopped tracking **{dname}** on **{platform.capitalize()}**."

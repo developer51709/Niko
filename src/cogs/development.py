@@ -83,7 +83,7 @@ class Development(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="# 🛠 Developer Toolkit\n> Easy-to-use debugging and control commands."
+                content=f"# {get_emoji('icon_bug')} Developer Toolkit\n> Easy-to-use debugging and control commands."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -121,7 +121,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ⚠️ Cog Load Error\nAn error occurred while loading the {cog} cog."
+                    content=f"## {get_emoji('icon_danger')} Cog Load Error\nAn error occurred while loading the {cog} cog."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -140,7 +140,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ⚠️ Cog Unload Error\nAn error occurred while unloading the {cog} cog."
+                    content=f"## {get_emoji('icon_danger')} Cog Unload Error\nAn error occurred while unloading the {cog} cog."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -159,7 +159,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ⚠️ Cog Reload Error\nAn error occurred while reloading the {cog} cog."
+                    content=f"## {get_emoji('icon_danger')} Cog Reload Error\nAn error occurred while reloading the {cog} cog."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -251,7 +251,7 @@ class Development(commands.Cog):
     async def dev_members(self, ctx):
         lines = [
             f"`{m.id}` — **{m.display_name}** ({m.name})"
-            + (" 🤖" if m.bot else "")
+            + (f" {get_emoji('icon_bot')}" if m.bot else "")
             for m in sorted(ctx.guild.members, key=lambda m: m.display_name.lower())
         ]
         pages = paginate(lines, per_page=15)
@@ -276,7 +276,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ✅️ Evaluation Success\nThe code was evaluated successfully."
+                    content=f"## {get_emoji('icon_tick')} Evaluation Success\nThe code was evaluated successfully."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -289,7 +289,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ⚠️ Evaluation Error\nAn error occurred while evaluating the code."
+                    content=f"## {get_emoji('icon_danger')} Evaluation Error\nAn error occurred while evaluating the code."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -320,7 +320,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## ⚠️ Execution Error\nAn error occurred while executing the code."
+                    content=f"## {get_emoji('icon_danger')} Execution Error\nAn error occurred while executing the code."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
