@@ -62,8 +62,12 @@ def get_emoji(emoji_name: str):
         return "<:icon_cross:1492967626320646315>"
     if emoji_name == "icon_danger":
         return "<:icon_danger:1492967630024474684>"
+    if emoji_name == "icon_disk":
+        return "<:icon_disk:1494738060255166556>"
     if emoji_name == "icon_dnd":
         return "<:icon_dnd:1494421802317778994>"
+    if emoji_name == "icon_docs":
+        return "<:icon_docs:1494738063383986236>"
     if emoji_name == "icon_economy":
         return "<:icon_economy:1492967632586936333>"
     if emoji_name == "icon_edit":
@@ -78,6 +82,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_giveaway:1492967641374265514>"
     if emoji_name == "icon_heart":
         return "<:icon_heart:1494438792038322186>"
+    if emoji_name == "icon_home":
+        return "<:icon_home:1494738066324066407>"
     if emoji_name == "icon_host":
         return "<:icon_host:1494434252081856776>"
     if emoji_name == "icon_idle":
@@ -100,6 +106,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_link:1492967649641107496>"
     if emoji_name == "icon_loading":
         return "<a:icon_loading:1493402982883000582>"
+    if emoji_name == "icon_loop":
+        return "<:icon_loop:1494738069398753452>"
     if emoji_name == "icon_megaphone":
         return "<:icon_megaphone:1494438801328574615>"
     if emoji_name == "icon_moderation":

@@ -10,5 +10,14 @@
     "rules_role_id": 1482871232260214886,
     "role_menu_channel": null,
     "role_menu_message_id": null,
-    "role_menu_options": null
+    "role_menu_options": null,
+    "autorole_ids": [
+        1482871232260214886
+    ],
+    "captcha_enabled": false,
+    "captcha_channel_id": null,
+    "captcha_panel_message_id": null,
+    "captcha_add_role_ids": null,
+    "captcha_remove_role_ids": null,
+    "captcha_kick_on_fail": false
 }
