@@ -436,6 +436,7 @@ class InfoCog(commands.Cog):
     # -------------------------------
     @commands.command(
         name="serverinfo",
+        aliases=["si", "server"],
         help="{ 'en': 'peek at cozy server stats ☕', 'de': 'zeigt server-infos' }"
     )
     async def serverinfo(self, ctx):
