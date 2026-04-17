@@ -241,7 +241,7 @@ MESSAGES = {
             "serverbanner_title": "☕ server banner",
             "serverbanner_none": "aww this café doesn't have a banner yet ☕",
 
-            "booststats_title": "☕ boost vibes",
+            "booststats_title": "boost vibes",
             "booststats_count": "boost count",
             "booststats_tier": "boost tier",
             "booststats_boosters": "boosters",
@@ -270,7 +270,7 @@ MESSAGES = {
             "hostinfo_os": "os",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
-            "invite_title": "☕️ invite niko",
+            "invite_title": "invite niko",
             "invite_link": "click here to invite niko to your café",
         },
 
@@ -327,7 +327,7 @@ MESSAGES = {
             "serverbanner_title": "☕ server-banner",
             "serverbanner_none": "aww dieses café hat noch kein banner ☕",
 
-            "booststats_title": "☕ boost-vibes",
+            "booststats_title": "boost-vibes",
             "booststats_count": "boosts",
             "booststats_tier": "boost-stufe",
             "booststats_boosters": "booster",
@@ -356,7 +356,7 @@ MESSAGES = {
             "hostinfo_os": "betriebssystem",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
-            "invite_title": "☕️ niko einladen",
+            "invite_title": "niko einladen",
             "invite_link": "klicke hier, um niko in dein café einzuladen",
         },
     },
@@ -813,7 +813,7 @@ class InfoCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
+                content=f"### {get_emoji('icon_invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
             )
         )
         view.add_item(container)

@@ -15,7 +15,7 @@ from discord.ext import commands
 from utils import logging
 from config.emojis import get_emoji
 
-# ── Constants ──────────────────────────────────────
+# ── Constants ─────────────────────────────────────
 
 LOG_CONFIG_FILE = "data/logging_config.json"
 
@@ -142,7 +142,7 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
 _AUTOMOD_DEFAULT_BUTTONS = ["kick", "ban"]
 
 
-# ── Config helpers ─────────────────────────────────
+# ── Config helpers ────────────────────────────────
 
 def _load_log_config() -> dict:
     if not os.path.exists(LOG_CONFIG_FILE):
@@ -172,7 +172,7 @@ def _guild_config(data: dict, guild_id: int) -> dict:
     return data[gid]
 
 
-# ── Quick-action buttons ───────────────────────────
+# ── Quick-action buttons ──────────────────────────
 
 class KickButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
@@ -198,7 +198,7 @@ class KickButton(discord.ui.Button):
 
 class BanButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Ban", style=discord.ButtonStyle.danger, emoji="🔨", row=0)
+        super().__init__(label="Ban", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_ban'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
@@ -226,7 +226,7 @@ class BanButton(discord.ui.Button):
 
 class UnbanButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Unban", style=discord.ButtonStyle.success, emoji="✅", row=0)
+        super().__init__(label="Unban", style=discord.ButtonStyle.success, emoji=get_emoji('icon_tick'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
@@ -273,7 +273,7 @@ class UnmuteButton(discord.ui.Button):
 
 class UnlockButton(discord.ui.Button):
     def __init__(self, guild_id: int, channel_id: int):
-        super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji="🔓", row=0)
+        super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji=get_emoji('icon_unlock'), row=0)
         self.guild_id = guild_id
         self.channel_id = channel_id
 
@@ -312,7 +312,7 @@ def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None,
     return btns
 
 
-# ── Log entry view builder ─────────────────────────
+# ── Log entry view builder ────────────────────────
 
 def _build_log_view(
     category: str,
@@ -330,11 +330,13 @@ def _build_log_view(
     # relative: <t:1711234567:R> → "2 months ago"
     # full: <t:1711234567:F> → "March 23, 2024 12:36 AM"
     timestamp = f"-# <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n-# <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
-    # set join and leave emojis
+    # set type specific emojis
     if title == "Member Joined":
         emoji = get_emoji("icon_join")
     if title == "Member Left":
         emoji = get_emoji("icon_leave")
+    if action_key == "Ban":
+        emoji = get_emoji("icon_ban")
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 
@@ -359,7 +361,7 @@ def _build_log_view(
     return view
 
 
-# ── Settings Panel ─────────────────────────────────
+# ── Settings Panel ────────────────────────────────
 
 class LoggingSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, category: str | None = None):
@@ -550,7 +552,7 @@ class LoggingSetupView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-# ── The Cog ────────────────────────────────────────
+# ── Main Cog ──────────────────────────────────────
 
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
@@ -577,7 +579,7 @@ class ServerLogger(commands.Cog):
     def _reload(self):
         self._config = _load_log_config()
 
-    # ── Core logging method ────────────────────────
+    # ── Core logging method ───────────────────────
 
     async def log_event(
         self,
@@ -645,7 +647,7 @@ class ServerLogger(commands.Cog):
         target_id = target.id if target else None
         await self.log_event(guild, category, title, body, target_id=target_id, action_key=title)
 
-    # ── Gateway event listeners ────────────────────
+    # ── Gateway event listeners ───────────────────
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -654,7 +656,7 @@ class ServerLogger(commands.Cog):
         account_age = (datetime.now(timezone.utc) - member.created_at).days
         age_warn = f"\n-# ⚠️ New account — only **{account_age}d** old" if account_age < 7 else ""
 
-        # ── Detect which invite was used ───────────
+        # ── Detect which invite was used ──────────
         used_invite = None
         try:
             current_invites = await guild.invites()
@@ -1019,7 +1021,7 @@ class ServerLogger(commands.Cog):
             perm_changes = []
             for perm, value in iter(after.permissions):
                 if getattr(before.permissions, perm) != value:
-                    symbol = "✅" if value else "❌"
+                    symbol = get_emoji('icon_tick') if value else get_emoji('icon_cross')
                     perm_changes.append(f"{symbol} `{perm.replace('_', ' ').title()}`")
             if perm_changes:
                 changes.append("**Permissions Changed:**\n" + " ".join(perm_changes))
@@ -1202,7 +1204,7 @@ class ServerLogger(commands.Cog):
             target_id=user.id, action_key="Unban"
         )
 
-    # ── Commands ───────────────────────────────────
+    # ── Commands ──────────────────────────────────
 
     @commands.group(name="logging", invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)

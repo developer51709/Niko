@@ -7,12 +7,14 @@ import discord
 import random
 from utils import logging as log
 from utils.ai_config import get_personality
+from config.emojis import get_emoji
 
 MESSAGES = {
     "normal": {
         "en": {
             "not_in_voice": "You need to be in a voice channel first.",
             "get_player_not_in_voice": "You need to be in a voice channel to use music commands.",
+            "music_player_status_title": "Music Player Status",
             "music_not_connected": "Not connected to any music servers.",
             "music_connected": "Connected to a music server and ready.",
             "play_not_found": "I couldn't find that track.",
@@ -36,6 +38,7 @@ MESSAGES = {
         "de": {
             "not_in_voice": "Du musst zuerst einem Sprachkanal beitreten.",
             "get_player_not_in_voice": "Du musst in einem Sprachkanal sein, um Musikbefehle zu nutzen.",
+            "music_player_status_title": "Musik-Player-Status",
             "music_not_connected": "Mit keinem Musikserver verbunden.",
             "music_connected": "Mit einem Musikserver verbunden und bereit.",
             "play_not_found": "Ich konnte diesen Track nicht finden.",
@@ -61,6 +64,7 @@ MESSAGES = {
         "en": {
             "not_in_voice": "hey bestie, you gotta hop into a voice channel first ☕💿",
             "get_player_not_in_voice": "you're not in a voice channel yet, i can't serve music there 😭☕",
+            "music_player_status_title": "Café Music Player Status",
             "music_not_connected": "hmm… i'm not connected to any music servers right now, like a café with no music on 😭",
             "music_connected": "yesss, i'm connected and ready to pour some cozy tracks ☕✨",
             "play_not_found": "i couldn't find that song, like a drink that's not on the menu 😭",
@@ -84,6 +88,7 @@ MESSAGES = {
         "de": {
             "not_in_voice": "hey liebchen, du musst erst in einen Sprachkanal gehen ☕💿",
             "get_player_not_in_voice": "du bist noch in keinem Sprachkanal, ich kann dort keine musik servieren 😭☕",
+            "music_player_status_title": "Café-Musik-Player-Status",
             "music_not_connected": "hmm… ich bin gerade mit keinem musikserver verbunden, wie ein café ohne musik 😭",
             "music_connected": "yesss, ich bin verbunden und bereit für cozy tracks ☕✨",
             "play_not_found": "ich konnte den song nicht finden, wie ein drink, der nicht auf der karte steht 😭",
@@ -331,9 +336,22 @@ class MusicSystem(commands.Cog):
         help="{ 'en': 'check if niko is connected to a music server ☕', 'de': 'prüfe ob niko verbunden ist' }"
     )
     async def music_status(self, ctx: commands.Context):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {msg(ctx, 'music_player_status_title')}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
         if not self.connected:
-            return await ctx.send(msg(ctx, "music_not_connected"))
-        await ctx.send(msg(ctx, "music_connected"))
+            container.add_item(discord.ui.TextDisplay(content=msg(ctx, "music_not_connected")))
+            container.add_item(discord.ui.TextDisplay(content=f"-# {get_emoji('wavelink')} Powered by Wavelink"))
+            view.add_item(container)
+            return await ctx.send(view=view)
+        container.add_item(discord.ui.TextDisplay(content=msg(ctx, "music_connected")))
+        container.add_item(discord.ui.TextDisplay(content=f"-# {get_emoji('wavelink')} Powered by Wavelink"))
+        view.add_item(container)
+        await ctx.send(view=view)
 
     @commands.command(
         name="play",
