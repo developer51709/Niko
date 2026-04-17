@@ -70,6 +70,10 @@ def get_emoji(emoji_name: str):
         return "<:icon_edit:1492967638484385982>"
     if emoji_name == "icon_games":
         return "<:icon_games:1492967635258966279>"
+    if emoji_name == "icon_gambling":
+        return "<:icon_gambling:1494521368061153280>"
+    if emoji_name == "icon_general":
+        return "<:icon_general:1494521371689226250>"
     if emoji_name == "icon_giveaway":
         return "<:icon_giveaway:1492967641374265514>"
     if emoji_name == "icon_heart":
@@ -80,6 +84,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_idle:1494421805333479475>"
     if emoji_name == "icon_image":
         return "<:icon_image:1492967644121530459>"
+    if emoji_name == "icon_info":
+        return "<:icon_info:1494521375325683792>"
     if emoji_name == "icon_important":
         return "<:icon_important:1494438794760552611>"
     if emoji_name == "icon_invite":
@@ -100,6 +106,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_megaphone:1494438801328574615>"
     if emoji_name == "icon_moderation":
         return "<:icon_moderation:1492967655819317388>"
+    if emoji_name == "icon_nsfw":
+        return "<:icon_nsfw:1494521378639183964>"
     if emoji_name == "icon_offline":
         return "<:icon_offline:1494421808345120961>"
     if emoji_name == "icon_online":
@@ -120,6 +128,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_question:1494414720009109515>"
     if emoji_name == "icon_refresh":
         return "<:icon_refresh:1494438804709441548>"
+    if emoji_name == "icon_roleplay":
+        return "<:icon_roleplay:1494521386159439965>"
     if emoji_name == "icon_rewind":
         return "<:icon_rewind:1494419255175811193>"
     if emoji_name == "icon_settings":
@@ -158,6 +168,8 @@ def get_emoji(emoji_name: str):
         return "<:soundcloud:1494419264323452990>"
     if emoji_name == "spotify":
         return "<:spotify:1492967684122349648>"
+    if emoji_name == "icon_voicemaster":
+        return "<:icon_voicemaster:1494521394522882058>"
     if emoji_name == "vm_lock":
         return "<:vm_lock:1492967686932529283>"
     if emoji_name == "vm_unlock":
