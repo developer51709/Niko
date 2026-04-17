@@ -363,6 +363,114 @@ def _build_log_view(
 
 # ── Settings Panel ────────────────────────────────
 
+class SelectChannelView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, category: str, author: discord.Member, panel_message):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        self.category = category
+        self.author = author
+        self.selected_channel: int | None = None
+
+        # --- COMPONENTS ---
+
+        class _ChannelSelect(discord.ui.ChannelSelect):
+            def __init__(s):
+                super().__init__(
+                    channel_types=[discord.ChannelType.text],
+                    placeholder="Select a channel…",
+                    min_values=1,
+                    max_values=1
+                )
+
+            async def callback(s, interaction: discord.Interaction):
+                if interaction.user != author:
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use this menu."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
+
+                ch = s.values[0]
+                self.selected_channel = ch.id
+
+                await interaction.response.defer()
+
+        class _SaveBtn(discord.ui.Button):
+            def __init__(s):
+                super().__init__(
+                    label="Save Channel",
+                    style=discord.ButtonStyle.primary,
+                    emoji=get_emoji("icon_tick")
+                )
+
+            async def callback(s, interaction: discord.Interaction):
+                if interaction.user != author:
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use this button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
+
+                if not self.selected_channel:
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Please select a channel first."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
+
+                d = _load_log_config()
+                gc = _guild_config(d, guild_id)
+                gc[self.category] = self.selected_channel
+                _save_log_config(d)
+
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} **{CATEGORIES[self.category]['label']}** logs → <#{self.selected_channel}>"
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await interaction.response.edit_message(view=view)
+
+                # Return to main panel
+                await panel_message.edit(
+                    view=LoggingSetupView(guild_id, author, self.category)
+                )
+
+        # --- BUILD CONTAINER ---
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_settings')} Select a channel for **{CATEGORIES[category]['label']}**"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(_ChannelSelect()),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(_SaveBtn())
+        )
+
+        self.add_item(container)
+        
+
 class LoggingSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, category: str | None = None):
         super().__init__(timeout=None)
@@ -411,32 +519,64 @@ class LoggingSetupView(discord.ui.LayoutView):
             async def callback(s, interaction: discord.Interaction):
                 _sel[0] = s.values[0]
                 label = CATEGORIES[_sel[0]]["label"]
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_settings')} Category **{label}** selected. Now use the buttons below to configure it."
+                    )
+                )
+                view.add_item(container)
                 await interaction.response.send_message(
-                    f"{get_emoji('icon_settings')} Category **{label}** selected. Now use the buttons below to configure it.",
+                    view=view,
                     ephemeral=True,
                 )
 
         class _SetChannelBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Set Channel Here", style=discord.ButtonStyle.primary, emoji=get_emoji("icon_plus"))
+                super().__init__(
+                    label="Set Channel",
+                    style=discord.ButtonStyle.primary,
+                    emoji=get_emoji("icon_plus")
+                )
                 s._author = author
                 s._guild_id = guild_id
 
             async def callback(s, interaction: discord.Interaction):
                 if interaction.user != s._author:
-                    return await interaction.response.send_message("Only the command invoker can use these buttons.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
+
                 cat = _sel[0]
                 if not cat:
-                    return await interaction.response.send_message("Please select a category from the dropdown first.", ephemeral=True)
-                d = _load_log_config()
-                gc = _guild_config(d, s._guild_id)
-                gc[cat] = interaction.channel.id
-                _save_log_config(d)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
+
+                # get the settings panel message
+                panel_message = interaction.message
                 await interaction.response.send_message(
-                    f"{get_emoji('icon_tick')} **{CATEGORIES[cat]['label']}** logs → {interaction.channel.mention}", ephemeral=True
+                    view=SelectChannelView(s._guild_id, cat, s._author, panel_message),
+                    ephemeral=True
                 )
-                # update the panel
-                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ClearChannelBtn(discord.ui.Button):
             def __init__(s):
@@ -446,32 +586,84 @@ class LoggingSetupView(discord.ui.LayoutView):
 
             async def callback(s, interaction: discord.Interaction):
                 if interaction.user != s._author:
-                    return await interaction.response.send_message("Only the command invoker can use these buttons.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 cat = _sel[0]
                 if not cat:
-                    return await interaction.response.send_message("Please select a category from the dropdown first.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 d = _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 gc[cat] = None
                 _save_log_config(d)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Cleared channel for **{CATEGORIES[cat]['label']}** logs."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
                 await interaction.response.send_message(
-                    f"{get_emoji('icon_cross')} Cleared channel for **{CATEGORIES[cat]['label']}** logs.", ephemeral=True
+                    view=view, ephemeral=True
                 )
                 # update the panel
                 await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ToggleBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Toggle Enable/Disable", style=discord.ButtonStyle.secondary, emoji="🔄")
+                super().__init__(label="Toggle Enable/Disable", style=discord.ButtonStyle.secondary, emoji=get_emoji('icon_refresh'))
                 s._author = author
                 s._guild_id = guild_id
 
             async def callback(s, interaction: discord.Interaction):
                 if interaction.user != s._author:
-                    return await interaction.response.send_message("Only the command invoker can use these buttons.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 cat = _sel[0]
                 if not cat:
-                    return await interaction.response.send_message("Please select a category from the dropdown first.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 d = _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 dis = gc.setdefault("disabled", [])
@@ -482,9 +674,16 @@ class LoggingSetupView(discord.ui.LayoutView):
                     dis.append(cat)
                     state, e = "disabled", get_emoji("icon_cross")
                 _save_log_config(d)
-                await interaction.response.send_message(
-                    f"{e} **{CATEGORIES[cat]['label']}** logging {state}.", ephemeral=True
+                color = discord.Color.green() if state == "enabled" else discord.Color.red()
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{e} **{CATEGORIES[cat]['label']}** logging {state}."
+                    ),
+                    accent_colour=color
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
                 await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
@@ -496,35 +695,69 @@ class LoggingSetupView(discord.ui.LayoutView):
 
             async def callback(s, interaction: discord.Interaction):
                 if interaction.user != s._author:
-                    return await interaction.response.send_message("Only the command invoker can use these buttons.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 d = _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 for cat in CATEGORIES:
                     gc[cat] = interaction.channel.id
                 _save_log_config(d)
-                await interaction.response.send_message(
-                    f"{get_emoji('icon_tick')} All log categories → {interaction.channel.mention}", ephemeral=True
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} All log categories → {interaction.channel.mention}"
+                    ),
+                    accent_colour=discord.Color.green()
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
                 await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
         class _ClearAllBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Clear All Channels", style=discord.ButtonStyle.danger, emoji="🗑️")
+                super().__init__(label="Clear All Channels", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
                 s._author = author
                 s._guild_id = guild_id
 
             async def callback(s, interaction: discord.Interaction):
                 if interaction.user != s._author:
-                    return await interaction.response.send_message("Only the command invoker can use these buttons.", ephemeral=True)
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(
+                        view=view,
+                        ephemeral=True
+                    )
                 d = _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 for cat in CATEGORIES:
                     gc[cat] = None
                 _save_log_config(d)
-                await interaction.response.send_message(
-                    f"{get_emoji('icon_cross')} Cleared all logging channels.", ephemeral=True
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Cleared all logging channels."
+                    ),
+                    accent_colour=discord.Color.red()
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
                 await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
 
@@ -654,7 +887,7 @@ class ServerLogger(commands.Cog):
         guild = member.guild
         created = member.created_at.strftime("%Y-%m-%d")
         account_age = (datetime.now(timezone.utc) - member.created_at).days
-        age_warn = f"\n-# ⚠️ New account — only **{account_age}d** old" if account_age < 7 else ""
+        age_warn = f"\n-# {get_emoji('icon_danger')} New account — only **{account_age}d** old" if account_age < 7 else ""
 
         # ── Detect which invite was used ──────────
         used_invite = None
