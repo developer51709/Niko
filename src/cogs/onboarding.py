@@ -84,7 +84,15 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
                 pass
 
         update_config(self.guild_id, cfg)
-        await interaction.response.send_message("Welcome message updated.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Welcome message updated."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class RulesModal(Modal, title="Set Rules Text"):
@@ -113,7 +121,15 @@ class RulesModal(Modal, title="Set Rules Text"):
                         await msg.edit(view=RulesAcknowledgeView(self.guild_id, cfg=cfg))
             except discord.NotFound:
                 pass
-        await interaction.response.send_message("Rules updated.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Rules text updated."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
@@ -149,8 +165,15 @@ class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
                 pass
 
         if role_id is None:
-            await interaction.response.send_message("Invalid role.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Invalid role."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
 
         if cfg.role_menu_options is None:
             cfg.role_menu_options = []
@@ -163,7 +186,15 @@ class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
         })
 
         update_config(self.guild_id, cfg)
-        await interaction.response.send_message("Role option added.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Role option added."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 # ------------ ONBOARDING SETUP BUTTONS ------------
@@ -177,7 +208,15 @@ class SetWelcomeMsgBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_modal(WelcomeMessageModal(self.guild_id))
 
 
@@ -191,13 +230,27 @@ class SetWelcomeChannelBtn(discord.ui.Button):
         # author check
         print(interaction.message)
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         cfg = get_config(self.guild_id)
         cfg.welcome_channel = interaction.channel.id
         update_config(self.guild_id, cfg)
-        await interaction.response.send_message(
-            f"Welcome channel set to {interaction.channel.mention}.", ephemeral=True
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Welcome channel set to {interaction.channel.mention}."
+            ),
+            accent_colour=discord.Color.green()
         )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class SetRulesTextBtn(discord.ui.Button):
@@ -209,7 +262,15 @@ class SetRulesTextBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_modal(RulesModal(self.guild_id))
 
 
@@ -222,7 +283,15 @@ class PostRulesBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         cfg = get_config(self.guild_id)
         cfg.rules_channel = interaction.channel.id
 
@@ -232,7 +301,15 @@ class PostRulesBtn(discord.ui.Button):
         cfg.rules_message_id = msg.id
         update_config(self.guild_id, cfg)
 
-        await interaction.response.send_message("Rules message posted.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Rules message posted."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class SetRulesRoleBtn(discord.ui.Button):
@@ -244,11 +321,23 @@ class SetRulesRoleBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
-        await interaction.response.send_message(
-            "Reply in this channel with a role mention, ID, or name within 60 seconds.",
-            ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_settings')} Reply in this channel with a role mention, ID, or name within 60 seconds."
+            )
         )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
         def check(msg: discord.Message) -> bool:
             return (
@@ -259,25 +348,52 @@ class SetRulesRoleBtn(discord.ui.Button):
         try:
             msg = await interaction.client.wait_for("message", check=check, timeout=60)
         except asyncio.TimeoutError:
-            await interaction.followup.send("Timed out. Try again.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Timed out. Try again."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.followup.send(view=view, ephemeral=True)
 
         if not interaction.guild:
-            await interaction.followup.send("This must be used in a server.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This must be used in a server."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.followup.send(view=view, ephemeral=True)
 
         role = parse_role_from_text(msg.content, interaction.guild)
         if role is None:
-            await interaction.followup.send(
-                "Could not find that role. Use a mention, ID, or name.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Could not find that role. Use a mention, ID, or name."
+                ),
+                accent_colour=discord.Color.red()
             )
-            return
+            view.add_item(container)
+            return await interaction.followup.send(view=view, ephemeral=True)
 
         cfg = get_config(interaction.guild.id)
         cfg.rules_role_id = role.id
         update_config(interaction.guild.id, cfg)
 
-        await interaction.followup.send(f"Rules role set to {role.mention}.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Rules role set to {role.mention}."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.followup.send(view=view, ephemeral=True)
 
 
 # ----------- AUTOROLE SETUP COMPONENTS -----------
@@ -305,18 +421,34 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
 
         update_config(self.guild_id, cfg)
         if added:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Added {', '.join(added)} as autorole(s)."
+                ),
+                accent_colour=discord.Color.green()
+            )
+            view.add_item(container)
             await interaction.response.send_message(
-                f"Added {', '.join(added)} as autorole(s).", ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+                view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
             )
         else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Those roles are already in the autorole list."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
             await interaction.response.send_message(
-                "Those roles are already in the autorole list.", ephemeral=True
+                view=view, ephemeral=True
             )
 
 
-class AddAutoroleView(discord.ui.View):
+class AddAutoroleView(discord.ui.ActionRow):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=60)
+        super().__init__()
         self.add_item(AddAutoroleSelect(guild_id))
 
 
@@ -357,18 +489,32 @@ class RemoveAutoroleSelect(discord.ui.Select):
 
         update_config(self.guild_id, cfg)
         if removed:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Removed {', '.join(removed)} from autoroles."
+                ),
+                accent_colour=discord.Color.green()
+            )
+            view.add_item(container)
             await interaction.response.send_message(
-                f"Removed {', '.join(removed)} from autoroles.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+                view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
             )
         else:
-            await interaction.response.send_message(
-                "Nothing was removed.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Nothing was removed."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 
-class RemoveAutoroleView(discord.ui.View):
+class RemoveAutoroleView(discord.ui.ActionRow):
     def __init__(self, guild_id: int, guild: discord.Guild):
-        super().__init__(timeout=60)
+        super().__init__()
         self.add_item(RemoveAutoroleSelect(guild_id, guild))
 
 
@@ -380,13 +526,25 @@ class AddAutoroleBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "This button can only be used by the person that triggered the command.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_settings')} Select one or more roles to automatically assign to new members:"
+            ),
+            AddAutoroleView(self.guild_id)
+        )
+        view.add_item(container)
         await interaction.response.send_message(
-            "Select one or more roles to automatically assign to new members:",
-            view=AddAutoroleView(self.guild_id),
-            ephemeral=True,
+            view=view, ephemeral=True,
         )
 
 
@@ -399,36 +557,69 @@ class RemoveAutoroleBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "This button can only be used by the person that triggered the command.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         cfg = get_config(self.guild_id)
         if not cfg.autorole_ids:
-            return await interaction.response.send_message(
-                "No autoroles are configured yet.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} No autoroles are configured yet."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_settings')} Select autoroles to remove:"
+            ),
+            RemoveAutoroleView(self.guild_id, self.guild)
+        )
+        view.add_item(container)
         await interaction.response.send_message(
-            "Select autoroles to remove:",
-            view=RemoveAutoroleView(self.guild_id, self.guild),
-            ephemeral=True,
+            view=view, ephemeral=True,
         )
 
 
 class ClearAutorolesBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji="🗑️")
+        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
         self.guild_id = guild_id
         self.author = author
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "This button can only be used by the person that triggered the command.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         cfg = get_config(self.guild_id)
         cfg.autorole_ids = []
         update_config(self.guild_id, cfg)
-        await interaction.response.send_message("All autoroles cleared.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} All autoroles cleared."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class AutoroleSetupView(discord.ui.LayoutView):
@@ -479,9 +670,15 @@ class ConfigureAutorolesBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "This button can only be used by the person that triggered the command.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
             view=AutoroleSetupView(self.guild_id, self.author, interaction.guild),
             ephemeral=False,
@@ -499,7 +696,15 @@ class AddRoleOptionBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_modal(RoleMenuOptionModal(self.guild_id))
 
 
@@ -512,12 +717,27 @@ class PostRoleMenuBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         # author check
         if interaction.user != self.author:
-            return await interaction.response.send_message("This button can only be used by the person that triggered the command.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         cfg = get_config(self.guild_id)
 
         if not cfg.role_menu_options:
-            await interaction.response.send_message("No role options configured.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} No role options configured."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
 
         cfg.role_menu_channel = interaction.channel.id
 
@@ -527,7 +747,15 @@ class PostRoleMenuBtn(discord.ui.Button):
         cfg.role_menu_message_id = msg.id
         update_config(self.guild_id, cfg)
 
-        await interaction.response.send_message("Role menu posted.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Role menu posted."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 # --------- CAPTCHA VERIFY BUTTON & PANEL ---------
@@ -537,7 +765,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         super().__init__(
             label="Verify",
             style=discord.ButtonStyle.success,
-            emoji="✅",
+            emoji=get_emoji('icon_tick'),
             custom_id=f"captcha_verify_{guild_id}",
         )
         self.guild_id = guild_id
@@ -547,10 +775,15 @@ class CaptchaVerifyButton(discord.ui.Button):
         guild_id = self.guild_id
 
         if user.id in _pending_verifications:
-            await interaction.response.send_message(
-                "You already have a captcha pending. Please check your DMs.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You already have a captcha pending. Please check your DMs."
+                ),
+                accent_colour=discord.Color.red()
             )
-            return
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
 
         code, img_bytes = generate_captcha()
         _pending_verifications[user.id] = {
@@ -582,16 +815,26 @@ class CaptchaVerifyButton(discord.ui.Button):
             )
             view.add_item(container)
             await dm.send(view=view, file=file)
-            await interaction.response.send_message(
-                "A captcha has been sent to your DMs. Please check and reply with the code.",
-                ephemeral=True,
+            sent_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} A captcha has been sent to your DMs. Please check and reply with the code."
+                ),
+                accent_colour=discord.Color.green()
             )
+            sent_view.add_item(container)
+            await interaction.response.send_message(view=sent_view, ephemeral=True)
         except discord.Forbidden:
             _pending_verifications.pop(user.id, None)
-            await interaction.response.send_message(
-                "I couldn't send you a DM. Please enable DMs from server members and try again.",
-                ephemeral=True,
+            error_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} I couldn't send you a DM. Please enable DMs from server members and try again."
+                ),
+                accent_colour=discord.Color.red()
             )
+            error_view.add_item(container)
+            await interaction.response.send_message(view=error_view, ephemeral=True)
 
 
 class CaptchaPanelView(discord.ui.LayoutView):
@@ -638,16 +881,30 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
                 added.append(role.mention)
         update_config(self.guild_id, cfg)
         if added:
-            await interaction.response.send_message(
-                f"Will **add** {', '.join(added)} on verification.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Will **add** {', '.join(added)} on verification."
+                ),
+                accent_colour=discord.Color.green()
             )
+            view.add_item(container)
+            await interaction.response.send_message(view=view, ephemeral=True)
         else:
-            await interaction.response.send_message("Those roles are already configured.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Those roles are already configured."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 
-class CaptchaAddRolesView(discord.ui.View):
+class CaptchaAddRolesView(discord.ui.ActionRow):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=60)
+        super().__init__()
         self.add_item(CaptchaAddRolesSelect(guild_id))
 
 
@@ -671,16 +928,30 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
                 added.append(role.mention)
         update_config(self.guild_id, cfg)
         if added:
-            await interaction.response.send_message(
-                f"Will **remove** {', '.join(added)} on verification.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Will **remove** {', '.join(added)} on verification."
+                ),
+                accent_colour=discord.Color.green()
             )
+            view.add_item(container)
+            await interaction.response.send_message(view=view, ephemeral=True)
         else:
-            await interaction.response.send_message("Those roles are already configured.", ephemeral=True)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Those roles are already configured."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 
-class CaptchaRemoveRolesView(discord.ui.View):
+class CaptchaRemoveRolesView(discord.ui.ActionRow):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=60)
+        super().__init__()
         self.add_item(CaptchaRemoveRolesSelect(guild_id))
 
 
@@ -728,14 +999,30 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
                 c = get_config(self_inner.guild_id)
                 c.captcha_enabled = not c.captcha_enabled
                 update_config(self_inner.guild_id, c)
                 state = "enabled" if c.captcha_enabled else "disabled"
-                await interaction.response.send_message(f"Captcha verification **{state}**.", ephemeral=True)
+                emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
+                color = discord.Color.green() if state == "enabled" else discord.Color.red()
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{emoji} Captcha verification **{state}**."
+                    ),
+                    accent_colour=color
+                )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class PostPanelBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -745,9 +1032,15 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
                 c = get_config(self_inner.guild_id)
                 c.captcha_channel_id = interaction.channel.id
                 panel_view = CaptchaPanelView(self_inner.guild_id)
@@ -755,9 +1048,15 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 c.captcha_panel_message_id = msg.id
                 update_config(self_inner.guild_id, c)
                 interaction.client.add_view(panel_view, message_id=msg.id)
-                await interaction.response.send_message(
-                    "Verification panel posted in this channel.", ephemeral=True
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Verification panel posted in this channel."
+                    ),
+                    accent_colour=discord.Color.green()
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class SetAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -767,14 +1066,24 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
-                await interaction.response.send_message(
-                    "Select roles to **add** to members after they pass verification:",
-                    view=CaptchaAddRolesView(self_inner.guild_id),
-                    ephemeral=True,
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_settings')} Select roles to **add** to members after they pass verification:"
+                    ),
+                    CaptchaAddRolesView(self_inner.guild_id)
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class SetRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -784,14 +1093,24 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
-                await interaction.response.send_message(
-                    "Select roles to **remove** from members after they pass verification:",
-                    view=CaptchaRemoveRolesView(self_inner.guild_id),
-                    ephemeral=True,
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_settings')} Select roles to **remove** from members after they pass verification:"
+                    ),
+                    CaptchaRemoveRolesView(self_inner.guild_id)
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class ToggleKickBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -801,48 +1120,90 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
                 c = get_config(self_inner.guild_id)
                 c.captcha_kick_on_fail = not c.captcha_kick_on_fail
                 update_config(self_inner.guild_id, c)
                 state = "enabled" if c.captcha_kick_on_fail else "disabled"
-                await interaction.response.send_message(
-                    f"Kick on failed captcha **{state}**.", ephemeral=True
+                emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
+                color = discord.Color.green() if state == "enabled" else discord.Color.red()
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{emoji} Kick on failed captcha **{state}**."
+                    ),
+                    accent_colour=color
                 )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class ClearAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji="🗑️")
+                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_trash"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
                 c = get_config(self_inner.guild_id)
                 c.captcha_add_role_ids = []
                 update_config(self_inner.guild_id, c)
-                await interaction.response.send_message("Cleared all roles to add.", ephemeral=True)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Cleared all roles to add."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         class ClearRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji="🗑️")
+                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_trash"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
             async def callback(self_inner, interaction: discord.Interaction):
                 if interaction.user != self_inner.author:
-                    return await interaction.response.send_message(
-                        "This button can only be used by the person that triggered the command.", ephemeral=True
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
                     )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
                 c = get_config(self_inner.guild_id)
                 c.captcha_remove_role_ids = []
                 update_config(self_inner.guild_id, c)
-                await interaction.response.send_message("Cleared all roles to remove.", ephemeral=True)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Cleared all roles to remove."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Captcha Verification Setup"),
@@ -869,9 +1230,15 @@ class ConfigureCaptchaBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "This button can only be used by the person that triggered the command.", ephemeral=True
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                ),
+                accent_colour=discord.Color.red()
             )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
             view=CaptchaSetupView(self.guild_id, self.author, interaction.guild),
             ephemeral=False,
@@ -893,16 +1260,38 @@ class AgreeButton(discord.ui.Button):
         cfg = get_config(self.guild_id)
 
         if not cfg.rules_role_id:
-            await interaction.response.send_message("No role configured.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} No role configured."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
 
         role = interaction.guild.get_role(cfg.rules_role_id)
         if not role:
-            await interaction.response.send_message("Configured role no longer exists.", ephemeral=True)
-            return
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Configured role no longer exists."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
 
         await interaction.user.add_roles(role, reason="Acknowledged rules")
-        await interaction.response.send_message("You have acknowledged the rules.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} You have acknowledged the rules."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class RoleMenuSelect(discord.ui.Select):
@@ -957,7 +1346,15 @@ class RoleMenuSelect(discord.ui.Select):
         if to_remove:
             await member.remove_roles(*to_remove)
 
-        await interaction.response.send_message("Roles updated.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Roles updated."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 # -------------------- PERSISTENT VIEWS --------------------
@@ -1145,13 +1542,27 @@ class Onboarding(commands.Cog):
             cfg = get_config(guild_id)
 
             if guild is None:
-                await message.channel.send("Verification passed! However, I could not find the server to apply roles.")
-                return
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find the server to apply roles."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                return await message.channel.send(view=view)
 
             member = guild.get_member(user_id)
             if member is None:
-                await message.channel.send("Verification passed! However, I could not find you in the server.")
-                return
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find you in the server."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                return await message.channel.send(view=view)
 
             applied = []
             removed = []
