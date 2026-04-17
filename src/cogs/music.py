@@ -30,9 +30,9 @@ from config.emojis import get_emoji
 from utils import logging as log
 from utils.ai_config import get_personality
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  CONSTANTS
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 IDLE_TIMEOUT   = 300       # seconds before auto-disconnect on empty queue
 HISTORY_LEN    = 10        # tracks kept in per-guild history deque
@@ -49,9 +49,9 @@ _SPOTIFY_TRACK_RE    = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?
 _SPOTIFY_ALBUM_RE    = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?album/([A-Za-z0-9]+)")
 _SPOTIFY_PLAYLIST_RE = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?playlist/([A-Za-z0-9]+)")
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  PERSONALITY MESSAGES
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 MESSAGES = {
     "normal": {
@@ -202,9 +202,9 @@ def msg(ctx: commands.Context, key: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  UTILITY — duration + progress bar
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 def _fmt_dur(ms: int) -> str:
     if ms is None or ms < 0:
@@ -233,9 +233,9 @@ def _source_colour(track: wavelink.Playable) -> discord.Colour:
     return SOURCE_COLOURS["default"]
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  SPOTIFY CLIENT
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class _SpotifyClient:
     _TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -309,9 +309,9 @@ class _SpotifyClient:
         return queries
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  LAST.FM AUTOPLAY
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 _LASTFM_URL = "https://ws.audioscrobbler.com/2.0/"
 
@@ -341,9 +341,9 @@ async def _lastfm_similar(api_key: str, artist: str, title: str) -> list[tuple[s
         return []
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  LAVALINK NODE DISCOVERY
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 _AJIE_ALL        = "https://lavalink-list.ajieblogs.eu.org/All"
 _PROBE_TIMEOUT   = 3.0
@@ -400,16 +400,16 @@ async def _find_responsive_nodes(nodes: list[dict]) -> list[dict]:
     return [n for n, _ in alive]
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  CONTROL PANEL — cv2 Button classes
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class _PauseResumeBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int, paused: bool):
         super().__init__(
             label="Resume" if paused else "Pause",
             style=discord.ButtonStyle.success if paused else discord.ButtonStyle.secondary,
-            emoji="▶️" if paused else "⏸️",
+            emoji=get_emoji("icon_play") if paused else get_emoji("icon_pause"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -424,7 +424,7 @@ class _PauseResumeBtn(discord.ui.Button):
 
 class _SkipBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Skip", style=discord.ButtonStyle.primary, emoji="⏭️")
+        super().__init__(label="Skip", style=discord.ButtonStyle.primary, emoji=get_emoji('icon_skip'))
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -438,7 +438,7 @@ class _SkipBtn(discord.ui.Button):
 
 class _StopBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Stop", style=discord.ButtonStyle.danger, emoji="⏹️")
+        super().__init__(label="Stop", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_stop"))
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -458,7 +458,7 @@ class _PrevBtn(discord.ui.Button):
         super().__init__(
             label="Prev",
             style=discord.ButtonStyle.secondary,
-            emoji="⏮️",
+            emoji=get_emoji("icon_rewind"),
             disabled=not enabled,
         )
         self.cog      = cog
@@ -484,7 +484,7 @@ class _LoopBtn(discord.ui.Button):
         super().__init__(
             label="Loop On" if loop else "Loop",
             style=discord.ButtonStyle.success if loop else discord.ButtonStyle.secondary,
-            emoji="🔁",
+            emoji=get_emoji("icon_loop"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -554,9 +554,9 @@ class _VolUpBtn(discord.ui.Button):
         await self.cog._update_np_message(interaction.guild)
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  NOW-PLAYING CARD BUILDER
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 def _build_np_view(
     player:   wavelink.Player,
@@ -575,7 +575,7 @@ def _build_np_view(
         # Idle / stopped card
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ⏹️ Nothing Playing"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_stop')} Nothing Playing"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"-# Use `.play <song>` to queue something up."),
             accent_colour=discord.Colour(0x5865F2),
@@ -591,13 +591,15 @@ def _build_np_view(
 
     # Source badge
     if "youtube" in source:
-        src_badge = "🎥 YouTube"
+        src_badge = f"{get_emoji('youtube')} YouTube"
     elif "soundcloud" in source:
-        src_badge = "☁️ SoundCloud"
+        src_badge = f"{get_emoji('soundcloud')} SoundCloud"
+    elif "spotify" in source:
+        src_badge = f"{get_emoji('spotify')} Spotify"
     else:
         src_badge = "🎵 Music"
 
-    status_icon = "⏸️" if player.paused else "▶️"
+    status_icon = get_emoji("icon_pause") if player.paused else get_emoji("icon_play")
 
     body = (
         f"### {status_icon} Now Playing\n"
@@ -605,7 +607,7 @@ def _build_np_view(
         f"by {author_name}\n\n"
         f"{duration}\n\n"
         f"-# {src_badge} · Vol {vol}% · "
-        f"{'🔁 Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
+        f"{get_emoji('icon_loop') + ' Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
     ).rstrip(" · \n")
 
     # Build container items
@@ -646,9 +648,9 @@ def _build_np_view(
     return view
 
 
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 #  MUSIC COG
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 
 class MusicSystem(commands.Cog):
     """Music system — artwork cards, control panel, multi-source, autoplay."""
@@ -668,11 +670,11 @@ class MusicSystem(commands.Cog):
             _SpotifyClient(sp_id, sp_secret) if sp_id and sp_secret else None
         )
         if self._spotify:
-            log.info("Music", "Spotify URL support enabled.")
+            log.debug("Music", "Spotify URL support enabled.")
 
         self._lastfm_key: str | None = os.environ.get("LASTFM_API_KEY")
         if self._lastfm_key:
-            log.info("Music", "Last.fm autoplay enabled.")
+            log.debug("Music", "Last.fm autoplay enabled.")
 
         bot.loop.create_task(self.startup_connect())
 
@@ -687,7 +689,7 @@ class MusicSystem(commands.Cog):
             }
         return self._guild_states[guild_id]
 
-    # ─── NP MESSAGE UPDATE ───────────────────────────────────
+    # ─── NP MESSAGE UPDATE ────────────────────────
 
     async def _update_np_message(self, guild: discord.Guild):
         state   = self._state(guild.id)
@@ -721,7 +723,7 @@ class MusicSystem(commands.Cog):
             except Exception:
                 pass
 
-    # ─── LAVALINK CONNECTION ──────────────────────────────────
+    # ─── LAVALINK CONNECTION ──────────────────────
 
     async def startup_connect(self, *, retry_delay: float = 0):
         if self._connecting:
@@ -768,7 +770,7 @@ class MusicSystem(commands.Cog):
         log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
         self._connecting = False
 
-    # ─── WAVELINK EVENTS ─────────────────────────────────────
+    # ─── WAVELINK EVENTS ──────────────────────────
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
@@ -832,7 +834,7 @@ class MusicSystem(commands.Cog):
                 pass
             state["np_message"] = None
 
-    # ─── SOURCE RESOLUTION ───────────────────────────────────
+    # ─── SOURCE RESOLUTION ────────────────────────
 
     async def _resolve_query(self, query: str) -> list[str] | None:
         """
@@ -842,7 +844,7 @@ class MusicSystem(commands.Cog):
         """
         q = query.strip()
 
-        # ── Spotify ──────────────────────────────────────────
+        # ── Spotify ───────────────────────────────
         if "open.spotify.com" in q:
             if not self._spotify:
                 return None
@@ -864,22 +866,22 @@ class MusicSystem(commands.Cog):
 
             return None
 
-        # ── SoundCloud prefix ─────────────────────────────────
+        # ── SoundCloud prefix ─────────────────────
         if q.lower().startswith("sc:"):
             return [f"scsearch:{q[3:].strip()}"]
 
-        # ── YouTube prefix ────────────────────────────────────
+        # ── YouTube prefix ────────────────────────
         if q.lower().startswith("yt:"):
             return [f"ytsearch:{q[3:].strip()}"]
 
-        # ── Raw URL (YouTube, SoundCloud, etc.) ───────────────
+        # ── Raw URL (YouTube, SoundCloud, etc.) ───
         if q.startswith("http://") or q.startswith("https://"):
             return [q]
 
-        # ── Default: YouTube text search ──────────────────────
+        # ── Default: YouTube text search ──────────
         return [f"ytsearch:{q}"]
 
-    # ─── PLAYER HELPER ───────────────────────────────────────
+    # ─── PLAYER HELPER ────────────────────────────
 
     async def get_player(self, ctx: commands.Context) -> wavelink.Player | None:
         if not ctx.author.voice:
@@ -891,7 +893,7 @@ class MusicSystem(commands.Cog):
             player = await channel.connect(cls=wavelink.Player)
         return player
 
-    # ─── COMMANDS ────────────────────────────────────────────
+    # ─── COMMANDS ─────────────────────────────────
 
     @commands.command(
         name="play", aliases=["p"],
