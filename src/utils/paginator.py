@@ -21,7 +21,7 @@ class _PrevButton(discord.ui.Button):
         v: PaginatedView = self.view
         v.current_page -= 1
         v._build()
-        await interaction.response.edit_message(view=v)
+        await interaction.response.edit_message(view=v, allowed_mentions=discord.AllowedMentions.none())
 
 
 class _PageLabel(discord.ui.Button):
@@ -48,7 +48,7 @@ class _NextButton(discord.ui.Button):
         v: PaginatedView = self.view
         v.current_page += 1
         v._build()
-        await interaction.response.edit_message(view=v)
+        await interaction.response.edit_message(view=v, allowed_mentions=discord.AllowedMentions.none())
 
 
 class PaginatedView(discord.ui.LayoutView):

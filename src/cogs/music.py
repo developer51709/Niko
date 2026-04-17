@@ -402,7 +402,6 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="skip",
-        aliases=["s"],
         help="{ 'en': 'skip to the next flavor on the playlist 🍰', 'de': 'springt zum nächsten track' }"
     )
     async def skip(self, ctx: commands.Context):

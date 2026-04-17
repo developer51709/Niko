@@ -10,11 +10,12 @@ from utils.onboarding_utils import (
 )
 from utils.onboarding_config import OnboardingConfig, load_all_configs
 from utils.captcha_gen import generate_captcha
+from config.emojis import get_emoji
 
 _pending_verifications: dict[int, dict] = {}
 
 
-# -------------------- UTILITY FUNCTIONS --------------------
+# --------------- UTILITY FUNCTIONS ---------------
 
 def parse_role_from_text(text: str, guild: discord.Guild) -> discord.Role | None:
     text = text.strip()
@@ -39,15 +40,27 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         super().__init__()
         self.guild_id = guild_id
 
-        self.title_input = TextInput(label="Title", required=False)
+        self.title_input = TextInput(
+            label="Title", 
+            required=False,
+            default=get_config(guild_id).welcome_title or None
+        )
         self.desc_input = TextInput(
             label="Description",
             style=discord.TextStyle.long,
             placeholder="Use {user} for mention, {name} for username.",
             required=False,
+            default=get_config(guild_id).welcome_description or None
         )
-        self.image_input = TextInput(label="Image URL", required=False)
-        self.color_input = TextInput(label="Color (hex)", required=False)
+        self.image_input = TextInput(
+            label="Image URL", 
+            required=False,
+            default=get_config(guild_id).welcome_image or None
+        )
+        self.color_input = TextInput(
+            label="Color (hex)", 
+            required=False
+        )
 
         self.add_item(self.title_input)
         self.add_item(self.desc_input)
@@ -79,13 +92,27 @@ class RulesModal(Modal, title="Set Rules Text"):
         super().__init__()
         self.guild_id = guild_id
 
-        self.rules_input = TextInput(label="Rules", style=discord.TextStyle.long)
+        self.rules_input = TextInput(
+            label="Rules", 
+            style=discord.TextStyle.long,
+            default=get_config(guild_id).rules_text or ""
+        )
         self.add_item(self.rules_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         cfg = get_config(self.guild_id)
         cfg.rules_text = self.rules_input.value
         update_config(self.guild_id, cfg)
+        # update the existing rules message if it exists
+        if cfg.rules_channel and cfg.rules_message_id:
+            try:
+                channel = interaction.guild.get_channel(cfg.rules_channel)
+                if channel:
+                    msg = await channel.fetch_message(cfg.rules_message_id)
+                    if msg:
+                        await msg.edit(view=RulesAcknowledgeView(self.guild_id, cfg=cfg))
+            except discord.NotFound:
+                pass
         await interaction.response.send_message("Rules updated.", ephemeral=True)
 
 
@@ -139,7 +166,7 @@ class RoleMenuOptionModal(Modal, title="Add Role Menu Option"):
         await interaction.response.send_message("Role option added.", ephemeral=True)
 
 
-# -------------------- ONBOARDING SETUP BUTTONS --------------------
+# ------------ ONBOARDING SETUP BUTTONS ------------
 
 class SetWelcomeMsgBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
@@ -253,7 +280,7 @@ class SetRulesRoleBtn(discord.ui.Button):
         await interaction.followup.send(f"Rules role set to {role.mention}.", ephemeral=True)
 
 
-# -------------------- AUTOROLE SETUP COMPONENTS --------------------
+# ----------- AUTOROLE SETUP COMPONENTS -----------
 
 class AddAutoroleSelect(discord.ui.RoleSelect):
     """Ephemeral role picker — adds chosen roles to the autorole list."""
@@ -461,7 +488,7 @@ class ConfigureAutorolesBtn(discord.ui.Button):
         )
 
 
-# -------------------- ROLE MENU SETUP BUTTONS --------------------
+# ------------ ROLE MENU SETUP BUTTONS ------------
 
 class AddRoleOptionBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
@@ -503,7 +530,7 @@ class PostRoleMenuBtn(discord.ui.Button):
         await interaction.response.send_message("Role menu posted.", ephemeral=True)
 
 
-# -------------------- CAPTCHA VERIFY BUTTON & PANEL --------------------
+# --------- CAPTCHA VERIFY BUTTON & PANEL ---------
 
 class CaptchaVerifyButton(discord.ui.Button):
     def __init__(self, guild_id: int):
@@ -589,7 +616,7 @@ class CaptchaPanelView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-# -------------------- CAPTCHA SETUP COMPONENTS --------------------
+# ------------ CAPTCHA SETUP COMPONENTS ------------
 
 class CaptchaAddRolesSelect(discord.ui.RoleSelect):
     def __init__(self, guild_id: int):
@@ -666,7 +693,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         cfg = get_config(guild_id)
 
-        status = "✅ Enabled" if cfg.captcha_enabled else "❌ Disabled"
+        status = f"{get_emoji('icon_tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('icon_cross')} Disabled"
         channel_text = (
             f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
         )
@@ -695,7 +722,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         class ToggleCaptchaBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label=toggle_label, style=toggle_style, emoji="🔒")
+                super().__init__(label=toggle_label, style=toggle_style, emoji=get_emoji("icon_lock"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1152,7 +1179,7 @@ class Onboarding(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content="### ✅ Verification complete!"
+                    content=f"### {get_emoji('icon_tick')} Verification complete!"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -1194,7 +1221,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content="### ❌️ Verification failed!"
+                        content=f"### {get_emoji('icon_cross')} Verification failed!"
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(
@@ -1237,7 +1264,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content="### ❌️ Incorrect."
+                        content=f"### {get_emoji('icon_cross')} Incorrect."
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(

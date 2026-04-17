@@ -48,5 +48,18 @@
         "channels": 1493005117996400661,
         "members": 1493005117996400661,
         "disabled": []
+    },
+    "1487540573870100661": {
+        "moderation": null,
+        "automod": null,
+        "messages": null,
+        "channels": null,
+        "members": null,
+        "captcha": null,
+        "invites": 1487540912325263550,
+        "roles": null,
+        "server": null,
+        "voice": null,
+        "disabled": []
     }
 }

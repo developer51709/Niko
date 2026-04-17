@@ -329,18 +329,18 @@ class EconomyCog(commands.Cog):
         lines = []
         for i, (user_id, data) in enumerate(sorted_users, start=1):
             user = self.bot.get_user(int(user_id))
-            name = user.display_name if user else f"User {user_id}"
+            name = user.mention if user else user_id
             total = data["balance"] + data.get("bank", 0)
             medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
-            lines.append(f"{medal} {name} — {total:,} 🥐")
+            lines.append(f"{medal} {name} — {total:,}")
 
         pages = paginate(lines, per_page=10)
         view = PaginatedView(
             title="☕ café rich list 🥐✨",
             pages=pages,
-            icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
+            # icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
         )
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # !shop command
     @commands.command(name="shop", help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Café-Boutique' }")

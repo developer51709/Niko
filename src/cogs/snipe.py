@@ -242,7 +242,7 @@ class Snipe(commands.Cog):
 
     @commands.command(
         name="snipe",
-        aliases=["sn"],
+        aliases=["sn", "s"],
         help="{ 'en': 'see recently deleted messages ☕🔍', 'de': 'sieh kürzlich gelöschte nachrichten' }"
     )
     async def snipe(self, ctx: commands.Context):
