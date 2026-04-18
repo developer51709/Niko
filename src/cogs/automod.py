@@ -548,6 +548,16 @@ class SectionSelect(discord.ui.Select):
         super().__init__(placeholder="Navigate sections...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
         await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
@@ -569,6 +579,16 @@ class ToggleButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         cfg["automod"][self._key] = not cfg["automod"].get(self._key, False)
@@ -594,6 +614,16 @@ class SubToggleButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         cfg[self._sub_cfg][self._field] = not cfg[self._sub_cfg].get(self._field, True)
@@ -610,6 +640,16 @@ class EditThresholdsButton(discord.ui.Button):
         super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("icon_settings"))
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         modal = _build_threshold_modal(cfg, self._cog, self._guild_id, self._section)
@@ -628,6 +668,16 @@ class EditExtAppButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(ExtAppThresholdModal(self._cog, self._guild_id, cfg))
@@ -651,6 +701,16 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
         self.max_ment.default = str(cfg.get("max_mentions", 5))
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -684,6 +744,16 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
         self.interval.default = str(an.get("interval", 10))
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -710,6 +780,16 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
         self.action.default = cfg.get("antinuke", {}).get("action", "strip")
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("strip", "kick", "ban"):
@@ -749,6 +829,16 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
         self.slow_secs.default = str(ar.get("lockdown_slowmode", 30))
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("kick", "ban", "softban", "slowmode", "lockdown"):
@@ -788,6 +878,16 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
         self.operator_act.default = are.get("operator_action", "notify")
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         raider_val = self.raider_act.value.lower().strip()
         operator_val = self.operator_act.value.lower().strip()
         lang = get_lang(interaction.guild)
@@ -827,6 +927,16 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
         self.action.default = are.get("ext_app_action", "kick")
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("kick", "ban", "warn", "log"):
@@ -868,6 +978,16 @@ class AntiNukeExtThresholdModal(discord.ui.Modal, title="Anti-Nuke — Extended 
         self.webhook_del.default = str(an.get("webhook_delete_threshold", 3))
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -890,6 +1010,16 @@ class _NukeExtThresholdButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(AntiNukeExtThresholdModal(self._cog, self._guild_id, cfg))
@@ -910,6 +1040,16 @@ class _WLUserSelect(discord.ui.UserSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for user in self.values:
@@ -943,6 +1083,16 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for role in self.values:
@@ -977,6 +1127,16 @@ class _WLUserRemoveSelect(discord.ui.Select):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for uid_str in self.values:
@@ -1008,6 +1168,16 @@ class _WLRoleRemoveSelect(discord.ui.Select):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for rid_str in self.values:
@@ -1037,6 +1207,16 @@ class _WLAddUserBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
@@ -1066,6 +1246,16 @@ class _WLAddRoleBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
@@ -1095,6 +1285,16 @@ class _WLRemoveUserBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -1139,6 +1339,16 @@ class _WLRemoveRoleBtn(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -1254,6 +1464,16 @@ class _NukeActionButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(AntiNukeActionModal(self._cog, self._guild_id, cfg))

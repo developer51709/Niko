@@ -16,9 +16,9 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  PIECE EMOJIS
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 RED   = get_emoji("C4Red")
 BLUE  = get_emoji("C4Yellow")
@@ -36,13 +36,13 @@ _TOP_ROW = (
     get_emoji("C4Top7"),
 )
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  LOCALISATION
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 _UI: dict[str, dict[str, str]] = {
     "en": {
-        "title":        "### 🎮 Connect Four",
+        "title":        "### Connect Four",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
         "turn":         "▶️ **{name}**'s turn  {emoji}",
         "game_over":    "**Game Over**",
@@ -54,7 +54,7 @@ _UI: dict[str, dict[str, str]] = {
         "vs_bot":       "You can't play against a bot!",
     },
     "de": {
-        "title":        "### 🎮 Vier Gewinnt",
+        "title":        "### Vier Gewinnt",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
         "turn":         "▶️ **{name}** ist dran  {emoji}",
         "game_over":    "**Spiel vorbei**",
@@ -87,9 +87,9 @@ def get_lang(ctx_or_interaction=None) -> str:
     return "en"
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  GAME LOGIC
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class ConnectFour:
     def __init__(self, *, red: discord.Member, blue: discord.Member) -> None:
@@ -103,7 +103,7 @@ class ConnectFour:
         self._piece   = {red: RED,  blue: BLUE}
         self._by_piece = {RED: red, BLUE: blue}
 
-    # ── display helpers ──────────────────────────────────────
+    # ── display helpers ────────────────────────────
 
     def board_string(self) -> str:
         top  = "".join(_TOP_ROW)
@@ -129,7 +129,7 @@ class ConnectFour:
             return discord.Colour(0x57F287) if self.winner else discord.Colour(0x5865F2)
         return discord.Colour(0xFF0000) if self.turn == self.red_player else discord.Colour(0xFFD700)
 
-    # ── game logic ───────────────────────────────────────────
+    # ── game logic ─────────────────────────────────
 
     def place_move(self, column: int, user: discord.Member) -> None:
         for row in range(5, -1, -1):
@@ -182,9 +182,9 @@ class ConnectFour:
         return False
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  CV2 BUTTON
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class ConnectFourButton(discord.ui.Button):
     def __init__(self, column: int, emoji: str):
@@ -212,14 +212,14 @@ class ConnectFourButton(discord.ui.Button):
         await interaction.response.edit_message(view=new_view)
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  CV2 LAYOUT VIEW
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 def _error_view(text: str) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### ❌ {text}"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} {text}"),
         accent_colour=discord.Colour(0xED4245),
     ))
     return view
@@ -258,7 +258,7 @@ class ConnectFourView(discord.ui.LayoutView):
         )
 
         items: list = [
-            discord.ui.TextDisplay(content=_t(lang, "title")),
+            discord.ui.TextDisplay(content=f"{get_emoji('icon_games')} {_t(lang, 'title')}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=players_line),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -284,9 +284,9 @@ class ConnectFourView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  COG
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class ConnectFourCog(commands.Cog):
     def __init__(self, bot: commands.Bot):

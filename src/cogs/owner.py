@@ -14,6 +14,47 @@ from .error_handler import is_owner
 from utils.image.extractor import extract_image_from_message
 
 
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
+
 class OwnerCog(commands.Cog):
     """Owner-only management commands."""
 
@@ -49,7 +90,7 @@ class OwnerCog(commands.Cog):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
         
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        prefix = await _resolve_prefix(self.bot, ctx)
         cog = self.bot.get_cog("OwnerCog")
         if not cog:
             return await ctx.send(f"{get_emoji('icon_cross')} OwnerCog not loaded.")

@@ -431,6 +431,8 @@ class SetProfileView(discord.ui.LayoutView):
                     f"https://discord.com/api/v9/users/@me",
                     f"https://discord.com/api/v9/users/{bot_id}"
                 ]
+        else:
+            owner = False
 
         success, attempts = await try_patch_with_fallbacks(urls, token, body)
 

@@ -146,6 +146,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_skip:1494419261647753337>"
     if emoji_name == "icon_stats":
         return "<:icon_stats:1494438808219947160>"
+    if emoji_name == "icon_stop":
+        return "<:icon_stop:1494803197741760514>"
     if emoji_name == "icon_support":
         return "<:icon_support:1494450967440003293>"
     if emoji_name == "icon_tick":

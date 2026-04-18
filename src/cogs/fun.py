@@ -3,6 +3,47 @@ from discord.ext import commands
 import random
 
 
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
+
 class FunCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -27,6 +68,7 @@ class FunCog(commands.Cog):
     @commands.command(name="boring")
     async def boring(self, ctx):
         """A boring command."""
+        prefix = await _resolve_prefix(self.bot, ctx)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
@@ -38,7 +80,7 @@ class FunCog(commands.Cog):
             ),
             discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# Maybe try `{self.bot.command_prefix}notboring`?"
+                content=f"-# Maybe try `{prefix}notboring`?"
             )
         ))
         await ctx.send(view=view)
