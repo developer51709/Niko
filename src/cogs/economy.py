@@ -62,6 +62,47 @@ def msg(ctx, key, **kwargs):
         text = MESSAGES["normal"].get(lang, {}).get(key, key)
     return text.format(**kwargs) if kwargs else text
 
+# Prefix resolver (required for dynamic prefixes to work)
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
 class EconomyCog(commands.Cog):
     def __init__(self, bot):
        self.bot = bot
@@ -137,7 +178,7 @@ class EconomyCog(commands.Cog):
         user_data = self.get_user_economy_data(target.id)
         balance = user_data["balance"]
         bank = user_data["bank"]
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        prefix = await _resolve_prefix(self.bot, ctx)
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(

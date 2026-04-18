@@ -75,6 +75,47 @@ def msg(ctx, key, **kwargs):
 EMOJI_REGEX = re.compile(r"<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]+):(?P<id>[0-9]+)>")
 URL_REGEX = re.compile(r"https?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+")
 
+# Prefix resolver (required for dynamic prefixes to work)
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
 class EmojiManagerCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -125,7 +166,7 @@ class EmojiManagerCog(commands.Cog):
 
     @commands.command(name="emojimanager", aliases=["em"], help="{ 'en': 'show emoji helper menu 🎨✨', 'de': 'zeige das Emoji-Hilfemenü' }")
     async def emojimanager_help(self, ctx):
-        prefix = self.get_prefix(ctx)
+        prefix = await _resolve_prefix(self.bot, ctx)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.Section(
