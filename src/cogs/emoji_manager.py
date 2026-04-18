@@ -14,6 +14,14 @@ from utils.ai_config import get_personality
 MESSAGES = {
     "normal": {
         "en": {
+            "emojimanager_title": "Emoji Manager",
+            "emojimanager_description": "Manage your server's emojis!",
+            "steal_description": "steal an emoji",
+            "sm_description": "steal many emojis",
+            "surl_description": "add from url",
+            "enlarge_description": "big emoji view",
+            "emojistats_description": "view slots",
+            "re_description": "remove emoji",
             "emoji_added": "Successfully added emoji: {emoji} (`:{name}:`)",
             "server_full": "This server has reached its maximum emoji limit of {limit}.",
             "no_perms": "I don't have the permissions to manage emojis.",
@@ -24,6 +32,14 @@ MESSAGES = {
             "no_emojis": "This server has no custom emojis."
         },
         "de": {
+            "emojimanager_title": "Emoji-Verwaltung",
+            "emojimanager_description": "Verwalte die Emojis deines Servers!",
+            "steal_description": "stiehl ein Emoji",
+            "sm_description": "stiehl viele Emojis",
+            "surl_description": "von URL hinzufügen",
+            "enlarge_description": "Emoji groß anzeigen",
+            "emojistats_description": "Emoji-Slots ansehen",
+            "re_description": "Emoji entfernen",
             "emoji_added": "Emoji erfolgreich hinzugefügt: {emoji} (`:{name}:`)",
             "server_full": "Dieser Server hat das Limit von {limit} Emojis erreicht.",
             "no_perms": "Ich habe keine Berechtigung, Emojis zu verwalten.",
@@ -36,6 +52,14 @@ MESSAGES = {
     },
     "cafe": {
         "en": {
+            "emojimanager_title": "Niko's Emoji Studio 🎨✨",
+            "emojimanager_description": "manage your café's aesthetics!",
+            "steal_description": "steal an emoji",
+            "sm_description": "steal many emojis",
+            "surl_description": "add from url",
+            "enlarge_description": "big emoji view",
+            "emojistats_description": "view slots",
+            "re_description": "remove emoji",
             "emoji_added": "yay! added {emoji} (`:{name}:`) to the collection! 🎨✨",
             "server_full": "oh no! the café is full! we hit the limit of {limit} emojis 🥐☕",
             "no_perms": "i don't have the keys to the emoji cabinet! (need permissions) 🗝️🍰",
@@ -46,6 +70,14 @@ MESSAGES = {
             "no_emojis": "the emoji tray is empty! let's add some treats 🥐✨"
         },
         "de": {
+            "emojimanager_title": "Nikos Emoji-Atelier 🎨✨️",
+            "emojimanager_description": "verwalte die Ästhetik deines Cafés!",
+            "steal_description": "stiehl ein Emoji",
+            "sm_description": "stiehl viele Emojis",
+            "surl_description": "von URL hinzufügen",
+            "enlarge_description": "Emoji groß anzeigen",
+            "emojistats_description": "Emoji-Slots ansehen",
+            "re_description": "Emoji entfernen",
             "emoji_added": "yay! {emoji} (`:{name}:`) zur Sammlung hinzugefügt! 🎨✨",
             "server_full": "oh nein! das Café ist voll! wir haben das Limit von {limit} Emojis erreicht 🥐☕",
             "no_perms": "ich habe die Schlüssel zum Emoji-Schrank nicht! (Berechtigungen fehlen) 🗝️🍰",
@@ -171,10 +203,10 @@ class EmojiManagerCog(commands.Cog):
         container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    content="### Niko's Emoji Studio 🎨✨"
+                    content=f"### {msg(ctx, 'emojimanager_title')}"
                 ),
                 discord.ui.TextDisplay(
-                    content="-# manage your café's aesthetics! | verwalte die Ästhetik deines Cafés!"
+                    content=f"-# {msg(ctx, 'emojimanager_description')}"
                 ),
                 accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
             ),
@@ -182,12 +214,12 @@ class EmojiManagerCog(commands.Cog):
         )
         
         commands_list = [
-            (f"{prefix}steal <emoji>", "steal an emoji | stiehl ein Emoji"),
-            (f"{prefix}sm <emojis...>", "steal many emojis | stiehl viele Emojis"),
-            (f"{prefix}surl <url> [name]", "add from url | von URL hinzufügen"),
-            (f"{prefix}enlarge <emoji>", "big emoji view | Emoji groß anzeigen"),
-            (f"{prefix}emojistats", "view slots | Emoji-Slots ansehen"),
-            (f"{prefix}re <emoji>", "remove emoji | Emoji entfernen")
+            (f"{prefix}steal <emoji>", f"{msg(ctx, 'steal_description')}"),
+            (f"{prefix}sm <emojis...>", f"{msg(ctx, 'sm_description')}"),
+            (f"{prefix}surl <url> [name]", f"{msg(ctx, 'surl_description')}"),
+            (f"{prefix}enlarge <emoji>", f"{msg(ctx, 'enlarge_description')}"),
+            (f"{prefix}emojistats", f"{msg(ctx, 'emojistats_description')}"),
+            (f"{prefix}re <emoji>", f"{msg(ctx, 're_description')}")
         ]
         for cmd, desc in commands_list:
             container.add_item(
