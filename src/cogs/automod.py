@@ -1785,34 +1785,25 @@ class AutoMod(commands.Cog):
         """
         Carry out anti-nuke enforcement.  Runs as a fire-and-forget task.
 
-        Speed strategy
-        ─────────────
-        1. Strip dangerous roles ALWAYS as the very first API call — one
-           remove_roles() call instantly revokes all destructive permissions
-           regardless of the configured action.  This stops ongoing damage
-           in the ~100 ms before a kick/ban round-trip completes.
-
-        2. If the configured action is kick or ban, run it CONCURRENTLY with
-           the role strip via asyncio.gather() — both API calls are in-flight
-           at the same time.
-
-        3. After enforcement, run mod-log and owner DM concurrently so neither
-           waits on the other.
+        Order of operations
+        ───────────────────
+        1. Execute the configured action (strip / kick / ban) immediately.
+        2. Run mod-log and owner DM concurrently so neither waits on the other.
         """
         uid    = offender.id
         member = guild.get_member(uid)
 
-        # ── 1+2. Strip + configured action concurrently ──────────────────────
+        # ── 1. Enforce configured action ─────────────────────────────────────
         if member:
-            enforce_coros = [self._strip_dangerous_roles(member)]
-            if nuke_action == "kick":
-                enforce_coros.append(member.kick(reason="Anti-Nuke: suspicious mass action"))
-            elif nuke_action == "ban":
-                enforce_coros.append(guild.ban(member, reason="Anti-Nuke: suspicious mass action"))
-            results = await asyncio.gather(*enforce_coros, return_exceptions=True)
-            for exc in results:
-                if isinstance(exc, Exception) and not isinstance(exc, discord.NotFound):
-                    log.error("Anti-Nuke", f"Enforcement error against {offender}: {exc}")
+            try:
+                if nuke_action == "strip":
+                    await self._strip_dangerous_roles(member)
+                elif nuke_action == "kick":
+                    await member.kick(reason="Anti-Nuke: suspicious mass action")
+                elif nuke_action == "ban":
+                    await guild.ban(member, reason="Anti-Nuke: suspicious mass action")
+            except Exception as exc:
+                log.error("Anti-Nuke", f"Failed to {nuke_action} {offender}: {exc}")
 
         # ── 3. Mod-log + owner DM concurrently ──────────────────────────────
         async def _do_log():
