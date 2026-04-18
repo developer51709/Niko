@@ -451,7 +451,9 @@
         "spam_threshold": 6,
         "spam_interval": 7,
         "max_mentions": 5,
-        "blocked_words": [],
+        "blocked_words": [
+            "https://cdn.discordapp.com/attachments/1493088186950484043/1493103111382761562/vid-20251216-wa0271.mp4?ex=69e50062&is=69e3aee2&hm=f60334ad4ac8731855fc2fb9729a830c2b8e430f7566cb3d2d4ea77b31a35c31&"
+        ],
         "antinuke": {
             "ban_threshold": 3,
             "kick_threshold": 3,
@@ -2173,8 +2175,8 @@
     },
     "1473279609259823280": {
         "automod": {
-            "antispam": true,
-            "antilink": true,
+            "antispam": false,
+            "antilink": false,
             "badwords": true,
             "massmention": true,
             "antinuke": false,
