@@ -415,6 +415,84 @@ def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: st
     return _build_overview_text(cfg, lang)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  OWNER DM — ANTI-NUKE  (cv2 LayoutView)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_NUKE_ACTION_LABELS = {
+    "ban":            "🔨 Mass Bans",
+    "kick":           "👟 Mass Kicks",
+    "channel_delete": "🗑️ Mass Channel Deletes",
+    "role_delete":    "🗑️ Mass Role Deletes",
+    "channel_create": "➕ Mass Channel Creates",
+    "webhook_delete": "🔗 Mass Webhook Deletes",
+}
+_NUKE_ACTION_LABELS_DE = {
+    "ban":            "🔨 Massen-Bans",
+    "kick":           "👟 Massen-Kicks",
+    "channel_delete": "🗑️ Massen-Kanal-Löschungen",
+    "role_delete":    "🗑️ Massen-Rollen-Löschungen",
+    "channel_create": "➕ Massen-Kanal-Erstellungen",
+    "webhook_delete": "🔗 Massen-Webhook-Löschungen",
+}
+_NUKE_TAKEN_EN = {"strip": "Dangerous roles stripped", "kick": "Offender kicked",  "ban": "Offender banned"}
+_NUKE_TAKEN_DE = {"strip": "Gefährliche Rollen entfernt", "kick": "Täter gekickt", "ban": "Täter gebannt"}
+
+
+def _build_nuke_dm_view(
+    guild:       discord.Guild,
+    offender:    discord.User,
+    action_key:  str,
+    threshold:   int,
+    interval:    int,
+    nuke_action: str,
+    lang:        str,
+) -> discord.ui.LayoutView:
+    """
+    Build a cv2 LayoutView for the single owner DM sent when anti-nuke fires.
+    Red-accented container with title, details, and a timestamp footer.
+    """
+    ts = int(time.time())
+
+    if lang == "de":
+        labels  = _NUKE_ACTION_LABELS_DE
+        taken   = _NUKE_TAKEN_DE
+        title   = "### 🚨 Anti-Nuke ausgelöst"
+        lines   = [
+            f"**Server:** {guild.name}",
+            f"**Täter:** {offender} (`{offender.id}`)",
+            f"**Auslöser:** {labels.get(action_key, action_key)}",
+            f"**Anzahl:** {threshold} Aktionen in `{interval}s`",
+            f"**Aktion:** {taken.get(nuke_action, nuke_action)}",
+        ]
+        footer  = f"-# Ausgelöst um <t:{ts}:T> • Niko Anti-Nuke"
+    else:
+        labels  = _NUKE_ACTION_LABELS
+        taken   = _NUKE_TAKEN_EN
+        title   = "### 🚨 Anti-Nuke Triggered"
+        lines   = [
+            f"**Server:** {guild.name}",
+            f"**Offender:** {offender} (`{offender.id}`)",
+            f"**Triggered by:** {labels.get(action_key, action_key)}",
+            f"**Count:** {threshold} actions within `{interval}s`",
+            f"**Action taken:** {taken.get(nuke_action, nuke_action)}",
+        ]
+        footer  = f"-# Triggered at <t:{ts}:T> • Niko Anti-Nuke"
+
+    view = discord.ui.LayoutView()
+    view.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay(content=title),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=footer),
+            accent_colour=discord.Colour(0xED4245),
+        )
+    )
+    return view
+
+
 # ──────────────────────────────────────────────────
 #  INTERACTIVE COMPONENTS
 # ──────────────────────────────────────────────────
@@ -1193,6 +1271,10 @@ class AutoMod(commands.Cog):
         self.bot = bot
         self._msg_history = {}  # guild_id -> user_id -> [timestamps]
         self._nuke_history = {}  # guild_id -> user_id -> {action_key: [ts]}
+        # Dedup guard: stores expiry timestamp per (guild_id, user_id).
+        # While now < expiry the user is already actioned — all further audit
+        # events from them are silently ignored so exactly one DM is sent.
+        self._nuke_actioned: dict[int, dict[int, float]] = {}
         self._join_history = {}  # guild_id -> [timestamps]
         self._interaction_history = {}  # guild_id -> [(user_id, timestamp)]
         self._ext_app_history = {}  # guild_id -> user_id -> [timestamps]
@@ -1672,8 +1754,17 @@ class AutoMod(commands.Cog):
         if self.utils().is_whitelisted(guild.id, entry.user):
             return
 
-        an = cfg.get("antinuke", {})
-        interval = an.get("interval", 10)
+        an         = cfg.get("antinuke", {})
+        interval   = an.get("interval", 10)
+        uid        = entry.user.id
+        now        = time.time()
+
+        # ── Dedup guard — if this user was already actioned, suppress entirely ──
+        # This ensures exactly ONE enforcement action and ONE DM no matter how
+        # many audit log events the nuke bot generates.
+        guild_actioned = self._nuke_actioned.setdefault(guild.id, {})
+        if now < guild_actioned.get(uid, 0):
+            return
 
         action_map = {
             discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
@@ -1687,53 +1778,92 @@ class AutoMod(commands.Cog):
             return
 
         action_key, threshold = action_map[entry.action]
-        now = time.time()
-        cutoff = now - interval
-        uid = entry.user.id
-
+        cutoff      = now - interval
         user_history = self._nuke_history.setdefault(guild.id, {}).setdefault(uid, {})
         bucket       = user_history.setdefault(action_key, [])
         bucket.append(now)
         user_history[action_key] = [t for t in bucket if t >= cutoff]
 
-        if len(user_history[action_key]) >= threshold:
-            user_history[action_key] = []
-            offender    = entry.user
-            nuke_action = an.get("action", "strip")
-            lang        = get_lang(guild)
+        if len(user_history[action_key]) < threshold:
+            return  # threshold not yet reached
 
-            log.warning("Anti-Nuke",
-                        f"Nuke by {offender} in {guild.name} — "
-                        f"{threshold}x {action_key} — action: {nuke_action}")
-            await self.utils().log_action(
-                guild, "💣 Anti-Nuke Triggered",
-                f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
-                f"within `{interval}s`.\n**Action:** `{nuke_action}`")
+        # ── Threshold reached ────────────────────────────────────────────────
+        # Mark actioned IMMEDIATELY (synchronously, no await) so any concurrent
+        # audit events for this user are dropped before we even start the task.
+        guild_actioned[uid] = now + max(interval, 60)
+        user_history[action_key] = []
 
-            member = guild.get_member(uid)
-            if member:
+        nuke_action = an.get("action", "strip")
+        offender    = entry.user
+        lang        = get_lang(guild)
+
+        log.warning(
+            "Anti-Nuke",
+            f"Nuke by {offender} in {guild.name} — "
+            f"{threshold}x {action_key} — action: {nuke_action}",
+        )
+
+        # Dispatch enforcement as an independent task so it starts on the very
+        # next event-loop tick without blocking further audit-log processing.
+        asyncio.create_task(
+            self._execute_nuke_action(
+                guild, offender, action_key, threshold, interval, nuke_action, lang
+            )
+        )
+
+    async def _execute_nuke_action(
+        self,
+        guild:       discord.Guild,
+        offender:    discord.User,
+        action_key:  str,
+        threshold:   int,
+        interval:    int,
+        nuke_action: str,
+        lang:        str,
+    ):
+        """
+        Carry out the anti-nuke enforcement.  Runs as a fire-and-forget task
+        so the audit-log listener returns immediately.
+
+        Order of operations (fastest response first):
+          1. Strip/kick/ban the offender
+          2. Log to the mod-log channel
+          3. DM the server owner (exactly once — dedup already applied)
+        """
+        uid    = offender.id
+        member = guild.get_member(uid)
+
+        # ── 1. Enforce ───────────────────────────────────────────────────────
+        if member:
+            try:
                 if nuke_action == "strip":
                     await self._strip_dangerous_roles(member)
                 elif nuke_action == "kick":
-                    try:
-                        await member.kick(reason="Anti-Nuke: suspicious mass action")
-                    except Exception:
-                        pass
+                    await member.kick(reason="Anti-Nuke: suspicious mass action")
                 elif nuke_action == "ban":
-                    try:
-                        await guild.ban(member, reason="Anti-Nuke: suspicious mass action")
-                    except Exception:
-                        pass
-            try:
-                await guild.owner.send(
-                    f"{get_emoji('icon_danger')} "
-                    + _t(lang, "nuke_dm",
-                         guild=guild.name, offender=str(offender),
-                         threshold=threshold, action_key=action_key,
-                         interval=interval, action=nuke_action)
-                )
-            except Exception:
-                pass
+                    await guild.ban(member, reason="Anti-Nuke: suspicious mass action")
+            except Exception as exc:
+                log.error("Anti-Nuke", f"Failed to {nuke_action} {offender}: {exc}")
+
+        # ── 2. Mod-log ───────────────────────────────────────────────────────
+        try:
+            await self.utils().log_action(
+                guild,
+                "💣 Anti-Nuke Triggered",
+                f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
+                f"within `{interval}s`.\n**Action:** `{nuke_action}`",
+            )
+        except Exception:
+            pass
+
+        # ── 3. Owner DM (cv2 container, single send guaranteed by dedup) ─────
+        try:
+            dm_view = _build_nuke_dm_view(
+                guild, offender, action_key, threshold, interval, nuke_action, lang
+            )
+            await guild.owner.send(view=dm_view)
+        except Exception:
+            pass
 
     async def _strip_dangerous_roles(self, member: discord.Member):
         dangerous = (
