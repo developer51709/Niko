@@ -32,6 +32,46 @@ def parse_role_from_text(text: str, guild: discord.Guild) -> discord.Role | None
 
     return discord.utils.get(guild.roles, name=text)
 
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
 
 # -------------------- MODALS --------------------
 
@@ -1468,7 +1508,7 @@ class Onboarding(commands.Cog):
     @commands.group(name="onboarding", help="Manage server onboarding")
     async def onboarding(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
-            prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+            prefix = await _resolve_prefix(self.bot, ctx)
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(content="### Server Onboarding"),
@@ -1498,14 +1538,14 @@ class Onboarding(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def onboarding_setup(self, ctx: commands.Context):
         """Setup onboarding for the server."""
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        prefix = await _resolve_prefix(self.bot, ctx)
         await ctx.send(view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Setup role menu for the server."""
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+        prefix = await _resolve_prefix(self.bot, ctx)
         await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="autoroles")
