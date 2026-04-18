@@ -268,7 +268,7 @@ class AddFollowModal(Modal):
             discord.ui.TextDisplay(content=f"Verifying this account exists. One moment…"),
             accent_colour=discord.Colour(0xFEE75C),
         ))
-        await interaction.followup.send(view=checking, ephemeral=True)
+        message = await interaction.followup.send(view=checking, ephemeral=True)
 
         ok, stored = await _validate(self.platform, raw)
 
@@ -286,7 +286,8 @@ class AddFollowModal(Modal):
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
-            await interaction.edit_original_response(view=fail)
+            # edit the ephemeral response
+            await interaction.followup.edit_message(view=fail, message_id=message.id)
             return
 
         # Seed last_post_id so we don't notify for the current latest post
@@ -313,7 +314,7 @@ class AddFollowModal(Modal):
             ),
             accent_colour=discord.Colour(0x57F287),
         ))
-        await interaction.edit_original_response(view=success)
+        await interaction.followup.edit_message(view=success, message_id=message.id)
 
 
 # ─────────────────────────────────────────
@@ -333,6 +334,16 @@ class _AddFollowBtn(discord.ui.Button):
         self.channel  = channel
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Manage Server** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_modal(
             AddFollowModal(self.platform, self.guild, self.channel)
         )
@@ -344,6 +355,16 @@ class _ViewFollowsBtn(discord.ui.Button):
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Manage Server** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
         follows = await interaction.client.cxn.fetch(
             "SELECT * FROM follows WHERE guild_id = $1", self.guild_id
         )

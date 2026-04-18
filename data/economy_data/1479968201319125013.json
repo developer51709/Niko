@@ -1,13 +1,13 @@
 {
-    "balance": 6484,
+    "balance": 7621,
     "inventory": [
         "coffee"
     ],
     "bank": 0,
-    "net_worth": 6303,
+    "net_worth": 6621,
     "daily_streak": 0,
-    "last_daily": 1776387248,
-    "last_work": 1776387253,
+    "last_daily": 1776535112,
+    "last_work": 1776535106,
     "last_crime": 0,
     "last_rob": 1775106550,
     "last_heist": 0,
