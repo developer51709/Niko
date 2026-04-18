@@ -43,15 +43,15 @@ MESSAGES = {
         # ── Overview panel ──
         "overview_title":    "### {emoji} AutoMod Dashboard",
         "overview_desc":     "Here's a full snapshot of your server's protection ☕",
-        "section_msgfilter": "**💬 Message Filter**",
+        "section_msgfilter": "**Message Filter**",
         "section_antinuke":  "**💣 Anti-Nuke**",
         "section_antiraid":  "**🌊 Anti-Raid** *(join flood)*",
-        "section_extraid":   "**🤖 Ext. App Raid**",
-        "section_whitelist": "**🔓 Whitelist**",
+        "section_extraid":   "**Ext. App Raid**",
+        "section_whitelist": "**Whitelist**",
         "wl_summary":        "`{wu}` whitelisted user(s)  •  `{wr}` whitelisted role(s)",
         "nav_hint":          "-# Use the dropdown below to navigate and configure each section.",
         # ── Filter panel ──
-        "filter_title":      "### 💬 Message Filter Settings",
+        "filter_title":      "Message Filter Settings",
         "filter_desc":       "Toggle each protection and adjust the thresholds below.",
         "antispam_desc":     "**Anti-Spam** — mutes members who send messages too fast",
         "antispam_thresh":   "  Threshold: `{msgs}` msgs / `{secs}s`",
@@ -65,12 +65,12 @@ MESSAGES = {
         "nuke_status_on":    "active 🟢",
         "nuke_status_off":   "inactive 🔴",
         "nuke_thresholds":   "**Tracked Actions & Thresholds** *(within interval)*",
-        "nuke_bans":         "🔨 Bans: ≥ `{t}`",
-        "nuke_kicks":        "👟 Kicks: ≥ `{t}`",
-        "nuke_chandel":      "🗑️ Channel Deletes: ≥ `{t}`",
-        "nuke_roledel":      "🗑️ Role Deletes: ≥ `{t}`",
-        "nuke_chancreate":   "➕ Channel Creates: ≥ `{t}`",
-        "nuke_webhookdel":   "🔗 Webhook Deletes: ≥ `{t}`",
+        "nuke_bans":         "Bans: ≥ `{t}`",
+        "nuke_kicks":        "Kicks: ≥ `{t}`",
+        "nuke_chandel":      "Channel Deletes: ≥ `{t}`",
+        "nuke_roledel":      "Role Deletes: ≥ `{t}`",
+        "nuke_chancreate":   "Channel Creates: ≥ `{t}`",
+        "nuke_webhookdel":   "Webhook Deletes: ≥ `{t}`",
         "nuke_interval":     "**Interval:** `{t}s`",
         "nuke_action":       "**Action on trigger:** `{action}`",
         "nuke_actions_hint": "-# Actions: `strip` (remove dangerous roles), `kick`, `ban`",
@@ -86,7 +86,7 @@ MESSAGES = {
         "raid_newacct_off":  "**New Account Filter:** disabled (all recent joiners actioned)",
         "raid_actions_hint": "-# Actions: `kick`, `ban`, `softban` (ban+unban), `slowmode`, `lockdown`",
         # ── Ext. Raid panel ──
-        "ext_title":         "### 🤖 External App Raid Protection",
+        "ext_title":         "External App Raid Protection",
         "ext_mode1":         "**Mode 1 — Interaction Flood Detection**",
         "ext_mode1_desc":    ("Detects raids driven by external tools by tracking how many recently-joined "
                               "members fire bot interactions in quick succession, then identifies the operator "
@@ -104,7 +104,7 @@ MESSAGES = {
                               "-# Operator-only: `notify` (log + DM owner)\n"
                               "-# User-app action: `kick`, `ban`, `warn`, `log`"),
         # ── Whitelist panel ──
-        "wl_title":          "### 🔓 AutoMod Whitelist",
+        "wl_title":          "AutoMod Whitelist",
         "wl_desc":           "Whitelisted users and roles bypass all automod checks.",
         "wl_users_hdr":      "**Whitelisted Users**",
         "wl_roles_hdr":      "**Whitelisted Roles**",
@@ -142,15 +142,15 @@ MESSAGES = {
         # ── Overview panel ──
         "overview_title":    "### {emoji} AutoMod-Dashboard",
         "overview_desc":     "Hier ist eine vollständige Übersicht des Serverschutzes ☕",
-        "section_msgfilter": "**💬 Nachrichtenfilter**",
+        "section_msgfilter": "**Nachrichtenfilter**",
         "section_antinuke":  "**💣 Anti-Nuke**",
         "section_antiraid":  "**🌊 Anti-Raid** *(Beitrittsflut)*",
-        "section_extraid":   "**🤖 Ext. App-Raid**",
-        "section_whitelist": "**🔓 Whitelist**",
+        "section_extraid":   "**Ext. App-Raid**",
+        "section_whitelist": "**Whitelist**",
         "wl_summary":        "`{wu}` befreite(r) Nutzer  •  `{wr}` befreite(r) Rolle(n)",
         "nav_hint":          "-# Nutze das Dropdown unten zur Navigation und Konfiguration.",
         # ── Filter panel ──
-        "filter_title":      "### 💬 Nachrichtenfilter-Einstellungen",
+        "filter_title":      "Nachrichtenfilter-Einstellungen",
         "filter_desc":       "Aktiviere/deaktiviere jeden Schutz und passe die Schwellenwerte an.",
         "antispam_desc":     "**Anti-Spam** — stummt Mitglieder, die zu schnell Nachrichten senden",
         "antispam_thresh":   "  Schwellenwert: `{msgs}` Nachrichten / `{secs}s`",
@@ -164,12 +164,12 @@ MESSAGES = {
         "nuke_status_on":    "aktiv 🟢",
         "nuke_status_off":   "inaktiv 🔴",
         "nuke_thresholds":   "**Überwachte Aktionen & Schwellenwerte** *(innerhalb des Intervalls)*",
-        "nuke_bans":         "🔨 Bans: ≥ `{t}`",
-        "nuke_kicks":        "👟 Kicks: ≥ `{t}`",
-        "nuke_chandel":      "🗑️ Kanal-Löschungen: ≥ `{t}`",
-        "nuke_roledel":      "🗑️ Rollen-Löschungen: ≥ `{t}`",
-        "nuke_chancreate":   "➕ Kanal-Erstellungen: ≥ `{t}`",
-        "nuke_webhookdel":   "🔗 Webhook-Löschungen: ≥ `{t}`",
+        "nuke_bans":         "Bans: ≥ `{t}`",
+        "nuke_kicks":        "Kicks: ≥ `{t}`",
+        "nuke_chandel":      "Kanal-Löschungen: ≥ `{t}`",
+        "nuke_roledel":      "Rollen-Löschungen: ≥ `{t}`",
+        "nuke_chancreate":   "Kanal-Erstellungen: ≥ `{t}`",
+        "nuke_webhookdel":   "Webhook-Löschungen: ≥ `{t}`",
         "nuke_interval":     "**Intervall:** `{t}s`",
         "nuke_action":       "**Aktion bei Auslösung:** `{action}`",
         "nuke_actions_hint": "-# Aktionen: `strip` (gefährliche Rollen entfernen), `kick`, `ban`",
@@ -185,7 +185,7 @@ MESSAGES = {
         "raid_newacct_off":  "**Neukonto-Filter:** deaktiviert (alle aktuellen Beitritte werden behandelt)",
         "raid_actions_hint": "-# Aktionen: `kick`, `ban`, `softban` (ban+unban), `slowmode`, `lockdown`",
         # ── Ext. Raid panel ──
-        "ext_title":         "### 🤖 Schutz vor externen App-Raids",
+        "ext_title":         "Schutz vor externen App-Raids",
         "ext_mode1":         "**Modus 1 — Interaktionsflut-Erkennung**",
         "ext_mode1_desc":    ("Erkennt Raids durch externe Tools, indem verfolgt wird, wie viele kürzlich "
                               "beigetretene Mitglieder gleichzeitig Bot-Interaktionen auslösen, und identifiziert "
@@ -202,7 +202,7 @@ MESSAGES = {
                               "-# Nur Operator: `notify` (Protokoll + DM an Eigentümer)\n"
                               "-# Nutzer-App-Aktion: `kick`, `ban`, `warn`, `log`"),
         # ── Whitelist panel ──
-        "wl_title":          "### 🔓 AutoMod-Whitelist",
+        "wl_title":          "AutoMod-Whitelist",
         "wl_desc":           "Befreite Nutzer und Rollen umgehen alle AutoMod-Prüfungen.",
         "wl_users_hdr":      "**Befreite Nutzer**",
         "wl_roles_hdr":      "**Befreite Rollen**",
@@ -276,7 +276,7 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
     return (
         f"{_t(lang, 'overview_title', emoji=get_emoji('automod'))}\n"
         f"{_t(lang, 'overview_desc')}\n\n"
-        f"{_t(lang, 'section_msgfilter')}\n"
+        f"{get_emoji('icon_message')} {_t(lang, 'section_msgfilter')}\n"
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
         f"{_icon(am.get('antilink'))} Anti-Link\n"
         f"{_icon(am.get('badwords'))} Bad Words  •  "
@@ -289,13 +289,13 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antiraid'))} Enabled  •  "
         f"Action: `{ar.get('action', 'kick')}`\n"
         f"Threshold: `{ar.get('join_threshold', 10)}` joins / `{ar.get('join_interval', 10)}s`\n\n"
-        f"{_t(lang, 'section_extraid')}\n"
+        f"{get_emoji('icon_bot')} {_t(lang, 'section_extraid')}\n"
         f"{_icon(am.get('antiraid_ext'))} Interaction flood  •  "
         f"{_icon(are.get('ext_app_detection', True))} User-installed apps\n"
         f"Raider: `{are.get('raider_action', 'kick')}`  •  "
         f"Operator: `{are.get('operator_action', 'notify')}`  •  "
         f"App abuse: `{are.get('ext_app_action', 'kick')}`\n\n"
-        f"{_t(lang, 'section_whitelist')}\n"
+        f"{get_emoji('vm_unlock')} {_t(lang, 'section_whitelist')}\n"
         f"{_t(lang, 'wl_summary', wu=wu, wr=wr)}\n\n"
         f"{_t(lang, 'nav_hint')}"
     )
@@ -304,7 +304,7 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
 def _build_filter_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     return (
-        f"{_t(lang, 'filter_title')}\n"
+        f"### {get_emoji('icon_message')} {_t(lang, 'filter_title')}\n"
         f"{_t(lang, 'filter_desc')}\n\n"
         f"{_icon(am.get('antispam'))} {_t(lang, 'antispam_desc')}\n"
         f"{_t(lang, 'antispam_thresh', msgs=cfg.get('spam_threshold', 6), secs=cfg.get('spam_interval', 7))}\n\n"
@@ -324,12 +324,12 @@ def _build_antinuke_text(cfg: dict, lang: str = "en") -> str:
         f"{_t(lang, 'nuke_desc')}\n\n"
         f"{_icon(am.get('antinuke'))} **Anti-Nuke** — currently {status}\n\n"
         f"{_t(lang, 'nuke_thresholds')}\n"
-        f"{_t(lang, 'nuke_bans',      t=an.get('ban_threshold', 3))}\n"
-        f"{_t(lang, 'nuke_kicks',     t=an.get('kick_threshold', 3))}\n"
-        f"{_t(lang, 'nuke_chandel',   t=an.get('channel_delete_threshold', 3))}\n"
-        f"{_t(lang, 'nuke_roledel',   t=an.get('role_delete_threshold', 3))}\n"
-        f"{_t(lang, 'nuke_chancreate',t=an.get('channel_create_threshold', 5))}\n"
-        f"{_t(lang, 'nuke_webhookdel',t=an.get('webhook_delete_threshold', 3))}\n\n"
+        f"{get_emoji('icon_ban')} {_t(lang, 'nuke_bans',      t=an.get('ban_threshold', 3))}\n"
+        f"{get_emoji('icon_cross')} {_t(lang, 'nuke_kicks',     t=an.get('kick_threshold', 3))}\n"
+        f"{get_emoji('icon_trash')} {_t(lang, 'nuke_chandel',   t=an.get('channel_delete_threshold', 3))}\n"
+        f"{get_emoji('icon_trash')} {_t(lang, 'nuke_roledel',   t=an.get('role_delete_threshold', 3))}\n"
+        f"{get_emoji('icon_plus')} {_t(lang, 'nuke_chancreate',t=an.get('channel_create_threshold', 5))}\n"
+        f"{get_emoji('icon_link')} {_t(lang, 'nuke_webhookdel',t=an.get('webhook_delete_threshold', 3))}\n\n"
         f"{_t(lang, 'nuke_interval',  t=an.get('interval', 10))}\n"
         f"{_t(lang, 'nuke_action',    action=an.get('action', 'strip'))}\n"
         f"{_t(lang, 'nuke_actions_hint')}"
@@ -361,7 +361,7 @@ def _build_ext_raid_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     are = cfg["antiraid_ext"]
     return (
-        f"{_t(lang, 'ext_title')}\n\n"
+        f"### {get_emoji('icon_bot')} {_t(lang, 'ext_title')}\n\n"
         f"{_t(lang, 'ext_mode1')}\n"
         f"{_t(lang, 'ext_mode1_desc')}\n\n"
         f"{_icon(am.get('antiraid_ext'))} **Enabled**\n"
@@ -391,7 +391,7 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> 
     ]
 
     return (
-        f"{_t(lang, 'wl_title')}\n"
+        f"### {get_emoji('vm_unlock')} {_t(lang, 'wl_title')}\n"
         f"{_t(lang, 'wl_desc')}\n\n"
         f"{_t(lang, 'wl_users_hdr')}\n"
         f"{chr(10).join(user_lines) or '*None*'}\n\n"
@@ -420,20 +420,20 @@ def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: st
 # ──────────────────────────────────────────────────────────────────────────────
 
 _NUKE_ACTION_LABELS = {
-    "ban":            "🔨 Mass Bans",
-    "kick":           "👟 Mass Kicks",
-    "channel_delete": "🗑️ Mass Channel Deletes",
-    "role_delete":    "🗑️ Mass Role Deletes",
-    "channel_create": "➕ Mass Channel Creates",
-    "webhook_delete": "🔗 Mass Webhook Deletes",
+    "ban":            f"{get_emoji('icon_ban')} Mass Bans",
+    "kick":           f"{get_emoji('icon_cross')} Mass Kicks",
+    "channel_delete": f"{get_emoji('icon_trash')} Mass Channel Deletes",
+    "role_delete":    f"{get_emoji('icon_trash')} Mass Role Deletes",
+    "channel_create": f"{get_emoji('icon_plus')} Mass Channel Creates",
+    "webhook_delete": f"{get_emoji('icon_link')} Mass Webhook Deletes",
 }
 _NUKE_ACTION_LABELS_DE = {
-    "ban":            "🔨 Massen-Bans",
-    "kick":           "👟 Massen-Kicks",
-    "channel_delete": "🗑️ Massen-Kanal-Löschungen",
-    "role_delete":    "🗑️ Massen-Rollen-Löschungen",
-    "channel_create": "➕ Massen-Kanal-Erstellungen",
-    "webhook_delete": "🔗 Massen-Webhook-Löschungen",
+    "ban":            f"{get_emoji('icon_ban')} Massen-Bans",
+    "kick":           f"{get_emoji('icon_cross')} Massen-Kicks",
+    "channel_delete": f"{get_emoji('icon_trash')} Massen-Kanal-Löschungen",
+    "role_delete":    f"{get_emoji('icon_trash')} Massen-Rollen-Löschungen",
+    "channel_create": f"{get_emoji('icon_plus')} Massen-Kanal-Erstellungen",
+    "webhook_delete": f"{get_emoji('icon_link')} Massen-Webhook-Löschungen",
 }
 _NUKE_TAKEN_EN = {"strip": "Dangerous roles stripped", "kick": "Offender kicked",  "ban": "Offender banned"}
 _NUKE_TAKEN_DE = {"strip": "Gefährliche Rollen entfernt", "kick": "Täter gekickt", "ban": "Täter gebannt"}
@@ -512,7 +512,7 @@ class SectionSelect(discord.ui.Select):
             discord.SelectOption(
                 label="Message Filter", 
                 value="filter", 
-                emoji="💬",
+                emoji=get_emoji("icon_message"),
                 description="Spam, links, bad words, mass mention",
                 default=(current_section == "filter")
             ),
@@ -533,14 +533,14 @@ class SectionSelect(discord.ui.Select):
             discord.SelectOption(
                 label="Ext. App Raid", 
                 value="ext_raid", 
-                emoji="🤖",
+                emoji=get_emoji("icon_bot"),
                 description="User-installed app abuse & interaction floods",
                 default=(current_section == "ext_raid")
             ),
             discord.SelectOption(
                 label="Whitelist", 
                 value="whitelist", 
-                emoji="🔓",
+                emoji=get_emoji("vm_unlock"),
                 description="Users and roles exempt from automod",
                 default=(current_section == "whitelist")
             ),
@@ -1457,9 +1457,73 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
     return view
 
 
+class AntiNukeActionSelect(discord.ui.Select):
+    def __init__(self, automod_cog, guild_id: int, cfg: dict, message):
+        self._cog = automod_cog
+        self._guild_id = guild_id
+        self.message = message
+        options = [
+            discord.SelectOption(
+                label="Strip Dangerous Roles", value="strip",
+                description="Remove roles with dangerous permissions",
+            ),
+            discord.SelectOption(
+                label="Kick Offender", value="kick",
+                description="Kick the member who triggered the action",
+            ),
+            discord.SelectOption(
+                label="Ban Offender", value="ban",
+                description="Ban the member who triggered the action",
+            )
+        ]
+        super().__init__(
+            placeholder="Choose action…",
+            options=options,
+            min_values=1, max_values=1
+        )
+
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        
+        val = self.values[0]
+        lang = get_lang(interaction.guild)
+        if val not in ("strip", "kick", "ban"):
+            return await interaction.response.send_message(
+                _t(lang, "invalid_nuke_action"), ephemeral=True)
+        utils = self._cog.utils()
+        cfg = utils.get_guild_config(self._guild_id)
+        cfg["antinuke"]["action"] = val
+        utils.save_config()
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Anti-Nuke action set to **{val}**"
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+        await self.message.edit(
+            view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
+
+
 class _NukeActionButton(discord.ui.Button):
     def __init__(self, automod_cog, guild_id: int):
-        super().__init__(label="🎯 Set Action", style=discord.ButtonStyle.gray)
+        super().__init__(
+            label="Set Action", 
+            style=discord.ButtonStyle.gray,
+            emoji=get_emoji("icon_utility")
+        )
         self._cog = automod_cog
         self._guild_id = guild_id
 
@@ -1476,7 +1540,19 @@ class _NukeActionButton(discord.ui.Button):
             return await interaction.response.send_message(view=view, ephemeral=True)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
-        await interaction.response.send_modal(AntiNukeActionModal(self._cog, self._guild_id, cfg))
+        message = interaction.message
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="Choose the action to take when anti-nuke is triggered:"
+            ),
+            discord.ui.ActionRow(
+                AntiNukeActionSelect(self._cog, self._guild_id, cfg, message)
+            )
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
+        # await interaction.response.send_modal(AntiNukeActionModal(self._cog, self._guild_id, cfg))
 
 
 # ──────────────────────────────────────────────────

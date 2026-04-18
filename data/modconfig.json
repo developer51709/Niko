@@ -889,7 +889,7 @@
             "channel_delete_threshold": 3,
             "role_delete_threshold": 3,
             "interval": 10,
-            "action": "strip"
+            "action": "kick"
         },
         "antiraid": {
             "join_threshold": 10,

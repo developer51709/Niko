@@ -39,7 +39,7 @@ PLATFORMS: dict[str, dict] = {
         "field_placeholder": "@MKBHD  or  UCBcRF18a7Qf58cCRy5xuWwQ",
     },
     "twitter": {
-        "icon":    "🐦",
+        "icon":    get_emoji("twitterx"),
         "color":   discord.Colour(0x1DA1F2),
         "label":   "Twitter/X Account",
         "btn_style": discord.ButtonStyle.primary,
@@ -47,7 +47,7 @@ PLATFORMS: dict[str, dict] = {
         "field_placeholder": "elonmusk",
     },
     "tiktok": {
-        "icon":    "🎵",
+        "icon":    get_emoji("tiktok"),
         "color":   discord.Colour(0xFF0050),
         "label":   "TikTok Account",
         "btn_style": discord.ButtonStyle.danger,
@@ -198,7 +198,7 @@ def build_notification_view(
         else:
             body = f"> {preview}"
 
-    body += f"\n\n🔗 [View{'  Video' if platform == 'youtube' else ' Post'}]({url})"
+    body += f"\n\n{get_emoji('icon_link')} [View{'  Video' if platform == 'youtube' else ' Post'}]({url})"
 
     # Build container items
     items: list = [
@@ -264,7 +264,7 @@ class AddFollowModal(Modal):
         # Show checking status
         checking = discord.ui.LayoutView()
         checking.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### ⏳ Checking…"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_loading')} Checking…"),
             discord.ui.TextDisplay(content=f"Verifying this account exists. One moment…"),
             accent_colour=discord.Colour(0xFEE75C),
         ))
@@ -547,7 +547,7 @@ class Notifier(commands.Cog):
         if not post:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="### ⚠️ No Posts Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} No Posts Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"Account found but couldn't retrieve any posts for **{stored}**."

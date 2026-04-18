@@ -110,6 +110,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_loop:1494738069398753452>"
     if emoji_name == "icon_megaphone":
         return "<:icon_megaphone:1494438801328574615>"
+    if emoji_name == "icon_message":
+        return "<:icon_message:1495062468156981350>"
     if emoji_name == "icon_moderation":
         return "<:icon_moderation:1492967655819317388>"
     if emoji_name == "icon_nsfw":
@@ -164,6 +166,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_welcome:1492967672902717622>"
     if emoji_name == "icon_wumpus":
         return "<:icon_wumpus:1494421819602636994>"
+    if emoji_name == "instagram":
+        return "<:instagram:1495056714628726934>"
     if emoji_name == "music":
         return "<:music:1492967675742261248>"
     if emoji_name == "owner_icon":
@@ -176,6 +180,10 @@ def get_emoji(emoji_name: str):
         return "<:soundcloud:1494419264323452990>"
     if emoji_name == "spotify":
         return "<:spotify:1492967684122349648>"
+    if emoji_name == "tiktok":
+        return "<:tiktok:1495056717883510968>"
+    if emoji_name == "twitterx":
+        return "<:twitterx:1495056720936828988>"
     if emoji_name == "icon_voicemaster":
         return "<:icon_voicemaster:1494521394522882058>"
     if emoji_name == "vm_lock":
