@@ -1275,6 +1275,10 @@ class AutoMod(commands.Cog):
         # While now < expiry the user is already actioned — all further audit
         # events from them are silently ignored so exactly one DM is sent.
         self._nuke_actioned: dict[int, dict[int, float]] = {}
+        # Dedup for anti-raid: guild_id → expiry timestamp.  While active,
+        # extra join events that re-hit the threshold are silently dropped so
+        # only one enforcement wave runs per raid event.
+        self._raid_actioned: dict[int, float] = {}
         self._join_history = {}  # guild_id -> [timestamps]
         self._interaction_history = {}  # guild_id -> [(user_id, timestamp)]
         self._ext_app_history = {}  # guild_id -> user_id -> [timestamps]
@@ -1655,86 +1659,43 @@ class AutoMod(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
-        await self._snapshot_invites(guild)
+
+        # Snapshot invites in the background — never blocks the join handler
+        asyncio.create_task(self._snapshot_invites(guild))
 
         cfg = self.get_cfg(guild.id)
         if not cfg["automod"].get("antiraid", False):
             return
 
-        ar = cfg.get("antiraid", {})
+        ar        = cfg.get("antiraid", {})
         threshold = ar.get("join_threshold", 10)
-        interval = ar.get("join_interval", 10)
-        action = ar.get("action", "kick")
+        interval  = ar.get("join_interval", 10)
+        now       = time.time()
 
-        now = time.time()
+        # ── Dedup guard: if a raid wave is already being actioned, drop this event ──
+        if now < self._raid_actioned.get(guild.id, 0):
+            return
+
         cutoff = now - interval
         bucket = self._join_history.setdefault(guild.id, [])
         bucket.append(now)
         self._join_history[guild.id] = [t for t in bucket if t >= cutoff]
 
-        if len(self._join_history[guild.id]) >= threshold:
-            self._join_history[guild.id] = []
-            lang = get_lang(guild)
-            log.warning("Anti-Raid", f"Join flood in {guild.name} — action: {action}")
-            await self.utils().log_action(
-                guild, "🌊 Anti-Raid Triggered",
-                f"**{len(bucket)}** members joined within `{interval}s`. Executing `{action}`.")
+        if len(self._join_history[guild.id]) < threshold:
+            return
 
-            new_account_days  = ar.get("new_account_days", 0)
-            lockdown_slowmode = ar.get("lockdown_slowmode", 30)
+        # ── Threshold reached — lock out further waves immediately ───────────
+        self._raid_actioned[guild.id] = now + max(interval, 60)
+        self._join_history[guild.id]  = []
+        join_count = len(bucket)
 
-            # Collect recent joiners; optionally filter to new accounts only
-            recent_members = []
-            for m in list(guild.members):
-                joined = m.joined_at
-                if not joined or (now - joined.timestamp()) > interval + 2:
-                    continue
-                if new_account_days > 0:
-                    account_age_days = (discord.utils.utcnow() - m.created_at).days
-                    if account_age_days >= new_account_days:
-                        continue  # old account — skip actioning
-                recent_members.append(m)
+        log.warning("Anti-Raid", f"Join flood in {guild.name} ({join_count} joins / {interval}s)")
 
-            if action in ("kick", "ban", "softban"):
-                for m in recent_members:
-                    try:
-                        if action == "ban":
-                            await guild.ban(m, reason="Anti-Raid: mass join")
-                        elif action == "softban":
-                            await guild.ban(m, reason="Anti-Raid: mass join (softban)",
-                                            delete_message_days=1)
-                            await guild.unban(m, reason="Anti-Raid: softban removal")
-                        else:
-                            await m.kick(reason="Anti-Raid: mass join")
-                        await asyncio.sleep(0.5)
-                    except Exception:
-                        pass
-            elif action == "slowmode":
-                for channel in guild.text_channels:
-                    try:
-                        await channel.edit(slowmode_delay=lockdown_slowmode,
-                                           reason=f"Anti-Raid: slowmode {lockdown_slowmode}s")
-                    except Exception:
-                        pass
-            elif action == "lockdown":
-                for channel in guild.text_channels:
-                    try:
-                        overwrite = channel.overwrites_for(guild.default_role)
-                        overwrite.send_messages = False
-                        await channel.set_permissions(
-                            guild.default_role, overwrite=overwrite,
-                            reason="Anti-Raid lockdown")
-                    except Exception:
-                        pass
-            try:
-                await guild.owner.send(
-                    f"{get_emoji('icon_danger')} "
-                    + _t(lang, "raid_dm",
-                         guild=guild.name, count=len(bucket),
-                         interval=interval, action=action)
-                )
-            except Exception:
-                pass
+        # Dispatch enforcement as an independent task — this handler returns
+        # in microseconds and does zero API calls itself.
+        asyncio.create_task(
+            self._execute_raid_action(guild, ar, now, join_count)
+        )
 
     # ─── ANTI-NUKE ────────────────────────────────
 
@@ -1822,48 +1783,142 @@ class AutoMod(commands.Cog):
         lang:        str,
     ):
         """
-        Carry out the anti-nuke enforcement.  Runs as a fire-and-forget task
-        so the audit-log listener returns immediately.
+        Carry out anti-nuke enforcement.  Runs as a fire-and-forget task.
 
-        Order of operations (fastest response first):
-          1. Strip/kick/ban the offender
-          2. Log to the mod-log channel
-          3. DM the server owner (exactly once — dedup already applied)
+        Speed strategy
+        ─────────────
+        1. Strip dangerous roles ALWAYS as the very first API call — one
+           remove_roles() call instantly revokes all destructive permissions
+           regardless of the configured action.  This stops ongoing damage
+           in the ~100 ms before a kick/ban round-trip completes.
+
+        2. If the configured action is kick or ban, run it CONCURRENTLY with
+           the role strip via asyncio.gather() — both API calls are in-flight
+           at the same time.
+
+        3. After enforcement, run mod-log and owner DM concurrently so neither
+           waits on the other.
         """
         uid    = offender.id
         member = guild.get_member(uid)
 
-        # ── 1. Enforce ───────────────────────────────────────────────────────
+        # ── 1+2. Strip + configured action concurrently ──────────────────────
         if member:
-            try:
-                if nuke_action == "strip":
-                    await self._strip_dangerous_roles(member)
-                elif nuke_action == "kick":
-                    await member.kick(reason="Anti-Nuke: suspicious mass action")
-                elif nuke_action == "ban":
-                    await guild.ban(member, reason="Anti-Nuke: suspicious mass action")
-            except Exception as exc:
-                log.error("Anti-Nuke", f"Failed to {nuke_action} {offender}: {exc}")
+            enforce_coros = [self._strip_dangerous_roles(member)]
+            if nuke_action == "kick":
+                enforce_coros.append(member.kick(reason="Anti-Nuke: suspicious mass action"))
+            elif nuke_action == "ban":
+                enforce_coros.append(guild.ban(member, reason="Anti-Nuke: suspicious mass action"))
+            results = await asyncio.gather(*enforce_coros, return_exceptions=True)
+            for exc in results:
+                if isinstance(exc, Exception) and not isinstance(exc, discord.NotFound):
+                    log.error("Anti-Nuke", f"Enforcement error against {offender}: {exc}")
 
-        # ── 2. Mod-log ───────────────────────────────────────────────────────
-        try:
+        # ── 3. Mod-log + owner DM concurrently ──────────────────────────────
+        async def _do_log():
             await self.utils().log_action(
                 guild,
                 "💣 Anti-Nuke Triggered",
                 f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
                 f"within `{interval}s`.\n**Action:** `{nuke_action}`",
             )
-        except Exception:
-            pass
 
-        # ── 3. Owner DM (cv2 container, single send guaranteed by dedup) ─────
-        try:
+        async def _do_dm():
             dm_view = _build_nuke_dm_view(
                 guild, offender, action_key, threshold, interval, nuke_action, lang
             )
             await guild.owner.send(view=dm_view)
-        except Exception:
-            pass
+
+        await asyncio.gather(_do_log(), _do_dm(), return_exceptions=True)
+
+    async def _execute_raid_action(
+        self,
+        guild:      discord.Guild,
+        ar:         dict,
+        trigger_ts: float,
+        join_count: int,
+    ):
+        """
+        Carry out anti-raid enforcement.  Runs as a fire-and-forget task.
+
+        Speed strategy
+        ─────────────
+        • Collect the target members first (pure Python, zero API calls).
+        • Fire ALL kick/ban operations via asyncio.gather() — discord.py's
+          internal rate-limiter queues them and drains as fast as Discord
+          allows.  No artificial asyncio.sleep() delays.
+        • Slowmode / lockdown channel edits are also gathered so all channels
+          are updated in parallel rather than one-by-one.
+        • Log and DM run concurrently after enforcement.
+        """
+        action            = ar.get("action", "kick")
+        interval          = ar.get("join_interval", 10)
+        new_account_days  = ar.get("new_account_days", 0)
+        lockdown_slowmode = ar.get("lockdown_slowmode", 30)
+        lang              = get_lang(guild)
+
+        # ── Collect targets (synchronous — no API calls) ─────────────────────
+        now = time.time()
+        recent_members: list[discord.Member] = []
+        for m in list(guild.members):
+            joined = m.joined_at
+            if not joined or (now - joined.timestamp()) > interval + 5:
+                continue
+            if new_account_days > 0:
+                if (discord.utils.utcnow() - m.created_at).days >= new_account_days:
+                    continue
+            recent_members.append(m)
+
+        # ── Enforcement ──────────────────────────────────────────────────────
+        if action in ("kick", "ban", "softban"):
+            if action == "ban":
+                coros = [guild.ban(m, reason="Anti-Raid: mass join") for m in recent_members]
+            elif action == "softban":
+                coros = [self._softban(guild, m) for m in recent_members]
+            else:
+                coros = [m.kick(reason="Anti-Raid: mass join") for m in recent_members]
+            await asyncio.gather(*coros, return_exceptions=True)
+
+        elif action == "slowmode":
+            coros = [
+                ch.edit(slowmode_delay=lockdown_slowmode, reason=f"Anti-Raid: slowmode {lockdown_slowmode}s")
+                for ch in guild.text_channels
+            ]
+            await asyncio.gather(*coros, return_exceptions=True)
+
+        elif action == "lockdown":
+            async def _lock_channel(ch: discord.TextChannel):
+                ow = ch.overwrites_for(guild.default_role)
+                ow.send_messages = False
+                await ch.set_permissions(guild.default_role, overwrite=ow, reason="Anti-Raid: lockdown")
+            await asyncio.gather(
+                *[_lock_channel(ch) for ch in guild.text_channels],
+                return_exceptions=True,
+            )
+
+        # ── Log + DM concurrently ────────────────────────────────────────────
+        async def _do_log():
+            await self.utils().log_action(
+                guild,
+                "🌊 Anti-Raid Triggered",
+                f"**{join_count}** members joined within `{interval}s`. "
+                f"Actioned `{len(recent_members)}` member(s). Executing `{action}`.",
+            )
+
+        async def _do_dm():
+            await guild.owner.send(
+                f"{get_emoji('icon_danger')} "
+                + _t(lang, "raid_dm",
+                     guild=guild.name, count=join_count,
+                     interval=interval, action=action)
+            )
+
+        await asyncio.gather(_do_log(), _do_dm(), return_exceptions=True)
+
+    async def _softban(self, guild: discord.Guild, member: discord.Member):
+        """Ban + immediate unban to clear recent messages without a permanent ban."""
+        await guild.ban(member, reason="Anti-Raid: mass join (softban)", delete_message_days=1)
+        await guild.unban(member, reason="Anti-Raid: softban removal")
 
     async def _strip_dangerous_roles(self, member: discord.Member):
         dangerous = (
