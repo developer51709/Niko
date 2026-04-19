@@ -44,7 +44,7 @@ _UI: dict[str, dict[str, str]] = {
     "en": {
         "title":        "Connect Four",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
-        "turn":         "▶️ **{name}**'s turn  {emoji}",
+        "turn":         "{emoji1} **{name}**'s turn  {emoji2}",
         "game_over":    "**Game Over**",
         "winner":       "🎉 **{name}** wins!",
         "tie":          "🤝 It's a tie!",
@@ -56,7 +56,7 @@ _UI: dict[str, dict[str, str]] = {
     "de": {
         "title":        "Vier Gewinnt",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
-        "turn":         "▶️ **{name}** ist dran  {emoji}",
+        "turn":         "{emoji1} **{name}** ist dran  {emoji2}",
         "game_over":    "**Spiel vorbei**",
         "winner":       "🎉 **{name}** gewinnt!",
         "tie":          "🤝 Unentschieden!",
@@ -115,7 +115,8 @@ class ConnectFour:
             return _t(
                 lang, "turn",
                 name=self.turn.display_name,
-                emoji=self._piece[self.turn],
+                emoji1=get_emoji("icon_play"),
+                emoji2=self._piece[self.turn],
             )
         if self.winner:
             return (
