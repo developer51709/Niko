@@ -367,7 +367,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
 # Map category label → list of cog names that contribute to it.
 CATEGORY_COGS: dict[str, List[str]] = {
     "General":       [],
-    "Fun":           ["UwULock", "Meme", "tictactoe", "CuteAnimals", "FunCog"],
+    "Fun":           ["UwULock", "Meme", "tictactoe", "CuteAnimals", "FunCog", "ConnectFourCog"],
     "Gambling":      ["Blackjack", "Roulette", "Slots", "GamblingCog"],
     "Economy":       ["EconomyCog"],
     "Roleplay":      ["RolePlayCog"],

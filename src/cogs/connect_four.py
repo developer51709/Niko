@@ -42,7 +42,7 @@ _TOP_ROW = (
 
 _UI: dict[str, dict[str, str]] = {
     "en": {
-        "title":        "### Connect Four",
+        "title":        "Connect Four",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
         "turn":         "▶️ **{name}**'s turn  {emoji}",
         "game_over":    "**Game Over**",
@@ -54,7 +54,7 @@ _UI: dict[str, dict[str, str]] = {
         "vs_bot":       "You can't play against a bot!",
     },
     "de": {
-        "title":        "### Vier Gewinnt",
+        "title":        "Vier Gewinnt",
         "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
         "turn":         "▶️ **{name}** ist dran  {emoji}",
         "game_over":    "**Spiel vorbei**",
@@ -258,7 +258,7 @@ class ConnectFourView(discord.ui.LayoutView):
         )
 
         items: list = [
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_games')} {_t(lang, 'title')}"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_games')} {_t(lang, 'title')}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=players_line),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
