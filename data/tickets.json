@@ -108,5 +108,16 @@
         "status": "open"
       }
     ]
+  },
+  "1443314822182732010": {
+    "guild_id": 1443314822182732010,
+    "panel_title": "Open a fucking ticket",
+    "panel_description": "no clue why you would need to open a ticket but whatever",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/icons/1443314822182732010/87d65130c84fdac3293449f9100d02e2.png?size=1024",
+    "panel_categories": [],
+    "panel_channel_id": 1495258758883049645,
+    "panel_message_id": 1495258834866802768,
+    "open_tickets": []
   }
 }

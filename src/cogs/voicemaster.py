@@ -95,6 +95,28 @@ INTERFACE_COMMANDS = (
     f"{E.DECREASE} — [`Decrease`]({SUPPORT_URL}) the user limit"
 )
 
+async def success(ctx: commands.Context, message: str):
+    view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=f"{get_emoji('icon_tick')} {message}"
+        ),
+        accent_colour=discord.Color.green()
+    )
+    view.add_item(container)
+    await ctx.reply(view=view)
+
+async def fail(ctx: commands.Context, message: str):
+    view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=f"{get_emoji('icon_cross')} {message}"
+        ),
+        accent_colour=discord.Color.red()
+    )
+    view.add_item(container)
+    await ctx.reply(view=view)
+
 
 class VoiceMasterInterface(discord.ui.LayoutView):
     def __init__(self):
@@ -501,7 +523,7 @@ class VoiceMaster(commands.Cog):
 
         except Exception as e:
             logging.error("VoiceMaster", f"Setup error: {e}")
-            await ctx.fail("Failed to set up VoiceMaster. Please check my permissions.")
+            await fail(ctx, "Failed to set up VoiceMaster. Please check my permissions.")
 
     @_voicemaster.command(help="Send the VoiceMaster control panel")
     @checks.has_perms(manage_guild=True)
@@ -539,7 +561,7 @@ class VoiceMaster(commands.Cog):
             await ctx.success(f"{E.TRANSFER} VoiceMaster has been reset.")
         except Exception as e:
             logging.error("VoiceMaster", f"Reset error: {e}")
-            await ctx.fail("Failed to reset VoiceMaster.")
+            await fail(ctx, "Failed to reset VoiceMaster.")
 
     @_voicemaster.command(help="Set the category for temporary voice channels")
     @checks.has_perms(manage_guild=True)
@@ -555,7 +577,7 @@ class VoiceMaster(commands.Cog):
             await ctx.success(msg)
         except Exception as e:
             logging.error("VoiceMaster", f"Category error: {e}")
-            await ctx.fail("Failed to set category.")
+            await fail(ctx, "Failed to set category.")
 
     @_voicemaster.group(help="Configure default settings for new voice channels")
     @checks.has_perms(manage_guild=True)
@@ -563,7 +585,7 @@ class VoiceMaster(commands.Cog):
         if not ctx.invoked_subcommand:
             settings = await self.get_guild_settings(ctx.guild.id)
             if not settings:
-                await ctx.fail("VoiceMaster is not set up. Use `voicemaster setup` first.")
+                await fail(ctx, "VoiceMaster is not set up. Use `voicemaster setup` first.")
                 return
 
             default_limit   = settings.get('default_limit', 0)
@@ -586,7 +608,7 @@ class VoiceMaster(commands.Cog):
     @checks.has_perms(manage_guild=True)
     async def default_name(self, ctx, *, name: str):
         if len(name) > 100:
-            await ctx.fail("Default name must be 100 characters or less.")
+            await fail(ctx, "Default name must be 100 characters or less.")
             return
         try:
             await self.bot.cxn.execute(
@@ -596,13 +618,13 @@ class VoiceMaster(commands.Cog):
             await ctx.success(f"{get_emoji('icon_edit')} Default channel name set to: **{name}**")
         except Exception as e:
             logging.error("VM", f"Default name error: {e}")
-            await ctx.fail("Failed to set default name.")
+            await fail(ctx, "Failed to set default name.")
 
     @default.command(name="limit", help="Set default user limit for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_limit(self, ctx, limit: int):
         if limit < 0 or limit > 99:
-            await ctx.fail("Limit must be between 0 and 99.")
+            await fail(ctx, "Limit must be between 0 and 99.")
             return
         try:
             await self.bot.cxn.execute(
@@ -614,13 +636,13 @@ class VoiceMaster(commands.Cog):
             await ctx.success(msg)
         except Exception as e:
             logging.error("VoiceMaster", f"Default limit error: {e}")
-            await ctx.fail("Failed to set default limit.")
+            await fail(ctx, "Failed to set default limit.")
 
     @default.command(name="bitrate", help="Set default bitrate for new voice channels")
     @checks.has_perms(manage_guild=True)
     async def default_bitrate(self, ctx, bitrate: int):
         if bitrate < 8 or bitrate > 384:
-            await ctx.fail("Bitrate must be between 8 and 384 kbps.")
+            await fail(ctx, "Bitrate must be between 8 and 384 kbps.")
             return
         try:
             await self.bot.cxn.execute(
@@ -631,7 +653,7 @@ class VoiceMaster(commands.Cog):
             await ctx.success(f"{E.BITRATE} Default bitrate set to: **{bitrate} kbps**")
         except Exception as e:
             logging.error("VM", f"Default bitrate error: {e}")
-            await ctx.fail("Failed to set default bitrate.")
+            await fail(ctx, "Failed to set default bitrate.")
 
     @default.command(name="region", help="Set default region for new voice channels")
     @checks.has_perms(manage_guild=True)
@@ -642,7 +664,7 @@ class VoiceMaster(commands.Cog):
             'brazil', 'hongkong', 'russia', 'japan', 'india',
         ]
         if region and region.lower() not in valid_regions:
-            await ctx.fail(f"Invalid region. Valid options: {', '.join(valid_regions)}")
+            await fail(ctx, f"Invalid region. Valid options: {', '.join(valid_regions)}")
             return
         try:
             await self.bot.cxn.execute(
@@ -655,7 +677,7 @@ class VoiceMaster(commands.Cog):
             await ctx.success(msg)
         except Exception as e:
             logging.error("VM", f"Default region error: {e}")
-            await ctx.fail("Failed to set default region.")
+            await fail(ctx, "Failed to set default region.")
 
     @_voicemaster.command(help="View current voice channel configuration")
     async def configuration(self, ctx):
@@ -745,22 +767,22 @@ class VoiceMaster(commands.Cog):
     @_voicemaster.command(help="Set a user limit on your voice channel")
     async def limit(self, ctx, limit: int):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await ctx.fail("You must be in a voice channel to use this command.")
+            await fail(ctx, "You must be in a voice channel to use this command.")
             return
         if limit < 0 or limit > 99:
-            await ctx.fail("Limit must be between 0 and 99.")
+            await fail(ctx, "Limit must be between 0 and 99.")
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await ctx.fail("You don't own this voice channel.")
+            await fail(ctx, "You don't own this voice channel.")
             return
         try:
             await channel.edit(user_limit=limit)
             msg = f"{E.LIMIT} User limit removed." if limit == 0 else f"{E.LIMIT} User limit set to {limit}."
-            await ctx.success(msg)
+            await success(ctx, msg)
         except Exception as e:
             logging.error("VoiceMaster", f"Limit error: {e}")
-            await ctx.fail("Failed to set user limit.")
+            await fail(ctx, "Failed to set user limit.")
 
     @_voicemaster.command(help="Rename your voice channel")
     async def name(self, ctx, *, name: str):

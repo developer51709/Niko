@@ -11,6 +11,11 @@ Features:
   • Autoplay via Last.fm "similar tracks" when the queue runs dry
       Requires: LASTFM_API_KEY env var (silently disabled when absent)
   • Personality-aware text (normal / café modes, EN / DE)
+
+Known Issues:
+  • When the play command is used while a song is actively playing it will add it to the queue but it will say it could not find the song even though it did
+  • When using spotify track links in the play command it always fails (the plan is to switch to spotipy for the spotify api in a future version)
+  • The now playing progress bar does not update unless someone presses the pause button
 """
 
 import asyncio
