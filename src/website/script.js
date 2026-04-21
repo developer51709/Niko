@@ -16,7 +16,35 @@ const LANG = {
     personality_title: "personality modes",
     personality_text: "niko can speak plainly or like a soft café barista — and is ready for future moods.",
     bilingual_title: "bilingual by design",
-    footer_text: "made with love by nyxen ☕"
+    footer_text: "made with love by nyxen ☕",
+    nav_home: "home",
+    nav_tos: "tos",
+    nav_privacy: "privacy",
+    privacy_title: "privacy policy",
+    privacy_updated: "last updated: february 24, 2026",
+    privacy_sec1_title: "1. data we store",
+    privacy_sec1_text: "niko stores only the data required for its features, such as:",
+    privacy_sec1_list: [
+      "leveling stats (xp, level, user id, guild id)",
+      "configuration data (e.g., uwu‑lock settings)"
+    ],
+    privacy_sec2_title: "2. data we do not store",
+    privacy_sec2_text: "niko does not store message content long‑term, except where technically required for a feature (e.g., temporary processing for uwu‑lock).",
+    privacy_sec3_title: "3. third‑party services",
+    privacy_sec3_text: "niko may call external apis (e.g., for images or memes). those services have their own privacy policies.",
+    privacy_sec4_title: "4. removal of data",
+    privacy_sec4_text: "if you want data related to your server removed, you can remove niko from the server or contact the developer.",
+    tos_title: "terms of service",
+    tos_updated: "last updated: february 24, 2026",
+    tos_intro: "this page describes the terms under which you may use niko, the discord bot.",
+    tos_sec1_title: "1. usage",
+    tos_sec1_text: "you may invite niko to your server and use its features as provided. abuse, spam, or use in violation of discord’s terms of service is not allowed.",
+    tos_sec2_title: "2. data",
+    tos_sec2_text: "niko stores minimal data required for functionality (such as leveling stats or configuration). see the privacy policy for details.",
+    tos_sec3_title: "3. availability",
+    tos_sec3_text: "niko is provided “as is” with no guarantee of uptime or continued availability.",
+    tos_sec4_title: "4. changes",
+    tos_sec4_text: "these terms may be updated from time to time. continued use of niko implies acceptance of the latest version."
   },
   de: {
     hero_title: "dein gemütlicher café‑discord‑begleiter",
@@ -35,7 +63,35 @@ const LANG = {
     personality_title: "persönlichkeitsmodi",
     personality_text: "niko kann neutral sprechen oder wie ein sanfter barista — und ist bereit für weitere moods.",
     bilingual_title: "von grund auf zweisprachig",
-    footer_text: "mit liebe gemacht von nyxen ☕"
+    footer_text: "mit liebe gemacht von nyxen ☕",
+    nav_home: "startseite",
+    nav_tos: "nutzungsbedingungen",
+    nav_privacy: "datenschutz",
+    privacy_title: "datenschutzerklärung",
+    privacy_updated: "zuletzt aktualisiert: 24. februar 2026",
+    privacy_sec1_title: "1. daten, die wir speichern",
+    privacy_sec1_text: "niko speichert nur daten, die für seine funktionen erforderlich sind, wie zum beispiel:",
+    privacy_sec1_list: [
+      "level-statistiken (xp, level, benutzer-id, guild-id)",
+      "konfigurationsdaten (z. b. uwu-lock-einstellungen)"
+    ],
+    privacy_sec2_title: "2. daten, die wir nicht speichern",
+    privacy_sec2_text: "niko speichert nachrichteninhalte nicht langfristig, es sei denn, dies ist für eine funktion technisch erforderlich (z. b. temporäre verarbeitung für uwu-lock).",
+    privacy_sec3_title: "3. drittanbieter-dienste",
+    privacy_sec3_text: "niko kann externe apis aufrufen (z. b. für bilder oder memes). diese dienste haben ihre eigenen datenschutzbestimmungen.",
+    privacy_sec4_title: "4. entfernung von daten",
+    privacy_sec4_text: "wenn du daten im zusammenhang mit deinem server entfernen möchtest, kannst du niko vom server entfernen oder den entwickler kontaktieren.",
+    tos_title: "nutzungsbedingungen",
+    tos_updated: "zuletzt aktualisiert: 24. februar 2026",
+    tos_intro: "diese seite beschreibt die bedingungen, unter denen du niko, den discord-bot, nutzen darfst.",
+    tos_sec1_title: "1. nutzung",
+    tos_sec1_text: "du kannst niko auf deinen server einladen und seine funktionen wie bereitgestellt nutzen. missbrauch, spam oder nutzung unter verstoß gegen die nutzungsbedingungen von discord ist nicht gestattet.",
+    tos_sec2_title: "2. daten",
+    tos_sec2_text: "niko speichert minimale daten, die für die funktionalität erforderlich sind (wie level-statistiken oder konfiguration). details findest du in der datenschutzerklärung.",
+    tos_sec3_title: "3. verfügbarkeit",
+    tos_sec3_text: "niko wird „wie besehen“ bereitgestellt, ohne garantie für die betriebszeit oder dauerhafte verfügbarkeit.",
+    tos_sec4_title: "4. änderungen",
+    tos_sec4_text: "diese bedingungen können von zeit zu zeit aktualisiert werden. die fortgesetzte nutzung von niko setzt die akzeptanz der neuesten version voraus."
   }
 };
 
@@ -75,8 +131,45 @@ function applyLang(lang) {
 
     safeSet("footer-text", t.footer_text);
 
-    fadeEls.forEach(el => el.classList.remove("hidden"));
-  }, 350);
+    // Common navigation items
+    safeSet("nav-home", t.nav_home);
+    safeSet("nav-tos", t.nav_tos);
+    safeSet("nav-privacy", t.nav_privacy);
+
+    // Privacy Policy specific
+    safeSet("privacy-title", t.privacy_title);
+    safeSet("privacy-updated", t.privacy_updated);
+    safeSet("privacy-section-1-title", t.privacy_sec1_title);
+    safeSet("privacy-section-1-text", t.privacy_sec1_text);
+    if (document.getElementById("privacy-section-1-list")) {
+      const list = document.getElementById("privacy-section-1-list");
+      list.innerHTML = t.privacy_sec1_list.map(item => `<li>${item}</li>`).join("");
+    }
+    safeSet("privacy-section-2-title", t.privacy_sec2_title);
+    safeSet("privacy-section-2-text", t.privacy_sec2_text);
+    safeSet("privacy-section-3-title", t.privacy_sec3_title);
+    safeSet("privacy-section-3-text", t.privacy_sec3_text);
+    safeSet("privacy-section-4-title", t.privacy_sec4_title);
+    safeSet("privacy-section-4-text", t.privacy_sec4_text);
+
+    // ToS specific
+    safeSet("tos-title", t.tos_title);
+    safeSet("tos-updated", t.tos_updated);
+    safeSet("tos-intro", t.tos_intro);
+    safeSet("tos-section-1-title", t.tos_sec1_title);
+    safeSet("tos-section-1-text", t.tos_sec1_text);
+    safeSet("tos-section-2-title", t.tos_sec2_title);
+    safeSet("tos-section-2-text", t.tos_sec2_text);
+    safeSet("tos-section-3-title", t.tos_sec3_title);
+    safeSet("tos-section-3-text", t.tos_sec3_text);
+    safeSet("tos-section-4-title", t.tos_sec4_title);
+    safeSet("tos-section-4-text", t.tos_sec4_text);
+
+    // Small delay before fading back in to ensure text has rendered
+    requestAnimationFrame(() => {
+      fadeEls.forEach(el => el.classList.remove("hidden"));
+    });
+  }, 400);
 
   document.querySelectorAll(".lang-toggle").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
