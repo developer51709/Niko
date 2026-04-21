@@ -119,5 +119,24 @@
     "panel_channel_id": 1495258758883049645,
     "panel_message_id": 1495258834866802768,
     "open_tickets": []
+  },
+  "1495899475456032911": {
+    "guild_id": 1495899475456032911,
+    "panel_title": "an average ticket panel frfr",
+    "panel_description": "use the button to open a ticket :P\nif you open multiple for no reason then you are stupid ngl \ud83d\ude16",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": 1495932591050719243,
+    "panel_message_id": 1495932645907890196,
+    "open_tickets": [
+      {
+        "channel_id": 1495933482352775259,
+        "message_id": 1495933484995182783,
+        "category": "General",
+        "opener_id": 1495589910839689407,
+        "status": "open"
+      }
+    ]
   }
 }
