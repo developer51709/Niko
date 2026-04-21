@@ -11,6 +11,7 @@ import asyncio
 from config.emojis import get_emoji
 from .error_handler import is_owner
 from utils.image.extractor import extract_image_from_message, extract_images_from_message
+from utils import logging
 
 PFPS_FOLDER = "src/assets/pfps"
 
@@ -77,6 +78,224 @@ async def get_couple_pfps(ctx: commands.Context, gender1: str, gender2: str):
     image2 = f"{gender_folder_path}/{image.split('_')[0]}_2.png"
     return discord.File(image1), discord.File(image2)
     
+
+# ------------------------------
+# Color Profile Picture Views
+# ------------------------------
+# this function allows for dynamic color lists based on the folders thar exist
+def get_color_list():
+    color_folder_path = f"{PFPS_FOLDER}/colors"
+    # this function returns both the color names and the number of images in each folder
+    colors = []
+    for color in os.listdir(color_folder_path):
+        colors.append((color, len(os.listdir(f"{color_folder_path}/{color}"))))
+    return colors
+
+class ColorSelect(discord.ui.Select):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        options = []
+        for color, count in get_color_list():
+            options.append(discord.SelectOption(label=color.capitalize(), value=color, description=f"{count} images"))
+        super().__init__(placeholder="Select a color", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        color = self.values[0]
+        # assign it to a variable in the context
+        self.ctx.color = color
+        await interaction.response.defer()
+
+class ColorSubmit(discord.ui.Button):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        super().__init__(label="Submit", style=discord.ButtonStyle.green)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        # get the color from the context
+        if not hasattr(self.ctx, "color"):
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You must select a color first!"
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        color = self.ctx.color
+        # edit the message to a loading message
+        message = interaction.message
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Finding a profile picture for the selected color..."
+            )
+        )
+        view.add_item(container)
+        await message.edit(view=view)
+        # get the profile picture
+        try:
+            pfp = await get_color_pfp(self.ctx, color)
+        except Exception as e:
+            logging.error("pfps_cog", f"An error occurred while fetching a pfp for color {color}: {e}")
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} An error occurred while finding the profile picture. Please try again later."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await message.edit(view=view)
+        # send the profile picture
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Profile Picture"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=pfp
+                )
+            )
+        )
+        view.add_item(container)
+        await message.edit(view=view, attachments=[pfp])
+
+class ColorSelectView(discord.ui.LayoutView):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        super().__init__()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Profile Picture"
+            ),
+            discord.ui.ActionRow(
+                ColorSelect(ctx)
+            ),
+            discord.ui.ActionRow(
+                ColorSubmit(ctx)
+            )
+        )
+        self.add_item(container)
+
+
+# ------------------------------
+# Gender Profile Picture Views
+# ------------------------------
+# folders are static meaning we can hardcode the options and just fetch the images from the existing folders as well as image count
+def get_gender_image_counts():
+    gender_folder_path = f"{PFPS_FOLDER}/genders"
+    genders = ["male", "female", "non-binary"]
+    counts = []
+    for gender in genders:
+        counts.append((gender, len(os.listdir(f"{gender_folder_path}/{gender}"))))
+    return counts
+
+class GenderSelect(discord.ui.Select):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        options = []
+        for gender, count in get_gender_image_counts():
+            options.append(discord.SelectOption(label=gender.capitalize(), value=gender, description=f"{count} images"))
+        super().__init__(placeholder="Select a gender", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        gender = self.values[0]
+        self.ctx.gender = gender
+        await interaction.response.defer()
+
+class GenderSubmit(discord.ui.Button):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        super().__init__(label="Submit", style=discord.ButtonStyle.green)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        # get the gender from the context
+        gender = self.ctx.gender
+        # edit the message to a loading message
+        message = interaction.message
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_loading')} Finding a profile picture for the selected gender..."
+            )
+        )
+        view.add_item(container)
+        await message.edit(view=view)
+        # get the profile picture
+        pfp = await get_gender_pfp(self.ctx, gender)
+        # send the profile picture
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Profile Picture"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=pfp
+                )
+            )
+        )
+        view.add_item(container)
+        await message.edit(view=view, attachments=[pfp])
+
+class GenderSelectView(discord.ui.LayoutView):
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        super().__init__()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_image')} Profile Picture"
+            ),
+            discord.ui.ActionRow(
+                GenderSelect(ctx)
+            ),
+            discord.ui.ActionRow(
+                GenderSubmit(ctx)
+            )
+        )
+        self.add_item(container)
 
 
 # ------------------------------
@@ -170,7 +389,10 @@ class CoupleGenderSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} An error occurred while finding the profile pictures. Please try again later."
+                    content=f"{get_emoji('icon_cross')} We couldn't find any matching profile pictures for the selected genders."
+                ),
+                discord.ui.TextDisplay(
+                    content="-# **Note from Developers:**\n-# This feature is still really new and not all the combinations are available yet. If you would like to help contribute to this feature, please feel free to add me on Discord (my username is `nyxenwastaken`) and send me message asking for more details on how you can contribute to the project.\n-# ~Sincerely, Nyxen"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -251,35 +473,10 @@ class PfpCog(commands.Cog):
         aliases=["colour"],
         help="{ 'en': 'Find a profile picture with the specified color.', 'de': 'Finde ein Profilbild mit der angegebenen Farbe.' }"
     )
-    async def color(self, ctx: commands.Context, color: str):
-        # 16 colors are supported: red, orange, yellow, green, blue, purple, pink, brown, black, white, gray, grey, cyan, magenta, lime, teal
-        supported_colors = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray", "grey", "cyan", "magenta", "lime", "teal"]
-        if color.lower() not in supported_colors:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} The specified color is not supported. Supported colors are: {', '.join(supported_colors)}"
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
-        # get the profile picture
-        pfp = await get_color_pfp(ctx, color.lower())
-        # send the profile picture
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
-            ),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem(
-                    media=pfp
-                )
-            )
-        )
-        view.add_item(container)
-        await ctx.reply(view=view, file=pfp)
+    async def color(self, ctx: commands.Context):
+        # rewrittem to use the select menu - 04/21/2026
+        view = ColorSelectView(ctx)
+        await ctx.send(view=view)
 
     # gender command
     @pfp.command(
@@ -287,35 +484,10 @@ class PfpCog(commands.Cog):
         aliases=["sex"],
         help="{ 'en': 'Find a profile picture with the specified gender.', 'de': 'Finde ein Profilbild mit dem angegebenen Geschlecht.' }"
     )
-    async def gender(self, ctx: commands.Context, gender: str):
-        # 3 genders are supported: male, female, non-binary
-        supported_genders = ["male", "female", "non-binary"]
-        if gender.lower() not in supported_genders:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
-        # get the profile picture
-        pfp = await get_gender_pfp(ctx, gender.lower())
-        # send the profile picture
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
-            ),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem(
-                    media=pfp
-                )
-            )
-        )
-        view.add_item(container)
-        await ctx.reply(view=view, file=pfp)
+    async def gender(self, ctx: commands.Context):
+        # rewritten to use the select menu - 04/21/2026
+        view = GenderSelectView(ctx)
+        await ctx.send(view=view)
 
     # couple command
     @pfp.command(
@@ -359,18 +531,6 @@ class PfpCog(commands.Cog):
     )
     @is_owner()
     async def upload_color(self, ctx: commands.Context, color: str):
-        # 16 colors are supported: red, orange, yellow, green, blue, purple, pink, brown, black, white, gray, grey, cyan, magenta, lime, teal
-        supported_colors = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray", "grey", "cyan", "magenta", "lime", "teal"]
-        if color.lower() not in supported_colors:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} The specified color is not supported. Supported colors are: {', '.join(supported_colors)}"
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
         # get the image from the message
         image = await extract_image_from_message(ctx.message)
         if not image:
@@ -383,13 +543,25 @@ class PfpCog(commands.Cog):
             )
             view.add_item(container)
             return await ctx.send(view=view)
-        # save the image to the folder
-        color_folder_path = f"{PFPS_FOLDER}/colors/{color.lower()}"
-        # get the number of images in the folder
-        number_of_images = len(os.listdir(color_folder_path))
-        # save the image to the folder
-        with open(f"{color_folder_path}/{number_of_images + 1}.png", "wb") as f:
-            f.write(image.read())
+        try:
+            # save the image to the folder
+            color_folder_path = f"{PFPS_FOLDER}/colors/{color.lower()}"
+            # get the number of images in the folder
+            number_of_images = len(os.listdir(color_folder_path))
+            # save the image to the folder
+            with open(f"{color_folder_path}/{number_of_images + 1}.png", "wb") as f:
+                f.write(image.read())
+        # handle missing folder error
+        except FileNotFoundError:
+            # create the folder
+            os.mkdir(f"{PFPS_FOLDER}/colors/{color.lower()}")
+            # save the image to the folder
+            color_folder_path = f"{PFPS_FOLDER}/colors/{color.lower()}"
+            # get the number of images in the folder
+            number_of_images = len(os.listdir(f"{PFPS_FOLDER}/colors/{color.lower()}"))
+            # save the image to the folder
+            with open(f"{color_folder_path}/{number_of_images + 1}.png", "wb") as f:
+                f.write(image.read())
         # send a success message
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
