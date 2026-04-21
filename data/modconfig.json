@@ -3,7 +3,7 @@
         "modlog_channel": 1468390244079632527,
         "automod": {
             "antispam": true,
-            "antilink": true,
+            "antilink": false,
             "badwords": true,
             "massmention": true,
             "antinuke": true,
