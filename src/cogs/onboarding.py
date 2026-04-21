@@ -440,13 +440,14 @@ class SetRulesRoleBtn(discord.ui.Button):
 
 class AddAutoroleSelect(discord.ui.RoleSelect):
     """Ephemeral role picker — adds chosen roles to the autorole list."""
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__(
             placeholder="Choose roles to add as autoroles…",
             min_values=1,
             max_values=10,
         )
         self.guild_id = guild_id
+        self.message = message
 
     async def callback(self, interaction: discord.Interaction):
         cfg = get_config(self.guild_id)
@@ -469,9 +470,12 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
-            await interaction.response.send_message(
-                view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+            # edit the interaction message
+            await interaction.response.edit_message(
+                view=view, allowed_mentions=discord.AllowedMentions.none()
             )
+            # update the setup panel
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -481,21 +485,22 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            await interaction.response.send_message(
-                view=view, ephemeral=True
+            await interaction.response.edit_message(
+                view=view
             )
 
 
 class AddAutoroleView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__()
-        self.add_item(AddAutoroleSelect(guild_id))
+        self.add_item(AddAutoroleSelect(guild_id, message))
 
 
 class RemoveAutoroleSelect(discord.ui.Select):
     """Ephemeral select of current autoroles — removes chosen ones."""
-    def __init__(self, guild_id: int, guild: discord.Guild):
+    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message):
         self.guild_id = guild_id
+        self.message = message
         cfg = get_config(guild_id)
         options = []
         for rid in (cfg.autorole_ids or []):
@@ -537,9 +542,10 @@ class RemoveAutoroleSelect(discord.ui.Select):
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
-            await interaction.response.send_message(
-                view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+            await interaction.response.edit_message(
+                view=view, allowed_mentions=discord.AllowedMentions.none()
             )
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -549,13 +555,13 @@ class RemoveAutoroleSelect(discord.ui.Select):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.edit_message(view=view)
 
 
 class RemoveAutoroleView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, guild: discord.Guild):
+    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message):
         super().__init__()
-        self.add_item(RemoveAutoroleSelect(guild_id, guild))
+        self.add_item(RemoveAutoroleSelect(guild_id, guild, message))
 
 
 class AddAutoroleBtn(discord.ui.Button):
@@ -575,12 +581,13 @@ class AddAutoroleBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
+        message = interaction.message
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"{get_emoji('icon_settings')} Select one or more roles to automatically assign to new members:"
             ),
-            AddAutoroleView(self.guild_id)
+            AddAutoroleView(self.guild_id, message)
         )
         view.add_item(container)
         await interaction.response.send_message(
@@ -618,12 +625,13 @@ class RemoveAutoroleBtn(discord.ui.Button):
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
 
+        message = interaction.message
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"{get_emoji('icon_settings')} Select autoroles to remove:"
             ),
-            RemoveAutoroleView(self.guild_id, self.guild)
+            RemoveAutoroleView(self.guild_id, self.guild, message)
         )
         view.add_item(container)
         await interaction.response.send_message(
@@ -660,6 +668,7 @@ class ClearAutorolesBtn(discord.ui.Button):
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
+        await interaction.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
 
 
 class AutoroleSetupView(discord.ui.LayoutView):
@@ -814,6 +823,19 @@ class CaptchaVerifyButton(discord.ui.Button):
         user = interaction.user
         guild_id = self.guild_id
 
+        # check if captcha is enabled
+        cfg = get_config(guild_id)
+        if not cfg.captcha_enabled:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Captcha verification is currently disabled for this server."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+            
         if user.id in _pending_verifications:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -902,13 +924,14 @@ class CaptchaPanelView(discord.ui.LayoutView):
 # ------------ CAPTCHA SETUP COMPONENTS ------------
 
 class CaptchaAddRolesSelect(discord.ui.RoleSelect):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__(
             placeholder="Choose roles to ADD after verification…",
             min_values=1,
             max_values=10,
         )
         self.guild_id = guild_id
+        self.message = message
 
     async def callback(self, interaction: discord.Interaction):
         cfg = get_config(self.guild_id)
@@ -929,7 +952,8 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.edit_message(view=view)
+            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -939,23 +963,24 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.edit_message(view=view)
 
 
 class CaptchaAddRolesView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__()
-        self.add_item(CaptchaAddRolesSelect(guild_id))
+        self.add_item(CaptchaAddRolesSelect(guild_id, message))
 
 
 class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__(
             placeholder="Choose roles to REMOVE after verification…",
             min_values=1,
             max_values=10,
         )
         self.guild_id = guild_id
+        self.message = message
 
     async def callback(self, interaction: discord.Interaction):
         cfg = get_config(self.guild_id)
@@ -976,7 +1001,8 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.edit_message(view=view)
+            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -986,13 +1012,13 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.edit_message(view=view)
 
 
 class CaptchaRemoveRolesView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, message: discord.Message):
         super().__init__()
-        self.add_item(CaptchaRemoveRolesSelect(guild_id))
+        self.add_item(CaptchaRemoveRolesSelect(guild_id, message))
 
 
 class CaptchaSetupView(discord.ui.LayoutView):
@@ -1051,18 +1077,20 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 c = get_config(self_inner.guild_id)
                 c.captcha_enabled = not c.captcha_enabled
                 update_config(self_inner.guild_id, c)
-                state = "enabled" if c.captcha_enabled else "disabled"
-                emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
-                color = discord.Color.green() if state == "enabled" else discord.Color.red()
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"{emoji} Captcha verification **{state}**."
-                    ),
-                    accent_colour=color
-                )
-                view.add_item(container)
-                await interaction.response.send_message(view=view, ephemeral=True)
+                # state = "enabled" if c.captcha_enabled else "disabled"
+                # emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
+                # color = discord.Color.green() if state == "enabled" else discord.Color.red()
+                # view = discord.ui.LayoutView()
+                # container = discord.ui.Container(
+                #     discord.ui.TextDisplay(
+                #         content=f"{emoji} Captcha verification **{state}**."
+                #     ),
+                #     accent_colour=color
+                # )
+                # view.add_item(container)
+                # await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.response.defer()
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
 
         class PostPanelBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1097,6 +1125,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
 
         class SetAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1115,12 +1144,13 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
+                message = interaction.message
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=f"{get_emoji('icon_settings')} Select roles to **add** to members after they pass verification:"
                     ),
-                    CaptchaAddRolesView(self_inner.guild_id)
+                    CaptchaAddRolesView(self_inner.guild_id, message)
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
@@ -1142,12 +1172,13 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
+                message = interaction.message
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=f"{get_emoji('icon_settings')} Select roles to **remove** from members after they pass verification:"
                     ),
-                    CaptchaRemoveRolesView(self_inner.guild_id)
+                    CaptchaRemoveRolesView(self_inner.guild_id, message)
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
@@ -1184,6 +1215,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
 
         class ClearAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1214,6 +1246,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
 
         class ClearRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1244,6 +1277,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Captcha Verification Setup"),
