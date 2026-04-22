@@ -12,10 +12,10 @@ CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 
 DEFAULT_GUILD_CONFIG = {
     "automod": {
-        "antispam":     True,
-        "antilink":     True,
+        "antispam":     False,
+        "antilink":     False,
         "badwords":     True,
-        "massmention":  True,
+        "massmention":  False,
         "antinuke":     False,
         "antiraid":     False,
         "antiraid_ext": False,
