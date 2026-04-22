@@ -13,7 +13,6 @@ Features:
   • Personality-aware text (normal / café modes, EN / DE)
 
 Known Issues:
-  • When the play command is used while a song is actively playing it will add it to the queue but it will say it could not find the song even though it did
   • When using spotify track links in the play command it always fails (the plan is to switch to spotipy for the spotify api in a future version)
   • The now playing progress bar does not update unless someone presses the pause button
 """
@@ -952,10 +951,12 @@ class MusicSystem(commands.Cog):
                 player.queue.put(track)
                 queued_count += 1
 
-        if first_track is None:
+        if first_track is None and queued_count == 0:
             return await ctx.send(msg(ctx, "play_not_found"))
 
         if queued_count:
+            if not first_track:
+                first_track = player.current
             # Multiple tracks added (album / playlist)
             multi = discord.ui.LayoutView()
             multi.add_item(discord.ui.Container(
@@ -970,7 +971,8 @@ class MusicSystem(commands.Cog):
             await ctx.send(view=multi)
 
         # Send / replace now-playing control panel
-        await self._send_np(ctx, player)
+        if first_track and not queued_count:
+            await self._send_np(ctx, player)
 
     @commands.command(
         name="pause",
