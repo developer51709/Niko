@@ -5,7 +5,6 @@ psutil
 colorama
 flask
 openai
-wavelink
 aiosqlite
 deep-translator
 langdetect
@@ -18,7 +17,6 @@ langdetect
 openai
 psutil
 requests
-wavelink
 feedparser
 pillow
 davey
@@ -38,4 +36,5 @@ Pillow
 psutil
 PyNaCl
 requests
+spotipy
 wavelink
