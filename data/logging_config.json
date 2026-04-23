@@ -115,16 +115,16 @@
         "disabled": []
     },
     "1495899475456032911": {
-        "moderation": 1495942023662796901,
-        "automod": 1495937075650760715,
-        "messages": 1495942061969510432,
-        "channels": 1495942061969510432,
-        "members": 1495942061969510432,
-        "captcha": 1496129105521934417,
+        "moderation": null,
+        "automod": null,
+        "messages": null,
+        "channels": null,
+        "members": null,
+        "captcha": null,
         "invites": 1496129781060735146,
-        "roles": 1495942061969510432,
-        "server": 1495942061969510432,
-        "voice": 1495942061969510432,
+        "roles": null,
+        "server": null,
+        "voice": null,
         "disabled": []
     }
 }

@@ -138,5 +138,24 @@
         "status": "open"
       }
     ]
+  },
+  "1495662474672738377": {
+    "guild_id": 1495662474672738377,
+    "panel_title": "Support Tickets",
+    "panel_description": "Use the button below to open a ticket.",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/attachments/1495932591050719243/1496649043127042058/background.png?ex=69eaa68a&is=69e9550a&hm=8e13bdf9fb9b5bdc40db7b4a718da834ecf27c34b9d255a95d24607c81f61202&",
+    "panel_categories": [],
+    "panel_channel_id": 1496163458503278702,
+    "panel_message_id": 1496671047875825828,
+    "open_tickets": [
+      {
+        "channel_id": 1496671910476648458,
+        "message_id": 1496671911537807490,
+        "category": "General",
+        "opener_id": 1495618222488162439,
+        "status": "open"
+      }
+    ]
   }
 }
