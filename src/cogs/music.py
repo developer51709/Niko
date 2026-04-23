@@ -472,15 +472,25 @@ async def _probe_node(session, node, sem):
     host   = node["host"]
     port   = node["port"]
     scheme = "https" if node.get("secure") else "http"
-    url    = f"{scheme}://{host}:{port}/version"
-    async with sem:
-        try:
-            t0 = _time.monotonic()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT), ssl=False) as r:
-                if r.status == 200:
-                    return (node, (_time.monotonic() - t0) * 1000)
-        except Exception:
-            pass
+    pw     = node.get("password", "")
+    headers = {"Authorization": pw} if pw else {}
+    # Try several endpoints — some lavalink builds 404 on /version but expose /v4/info
+    for path in ("/version", "/v4/info", "/v3/info", "/"):
+        url = f"{scheme}://{host}:{port}{path}"
+        async with sem:
+            try:
+                t0 = _time.monotonic()
+                async with session.get(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT),
+                    ssl=False,
+                ) as r:
+                    # 200/204 = healthy; 401/403 = alive but auth-gated (still alive)
+                    if r.status in (200, 204, 401, 403):
+                        return (node, (_time.monotonic() - t0) * 1000)
+            except Exception:
+                continue
     return None
 
 
@@ -890,7 +900,19 @@ class MusicSystem(commands.Cog):
             self._connecting = False
             return
 
-        for node_info in responsive:
+        # Pick one node per unique host so we have voice-routing diversity
+        # (multiple ports of the same host all route through the same physical
+        # voice pipe, so they don't help failover).
+        seen_hosts: set[str] = set()
+        unique_nodes: list[dict] = []
+        for n in responsive:
+            if n["host"] in seen_hosts:
+                continue
+            seen_hosts.add(n["host"])
+            unique_nodes.append(n)
+
+        connected: list[str] = []
+        for node_info in unique_nodes[:5]:
             host     = node_info["host"]
             port     = node_info["port"]
             password = node_info["password"]
@@ -902,17 +924,17 @@ class MusicSystem(commands.Cog):
                     wavelink.Pool.connect(nodes=[node], client=self.bot),
                     timeout=_CONNECT_TIMEOUT,
                 )
+                connected.append(f"{host}:{port}")
                 log.info("Lavalink", f"Connected to {host}:{port} (SSL={secure})")
-                self.connected   = True
-                self._connecting = False
-                return
-            except Exception:
-                try:
-                    await wavelink.Pool.close()
-                except Exception:
-                    pass
+                self.connected = True
+            except Exception as e:
+                log.warning("Lavalink", f"Handshake failed for {host}:{port} — {type(e).__name__}")
+                continue
 
-        log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
+        if connected:
+            log.info("Lavalink", f"Active nodes: {len(connected)} — {', '.join(connected)}")
+        else:
+            log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
         self._connecting = False
 
     # ─── WAVELINK EVENTS ──────────────────────────
@@ -1039,28 +1061,61 @@ class MusicSystem(commands.Cog):
             await ctx.send(msg(ctx, "get_player_not_in_voice"))
             return None
         channel = ctx.author.voice.channel
-        try:
-            player: Optional[wavelink.Player] = ctx.voice_client
-            if player is None:
-                player = await channel.connect(cls=wavelink.Player)
-            # Critical for gap-free playback: wavelink auto-advances the queue
+
+        # Existing player? Just hand it back.
+        existing: Optional[wavelink.Player] = ctx.voice_client
+        if existing is not None:
             try:
-                player.autoplay = wavelink.AutoPlayMode.partial
+                existing.autoplay = wavelink.AutoPlayMode.partial
             except Exception:
                 pass
-            return player
-        except wavelink.exceptions.ChannelTimeoutException:
-            log.warning("Music", f"Voice connect timed out for guild {ctx.guild.id}.")
-            await ctx.send(view=await self._voice_failure_view(
-                "the music server didn't respond in time. Try again in a moment."
-            ))
-            return None
-        except Exception as e:
-            log.warning("Music", f"Voice connect failed: {e!r}")
-            await ctx.send(view=await self._voice_failure_view(
-                f"connection failed: `{type(e).__name__}`"
-            ))
-            return None
+            return existing
+
+        # Fresh connect — try each available lavalink node until one's voice
+        # routing actually completes. Different hosts have different voice
+        # peering, so a timeout on one doesn't mean another won't work.
+        try:
+            nodes = list(wavelink.Pool.nodes.values())
+        except Exception:
+            nodes = []
+
+        # Wavelink's Pool auto-selects a node per player. With multiple hosts
+        # connected we just retry — each retry has a chance of landing on a
+        # different node with working voice routing for this channel's region.
+        last_exc: Optional[Exception] = None
+        attempts = max(len(nodes), 1) if nodes else 2
+        for i in range(attempts):
+            try:
+                player = await channel.connect(cls=wavelink.Player)
+                try:
+                    player.autoplay = wavelink.AutoPlayMode.partial
+                except Exception:
+                    pass
+                return player
+            except wavelink.exceptions.ChannelTimeoutException as e:
+                last_exc = e
+                log.warning("Music", f"Voice timeout (attempt {i + 1}/{attempts}); retrying.")
+                # Clean up half-open voice state before next attempt
+                try:
+                    if ctx.guild.voice_client:
+                        await ctx.guild.voice_client.disconnect(force=True)
+                except Exception:
+                    pass
+                await asyncio.sleep(1.0)
+                continue
+            except Exception as e:
+                last_exc = e
+                log.warning("Music", f"Voice connect failed: {e!r}")
+                break
+
+        if isinstance(last_exc, wavelink.exceptions.ChannelTimeoutException):
+            reason = ("none of the music servers could open a voice channel right now. "
+                      "This is usually a Discord voice-region routing issue — try again "
+                      "in a minute, or change the channel's voice region in channel settings.")
+        else:
+            reason = f"connection failed: `{type(last_exc).__name__ if last_exc else 'Unknown'}`"
+        await ctx.send(view=await self._voice_failure_view(reason))
+        return None
 
     # ─── COMMANDS ─────────────────────────────────
 
