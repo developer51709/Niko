@@ -10,6 +10,8 @@ import os
 import random
 import time
 
+from config.emojis import get_emoji
+from utils.paginator import PaginatedView, paginate
 from utils.image.blackjack import render_table
 
 SHOE_FILE   = "blackjack_shoe.json"
@@ -20,6 +22,47 @@ ACCENT_RED   = discord.Colour(0xED4245)
 ACCENT_GOLD  = discord.Colour(0xFEE75C)
 ACCENT_BLUE  = discord.Colour(0x5865F2)
 
+
+# ============================
+#  PREFIX RESOLVER
+# ============================
+
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
 
 # ============================
 #  SHOE MANAGER (PERSISTENT)
@@ -239,8 +282,31 @@ class Blackjack(commands.Cog):
         self.bot = bot
         self.shoe = Shoe()
 
-    @commands.command(name="blackjack")
-    async def blackjack(self, ctx, amount: int = None):
+    @commands.group(
+        name="blackjack",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel' }"
+    )
+    async def blackjack(self, ctx):
+        if ctx.invoked_subcommand is None:
+            prefix = await _resolve_prefix(self.bot, ctx)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🎰 Blackjack Help"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"**{prefix}blackjack play <amount>** - Play a game of blackjack.\n**{prefix}blackjack tutorial** - Learn how to play blackjack."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+    @blackjack.command(
+        name="play",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel' }"
+    )
+    async def blackjack_play(self, ctx, amount: int = None):
         """Play a full casino-grade blackjack game with a rendered table image."""
         if amount is None or amount <= 0:
             return await ctx.send("You must bet more than 0 coins.")
@@ -404,6 +470,25 @@ class Blackjack(commands.Cog):
         buf  = await _render(reveal_dealer=True, title=title, status=status, status_color=color)
         view = _build_view(with_buttons=False, accent=accent)
         await _send_or_edit(buf, view)
+
+    # This command is a tutorial for people who don't know how to play blackjack
+    @blackjack.command(
+        name="tutorial",
+        help="{ 'en': 'learn how to play blackjack', 'de': 'lerne, wie man Blackjack spielt' }"
+    )
+    async def blackjack_tutorial(self, ctx):
+        """Learn how to play blackjack."""
+        # Paginated tutorial via the shared PaginatedView
+        pages = [
+            "## **Page 1 — What Is Blackjack? (The Goal of the Game)**\nBlackjack (also called **21**) is a simple card game where **you play against the dealer**, not the other players.\nYour goal is to get a hand value **closer to 21 than the dealer** *without going over 21*. Going over 21 is called **busting**, and it means you automatically lose.\n\nBlackjack is played with one or more standard 52‑card decks. Each round begins with everyone placing a bet. After that, the dealer gives each player **two cards face‑up**, and gives themselves **one face‑up card and one face‑down card**.",
+            "## **Page 2 — Understanding Card Values (No Math Skills Needed!)**\nBlackjack uses very simple card values:\n- **Number cards (2–10):** worth their number\n- **Face cards (J, Q, K):** worth **10**\n- **Ace:** worth **1 or 11**, whichever helps your hand more\n\nYou don’t need to calculate anything complicated — just add the values together.\nExample:\n- A **7** and a **King** = **17**\n- An **Ace** and a **6** = **7 or 17** (the Ace adjusts automatically)\n\nA hand with an Ace that can count as 11 without busting is called a **soft hand**.\nA hand where the Ace must count as 1 is a **hard hand**.",
+            "## **Page 3 — What Happens at the Start of a Round**\nA typical round looks like this:\n1. You place your bet.\n2. You receive **two cards face‑up**.\n3. The dealer receives **one face‑up card** and **one face‑down card** (the “hole card”).\n4. If you have an **Ace + 10‑value card**, that’s a **Blackjack**, also called a **natural**.\n   - A natural Blackjack usually pays **3:2**, though some tables pay **6:5** (which is worse for players).\n\nIf you don’t have a natural, you choose what to do next.",
+            "## **Page 4 — Your Options: Hit, Stand, Double, Split, Surrender**\nYou can choose from several actions:\n\n### **Hit**\nAsk for another card. Use this when your hand is low and you want to improve it.\n\n### **Stand**\nKeep your current hand and end your turn.\n\n### **Double Down**/nDouble your bet and receive **exactly one more card**.\nThis is best when you have a strong starting hand (like 10 or 11).\n\n### **Split**\nIf your two cards have the **same value**, you can split them into **two separate hands**, doubling your bet.\nEach new hand gets one extra card.\n\n### **Surrender** (not always available)\nYou give up your hand immediately and get **half your bet back**.\n\n### **Insurance**\nA side bet offered only when the dealer shows an Ace.\nIt pays **2:1** if the dealer has Blackjack — but statistically, it’s usually a bad bet.",
+            "## **Page 5 — Dealer Rules**\nThe dealer must follow strict rules:\n- The dealer must **hit until reaching 17 or higher**.\n- Most casinos require the dealer to stand on **all 17s**, but some require hitting on a “soft 17.”\n- If the dealer busts (goes over 21), **all players who didn’t bust win**.\n\nYou don’t need to guess what the dealer will do — the rules are fixed.",
+            "## **Page 6 — How You Win (and What a Push Is)**\nAfter all players finish their turns, the dealer reveals their hidden card and plays their hand. Then:\n\n- If your total is **closer to 21 than the dealer**, you win.\n- If your total is **lower**, you lose.\n- If both totals are **equal**, it’s a **push** (tie) — you get your bet back.\n\nA natural Blackjack (Ace + 10‑value card) pays **3:2** at most tables, but some pay **6:5**, which is worse for players. Avoid 6:5 tables when possible."
+        ]
+        view = PaginatedView(title="Blackjack Tutorial", pages=pages)
+        await ctx.send(view=view)
 
 
 # ============================
