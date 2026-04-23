@@ -1,31 +1,28 @@
 """
 Music System — Niko's Cozy Café Jukebox
 ────────────────────────────────────────
-Premium feature set:
-  • cv2 Now-Playing cards with album artwork + 3-row control panel
-      Row 1: Prev · Pause/Resume · Skip · Stop
-      Row 2: Loop (cycle) · Shuffle · Vol − · Vol +
-      Row 3: Queue (ephemeral paginated) · Autoplay · Open Track (link)
-  • Live progress bar — background task refreshes the NP card every 10s
-  • Three-state loop (off / track / queue) using wavelink QueueMode natively
-  • Premium queue management: shuffle, move, remove, jump, clearqueue, history
-  • Spotipy-powered Spotify URL support (track / album / playlist) — runs sync
-    API in a thread executor so the event loop never blocks. Resolves up to
-    100 tracks per album/playlist via paginated requests.
-      Requires: SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET (silently disabled
-      when absent)
-  • Last.fm autoplay fallback when the queue runs dry
-      Requires: LASTFM_API_KEY (silently disabled when absent)
-  • Multi-source: YouTube (default), SoundCloud (sc:), direct URLs
+Features:
+  • cv2 Now-Playing cards with album artwork (MediaGallery)
+  • Interactive control panel (pause/resume, skip, stop, loop, volume ±10)
+  • Multi-source playback: YouTube (default), SoundCloud (sc: prefix), direct URLs
+  • Spotify URL support — resolves tracks, albums, playlists → YouTube search
+      Requires: SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET env vars (silently
+      disabled when absent)
+  • Autoplay via Last.fm "similar tracks" when the queue runs dry
+      Requires: LASTFM_API_KEY env var (silently disabled when absent)
   • Personality-aware text (normal / café modes, EN / DE)
+
+Known Issues:
+  • When using spotify track links in the play command it always fails (the plan is to switch to spotipy for the spotify api in a future version)
+  • The now playing progress bar does not update unless someone presses the pause button
 """
 
 import asyncio
+import base64
 import os
 import re
 import time as _time
 from collections import deque
-from typing import Optional
 
 import aiohttp
 import discord
@@ -33,44 +30,23 @@ import wavelink
 from discord import MediaGalleryItem, UnfurledMediaItem
 from discord.ext import commands
 
-try:
-    import spotipy
-    from spotipy.oauth2 import SpotifyClientCredentials
-    _SPOTIPY_AVAILABLE = True
-except Exception:
-    _SPOTIPY_AVAILABLE = False
-
 from config.emojis import get_emoji
 from utils import logging as log
 from utils.ai_config import get_personality
-from utils.paginator import PaginatedView, paginate
 
 # ──────────────────────────────────────────────────
 #  CONSTANTS
 # ──────────────────────────────────────────────────
 
-IDLE_TIMEOUT     = 300     # seconds before auto-disconnect on empty queue
-HISTORY_LEN      = 25      # tracks kept in per-guild history deque
-QUEUE_PAGE_SIZE  = 10      # tracks per page in .queue
-MAX_SPOTIFY_LOAD = 100     # tracks resolved from a single album/playlist
-NP_REFRESH_SECS  = 10      # how often to refresh the NP card progress bar
+IDLE_TIMEOUT   = 300       # seconds before auto-disconnect on empty queue
+HISTORY_LEN    = 10        # tracks kept in per-guild history deque
+MAX_QUEUE_SHOW = 10        # tracks shown in .queue list
 
 SOURCE_COLOURS = {
     "youtube":    discord.Colour(0xFF0000),
     "soundcloud": discord.Colour(0xFF5500),
     "spotify":    discord.Colour(0x1DB954),
     "default":    discord.Colour(0x5865F2),
-}
-
-_LOOP_LABELS = {
-    wavelink.QueueMode.normal:   "Loop",
-    wavelink.QueueMode.loop:     "Loop: Track",
-    wavelink.QueueMode.loop_all: "Loop: Queue",
-}
-_LOOP_NEXT = {
-    wavelink.QueueMode.normal:   wavelink.QueueMode.loop,
-    wavelink.QueueMode.loop:     wavelink.QueueMode.loop_all,
-    wavelink.QueueMode.loop_all: wavelink.QueueMode.normal,
 }
 
 _SPOTIFY_TRACK_RE    = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?track/([A-Za-z0-9]+)")
@@ -109,23 +85,6 @@ MESSAGES = {
             "autoplay_unavailable":       "Autoplay is not configured (no Last.fm API key).",
             "loop_on":                    "Loop enabled — repeating the current track.",
             "loop_off":                   "Loop disabled.",
-            "loop_track":                 "Looping the current track.",
-            "loop_queue":                 "Looping the entire queue.",
-            "shuffle_ok":                 "Queue shuffled.",
-            "shuffle_nothing":            "Nothing in the queue to shuffle.",
-            "clear_ok":                   "Removed **{n}** track(s) from the queue.",
-            "clear_nothing":              "The queue is already empty.",
-            "remove_ok":                  "Removed **{title}** from the queue.",
-            "remove_oob":                 "That position is out of range.",
-            "move_ok":                    "Moved **{title}** to position **{to}**.",
-            "move_oob":                   "Both positions must be within the queue.",
-            "jump_ok":                    "Jumped to **{title}**.",
-            "jump_oob":                   "That position is out of range.",
-            "history_empty":              "No tracks have been played yet.",
-            "history_title":              "Recently Played",
-            "queue_title":                "Queue",
-            "added_one":                  "Added **{title}** to the queue.",
-            "added_many":                 "Added **{n}** tracks to the queue.",
             "spotify_disabled":           "Spotify support is not configured.",
             "spotify_resolving":          "Resolving Spotify link…",
             "spotify_fail":               "Couldn't resolve that Spotify link.",
@@ -156,23 +115,6 @@ MESSAGES = {
             "autoplay_unavailable":       "Autoplay ist nicht konfiguriert (kein Last.fm-API-Schlüssel).",
             "loop_on":                    "Loop aktiviert — der aktuelle Track wird wiederholt.",
             "loop_off":                   "Loop deaktiviert.",
-            "loop_track":                 "Aktuellen Track in Schleife.",
-            "loop_queue":                 "Gesamte Warteschlange in Schleife.",
-            "shuffle_ok":                 "Warteschlange gemischt.",
-            "shuffle_nothing":            "Nichts in der Warteschlange zum Mischen.",
-            "clear_ok":                   "**{n}** Track(s) aus der Warteschlange entfernt.",
-            "clear_nothing":              "Die Warteschlange ist bereits leer.",
-            "remove_ok":                  "**{title}** aus der Warteschlange entfernt.",
-            "remove_oob":                 "Diese Position ist außerhalb des Bereichs.",
-            "move_ok":                    "**{title}** zu Position **{to}** verschoben.",
-            "move_oob":                   "Beide Positionen müssen innerhalb der Warteschlange liegen.",
-            "jump_ok":                    "Gesprungen zu **{title}**.",
-            "jump_oob":                   "Diese Position ist außerhalb des Bereichs.",
-            "history_empty":              "Es wurden noch keine Tracks gespielt.",
-            "history_title":              "Zuletzt Gespielt",
-            "queue_title":                "Warteschlange",
-            "added_one":                  "**{title}** zur Warteschlange hinzugefügt.",
-            "added_many":                 "**{n}** Tracks zur Warteschlange hinzugefügt.",
             "spotify_disabled":           "Spotify-Unterstützung ist nicht konfiguriert.",
             "spotify_resolving":          "Spotify-Link wird aufgelöst…",
             "spotify_fail":               "Der Spotify-Link konnte nicht aufgelöst werden.",
@@ -205,23 +147,6 @@ MESSAGES = {
             "autoplay_unavailable":       "autoplay isn't set up (no Last.fm key) 😭",
             "loop_on":                    "looping this track on repeat like a cozy café playlist 🔁☕",
             "loop_off":                   "loop off, moving on to the next track 🍵",
-            "loop_track":                 "this track is on repeat now ☕🔂",
-            "loop_queue":                 "looping the whole queue like a cozy café playlist 🔁☕",
-            "shuffle_ok":                 "shuffled the queue like a fresh deck of menu cards ✨",
-            "shuffle_nothing":            "nothing in the queue to shuffle 😭",
-            "clear_ok":                   "wiped **{n}** track(s) off the queue ☕",
-            "clear_nothing":              "the queue is already empty, bestie 🌙",
-            "remove_ok":                  "took **{title}** off the menu ☕",
-            "remove_oob":                 "that spot doesn't exist in the queue 😭",
-            "move_ok":                    "moved **{title}** to spot **{to}** ✨",
-            "move_oob":                   "those spots are out of range 😭",
-            "jump_ok":                    "jumped straight to **{title}** ☕✨",
-            "jump_oob":                   "that spot doesn't exist 😭",
-            "history_empty":              "no tracks brewed yet today 🌿",
-            "history_title":              "Recently Brewed ☕",
-            "queue_title":                "Cozy Queue ☕",
-            "added_one":                  "added **{title}** to the queue ☕✨",
-            "added_many":                 "added **{n}** tracks to the queue ☕✨",
             "spotify_disabled":           "spotify support isn't set up right now 😭",
             "spotify_resolving":          "brewing that spotify link… ☕",
             "spotify_fail":               "couldn't resolve that spotify link 😭",
@@ -252,23 +177,6 @@ MESSAGES = {
             "autoplay_unavailable":       "autoplay ist nicht eingerichtet (kein Last.fm-Schlüssel) 😭",
             "loop_on":                    "dieser track läuft auf repeat wie eine cozy café-playlist 🔁☕",
             "loop_off":                   "loop aus, weiter zum nächsten track 🍵",
-            "loop_track":                 "dieser track läuft jetzt in dauerschleife ☕🔂",
-            "loop_queue":                 "die ganze warteschlange läuft in schleife wie eine cozy café-playlist 🔁☕",
-            "shuffle_ok":                 "warteschlange neu gemischt wie ein frischer kartendeck ✨",
-            "shuffle_nothing":            "nichts in der warteschlange zum mischen 😭",
-            "clear_ok":                   "**{n}** track(s) von der warteschlange weggewischt ☕",
-            "clear_nothing":              "die warteschlange ist schon leer, liebchen 🌙",
-            "remove_ok":                  "**{title}** von der karte genommen ☕",
-            "remove_oob":                 "diesen platz gibt's in der warteschlange nicht 😭",
-            "move_ok":                    "**{title}** zu platz **{to}** verschoben ✨",
-            "move_oob":                   "diese plätze sind außerhalb des bereichs 😭",
-            "jump_ok":                    "direkt zu **{title}** gesprungen ☕✨",
-            "jump_oob":                   "diesen platz gibt's nicht 😭",
-            "history_empty":              "heute noch keine tracks gebrüht 🌿",
-            "history_title":              "Zuletzt Gebrüht ☕",
-            "queue_title":                "Cozy Warteschlange ☕",
-            "added_one":                  "**{title}** zur warteschlange hinzugefügt ☕✨",
-            "added_many":                 "**{n}** tracks zur warteschlange hinzugefügt ☕✨",
             "spotify_disabled":           "spotify-unterstützung ist nicht eingerichtet 😭",
             "spotify_resolving":          "löse den spotify-link auf… ☕",
             "spotify_fail":               "spotify-link konnte nicht aufgelöst werden 😭",
@@ -334,90 +242,75 @@ def _source_colour(track: wavelink.Playable) -> discord.Colour:
 # ──────────────────────────────────────────────────
 
 class _SpotifyClient:
-    """
-    Spotipy-backed Spotify resolver.
-    Sync API calls are pushed to a thread executor so the event loop never
-    blocks. Resolves up to MAX_SPOTIFY_LOAD tracks per album/playlist via
-    paginated requests (50 per page).
-    """
+    _TOKEN_URL = "https://accounts.spotify.com/api/token"
+    _API_URL   = "https://api.spotify.com/v1"
 
     def __init__(self, client_id: str, client_secret: str):
-        auth_mgr = SpotifyClientCredentials(
-            client_id=client_id,
-            client_secret=client_secret,
-        )
-        # requests_timeout to avoid hanging the executor thread forever
-        self._sp = spotipy.Spotify(auth_manager=auth_mgr, requests_timeout=10, retries=2)
+        self._id     = client_id
+        self._secret = client_secret
+        self._token: str | None = None
+        self._exp: float = 0.0
 
-    async def _run(self, fn, *args, **kwargs):
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+    async def _token_headers(self) -> dict:
+        if not self._token or _time.monotonic() >= self._exp - 60:
+            creds = base64.b64encode(f"{self._id}:{self._secret}".encode()).decode()
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    self._TOKEN_URL,
+                    headers={"Authorization": f"Basic {creds}"},
+                    data={"grant_type": "client_credentials"},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as r:
+                    data = await r.json()
+            self._token = data["access_token"]
+            self._exp   = _time.monotonic() + data.get("expires_in", 3600)
+        return {"Authorization": f"Bearer {self._token}"}
 
-    async def resolve_track(self, track_id: str) -> Optional[str]:
+    async def _get(self, path: str) -> dict | None:
         try:
-            data = await self._run(self._sp.track, track_id)
-        except Exception as e:
-            log.warning("Spotify", f"track lookup failed: {e}")
+            headers = await self._token_headers()
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{self._API_URL}/{path}",
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as r:
+                    return await r.json() if r.status == 200 else None
+        except Exception:
             return None
+
+    async def resolve_track(self, track_id: str) -> str | None:
+        """Returns 'Artist - Title' search string."""
+        data = await self._get(f"tracks/{track_id}")
         if not data:
             return None
         artist = data["artists"][0]["name"] if data.get("artists") else "Unknown"
         return f"{artist} - {data['name']}"
 
     async def resolve_album(self, album_id: str) -> list[str]:
-        queries: list[str] = []
-        try:
-            offset = 0
-            while len(queries) < MAX_SPOTIFY_LOAD:
-                data = await self._run(
-                    self._sp.album_tracks, album_id, limit=50, offset=offset
-                )
-                if not data:
-                    break
-                items = data.get("items", [])
-                if not items:
-                    break
-                for item in items:
-                    if not item:
-                        continue
-                    artist = item["artists"][0]["name"] if item.get("artists") else "Unknown"
-                    queries.append(f"{artist} - {item['name']}")
-                if len(items) < 50:
-                    break
-                offset += 50
-        except Exception as e:
-            log.warning("Spotify", f"album lookup failed: {e}")
-        return queries[:MAX_SPOTIFY_LOAD]
+        """Returns list of 'Artist - Title' search strings for all album tracks."""
+        data = await self._get(f"albums/{album_id}/tracks?limit=50")
+        if not data:
+            return []
+        queries = []
+        for item in data.get("items", []):
+            artist = item["artists"][0]["name"] if item.get("artists") else "Unknown"
+            queries.append(f"{artist} - {item['name']}")
+        return queries
 
     async def resolve_playlist(self, playlist_id: str) -> list[str]:
-        queries: list[str] = []
-        try:
-            offset = 0
-            while len(queries) < MAX_SPOTIFY_LOAD:
-                data = await self._run(
-                    self._sp.playlist_items,
-                    playlist_id,
-                    limit=50,
-                    offset=offset,
-                    additional_types=("track",),
-                )
-                if not data:
-                    break
-                items = data.get("items", [])
-                if not items:
-                    break
-                for item in items:
-                    track = item.get("track") if item else None
-                    if not track:
-                        continue
-                    artist = track["artists"][0]["name"] if track.get("artists") else "Unknown"
-                    queries.append(f"{artist} - {track['name']}")
-                if len(items) < 50:
-                    break
-                offset += 50
-        except Exception as e:
-            log.warning("Spotify", f"playlist lookup failed: {e}")
-        return queries[:MAX_SPOTIFY_LOAD]
+        """Returns list of 'Artist - Title' search strings (first 50 tracks)."""
+        data = await self._get(f"playlists/{playlist_id}/tracks?limit=50")
+        if not data:
+            return []
+        queries = []
+        for item in data.get("items", []):
+            track = item.get("track")
+            if not track:
+                continue
+            artist = track["artists"][0]["name"] if track.get("artists") else "Unknown"
+            queries.append(f"{artist} - {track['name']}")
+        return queries
 
 
 # ──────────────────────────────────────────────────
@@ -557,10 +450,8 @@ class _StopBtn(discord.ui.Button):
         await interaction.response.defer()
         player: wavelink.Player = interaction.guild.voice_client
         if player:
-            try:
-                player.queue.mode = wavelink.QueueMode.normal
-            except Exception:
-                pass
+            state = self.cog._state(self.guild_id)
+            state["loop"] = False
             player.queue.clear()
             await player.stop()
         await self.cog._update_np_message(interaction.guild)
@@ -585,89 +476,28 @@ class _PrevBtn(discord.ui.Button):
         if not player or not history:
             return
         prev_track = history.pop()
-        # Put current back at front of queue so it plays after prev_track ends
+        # put current back at front of queue
         if player.current:
-            try:
-                player.queue.put_at(0, player.current)
-            except Exception:
-                player.queue.put(player.current)
-        # Mark this as a loop-style replay so on_track_end skips history-push
-        state["_skip_history_once"] = True
+            player.queue.put_at(0, player.current)
         await player.play(prev_track)
         await self.cog._update_np_message(interaction.guild)
 
 
 class _LoopBtn(discord.ui.Button):
-    """Three-state loop cycle: normal → loop (track) → loop_all (queue) → normal."""
-
-    def __init__(self, cog: "MusicSystem", guild_id: int, mode: wavelink.QueueMode):
-        label = _LOOP_LABELS.get(mode, "Loop")
-        style = (
-            discord.ButtonStyle.secondary
-            if mode == wavelink.QueueMode.normal
-            else discord.ButtonStyle.success
-        )
-        super().__init__(label=label, style=style, emoji=get_emoji("icon_loop"))
-        self.cog      = cog
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
-        if player:
-            current_mode = player.queue.mode
-            player.queue.mode = _LOOP_NEXT.get(current_mode, wavelink.QueueMode.normal)
-        await self.cog._update_np_message(interaction.guild)
-
-
-class _ShuffleBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int, enabled: bool):
+    def __init__(self, cog: "MusicSystem", guild_id: int, loop: bool):
         super().__init__(
-            label="Shuffle",
-            style=discord.ButtonStyle.secondary,
-            emoji="🔀",
-            disabled=not enabled,
+            label="Loop On" if loop else "Loop",
+            style=discord.ButtonStyle.success if loop else discord.ButtonStyle.secondary,
+            emoji=get_emoji("icon_loop"),
         )
         self.cog      = cog
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
-        if player and not player.queue.is_empty:
-            try:
-                player.queue.shuffle()
-            except Exception:
-                pass
+        state = self.cog._state(self.guild_id)
+        state["loop"] = not state["loop"]
         await self.cog._update_np_message(interaction.guild)
-
-
-class _QueueBtn(discord.ui.Button):
-    """Opens the current queue as an ephemeral paginated view."""
-
-    def __init__(self, cog: "MusicSystem", guild_id: int, enabled: bool):
-        super().__init__(
-            label="Queue",
-            style=discord.ButtonStyle.secondary,
-            emoji="📜",
-            disabled=not enabled,
-        )
-        self.cog      = cog
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        player: wavelink.Player = interaction.guild.voice_client
-        if not player or player.queue.is_empty:
-            return await interaction.response.send_message(
-                "The queue is currently empty.", ephemeral=True
-            )
-        lines = []
-        for i, track in enumerate(player.queue, start=1):
-            dur = _fmt_dur(track.length) if track.length else "?"
-            lines.append(f"`{i:>2}.` **{track.title[:60]}** — {(track.author or 'Unknown')[:30]} `[{dur}]`")
-        pages = paginate(lines, per_page=QUEUE_PAGE_SIZE)
-        view  = PaginatedView(title=f"Queue · {len(player.queue)} track(s)", pages=pages)
-        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class _AutoplayBtn(discord.ui.Button):
@@ -740,11 +570,10 @@ def _build_np_view(
 ) -> discord.ui.LayoutView:
     state   = cog._state(guild.id)
     track   = player.current if player else None
+    loop    = state.get("loop", False)
     autoplay = state.get("autoplay", False)
     history: deque = state.get("history", deque())
     vol     = player.volume if player else 100
-    queue_filled = bool(player and not player.queue.is_empty)
-    loop_mode = player.queue.mode if player else wavelink.QueueMode.normal
 
     if not track or not is_playing:
         # Idle / stopped card
@@ -776,27 +605,19 @@ def _build_np_view(
 
     status_icon = get_emoji("icon_pause") if player.paused else get_emoji("icon_play")
 
-    # Footer status line
-    foot_bits = [src_badge, f"Vol {vol}%"]
-    if loop_mode == wavelink.QueueMode.loop:
-        foot_bits.append(f"{get_emoji('icon_loop')} Track")
-    elif loop_mode == wavelink.QueueMode.loop_all:
-        foot_bits.append(f"{get_emoji('icon_loop')} Queue")
-    if autoplay:
-        foot_bits.append("📻 Autoplay")
-    if queue_filled:
-        foot_bits.append(f"📜 {len(player.queue)} queued")
-
     body = (
         f"### {status_icon} Now Playing\n"
         f"**{track.title}**\n"
         f"by {author_name}\n\n"
         f"{duration}\n\n"
-        f"-# {' · '.join(foot_bits)}"
-    )
+        f"-# {src_badge} · Vol {vol}% · "
+        f"{get_emoji('icon_loop') + ' Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
+    ).rstrip(" · \n")
 
     # Build container items
-    items: list = [discord.ui.TextDisplay(content=body)]
+    items: list = [
+        discord.ui.TextDisplay(content=body),
+    ]
 
     # Artwork thumbnail (if available)
     if track.artwork:
@@ -805,39 +626,29 @@ def _build_np_view(
         ))
         items.insert(1, discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
-    # Build link button row (only if track URL is present)
-    link_row_items = []
-    if uri:
-        link_row_items.append(
-            discord.ui.Button(label="Open Track", style=discord.ButtonStyle.link, url=uri)
-        )
-
     items += [
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        # Row 1 — playback transport
         discord.ui.ActionRow(
             _PrevBtn(cog, guild.id, enabled=bool(history)),
             _PauseResumeBtn(cog, guild.id, paused=player.paused),
             _SkipBtn(cog, guild.id),
             _StopBtn(cog, guild.id),
         ),
-        # Row 2 — loop / shuffle / volume
         discord.ui.ActionRow(
-            _LoopBtn(cog, guild.id, mode=loop_mode),
-            _ShuffleBtn(cog, guild.id, enabled=queue_filled),
+            _LoopBtn(cog, guild.id, loop=loop),
+            _AutoplayBtn(cog, guild.id, autoplay=autoplay, available=bool(cog._lastfm_key)),
             _VolDownBtn(cog, guild.id),
             _VolUpBtn(cog, guild.id),
         ),
-        # Row 3 — queue / autoplay / link
-        discord.ui.ActionRow(
-            _QueueBtn(cog, guild.id, enabled=queue_filled),
-            _AutoplayBtn(cog, guild.id, autoplay=autoplay, available=bool(cog._lastfm_key)),
-            *link_row_items,
-        ),
     ]
 
+    # Link button (separate ActionRow below the container — not inside)
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(*items, accent_colour=accent_color))
+    if uri:
+        view.add_item(discord.ui.ActionRow(
+            discord.ui.Button(label="Open Track", style=discord.ButtonStyle.link, url=uri)
+        ))
     return view
 
 
@@ -874,12 +685,11 @@ class MusicSystem(commands.Cog):
     def _state(self, guild_id: int) -> dict:
         if guild_id not in self._guild_states:
             self._guild_states[guild_id] = {
-                "autoplay":           False,
-                "history":            deque(maxlen=HISTORY_LEN),
-                "np_message":         None,
-                "last_track":         None,
-                "np_task":            None,
-                "_skip_history_once": False,
+                "loop":       False,
+                "autoplay":   False,
+                "history":    deque(maxlen=HISTORY_LEN),
+                "np_message": None,
+                "last_track": None,
             }
         return self._guild_states[guild_id]
 
@@ -887,7 +697,7 @@ class MusicSystem(commands.Cog):
 
     async def _update_np_message(self, guild: discord.Guild):
         state   = self._state(guild.id)
-        message: Optional[discord.Message] = state.get("np_message")
+        message: discord.Message | None = state.get("np_message")
         if not message:
             return
         player: wavelink.Player = guild.voice_client
@@ -902,50 +712,20 @@ class MusicSystem(commands.Cog):
             pass
 
     async def _send_np(self, ctx: commands.Context, player: wavelink.Player):
-        """Send (or replace) the now-playing control panel + start refresh task."""
+        """Send (or update) the now-playing control panel."""
         state  = self._state(ctx.guild.id)
-        old_msg: Optional[discord.Message] = state.get("np_message")
+        old_msg: discord.Message | None = state.get("np_message")
 
         view = _build_np_view(player, ctx.guild, self)
         new_msg = await ctx.send(view=view)
         state["np_message"] = new_msg
 
-        # Replace the previous control panel quietly
+        # Clean up the previous control panel quietly
         if old_msg:
             try:
                 await old_msg.delete()
             except Exception:
                 pass
-
-        # (Re)start the live progress-bar refresh task
-        self._start_np_refresh(ctx.guild)
-
-    def _start_np_refresh(self, guild: discord.Guild):
-        """Spawn a per-guild background task that re-renders the NP card every NP_REFRESH_SECS."""
-        state = self._state(guild.id)
-        old_task: Optional[asyncio.Task] = state.get("np_task")
-        if old_task and not old_task.done():
-            old_task.cancel()
-        state["np_task"] = self.bot.loop.create_task(self._np_refresh_loop(guild))
-
-    async def _np_refresh_loop(self, guild: discord.Guild):
-        try:
-            while True:
-                await asyncio.sleep(NP_REFRESH_SECS)
-                state = self._state(guild.id)
-                if not state.get("np_message"):
-                    return
-                player: wavelink.Player = guild.voice_client
-                if not player or (not player.playing and not player.paused):
-                    return
-                # Only refresh when actively playing (skip on pause to save edits)
-                if player.paused:
-                    continue
-                await self._update_np_message(guild)
-        except asyncio.CancelledError:
-            return
-        except Exception as e:
-            log.debug("Music", f"NP refresh loop ended: {e}")
 
     # ─── LAVALINK CONNECTION ──────────────────────
 
@@ -1007,85 +787,56 @@ class MusicSystem(commands.Cog):
         self.bot.loop.create_task(self.startup_connect(retry_delay=10))
 
     @commands.Cog.listener()
-    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
-        # Refresh NP card so it switches to the new track immediately
-        player = payload.player
-        if player and player.guild:
-            await self._update_np_message(player.guild)
-
-    @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
-        """
-        With `player.autoplay = AutoPlayMode.partial`, wavelink advances the queue
-        natively — we never call player.play() from here (gap-free playback).
-        Our job: track history + top up via Last.fm before the queue dries.
-        """
         player = payload.player
         if player is None:
             return
 
         guild_id = player.guild.id
         state    = self._state(guild_id)
-        loop_mode = player.queue.mode
 
-        # Push to history (skip on loop replays + Prev-button replays)
-        if payload.track and loop_mode == wavelink.QueueMode.normal:
-            if state.pop("_skip_history_once", False):
-                pass  # consumed the skip flag — don't push
-            else:
-                state["history"].append(payload.track)
-                state["last_track"] = payload.track
+        # Push finished track to history
+        if payload.track:
+            state["history"].append(payload.track)
+            state["last_track"] = payload.track
 
-        # Top up via Last.fm autoplay BEFORE wavelink hits an empty queue
-        if (
-            state.get("autoplay")
-            and self._lastfm_key
-            and payload.track
-            and loop_mode == wavelink.QueueMode.normal
-            and len(player.queue) < 1
-        ):
-            await self._topup_autoplay(player, payload.track, count=5)
-
-        # Idle grace period: if nothing left, schedule a disconnect check
-        if loop_mode == wavelink.QueueMode.normal and player.queue.is_empty:
-            await asyncio.sleep(IDLE_TIMEOUT)
-            if player and not player.playing and player.queue.is_empty:
-                try:
-                    await player.disconnect()
-                except Exception:
-                    pass
-                # Cancel NP refresh task
-                task = state.get("np_task")
-                if task and not task.done():
-                    task.cancel()
-                state["np_message"] = None
-                state["np_task"]    = None
-
-    async def _topup_autoplay(self, player: wavelink.Player, seed_track, count: int = 5):
-        """Add up to `count` Last.fm-similar tracks to the queue."""
-        if not self._lastfm_key:
+        # Loop mode — replay the same track
+        if state.get("loop") and payload.track:
+            await player.play(payload.track)
+            await self._update_np_message(player.guild)
             return
-        artist = seed_track.author or ""
-        title  = seed_track.title  or ""
-        similars = await _lastfm_similar(self._lastfm_key, artist, title)
-        added = 0
-        for sim_artist, sim_title in similars:
-            if added >= count:
-                break
+
+        # Queue has more tracks
+        if not player.queue.is_empty:
+            next_track = player.queue.get()
+            await player.play(next_track)
+            await self._update_np_message(player.guild)
+            return
+
+        # Queue exhausted — try autoplay via Last.fm
+        if state.get("autoplay") and self._lastfm_key and payload.track:
+            track      = payload.track
+            artist_raw = track.author or ""
+            title_raw  = track.title  or ""
+            similars   = await _lastfm_similar(self._lastfm_key, artist_raw, title_raw)
+
+            for similar_artist, similar_title in similars:
+                query   = f"ytsearch:{similar_artist} - {similar_title}"
+                results = await wavelink.Playable.search(query)
+                if results:
+                    nxt = results[0] if isinstance(results, list) else results
+                    await player.play(nxt)
+                    await self._update_np_message(player.guild)
+                    return
+
+        # Nothing more to play — idle grace period then disconnect
+        await asyncio.sleep(IDLE_TIMEOUT)
+        if player and not player.playing:
             try:
-                results = await wavelink.Playable.search(f"ytsearch:{sim_artist} - {sim_title}")
+                await player.disconnect()
             except Exception:
-                continue
-            if not results:
-                continue
-            track = results[0] if isinstance(results, list) else results
-            try:
-                player.queue.put(track)
-                added += 1
-            except Exception:
-                continue
-        if added:
-            log.debug("Music", f"Autoplay topped up queue with {added} similar tracks")
+                pass
+            state["np_message"] = None
 
     # ─── SOURCE RESOLUTION ────────────────────────
 
@@ -1157,18 +908,11 @@ class MusicSystem(commands.Cog):
         if not player:
             return
 
-        # Enable native gap-free queue advancement
-        try:
-            player.autoplay = wavelink.AutoPlayMode.partial
-        except Exception:
-            pass
-
-        # Spotify URL feedback before long resolution
+        # Handle Spotify URL feedback before long resolution
         is_spotify = "open.spotify.com" in search
         if is_spotify and not self._spotify:
             return await ctx.send(msg(ctx, "spotify_disabled"))
 
-        status_msg = None
         if is_spotify:
             resolving = discord.ui.LayoutView()
             resolving.add_item(discord.ui.Container(
@@ -1176,6 +920,8 @@ class MusicSystem(commands.Cog):
                 accent_colour=SOURCE_COLOURS["spotify"],
             ))
             status_msg = await ctx.send(view=resolving)
+        else:
+            status_msg = None
 
         # Resolve to wavelink search strings
         searches = await self._resolve_query(search)
@@ -1189,49 +935,43 @@ class MusicSystem(commands.Cog):
         if not searches:
             return await ctx.send(msg(ctx, "play_not_found" if not is_spotify else "spotify_fail"))
 
-        # Resolve every search string to a wavelink Playable
-        added_tracks = []
-        for query in searches:
-            try:
-                results = await wavelink.Playable.search(query)
-            except Exception:
-                continue
+        queued_count = 0
+        first_track  = None
+
+        for i, query in enumerate(searches):
+            results = await wavelink.Playable.search(query)
             if not results:
                 continue
-            track = results[0] if isinstance(results, list) else results
-            added_tracks.append(track)
 
-        if not added_tracks:
+            track = results[0] if isinstance(results, list) else results
+            if not player.playing and first_track is None:
+                await player.play(track)
+                first_track = track
+            else:
+                player.queue.put(track)
+                queued_count += 1
+
+        if first_track is None and queued_count == 0:
             return await ctx.send(msg(ctx, "play_not_found"))
 
-        # Was the player idle before we added anything?
-        was_idle = not player.playing and not player.paused
+        if queued_count:
+            if not first_track:
+                first_track = player.current
+            # Multiple tracks added (album / playlist)
+            multi = discord.ui.LayoutView()
+            multi.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=(
+                        f"### ☕ Added {queued_count + 1} track{'s' if queued_count else ''} to the queue\n"
+                        f"Now playing **{first_track.title}** + {queued_count} more queued."
+                    )
+                ),
+                accent_colour=_source_colour(first_track),
+            ))
+            await ctx.send(view=multi)
 
-        # Push everything to the queue
-        for t in added_tracks:
-            try:
-                await player.queue.put_wait(t)
-            except Exception:
-                player.queue.put(t)
-
-        # Kick off playback if idle (wavelink will handle subsequent tracks)
-        first_track = added_tracks[0]
-        if was_idle and not player.playing:
-            try:
-                next_track = player.queue.get()
-                await player.play(next_track)
-            except Exception as e:
-                log.warning("Music", f"Failed to start playback: {e}")
-
-        # Feedback
-        if len(added_tracks) == 1:
-            if not was_idle:
-                await ctx.send(msg(ctx, "added_one", title=first_track.title))
-        else:
-            await ctx.send(msg(ctx, "added_many", n=len(added_tracks)))
-
-        # Send NP control panel only when we actually started playback now
-        if was_idle:
+        # Send / replace now-playing control panel
+        if first_track and not queued_count:
             await self._send_np(ctx, player)
 
     @commands.command(
@@ -1277,10 +1017,7 @@ class MusicSystem(commands.Cog):
         player = ctx.voice_client
         if not player:
             return await ctx.send(msg(ctx, "stop_nothing"))
-        try:
-            player.queue.mode = wavelink.QueueMode.normal
-        except Exception:
-            pass
+        self._state(ctx.guild.id)["loop"] = False
         player.queue.clear()
         await player.stop()
         await ctx.send(msg(ctx, "stop_ok"))
@@ -1288,140 +1025,14 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="loop", aliases=["repeat"],
-        help="{ 'en': 'cycle loop mode: off → track → queue → off 🔁', 'de': 'wechselt den loop-modus' }"
+        help="{ 'en': 'toggle loop for the current track 🔁', 'de': 'wiederholt den aktuellen track' }"
     )
     async def loop(self, ctx: commands.Context):
-        player = ctx.voice_client
-        if not player:
-            return await ctx.send(msg(ctx, "stop_nothing"))
-        new_mode = _LOOP_NEXT.get(player.queue.mode, wavelink.QueueMode.normal)
-        player.queue.mode = new_mode
-        if new_mode == wavelink.QueueMode.loop:
-            await ctx.send(msg(ctx, "loop_track"))
-        elif new_mode == wavelink.QueueMode.loop_all:
-            await ctx.send(msg(ctx, "loop_queue"))
-        else:
-            await ctx.send(msg(ctx, "loop_off"))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="loopqueue", aliases=["lq"],
-        help="{ 'en': 'toggle loop for the entire queue 🔁☕', 'de': 'wiederholt die gesamte warteschlange' }"
-    )
-    async def loopqueue(self, ctx: commands.Context):
-        player = ctx.voice_client
-        if not player:
-            return await ctx.send(msg(ctx, "stop_nothing"))
-        if player.queue.mode == wavelink.QueueMode.loop_all:
-            player.queue.mode = wavelink.QueueMode.normal
-            await ctx.send(msg(ctx, "loop_off"))
-        else:
-            player.queue.mode = wavelink.QueueMode.loop_all
-            await ctx.send(msg(ctx, "loop_queue"))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="shuffle", aliases=["sh"],
-        help="{ 'en': 'shuffle the queue 🔀☕', 'de': 'mischt die warteschlange' }"
-    )
-    async def shuffle(self, ctx: commands.Context):
-        player = ctx.voice_client
-        if not player or player.queue.is_empty:
-            return await ctx.send(msg(ctx, "shuffle_nothing"))
-        try:
-            player.queue.shuffle()
-        except Exception:
-            return await ctx.send(msg(ctx, "shuffle_nothing"))
-        await ctx.send(msg(ctx, "shuffle_ok"))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="clearqueue", aliases=["cq", "qclear"],
-        help="{ 'en': 'clear the upcoming queue ☕', 'de': 'leert die warteschlange' }"
-    )
-    async def clearqueue(self, ctx: commands.Context):
-        player = ctx.voice_client
-        if not player or player.queue.is_empty:
-            return await ctx.send(msg(ctx, "clear_nothing"))
-        n = len(player.queue)
-        player.queue.clear()
-        await ctx.send(msg(ctx, "clear_ok", n=n))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="remove", aliases=["rm"],
-        help="{ 'en': 'remove a track from the queue by position', 'de': 'entfernt einen track aus der warteschlange' }"
-    )
-    async def remove(self, ctx: commands.Context, position: int):
-        player = ctx.voice_client
-        if not player or player.queue.is_empty:
-            return await ctx.send(msg(ctx, "remove_oob"))
-        if position < 1 or position > len(player.queue):
-            return await ctx.send(msg(ctx, "remove_oob"))
-        try:
-            track = player.queue.get_at(position - 1)
-        except Exception:
-            return await ctx.send(msg(ctx, "remove_oob"))
-        await ctx.send(msg(ctx, "remove_ok", title=track.title))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="move", aliases=["mv"],
-        help="{ 'en': 'move a track from one queue position to another', 'de': 'verschiebt einen track' }"
-    )
-    async def move(self, ctx: commands.Context, frm: int, to: int):
-        player = ctx.voice_client
-        if not player or player.queue.is_empty:
-            return await ctx.send(msg(ctx, "move_oob"))
-        size = len(player.queue)
-        if frm < 1 or frm > size or to < 1 or to > size:
-            return await ctx.send(msg(ctx, "move_oob"))
-        try:
-            track = player.queue.get_at(frm - 1)
-            player.queue.put_at(to - 1, track)
-        except Exception:
-            return await ctx.send(msg(ctx, "move_oob"))
-        await ctx.send(msg(ctx, "move_ok", title=track.title, to=to))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="jump", aliases=["skipto"],
-        help="{ 'en': 'jump to a specific position in the queue', 'de': 'springt zu einer queue-position' }"
-    )
-    async def jump(self, ctx: commands.Context, position: int):
-        player = ctx.voice_client
-        if not player or player.queue.is_empty:
-            return await ctx.send(msg(ctx, "jump_oob"))
-        if position < 1 or position > len(player.queue):
-            return await ctx.send(msg(ctx, "jump_oob"))
-        # Remove every track ahead of `position` so the next skip lands on it
-        try:
-            for _ in range(position - 1):
-                player.queue.get_at(0)
-            target = player.queue.get_at(0)
-            await player.play(target)
-        except Exception:
-            return await ctx.send(msg(ctx, "jump_oob"))
-        await ctx.send(msg(ctx, "jump_ok", title=target.title))
-        await self._update_np_message(ctx.guild)
-
-    @commands.command(
-        name="history", aliases=["hist"],
-        help="{ 'en': 'show recently played tracks ☕📜', 'de': 'zeigt zuletzt gespielte tracks' }"
-    )
-    async def history(self, ctx: commands.Context):
         state = self._state(ctx.guild.id)
-        history: deque = state.get("history", deque())
-        if not history:
-            return await ctx.send(msg(ctx, "history_empty"))
-        # Reverse so most recent comes first
-        lines = []
-        for i, track in enumerate(reversed(list(history)), start=1):
-            dur = _fmt_dur(track.length) if track.length else "?"
-            lines.append(f"`{i:>2}.` **{track.title[:60]}** — {(track.author or 'Unknown')[:30]} `[{dur}]`")
-        pages = paginate(lines, per_page=QUEUE_PAGE_SIZE)
-        view  = PaginatedView(title=msg(ctx, "history_title"), pages=pages)
-        await ctx.send(view=view)
+        state["loop"] = not state["loop"]
+        key = "loop_on" if state["loop"] else "loop_off"
+        await ctx.send(msg(ctx, key))
+        await self._update_np_message(ctx.guild)
 
     @commands.command(
         name="autoplay", aliases=["ap"],
@@ -1445,19 +1056,21 @@ class MusicSystem(commands.Cog):
         if not player or player.queue.is_empty:
             return await ctx.send(msg(ctx, "queue_empty"))
 
-        lines = []
-        if player.current:
-            lines.append(f"▶︎ **{player.current.title[:60]}** — {(player.current.author or 'Unknown')[:30]}")
-            lines.append("")
+        lines = [msg(ctx, "queue_header")]
         for i, track in enumerate(player.queue, start=1):
             dur = _fmt_dur(track.length) if track.length else "?"
-            lines.append(f"`{i:>2}.` **{track.title[:60]}** — {(track.author or 'Unknown')[:30]} `[{dur}]`")
+            lines.append(f"{i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
+            if i >= MAX_QUEUE_SHOW:
+                remaining = len(player.queue) - MAX_QUEUE_SHOW
+                if remaining > 0:
+                    lines.append(f"\n*…and {remaining} more track{'s' if remaining > 1 else ''}*")
+                break
 
-        pages = paginate(lines, per_page=QUEUE_PAGE_SIZE)
-        view  = PaginatedView(
-            title=f"{msg(ctx, 'queue_title')} · {len(player.queue)} track(s)",
-            pages=pages,
-        )
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accent_colour=discord.Colour(0x5865F2),
+        ))
         await ctx.send(view=view)
 
     @commands.command(
@@ -1492,12 +1105,7 @@ class MusicSystem(commands.Cog):
         if not player:
             return await ctx.send(msg(ctx, "disconnect_nothing"))
         state = self._state(ctx.guild.id)
-        # Cancel NP refresh task
-        task = state.get("np_task")
-        if task and not task.done():
-            task.cancel()
         state["np_message"] = None
-        state["np_task"]    = None
         await player.disconnect()
         await ctx.send(msg(ctx, "disconnect_ok"))
 
