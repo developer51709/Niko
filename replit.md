@@ -121,8 +121,18 @@ Preferred communication style: Simple, everyday language.
 - Onboarding: `load_all_configs()` in `onboarding_config.py` iterates all guild JSON files to re-register views
 
 ### Music
-- Lavalink-based music via wavelink
-- Nodes loaded from AjieBlogs API on startup
+- Lavalink-based music via wavelink (3.4.1), nodes loaded from AjieBlogs API on startup
+- **Gap-free playback**: `player.autoplay = wavelink.AutoPlayMode.partial` is set on every new player → wavelink advances the queue natively with no audio gap on commands. We **never** call `player.play()` from `on_track_end`.
+- **Three-state loop**: uses native `wavelink.QueueMode` (normal → loop → loop_all). The `_LoopBtn` and `!loop` command cycle through; `!loopqueue` toggles loop_all directly.
+- **Spotipy** (`spotipy==2.26.0`): replaces the old raw-OAuth Spotify client. Sync API wrapped in `loop.run_in_executor`. Resolves track / album / playlist (up to 100 items, paginated 50 at a time). Silently disabled if `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` are absent.
+- **Last.fm autoplay** fallback: when the user-built queue is about to dry up AND autoplay is on, top up with 5 similar tracks via Last.fm before wavelink hits the empty queue. Requires `LASTFM_API_KEY`.
+- **Premium queue management commands**: `play/p`, `pause`, `resume`, `skip/sk`, `stop`, `queue/q` (paginated), `shuffle/sh`, `clearqueue/cq/qclear`, `remove/rm <pos>`, `move/mv <from> <to>`, `jump/skipto <pos>`, `history/hist`, `loop/repeat`, `loopqueue/lq`, `autoplay/ap`, `nowplaying/np`, `volume/vol`, `disconnect/dc/leave`, `musicstatus`. Note: `clear` was renamed to `clearqueue` to avoid collision with moderation's `clear` (purge messages).
+- **Now-playing card** (cv2 LayoutView): album art + 3 button rows
+  - Row 1: Prev · Pause/Resume · Skip · Stop
+  - Row 2: Loop (cycle, label shows current mode) · Shuffle · Vol − · Vol +
+  - Row 3: Queue (ephemeral PaginatedView) · Autoplay · Open Track (link)
+- **NP refresh**: a per-guild background task (`_np_refresh_loop`) edits the now-playing message every 10s while a track plays, so the progress bar advances without user interaction. Auto-cancels on disconnect / track end with empty queue.
+- History stored in per-guild `deque(maxlen=25)`; loop replays don't push to history.
 
 ## External Dependencies
 
