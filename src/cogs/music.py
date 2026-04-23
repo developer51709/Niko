@@ -890,12 +890,7 @@ class MusicSystem(commands.Cog):
             self._connecting = False
             return
 
-        # Try each responsive node, keeping all that succeed (up to 3) so wavelink
-        # has failover alternatives if one node has bad voice routing.
-        connected_uris: list[str] = []
         for node_info in responsive:
-            if len(connected_uris) >= 3:
-                break
             host     = node_info["host"]
             port     = node_info["port"]
             password = node_info["password"]
@@ -907,16 +902,17 @@ class MusicSystem(commands.Cog):
                     wavelink.Pool.connect(nodes=[node], client=self.bot),
                     timeout=_CONNECT_TIMEOUT,
                 )
-                connected_uris.append(f"{host}:{port}")
                 log.info("Lavalink", f"Connected to {host}:{port} (SSL={secure})")
-                self.connected = True
+                self.connected   = True
+                self._connecting = False
+                return
             except Exception:
-                continue
+                try:
+                    await wavelink.Pool.close()
+                except Exception:
+                    pass
 
-        if connected_uris:
-            log.info("Lavalink", f"Active nodes: {len(connected_uris)} — {', '.join(connected_uris)}")
-        else:
-            log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
+        log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
         self._connecting = False
 
     # ─── WAVELINK EVENTS ──────────────────────────
@@ -1043,70 +1039,28 @@ class MusicSystem(commands.Cog):
             await ctx.send(msg(ctx, "get_player_not_in_voice"))
             return None
         channel = ctx.author.voice.channel
-
-        # Check permissions before attempting the handshake
-        perms = channel.permissions_for(ctx.guild.me)
-        if not (perms.connect and perms.speak):
+        try:
+            player: Optional[wavelink.Player] = ctx.voice_client
+            if player is None:
+                player = await channel.connect(cls=wavelink.Player)
+            # Critical for gap-free playback: wavelink auto-advances the queue
+            try:
+                player.autoplay = wavelink.AutoPlayMode.partial
+            except Exception:
+                pass
+            return player
+        except wavelink.exceptions.ChannelTimeoutException:
+            log.warning("Music", f"Voice connect timed out for guild {ctx.guild.id}.")
             await ctx.send(view=await self._voice_failure_view(
-                "I'm missing **Connect** and/or **Speak** permission in that channel."
+                "the music server didn't respond in time. Try again in a moment."
             ))
             return None
-
-        # Use guild.voice_client (more reliable than ctx.voice_client)
-        player: Optional[wavelink.Player] = ctx.guild.voice_client  # type: ignore
-
-        # Handle stale / wrong-channel voice clients
-        if player is not None:
-            try:
-                if player.channel and player.channel.id == channel.id:
-                    return player
-                # In a different channel — move to the user
-                await player.move_to(channel)
-                return player
-            except Exception:
-                # Player is broken — force-clear it and reconnect fresh
-                try:
-                    await player.disconnect(force=True)
-                except Exception:
-                    pass
-                player = None
-
-        # Fresh connect — try up to 2 times (some voice handshakes flake on the first try)
-        last_exc: Optional[Exception] = None
-        for attempt in range(2):
-            try:
-                player = await channel.connect(
-                    cls=wavelink.Player,
-                    self_deaf=True,
-                    timeout=45.0,
-                    reconnect=True,
-                )
-                # Critical for gap-free playback: wavelink auto-advances the queue
-                player.autoplay = wavelink.AutoPlayMode.partial
-                return player
-            except wavelink.exceptions.ChannelTimeoutException as e:
-                last_exc = e
-                log.warning("Music", f"Voice connect attempt {attempt + 1} timed out for guild {ctx.guild.id}.")
-                # Clean up any half-open voice state before retrying
-                try:
-                    if ctx.guild.voice_client:
-                        await ctx.guild.voice_client.disconnect(force=True)
-                except Exception:
-                    pass
-                await asyncio.sleep(1.5)
-            except Exception as e:
-                last_exc = e
-                log.warning("Music", f"Voice connect failed: {e!r}")
-                break
-
-        reason = (
-            "the music server didn't respond in time — this is usually a regional routing "
-            "hiccup with the Lavalink node."
-            if isinstance(last_exc, wavelink.exceptions.ChannelTimeoutException)
-            else f"connection failed: `{type(last_exc).__name__}`"
-        )
-        await ctx.send(view=await self._voice_failure_view(reason))
-        return None
+        except Exception as e:
+            log.warning("Music", f"Voice connect failed: {e!r}")
+            await ctx.send(view=await self._voice_failure_view(
+                f"connection failed: `{type(e).__name__}`"
+            ))
+            return None
 
     # ─── COMMANDS ─────────────────────────────────
 
