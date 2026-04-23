@@ -121,8 +121,20 @@ Preferred communication style: Simple, everyday language.
 - Onboarding: `load_all_configs()` in `onboarding_config.py` iterates all guild JSON files to re-register views
 
 ### Music
-- Lavalink-based music via wavelink
-- Nodes loaded from AjieBlogs API on startup
+- Lavalink-based music via wavelink (3.4.1), nodes loaded from AjieBlogs API on startup
+- **Voice-connect logic restored & frozen**: `get_player`, `startup_connect`, `_fetch_node_list`, `_probe_node`, `_find_responsive_nodes` are the known-working version — DO NOT modify them
+- **Gap-free playback**: `player.autoplay = wavelink.AutoPlayMode.partial` is set when `play` is invoked → wavelink advances the queue natively. `on_wavelink_track_end` no longer calls `player.play()` (no double-trigger / audio gap)
+- **Three-state loop** via native `wavelink.QueueMode` (normal → loop → loop_all). The `_LoopBtn` and `!loop` command cycle through; `!loopqueue/lq` toggles loop_all directly
+- **Spotipy** (`spotipy`): sync API wrapped in `loop.run_in_executor`. Resolves track / album / playlist (up to 100 items, paginated 50 at a time). Silently disabled if `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` are absent
+- **Last.fm autoplay top-up**: when autoplay is on and the queue is about to dry, `_topup_autoplay()` queues 5 similar tracks via Last.fm before wavelink reaches an empty queue. Requires `LASTFM_API_KEY`
+- **Premium queue management commands**: `play/p`, `pause`, `resume`, `skip/sk`, `stop`, `queue/q` (paginated), `shuffle/sh`, `clearqueue/cq/qclear`, `remove/rm <pos>`, `move/mv <from> <to>`, `jump/skipto <pos>`, `history/hist`, `loop/repeat`, `loopqueue/lq`, `autoplay/ap`, `nowplaying/np`, `volume/vol`, `disconnect/dc/leave`, `musicstatus`. Note: `clear` was renamed to `clearqueue` to avoid collision with moderation's `clear` (purge messages)
+- **Now-playing card** (cv2 LayoutView): album art + 3 button rows
+  - Row 1: Prev · Pause/Resume · Skip · Stop
+  - Row 2: Loop (cycle, label shows current mode) · Shuffle · Vol − · Vol +
+  - Row 3: Queue (opens ephemeral PaginatedView) · Autoplay · Open Track (link)
+- **NP live refresh**: per-guild background task `_np_refresh_loop` edits the NP message every 10s while a track plays so the progress bar advances on its own. Started in `_send_np`, cancelled on disconnect / idle timeout. Skips edits while paused
+- **`on_wavelink_track_start`** listener re-renders the NP card the moment wavelink advances to a new track
+- History stored in per-guild `deque(maxlen=25)`; loop replays and Prev-button replays use a `_skip_history_once` flag so they don't pollute history
 
 ## External Dependencies
 

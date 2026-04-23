@@ -6,9 +6,16 @@
     "welcome_image": null,
     "rules_channel": 1476078137845612585,
     "rules_message_id": 1492342596075257928,
-    "rules_text": "1. No groser\u00edas\n2. Nada +18\n3. No m\u00e1s raid",
+    "rules_text": "1. No groser\u00edas\n2. Nada +18\n3. No m\u00e1s raid\n4. Este server solo es para los de 9-15",
     "rules_role_id": null,
     "role_menu_channel": null,
     "role_menu_message_id": null,
-    "role_menu_options": null
+    "role_menu_options": null,
+    "autorole_ids": null,
+    "captcha_enabled": false,
+    "captcha_channel_id": null,
+    "captcha_panel_message_id": null,
+    "captcha_add_role_ids": null,
+    "captcha_remove_role_ids": null,
+    "captcha_kick_on_fail": false
 }
