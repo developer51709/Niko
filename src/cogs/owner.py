@@ -12,6 +12,7 @@ from config.emojis import get_emoji
 from .error_handler import is_owner
 # image extractor used for setpfp and setbanner
 from utils.image.extractor import extract_image_from_message
+from utils.blacklist_manager import BlacklistManager
 
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
@@ -272,44 +273,77 @@ class OwnerCog(commands.Cog):
         await self.bot.change_presence(activity=activity)
         await ctx.send(f"{get_emoji('icon_tick')} Activity updated: **{activity_type.title()} {text}**")
 
-    # -------------------------------
-    # Reload a cog
-    # -------------------------------
-    @commands.command(name="reload")
-    @is_owner()
-    async def reload_cog(self, ctx, cog: str):
-        """Reload a cog."""
-        try:
-            await self.bot.reload_extension(cog)
-            await ctx.send(f"🔄 Reloaded `{cog}`")
-        except Exception as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to reload `{cog}`:\n`{e}`")
+        # -------------------------------
+        # Cog Management
+        # -------------------------------
+        @commands.command(
+            name="load",
+            help="Load a cog (owner only)."
+        )
+        @is_owner()
+        async def load(self, ctx, cog: str):
+            try:
+                await self.bot.load_extension(f"cogs.{cog}")
+                await ctx.send(f"Loaded `{cog}`.")
+            except Exception as e:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"## {get_emoji('icon_danger')} Cog Load Error\nAn error occurred while loading the {cog} cog."
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"### Traceback\n```\n{e}\n```"
+                    )
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
 
-    # -------------------------------
-    # Load a cog
-    # -------------------------------
-    @commands.command(name="load")
-    @is_owner()
-    async def load_cog(self, ctx, cog: str):
-        """Load a cog."""
-        try:
-            await self.bot.load_extension(cog)
-            await ctx.send(f"📥 Loaded `{cog}`")
-        except Exception as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to load `{cog}`:\n`{e}`")
+        @commands.command(
+            name="unload",
+            help="Unload a cog (owner only)."
+        )
+        @is_owner()
+        async def unload(self, ctx, cog: str):
+            try:
+                await self.bot.unload_extension(f"cogs.{cog}")
+                await ctx.send(f"Unloaded `{cog}`.")
+            except Exception as e:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"## {get_emoji('icon_danger')} Cog Unload Error\nAn error occurred while unloading the {cog} cog."
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"### Traceback\n```\n{e}\n```"
+                    )
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
 
-    # -------------------------------
-    # Unload a cog
-    # -------------------------------
-    @commands.command(name="unload")
-    @is_owner()
-    async def unload_cog(self, ctx, cog: str):
-        """Unload a cog."""
-        try:
-            await self.bot.unload_extension(cog)
-            await ctx.send(f"📤 Unloaded `{cog}`")
-        except Exception as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to unload `{cog}`:\n`{e}`")
+        @commands.command(
+            name="reload",
+            help="Reload a cog (owner only)."
+        )
+        @is_owner()
+        async def reload(self, ctx, cog: str):
+            try:
+                await self.bot.reload_extension(f"cogs.{cog}")
+                await ctx.send(f"Reloaded `{cog}`.")
+            except Exception as e:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"## {get_emoji('icon_danger')} Cog Reload Error\nAn error occurred while reloading the {cog} cog."
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"### Traceback\n```\n{e}\n```"
+                    )
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
 
     # -------------------------------
     # Restart bot
@@ -627,6 +661,279 @@ class OwnerCog(commands.Cog):
         await message.edit(view=success_view)
         await asyncio.sleep(5)
         await message.delete()
+
+    # -------------------------------
+    # Blacklist commands
+    # -------------------------------
+    @commands.group(
+        name="blacklist",
+        help="Manage the bot's blacklist.",
+        invoke_without_command=True
+    )
+    @is_owner()
+    async def blacklist(self, ctx):
+        """Show the current blacklist."""
+        blacklist_manager = BlacklistManager()
+        blacklisted_users = blacklist_manager.get_blacklisted_users()
+        blacklisted_guilds = blacklist_manager.get_blacklisted_guilds()
+
+        # Format lines
+        user_lines = [f"**User:**\n-# {user_id}" for user_id in blacklisted_users]
+        guild_lines = [f"**Guild:**\n-# {guild_id}" for guild_id in blacklisted_guilds]
+
+        lines = user_lines + guild_lines
+        if not lines:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_important')} The blacklist is currently empty."
+                ),
+                accent_colour=discord.Color.blurple()
+            )
+            view.add_item(container)
+            return await ctx.send(view=view)
+
+        pages = paginate(lines, per_page=10)
+        view = PaginatedView(
+            title=f"🔨 Blacklist\n-# Total: {len(lines)}",
+            pages=pages
+        )
+        await ctx.send(view=view)
+
+    # -------------------------------
+    # ADD
+    # -------------------------------
+    @blacklist.command(
+        name="add",
+        help="Add a user or guild to the blacklist."
+    )
+    @is_owner()
+    async def blacklist_add(self, ctx, type: str, id_or_mention: str, send_message: bool = False):
+        """Add a user or guild to the blacklist."""
+        blacklist_manager = BlacklistManager()
+        type = type.lower()
+
+        # -------------------------------
+        # USER ADD
+        # -------------------------------
+        if type == "user":
+            try:
+                user_id = int(id_or_mention.strip("<@!>"))
+            except ValueError:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Invalid user ID or mention."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                return await ctx.send(view=view)
+
+            if blacklist_manager.add_user(user_id):
+                # Success message
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} User `{user_id}` added to blacklist."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+
+                # Optional DM
+                if send_message:
+                    try:
+                        user = self.bot.get_user(user_id)
+                        if user:
+                            view = discord.ui.LayoutView()
+                            container = discord.ui.Container(
+                                discord.ui.TextDisplay(
+                                    content=f"### {get_emoji('icon_danger')} You have been blacklisted from using this bot."
+                                ),
+                                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                                discord.ui.TextDisplay(
+                                    content="This is likely due to repeated violations of the bot's terms of service or abuse of the bot's features."
+                                ),
+                                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                                discord.ui.TextDisplay(
+                                    content="-# If you believe this is a mistake, please open a ticket in the [support server](https://dsc.gg/astral-haven)."
+                                ),
+                                accent_colour=discord.Color.red()
+                            )
+                            await user.send(view=view)
+                    except Exception:
+                        view = discord.ui.LayoutView()
+                        container = discord.ui.Container(
+                            discord.ui.TextDisplay(
+                                content=f"{get_emoji('icon_cross')} Failed to send message to user `{user_id}`."
+                            ),
+                            accent_colour=discord.Color.red()
+                        )
+                        view.add_item(container)
+                        await ctx.send(view=view)
+
+            else:
+                # Already blacklisted
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} User `{user_id}` is already blacklisted."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+
+        # -------------------------------
+        # GUILD ADD
+        # -------------------------------
+        elif type == "guild":
+            try:
+                guild_id = int(id_or_mention)
+            except ValueError:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Invalid guild ID."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                return await ctx.send(view=view)
+
+            if blacklist_manager.add_guild(guild_id):
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Guild `{guild_id}` added to blacklist."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+            else:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Guild `{guild_id}` is already blacklisted."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Invalid type. Use `user` or `guild`."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+    # -------------------------------
+    # REMOVE
+    # -------------------------------
+    @blacklist.command(
+        name="remove",
+        help="Remove a user or guild from the blacklist."
+    )
+    @is_owner()
+    async def blacklist_remove(self, ctx, type: str, id_or_mention: str):
+        """Remove a user or guild from the blacklist."""
+        blacklist_manager = BlacklistManager()
+        type = type.lower()
+
+        # -------------------------------
+        # USER REMOVE
+        # -------------------------------
+        if type == "user":
+            try:
+                user_id = int(id_or_mention.strip("<@!>"))
+            except ValueError:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Invalid user ID or mention."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                return await ctx.send(view=view)
+
+            if blacklist_manager.remove_user(user_id):
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} User `{user_id}` removed from blacklist."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+            else:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} User `{user_id}` is not blacklisted."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+
+        # -------------------------------
+        # GUILD REMOVE
+        # -------------------------------
+        elif type == "guild":
+            try:
+                guild_id = int(id_or_mention)
+            except ValueError:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Invalid guild ID."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                return await ctx.send(view=view)
+
+            if blacklist_manager.remove_guild(guild_id):
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_tick')} Guild `{guild_id}` removed from blacklist."
+                    ),
+                    accent_colour=discord.Color.green()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+            else:
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('icon_cross')} Guild `{guild_id}` is not blacklisted."
+                    ),
+                    accent_colour=discord.Color.red()
+                )
+                view.add_item(container)
+                await ctx.send(view=view)
+
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Invalid type. Use `user` or `guild`."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
 
 
 async def setup(bot):

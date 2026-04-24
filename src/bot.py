@@ -7,12 +7,14 @@ import colorama
 import datetime
 import importlib
 from discord.ext import commands
+from config.emojis import get_emoji
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
 from utils.ai_nikoapi import generate_reply_nikoapi
 from utils.ai_config import get_ai_config
 from utils.prefix_manager import get_prefixes
 from utils.emoji_sync import sync_application_emojis
+from utils.blacklist_manager import BlacklistManager
 from utils import logging
 import database
 
@@ -287,6 +289,44 @@ def dynamic_prefix(bot, message):
     return get_prefixes(message.guild.id)
 
 # -----------------------------
+# Blacklist check
+# -----------------------------
+async def blacklist_check(msg):
+    blacklist_manager = BlacklistManager()
+    if blacklist_manager.is_user_blacklisted(msg.author.id):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_danger')} Blacklisted"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="You are blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+            ),
+            accent_colour=discord.Color.red()
+        )
+        view.add_item(container)
+        await msg.channel.send(view=view)
+        return True
+    if msg.guild:
+        if blacklist_manager.is_guild_blacklisted(msg.guild.id):
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_danger')} Blacklisted"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="This server is blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await msg.channel.send(view=view)
+            return True
+    return False
+
+# -----------------------------
 # Discord bot
 # -----------------------------
 intents = discord.Intents.default()
@@ -323,6 +363,10 @@ async def on_message(msg: discord.Message):
     for p in prefixes:
         if content.startswith(p.lower()):
             used_prefix = p
+            # blacklist check
+            bl = await blacklist_check(msg)
+            if bl:
+                return
             # Check if it's an AI command
             if content.startswith(f"{p.lower()}ai "):
                 is_ai_command = True
@@ -365,6 +409,11 @@ async def on_message(msg: discord.Message):
     # -----------------------------
     loop = asyncio.get_event_loop()
 
+    # blacklist check
+    bl = await blacklist_check(msg)
+    if bl:
+        return
+    
     async with msg.channel.typing():
         reply = await loop.run_in_executor(
             None,

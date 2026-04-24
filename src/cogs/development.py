@@ -206,8 +206,13 @@ class Development(commands.Cog):
     # Guild Inspection
     # -------------------------------
     @commands.command(name="devguild")
-    async def dev_guild(self, ctx):
-        g = ctx.guild
+    async def dev_guild(self, ctx, guild_id: int = None):
+        if guild_id:
+            g = self.bot.get_guild(guild_id)
+            if not g:
+                return await ctx.send("Guild not found.")
+        else:
+            g = ctx.guild
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
