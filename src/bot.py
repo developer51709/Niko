@@ -293,7 +293,9 @@ def dynamic_prefix(bot, message):
 # -----------------------------
 async def blacklist_check(msg):
     blacklist_manager = BlacklistManager()
-    if blacklist_manager.is_user_blacklisted(msg.author.id):
+    user_entry = blacklist_manager.get_user_entry(msg.author.id)
+    if user_entry:
+        reason = user_entry.get("reason") or "No reason provided."
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -301,7 +303,7 @@ async def blacklist_check(msg):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="You are blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
             ),
             accent_colour=discord.Color.red()
         )
@@ -309,7 +311,9 @@ async def blacklist_check(msg):
         await msg.channel.send(view=view)
         return True
     if msg.guild:
-        if blacklist_manager.is_guild_blacklisted(msg.guild.id):
+        guild_entry = blacklist_manager.get_guild_entry(msg.guild.id)
+        if guild_entry:
+            reason = guild_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -317,7 +321,7 @@ async def blacklist_check(msg):
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content="This server is blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                    content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -647,6 +651,17 @@ async def on_ready():
     print_banner()
     # Sync application emojis in the background so startup isn't blocked
     asyncio.create_task(_run_emoji_sync())
+    # Sync slash commands in the background so startup isn't blocked
+    asyncio.create_task(_run_slash_sync())
+
+
+async def _run_slash_sync():
+    """Sync the application command tree once on startup."""
+    try:
+        synced = await bot.tree.sync()
+        logging.success("SlashSync", f"Synced {len(synced)} application command(s) globally.")
+    except Exception as exc:
+        logging.error("SlashSync", f"Startup slash sync failed: {exc}")
 
 async def _run_emoji_sync():
     try:

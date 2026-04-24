@@ -121,6 +121,62 @@ MESSAGES = {
         "wl_users":         "**Benutzer auf Whitelist**\n{users}\n\n",
         "wl_roles":         "**Rollen auf Whitelist**\n{roles}",
     },
+    "es": {
+        # generic
+        "no_member":        "Por favor especifica un miembro al que {action}.",
+        "no_user_id":       "Por favor proporciona un ID de usuario para desbanear.",
+        "no_amount":        "Por favor especifica una cantidad de mensajes a borrar.",
+        "no_duration":      "Por favor especifica una duración en segundos.",
+        "no_nickname":      "Por favor especifica un nuevo apodo.",
+        "no_word":          "Por favor especifica una palabra.",
+        "no_channel":       "Por favor especifica un miembro cuyos mensajes borrar.",
+
+        # kick / ban / unban
+        "kicked":           "### 👟 Usuario Expulsado\n**{member}** ha sido expulsado.\n**Razón:** {reason}",
+        "banned":           "### 🔨 Usuario Baneado\n**{member}** ha sido baneado.\n**Razón:** {reason}",
+        "unbanned":         "### ✅ Usuario Desbaneado\n**{user}** ha sido desbaneado.",
+
+        # warn
+        "warned":           "### ⚠️ Usuario Advertido\n**{member}** ha sido advertido.\n**Razón:** {reason}",
+        "no_warnings":      "{member} no tiene advertencias.",
+        "warnings_title":   "### ⚠️ Advertencias de {member}\n",
+        "warnings_cleared": "✅ Advertencias borradas para {member}.",
+        "no_member_warns":  "Por favor especifica un miembro cuyas advertencias borrar.",
+
+        # mute / unmute
+        "muted":            "🔇 **{member}** silenciado | Razón: {reason}",
+        "tempmuted":        "⏳ **{member}** silenciado por `{duration}s` | Razón: {reason}",
+        "unmuted":          "🔊 **{member}** desilenciado.",
+
+        # clear / purge
+        "cleared":          "🧹 Borrados `{count}` mensajes.",
+        "purged":           "🧹 Borrados `{count}` mensajes de **{member}**.",
+
+        # slowmode / lock / unlock
+        "slowmode_set":     "🐢 Modo lento ajustado a `{seconds}` segundos.",
+        "locked":           "🔒 Canal bloqueado.",
+        "unlocked":         "🔓 Canal desbloqueado.",
+
+        # nick
+        "nick_changed":     "✏️ Apodo de **{member}** cambiado a `{nickname}`.",
+
+        # badwords
+        "badwords_none":    "No hay palabras bloqueadas configuradas para este servidor.",
+        "badwords_added":   "Se añadió `{word}` a la lista de palabras bloqueadas.",
+        "badwords_removed": "Se eliminó `{word}` de la lista de palabras bloqueadas.",
+        "badwords_cleared": "Se eliminaron todas las palabras bloqueadas para este servidor.",
+
+        # whitelist
+        "wl_user_added":    "✅ {target} añadido a la lista blanca de automod.",
+        "wl_user_removed":  "✅ {target} eliminado de la lista blanca de automod.",
+        "wl_role_added":    "✅ {target} añadido a la lista blanca de automod.",
+        "wl_role_removed":  "✅ {target} eliminado de la lista blanca de automod.",
+        "wl_invalid_type":  "Tipo inválido. Usa `user` o `role`.",
+        "wl_empty":         "No hay usuarios ni roles en la lista blanca.",
+        "wl_title":         "### 🔓 Lista Blanca de AutoMod\n",
+        "wl_users":         "**Usuarios en Lista Blanca**\n{users}\n\n",
+        "wl_roles":         "**Roles en Lista Blanca**\n{roles}",
+    },
 }
 
 
@@ -128,6 +184,8 @@ def get_lang(ctx: commands.Context) -> str:
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

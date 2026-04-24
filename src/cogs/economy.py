@@ -28,6 +28,13 @@ MESSAGES = {
             "daily_success": "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
             "work_wait": "Du kannst nur einmal pro Stunde arbeiten.",
             "work_success": "Du hast gearbeitet und {reward} Münzen verdient!",
+        },
+        "es": {
+            "balance": "El saldo de {name} es de {balance} monedas.",
+            "daily_wait": "Solo puedes reclamar tu recompensa diaria una vez cada 24 horas.",
+            "daily_success": "¡Has reclamado tu recompensa diaria de {reward} monedas!",
+            "work_wait": "Solo puedes trabajar una vez cada hora.",
+            "work_success": "¡Trabajaste y ganaste {reward} monedas!",
         }
     },
     "cafe": {
@@ -44,6 +51,13 @@ MESSAGES = {
             "daily_success": "yesss! Du hast deine täglichen {reward} Münzen bekommen. Geh dir was Schönes kaufen! 🍬✨",
             "work_wait": "Du arbeitest zu hart! Mach eine Kaffeepause und komm in einer Stunde wieder ☕💤",
             "work_success": "Gute Arbeit! Du hast eine Schicht gearbeitet und {reward} Münzen für das Trinkgeldglas verdient 🍯✨",
+        },
+        "es": {
+            "balance": "¡oye! {name} tiene {balance} monedas en su bolsita de pastelitos 🥐✨",
+            "daily_wait": "¡paciencia, amix! tus delicias diarias aún no están listas. ¡prueba en un ratito! ☕🍰",
+            "daily_success": "¡yesss! recibiste tus {reward} monedas diarias. ¡vete a comprar algo bonito! 🍬✨",
+            "work_wait": "¡estás trabajando demasiado! tómate un descanso para el café y vuelve en una hora ☕💤",
+            "work_success": "¡buen trabajo! hiciste un turno y ganaste {reward} monedas para el bote de propinas 🍯✨",
         }
     }
 }
@@ -52,6 +66,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 def msg(ctx, key, **kwargs):
@@ -171,7 +187,7 @@ class EconomyCog(commands.Cog):
     # -----------------------------
 
     # !balance command
-    @commands.command(name="balance", aliases=["bal", "wallet"], help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh nach, wie viele Münzen du hast' }")
+    @commands.hybrid_command(name="balance", aliases=["bal", "wallet"], description="Check your pastry bag balance", help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh nach, wie viele Münzen du hast', 'es': 'consulta tu bolsa de monedas 🥐✨' }")
     async def balance(self, ctx, member: discord.Member = None):
         '''Check your balance or another user's balance.'''
         target = member or ctx.author
@@ -202,7 +218,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !daily command
-    @commands.command(name="daily", help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen' }")
+    @commands.hybrid_command(name="daily", description="Claim your daily treats", help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tus golosinas diarias 🍬✨' }")
     async def daily(self, ctx):
         '''Claim your daily reward.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -242,7 +258,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(view=view)
 
     # !work command
-    @commands.command(name="work", help="{ 'en': 'work a shift at the café ☕', 'de': 'arbeite eine Schicht im Café' }")
+    @commands.hybrid_command(name="work", description="Work a shift at the café", help="{ 'en': 'work a shift at the café ☕', 'de': 'arbeite eine Schicht im Café', 'es': 'trabaja un turno en el café ☕' }")
     async def work(self, ctx):
         '''Work to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)

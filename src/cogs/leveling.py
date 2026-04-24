@@ -41,6 +41,19 @@ MESSAGES = {
             "cfg_updated":       "✅ Einstellung aktualisiert.",
             "cfg_show":          "### Level-Konfiguration — {guild}\n{body}",
         },
+        "es": {
+            "level_up":          "¡Felicidades {mention}, has subido al nivel **{level}**!",
+            "no_xp":             "{name} aún no ha ganado XP.",
+            "stats_title":       "Estadísticas de Nivel — {name}",
+            "stats_level":       "Nivel",
+            "stats_xp":          "XP",
+            "stats_rank":        "Rango",
+            "leaderboard_title": "Tabla de Niveles — {guild}",
+            "leaderboard_empty": "Nadie ha ganado XP en este servidor todavía.",
+            "xp_disabled":       "El sistema de XP está desactivado en este servidor.",
+            "cfg_updated":       "✅ Configuración actualizada.",
+            "cfg_show":          "### Configuración de Niveles — {guild}\n{body}",
+        },
     },
     "cafe": {
         "en": {
@@ -69,6 +82,19 @@ MESSAGES = {
             "cfg_updated":       "✅ einstellung aktualisiert~",
             "cfg_show":          "### ☕ gemütliche level-config — {guild}\n{body}",
         },
+        "es": {
+            "level_up":          "¡felicidades {mention}, subiste al nivel **{level}**! ☕✨",
+            "no_xp":             "{name} aún no ha preparado nada de xp ☕😔",
+            "stats_title":       "☕ estadísticas acogedoras de nivel para {name}",
+            "stats_level":       "nivel-vibe",
+            "stats_xp":          "xp preparada",
+            "stats_rank":        "rango del café",
+            "leaderboard_title": "☕ tabla acogedora — {guild}",
+            "leaderboard_empty": "nadie ha preparado xp en este café todavía 😭",
+            "xp_disabled":       "el sistema de xp está apagado en este servidor ☕",
+            "cfg_updated":       "✅ configuración actualizada~",
+            "cfg_show":          "### ☕ config acogedora de niveles — {guild}\n{body}",
+        },
     },
 }
 
@@ -77,6 +103,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
@@ -783,10 +811,11 @@ class Leveling(commands.Cog):
 
     # ── RANK COMMAND ───────────────────────────────
 
-    @commands.command(
+    @commands.hybrid_command(
         name="level",
         aliases=["rank"],
-        help="{ 'en': 'Check your cozy level stats ☕', 'de': 'Zeigt deine Level-Statistiken.' }"
+        description="Check your cozy level stats",
+        help="{ 'en': 'Check your cozy level stats ☕', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel ☕' }"
     )
     async def level(self, ctx, member: discord.Member = None):
         member   = member or ctx.author

@@ -14,6 +14,11 @@ MESSAGES = {
             "favor_score": "{name} hat einen Beliebtheitswert von **{score}** bei Niko.",
             "no_memory": "Kein Speicher für {name} gefunden.",
             "memory_title": "Speicher für {name}",
+        },
+        "es": {
+            "favor_score": "{name} tiene una puntuación de favoritismo de **{score}** con Niko.",
+            "no_memory": "No hay memoria registrada para {name}.",
+            "memory_title": "Memoria de {name}",
         }
     },
     "cafe": {
@@ -26,6 +31,11 @@ MESSAGES = {
             "favor_score": "{name} und ich haben einen Vibe-Wert von **{score}**! ☕✨",
             "no_memory": "ich habe noch keine Notizen über {name}... wir sollten mehr plaudern! ☕📝",
             "memory_title": "☕ Café-Notizen über {name}",
+        },
+        "es": {
+            "favor_score": "{name} y yo tenemos una puntuación de vibras de **{score}**! ☕✨",
+            "no_memory": "aún no tengo apuntes sobre {name}… ¡deberíamos charlar más! ☕📝",
+            "memory_title": "☕ apuntes del café sobre {name}",
         }
     }
 }
@@ -34,6 +44,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 def msg(ctx, key, **kwargs):

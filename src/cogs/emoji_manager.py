@@ -48,6 +48,24 @@ MESSAGES = {
             "timeout": "Zeit abgelaufen. Vorgang abgebrochen.",
             "invalid_name": "Ungültiger Name. Bitte nutze alphanumerische Zeichen (2-32 Zeichen).",
             "no_emojis": "Dieser Server hat keine benutzerdefinierten Emojis."
+        },
+        "es": {
+            "emojimanager_title": "Gestor de Emojis",
+            "emojimanager_description": "¡Gestiona los emojis de tu servidor!",
+            "steal_description": "robar un emoji",
+            "sm_description": "robar varios emojis",
+            "surl_description": "añadir desde URL",
+            "enlarge_description": "ver emoji grande",
+            "emojistats_description": "ver espacios",
+            "re_description": "quitar emoji",
+            "emoji_added": "Emoji añadido correctamente: {emoji} (`:{name}:`)",
+            "server_full": "Este servidor ha alcanzado el límite máximo de {limit} emojis.",
+            "no_perms": "No tengo permisos para gestionar emojis.",
+            "error": "Ha ocurrido un error: {error}",
+            "not_found": "No pude encontrar o descargar el emoji. Asegúrate de proporcionar el texto completo del emoji (p. ej. `<:nombre:id>`).",
+            "timeout": "Tardaste demasiado. Operación cancelada.",
+            "invalid_name": "Nombre inválido. Usa caracteres alfanuméricos (2-32 caracteres).",
+            "no_emojis": "Este servidor no tiene emojis personalizados."
         }
     },
     "cafe": {
@@ -86,6 +104,24 @@ MESSAGES = {
             "timeout": "zu langsam! die Milch ist kalt geworden. versuch es nochmal! ☕💤",
             "invalid_name": "der Name sieht nicht richtig aus! mach ihn alphanumerisch und süß (2-32 Zeichen) ✨🥨",
             "no_emojis": "das Emoji-Tablett ist leer! lass uns ein paar Leckereien hinzufügen 🥐✨"
+        },
+        "es": {
+            "emojimanager_title": "Estudio de Emojis de Niko 🎨✨",
+            "emojimanager_description": "¡gestiona la estética de tu café!",
+            "steal_description": "robar un emoji",
+            "sm_description": "robar varios emojis",
+            "surl_description": "añadir desde URL",
+            "enlarge_description": "ver emoji grande",
+            "emojistats_description": "ver espacios",
+            "re_description": "quitar emoji",
+            "emoji_added": "¡yay! {emoji} (`:{name}:`) añadido a la colección 🎨✨",
+            "server_full": "¡oh no! ¡el café está lleno! llegamos al límite de {limit} emojis 🥐☕",
+            "no_perms": "¡no tengo las llaves del armario de emojis! (faltan permisos) 🗝️🍰",
+            "error": "algo salió mal en la cocina: {error} 🥘💨",
+            "not_found": "¡no encontré ese emoji! ¿enviaste el código completo? (como `<:nombre:id>`) 🔍🥐",
+            "timeout": "¡muy lento, amix! la leche se enfrió. ¡prueba otra vez! ☕💤",
+            "invalid_name": "¡ese nombre no se ve bien! mantenlo alfanumérico y bonito (2-32 caracteres) ✨🥨",
+            "no_emojis": "¡la bandeja de emojis está vacía! añadamos algunas delicias 🥐✨"
         }
     }
 }
@@ -94,6 +130,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 def msg(ctx, key, **kwargs):

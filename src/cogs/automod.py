@@ -236,6 +236,105 @@ MESSAGES = {
         "wl_no_users":           "Aktuell sind keine Nutzer auf der Whitelist.",
         "wl_no_roles":           "Aktuell sind keine Rollen auf der Whitelist.",
     },
+    "es": {
+        # ── Overview panel ──
+        "overview_title":    "### {emoji} Panel de AutoMod",
+        "overview_desc":     "Aquí tienes una vista completa de la protección de tu servidor ☕",
+        "section_msgfilter": "**Filtro de Mensajes**",
+        "section_antinuke":  "**💣 Anti-Nuke**",
+        "section_antiraid":  "**🌊 Anti-Raid** *(avalancha de ingresos)*",
+        "section_extraid":   "**Raid de Apps Externas**",
+        "section_whitelist": "**Lista Blanca**",
+        "wl_summary":        "`{wu}` usuario(s) en lista blanca  •  `{wr}` rol(es) en lista blanca",
+        "nav_hint":          "-# Usa el desplegable de abajo para navegar y configurar cada sección.",
+        # ── Filter panel ──
+        "filter_title":      "Configuración del Filtro de Mensajes",
+        "filter_desc":       "Activa cada protección y ajusta los umbrales abajo.",
+        "antispam_desc":     "**Anti-Spam** — silencia a miembros que envían mensajes muy rápido",
+        "antispam_thresh":   "  Umbral: `{msgs}` msgs / `{secs}s`",
+        "antilink_desc":     "**Anti-Link** — borra enlaces de invitación de Discord",
+        "badwords_desc":     "**Palabras Prohibidas** — borra palabras bloqueadas (gestiona con `!badwords`)",
+        "massmention_desc":  "**Menciones Masivas** — silencia a quien hace menciones masivas",
+        "massmention_max":   "  Máx menciones: `{max}`",
+        # ── Anti-Nuke panel ──
+        "nuke_title":        "### 💣 Configuración Anti-Nuke",
+        "nuke_desc":         "Protege tu servidor contra moderadores corruptos que realizan acciones destructivas masivas.",
+        "nuke_status_on":    "activo 🟢",
+        "nuke_status_off":   "inactivo 🔴",
+        "nuke_thresholds":   "**Acciones Monitorizadas y Umbrales** *(dentro del intervalo)*",
+        "nuke_bans":         "Baneos: ≥ `{t}`",
+        "nuke_kicks":        "Expulsiones: ≥ `{t}`",
+        "nuke_chandel":      "Canales Borrados: ≥ `{t}`",
+        "nuke_roledel":      "Roles Borrados: ≥ `{t}`",
+        "nuke_chancreate":   "Canales Creados: ≥ `{t}`",
+        "nuke_webhookdel":   "Webhooks Borrados: ≥ `{t}`",
+        "nuke_interval":     "**Intervalo:** `{t}s`",
+        "nuke_action":       "**Acción al activarse:** `{action}`",
+        "nuke_actions_hint": "-# Acciones: `strip` (quitar roles peligrosos), `kick`, `ban`",
+        # ── Anti-Raid panel ──
+        "raid_title":        "### 🌊 Configuración Anti-Raid *(Avalancha de Ingresos)*",
+        "raid_desc":         "Detecta y responde ante ingresos masivos de miembros.",
+        "raid_status_on":    "activo 🟢",
+        "raid_status_off":   "inactivo 🔴",
+        "raid_threshold":    "**Umbral de Ingresos:** `{t}` miembros",
+        "raid_window":       "**Ventana de Tiempo:** `{t}` segundos",
+        "raid_action":       "**Acción al activarse:** `{action}`",
+        "raid_newacct":      "**Filtro de Cuentas Nuevas:** cuentas con menos de `{days}` día(s) reciben acción primero",
+        "raid_newacct_off":  "**Filtro de Cuentas Nuevas:** desactivado (todos los recién llegados reciben acción)",
+        "raid_actions_hint": "-# Acciones: `kick`, `ban`, `softban` (ban+unban), `slowmode`, `lockdown`",
+        # ── Ext. Raid panel ──
+        "ext_title":         "Protección contra Raid de Apps Externas",
+        "ext_mode1":         "**Modo 1 — Detección de Avalancha de Interacciones**",
+        "ext_mode1_desc":    ("Detecta raids impulsados por herramientas externas rastreando cuántos miembros recién "
+                              "ingresados disparan interacciones del bot en sucesión rápida, e identifica al operador "
+                              "mediante el diff de invitaciones usadas."),
+        "ext_mode2":         "**Modo 2 — Detección de Apps Instaladas por el Usuario**",
+        "ext_mode2_desc":    ("Detecta comandos slash disparados por apps instaladas en la **cuenta de un usuario** "
+                              "en vez del servidor. Atrapa bots de raid que nunca se unen al servidor y que la "
+                              "mayoría de herramientas anti-raid no detectan."),
+        "ext_threshold":     "Umbral: `{t}` miembros nuevos únicos / `{w}s`",
+        "ext_newmember":     "'Miembro nuevo' = se unió en los últimos `{s}s`",
+        "ext_raiderop":      "Acción raider: `{ra}`  •  Acción operador: `{oa}`",
+        "ext_app_threshold": "Umbral: `{t}` comandos / `{w}s`",
+        "ext_app_action":    "Acción: `{a}`",
+        "ext_hint":          ("-# Acciones raider/operador: `kick`, `ban`\n"
+                              "-# Solo operador: `notify` (log + DM al dueño)\n"
+                              "-# Acción para apps de usuario: `kick`, `ban`, `warn`, `log`"),
+        # ── Whitelist panel ──
+        "wl_title":          "Lista Blanca de AutoMod",
+        "wl_desc":           "Los usuarios y roles en lista blanca se saltan todas las verificaciones de automod.",
+        "wl_users_hdr":      "**Usuarios en Lista Blanca**",
+        "wl_roles_hdr":      "**Roles en Lista Blanca**",
+        "wl_hint":           "-# Usa `.whitelist add user @user` o `.whitelist add role @role` para gestionar.",
+        # ── Modal validation errors ──
+        "invalid_nuke_action":     "Acción inválida. Elige: `strip`, `kick` o `ban`.",
+        "invalid_raid_action":     "Acción inválida. Elige: `kick`, `ban`, `softban`, `slowmode` o `lockdown`.",
+        "invalid_raider_action":   "Acción raider inválida. Elige: `kick` o `ban`.",
+        "invalid_operator_action": "Acción operador inválida. Elige: `notify`, `kick` o `ban`.",
+        "invalid_ext_action":      "Acción inválida. Elige: `kick`, `ban`, `warn` o `log`.",
+        "invalid_numbers":         "Por favor introduce números enteros válidos.",
+        # ── DM alerts to server owner ──
+        "raid_dm":    ("🚨 ¡**Anti-Raid** en **{guild}**!\n"
+                       "`{count}` ingresos en `{interval}s`. Acción: `{action}`."),
+        "nuke_dm":    ("🚨 ¡**Anti-Nuke** en **{guild}**!\n"
+                       "`{offender}` realizó `{threshold}` `{action_key}` en `{interval}s`.\n"
+                       "Acción: `{action}`."),
+        "extraid_dm": ("🚨 ¡**Raid de Avalancha de Interacciones** detectado en **{guild}**!\n"
+                       "`{count}` miembros recién ingresados dispararon interacciones del bot simultáneamente.\n"
+                       "Operador sospechoso: {operator}\n"
+                       "Acción raider: `{ra}`  •  Acción operador: `{oa}`"),
+        # ── WL ephemeral prompts ──
+        "wl_add_user_prompt":    "Selecciona los miembros que quieres eximir del automod:",
+        "wl_add_role_prompt":    "Selecciona los roles que quieres eximir del automod:",
+        "wl_remove_user_prompt": "Selecciona los miembros a quitar de la lista blanca:",
+        "wl_remove_role_prompt": "Selecciona los roles a quitar de la lista blanca:",
+        "wl_added_users":        "{emoji} Añadidos {names} a la lista blanca de automod.",
+        "wl_added_roles":        "{emoji} Añadidos {names} a la lista blanca de automod.",
+        "wl_removed_users":      "{emoji} Eliminados `{count}` usuario(s) de la lista blanca.",
+        "wl_removed_roles":      "{emoji} Eliminados `{count}` rol(es) de la lista blanca.",
+        "wl_no_users":           "Actualmente no hay usuarios en la lista blanca.",
+        "wl_no_roles":           "Actualmente no hay roles en la lista blanca.",
+    },
 }
 
 
@@ -249,6 +348,8 @@ def get_lang(ctx_or_guild=None) -> str:
     if guild and guild.preferred_locale:
         if str(guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
@@ -435,8 +536,17 @@ _NUKE_ACTION_LABELS_DE = {
     "channel_create": f"{get_emoji('icon_plus')} Massen-Kanal-Erstellungen",
     "webhook_delete": f"{get_emoji('icon_link')} Massen-Webhook-Löschungen",
 }
+_NUKE_ACTION_LABELS_ES = {
+    "ban":            f"{get_emoji('icon_ban')} Baneos Masivos",
+    "kick":           f"{get_emoji('icon_cross')} Expulsiones Masivas",
+    "channel_delete": f"{get_emoji('icon_trash')} Borrado Masivo de Canales",
+    "role_delete":    f"{get_emoji('icon_trash')} Borrado Masivo de Roles",
+    "channel_create": f"{get_emoji('icon_plus')} Creación Masiva de Canales",
+    "webhook_delete": f"{get_emoji('icon_link')} Borrado Masivo de Webhooks",
+}
 _NUKE_TAKEN_EN = {"strip": "Dangerous roles stripped", "kick": "Offender kicked",  "ban": "Offender banned"}
 _NUKE_TAKEN_DE = {"strip": "Gefährliche Rollen entfernt", "kick": "Täter gekickt", "ban": "Täter gebannt"}
+_NUKE_TAKEN_ES = {"strip": "Roles peligrosos retirados", "kick": "Infractor expulsado", "ban": "Infractor baneado"}
 
 
 def _build_nuke_dm_view(
@@ -466,6 +576,18 @@ def _build_nuke_dm_view(
             f"**Aktion:** {taken.get(nuke_action, nuke_action)}",
         ]
         footer  = f"-# Ausgelöst um <t:{ts}:T> • Niko Anti-Nuke"
+    elif lang == "es":
+        labels  = _NUKE_ACTION_LABELS_ES
+        taken   = _NUKE_TAKEN_ES
+        title   = "### 🚨 Anti-Nuke Activado"
+        lines   = [
+            f"**Servidor:** {guild.name}",
+            f"**Infractor:** {offender} (`{offender.id}`)",
+            f"**Activado por:** {labels.get(action_key, action_key)}",
+            f"**Cantidad:** {threshold} acciones en `{interval}s`",
+            f"**Acción tomada:** {taken.get(nuke_action, nuke_action)}",
+        ]
+        footer  = f"-# Activado a las <t:{ts}:T> • Niko Anti-Nuke"
     else:
         labels  = _NUKE_ACTION_LABELS
         taken   = _NUKE_TAKEN_EN

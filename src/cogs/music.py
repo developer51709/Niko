@@ -27,7 +27,7 @@ from collections import deque
 import aiohttp
 import discord
 import wavelink
-from discord import MediaGalleryItem, UnfurledMediaItem
+from discord import MediaGalleryItem, UnfurledMediaItem, app_commands
 from discord.ext import commands
 
 from config.emojis import get_emoji
@@ -119,6 +119,36 @@ MESSAGES = {
             "spotify_resolving":          "Spotify-Link wird aufgelöst…",
             "spotify_fail":               "Der Spotify-Link konnte nicht aufgelöst werden.",
         },
+        "es": {
+            "not_in_voice":               "Necesitas estar en un canal de voz primero.",
+            "get_player_not_in_voice":    "Necesitas estar en un canal de voz para usar comandos de música.",
+            "music_player_status_title":  "Estado del Reproductor de Música",
+            "music_not_connected":        "No conectado a ningún servidor de música.",
+            "music_connected":            "Conectado a un servidor de música y listo.",
+            "play_not_found":             "No pude encontrar esa canción.",
+            "pause_nothing":              "No hay nada reproduciéndose ahora mismo.",
+            "pause_ok":                   "Pausado.",
+            "resume_nothing":             "No hay nada que reanudar.",
+            "resume_ok":                  "Reanudado.",
+            "skip_nothing":               "No hay nada que saltar.",
+            "skip_ok":                    "Saltado.",
+            "stop_nothing":               "No hay nada que detener.",
+            "stop_ok":                    "Reproducción detenida y cola limpiada.",
+            "queue_empty":                "La cola está vacía actualmente.",
+            "queue_header":               "**Cola Actual:**",
+            "volume_nothing":             "No hay un reproductor activo.",
+            "volume_set":                 "Volumen ajustado a **{vol}%**.",
+            "disconnect_nothing":         "No estoy conectado a ningún canal de voz.",
+            "disconnect_ok":              "Desconectado del canal de voz.",
+            "autoplay_on":                "Autoplay activado — añadiré canciones similares automáticamente.",
+            "autoplay_off":               "Autoplay desactivado.",
+            "autoplay_unavailable":       "Autoplay no está configurado (sin clave de API de Last.fm).",
+            "loop_on":                    "Loop activado — repitiendo la canción actual.",
+            "loop_off":                   "Loop desactivado.",
+            "spotify_disabled":           "El soporte para Spotify no está configurado.",
+            "spotify_resolving":          "Resolviendo el enlace de Spotify…",
+            "spotify_fail":               "No pude resolver ese enlace de Spotify.",
+        },
     },
     "cafe": {
         "en": {
@@ -181,6 +211,36 @@ MESSAGES = {
             "spotify_resolving":          "löse den spotify-link auf… ☕",
             "spotify_fail":               "spotify-link konnte nicht aufgelöst werden 😭",
         },
+        "es": {
+            "not_in_voice":               "ey amix, tienes que entrar a un canal de voz primero ☕💿",
+            "get_player_not_in_voice":    "todavía no estás en un canal de voz, no puedo servir música allí 😭☕",
+            "music_player_status_title":  "Reproductor del Café ☕",
+            "music_not_connected":        "hmm… no conectado a ningún servidor de música, como un café sin música 😭",
+            "music_connected":            "yesss, conectado y listo para servir tracks acogedores ☕✨",
+            "play_not_found":             "no encontré esa canción, como una bebida que no está en el menú 😭",
+            "pause_nothing":              "no hay nada reproduciéndose para pausar, solo aire silencioso del café 😭",
+            "pause_ok":                   "pausando los vibes un momento 🌿☕",
+            "resume_nothing":             "no hay nada pausado para reanudar 😭",
+            "resume_ok":                  "trayendo los vibes calentitos del café de vuelta 🎶☕",
+            "skip_nothing":               "¿saltar qué… el silencio? la playlist está vacía 😭",
+            "skip_ok":                    "saltando al siguiente sabor del menú 🍰✨",
+            "stop_nothing":               "nada que detener, los altavoces ya están en silencio 🌙",
+            "stop_ok":                    "vale vale, deteniendo todo y limpiando la bandeja ☕💛",
+            "queue_empty":                "la cola está más vacía que un café a la hora de cierre 😭",
+            "queue_header":               "☕ **cola acogedora actual:**",
+            "volume_nothing":             "no hay reproductor activo, no se está preparando música 😭",
+            "volume_set":                 "volumen a **{vol}%** — ajustando el ambiente del café ✨",
+            "disconnect_nothing":         "ni siquiera estoy en un canal de voz ahora mismo 😭",
+            "disconnect_ok":              "me voy con un suave saludito de barista, ¡nos vemos pronto! ☕🌿",
+            "autoplay_on":                "¡autoplay activado! mantendré los vibes con canciones similares 🎶✨",
+            "autoplay_off":               "autoplay apagado — añádelas tú, amix 🍵",
+            "autoplay_unavailable":       "autoplay no está configurado (sin clave de Last.fm) 😭",
+            "loop_on":                    "repitiendo esta canción como una playlist acogedora del café 🔁☕",
+            "loop_off":                   "loop apagado, pasando a la siguiente canción 🍵",
+            "spotify_disabled":           "el soporte para spotify no está configurado ahora mismo 😭",
+            "spotify_resolving":          "preparando ese enlace de spotify… ☕",
+            "spotify_fail":               "no pude resolver ese enlace de spotify 😭",
+        },
     },
 }
 
@@ -189,6 +249,8 @@ def get_lang(ctx: commands.Context) -> str:
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
@@ -667,6 +729,9 @@ class MusicSystem(commands.Cog):
         # { guild_id: { loop, autoplay, history, np_message, last_track } }
         self._guild_states: dict[int, dict] = {}
 
+        # YouTube autocomplete cache: { lower_query: (monotonic_ts, [Choice, ...]) }
+        self._autocomplete_cache: dict[str, tuple[float, list]] = {}
+
         # Optional integrations — silently disabled if env vars are absent
         sp_id     = os.environ.get("SPOTIFY_CLIENT_ID")
         sp_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
@@ -679,6 +744,12 @@ class MusicSystem(commands.Cog):
         self._lastfm_key: str | None = os.environ.get("LASTFM_API_KEY")
         if self._lastfm_key:
             log.debug("Music", "Last.fm autoplay enabled.")
+
+        # Wire the slash autocomplete callback to the /play search parameter
+        try:
+            self.play.autocomplete("search")(self._play_autocomplete)
+        except Exception as exc:
+            log.warning("Music", f"Could not attach play autocomplete: {exc}")
 
         bot.loop.create_task(self.startup_connect())
 
@@ -899,11 +970,62 @@ class MusicSystem(commands.Cog):
 
     # ─── COMMANDS ─────────────────────────────────
 
-    @commands.command(
+    async def _play_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        """Live YouTube search suggestions for the slash version of /play."""
+        current = (current or "").strip()
+        if len(current) < 2:
+            return []
+        # If the user already pasted a URL, just echo it back so they can submit.
+        if current.startswith(("http://", "https://")):
+            return [app_commands.Choice(name=current[:100], value=current[:100])]
+
+        # Cheap in-memory cache to avoid hammering Lavalink for every keystroke.
+        cache_key = current.lower()
+        cached = self._autocomplete_cache.get(cache_key)
+        now = _time.monotonic()
+        if cached and now - cached[0] < 30:
+            return cached[1]
+
+        try:
+            results = await asyncio.wait_for(
+                wavelink.Playable.search(f"ytsearch:{current}"),
+                timeout=2.5,
+            )
+        except (asyncio.TimeoutError, Exception):
+            return []
+
+        if not results:
+            return []
+
+        choices: list[app_commands.Choice[str]] = []
+        for track in (results if isinstance(results, list) else [results])[:25]:
+            label = track.title
+            if getattr(track, "author", None):
+                label = f"{track.title} — {track.author}"
+            label = label[:100]
+            value = (getattr(track, "uri", None) or track.title)[:100]
+            choices.append(app_commands.Choice(name=label, value=value))
+
+        self._autocomplete_cache[cache_key] = (now, choices)
+        return choices
+
+    @commands.hybrid_command(
         name="play", aliases=["p"],
-        help="{ 'en': 'play a song or queue it up ☕🎶', 'de': 'spiele einen track ab' }"
+        description="Play a song or add it to the queue",
+        help="{ 'en': 'play a song or queue it up ☕🎶', 'de': 'spiele einen track ab', 'es': 'reproduce una canción o agrégala a la cola ☕🎶' }"
     )
+    @app_commands.describe(search="Song name, YouTube/SoundCloud/Spotify URL, or sc:<query>")
     async def play(self, ctx: commands.Context, *, search: str):
+        # Slash invocations need to defer because resolution can take >3s
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            try:
+                await ctx.defer()
+            except Exception:
+                pass
         player = await self.get_player(ctx)
         if not player:
             return

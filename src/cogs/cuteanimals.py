@@ -21,6 +21,12 @@ MESSAGES = {
             "sending_cat": "Hier ist eine Katze:",
             "sending_dog": "Hier ist ein Hund:",
         },
+        "es": {
+            "fetch_fail": "No pude traer un animalito ahora mismo.",
+            "sending_random": "Aquí tienes un {animal} aleatorio:",
+            "sending_cat": "Aquí tienes un gato:",
+            "sending_dog": "Aquí tienes un perro:",
+        },
     },
 
     "cafe": {
@@ -36,6 +42,12 @@ MESSAGES = {
             "sending_cat": "brühe dir ein kleines kätzchen auf ☕🐱",
             "sending_dog": "serviere dir einen warmen flauschigen hund aus dem café ☕🐶",
         },
+        "es": {
+            "fetch_fail": "ay no pude traer un animalito ahora 😭☕",
+            "sending_random": "okey amix, aquí tienes un {animal} acogedor ☕✨",
+            "sending_cat": "te preparo un gatito bien suave ☕🐱",
+            "sending_dog": "te sirvo un perrito calentito recién salido del café ☕🐶",
+        },
     },
 
     # future personalities can be added here
@@ -48,6 +60,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

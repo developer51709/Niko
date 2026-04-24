@@ -157,5 +157,19 @@
         "status": "open"
       }
     ]
+  },
+  "1497250915034337330": {
+    "guild_id": 1497250915034337330,
+    "panel_title": "Niko Support Tickets",
+    "panel_description": "**Ticket Rules:**\n- Do not open multiple tickets\n- Only open a ticket if you need help with the bot\n- Do not open a ticket and then ignore the staff who are trying to help",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "General Help",
+      "Bug Report"
+    ],
+    "panel_channel_id": 1497253295184543847,
+    "panel_message_id": 1497254635189174312,
+    "open_tickets": []
   }
 }

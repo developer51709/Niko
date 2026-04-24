@@ -30,6 +30,15 @@ MESSAGES = {
             "sticker":   "🎟️ Aufkleber: {name}",
             "embed_msg": "*(hatte einen Embed)*",
         },
+        "es": {
+            "empty":     "No hay mensajes eliminados recientemente en este canal.",
+            "header":    "Mensaje cazado",
+            "no_text":   "*(sin contenido de texto)*",
+            "attach":    "📎 {n} archivo(s) adjunto(s)",
+            "footer":    "Mensaje eliminado {cur} de {total}",
+            "sticker":   "🎟️ Pegatina: {name}",
+            "embed_msg": "*(tenía un embed)*",
+        },
     },
     "cafe": {
         "en": {
@@ -50,6 +59,15 @@ MESSAGES = {
             "sticker":   "🎟️ aufkleber: {name}",
             "embed_msg": "*(hatte einen embed — das rätsel vertieft sich ☕)*",
         },
+        "es": {
+            "empty":     "no se ha borrado nada por aquí últimamente — el café está limpio ☕✨",
+            "header":    "☕ mensaje cazado",
+            "no_text":   "*(no dijeron nada, solo silencio ☕)*",
+            "attach":    "📎 {n} adjunto(s) — se fueron como los pastelitos de ayer 🥐",
+            "footer":    "mensaje eliminado {cur} de {total} · ido pero no olvidado ☕",
+            "sticker":   "🎟️ pegatina: {name}",
+            "embed_msg": "*(tenía un embed — el misterio se profundiza ☕)*",
+        },
     },
 }
 
@@ -58,6 +76,8 @@ def get_lang(ctx: commands.Context) -> str:
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

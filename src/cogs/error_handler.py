@@ -111,7 +111,9 @@ def is_premium():
 def is_blacklisted():
     async def predicate(ctx):
         blacklist_manager = BlacklistManager()
-        if blacklist_manager.is_user_blacklisted(ctx.author.id):
+        user_entry = blacklist_manager.get_user_entry(ctx.author.id)
+        if user_entry:
+            reason = user_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -119,26 +121,29 @@ def is_blacklisted():
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content="You have been blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                    content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
                 )
             )
             view.add_item(container)
             await ctx.send(view=view)
             return False
-        if blacklist_manager.is_guild_blacklisted(ctx.guild.id):
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Blacklisted"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="This server has been blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+        if ctx.guild:
+            guild_entry = blacklist_manager.get_guild_entry(ctx.guild.id)
+            if guild_entry:
+                reason = guild_entry.get("reason") or "No reason provided."
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"### {get_emoji('icon_danger')} Blacklisted"
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(
+                        content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
+                    )
                 )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-            return False
+                view.add_item(container)
+                await ctx.send(view=view)
+                return False
         return True
 
 class ErrorHandler(commands.Cog):

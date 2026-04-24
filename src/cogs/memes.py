@@ -19,6 +19,11 @@ MESSAGES = {
             "no_safe_memes": "Keine sicheren Memes verfügbar.",
             "meme_title_prefix": "",
         },
+        "es": {
+            "fetch_fail": "No pude traer memes ahora mismo.",
+            "no_safe_memes": "No hay memes seguros disponibles ahora mismo.",
+            "meme_title_prefix": "",
+        },
     },
 
     "cafe": {
@@ -32,6 +37,11 @@ MESSAGES = {
             "no_safe_memes": "keine sicheren memes im café gerade 😭☕",
             "meme_title_prefix": "☕ meme des moments — ",
         },
+        "es": {
+            "fetch_fail": "ay no pude traer memes ahora 😭☕",
+            "no_safe_memes": "no hay memes seguros en el café ahora mismo 😭☕",
+            "meme_title_prefix": "☕ meme del momento — ",
+        },
     },
 
     # future personalities can be added here
@@ -44,6 +54,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

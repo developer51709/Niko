@@ -28,6 +28,12 @@ MESSAGES = {
             "fetch_fail": "Konnte die uwu‑Nachricht nicht verarbeiten.",
             "no_permission": "Du benötigst Administratorrechte.",
         },
+        "es": {
+            "uwu_locked": "{mention} ha sido uwu-bloqueado/a.",
+            "uwu_unlocked": "{mention} ha sido des-uwu-bloqueado/a.",
+            "fetch_fail": "No pude procesar el mensaje uwu.",
+            "no_permission": "Necesitas permisos de administrador.",
+        },
     },
 
     "cafe": {
@@ -43,6 +49,12 @@ MESSAGES = {
             "fetch_fail": "aww ich konnte die uwu‑nachricht gerade nicht verarbeiten 😭☕",
             "no_permission": "du brauchst admin‑rechte dafür ☕💛",
         },
+        "es": {
+            "uwu_locked": "okey amix… {mention} ya está uwu-bloqueado/a ☕💖",
+            "uwu_unlocked": "des-uwu-eado a {mention} — vuelve a ser libre ☕🌿",
+            "fetch_fail": "ay no pude procesar ese mensajito uwu 😭☕",
+            "no_permission": "necesitas perms de admin para esto cariño ☕💛",
+        },
     },
 
     # future personalities can be added here
@@ -55,6 +67,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

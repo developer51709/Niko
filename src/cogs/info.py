@@ -185,6 +185,92 @@ MESSAGES = {
             "invite_title": "Niko einladen",
             "invite_link": "Klicke hier, um Niko auf deinen Server einzuladen",
         },
+        "es": {
+            "serverinfo_title": "Información del Servidor",
+            "serverinfo_name": "Nombre del Servidor",
+            "serverinfo_id": "ID del Servidor",
+            "serverinfo_members": "Cantidad de Miembros",
+            "serverinfo_users": "Cantidad de Usuarios",
+            "serverinfo_bots": "Cantidad de Bots",
+            "serverinfo_roles": "Cantidad de Roles",
+            "serverinfo_created": "Servidor Creado",
+            "serverinfo_owner": "Dueño del Servidor",
+
+            "userinfo_title": "Información del Usuario",
+            "userinfo_username": "Nombre de Usuario",
+            "userinfo_id": "ID de Usuario",
+            "userinfo_created": "Cuenta Creada",
+            "userinfo_joined": "Se Unió al Servidor",
+            "userinfo_toprole": "Rol Más Alto",
+            "userinfo_roles": "Roles",
+
+            "avatar_title": "Avatar de {user}",
+
+            "banner_title": "Banner de {user}",
+            "banner_none": "{user} no tiene banner.",
+
+            "about_title": "Acerca de Niko",
+            "about_desc": (
+                "Niko es una IA amigable, juguetona y muy social diseñada para ser un compañero "
+                "entretenido en tu servidor de Discord. Le encanta charlar, ayudar y hacer que "
+                "tu comunidad se sienta más viva."
+            ),
+            "about_dev": "Desarrollador",
+            "about_lib": "Librería",
+            "about_servers": "Servidores",
+            "about_footer": "¡Gracias por usar a Niko!",
+
+            "creator_title": "Creador",
+            "creator_desc": "Niko fue creado por **{creator}**.",
+            "creator_tag": "Tag del Creador",
+            "creator_id": "ID de Usuario",
+            "creator_project": "Proyecto",
+
+            "roleinfo_title": "Información del Rol",
+            "roleinfo_name": "Nombre del Rol",
+            "roleinfo_id": "ID del Rol",
+            "roleinfo_color": "Color del Rol",
+            "roleinfo_position": "Posición del Rol",
+            "roleinfo_members": "Miembros con el Rol",
+            "roleinfo_need_role": "¡Por favor especifica un rol! Ejemplo: `!roleinfo @Rol`",
+
+            "servericon_title": "Icono del Servidor",
+
+            "serverbanner_title": "Banner del Servidor",
+            "serverbanner_none": "Este servidor no tiene banner.",
+
+            "booststats_title": "Estadísticas de Boost",
+            "booststats_count": "Cantidad de Boosts",
+            "booststats_tier": "Nivel de Boost",
+            "booststats_boosters": "Boosters",
+
+            "spotify_not_member": "Solo puedo ver la actividad de Spotify de los miembros del servidor.",
+            "spotify_not_listening": "{user} no está escuchando Spotify.",
+            "spotify_title": "{user} está escuchando Spotify",
+            "spotify_track": "Canción",
+            "spotify_artist": "Artista",
+            "spotify_album": "Álbum",
+            "spotify_duration": "Duración",
+            "spotify_started": "Empezó",
+            "spotify_ends": "Termina",
+            "spotify_footer": "El estado de Spotify se actualiza en tiempo real.",
+
+            "debuginfo_title": "Información de Depuración",
+            "debuginfo_uptime": "Tiempo Activo",
+            "debuginfo_model": "Modelo de IA",
+            "debuginfo_commands": "Cantidad de Comandos",
+            "debuginfo_ping": "Latencia",
+            "debuginfo_cpu": "Uso de CPU",
+            "debuginfo_ram": "Uso de Memoria",
+
+            "hostinfo_title": "Información del Host",
+            "hostinfo_hostname": "Nombre del Host",
+            "hostinfo_os": "SO",
+            "hostinfo_cpu": "CPU",
+            "hostinfo_ram": "RAM",
+            "invite_title": "Invitar a Niko",
+            "invite_link": "Haz clic aquí para invitar a Niko a tu servidor",
+        },
     },
 
     "cafe": {
@@ -367,6 +453,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

@@ -33,6 +33,8 @@ def get_lang(ctx_or_guild=None) -> str:
     if guild and guild.preferred_locale:
         if str(guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

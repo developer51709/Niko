@@ -26,6 +26,15 @@ MESSAGES = {
             "cannot_play_self": "Du kannst nicht gegen dich selbst spielen.",
             "game_start": "{opponent}, euer Spiel hat begonnen!",
         },
+        "es": {
+            "not_your_turn": "{mention}, no es tu turno todavía.",
+            "winner_x": "¡{p1} es el ganador!",
+            "winner_o": "¡{p2} es el ganador!",
+            "tie": "¡Es un empate!",
+            "mention_user": "Por favor menciona a un usuario.",
+            "cannot_play_self": "No puedes jugar contra ti mismo.",
+            "game_start": "¡{opponent}, vuestra partida ha comenzado!",
+        },
     },
 
     "cafe": {
@@ -47,6 +56,15 @@ MESSAGES = {
             "cannot_play_self": "du kannst nicht gegen dich selbst spielen hehe ☕😆",
             "game_start": "{opponent}, euer gemütliches café‑spiel beginnt ☕🎮",
         },
+        "es": {
+            "not_your_turn": "ey {mention}, aún no es tu turno ☕😔",
+            "winner_x": "¡yaaay {p1} gana — esa victoria salió perfecta ☕✨",
+            "winner_o": "¡yaaay {p2} gana — campeoncito acogedor ☕🌿",
+            "tie": "empate… como dos pastelitos peleando por la última miga 🍰😔",
+            "mention_user": "amix porfa menciona a alguien para jugar ☕💛",
+            "cannot_play_self": "no puedes jugar contra ti mismo, tontito ☕😆",
+            "game_start": "{opponent}, vuestra partida acogedora del café ha empezado ☕🎮",
+        },
     },
 
     # future personalities can be added here
@@ -59,6 +77,8 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 

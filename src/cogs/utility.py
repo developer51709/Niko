@@ -7,7 +7,7 @@ class UtilityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="ping")
+    @commands.hybrid_command(name="ping", description="Check the bot's latency")
     async def ping(self, ctx):
         """Check the bot's latency."""
         view = discord.ui.LayoutView()

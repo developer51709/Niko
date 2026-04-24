@@ -24,7 +24,8 @@ Preferred communication style: Simple, everyday language.
   - Interactive buttons/selects CAN be added to a LayoutView via `ActionRow` — subclass `discord.ui.Button` and use `self.view` in callback.
   - Exception: `automod` command uses `discord.ui.View` + `discord.Embed` because it predates the cv2 interactive pattern.
 - **Pagination**: `from utils.paginator import PaginatedView, paginate` — shared cv2 paginator used by leaderboards and dev inspection commands. `paginate(lines, per_page)` chunks a list of strings; `PaginatedView(title, pages, icon_url)` renders with ◀ / ▶ nav buttons.
-- **Bilingual EN/DE**: Every cog has a `MESSAGES` dict with `normal`/`cafe` personalities and `en`/`de` languages. `get_lang(ctx)` checks `guild.preferred_locale`. 4-level fallback in `msg()`.
+- **Trilingual EN/DE/ES**: Every cog has a `MESSAGES` dict with `normal`/`cafe` personalities and `en`/`de`/`es` languages. `get_lang(ctx)` checks `guild.preferred_locale` (returns `"de"` if locale starts with `de`, `"es"` if starts with `es`, else `"en"`). 4-level fallback in `msg()` so missing es keys gracefully fall back to en.
+- **Hybrid (slash + prefix) commands**: Several commands use `commands.hybrid_command` so they work both as `!play` and `/play`. Slash sync runs as a background task on startup via `_run_slash_sync()` in `bot.py`. NOTE: hybrid command `description=` must be ≤100 chars; the longer trilingual JSON string lives in `help=`. `music.play` has a `_play_autocomplete` that ytsearches with a 30s in-memory cache.
 - **Personality**: `PERSONALITY = "cafe"` across all cogs for cozy café-themed text.
 
 ### Critical Design Notes
