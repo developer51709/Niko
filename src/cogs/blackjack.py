@@ -282,9 +282,10 @@ class Blackjack(commands.Cog):
         self.bot = bot
         self.shoe = Shoe()
 
-    @commands.group(
+    @commands.hybrid_group(
         name="blackjack",
-        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel' }"
+        description="Play a full casino-grade blackjack game",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega un blackjack de casino completo' }"
     )
     async def blackjack(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -304,7 +305,8 @@ class Blackjack(commands.Cog):
 
     @blackjack.command(
         name="play",
-        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel' }"
+        description="Play a game of blackjack",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega una partida de blackjack' }"
     )
     async def blackjack_play(self, ctx, amount: int = None):
         """Play a full casino-grade blackjack game with a rendered table image."""
@@ -474,7 +476,8 @@ class Blackjack(commands.Cog):
     # This command is a tutorial for people who don't know how to play blackjack
     @blackjack.command(
         name="tutorial",
-        help="{ 'en': 'learn how to play blackjack', 'de': 'lerne, wie man Blackjack spielt' }"
+        description="Learn how to play blackjack",
+        help="{ 'en': 'learn how to play blackjack', 'de': 'lerne, wie man Blackjack spielt', 'es': 'aprende a jugar blackjack' }"
     )
     async def blackjack_tutorial(self, ctx):
         """Learn how to play blackjack."""

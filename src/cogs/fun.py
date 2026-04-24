@@ -48,7 +48,7 @@ class FunCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="nitro")
+    @commands.hybrid_command(name="nitro", description="Free Nitro!!!", help="{ 'en': 'free nitro!!! 🎁', 'de': 'kostenloses Nitro!!! 🎁', 'es': '¡¡¡nitro gratis!!! 🎁' }")
     async def nitro(self, ctx):
         """FREE NITRO!!!"""
         rickroll_gif = "https://csyn.me/assets/rickroll.gif"
@@ -65,7 +65,7 @@ class FunCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="boring")
+    @commands.hybrid_command(name="boring", description="A boring command", help="{ 'en': 'a boring command 😴', 'de': 'ein langweiliger Befehl 😴', 'es': 'un comando aburrido 😴' }")
     async def boring(self, ctx):
         """A boring command."""
         prefix = await _resolve_prefix(self.bot, ctx)
@@ -85,7 +85,7 @@ class FunCog(commands.Cog):
         ))
         await ctx.send(view=view)
 
-    @commands.command(name="notboring")
+    @commands.hybrid_command(name="notboring", description="A not boring command", help="{ 'en': 'a not boring command 🎉', 'de': 'ein nicht langweiliger Befehl 🎉', 'es': 'un comando no aburrido 🎉' }")
     async def notboring(self, ctx):
         """A not boring command."""
         view = discord.ui.LayoutView()
@@ -104,7 +104,7 @@ class FunCog(commands.Cog):
         ))
         await ctx.send(view=view)
 
-    @commands.command(name="crazy")
+    @commands.hybrid_command(name="crazy", description="Crazy? I was crazy once...", help="{ 'en': 'crazy? I was crazy once... 🤪', 'de': 'verrückt? Ich war mal verrückt... 🤪', 'es': '¿loco? estuve loco una vez... 🤪' }")
     async def crazy(self, ctx):
         """Crazy? I was crazy once..."""
         view = discord.ui.LayoutView()

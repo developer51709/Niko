@@ -297,7 +297,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(view=view)
 
     # !crime command
-    @commands.command(name="crime", help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, ein paar extra Leckereien zu stibitzen' }")
+    @commands.hybrid_command(name="crime", description="Try to steal some extra treats", help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, ein paar extra Leckereien zu stibitzen', 'es': 'intenta robar unas golosinas extra 😈' }")
     async def crime(self, ctx):
         '''Commit a crime to earn money.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -319,7 +319,7 @@ class EconomyCog(commands.Cog):
             self.save_economy_data()
 
     # !rob command
-    @commands.command(name="rob", help="{ 'en': 'try to rob another user 🔫', 'de': 'versuch, einen anderen Nutzer auszurauben' }")
+    @commands.hybrid_command(name="rob", description="Try to rob another user", help="{ 'en': 'try to rob another user 🔫', 'de': 'versuch, einen anderen Nutzer auszurauben', 'es': 'intenta robar a otro usuario 🔫' }")
     async def rob(self, ctx, member: discord.Member):
         '''Rob another user to earn money.'''
         if member.id == ctx.author.id:
@@ -353,7 +353,7 @@ class EconomyCog(commands.Cog):
         self.save_economy_data()
 
     # !pay command
-    @commands.command(name="pay", help="{ 'en': 'share some treats with a friend 💸🥐', 'de': 'teile deine Leckereien mit einem Freund' }")
+    @commands.hybrid_command(name="pay", description="Share some treats with a friend", help="{ 'en': 'share some treats with a friend 💸🥐', 'de': 'teile deine Leckereien mit einem Freund', 'es': 'comparte unas golosinas con un amigo 💸🥐' }")
     async def pay(self, ctx, member: discord.Member = None, amount: int = None):
         '''pay another user 💸💰 | bezahl einen anderen Nutzer'''
         if not member:
@@ -371,7 +371,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"You gave {member.display_name} {amount} coins! 💸✨")
 
     # !leaderboard command
-    @commands.command(name="leaderboard", aliases=["lb", "top"], help="{ 'en': 'see who has the most treats 🏆🥐', 'de': 'sieh nach, wer die meisten Leckereien hat' }")
+    @commands.hybrid_command(name="leaderboard", aliases=["lb", "top"], description="See who has the most treats", help="{ 'en': 'see who has the most treats 🏆🥐', 'de': 'sieh nach, wer die meisten Leckereien hat', 'es': 'mira quién tiene más golosinas 🏆🥐' }")
     async def leaderboard(self, ctx):
         '''View the economy leaderboard.'''
         sorted_users = sorted(
@@ -400,7 +400,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # !shop command
-    @commands.command(name="shop", help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Café-Boutique' }")
+    @commands.hybrid_command(name="shop", description="Browse the café boutique", help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Café-Boutique', 'es': 'explora la boutique del café 🛍️✨' }")
     async def shop(self, ctx):
         '''View the shop.'''
         shop_items = {
@@ -426,7 +426,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !buy command
-    @commands.command(name="buy", help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf dir eine Leckerei im Shop' }")
+    @commands.hybrid_command(name="buy", description="Buy a treat from the shop", help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf dir eine Leckerei im Shop', 'es': 'compra una golosina en la tienda 🍰✨' }")
     async def buy(self, ctx, item_id: str = None):
         '''Buy an item from the shop.'''
         if not item_id:
@@ -449,7 +449,7 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"You bought a {shop_items[item_id]['name']}! Enjoy! 🍰✨")
 
     # !inventory command
-    @commands.command(name="inventory", aliases=["inv"], help="{ 'en': 'check your collection of treats 🎒✨', 'de': 'sieh dir deine gesammelten Leckereien an' }")
+    @commands.hybrid_command(name="inventory", aliases=["inv"], description="Check your collection of treats", help="{ 'en': 'check your collection of treats 🎒✨', 'de': 'sieh dir deine gesammelten Leckereien an', 'es': 'revisa tu colección de golosinas 🎒✨' }")
     async def inventory(self, ctx):
         '''View your inventory.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -475,7 +475,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(view=view)
 
     # !sell command
-    @commands.command(name="sell", help="{ 'en': 'sell back a treat for some coins 💰', 'de': 'verkauf eine Leckerei gegen Münzen' }")
+    @commands.hybrid_command(name="sell", description="Sell back a treat for some coins", help="{ 'en': 'sell back a treat for some coins 💰', 'de': 'verkauf eine Leckerei gegen Münzen', 'es': 'vende una golosina por monedas 💰' }")
     async def sell(self, ctx, item_id: str = None):
         '''Sell an item from your inventory.'''
         if not item_id:
@@ -497,14 +497,14 @@ class EconomyCog(commands.Cog):
             await ctx.send(f"Sold your {item_id} for {sell_price} coins! 💰")
 
     # !bank command (Handled by balance embed, but kept for legacy)
-    @commands.command(name="bank", help="{ 'en': 'check your vault balance 🏦', 'de': 'sieh dir dein Tresorguthaben an' }")
+    @commands.hybrid_command(name="bank", description="Check your vault balance", help="{ 'en': 'check your vault balance 🏦', 'de': 'sieh dir dein Tresorguthaben an', 'es': 'revisa el saldo de tu bóveda 🏦' }")
     async def bank(self, ctx):
         '''View your bank balance.'''
         user_data = self.get_user_economy_data(ctx.author.id)
         await ctx.send(f"You have {user_data['bank']} coins safely tucked away in your vault! 🏦✨")
 
     # !deposit command
-    @commands.command(name="deposit", aliases=["dep"], help="{ 'en': 'put coins in the safety vault 🏦', 'de': 'zahl Münzen in den Safe ein' }")
+    @commands.hybrid_command(name="deposit", aliases=["dep"], description="Put coins in the safety vault", help="{ 'en': 'put coins in the safety vault 🏦', 'de': 'zahl Münzen in den Safe ein', 'es': 'guarda monedas en la bóveda segura 🏦' }")
     async def deposit(self, ctx, amount: str):
         '''Deposit money into the bank.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -528,7 +528,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"Deposited {amount} coins into your vault! 🏦✨")
 
     # !withdraw command
-    @commands.command(name="withdraw", aliases=["with"], help="{ 'en': 'take coins from the vault 🥐', 'de': 'nimm Münzen aus dem Safe' }")
+    @commands.hybrid_command(name="withdraw", aliases=["with"], description="Take coins from the vault", help="{ 'en': 'take coins from the vault 🥐', 'de': 'nimm Münzen aus dem Safe', 'es': 'saca monedas de la bóveda 🥐' }")
     async def withdraw(self, ctx, amount: str):
         '''Withdraw money from the bank.'''
         user_data = self.get_user_economy_data(ctx.author.id)
@@ -552,7 +552,7 @@ class EconomyCog(commands.Cog):
         await ctx.send(f"Withdrew {amount} coins from your vault! 🥐✨")
 
     # !networth command
-    @commands.command(name="networth", aliases=["nw"], help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Café-Vermögen' }")
+    @commands.hybrid_command(name="networth", aliases=["nw"], description="Calculate your total café fortune", help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Café-Vermögen', 'es': 'calcula tu fortuna total del café 📊🥐' }")
     async def networth(self, ctx):
         '''View your net worth.'''
         user_data = self.get_user_economy_data(ctx.author.id)

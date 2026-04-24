@@ -522,10 +522,11 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="serverinfo",
         aliases=["si", "server"],
-        help="{ 'en': 'peek at cozy server stats ☕', 'de': 'zeigt server-infos' }"
+        description="View server info",
+        help="{ 'en': 'peek at cozy server stats ☕', 'de': 'zeigt server-infos', 'es': 'mira info del servidor ☕' }"
     )
     async def serverinfo(self, ctx):
         server = ctx.guild
@@ -549,9 +550,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # USER INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="userinfo",
-        help="{ 'en': 'see cute lil user details ☕', 'de': 'benutzer-infos anzeigen' }"
+        description="View user info",
+        help="{ 'en': 'see cute lil user details ☕', 'de': 'benutzer-infos anzeigen', 'es': 'mira detalles del usuario ☕' }"
     )
     async def userinfo(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -574,9 +576,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # AVATAR
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="avatar",
-        help="{ 'en': 'peek at someones cute avatar 👤', 'de': 'avatar anzeigen' }"
+        description="View someone's avatar",
+        help="{ 'en': 'peek at someones cute avatar 👤', 'de': 'avatar anzeigen', 'es': 'mira el avatar de alguien 👤' }"
     )
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -587,9 +590,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # BANNER
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="banner",
-        help="{ 'en': 'see someones banner 🖼', 'de': 'banner anzeigen' }"
+        description="View someone's banner",
+        help="{ 'en': 'see someones banner 🖼', 'de': 'banner anzeigen', 'es': 'mira el banner de alguien 🖼' }"
     )
     async def banner(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -603,9 +607,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # ABOUT
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="about",
-        help="{ 'en': 'learn about Niko ☕', 'de': 'über Niko' }"
+        description="Learn about Niko",
+        help="{ 'en': 'learn about Niko ☕', 'de': 'über Niko', 'es': 'aprende sobre Niko ☕' }"
     )
     async def about(self, ctx):
         bot_user = self.bot.user
@@ -666,9 +671,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # CREATOR
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="creator",
-        help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos' }"
+        description="Meet Niko's creator",
+        help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko ☕' }"
     )
     async def creator(self, ctx):
         creator = await self.bot.fetch_user(1479968201319125013)
@@ -716,9 +722,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # ROLE INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="roleinfo",
-        help="{ 'en': 'see cozy role details ☕', 'de': 'rollen-infos anzeigen' }"
+        description="View role info",
+        help="{ 'en': 'see cozy role details ☕', 'de': 'rollen-infos anzeigen', 'es': 'mira detalles del rol ☕' }"
     )
     async def roleinfo(self, ctx, role: discord.Role = None):
         if role is None:
@@ -737,9 +744,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER ICON
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="servericon",
-        help="{ 'en': 'show the servers cute icon 📍', 'de': 'server-icon anzeigen' }"
+        description="Show the server's icon",
+        help="{ 'en': 'show the servers cute icon 📍', 'de': 'server-icon anzeigen', 'es': 'muestra el icono del servidor 📍' }"
     )
     async def servericon(self, ctx):
         server = ctx.guild
@@ -750,9 +758,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER BANNER
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="serverbanner",
-        help="{ 'en': 'show the servers banner 🖼', 'de': 'server-banner anzeigen' }"
+        description="Show the server's banner",
+        help="{ 'en': 'show the servers banner 🖼', 'de': 'server-banner anzeigen', 'es': 'muestra el banner del servidor 🖼' }"
     )
     async def serverbanner(self, ctx):
         server = ctx.guild
@@ -764,9 +773,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # BOOST STATS
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="booststats",
-        help="{ 'en': 'see the servers boost vibes ☕', 'de': 'boost-infos anzeigen' }"
+        description="View the server's boost stats",
+        help="{ 'en': 'see the servers boost vibes ☕', 'de': 'boost-infos anzeigen', 'es': 'mira las estadísticas de boost del servidor ☕' }"
     )
     async def booststats(self, ctx):
         server = ctx.guild
@@ -781,9 +791,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SPOTIFY
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="spotify",
-        help="{ 'en': 'see what someone is vibing to on Spotify 🎧', 'de': 'spotify-infos anzeigen' }"
+        description="See what someone's listening to on Spotify",
+        help="{ 'en': 'see what someone is vibing to on Spotify 🎧', 'de': 'spotify-infos anzeigen', 'es': 'mira qué escucha alguien en Spotify 🎧' }"
     )
     async def spotify(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -843,9 +854,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # DEBUG INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="debuginfo",
-        help="{ 'en': 'view debug info 👾', 'de': 'debug-infos anzeigen' }"
+        description="View bot debug info",
+        help="{ 'en': 'view debug info 👾', 'de': 'debug-infos anzeigen', 'es': 'mira info de depuración 👾' }"
     )
     async def debuginfo(self, ctx):
         uptime_seconds = int(time.time() - self.bot.start_time)
@@ -870,9 +882,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # HOST INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="hostinfo",
-        help="{ 'en': 'view host info 💻', 'de': 'host-infos anzeigen' }"
+        description="View bot host info",
+        help="{ 'en': 'view host info 💻', 'de': 'host-infos anzeigen', 'es': 'mira info del host 💻' }"
     )
     async def hostinfo(self, ctx):
         hostname = platform.node()
@@ -892,9 +905,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # INVITE
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="invite",
-        help="{ 'en': 'get Nikos invite link ☕️', 'de': 'einladungslink für Niko' }"
+        description="Get Niko's invite link",
+        help="{ 'en': 'get Nikos invite link ☕️', 'de': 'einladungslink für Niko', 'es': 'obtén el enlace de invitación de Niko ☕️' }"
     )
     async def invite(self, ctx):
         bot_user = self.bot.user

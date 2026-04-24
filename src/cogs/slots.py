@@ -52,9 +52,10 @@ class Slots(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.group(
+    @commands.hybrid_group(
         name="slots",
-        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel' }"
+        description="Play a casino-style 3x3 slot machine",
+        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel', 'es': 'juega una tragamonedas 3×3 estilo casino 🎰' }"
     )
     async def slots(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -72,7 +73,7 @@ class Slots(commands.Cog):
             view.add_item(container)
             await ctx.send(view=view)
 
-    @slots.command(name="play")
+    @slots.command(name="play", description="Play a game of slots")
     async def slots_play(self, ctx, amount: int = None):
         """Play a casino‑style 3×3 slot machine."""
         # Economy access
@@ -223,7 +224,7 @@ class Slots(commands.Cog):
         await msg.edit(view=result_view)
 
     # payouts subcommand (!slots payouts)
-    @slots.command(name="payouts")
+    @slots.command(name="payouts", description="View the slots payout table")
     async def slots_payouts(self, ctx):
         """View the slots payout table."""
         view = discord.ui.LayoutView()

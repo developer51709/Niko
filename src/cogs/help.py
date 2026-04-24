@@ -1,9 +1,9 @@
 """
-Help System — fully bilingual (EN / DE)
-────────────────────────────────────────
+Help System — fully trilingual (EN / DE / ES)
+─────────────────────────────────────────────
 All UI strings, category descriptions, category headers, pagination labels,
 and command detail labels are localised to the guild's preferred locale.
-Command help strings use the existing { 'en': '…', 'de': '…' } JSON format.
+Command help strings use the existing { 'en': '…', 'de': '…', 'es': '…' } JSON format.
 """
 
 from typing import List, Tuple
@@ -90,6 +90,29 @@ _UI_STRINGS: dict[str, dict] = {
             "bilingual (EN/DE), packed with economy, leveling, music, moderation, and more!"
         ),
         "general_links_title":  "**{icon} Links**",
+    },
+    "es": {
+        "dropdown_placeholder": "☕ Elige una categoría…",
+        "no_commands":          "*No se encontraron comandos.*",
+        "no_desc":              "Sin descripción.",
+        "cmd_not_found_title":  "Comando no encontrado",
+        "cmd_not_found_body":   "No existe un comando llamado `{name}`.\nUsa el menú de ayuda para ver los comandos disponibles.",
+        "detail_description":   "Descripción",
+        "detail_usage":         "Uso",
+        "detail_aliases":       "Alias",
+        "detail_subcommands":   "Subcomandos",
+        "detail_category":      "Categoría",
+        "btn_prev":             "◀ Anterior",
+        "btn_next":             "Siguiente ▶",
+        "btn_page":             "Página {page}/{total}",
+        "general_title":        "### 🌸 Bienvenido al menú de ayuda de Niko",
+        "general_intro":        "Usa el menú desplegable para explorar los comandos por categoría.",
+        "general_about_title":  "**Sobre Niko**",
+        "general_about_body": (
+            "Niko es un bot de Discord acogedor con personalidad de café e impulsado por IA — "
+            "trilingüe (EN/DE/ES), repleto de economía, niveles, música, moderación y más!"
+        ),
+        "general_links_title":  "**{icon} Enlaces**",
     },
     "de": {
         "dropdown_placeholder": "☕ Kategorie auswählen…",
@@ -192,6 +215,29 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Image Tools":   "Bildbearbeitungsbefehle",
         "Giveaway":      "Gewinnspiel-Befehle",
         "Customization": "Anpassungsbefehle",
+    },
+    "es": {
+        "General":       "Información general del bot",
+        "Fun":           "Comandos divertidos",
+        "Gambling":      "Blackjack, tragamonedas, ruleta",
+        "Economy":       "Saldo, diario, trabajo, etc.",
+        "Roleplay":      "Comandos de rol",
+        "Info":          "Info de usuario/servidor",
+        "Utility":       "Herramientas y utilidades varias",
+        "AI":            "Comandos de IA",
+        "Moderation":    "Comandos de moderación",
+        "AutoMod":       "Comandos de automoderación",
+        "EmojiManager":  "Gestión de emojis",
+        "Onboarding":    "Bienvenida a nuevos miembros",
+        "NSFW":          "Comandos NSFW",
+        "Music":         "Comandos de música",
+        "Leveling":      "Comandos de niveles",
+        "Notifier":      "Notificaciones de redes sociales",
+        "VoiceMaster":   "Gestión de canales de voz",
+        "Ticket":        "Comandos de tickets",
+        "Image Tools":   "Manipulación de imágenes",
+        "Giveaway":      "Comandos de sorteos",
+        "Customization": "Comandos de personalización",
     },
 }
 
@@ -362,6 +408,89 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
         "Customization": (
             f"{get_emoji('icon_edit')} **Anpassungsbefehle**\n"
             "> Nikos Profilbild, Banner und mehr anpassen!"
+        ),
+    },
+    "es": {
+        "General": "",
+        "Fun": (
+            f"{get_emoji('icon_games')} **Comandos Divertidos**\n"
+            "> ¡Comandos para diversión y juegos!"
+        ),
+        "Gambling": (
+            f"{get_emoji('icon_gambling')} **Comandos del Casino**\n"
+            "> ¡Juega juegos de azar!"
+        ),
+        "Economy": (
+            f"{get_emoji('icon_economy')} **Comandos de Economía**\n"
+            "> ¡Gana y gasta moneda virtual!"
+        ),
+        "Roleplay": (
+            f"{get_emoji('icon_roleplay')} **Comandos de Rol**\n"
+            "> ¡Comandos divertidos de rol!"
+        ),
+        "Info": (
+            f"{get_emoji('icon_stats')} **Comandos de Información**\n"
+            "> ¡Obtén info sobre usuarios, servidores y más!"
+        ),
+        "Utility": (
+            f"{get_emoji('icon_utility')} **Comandos de Utilidad**\n"
+            "> Herramientas útiles y utilidades."
+        ),
+        "AI": (
+            f"{get_emoji('icon_ai')} **Comandos de IA**\n"
+            "> ¡Interactúa con las funciones de IA de Niko!"
+        ),
+        "Moderation": (
+            f"{get_emoji('icon_moderation')} **Comandos de Moderación**\n"
+            "> Herramientas de moderación para gestionar el servidor."
+        ),
+        "AutoMod": (
+            f"{get_emoji('icon_automod')} **Comandos de AutoMod**\n"
+            "> Moderación automática para mantener tu servidor seguro."
+        ),
+        "EmojiManager": (
+            f"{get_emoji('icon_paint')} **Comandos del Gestor de Emojis**\n"
+            "> Gestiona emojis personalizados en tu servidor."
+        ),
+        "Onboarding": (
+            f"{get_emoji('icon_welcome')} **Comandos de Bienvenida**\n"
+            "> Configura mensajes de bienvenida y roles para nuevos miembros."
+        ),
+        "NSFW": (
+            f"{get_emoji('icon_nsfw')} **Comandos NSFW**\n"
+            "> Estos comandos solo funcionan en canales marcados como NSFW."
+        ),
+        "Music": (
+            f"{get_emoji('music')} **Comandos de Música**\n"
+            "> ¡Reproduce música en tu canal de voz!"
+        ),
+        "Leveling": (
+            f"{get_emoji('icon_leveling')} **Comandos de Niveles**\n"
+            "> ¡Sube de nivel chateando y ganando XP!"
+        ),
+        "Notifier": (
+            f"{get_emoji('icon_megaphone')} **Comandos de Notificaciones**\n"
+            "> ¡Recibe notificaciones sobre nuevas publicaciones de tus creadores favoritos!"
+        ),
+        "VoiceMaster": (
+            f"{get_emoji('icon_voicemaster')} **Comandos de VoiceMaster**\n"
+            "> ¡Crea y gestiona canales de voz temporales!"
+        ),
+        "Ticket": (
+            f"{get_emoji('icon_ticket')} **Comandos de Tickets**\n"
+            "> Crea y gestiona tickets de soporte."
+        ),
+        "Image Tools": (
+            f"{get_emoji('icon_image')} **Herramientas de Imagen**\n"
+            "> ¡Manipula imágenes con estos comandos!"
+        ),
+        "Giveaway": (
+            f"{get_emoji('icon_giveaway')} **Comandos de Sorteos**\n"
+            "> ¡Organiza y gestiona sorteos en tu servidor!"
+        ),
+        "Customization": (
+            f"{get_emoji('icon_edit')} **Comandos de Personalización**\n"
+            "> ¡Personaliza la foto de perfil, banner y más de Niko!"
         ),
     },
 }
@@ -742,14 +871,15 @@ def _make_layout(
 # ===================================================
 
 class HelpCog(commands.Cog):
-    """Custom help system — fully bilingual (EN / DE)."""
+    """Custom help system — fully trilingual (EN / DE / ES)."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(
+    @commands.hybrid_command(
         name="help",
-        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü 📘☕' }",
+        description="Show the help menu",
+        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü 📘☕', 'es': 'muestra el menú de ayuda 📘☕' }",
     )
     async def help(self, ctx: commands.Context, *, command_name: str = None):
         lang = get_lang(ctx)
