@@ -212,21 +212,26 @@ class _LvSectionSelect(discord.ui.Select):
         self._cog      = cog
         self._guild_id = guild_id
         options = [
-            discord.SelectOption(label="Overview",       value="overview",      emoji="☕",
-                                 description="All leveling settings at a glance",
-                                 default=(current == "overview")),
-            discord.SelectOption(label="XP Settings",    value="xp",            emoji="📊",
-                                 description="Toggle XP, multiplier, cooldown",
-                                 default=(current == "xp")),
-            discord.SelectOption(label="Announcements",  value="announcements", emoji="📣",
-                                 description="Level-up channel and custom message",
-                                 default=(current == "announcements")),
-            discord.SelectOption(label="Level Roles",    value="level_roles",   emoji="🎖️",
-                                 description="Roles awarded on level-up",
-                                 default=(current == "level_roles")),
+            discord.SelectOption(
+                label="Overview",       value="overview",      emoji="☕",
+                description="All leveling settings at a glance",
+                default=(current == "overview")),
+            discord.SelectOption(
+                label="XP Settings",    value="xp",            emoji="📊",
+                description="Toggle XP, multiplier, cooldown",
+                default=(current == "xp")),
+            discord.SelectOption(
+                label="Announcements",  value="announcements", emoji="📣",
+                description="Level-up channel and custom message",
+                default=(current == "announcements")),
+            discord.SelectOption(
+                label="Level Roles",    value="level_roles",   emoji="🎖️",
+                description="Roles awarded on level-up",
+                default=(current == "level_roles")),
         ]
-        super().__init__(placeholder="Navigate sections…", options=options,
-                         min_values=1, max_values=1)
+        super().__init__(
+            placeholder="Navigate sections…", options=options,
+            min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         panel = await _build_level_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
@@ -281,8 +286,9 @@ class _LvEditXPBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Edit XP Values", style=discord.ButtonStyle.blurple,
-                         emoji=get_emoji("icon_settings"))
+        super().__init__(
+            label="Edit XP Values", style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("icon_settings"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -394,19 +400,29 @@ class _LvResetMessageBtn(discord.ui.Button):
 # ── Level Roles ────────────────────────────────────
 
 class _LvRoleAssignSelect(discord.ui.RoleSelect):
-    def __init__(self, cog, guild_id: int, level: int):
+    def __init__(self, cog, guild_id: int, level: int, message: discord.Message):
         super().__init__(placeholder="Choose a role to award…", min_values=1, max_values=1)
         self._cog      = cog
         self._guild_id = guild_id
         self._level    = level
+        self.message   = message
 
     async def callback(self, interaction: discord.Interaction):
         role = self.values[0]
         cfg  = await self._cog._guild_cfg(self._guild_id)
         cfg.setdefault("level_roles", {})[str(self._level)] = role.id
         await self._cog._save_guild_cfg(self._guild_id, cfg)
-        await interaction.response.edit_message(
-            content=f"{get_emoji('icon_tick')} **Level {self._level}** → {role.mention}", view=None)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} **Level {self._level}** → {role.mention}"
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+        panel = await _build_level_panel(self._cog, self._guild_id, "level_roles", interaction.guild)
+        await self.message.edit(view=panel)
 
 
 class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
@@ -426,11 +442,17 @@ class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
         except ValueError:
             return await interaction.response.send_message(
                 "Please enter a valid whole number for the level.", ephemeral=True)
-        view = discord.ui.View(timeout=60)
-        view.add_item(_LvRoleAssignSelect(self._cog, self._guild_id, lvl))
-        await interaction.response.send_message(
-            f"Now select the role to award at **Level {lvl}**:",
-            view=view, ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"Now select the role to award at **Level {lvl}**"
+            ),
+            discord.ui.ActionRow(
+                _LvRoleAssignSelect(self._cog, self._guild_id, lvl, interaction.message)
+            )
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class _LvAddRoleBtn(discord.ui.Button):
@@ -444,7 +466,7 @@ class _LvAddRoleBtn(discord.ui.Button):
 
 
 class _LvRemoveRoleSelect(discord.ui.Select):
-    def __init__(self, cog, guild_id: int, options: list):
+    def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
         super().__init__(
             placeholder="Choose level role(s) to remove…",
             min_values=1, max_values=len(options),
@@ -452,6 +474,7 @@ class _LvRemoveRoleSelect(discord.ui.Select):
         )
         self._cog      = cog
         self._guild_id = guild_id
+        self.message   = message
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -459,8 +482,17 @@ class _LvRemoveRoleSelect(discord.ui.Select):
         for val in self.values:
             lr.pop(val, None)
         await self._cog._save_guild_cfg(self._guild_id, cfg)
-        await interaction.response.edit_message(
-            content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` level role assignment(s).", view=None)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` level role assignment(s)."
+            ),
+            accent_colour=discord.Color.green()
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+        panel = await _build_level_panel(self._cog, self._guild_id, "level_roles", interaction.guild)
+        await self.message.edit(view=panel)
 
 
 class _LvRemoveRoleBtn(discord.ui.Button):
@@ -485,17 +517,22 @@ class _LvRemoveRoleBtn(discord.ui.Button):
         if not options:
             return await interaction.response.send_message(
                 "No level roles are configured.", ephemeral=True)
-        view = discord.ui.View(timeout=60)
-        view.add_item(_LvRemoveRoleSelect(self._cog, self._guild_id, options))
-        await interaction.response.send_message(
-            "Select the level role assignments to remove:",
-            view=view, ephemeral=True)
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="Select the level role assignments to remove:"
+            ),
+            discord.ui.ActionRow(
+                _LvRemoveRoleSelect(self._cog, self._guild_id, options, interaction.message)
+            )
+        )
+        view.add_item(container)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 # ───────────────────────────────────────────────────
 #  PANEL FACTORY  (async — fetches cfg from DB)
 # ───────────────────────────────────────────────────
-
 async def _build_level_panel(cog, guild_id: int, section: str = "overview",
                               guild: discord.Guild = None) -> discord.ui.LayoutView:
     cfg  = await cog._guild_cfg(guild_id)
