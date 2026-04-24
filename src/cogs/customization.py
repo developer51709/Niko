@@ -6,6 +6,7 @@ import json
 import os
 import base64
 from utils import logging
+from config.emojis import get_emoji
 from .error_handler import is_owner
 
 # ---------- Helpers ----------
@@ -127,15 +128,15 @@ async def collect_image_attachment(interaction: discord.Interaction, profile_vie
         msg = await interaction.client.wait_for("message", check=check, timeout=60.0)
         attachment = msg.attachments[0]
         if not attachment.content_type or not attachment.content_type.startswith("image/"):
-            return await interaction.followup.send("❌ That file doesn't look like an image. Please try again.", ephemeral=True)
+            return await interaction.followup.send(f"{get_emoji('icon_cross')} That file doesn't look like an image. Please try again.", ephemeral=True)
         file_bytes = await attachment.read()
         if target == "pfp":
             profile_view.pfp_bytes = file_bytes
         else:
             profile_view.banner_bytes = file_bytes
-        await interaction.followup.send("✅ Image received! Click **Apply** when you're ready.", ephemeral=True)
+        await interaction.followup.send(f"{get_emoji('icon_tick')} Image received! Click **Apply** when you're ready.", ephemeral=True)
     except asyncio.TimeoutError:
-        await interaction.followup.send("❌ Timed out — no image received.", ephemeral=True)
+        await interaction.followup.send(f"{get_emoji('icon_cross')} Timed out — no image received.", ephemeral=True)
 
 
 class FontSelect(discord.ui.Select):
@@ -441,20 +442,20 @@ class SetProfileView(discord.ui.LayoutView):
                 await interaction.followup.send(f"Updated successfully in {choice} settings.", ephemeral=True)
             else:
                 await interaction.followup.send("Updated successfully.", ephemeral=True)
+        else:
+            msg_lines = ["Failed to update profile. Attempts:"]
+            for a in attempts:
+                if a.get("status") == "request_error":
+                    msg_lines.append(f"- {a['url']} auth={a['auth']} error={a['error']}")
+                else:
+                    code = a.get("status_code")
+                    body_text = a.get("response_text", "")
+                    msg_lines.append(f"- {a['url']} auth={a['auth']} status={code} body={body_text}")
 
-        msg_lines = ["Failed to update profile. Attempts:"]
-        for a in attempts:
-            if a.get("status") == "request_error":
-                msg_lines.append(f"- {a['url']} auth={a['auth']} error={a['error']}")
-            else:
-                code = a.get("status_code")
-                body_text = a.get("response_text", "")
-                msg_lines.append(f"- {a['url']} auth={a['auth']} status={code} body={body_text}")
-
-        logging.error("customization", " | ".join(msg_lines))
-        return await interaction.followup.send(
-            "Failed to update profile. Please try again later.", ephemeral=True
-        )
+            logging.error("customization", " | ".join(msg_lines))
+            return await interaction.followup.send(
+                "Failed to update profile. Please try again later.", ephemeral=True
+            )
 
 # ---------- Cog ----------
 
