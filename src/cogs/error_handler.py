@@ -10,6 +10,7 @@ from colorama import Fore, Style, init as colorama_init
 from config.emojis import get_emoji
 from utils import logging
 from utils.ai_debugging import send_debug_report
+from utils.blacklist_manager import BlacklistManager
 
 from discord.ext.commands import (
     CommandError, CommandInvokeError, CommandNotFound,
@@ -73,6 +74,72 @@ def under_development(feature = None):
         return True
     return commands.check(predicate)
 
+def is_premium():
+    # check for the premium role in the main guild
+    async def predicate(ctx):
+        premium_role_id = 1493294143600853062
+        support_server_id = 1470878953743974587
+        # error response
+        error_view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_danger')} Premium Required"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="This feature is only available to premium users. You can get premium by joining the support server and boosting or making a donation to support the bot's development."
+            )
+        )
+        guild = ctx.bot.get_guild(support_server_id)
+        if guild is None:
+            await ctx.send(view=error_view)
+            return False
+        role = guild.get_role(premium_role_id)
+        if role is None:
+            await ctx.send(view=error_view)
+            return False
+        member = guild.get_member(ctx.author.id)
+        if member is None:
+            await ctx.send(view=error_view)
+            return False
+        if role not in member.roles:
+            await ctx.send(view=error_view)
+            return False
+        return True
+    return commands.check(predicate)
+
+def is_blacklisted():
+    async def predicate(ctx):
+        blacklist_manager = BlacklistManager()
+        if blacklist_manager.is_user_blacklisted(ctx.author.id):
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_danger')} Blacklisted"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="You have been blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+            return False
+        if blacklist_manager.is_guild_blacklisted(ctx.guild.id):
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_danger')} Blacklisted"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content="This server has been blacklisted from using this bot. If you believe this is a mistake, please open a ticket in the support server."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+            return False
+        return True
 
 class ErrorHandler(commands.Cog):
     def __init__(self, bot):
