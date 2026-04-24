@@ -1,7 +1,7 @@
 {
-    "welcome_channel": null,
+    "welcome_channel": 1497250916301013206,
     "welcome_title": null,
-    "welcome_description": null,
+    "welcome_description": "Welcome to the server {user}!\n\nPlease be sure to review the server [rules](https://discord.com/channels/1497250915034337330/1497252507729137827/1497256695863443588).\nFor help with the bot please open a [support ticket](https://discord.com/channels/1497250915034337330/1497253295184543847/1497254635189174312).",
     "welcome_color": 5793266,
     "welcome_image": null,
     "rules_channel": 1497252507729137827,
