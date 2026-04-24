@@ -118,7 +118,7 @@ class Meme(commands.Cog):
         meme = random.choice(memes)
 
         # personality-aware embed styling
-        personality = get_personality()
+        personality = get_personality(ctx)
         lang = get_lang(ctx)
 
         title_prefix = msg(ctx, "meme_title_prefix")
