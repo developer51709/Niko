@@ -419,10 +419,13 @@ class Moderation(commands.Cog):
         if not amount:
             return await ctx.send(msg(ctx, "no_amount"))
         amount = int(amount)
-        try:
-            await ctx.message.delete()
-        except (discord.HTTPException, AttributeError):
-            pass
+        if ctx.interaction is not None:
+            await ctx.defer(ephemeral=True)
+        else:
+            try:
+                await ctx.message.delete()
+            except (discord.HTTPException, AttributeError):
+                pass
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
         body = (
@@ -442,10 +445,13 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_channel"))
         def check(m):
             return m.author.id == member.id
-        try:
-            await ctx.message.delete()
-        except (discord.HTTPException, AttributeError):
-            pass
+        if ctx.interaction is not None:
+            await ctx.defer(ephemeral=True)
+        else:
+            try:
+                await ctx.message.delete()
+            except (discord.HTTPException, AttributeError):
+                pass
         deleted = await ctx.channel.purge(limit=amount, check=check)
         await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
         body = (
