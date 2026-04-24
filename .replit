@@ -2,6 +2,7 @@ modules = ["web", "python-3.11"]
 [agent]
 expertMode = true
 integrations = ["python_openai_ai_integrations:1.0.0"]
+stack = "BEST_EFFORT_FALLBACK"
 
 [nix]
 channel = "stable-25_05"
