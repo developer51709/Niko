@@ -1780,7 +1780,9 @@
         "spam_interval": 7,
         "max_mentions": 5,
         "blocked_words": [],
-        "whitelist_users": [],
+        "whitelist_users": [
+            1495837570133659860
+        ],
         "whitelist_roles": [],
         "antinuke": {
             "ban_threshold": 3,
@@ -2260,9 +2262,9 @@
     },
     "1495899475456032911": {
         "automod": {
-            "antispam": true,
+            "antispam": false,
             "antilink": true,
-            "badwords": true,
+            "badwords": false,
             "massmention": true,
             "antinuke": false,
             "antiraid": false,
@@ -2342,11 +2344,11 @@
     },
     "1496921270279868487": {
         "automod": {
-            "antispam": false,
-            "antilink": false,
+            "antispam": true,
+            "antilink": true,
             "badwords": true,
             "massmention": false,
-            "antinuke": false,
+            "antinuke": true,
             "antiraid": false,
             "antiraid_ext": false
         },
@@ -2354,15 +2356,25 @@
         "spam_interval": 7,
         "max_mentions": 5,
         "blocked_words": [],
-        "whitelist_users": [],
-        "whitelist_roles": [],
+        "whitelist_users": [
+            1442831463061127289,
+            1281286413861523567,
+            1222548162741538938,
+            1153715777594200074,
+            1089935069927456849,
+            1028956609382199346,
+            1495589910839689407
+        ],
+        "whitelist_roles": [
+            1497305357729660999
+        ],
         "antinuke": {
             "ban_threshold": 3,
             "kick_threshold": 3,
             "channel_delete_threshold": 3,
             "role_delete_threshold": 3,
             "interval": 10,
-            "action": "strip"
+            "action": "kick"
         },
         "antiraid": {
             "join_threshold": 10,
@@ -2486,6 +2498,47 @@
             "role_delete_threshold": 3,
             "interval": 10,
             "action": "kick"
+        },
+        "antiraid": {
+            "join_threshold": 10,
+            "join_interval": 10,
+            "action": "kick"
+        },
+        "antiraid_ext": {
+            "interaction_threshold": 5,
+            "interaction_window": 30,
+            "join_age_limit": 120,
+            "raider_action": "kick",
+            "operator_action": "notify",
+            "ext_app_detection": true,
+            "ext_app_threshold": 3,
+            "ext_app_window": 15,
+            "ext_app_action": "kick"
+        }
+    },
+    "1497372474919227456": {
+        "automod": {
+            "antispam": false,
+            "antilink": false,
+            "badwords": true,
+            "massmention": false,
+            "antinuke": false,
+            "antiraid": false,
+            "antiraid_ext": false
+        },
+        "spam_threshold": 6,
+        "spam_interval": 7,
+        "max_mentions": 5,
+        "blocked_words": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "antinuke": {
+            "ban_threshold": 3,
+            "kick_threshold": 3,
+            "channel_delete_threshold": 3,
+            "role_delete_threshold": 3,
+            "interval": 10,
+            "action": "strip"
         },
         "antiraid": {
             "join_threshold": 10,

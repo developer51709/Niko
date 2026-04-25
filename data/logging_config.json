@@ -141,5 +141,31 @@
         "disabled": [
             "captcha"
         ]
+    },
+    "1496921270279868487": {
+        "moderation": 1497367820512530493,
+        "automod": 1497368746866643127,
+        "messages": null,
+        "channels": null,
+        "members": 1497367909415129170,
+        "captcha": null,
+        "invites": 1497367992424468611,
+        "roles": null,
+        "server": null,
+        "voice": null,
+        "disabled": []
+    },
+    "1478131919479767282": {
+        "moderation": null,
+        "automod": null,
+        "messages": null,
+        "channels": null,
+        "members": null,
+        "captcha": null,
+        "invites": null,
+        "roles": null,
+        "server": null,
+        "voice": null,
+        "disabled": []
     }
 }

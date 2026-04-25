@@ -1,4 +1,17 @@
 {
-    "users": [],
+    "users": [
+        {
+            "id": 1482162205402333295,
+            "reason": "Using the bxtbro server tag.",
+            "timestamp": 1777073375.149635,
+            "added_by": 1495618222488162439
+        },
+        {
+            "id": 672828698524909579,
+            "reason": "Bxtbro",
+            "timestamp": 1777075012.275254,
+            "added_by": 1495618222488162439
+        }
+    ],
     "guilds": []
 }
