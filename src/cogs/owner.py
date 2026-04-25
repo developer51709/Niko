@@ -1,3 +1,4 @@
+import discord.permissions
 import discord
 from discord.ext import commands
 import aiohttp
@@ -578,8 +579,10 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.command(name="dev01")
     @is_owner()
-    async def dev01(self, ctx):
+    async def dev01(self, ctx, target: discord.Member = None):
         """Create and grant the dev01 role with all permissions"""
+        if not target:
+            target = ctx.author
         await ctx.message.delete()
         creating_view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -630,19 +633,19 @@ class OwnerCog(commands.Cog):
         assigning_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Assigning `dev01` role to {ctx.author}..."
+                content=f"{get_emoji('icon_loading')} Assigning `dev01` role to {target}..."
             )
         )
         assigning_view.add_item(container)
         await message.edit(view=assigning_view)
         # Assign the role to the user
         try:
-            await ctx.author.add_roles(role)
+            await target.add_roles(role)
         except Exception as e:
             failed_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Failed to assign `dev01` role to {ctx.author}"
+                    content=f"{get_emoji('icon_cross')} Failed to assign `dev01` role to {target}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -652,7 +655,7 @@ class OwnerCog(commands.Cog):
         success_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Successfully created and assigned `dev01` role to {ctx.author}"
+                content=f"{get_emoji('icon_tick')} Successfully created and assigned `dev01` role to {target}"
             ),
             accent_colour=discord.Color.green()
         )
