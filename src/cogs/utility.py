@@ -23,7 +23,10 @@ class UtilityCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="echo")
+    @commands.hybrid_command(
+        name="echo",
+        description="Echoes the user's message"
+    )
     @commands.has_permissions(manage_messages=True)
     async def echo(self, ctx, *, message: str):
         """Echoes the user's message."""
