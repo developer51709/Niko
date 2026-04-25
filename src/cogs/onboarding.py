@@ -475,7 +475,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
             # update the setup panel
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild), allowed_mentions=discord.AllowedMentions.none())
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -545,7 +545,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
             await interaction.response.edit_message(
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild), allowed_mentions=discord.AllowedMentions.none())
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -731,6 +731,7 @@ class ConfigureAutorolesBtn(discord.ui.Button):
         await interaction.response.send_message(
             view=AutoroleSetupView(self.guild_id, self.author, interaction.guild),
             ephemeral=False,
+            allowed_mentions=discord.AllowedMentions.none()
         )
 
 
