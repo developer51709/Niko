@@ -196,6 +196,15 @@
     "support_roles": [
       1497305596196683796
     ],
-    "open_tickets": []
+    "open_tickets": [
+      {
+        "channel_id": 1497796254745366548,
+        "message_id": 1497796255718310059,
+        "category": "Staff Application",
+        "opener_id": 1457043771232620812,
+        "claimed_by": null,
+        "status": "open"
+      }
+    ]
   }
 }
