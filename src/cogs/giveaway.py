@@ -725,13 +725,13 @@ class _PrizeModal(discord.ui.Modal, title="Set Prize"):
 
     def __init__(self, parent: "_GiveawaySetupView"):
         super().__init__()
-        self.parent = parent
+        self._setup_view = parent
         if parent.state.prize:
             self.prize.default = parent.state.prize
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.parent.state.prize = self.prize.value.strip()
-        await self.parent.refresh(interaction)
+        self._setup_view.state.prize = self.prize.value.strip()
+        await self._setup_view.refresh(interaction)
 
 
 class _DurationModal(discord.ui.Modal, title="Set Duration"):
@@ -742,7 +742,7 @@ class _DurationModal(discord.ui.Modal, title="Set Duration"):
 
     def __init__(self, parent: "_GiveawaySetupView"):
         super().__init__()
-        self.parent = parent
+        self._setup_view = parent
 
     async def on_submit(self, interaction: discord.Interaction):
         seconds = _parse_duration_str(self.duration.value)
@@ -750,8 +750,8 @@ class _DurationModal(discord.ui.Modal, title="Set Duration"):
             return await interaction.response.send_message(
                 msg(interaction, "invalid_duration"), ephemeral=True
             )
-        self.parent.state.duration_s = seconds
-        await self.parent.refresh(interaction)
+        self._setup_view.state.duration_s = seconds
+        await self._setup_view.refresh(interaction)
 
 
 class _WinnersModal(discord.ui.Modal, title="Set Winners"):
@@ -762,7 +762,7 @@ class _WinnersModal(discord.ui.Modal, title="Set Winners"):
 
     def __init__(self, parent: "_GiveawaySetupView"):
         super().__init__()
-        self.parent = parent
+        self._setup_view = parent
         self.winners.default = str(parent.state.winners)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -771,8 +771,8 @@ class _WinnersModal(discord.ui.Modal, title="Set Winners"):
             return await interaction.response.send_message(
                 msg(interaction, "min_one_winner"), ephemeral=True
             )
-        self.parent.state.winners = int(digits)
-        await self.parent.refresh(interaction)
+        self._setup_view.state.winners = int(digits)
+        await self._setup_view.refresh(interaction)
 
 
 class _AccountAgeModal(discord.ui.Modal, title="Minimum Account Age"):
@@ -784,14 +784,14 @@ class _AccountAgeModal(discord.ui.Modal, title="Minimum Account Age"):
 
     def __init__(self, parent: "_GiveawaySetupView"):
         super().__init__()
-        self.parent = parent
+        self._setup_view = parent
         self.days.default = str(parent.state.requirements["account_age_days"])
 
     async def on_submit(self, interaction: discord.Interaction):
         digits = "".join(ch for ch in self.days.value if ch.isdigit())
         value = int(digits) if digits else 0
-        self.parent.state.requirements["account_age_days"] = max(0, min(value, 3650))
-        await self.parent.refresh(interaction)
+        self._setup_view.state.requirements["account_age_days"] = max(0, min(value, 3650))
+        await self._setup_view.refresh(interaction)
 
 
 class _ServerAgeModal(discord.ui.Modal, title="Minimum Time in Server"):
@@ -803,14 +803,14 @@ class _ServerAgeModal(discord.ui.Modal, title="Minimum Time in Server"):
 
     def __init__(self, parent: "_GiveawaySetupView"):
         super().__init__()
-        self.parent = parent
+        self._setup_view = parent
         self.days.default = str(parent.state.requirements["server_age_days"])
 
     async def on_submit(self, interaction: discord.Interaction):
         digits = "".join(ch for ch in self.days.value if ch.isdigit())
         value = int(digits) if digits else 0
-        self.parent.state.requirements["server_age_days"] = max(0, min(value, 3650))
-        await self.parent.refresh(interaction)
+        self._setup_view.state.requirements["server_age_days"] = max(0, min(value, 3650))
+        await self._setup_view.refresh(interaction)
 
 
 # ── Buttons ─────────────────────────────────────────────────
@@ -819,34 +819,34 @@ class _SetupBtn(discord.ui.Button):
     def __init__(self, label: str, style, emoji, parent: "_GiveawaySetupView", action: str,
                  *, row: int = 0):
         super().__init__(label=label, style=style, emoji=emoji)
-        self.parent = parent
+        self._setup_view = parent
         self.action = action
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.parent.host_id:
+        if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
                 "❌ Only the host of this setup can configure this giveaway.",
                 ephemeral=True,
             )
         action = self.action
         if action == "prize":
-            return await interaction.response.send_modal(_PrizeModal(self.parent))
+            return await interaction.response.send_modal(_PrizeModal(self._setup_view))
         if action == "duration":
-            return await interaction.response.send_modal(_DurationModal(self.parent))
+            return await interaction.response.send_modal(_DurationModal(self._setup_view))
         if action == "winners":
-            return await interaction.response.send_modal(_WinnersModal(self.parent))
+            return await interaction.response.send_modal(_WinnersModal(self._setup_view))
         if action == "account_age":
-            return await interaction.response.send_modal(_AccountAgeModal(self.parent))
+            return await interaction.response.send_modal(_AccountAgeModal(self._setup_view))
         if action == "server_age":
-            return await interaction.response.send_modal(_ServerAgeModal(self.parent))
+            return await interaction.response.send_modal(_ServerAgeModal(self._setup_view))
         if action == "boost":
-            self.parent.state.requirements["boost_required"] = (
-                not self.parent.state.requirements["boost_required"]
+            self._setup_view.state.requirements["boost_required"] = (
+                not self._setup_view.state.requirements["boost_required"]
             )
-            return await self.parent.refresh(interaction)
+            return await self._setup_view.refresh(interaction)
         if action == "clear_roles":
-            self.parent.state.requirements["role_ids"] = []
-            return await self.parent.refresh(interaction)
+            self._setup_view.state.requirements["role_ids"] = []
+            return await self._setup_view.refresh(interaction)
         if action == "cancel":
             cancelled = discord.ui.LayoutView()
             cancelled.add_item(discord.ui.Container(
@@ -855,7 +855,7 @@ class _SetupBtn(discord.ui.Button):
             ))
             return await interaction.response.edit_message(view=cancelled)
         if action == "start":
-            return await self.parent.launch(interaction)
+            return await self._setup_view.launch(interaction)
 
 
 class _SetupChannelSelect(discord.ui.ChannelSelect):
@@ -865,15 +865,15 @@ class _SetupChannelSelect(discord.ui.ChannelSelect):
             channel_types=[discord.ChannelType.text, discord.ChannelType.news],
             min_values=1, max_values=1,
         )
-        self.parent = parent
+        self._setup_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.parent.host_id:
+        if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
                 "❌ Only the host can configure this giveaway.", ephemeral=True
             )
-        self.parent.state.channel_id = self.values[0].id
-        await self.parent.refresh(interaction)
+        self._setup_view.state.channel_id = self.values[0].id
+        await self._setup_view.refresh(interaction)
 
 
 class _SetupRoleSelect(discord.ui.RoleSelect):
@@ -882,15 +882,15 @@ class _SetupRoleSelect(discord.ui.RoleSelect):
             placeholder="Pick required roles (entrants must hold all)…",
             min_values=0, max_values=10,
         )
-        self.parent = parent
+        self._setup_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.parent.host_id:
+        if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
                 "❌ Only the host can configure this giveaway.", ephemeral=True
             )
-        self.parent.state.requirements["role_ids"] = [r.id for r in self.values]
-        await self.parent.refresh(interaction)
+        self._setup_view.state.requirements["role_ids"] = [r.id for r in self.values]
+        await self._setup_view.refresh(interaction)
 
 
 # ── Setup view ─────────────────────────────────────────────
