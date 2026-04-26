@@ -344,6 +344,8 @@ class Moderation(commands.Cog):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="mute"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.mute_member(ctx.guild, member, duration=None, reason=reason)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -372,6 +374,8 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="tempmute"))
         if not duration:
             return await ctx.send(msg(ctx, "no_duration"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.mute_member(ctx.guild, member, duration=duration, reason=reason)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -399,6 +403,8 @@ class Moderation(commands.Cog):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.unmute_member(member, reason=f"Unmuted by {ctx.author}")
         await ctx.send(msg(ctx, "unmuted", member=member))
         body = (

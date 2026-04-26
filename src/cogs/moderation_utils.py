@@ -175,17 +175,30 @@ class ModerationUtils(commands.Cog):
 
     # ---------- MUTE SYSTEM ----------
 
-    async def ensure_mute_role(self, guild: discord.Guild) -> discord.Role:
+    async def ensure_mute_role(self, guild: discord.Guild, *, verify_perms: bool = False) -> discord.Role:
         role = discord.utils.get(guild.roles, name="Muted")
+        created = False
         if not role:
             perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
             role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
-        # verify perms every time in case the role was modified
-        for channel in guild.channels:
-            try:
-                await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False, use_application_commands=False, use_external_apps=False, reason="Verify mute role permissions")
-            except Exception:
-                continue
+            created = True
+        # Only walk every channel when the role was just created, or
+        # when the caller explicitly asks to verify (avoids slash-interaction
+        # timeouts caused by N HTTP calls on every mute/unmute).
+        if created or verify_perms:
+            for channel in guild.channels:
+                try:
+                    await channel.set_permissions(
+                        role,
+                        send_messages=False,
+                        speak=False,
+                        add_reactions=False,
+                        use_application_commands=False,
+                        use_external_apps=False,
+                        reason="Verify mute role permissions",
+                    )
+                except Exception:
+                    continue
         return role
 
     async def mute_member(self, guild: discord.Guild, member: discord.Member, duration=None, reason=None):

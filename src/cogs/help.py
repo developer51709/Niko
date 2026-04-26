@@ -166,6 +166,13 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("Ticket",         f"{get_emoji('icon_ticket')}"),
     ("Image Tools",    f"{get_emoji('icon_image')}"),
     ("Giveaway",       f"{get_emoji('icon_giveaway')}"),
+    ("Reminders",      f"{get_emoji('icon_loading')}"),
+    ("Tags",           f"{get_emoji('icon_message')}"),
+    ("Birthdays",      f"{get_emoji('icon_heart')}"),
+    ("Highlights",     f"{get_emoji('icon_lightbulb')}"),
+    ("Polls",          f"{get_emoji('icon_lightbulb')}"),
+    ("Suggestions",    f"{get_emoji('icon_lightbulb')}"),
+    ("Starboard",      f"{get_emoji('icon_important')}"),
     ("Customization",  f"{get_emoji('icon_edit')}"),
 ]
 
@@ -191,6 +198,13 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket commands",
         "Image Tools":   "Image manipulation commands",
         "Giveaway":      "Giveaway commands",
+        "Reminders":     "Personal reminder system",
+        "Tags":          "Custom server tags",
+        "Birthdays":     "Server birthdays",
+        "Highlights":    "Keyword DM notifications",
+        "Polls":         "Multi-option polls",
+        "Suggestions":   "Server suggestions",
+        "Starboard":     "Highlight wall for popular messages",
         "Customization": "Customization commands",
     },
     "de": {
@@ -214,6 +228,13 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket-Befehle",
         "Image Tools":   "Bildbearbeitungsbefehle",
         "Giveaway":      "Gewinnspiel-Befehle",
+        "Reminders":     "Persönliche Erinnerungen",
+        "Tags":          "Benutzerdefinierte Server-Tags",
+        "Birthdays":     "Server-Geburtstage",
+        "Highlights":    "Schlüsselwort-DM-Benachrichtigungen",
+        "Polls":         "Mehrfach-Umfragen",
+        "Suggestions":   "Server-Vorschläge",
+        "Starboard":     "Highlight-Wand für beliebte Nachrichten",
         "Customization": "Anpassungsbefehle",
     },
     "es": {
@@ -237,6 +258,13 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Comandos de tickets",
         "Image Tools":   "Manipulación de imágenes",
         "Giveaway":      "Comandos de sorteos",
+        "Reminders":     "Sistema de recordatorios personales",
+        "Tags":          "Tags personalizados del servidor",
+        "Birthdays":     "Cumpleaños del servidor",
+        "Highlights":    "Notificaciones DM por palabras clave",
+        "Polls":         "Encuestas multi-opción",
+        "Suggestions":   "Sugerencias del servidor",
+        "Starboard":     "Muro de mensajes populares",
         "Customization": "Comandos de personalización",
     },
 }
@@ -322,6 +350,34 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n"
             "> Host and manage giveaways in your server!"
         ),
+        "Reminders": (
+            f"{get_emoji('icon_loading')} **Reminder Commands**\n"
+            "> Schedule personal reminders, list and manage them."
+        ),
+        "Tags": (
+            f"{get_emoji('icon_message')} **Tag Commands**\n"
+            "> Create custom server tags — quick text snippets keyed by name."
+        ),
+        "Birthdays": (
+            f"{get_emoji('icon_heart')} **Birthday Commands**\n"
+            "> Set and announce server member birthdays."
+        ),
+        "Highlights": (
+            f"{get_emoji('icon_lightbulb')} **Highlight Commands**\n"
+            "> Get DMed when keywords you care about are mentioned."
+        ),
+        "Polls": (
+            f"{get_emoji('icon_lightbulb')} **Poll Commands**\n"
+            "> Multi-option polls with live vote buttons."
+        ),
+        "Suggestions": (
+            f"{get_emoji('icon_lightbulb')} **Suggestion Commands**\n"
+            "> Submit and vote on server suggestions; admins can approve or deny."
+        ),
+        "Starboard": (
+            f"{get_emoji('icon_important')} **Starboard Commands**\n"
+            "> Auto-mirror popular messages (⭐) to a starboard channel."
+        ),
         "Customization": (
             f"{get_emoji('icon_edit')} **Customization Commands**\n"
             "> Customize Niko's pfp, banner, and more!"
@@ -404,6 +460,34 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
         "Giveaway": (
             f"{get_emoji('icon_giveaway')} **Gewinnspiel-Befehle**\n"
             "> Gewinnspiele auf deinem Server veranstalten und verwalten!"
+        ),
+        "Reminders": (
+            f"{get_emoji('icon_loading')} **Erinnerungs-Befehle**\n"
+            "> Persönliche Erinnerungen planen, anzeigen und verwalten."
+        ),
+        "Tags": (
+            f"{get_emoji('icon_message')} **Tag-Befehle**\n"
+            "> Benutzerdefinierte Server-Tags — schnelle Textbausteine per Name."
+        ),
+        "Birthdays": (
+            f"{get_emoji('icon_heart')} **Geburtstags-Befehle**\n"
+            "> Geburtstage von Mitgliedern setzen und ankündigen."
+        ),
+        "Highlights": (
+            f"{get_emoji('icon_lightbulb')} **Highlight-Befehle**\n"
+            "> Lass dir per DM Bescheid geben, wenn deine Schlüsselwörter genannt werden."
+        ),
+        "Polls": (
+            f"{get_emoji('icon_lightbulb')} **Umfrage-Befehle**\n"
+            "> Mehrfach-Umfragen mit Live-Vote-Buttons."
+        ),
+        "Suggestions": (
+            f"{get_emoji('icon_lightbulb')} **Vorschlags-Befehle**\n"
+            "> Vorschläge einreichen und abstimmen; Admins können annehmen oder ablehnen."
+        ),
+        "Starboard": (
+            f"{get_emoji('icon_important')} **Starboard-Befehle**\n"
+            "> Beliebte Nachrichten (⭐) automatisch in einen Starboard-Kanal spiegeln."
         ),
         "Customization": (
             f"{get_emoji('icon_edit')} **Anpassungsbefehle**\n"
@@ -488,6 +572,34 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_giveaway')} **Comandos de Sorteos**\n"
             "> ¡Organiza y gestiona sorteos en tu servidor!"
         ),
+        "Reminders": (
+            f"{get_emoji('icon_loading')} **Comandos de Recordatorios**\n"
+            "> Programa recordatorios personales, lístalos y gestiónalos."
+        ),
+        "Tags": (
+            f"{get_emoji('icon_message')} **Comandos de Tags**\n"
+            "> Crea tags personalizados — fragmentos de texto rápidos por nombre."
+        ),
+        "Birthdays": (
+            f"{get_emoji('icon_heart')} **Comandos de Cumpleaños**\n"
+            "> Establece y anuncia cumpleaños de los miembros del servidor."
+        ),
+        "Highlights": (
+            f"{get_emoji('icon_lightbulb')} **Comandos de Highlights**\n"
+            "> Recibe DMs cuando se mencionan tus palabras clave."
+        ),
+        "Polls": (
+            f"{get_emoji('icon_lightbulb')} **Comandos de Encuestas**\n"
+            "> Encuestas multi-opción con botones de voto en vivo."
+        ),
+        "Suggestions": (
+            f"{get_emoji('icon_lightbulb')} **Comandos de Sugerencias**\n"
+            "> Envía y vota sugerencias; los admins pueden aprobar o denegar."
+        ),
+        "Starboard": (
+            f"{get_emoji('icon_important')} **Comandos del Starboard**\n"
+            "> Refleja automáticamente mensajes populares (⭐) a un canal starboard."
+        ),
         "Customization": (
             f"{get_emoji('icon_edit')} **Comandos de Personalización**\n"
             "> ¡Personaliza la foto de perfil, banner y más de Niko!"
@@ -517,6 +629,13 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Ticket":        ["Tickets"],
     "Image Tools":   ["ImageTools", "AiImageTools"],
     "Giveaway":      ["Giveaway"],
+    "Reminders":     ["Reminders"],
+    "Tags":          ["Tags"],
+    "Birthdays":     ["Birthdays"],
+    "Highlights":    ["Highlights"],
+    "Polls":         ["Polls"],
+    "Suggestions":   ["Suggestions"],
+    "Starboard":     ["Starboard"],
     "Customization": ["Customization", "PrefixConfig"],
 }
 

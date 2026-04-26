@@ -11,7 +11,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Bot Framework
-- **Discord.py with Cogs pattern**: Modular cog system under `src/cogs/`. All 37+ cogs load on startup.
+- **Discord.py with Cogs pattern**: Modular cog system under `src/cogs/`. All 50+ cogs load on startup.
 - All cogs live in `src/cogs/` (NOT a separate `cogs/` root directory).
 - Logging via `utils/logging.py` custom logger (`from utils import logging as log`).
 
@@ -111,6 +111,44 @@ Preferred communication style: Simple, everyday language.
 - Commands: `.giveaway start <duration> <winners> <prize>`, `.giveaway reroll <message_id>`
 - Background task (`check_giveaways`) fires every 15 s
 
+### Tickets (Restructured — `ticket` hybrid group)
+- Single `ticket` hybrid group in `src/cogs/tickets.py` with admin sub-commands and in-ticket sub-commands.
+- **Admin sub-commands** (require Manage Channels): `setup <category>`, `panel [channel]`, `category add/remove/list <name>`, `support add/remove/list <role>`.
+- **In-ticket sub-commands** (run inside an open ticket channel): `add <user>`, `remove <user>`, `rename <name>`, `claim`, `transcript`, `close`, `delete`.
+- Per-guild config in `data/ticket_config.json` via `src/utils/ticket_config.py` — adds `support_roles` (list of role IDs) and `claimed_by` (per-channel claimer map).
+- `src/utils/ticket_utils.py` exposes `find_open_ticket(guild, user)` for the open-ticket guard and lazy-loads via `_loaded` flag.
+- Trilingual EN/DE/ES MESSAGES table with normal/cafe personalities throughout.
+- Persistent ticket buttons (`OpenTicketBtn`, `CloseTicketBtn`, `DeleteTicketBtn`) keep their `custom_id`s — see Persistent Views section.
+
+### Reminders (`src/cogs/reminders.py`)
+- Personal reminders backed by `data/reminders.json`. Background task fires due reminders by DM (channel fallback).
+- Commands: `reminder add <duration> <text>`, `reminder list`, `reminder remove <id>`, `reminder clear`.
+- Trilingual EN/DE/ES + normal/cafe MESSAGES.
+
+### Tags (`src/cogs/tags.py`)
+- Per-guild custom text snippets stored in `data/tags.json`.
+- Commands: `tag <name>` (show), `tag create <name> <content>`, `tag edit <name> <content>`, `tag delete <name>`, `tag list`, `tag info <name>`.
+
+### Birthdays (`src/cogs/birthdays.py`)
+- Per-guild birthday store in `data/birthdays.json`. Daily background task announces birthdays in the configured channel.
+- Commands: `birthday set <MM-DD>`, `birthday remove`, `birthday upcoming`, `birthday list`, `birthday channel <#channel>`.
+
+### Highlights (`src/cogs/highlights.py`)
+- Per-user keyword DM notifications stored in `data/highlights.json`. `on_message` listener checks for keyword matches and DMs the user a context snippet.
+- Commands: `highlight add <word>`, `highlight remove <word>`, `highlight list`, `highlight clear`.
+
+### Polls (`src/cogs/polls.py`)
+- Multi-option polls (2–10 options) with live vote buttons. Stored in `data/polls.json`; persistent view registered on cog load.
+- Commands: `poll create <question> | <opt1> | <opt2> ...`, `poll close <message_id>`, `poll results <message_id>`.
+
+### Suggestions (`src/cogs/suggestions.py`)
+- Per-guild suggestion channel + voting buttons. Admins can approve/deny via in-message buttons. Stored in `data/suggestions.json`.
+- Commands: `suggest <text>`, `suggestion channel <#channel>`, `suggestion approve <id> [reason]`, `suggestion deny <id> [reason]`.
+
+### Starboard (`src/cogs/starboard.py`)
+- Auto-mirrors messages reaching the configured ⭐ threshold to a starboard channel. Tracks original→starboard message mapping in `data/starboard.json`.
+- Commands: `starboard channel <#channel>`, `starboard threshold <n>`, `starboard emoji <emoji>`, `starboard ignore <#channel>`, `starboard config`.
+
 ### Persistent Views (Tickets & Onboarding)
 - All persistent interactive components have `custom_id` set so Discord can re-dispatch interactions after restarts
   - `OpenTicketBtn`: `custom_id=f"open_ticket_{guild_id}"`
@@ -166,4 +204,4 @@ Preferred communication style: Simple, everyday language.
 - Removed top-level model loading from `bot.py` (was downloading 600MB TinyLlama on every start)
 - `utils/ai_local.py` now lazy-loads the local model only when actually called
 - Replaced incompatible `googletrans` with `deep-translator` + `langdetect` to avoid httpx version conflicts
-- All 33 cogs load successfully on startup
+- All 50+ cogs load successfully on startup
