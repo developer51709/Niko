@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 
 from utils import logging
+from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
 
 # ── Constants ─────────────────────────────────────
@@ -849,6 +850,9 @@ class ServerLogger(commands.Cog):
             channel_id=channel_id,
         )
         try:
+            # Stay under Discord's per-channel send budget so a burst of
+            # events (e.g. mass-ban) can't get the channel rate-limited.
+            await log_channel_limiter.acquire((guild.id, channel.id))
             await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
         except Exception as e:
             logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")

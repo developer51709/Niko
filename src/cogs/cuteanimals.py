@@ -1,4 +1,5 @@
 from discord.ext import commands
+import asyncio
 import requests
 import discord
 import random
@@ -142,7 +143,7 @@ class CuteAnimals(commands.Cog):
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
         animal, (url, api_type) = random.choice(list(self.animal_apis.items()))
-        response = requests.get(url)
+        response = await asyncio.to_thread(requests.get, url, timeout=10)
         data = response.json()
 
         img_url = self.extract_url(api_type, data)
@@ -179,7 +180,9 @@ class CuteAnimals(commands.Cog):
     )
     async def cat(self, ctx):
         """Sends a random cat image."""
-        response = requests.get("https://api.thecatapi.com/v1/images/search")
+        response = await asyncio.to_thread(
+            requests.get, "https://api.thecatapi.com/v1/images/search", timeout=10
+        )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -204,7 +207,9 @@ class CuteAnimals(commands.Cog):
     )
     async def dog(self, ctx):
         """Sends a random dog image."""
-        response = requests.get("https://dog.ceo/api/breeds/image/random")
+        response = await asyncio.to_thread(
+            requests.get, "https://dog.ceo/api/breeds/image/random", timeout=10
+        )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(

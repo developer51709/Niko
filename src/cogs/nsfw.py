@@ -4,6 +4,7 @@
 
 import discord
 from discord.ext import commands
+import asyncio
 import requests
 import random
 import os
@@ -36,7 +37,7 @@ class NSFW(commands.Cog):
                 query = query.replace('=', '%3D')
             # make request to rule34 API with api key and user id
             RULE34_API_URL = f'https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags={query}&limit=100&pid=0&api_key={RULE34_API_KEY}&user_id={RULE34_USER_ID}'
-            response = requests.get(RULE34_API_URL)
+            response = await asyncio.to_thread(requests.get, RULE34_API_URL, timeout=15)
             # check if response is valid
             if response.status_code != 200:
                 view = discord.ui.LayoutView()
@@ -111,7 +112,7 @@ class NSFW(commands.Cog):
         async with ctx.typing():
             # make request to gelbooru API with api key and user id
             GELBOORU_API_URL = f'https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags={query}&limit=100&pid=0&api_key={GELBOORU_API_KEY}&user_id={GELBOORU_USER_ID}'
-            response = requests.get(GELBOORU_API_URL)
+            response = await asyncio.to_thread(requests.get, GELBOORU_API_URL, timeout=15)
             # check if response is valid
             if response.status_code != 200:
                 view = discord.ui.LayoutView()
@@ -186,7 +187,7 @@ class NSFW(commands.Cog):
     @commands.is_nsfw()
     async def realbooru(self, ctx, *, query: str):
         async with ctx.typing():
-            posts = search_realbooru(query)
+            posts = await asyncio.to_thread(search_realbooru, query)
 
             if not posts:
                 return await self._send_error(
@@ -196,7 +197,7 @@ class NSFW(commands.Cog):
 
             # Pick a random post
             post = random.choice(posts)
-            details = get_post_details(post["id"])
+            details = await asyncio.to_thread(get_post_details, post["id"])
 
             if not details["media_url"]:
                 return await self._send_error(

@@ -10,6 +10,7 @@ from utils.onboarding_utils import (
 )
 from utils.onboarding_config import OnboardingConfig, load_all_configs
 from utils.captcha_gen import generate_captcha
+from utils.ratelimit import role_assign_limiter, welcome_limiter
 from config.emojis import get_emoji
 
 _pending_verifications: dict[int, dict] = {}
@@ -1777,10 +1778,15 @@ class Onboarding(commands.Cog):
                 if member.guild.get_role(rid)
             ]
             if roles_to_add:
+                # Queue role assignments per-guild so a join wave doesn't
+                # blow through Discord's role-edit rate limit.
+                await role_assign_limiter.acquire(member.guild.id)
                 try:
                     await member.add_roles(*roles_to_add, reason="Onboarding autoroles")
                 except discord.Forbidden:
                     pass  # bot lacks permission — silently skip
+                except discord.HTTPException:
+                    pass
 
         # ── Welcome message ───────────────────────
         if not cfg.welcome_channel:
@@ -1793,7 +1799,12 @@ class Onboarding(commands.Cog):
         view = build_welcome_view(cfg, member)
         # allow user and role mentions but not everyone and here
         welcome_mentions = discord.AllowedMentions(everyone=False, roles=True, users=True)
-        await channel.send(view=view, allowed_mentions=welcome_mentions)
+        # Throttle welcome sends per-guild so raids can't spam the channel.
+        await welcome_limiter.acquire(member.guild.id)
+        try:
+            await channel.send(view=view, allowed_mentions=welcome_mentions)
+        except discord.HTTPException:
+            pass
 
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))

@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import logging.handlers
+from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init as colorama_init
 from utils.ai_debugging import send_debug_report
 
@@ -113,6 +114,8 @@ class WebhookHandler(logging.Handler):
     Automatically censors the webhook URL in all logs.
     """
 
+    _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="webhook-log")
+
     def __init__(self, url: str):
         super().__init__(level=logging.INFO)
         self.webhook_url = url
@@ -127,22 +130,30 @@ class WebhookHandler(logging.Handler):
             return "***"
         return "/".join(parts[:-1] + ["***"])
 
-    def emit(self, record: logging.LogRecord):
+    def _send(self, payload: dict):
         try:
-            payload = self._build_payload(record)
             response = requests.post(
                 self.webhook_url,
                 json=payload,
                 timeout=5
             )
-
             if response.status_code >= 400:
                 root.error(
                     "WebhookHandler",
                     f"Discord rejected webhook payload ({response.status_code}): "
                     f"{response.text}"
                 )
+        except Exception as exc:
+            root.error(
+                "WebhookHandler",
+                f"Webhook logging failed: {exc}"
+            )
 
+    def emit(self, record: logging.LogRecord):
+        try:
+            payload = self._build_payload(record)
+            # Offload the network call so we never block the event loop
+            self._executor.submit(self._send, payload)
         except Exception as exc:
             root.error(
                 "WebhookHandler",

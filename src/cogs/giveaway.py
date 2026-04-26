@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 import re
+import json
 import datetime
 import random
 import asyncio
@@ -8,6 +9,104 @@ import asyncio
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 from utils.ai_config import get_personality
+
+
+# ─────────────────────────────────────────────────────────────
+#  REQUIREMENT HELPERS
+# ─────────────────────────────────────────────────────────────
+
+DEFAULT_REQUIREMENTS = {
+    "account_age_days": 0,   # minimum Discord account age (days)
+    "server_age_days":  0,   # minimum time the user has been in the guild (days)
+    "role_ids":         [],  # all of these role IDs must be held
+    "boost_required":   False,
+}
+
+
+def _load_reqs(raw) -> dict:
+    """Return a fully-populated requirements dict from a raw DB value."""
+    out = dict(DEFAULT_REQUIREMENTS)
+    if not raw:
+        return out
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    except (ValueError, TypeError):
+        return out
+    for key, default in DEFAULT_REQUIREMENTS.items():
+        if key in data and data[key] is not None:
+            out[key] = data[key]
+    if not isinstance(out["role_ids"], list):
+        out["role_ids"] = []
+    out["account_age_days"] = max(0, int(out["account_age_days"] or 0))
+    out["server_age_days"]  = max(0, int(out["server_age_days"] or 0))
+    out["boost_required"]   = bool(out["boost_required"])
+    return out
+
+
+def _dump_reqs(reqs: dict) -> str:
+    return json.dumps({k: reqs.get(k, v) for k, v in DEFAULT_REQUIREMENTS.items()})
+
+
+def _requirements_summary(reqs: dict, guild: discord.Guild | None = None) -> str:
+    """Human-readable bullet list of the current requirements (or 'None')."""
+    parts: list[str] = []
+    if reqs["account_age_days"] > 0:
+        parts.append(f"• Account age ≥ **{reqs['account_age_days']}** day(s)")
+    if reqs["server_age_days"] > 0:
+        parts.append(f"• Server member ≥ **{reqs['server_age_days']}** day(s)")
+    if reqs["role_ids"]:
+        if guild:
+            mentions = []
+            for rid in reqs["role_ids"]:
+                role = guild.get_role(rid)
+                mentions.append(role.mention if role else f"<@&{rid}>")
+            parts.append("• Required roles: " + ", ".join(mentions))
+        else:
+            parts.append(
+                "• Required roles: "
+                + ", ".join(f"<@&{rid}>" for rid in reqs["role_ids"])
+            )
+    if reqs["boost_required"]:
+        parts.append("• Must be boosting the server")
+    return "\n".join(parts) if parts else "_None — anyone can enter._"
+
+
+def _check_member_meets_reqs(member: discord.Member, reqs: dict) -> str | None:
+    """Return ``None`` if ``member`` meets every requirement, else a reason string."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if reqs["account_age_days"] > 0:
+        age = (now - member.created_at).days
+        if age < reqs["account_age_days"]:
+            return (
+                f"❌ Your Discord account must be at least "
+                f"**{reqs['account_age_days']}** day(s) old to join "
+                f"this giveaway (yours is **{age}**)."
+            )
+
+    if reqs["server_age_days"] > 0:
+        joined_at = getattr(member, "joined_at", None)
+        if joined_at is None:
+            return "❌ I can't verify how long you've been in this server, so you can't join this giveaway."
+        days_in = (now - joined_at).days
+        if days_in < reqs["server_age_days"]:
+            return (
+                f"❌ You must have been in this server for at least "
+                f"**{reqs['server_age_days']}** day(s) to join this giveaway "
+                f"(you've been here **{days_in}**)."
+            )
+
+    if reqs["role_ids"]:
+        member_role_ids = {r.id for r in member.roles}
+        missing = [rid for rid in reqs["role_ids"] if rid not in member_role_ids]
+        if missing:
+            mentions = ", ".join(f"<@&{rid}>" for rid in missing)
+            return f"❌ You're missing the required role(s): {mentions}."
+
+    if reqs["boost_required"] and getattr(member, "premium_since", None) is None:
+        return "❌ Only members boosting this server can join this giveaway."
+
+    return None
 
 # ─────────────────────────────────────────────────────────────
 #  MESSAGE TABLE
@@ -277,7 +376,8 @@ class _GiveawayJoinBtn(discord.ui.Button):
         user_id    = interaction.user.id
 
         giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id, ended FROM giveaways WHERE message_id = $1", message_id
+            "SELECT host_id, ended, requirements FROM giveaways WHERE message_id = $1",
+            message_id,
         )
         if not giveaway:
             return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
@@ -287,6 +387,13 @@ class _GiveawayJoinBtn(discord.ui.Button):
             return await interaction.response.send_message(msg(interaction, "join_host"), ephemeral=True)
         if interaction.user.bot:
             return await interaction.response.send_message(msg(interaction, "join_bot"), ephemeral=True)
+
+        # Enforce host-configured requirements (account age, server age, roles, boost).
+        reqs = _load_reqs(giveaway["requirements"])
+        if isinstance(interaction.user, discord.Member):
+            failure = _check_member_meets_reqs(interaction.user, reqs)
+            if failure:
+                return await interaction.response.send_message(failure, ephemeral=True)
 
         existing = await self._bot.cxn.fetchval(
             "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
@@ -561,6 +668,397 @@ def _build_manage_panel(bot, giveaway_row, guild=None) -> discord.ui.LayoutView:
 
 
 # ─────────────────────────────────────────────────────────────
+#  INTERACTIVE SETUP — `.giveaway start` panel
+# ─────────────────────────────────────────────────────────────
+
+def _parse_duration_str(value: str) -> int:
+    """Mirror of ``Giveaway.parse_duration`` but free-standing for the setup view."""
+    m = re.match(r"\s*([\d\.]+)\s*([smhd])\s*$", value.lower())
+    if not m:
+        return -1
+    try:
+        amount = float(m.group(1))
+        unit   = m.group(2)
+        return int(amount * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit])
+    except ValueError:
+        return -1
+
+
+def _format_duration(seconds: int) -> str:
+    if seconds <= 0:
+        return "—"
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    bits = []
+    if days:    bits.append(f"{days}d")
+    if hours:   bits.append(f"{hours}h")
+    if minutes: bits.append(f"{minutes}m")
+    if secs:    bits.append(f"{secs}s")
+    return " ".join(bits) if bits else "—"
+
+
+class _SetupState:
+    """Mutable state held by an in-flight giveaway-setup view."""
+    __slots__ = ("prize", "duration_s", "winners", "channel_id", "requirements")
+
+    def __init__(self, channel_id: int):
+        self.prize: str | None         = None
+        self.duration_s: int           = 0
+        self.winners: int              = 1
+        self.channel_id: int           = channel_id
+        self.requirements: dict        = dict(DEFAULT_REQUIREMENTS)
+        self.requirements["role_ids"] = []
+
+
+def _build_setup_view(bot, ctx_or_inter, state: _SetupState, host_id: int) -> "_GiveawaySetupView":
+    return _GiveawaySetupView(bot, ctx_or_inter, state, host_id)
+
+
+# ── Modals ──────────────────────────────────────────────────
+
+class _PrizeModal(discord.ui.Modal, title="Set Prize"):
+    prize = discord.ui.TextInput(
+        label="Prize", placeholder="e.g. Discord Nitro (1 month)",
+        max_length=200, required=True, style=discord.TextStyle.short,
+    )
+
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__()
+        self.parent = parent
+        if parent.state.prize:
+            self.prize.default = parent.state.prize
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.parent.state.prize = self.prize.value.strip()
+        await self.parent.refresh(interaction)
+
+
+class _DurationModal(discord.ui.Modal, title="Set Duration"):
+    duration = discord.ui.TextInput(
+        label="Duration", placeholder="30s · 10m · 2h · 1d",
+        max_length=20, required=True, style=discord.TextStyle.short,
+    )
+
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__()
+        self.parent = parent
+
+    async def on_submit(self, interaction: discord.Interaction):
+        seconds = _parse_duration_str(self.duration.value)
+        if seconds <= 0:
+            return await interaction.response.send_message(
+                msg(interaction, "invalid_duration"), ephemeral=True
+            )
+        self.parent.state.duration_s = seconds
+        await self.parent.refresh(interaction)
+
+
+class _WinnersModal(discord.ui.Modal, title="Set Winners"):
+    winners = discord.ui.TextInput(
+        label="Winners", placeholder="1",
+        max_length=4, required=True, style=discord.TextStyle.short,
+    )
+
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__()
+        self.parent = parent
+        self.winners.default = str(parent.state.winners)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        digits = "".join(ch for ch in self.winners.value if ch.isdigit())
+        if not digits or int(digits) < 1:
+            return await interaction.response.send_message(
+                msg(interaction, "min_one_winner"), ephemeral=True
+            )
+        self.parent.state.winners = int(digits)
+        await self.parent.refresh(interaction)
+
+
+class _AccountAgeModal(discord.ui.Modal, title="Minimum Account Age"):
+    days = discord.ui.TextInput(
+        label="Account age in days (0 = no requirement)",
+        placeholder="e.g. 7", max_length=5, required=True,
+        style=discord.TextStyle.short,
+    )
+
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__()
+        self.parent = parent
+        self.days.default = str(parent.state.requirements["account_age_days"])
+
+    async def on_submit(self, interaction: discord.Interaction):
+        digits = "".join(ch for ch in self.days.value if ch.isdigit())
+        value = int(digits) if digits else 0
+        self.parent.state.requirements["account_age_days"] = max(0, min(value, 3650))
+        await self.parent.refresh(interaction)
+
+
+class _ServerAgeModal(discord.ui.Modal, title="Minimum Time in Server"):
+    days = discord.ui.TextInput(
+        label="Days in server (0 = no requirement)",
+        placeholder="e.g. 3", max_length=5, required=True,
+        style=discord.TextStyle.short,
+    )
+
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__()
+        self.parent = parent
+        self.days.default = str(parent.state.requirements["server_age_days"])
+
+    async def on_submit(self, interaction: discord.Interaction):
+        digits = "".join(ch for ch in self.days.value if ch.isdigit())
+        value = int(digits) if digits else 0
+        self.parent.state.requirements["server_age_days"] = max(0, min(value, 3650))
+        await self.parent.refresh(interaction)
+
+
+# ── Buttons ─────────────────────────────────────────────────
+
+class _SetupBtn(discord.ui.Button):
+    def __init__(self, label: str, style, emoji, parent: "_GiveawaySetupView", action: str,
+                 *, row: int = 0):
+        super().__init__(label=label, style=style, emoji=emoji)
+        self.parent = parent
+        self.action = action
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent.host_id:
+            return await interaction.response.send_message(
+                "❌ Only the host of this setup can configure this giveaway.",
+                ephemeral=True,
+            )
+        action = self.action
+        if action == "prize":
+            return await interaction.response.send_modal(_PrizeModal(self.parent))
+        if action == "duration":
+            return await interaction.response.send_modal(_DurationModal(self.parent))
+        if action == "winners":
+            return await interaction.response.send_modal(_WinnersModal(self.parent))
+        if action == "account_age":
+            return await interaction.response.send_modal(_AccountAgeModal(self.parent))
+        if action == "server_age":
+            return await interaction.response.send_modal(_ServerAgeModal(self.parent))
+        if action == "boost":
+            self.parent.state.requirements["boost_required"] = (
+                not self.parent.state.requirements["boost_required"]
+            )
+            return await self.parent.refresh(interaction)
+        if action == "clear_roles":
+            self.parent.state.requirements["role_ids"] = []
+            return await self.parent.refresh(interaction)
+        if action == "cancel":
+            cancelled = discord.ui.LayoutView()
+            cancelled.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content="🗑 Giveaway setup cancelled."),
+                accent_colour=discord.Color.red(),
+            ))
+            return await interaction.response.edit_message(view=cancelled)
+        if action == "start":
+            return await self.parent.launch(interaction)
+
+
+class _SetupChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__(
+            placeholder="Pick the channel to host the giveaway in…",
+            channel_types=[discord.ChannelType.text, discord.ChannelType.news],
+            min_values=1, max_values=1,
+        )
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent.host_id:
+            return await interaction.response.send_message(
+                "❌ Only the host can configure this giveaway.", ephemeral=True
+            )
+        self.parent.state.channel_id = self.values[0].id
+        await self.parent.refresh(interaction)
+
+
+class _SetupRoleSelect(discord.ui.RoleSelect):
+    def __init__(self, parent: "_GiveawaySetupView"):
+        super().__init__(
+            placeholder="Pick required roles (entrants must hold all)…",
+            min_values=0, max_values=10,
+        )
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent.host_id:
+            return await interaction.response.send_message(
+                "❌ Only the host can configure this giveaway.", ephemeral=True
+            )
+        self.parent.state.requirements["role_ids"] = [r.id for r in self.values]
+        await self.parent.refresh(interaction)
+
+
+# ── Setup view ─────────────────────────────────────────────
+
+class _GiveawaySetupView(discord.ui.LayoutView):
+    """Interactive panel returned by ``.giveaway start``."""
+
+    def __init__(self, bot, ctx_or_inter, state: _SetupState, host_id: int):
+        super().__init__(timeout=600)
+        self.bot       = bot
+        self.state     = state
+        self.host_id   = host_id
+        self.guild     = getattr(ctx_or_inter, "guild", None)
+        self.message: discord.Message | None = None  # set after the first send
+        self._build()
+
+    # ── building ───────────────────────────────────────
+
+    def _build(self):
+        self.clear_items()
+        s = self.state
+        guild = self.guild
+
+        channel_disp = f"<#{s.channel_id}>" if s.channel_id else "—"
+        prize_disp   = s.prize if s.prize else "_not set_"
+        dur_disp     = _format_duration(s.duration_s)
+
+        summary = (
+            f"**Prize:** {prize_disp}\n"
+            f"**Duration:** {dur_disp}\n"
+            f"**Winners:** {s.winners}\n"
+            f"**Channel:** {channel_disp}"
+        )
+        reqs_text = _requirements_summary(s.requirements, guild)
+
+        boost_label = (
+            "Booster Only ✓" if s.requirements["boost_required"] else "Booster Only"
+        )
+        boost_style = (
+            discord.ButtonStyle.success if s.requirements["boost_required"]
+            else discord.ButtonStyle.secondary
+        )
+
+        ready = bool(s.prize) and s.duration_s > 0 and s.channel_id
+        start_style = discord.ButtonStyle.success if ready else discord.ButtonStyle.secondary
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### 🎉 Giveaway Setup"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=summary),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=f"**Requirements**\n{reqs_text}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                _SetupBtn("Prize",    discord.ButtonStyle.primary,   "🎁", self, "prize"),
+                _SetupBtn("Duration", discord.ButtonStyle.primary,   "⏳", self, "duration"),
+                _SetupBtn("Winners",  discord.ButtonStyle.primary,   "🏆", self, "winners"),
+            ),
+            discord.ui.ActionRow(_SetupChannelSelect(self)),
+            discord.ui.ActionRow(_SetupRoleSelect(self)),
+            discord.ui.ActionRow(
+                _SetupBtn("Account Age", discord.ButtonStyle.secondary, "📅", self, "account_age"),
+                _SetupBtn("Server Time", discord.ButtonStyle.secondary, "🏠", self, "server_age"),
+                _SetupBtn(boost_label,   boost_style,                   "💎", self, "boost"),
+                _SetupBtn("Clear Roles", discord.ButtonStyle.secondary, "🧹", self, "clear_roles"),
+            ),
+            discord.ui.ActionRow(
+                _SetupBtn("Start Giveaway", start_style,                 "🎉", self, "start"),
+                _SetupBtn("Cancel",         discord.ButtonStyle.danger,  "🗑", self, "cancel"),
+            ),
+            accent_colour=discord.Color.purple(),
+        )
+        self.add_item(container)
+
+    async def refresh(self, interaction: discord.Interaction):
+        self._build()
+        await interaction.response.edit_message(view=self)
+
+    async def on_timeout(self):
+        if self.message is None:
+            return
+        try:
+            timeout_view = discord.ui.LayoutView()
+            timeout_view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content="⌛ Giveaway setup timed out."),
+                accent_colour=discord.Color.greyple(),
+            ))
+            await self.message.edit(view=timeout_view)
+        except discord.HTTPException:
+            pass
+
+    # ── launching the giveaway from setup state ─────────
+
+    async def launch(self, interaction: discord.Interaction):
+        s = self.state
+        problems = []
+        if not s.prize:
+            problems.append("• Prize is not set")
+        if s.duration_s <= 0:
+            problems.append("• Duration is not set")
+        if not s.channel_id:
+            problems.append("• Channel is not set")
+        if problems:
+            return await interaction.response.send_message(
+                "❌ Can't start the giveaway yet:\n" + "\n".join(problems),
+                ephemeral=True,
+            )
+
+        guild   = interaction.guild
+        channel = guild.get_channel(s.channel_id) if guild else None
+        if channel is None:
+            return await interaction.response.send_message(
+                "❌ I can't find the configured channel anymore.", ephemeral=True
+            )
+        me = guild.me if guild else None
+        if me and not channel.permissions_for(me).send_messages:
+            return await interaction.response.send_message(
+                f"❌ I can't send messages in {channel.mention}.", ephemeral=True
+            )
+
+        end_time      = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=s.duration_s)
+        end_timestamp = int(end_time.timestamp())
+        author_mention = f"<@{self.host_id}>"
+
+        # Step 1: send a stub message in the chosen channel to obtain its ID.
+        content_view = _build_content_view(
+            s.prize, end_timestamp, s.winners, author_mention, guild
+        )
+        sent = await channel.send(view=content_view)
+
+        # Step 2: register persistent buttons + edit them in.
+        active_view = _build_active_view(
+            self.bot, sent.id, s.prize, end_timestamp, s.winners,
+            author_mention, guild,
+        )
+        persistent_view = _make_persistent_view(self.bot, sent.id)
+        self.bot.add_view(persistent_view, message_id=sent.id)
+        await sent.edit(view=active_view)
+
+        # Step 3: persist everything to the DB, including requirements.
+        await self.bot.cxn.execute(
+            "INSERT INTO giveaways "
+            "(message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id, requirements) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            sent.id, channel.id, guild.id,
+            s.prize, s.winners, end_time.isoformat(), False, self.host_id,
+            _dump_reqs(s.requirements),
+        )
+
+        # Step 4: collapse the setup panel.
+        done_view = discord.ui.LayoutView()
+        reqs_line = _requirements_summary(s.requirements, guild)
+        done_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    f"### {get_emoji('icon_tick')} Giveaway started!\n"
+                    f"**Prize:** {s.prize}\n"
+                    f"**Channel:** {channel.mention}\n"
+                    f"**Ends:** <t:{end_timestamp}:R>\n\n"
+                    f"**Requirements**\n{reqs_line}"
+                )
+            ),
+            accent_colour=discord.Color.green(),
+        ))
+        await interaction.response.edit_message(view=done_view)
+
+
+# ─────────────────────────────────────────────────────────────
 #  GIVEAWAY COG
 # ─────────────────────────────────────────────────────────────
 
@@ -579,7 +1077,8 @@ class Giveaway(commands.Cog):
                 winners_count INTEGER,
                 end_time      TEXT,
                 ended         BOOLEAN DEFAULT 0,
-                host_id       INTEGER
+                host_id       INTEGER,
+                requirements  TEXT
             )
         """)
         await self.bot.cxn.execute("""
@@ -589,6 +1088,11 @@ class Giveaway(commands.Cog):
                 PRIMARY KEY (message_id, user_id)
             )
         """)
+        # Migrate older databases: add the requirements column if missing.
+        try:
+            await self.bot.cxn.execute("ALTER TABLE giveaways ADD COLUMN requirements TEXT")
+        except Exception:
+            pass
 
         # Sanitise rows with unparseable end_time
         await self.bot.cxn.execute(
@@ -642,43 +1146,17 @@ class Giveaway(commands.Cog):
 
     @giveaway.command(name="start")
     @commands.has_permissions(manage_guild=True)
-    async def start(self, ctx, duration: str, winners: str, *, prize: str):
-        """Start a new giveaway.  Usage: .giveaway start <duration> <winners> <prize>"""
-        seconds = self.parse_duration(duration)
-        if seconds <= 0:
-            return await ctx.send(msg(ctx, "invalid_duration"))
+    async def start(self, ctx, *, _ignored: str = ""):
+        """Open the interactive giveaway setup panel.
 
-        winners_clean = "".join(filter(str.isdigit, winners))
-        if not winners_clean:
-            return await ctx.send(msg(ctx, "invalid_winners"))
-        winners_count = int(winners_clean)
-        if winners_count < 1:
-            return await ctx.send(msg(ctx, "min_one_winner"))
-
-        end_time      = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=seconds)
-        end_timestamp = int(end_time.timestamp())
-
-        # Step 1: send content without buttons to obtain the message_id
-        content_view = _build_content_view(prize, end_timestamp, winners_count,
-                                           ctx.author.mention, ctx.guild)
-        sent = await ctx.send(view=content_view)
-
-        # Step 2: build the interactive view now that we know the message_id,
-        #         register the persistent handler, then edit in the buttons
-        active_view     = _build_active_view(self.bot, sent.id, prize, end_timestamp,
-                                             winners_count, ctx.author.mention, ctx.guild)
-        persistent_view = _make_persistent_view(self.bot, sent.id)
-        self.bot.add_view(persistent_view, message_id=sent.id)
-        await sent.edit(view=active_view)
-
-        # Step 3: persist to DB
-        await self.bot.cxn.execute(
-            "INSERT INTO giveaways "
-            "(message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            sent.id, ctx.channel.id, ctx.guild.id,
-            prize, winners_count, end_time.isoformat(), False, ctx.author.id
-        )
+        All settings — prize, duration, winners, channel, and join requirements
+        (account age, time in server, required roles, booster-only) — are
+        configured through the buttons on the panel that this command sends.
+        """
+        state = _SetupState(channel_id=ctx.channel.id)
+        view  = _build_setup_view(self.bot, ctx, state, ctx.author.id)
+        sent  = await ctx.send(view=view)
+        view.message = sent
 
     @giveaway.command(name="reroll")
     @commands.has_permissions(manage_guild=True)

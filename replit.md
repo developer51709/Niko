@@ -28,6 +28,18 @@ Preferred communication style: Simple, everyday language.
 - **Hybrid (slash + prefix) commands**: Several commands use `commands.hybrid_command` so they work both as `!play` and `/play`. Slash sync runs as a background task on startup via `_run_slash_sync()` in `bot.py`. NOTE: hybrid command `description=` must be ≤100 chars; the longer trilingual JSON string lives in `help=`. `music.play` has a `_play_autocomplete` that ytsearches with a 30s in-memory cache.
 - **Personality**: `PERSONALITY = "cafe"` across all cogs for cozy café-themed text.
 
+### Rate Limiting (`src/utils/ratelimit.py`)
+- Async rolling-window `RateLimiter(max_calls, per_seconds)` with `try_acquire(key)` returning `True` if allowed.
+- Three shared instances:
+  - `log_channel_limiter` (4 / 5 s per `(guild_id, channel_id)`) — used in `logging_cog.log_event` to throttle bursts.
+  - `welcome_limiter` (3 / 5 s per `guild_id`) — used in `onboarding.on_member_join` for the welcome message send.
+  - `role_assign_limiter` (5 / 5 s per `guild_id`) — used in `onboarding.on_member_join` before each autorole assignment, with `discord.HTTPException` try/except.
+
+### Event-Loop Hygiene
+- AI calls (`generate_reply_*`) run via `loop.run_in_executor(None, generate_reply, ...)` in `src/bot.py`, so the underlying `requests.*` calls in `utils/ai_*` do not block.
+- Cog-level `requests.*` calls converted to `await asyncio.to_thread(requests.get, ...)`: `cuteanimals.py` (cuteanimal/cat/dog), `nsfw.py` (rule34/gelbooru), and the `realbooru` command's `search_realbooru` / `get_post_details` helpers.
+- `WebhookHandler.emit` in `src/utils/logging.py` offloads `requests.post` to a 2-worker `ThreadPoolExecutor` so logging never blocks the event loop.
+
 ### Critical Design Notes
 - Do NOT use `discord.TextChannel | None` union type hints — use `= None` default instead.
 - The `edit` tool can fail with "did not appear verbatim" for files with special chars (é, ü, ☕). Use the `write` tool to fully rewrite such files.
@@ -101,14 +113,16 @@ Preferred communication style: Simple, everyday language.
 - Dashboard: "Ext. App Raid" section with toggle + threshold modal accessible from `!automod`
 
 ### Giveaway System
-- Tables: `giveaways` (message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id) and `participants` (message_id, user_id) in `data/database.db` via `bot.cxn`
+- Tables: `giveaways` (message_id, channel_id, guild_id, prize, winners_count, end_time, ended, host_id, **requirements TEXT**) and `participants` (message_id, user_id) in `data/database.db` via `bot.cxn`. ALTER TABLE migration in `cog_load` adds `requirements` column to existing DBs.
 - Persistent across restarts: `GiveawayPersistentView` registered via `bot.add_view()` in `cog_load` — only the two main-message buttons have fixed `custom_id`s (`giveaway_system_join`, `giveaway_system_manage`)
 - Active giveaway messages show **Join** + **Manage** buttons. Manage opens an ephemeral management panel (host or server admin only) containing: End Giveaway, Select Random, and Participants buttons
 - Management panel buttons are NOT persistent (ephemeral, created fresh per click); they use `interaction.response.edit_message` to update the panel in-place
 - Participants button edits the ephemeral panel to a `PaginatedView` (15 per page, ◀/▶ nav)
 - Ended messages use `_build_ended_view()` (LayoutView, no buttons); `end_giveaway()` edits the original public message
 - Full bilingual EN/DE + normal/cafe personality MESSAGES table; `msg(ctx_or_interaction, key)` and `_guild_msg(guild, key)` helpers for task callbacks
-- Commands: `.giveaway start <duration> <winners> <prize>`, `.giveaway reroll <message_id>`
+- **Setup panel**: `.giveaway start` now opens an interactive `_GiveawaySetupView` (LayoutView) in-channel — modals for Prize/Duration/Winners/AccountAge/ServerAge, ChannelSelect, RoleSelect, Boost toggle, Clear Roles, Start, Cancel. Per-button `host_id` interaction check (no `view.interaction_check`).
+- **Join requirements** persisted as JSON (`{min_account_age_days, min_server_age_days, required_role_ids[], require_boost}`); enforced in the Join button via `_check_member_meets_reqs`. Helper `_requirements_summary` renders them on the giveaway embed.
+- Other commands: `.giveaway reroll <message_id>`
 - Background task (`check_giveaways`) fires every 15 s
 
 ### Tickets (Restructured — `ticket` hybrid group)
