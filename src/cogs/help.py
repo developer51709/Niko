@@ -70,6 +70,8 @@ def _ui(lang: str, key: str, **kwargs) -> str:
 _UI_STRINGS: dict[str, dict] = {
     "en": {
         "dropdown_placeholder": "☕ Pick a category…",
+        "dropdown_more_label":  "More categories (page {page}/{total})",
+        "dropdown_more_desc":   "Show the next page of categories",
         "no_commands":          "*No commands found.*",
         "no_desc":              "No description provided.",
         "cmd_not_found_title":  "Command Not Found",
@@ -93,6 +95,8 @@ _UI_STRINGS: dict[str, dict] = {
     },
     "es": {
         "dropdown_placeholder": "☕ Elige una categoría…",
+        "dropdown_more_label":  "Más categorías (página {page}/{total})",
+        "dropdown_more_desc":   "Mostrar la siguiente página de categorías",
         "no_commands":          "*No se encontraron comandos.*",
         "no_desc":              "Sin descripción.",
         "cmd_not_found_title":  "Comando no encontrado",
@@ -116,6 +120,8 @@ _UI_STRINGS: dict[str, dict] = {
     },
     "de": {
         "dropdown_placeholder": "☕ Kategorie auswählen…",
+        "dropdown_more_label":  "Weitere Kategorien (Seite {page}/{total})",
+        "dropdown_more_desc":   "Nächste Seite mit Kategorien anzeigen",
         "no_commands":          "*Keine Befehle gefunden.*",
         "no_desc":              "Keine Beschreibung verfügbar.",
         "cmd_not_found_title":  "Befehl nicht gefunden",
@@ -786,20 +792,53 @@ async def _command_detail_text(
 #  DROPDOWN
 # ===================================================
 
-class HelpDropdown(discord.ui.Select):
-    """Category dropdown — options are localised per guild locale."""
+_DROPDOWN_PAGE_SIZE = 24  # Discord max is 25; reserve 1 slot for the page-switch sentinel
+_DROPDOWN_NAV_VALUE = "__help_nav_page__"
 
-    def __init__(self, bot: commands.Bot, lang: str = "en"):
+
+class HelpDropdown(discord.ui.Select):
+    """Category dropdown — options are localised per guild locale.
+
+    Discord's Select component is capped at 25 options. We have more categories
+    than that, so the dropdown is paginated: each page shows up to 24 categories
+    plus a 25th sentinel option that flips to the next page.
+    """
+
+    def __init__(self, bot: commands.Bot, lang: str = "en", page: int = 0):
         self.bot  = bot
         self.lang = lang
-        options   = [
+
+        total       = len(_CATEGORY_LIST)
+        total_pages = max(1, (total + _DROPDOWN_PAGE_SIZE - 1) // _DROPDOWN_PAGE_SIZE)
+        self.page   = max(0, min(page, total_pages - 1))
+        self.total_pages = total_pages
+
+        start = self.page * _DROPDOWN_PAGE_SIZE
+        end   = start + _DROPDOWN_PAGE_SIZE
+        slice_ = _CATEGORY_LIST[start:end]
+
+        options = [
             discord.SelectOption(
                 label=label,
                 description=_category_desc(lang, label),
                 emoji=emoji,
             )
-            for label, emoji in _CATEGORY_LIST
+            for label, emoji in slice_
         ]
+
+        if total_pages > 1:
+            next_page_idx = (self.page + 1) % total_pages
+            options.append(
+                discord.SelectOption(
+                    label=_ui(lang, "dropdown_more_label").format(
+                        page=next_page_idx + 1, total=total_pages
+                    ),
+                    value=f"{_DROPDOWN_NAV_VALUE}:{next_page_idx}",
+                    description=_ui(lang, "dropdown_more_desc"),
+                    emoji="➡️",
+                )
+            )
+
         super().__init__(
             placeholder=_ui(lang, "dropdown_placeholder"),
             min_values=1,
@@ -809,12 +848,33 @@ class HelpDropdown(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         lang     = get_lang(interaction)
-        category = self.values[0]
+        value    = self.values[0]
+
+        # Page-switch sentinel — re-render current message with the new dropdown page,
+        # keeping whatever content (general or category) was already shown.
+        if value.startswith(_DROPDOWN_NAV_VALUE):
+            try:
+                next_page = int(value.split(":", 1)[1])
+            except (ValueError, IndexError):
+                next_page = 0
+            content = _general_text(self.bot, lang)
+            view    = _make_layout(
+                self.bot, content, lang,
+                include_dropdown=True, general_page=True,
+                dropdown_page=next_page,
+            )
+            return await interaction.response.edit_message(view=view)
+
+        category  = value
         cog_names = CATEGORY_COGS.get(category, [])
 
         if category == "General":
             content = _general_text(self.bot, lang)
-            view    = _make_layout(self.bot, content, lang, include_dropdown=True, general_page=True)
+            view    = _make_layout(
+                self.bot, content, lang,
+                include_dropdown=True, general_page=True,
+                dropdown_page=self.page,
+            )
             return await interaction.response.edit_message(view=view)
 
         page                      = 1
@@ -831,6 +891,7 @@ class HelpDropdown(discord.ui.Select):
             ctx_or_interaction=interaction,
             page=page,
             total_pages=total_pages,
+            dropdown_page=self.page,
         )
         view.header_display.content   = header
         view.commands_display.content = commands_content
@@ -863,6 +924,7 @@ class HelpPagination(discord.ui.LayoutView):
         ctx_or_interaction,
         page: int = 1,
         total_pages: int = 1,
+        dropdown_page: int = 0,
     ):
         super().__init__(timeout=None)
         self.bot                = bot
@@ -872,6 +934,7 @@ class HelpPagination(discord.ui.LayoutView):
         self.page               = page
         self.total_pages        = total_pages
         self.ctx_or_interaction = ctx_or_interaction
+        self.dropdown_page      = dropdown_page
 
         self.header_display:   discord.ui.TextDisplay
         self.commands_display: discord.ui.TextDisplay
@@ -921,7 +984,7 @@ class HelpPagination(discord.ui.LayoutView):
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
         )
-        container.add_item(discord.ui.ActionRow(HelpDropdown(self.bot, self.lang)))
+        container.add_item(discord.ui.ActionRow(HelpDropdown(self.bot, self.lang, page=self.dropdown_page)))
         self.add_item(container)
 
     async def _update_content(self, interaction: discord.Interaction):
@@ -962,6 +1025,7 @@ def _make_layout(
     lang: str = "en",
     include_dropdown: bool = True,
     general_page: bool = False,
+    dropdown_page: int = 0,
 ) -> discord.ui.LayoutView:
     view      = discord.ui.LayoutView()
     container = discord.ui.Container()
@@ -979,7 +1043,7 @@ def _make_layout(
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
         )
-        container.add_item(discord.ui.ActionRow(HelpDropdown(bot, lang)))
+        container.add_item(discord.ui.ActionRow(HelpDropdown(bot, lang, page=dropdown_page)))
 
     view.add_item(container)
     return view
