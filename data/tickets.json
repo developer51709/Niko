@@ -171,5 +171,35 @@
     "panel_channel_id": 1497253295184543847,
     "panel_message_id": 1497254635189174312,
     "open_tickets": []
+  },
+  "1496921270279868487": {
+    "guild_id": 1496921270279868487,
+    "panel_title": "Aether Lounge Tickets",
+    "panel_description": "Use the button to open a ticket.\n\n**Do not open multiple tickets or you will be ignored**",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "Report a member or staff",
+      "Staff Application",
+      "Other"
+    ],
+    "panel_channel_id": 1497727505006723162,
+    "panel_message_id": 1497728192377520222,
+    "open_tickets": [
+      {
+        "channel_id": 1497749578361868539,
+        "message_id": 1497749579896983714,
+        "category": "Staff Application",
+        "opener_id": 911463582598844486,
+        "status": "open"
+      },
+      {
+        "channel_id": 1497750898108268736,
+        "message_id": 1497750899504975932,
+        "category": "Staff Application",
+        "opener_id": 1475010378114269290,
+        "status": "open"
+      }
+    ]
   }
 }

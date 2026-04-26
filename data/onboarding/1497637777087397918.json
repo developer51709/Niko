@@ -1,0 +1,23 @@
+{
+    "welcome_channel": 1497637777951690995,
+    "welcome_title": "Welcome!",
+    "welcome_description": "Welcome to the Bumpify Support server {user}!",
+    "welcome_color": 5793266,
+    "welcome_image": null,
+    "rules_channel": null,
+    "rules_message_id": null,
+    "rules_text": null,
+    "rules_role_id": null,
+    "role_menu_channel": null,
+    "role_menu_message_id": null,
+    "role_menu_options": null,
+    "autorole_ids": [
+        1497639201204867194
+    ],
+    "captcha_enabled": false,
+    "captcha_channel_id": null,
+    "captcha_panel_message_id": null,
+    "captcha_add_role_ids": null,
+    "captcha_remove_role_ids": null,
+    "captcha_kick_on_fail": false
+}
