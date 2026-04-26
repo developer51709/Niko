@@ -12,6 +12,7 @@
     ],
     "panel_channel_id": 1488008643101065278,
     "panel_message_id": 1488262594111344772,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1494039330987970681,
@@ -56,6 +57,7 @@
     ],
     "panel_channel_id": 1472038470313705675,
     "panel_message_id": 1491898738359275643,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1494389983551819836,
@@ -75,6 +77,7 @@
     "panel_categories": [],
     "panel_channel_id": 1492596494719520922,
     "panel_message_id": 1492750423814049813,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1492750512120922264,
@@ -99,6 +102,7 @@
     ],
     "panel_channel_id": 1493962341249843392,
     "panel_message_id": 1493962990385631303,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1494029539620163614,
@@ -118,6 +122,7 @@
     "panel_categories": [],
     "panel_channel_id": 1495258758883049645,
     "panel_message_id": 1495258834866802768,
+    "support_roles": [],
     "open_tickets": []
   },
   "1495899475456032911": {
@@ -129,6 +134,7 @@
     "panel_categories": [],
     "panel_channel_id": 1495932591050719243,
     "panel_message_id": 1495932645907890196,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1495933482352775259,
@@ -148,6 +154,7 @@
     "panel_categories": [],
     "panel_channel_id": 1496163458503278702,
     "panel_message_id": 1496671047875825828,
+    "support_roles": [],
     "open_tickets": [
       {
         "channel_id": 1496671910476648458,
@@ -170,6 +177,7 @@
     ],
     "panel_channel_id": 1497253295184543847,
     "panel_message_id": 1497254635189174312,
+    "support_roles": [],
     "open_tickets": []
   },
   "1496921270279868487": {
@@ -185,21 +193,9 @@
     ],
     "panel_channel_id": 1497727505006723162,
     "panel_message_id": 1497728192377520222,
-    "open_tickets": [
-      {
-        "channel_id": 1497749578361868539,
-        "message_id": 1497749579896983714,
-        "category": "Staff Application",
-        "opener_id": 911463582598844486,
-        "status": "open"
-      },
-      {
-        "channel_id": 1497750898108268736,
-        "message_id": 1497750899504975932,
-        "category": "Staff Application",
-        "opener_id": 1475010378114269290,
-        "status": "open"
-      }
-    ]
+    "support_roles": [
+      1497305596196683796
+    ],
+    "open_tickets": []
   }
 }

@@ -544,7 +544,7 @@ async def create_ticket(interaction: discord.Interaction, category: str):
     )
 
     view = TicketWelcomeView(category, user)
-    msg_obj = await channel.send(content=user.mention, view=view)
+    msg_obj = await channel.send(view=view)
 
     cfg.open_tickets.append({
         "channel_id": channel.id,
@@ -613,7 +613,7 @@ class Tickets(commands.Cog):
         cfg.panel_message_id = sent.id
         cfg.panel_channel_id = ctx.channel.id
         update_ticket_config(ctx.guild.id, cfg)
-        await ctx.send(_cv2_text(ctx, "panel_posted", channel=ctx.channel.mention), ephemeral=True if ctx.interaction else False)
+        await ctx.send(view=_cv2_text(ctx, "panel_posted", channel=ctx.channel.mention), ephemeral=True if ctx.interaction else False)
 
     # ───── admin: category management ─────────────
 
@@ -636,11 +636,11 @@ class Tickets(commands.Cog):
     async def ticket_category_add(self, ctx: commands.Context, *, name: str):
         cfg = get_ticket_config(ctx.guild.id)
         if name in cfg.panel_categories:
-            return await ctx.send(_cv2_text(ctx, "category_exists", name=name))
+            return await ctx.send(view=_cv2_text(ctx, "category_exists", name=name))
         cfg.panel_categories.append(name)
         update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
-        await ctx.send(_cv2_text(ctx, "category_added", name=name))
+        await ctx.send(view=_cv2_text(ctx, "category_added", name=name))
 
     @ticket_category.command(
         name="remove",
@@ -650,11 +650,11 @@ class Tickets(commands.Cog):
     async def ticket_category_remove(self, ctx: commands.Context, *, name: str):
         cfg = get_ticket_config(ctx.guild.id)
         if name not in cfg.panel_categories:
-            return await ctx.send(_cv2_text(ctx, "category_missing", name=name))
+            return await ctx.send(view=_cv2_text(ctx, "category_missing", name=name))
         cfg.panel_categories.remove(name)
         update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
-        await ctx.send(_cv2_text(ctx, "category_removed", name=name))
+        await ctx.send(view=_cv2_text(ctx, "category_removed", name=name))
 
     @ticket_category.command(
         name="list",
@@ -664,9 +664,9 @@ class Tickets(commands.Cog):
     async def ticket_category_list(self, ctx: commands.Context):
         cfg = get_ticket_config(ctx.guild.id)
         if not cfg.panel_categories:
-            return await ctx.send(_cv2_text(ctx, "categories_empty"))
+            return await ctx.send(view=_cv2_text(ctx, "categories_empty"))
         body = "\n".join(f"• **{c}**" for c in cfg.panel_categories)
-        await ctx.send(_cv2_text(ctx, "categories_list", list=body))
+        await ctx.send(view=_cv2_text(ctx, "categories_list", list=body))
 
     # ───── admin: support role management ─────────
 
@@ -689,10 +689,10 @@ class Tickets(commands.Cog):
     async def ticket_support_add(self, ctx: commands.Context, role: discord.Role):
         cfg = get_ticket_config(ctx.guild.id)
         if role.id in cfg.support_roles:
-            return await ctx.send(_cv2_text(ctx, "support_exists", role=role.mention))
+            return await ctx.send(view=_cv2_text(ctx, "support_exists", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.append(role.id)
         update_ticket_config(ctx.guild.id, cfg)
-        await ctx.send(_cv2_text(ctx, "support_added", role=role.mention))
+        await ctx.send(view=_cv2_text(ctx, "support_added", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
         name="remove",
@@ -702,10 +702,10 @@ class Tickets(commands.Cog):
     async def ticket_support_remove(self, ctx: commands.Context, role: discord.Role):
         cfg = get_ticket_config(ctx.guild.id)
         if role.id not in cfg.support_roles:
-            return await ctx.send(_cv2_text(ctx, "support_missing", role=role.mention))
+            return await ctx.send(view=_cv2_text(ctx, "support_missing", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.remove(role.id)
         update_ticket_config(ctx.guild.id, cfg)
-        await ctx.send(_cv2_text(ctx, "support_removed", role=role.mention))
+        await ctx.send(view=_cv2_text(ctx, "support_removed", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
         name="list",
@@ -715,12 +715,12 @@ class Tickets(commands.Cog):
     async def ticket_support_list(self, ctx: commands.Context):
         cfg = get_ticket_config(ctx.guild.id)
         if not cfg.support_roles:
-            return await ctx.send(_cv2_text(ctx, "support_empty"))
+            return await ctx.send(view=_cv2_text(ctx, "support_empty"))
         body = "\n".join(
             f"• {ctx.guild.get_role(rid).mention if ctx.guild.get_role(rid) else f'`{rid}`'}"
             for rid in cfg.support_roles
         )
-        await ctx.send(_cv2_text(ctx, "support_list", list=body))
+        await ctx.send(view=_cv2_text(ctx, "support_list", list=body), allowed_mentions=discord.AllowedMentions.none())
 
     # ───── in-ticket: add user ────────────────────
 
@@ -732,19 +732,19 @@ class Tickets(commands.Cog):
     @commands.guild_only()
     async def ticket_add(self, ctx: commands.Context, user: discord.Member):
         if not is_ticket_channel(ctx):
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_manage"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         existing = ctx.channel.overwrites_for(user)
         if existing.read_messages:
-            return await ctx.send(_cv2_text(ctx, "user_already_added", user=user.mention))
+            return await ctx.send(view=_cv2_text(ctx, "user_already_added", user=user.mention))
         await ctx.channel.set_permissions(
             user, read_messages=True, send_messages=True,
             attach_files=True, embed_links=True,
             reason=f"Added by {ctx.author}",
         )
-        await ctx.send(_cv2_text(ctx, "user_added", user=user.mention))
+        await ctx.send(view=_cv2_text(ctx, "user_added", user=user.mention))
 
     # ───── in-ticket: remove user ─────────────────
 
@@ -756,15 +756,15 @@ class Tickets(commands.Cog):
     @commands.guild_only()
     async def ticket_remove(self, ctx: commands.Context, user: discord.Member):
         if not is_ticket_channel(ctx):
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_manage"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         existing = ctx.channel.overwrites_for(user)
         if not existing.read_messages:
-            return await ctx.send(_cv2_text(ctx, "user_not_in_ticket", user=user.mention))
+            return await ctx.send(view=_cv2_text(ctx, "user_not_in_ticket", user=user.mention))
         await ctx.channel.set_permissions(user, overwrite=None, reason=f"Removed by {ctx.author}")
-        await ctx.send(_cv2_text(ctx, "user_removed", user=user.mention))
+        await ctx.send(view=_cv2_text(ctx, "user_removed", user=user.mention))
 
     # ───── in-ticket: rename ──────────────────────
 
@@ -776,15 +776,15 @@ class Tickets(commands.Cog):
     @commands.guild_only()
     async def ticket_rename(self, ctx: commands.Context, *, name: str):
         if not is_ticket_channel(ctx):
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_manage"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         clean = name.strip().lower().replace(" ", "-")[:90]
         await ctx.channel.edit(name=clean, reason=f"Renamed by {ctx.author}")
-        await ctx.send(_cv2_text(ctx, "renamed", name=clean))
+        await ctx.send(view=_cv2_text(ctx, "renamed", name=clean))
 
     # ───── in-ticket: claim ───────────────────────
 
@@ -797,18 +797,18 @@ class Tickets(commands.Cog):
     async def ticket_claim(self, ctx: commands.Context):
         ticket = is_ticket_channel(ctx)
         if not ticket:
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_manage"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         existing = ticket.get("claimed_by")
         if existing and existing != ctx.author.id:
             other = ctx.guild.get_member(existing)
             who = other.mention if other else f"<@{existing}>"
-            return await ctx.send(_cv2_text(ctx, "already_claimed", user=who))
+            return await ctx.send(view=_cv2_text(ctx, "already_claimed", user=who))
         ticket["claimed_by"] = ctx.author.id
         update_ticket_config(ctx.guild.id, cfg)
-        await ctx.send(_cv2_text(ctx, "claimed", user=ctx.author.mention))
+        await ctx.send(view=_cv2_text(ctx, "claimed", user=ctx.author.mention))
 
     # ───── in-ticket: transcript ──────────────────
 
@@ -820,10 +820,10 @@ class Tickets(commands.Cog):
     @commands.guild_only()
     async def ticket_transcript(self, ctx: commands.Context):
         if not is_ticket_channel(ctx):
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_manage"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         lines = []
@@ -849,10 +849,10 @@ class Tickets(commands.Cog):
     async def ticket_close(self, ctx: commands.Context):
         ticket = is_ticket_channel(ctx)
         if not ticket:
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_close"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_close"))
 
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
@@ -877,7 +877,7 @@ class Tickets(commands.Cog):
         ticket["status"] = "closed"
         update_ticket_config(ctx.guild.id, cfg)
 
-        await ctx.send(_cv2_text(ctx, "closed", user=ctx.author.mention))
+        await ctx.send(view=_cv2_text(ctx, "closed", user=ctx.author.mention))
 
     # ───── in-ticket: delete ──────────────────────
 
@@ -890,13 +890,13 @@ class Tickets(commands.Cog):
     async def ticket_delete(self, ctx: commands.Context, seconds: int = 5):
         ticket = is_ticket_channel(ctx)
         if not ticket:
-            return await ctx.send(_cv2_text(ctx, "not_in_ticket"))
+            return await ctx.send(view=_cv2_text(ctx, "not_in_ticket"))
         cfg = get_ticket_config(ctx.guild.id)
         if not has_support_perms(ctx.author, cfg):
-            return await ctx.send(_cv2_text(ctx, "no_perm_delete"))
+            return await ctx.send(view=_cv2_text(ctx, "no_perm_delete"))
 
         seconds = max(1, min(seconds, 30))
-        await ctx.send(_cv2_text(ctx, "deleting", seconds=seconds))
+        await ctx.send(view=_cv2_text(ctx, "deleting", seconds=seconds))
         await asyncio.sleep(seconds)
 
         # remove from open tickets list

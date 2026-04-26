@@ -1,0 +1,11 @@
+{
+  "guilds": {
+    "1496921270279868487": {
+      "channel_id": 1497788826376998942,
+      "threshold": 3,
+      "emoji": "\u2b50",
+      "ignored_channels": []
+    }
+  },
+  "starred": {}
+}
