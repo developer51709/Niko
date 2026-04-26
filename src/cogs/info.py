@@ -542,7 +542,7 @@ class InfoCog(commands.Cog):
             f"**{msg(ctx, 'serverinfo_users')}:** `{humans}`\n"
             f"**{msg(ctx, 'serverinfo_bots')}:** `{bots}`\n"
             f"**{msg(ctx, 'serverinfo_roles')}:** `{len(server.roles)}`\n"
-            f"**{msg(ctx, 'serverinfo_created')}:** `{server.created_at:%Y-%m-%d}`\n"
+            f"**{msg(ctx, 'serverinfo_created')}:** <t:{int(server.created_at.timestamp())}:f> (<t:{int(server.created_at.timestamp())}:R>)\n"
             f"**{msg(ctx, 'serverinfo_owner')}:** {server.owner}"
         )
         await ctx.send(view=cv2_text(text, thumbnail_url=icon_url))
@@ -560,13 +560,13 @@ class InfoCog(commands.Cog):
         avatar_url = target.avatar.url if target.avatar else None
 
         roles = [r.name for r in target.roles if r.name != "@everyone"]
-        joined = f"`{target.joined_at:%Y-%m-%d}`" if target.joined_at else "`N/A`"
+        joined = f"<t:{int(target.joined_at.timestamp())}:f> (<t:{int(target.joined_at.timestamp())}:R>)" if target.joined_at else "`N/A`"
 
         text = (
             f"### {msg(ctx, 'userinfo_title')}\n"
             f"**{msg(ctx, 'userinfo_username')}:** `{target.display_name}`\n"
             f"**{msg(ctx, 'userinfo_id')}:** `{target.id}`\n"
-            f"**{msg(ctx, 'userinfo_created')}:** `{target.created_at:%Y-%m-%d}`\n"
+            f"**{msg(ctx, 'userinfo_created')}:** <t:{int(target.created_at.timestamp())}:f> (<t:{int(target.created_at.timestamp())}:R>)\n"
             f"**{msg(ctx, 'userinfo_joined')}:** {joined}\n"
             f"**{msg(ctx, 'userinfo_toprole')}:** `{target.top_role.name}`\n"
             f"**{msg(ctx, 'userinfo_roles')}:** `{', '.join(roles) if roles else 'None'}`"
