@@ -83,11 +83,13 @@ User message:
     except (NotFoundError, APIConnectionError, APIStatusError) as e:
         # Reset cached client so the next message retries a fresh connection
         _reset_client()
+        print(f"OpenAI API error: {e}")
         reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
         _fallback_idx += 1
         return reply
-    except Exception:
+    except Exception as e:
         _reset_client()
+        print(f"Unexpected OpenAI error: {e}")
         reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
         _fallback_idx += 1
         return reply
