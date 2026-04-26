@@ -70,11 +70,20 @@ Preferred communication style: Simple, everyday language.
 - Buttons: **AI Debug** (explains root cause) → **Fix with AI** (rewrites cog, reloads it, saves backup) → **Revert Fix** (restores backup)
 - Backups stored in `data/ai_debug_backups/`
 
-### Economy System
-- **Per-user JSON files**: `economy_data/{user_id}.json`
-- Starting balance: 100 coins
-- Shop items: Coffee (50), Cake (120), Café Badge (300)
-- Commands: balance, deposit, withdraw (supports "all"), daily, work, crime, rob, shop, buy, inventory, leaderboard, give, net_worth
+### Economy System (Premium rewrite)
+- **Per-user JSON files**: `data/economy_data/{user_id}.json`; lottery state in `data/economy_data/_lottery.json` (loader skips files starting with `_`).
+- Auto-migration: legacy `inventory: list[str]` is converted to `inventory: dict[item_id, count]` on load. All defaults backfilled by `_migrate_user`.
+- **Image cards** rendered with PIL in `src/utils/image/economy_card.py` (`render_balance_card`, `render_reward_card`, `render_leaderboard_card`). All renders run via `asyncio.to_thread`. Cards use a brown/gold/cream café aesthetic with stat chips, XP bar, and a stylised coffee-cup glyph as avatar fallback. Color emoji is intentionally kept out of PIL output (DejaVu fallback can't render them) — emojis live in surrounding LayoutView text instead.
+- **Components-V2**: every reply is a `discord.ui.LayoutView` with a `Container` + `MediaGallery` (for cards) or `TextDisplay` blocks (for info). Helpers: `_card_view`, `_info_view`, `ACCENT_BROWN = 0xC8853F`.
+- **Jobs ladder** (`src/utils/economy_jobs.py` `JOBS`): barista → server → pastry chef → barback → shift manager → general manager → owner. Each job has `min_level`, `min_pay`/`max_pay`, `xp_per_shift`, `cooldown`, emoji, description.
+- **XP / level math**: `xp_to_next(level) = 100 * (level + 1)^1.45`, helpers `total_xp_for_level`, `level_from_total_xp`, `add_xp(data, gained) -> (new_level, levels_gained, leveled)`.
+- **Tiered bank** (`BANK_TIERS`): Tin Jar → Wooden Drawer → Iron Safe → Steel Vault → Diamond Vault. Each tier has a cap and a daily interest rate. `_apply_bank_interest` runs every 30 min via `tasks.loop`, gated on UTC date so each account gets at most one credit per UTC day.
+- **Shop** (`SHOP_ITEMS`): three categories — `consumable` (one-shot effects: `work_cooldown_half`, `crime_boost`, `rob_shield`, `lottery_boost`, `xp_potion`), `upgrade` (`bank_tier_up`), `collectible` (display-only). `data["effects"]` dict holds pending one-shot consumables.
+- **Weekly lottery**: `LOTTERY_DRAW_INTERVAL = 7 days`, `LOTTERY_TICKET_PRICE = 500`, `LOTTERY_HOUSE_RAKE = 5%`. Tickets stored on user; pot rolls over with rake if no entrants. Draw runs from `_tick_task`.
+- **Achievements** (`ACHIEVEMENTS` dict): nine badges (first paycheck, regular, shift lead, saver, vault keeper, millionaire, 7-day streak, 30-day streak, owner). Newly unlocked badges appear in card footers.
+- **Transactions**: every credit/debit logs to `data["transactions"]` (capped at 40, newest first) via `_log_tx(data, kind, amount, note)`.
+- **Commands**: `balance`/`bal`/`wallet`, `profile`/`prof`/`stats`, `daily` (streak multiplier), `work`, `job` (group: `list`, `info`, `apply`, `quit`), `crime`, `rob`, `pay`/`give`, `leaderboard`/`lb`/`top` (image card, top 10 with avatars), `shop [category]`, `buy`, `sell`, `use`, `inventory`/`inv`/`bag`, `bank` (group: `deposit`, `withdraw`, `upgrade`), `lottery`/`lotto` (group: `info`, `buy`), `transactions`/`tx`/`history`, `networth`/`nw`.
+- **Backwards compatibility**: `EconomyCog.get_user_economy_data(user_id)` and `save_economy_data()` are preserved exactly so blackjack/slots/roulette/gambling cogs that read `user_data["balance"]` continue to work without changes.
 
 ### Leveling System
 - XP stored in `data/levels.json` per guild/user
