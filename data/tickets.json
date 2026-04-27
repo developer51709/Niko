@@ -65,6 +65,14 @@
         "category": "Community support",
         "opener_id": 1256296452045668382,
         "status": "open"
+      },
+      {
+        "channel_id": 1498031277234978950,
+        "message_id": 1498031279004717269,
+        "category": "Community support",
+        "opener_id": 1414184882917347419,
+        "claimed_by": null,
+        "status": "open"
       }
     ]
   },
@@ -198,10 +206,18 @@
     ],
     "open_tickets": [
       {
-        "channel_id": 1497796254745366548,
-        "message_id": 1497796255718310059,
-        "category": "Staff Application",
-        "opener_id": 1457043771232620812,
+        "channel_id": 1498022453379600424,
+        "message_id": 1498022453962739925,
+        "category": "Other",
+        "opener_id": 1475010378114269290,
+        "claimed_by": null,
+        "status": "open"
+      },
+      {
+        "channel_id": 1498139571182108714,
+        "message_id": 1498139572771622932,
+        "category": "Other",
+        "opener_id": 983383480333393950,
         "claimed_by": null,
         "status": "open"
       }

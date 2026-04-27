@@ -109,7 +109,7 @@
     },
     "1496921270279868487": {
         "personality": "cafe",
-        "enabled": "False"
+        "enabled": "True"
     },
     "1442547737492066466": {
         "personality": "cafe",
@@ -136,6 +136,26 @@
         "enabled": "True"
     },
     "1495114388225659090": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1493063109546610768": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1497637777087397918": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1498194536223084646": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1487480614369099826": {
+        "personality": "cafe",
+        "enabled": "True"
+    },
+    "1498249795150675978": {
         "personality": "cafe",
         "enabled": "True"
     }

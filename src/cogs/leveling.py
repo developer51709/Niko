@@ -792,7 +792,7 @@ class Leveling(commands.Cog):
                 view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
                     await lu_channel.send(view=view)
-                log.info("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
+                log.debug("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass
 

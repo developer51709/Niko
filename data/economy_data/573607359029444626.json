@@ -10,7 +10,7 @@
   "last_rob": 0,
   "last_heist": 0,
   "last_slots": 0,
-  "last_blackjack": 1777151691.3986466,
+  "last_blackjack": 1777246101.8079202,
   "last_roulette": 0,
   "last_casino": 0,
   "last_gamble": 0,
@@ -30,5 +30,5 @@
   "lottery_tickets": 0,
   "transactions": [],
   "achievements": [],
-  "last_interest_day": "2026-04-26"
+  "last_interest_day": "2026-04-27"
 }

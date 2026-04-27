@@ -1,16 +1,16 @@
 {
-  "balance": 528,
+  "balance": 1106,
   "inventory": {},
-  "bank": 4010,
-  "net_worth": 4538,
-  "daily_streak": 0,
-  "last_daily": 1777172565,
-  "last_work": 1777223027,
+  "bank": 5000,
+  "net_worth": 6106,
+  "daily_streak": 1,
+  "last_daily": 1777261937,
+  "last_work": 1777288925,
   "last_crime": 0,
   "last_rob": 1776997733,
   "last_heist": 0,
   "last_slots": 1777139250.6587224,
-  "last_blackjack": 1777216722.8263316,
+  "last_blackjack": 1777289699.5575101,
   "last_roulette": 0,
   "last_casino": 0,
   "last_gamble": 0,
@@ -18,17 +18,53 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 269,
+  "total_earned": 1857,
   "total_spent": 0,
-  "xp": 12,
+  "xp": 48,
   "level": 0,
   "job": "barista",
-  "times_worked": 1,
+  "times_worked": 4,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 0,
   "transactions": [
+    {
+      "ts": 1777288925,
+      "kind": "work",
+      "amount": 184,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777262135,
+      "kind": "deposit",
+      "amount": 970,
+      "note": "wallet \u2192 vault"
+    },
+    {
+      "ts": 1777261949,
+      "kind": "work",
+      "amount": 99,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777261937,
+      "kind": "daily",
+      "amount": 1200,
+      "note": "day 1 \u2022 x1.2"
+    },
+    {
+      "ts": 1777248028,
+      "kind": "interest",
+      "amount": 20,
+      "note": "daily Tin Jar interest"
+    },
+    {
+      "ts": 1777226629,
+      "kind": "work",
+      "amount": 85,
+      "note": "Barista shift"
+    },
     {
       "ts": 1777223583,
       "kind": "deposit",
@@ -51,5 +87,5 @@
   "achievements": [
     "first_paycheck"
   ],
-  "last_interest_day": "2026-04-26"
+  "last_interest_day": "2026-04-27"
 }
