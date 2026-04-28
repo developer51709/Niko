@@ -1,11 +1,11 @@
 {
-  "balance": 1205,
+  "balance": 2542,
   "inventory": {},
   "bank": 0,
-  "net_worth": 1205,
-  "daily_streak": 0,
-  "last_daily": 1776987512,
-  "last_work": 1776986057,
+  "net_worth": 2542,
+  "daily_streak": 1,
+  "last_daily": 1777315657,
+  "last_work": 1777321405,
   "last_crime": 0,
   "last_rob": 0,
   "last_heist": 0,
@@ -18,17 +18,38 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 100,
-  "total_spent": 0,
-  "xp": 0,
+  "total_earned": 1460,
+  "total_spent": 23,
+  "xp": 12,
   "level": 0,
   "job": "barista",
-  "times_worked": 0,
+  "times_worked": 1,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 0,
-  "transactions": [],
-  "achievements": [],
+  "transactions": [
+    {
+      "ts": 1777321405,
+      "kind": "work",
+      "amount": 160,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777315682,
+      "kind": "robbed",
+      "amount": -23,
+      "note": "by ! - Nyxen"
+    },
+    {
+      "ts": 1777315657,
+      "kind": "daily",
+      "amount": 1200,
+      "note": "day 1 \u2022 x1.2"
+    }
+  ],
+  "achievements": [
+    "first_paycheck"
+  ],
   "last_interest_day": "2026-04-27"
 }

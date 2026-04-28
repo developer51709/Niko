@@ -8,9 +8,7 @@ AI_CONFIG_FILE = "data/ai_config.json"
 DEFAULT_CONFIG = {
     "personality": "cafe",
     "enabled": "True",
-    "experiments": {
-        "ai_actions": "False",
-    }
+    "ai_actions_experiment": "False",
 }
 
 

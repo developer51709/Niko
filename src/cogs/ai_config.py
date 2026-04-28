@@ -57,8 +57,7 @@ class ExperimentToggle(discord.ui.Button):
         # the emoji and text will be set based on the current status of the experiment
         self.bot = bot
         self.experiment = experiment
-        self.current_status = get_ai_config(guild_id, "experiments")
-        self.current_status = self.current_status.get(experiment, "False")
+        self.current_status = get_ai_config(guild_id, f"{experiment}_experiment")
         if self.current_status == "True":
             self.emoji = get_emoji("icon_tick")
             self.label = "Enabled"

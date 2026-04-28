@@ -158,5 +158,10 @@
     "1498249795150675978": {
         "personality": "cafe",
         "enabled": "True"
+    },
+    "1498374522360041514": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
     }
 }
