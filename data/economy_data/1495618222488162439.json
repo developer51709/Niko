@@ -1,8 +1,8 @@
 {
   "balance": 1073,
   "inventory": {},
-  "bank": 5000,
-  "net_worth": 6073,
+  "bank": 5025,
+  "net_worth": 6098,
   "daily_streak": 1,
   "last_daily": 1777261937,
   "last_work": 1777314466,
@@ -18,7 +18,7 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 2014,
+  "total_earned": 2039,
   "total_spent": 200,
   "xp": 60,
   "level": 0,
@@ -29,6 +29,12 @@
   "effects": {},
   "lottery_tickets": 1,
   "transactions": [
+    {
+      "ts": 1777375147,
+      "kind": "interest",
+      "amount": 25,
+      "note": "daily Tin Jar interest"
+    },
     {
       "ts": 1777315756,
       "kind": "lottery_buy",
@@ -105,5 +111,5 @@
   "achievements": [
     "first_paycheck"
   ],
-  "last_interest_day": "2026-04-27"
+  "last_interest_day": "2026-04-28"
 }

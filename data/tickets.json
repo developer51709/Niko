@@ -220,6 +220,14 @@
         "opener_id": 983383480333393950,
         "claimed_by": null,
         "status": "open"
+      },
+      {
+        "channel_id": 1498659597181911050,
+        "message_id": 1498659598780076093,
+        "category": "Staff Application",
+        "opener_id": 1344209369205706802,
+        "claimed_by": null,
+        "status": "open"
       }
     ]
   }
