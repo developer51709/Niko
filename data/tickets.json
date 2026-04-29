@@ -230,5 +230,17 @@
         "status": "open"
       }
     ]
+  },
+  "1495114388225659090": {
+    "guild_id": 1495114388225659090,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": null,
+    "panel_message_id": null,
+    "support_roles": [],
+    "open_tickets": []
   }
 }

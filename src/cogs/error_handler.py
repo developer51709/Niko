@@ -191,6 +191,9 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, CommandNotFound):
             return  # silently ignore unknown commands
 
+        if isinstance(error, discord.ext.commands.errors.CommandNotFound):
+            return
+
         # --- User-Facing Errors (with embeds) ---
         if isinstance(error, MissingPermissions):
             # owner bypass
@@ -251,16 +254,6 @@ class ErrorHandler(commands.Cog):
                 f"I don't have permission to perform this action. Please check my roles and permissions."
             )
             await ctx.reply(view=view)
-            logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
-            return
-
-        # slash variant of forbidden error
-        if isinstance(error, discord.ext.commands.errors.Forbidden):
-            view = self.error_embed(
-                "Forbidden Action",
-                f"I don't have permission to perform this action. Please check my roles and permissions."
-            )
-            await ctx.interaction.response.send_message(view=view, ephemeral=True)
             logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
             return
 

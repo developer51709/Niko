@@ -242,6 +242,25 @@ def _truncate(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
     return text + "…"
 
 
+def _emoji_to_codepoints(emoji: str) -> str:
+    # Convert emoji into hyphen-separated lowercase hex codepoints
+    return "-".join(f"{ord(c):x}" for c in emoji)
+
+
+def _render_emoji(emoji: str, size: int) -> Image.Image:
+    """Render an emoji using Twemoji PNG assets."""
+    code = _emoji_to_codepoints(emoji)
+    url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{code}.png"
+
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ValueError(f"Twemoji asset not found for {emoji} ({code})")
+
+    img = Image.open(io.BytesIO(response.content)).convert("RGBA")
+    img = img.resize((size, size), Image.LANCZOS)
+    return img
+
+
 # ── Stat chip ──────────────────────────────────────────────────────────────
 
 

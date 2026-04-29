@@ -1,11 +1,11 @@
 {
-  "balance": 2638,
+  "balance": 2895,
   "inventory": {},
   "bank": 5050,
-  "net_worth": 7688,
+  "net_worth": 7945,
   "daily_streak": 2,
   "last_daily": 1777429926,
-  "last_work": 1777429940,
+  "last_work": 1777474630,
   "last_crime": 0,
   "last_rob": 1777315682,
   "last_heist": 0,
@@ -18,17 +18,29 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 3634,
+  "total_earned": 3891,
   "total_spent": 200,
-  "xp": 72,
+  "xp": 96,
   "level": 0,
   "job": "barista",
-  "times_worked": 6,
+  "times_worked": 8,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 1,
   "transactions": [
+    {
+      "ts": 1777474630,
+      "kind": "work",
+      "amount": 150,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777467930,
+      "kind": "work",
+      "amount": 107,
+      "note": "Barista shift"
+    },
     {
       "ts": 1777429940,
       "kind": "work",
