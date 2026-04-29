@@ -1,6 +1,7 @@
 # error_handler.py
 import discord
 from discord.ext import commands
+from discord import app_commands
 import traceback
 import sys
 import datetime
@@ -27,6 +28,16 @@ from discord.ext.commands import (
     DisabledCommand, CommandRegistrationError,
     ExtensionError, ExtensionAlreadyLoaded, ExtensionNotLoaded,
     NoEntryPointError, ExtensionFailed, ExtensionNotFound
+)
+
+from discord.ext.commands.errors import (
+    MissingPermissions
+)
+
+from discord.app_commands import (
+    CommandNotFound, MissingPermissions, MissingRole, 
+    MissingAnyRole, BotMissingPermissions, NoPrivateMessage, 
+    CheckFailure, CommandOnCooldown
 )
 
 from discord.errors import (
@@ -205,6 +216,16 @@ class ErrorHandler(commands.Cog):
             logging.warning("error_handler", f"{ctx.author} tried to use {ctx.command} without permissions")
             return
 
+        # slash variant of missing permissions error
+        if isinstance(error, discord.ext.commands.errors.MissingPermissions):
+            view = self.error_embed(
+                "Missing Permissions",
+                f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
+            )
+            await ctx.interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"{ctx.author} tried to use {ctx.command} without permissions")
+            return
+
         if isinstance(error, BotMissingPermissions):
             view = self.error_embed(
                 "Bot Missing Permissions",
@@ -214,12 +235,32 @@ class ErrorHandler(commands.Cog):
             logging.warning("error_handler", f"Bot missing permissions for {ctx.command}")
             return
 
+        # slash variant of bot missing permissions error
+        if isinstance(error, discord.ext.commands.errors.BotMissingPermissions):
+            view = self.error_embed(
+                "Bot Missing Permissions",
+                f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
+            )
+            await ctx.interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"Bot missing permissions for {ctx.command}")
+            return
+
         if isinstance(error, Forbidden):
             view = self.error_embed(
                 "Forbidden Action",
                 f"I don't have permission to perform this action. Please check my roles and permissions."
             )
             await ctx.reply(view=view)
+            logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
+            return
+
+        # slash variant of forbidden error
+        if isinstance(error, discord.ext.commands.errors.Forbidden):
+            view = self.error_embed(
+                "Forbidden Action",
+                f"I don't have permission to perform this action. Please check my roles and permissions."
+            )
+            await ctx.interaction.response.send_message(view=view, ephemeral=True)
             logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
             return
 
@@ -377,6 +418,125 @@ class ErrorHandler(commands.Cog):
 
         # Send to AI debug channel if configured
         cog_name = ctx.command.cog.__class__.__name__.lower() if ctx.command and ctx.command.cog else None
+        # Try to match cog class name to a cog file name
+        if cog_name:
+            import os as _os
+            cog_files = [f[:-3] for f in _os.listdir("src/cogs") if f.endswith(".py")]
+            if cog_name not in cog_files:
+                cog_name = None
+        asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
+
+
+    # handle slash command errors
+    @commands.Cog.listener()
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        # Unwrap original error
+        error = getattr(error, "original", error)
+        # --- Known Non-Critical Errors ---
+        if isinstance(error, CommandNotFound):
+            # return an ephemeral message
+            view = self.error_embed(
+                "Command Not Found",
+                "This command does not exist."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"Command not found: {interaction.command}")
+            return
+
+        if isinstance(error, Forbidden):
+            view = self.error_embed(
+                "Forbidden Action",
+                f"I don't have permission to perform this action. Please check my roles and permissions."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"403 Forbidden in {interaction.command}")
+            return
+
+        if isinstance(error, MissingPermissions):
+            view = self.error_embed(
+                "Missing Permissions",
+                f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"{interaction.user} tried to use {interaction.command} without permissions")
+            return
+
+        if isinstance(error, BotMissingPermissions):
+            view = self.error_embed(
+                "Bot Missing Permissions",
+                f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"Bot missing permissions for {interaction.command}")
+            return
+
+        if isinstance(error, MissingRole):
+            view = self.error_embed(
+                "Missing Role",
+                f"You must have the `{error.missing_role}` role to use this command."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"{interaction.user} missing role {error.missing_role}")
+            return
+
+        if isinstance(error, MissingAnyRole):
+            view = self.error_embed(
+                "Missing Required Roles",
+                f"You need **one** of these roles: `{', '.join(error.missing_roles)}`"
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"{interaction.user} missing any of roles {error.missing_roles}")
+            return
+
+        if isinstance(error, CommandOnCooldown):
+            view = self.error_embed(
+                "Cooldown Active",
+                f"Try again in `{error.retry_after:.1f}` seconds."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.info("error_handler", f"{interaction.user} hit cooldown on {interaction.command}")
+            return
+
+        if isinstance(error, NoPrivateMessage):
+            view = self.error_embed(
+                "Not Allowed in DMs",
+                "This command can only be used in a server."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.info("error_handler", f"{interaction.user} tried using {interaction.command} in DMs")
+            return
+
+        if isinstance(error, PrivateMessageOnly):
+            view = self.error_embed(
+                "DM Only Command",
+                "This command can only be used in private messages."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.info("error_handler", f"{interaction.user} tried using DM-only command in a guild")
+            return
+
+        if isinstance(error, NSFWChannelRequired):
+            view = self.error_embed(
+                "NSFW Required",
+                "This command can only be used in an NSFW channel."
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            logging.warning("error_handler", f"{interaction.user} attempted NSFW command in non-NSFW channel")
+            return
+
+        # --- Unexpected / Critical Errors ---
+        logging.error("error_handler", f"Unexpected error in slash command {interaction.command}: {error}")
+        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        view = self.error_embed(
+            "Unexpected Error",
+            "An unexpected error occurred. The developers have been notified."
+        )
+        try:
+            await interaction.response.send_message(view=view, ephemeral=True)
+        except discord.HTTPException:
+            pass
+        # Send to AI debug channel if configured
+        cog_name = interaction.command.cog.__class__.__name__.lower() if interaction.command and interaction.command.cog else None
         # Try to match cog class name to a cog file name
         if cog_name:
             import os as _os
