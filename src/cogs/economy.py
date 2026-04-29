@@ -706,7 +706,7 @@ class EconomyCog(commands.Cog):
         lines = []
         for jid, j in JOBS.items():
             tag = "  ← **current**" if jid == cur else ""
-            lock = "" if data["level"] >= j["min_level"] else f"  🔒 lvl {j['min_level']}"
+            lock = "" if data["level"] >= j["min_level"] else f"  {get_emoji('vm_lock')} lvl {j['min_level']}"
             lines.append(f"{j['emoji']} **{j['name']}** `({jid})`{tag}{lock}\n-# {j['min_pay']}–{j['max_pay']} coins/shift • +{j['xp_per_shift']} XP\n-# *{j['description']}*")
         prefix = await _resolve_prefix(self.bot, ctx)
         await ctx.send(view=_info_view(
@@ -722,7 +722,7 @@ class EconomyCog(commands.Cog):
     async def job_info(self, ctx: commands.Context, job_id: str):
         j = JOBS.get(job_id.lower())
         if not j:
-            return await ctx.send(view=_info_view("❌ Unknown job", f"No job called `{job_id}`. Try `job list`."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
         body = (f"{j['emoji']} **{j['name']}**\n*{j['description']}*\n\n"
                 f"• Min level: **{j['min_level']}**\n"
                 f"• Pay range: **{j['min_pay']:,} – {j['max_pay']:,}** coins/shift\n"
@@ -736,17 +736,17 @@ class EconomyCog(commands.Cog):
         jid = job_id.lower()
         j = JOBS.get(jid)
         if not j:
-            return await ctx.send(view=_info_view("❌ Unknown job", f"No job called `{job_id}`. Try `job list`."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
         if data["level"] < j["min_level"]:
             return await ctx.send(view=_info_view(
-                "🔒 Not yet",
+                f"{get_emoji('vm_lock')} Not yet",
                 f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
             ))
         data["job"] = jid
         _check_achievements(data)
         self.save_economy_data()
         await ctx.send(view=_info_view(
-            "✅ Hired!",
+            f"{get_emoji('icon_tick')} Hired!",
             f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
         ))
 
@@ -801,7 +801,7 @@ class EconomyCog(commands.Cog):
         if member.id == ctx.author.id:
             return await ctx.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
         if member.bot:
-            return await ctx.send(view=_info_view("🤖 No can do", "Bots have nothing in their pockets."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
 
         data   = self.get_user_economy_data(ctx.author.id)
         target = self.get_user_economy_data(member.id)
@@ -850,9 +850,9 @@ class EconomyCog(commands.Cog):
                              help="{ 'en': 'send coins to another user 💸🥐', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🥐' }")
     async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
         if not member or member.bot or member.id == ctx.author.id:
-            return await ctx.send(view=_info_view("❌ Bad target", "Pick a real person other than yourself."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad target", "Pick a real person other than yourself."))
         if amount <= 0:
-            return await ctx.send(view=_info_view("❌ Bad amount", "Amount must be positive."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
 
         data   = self.get_user_economy_data(ctx.author.id)
         target = self.get_user_economy_data(member.id)
@@ -915,7 +915,7 @@ class EconomyCog(commands.Cog):
         prefix = await _resolve_prefix(self.bot, ctx)
         cats = ("consumable", "upgrade", "collectible")
         if category and category.lower() not in cats:
-            return await ctx.send(view=_info_view("❌ Unknown category", f"Try one of: {', '.join('`' + c + '`' for c in cats)}"))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown category", f"Try one of: {', '.join('`' + c + '`' for c in cats)}"))
         cat_filter = category.lower() if category else None
 
         sections: dict[str, list[str]] = {c: [] for c in cats}
@@ -924,7 +924,7 @@ class EconomyCog(commands.Cog):
         for iid, item in SHOP_ITEMS.items():
             if cat_filter and item["category"] != cat_filter:
                 continue
-            lock = "" if lvl >= item.get("min_level", 0) else f"  🔒 lvl {item['min_level']}"
+            lock = "" if lvl >= item.get("min_level", 0) else f"  {get_emoji('icon_lock')} lvl {item['min_level']}"
             sections[item["category"]].append(
                 f"{item['emoji']} **{item['name']}** `({iid})` — **{item['price']:,}** 🥐{lock}\n-# *{item['description']}*"
             )
@@ -944,13 +944,13 @@ class EconomyCog(commands.Cog):
                              help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf etwas im Shop', 'es': 'compra algo en la tienda 🍰✨' }")
     async def buy(self, ctx: commands.Context, item_id: str, count: int = 1):
         if count <= 0:
-            return await ctx.send(view=_info_view("❌ Bad amount", "Count must be at least 1."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
         item = get_item(item_id)
         if not item:
-            return await ctx.send(view=_info_view("❌ Out of stock", f"No item called `{item_id}`."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Out of stock", f"No item called `{item_id}`."))
         data = self.get_user_economy_data(ctx.author.id)
         if data["level"] < item.get("min_level", 0):
-            return await ctx.send(view=_info_view("🔒 Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
+            return await ctx.send(view=_info_view(f"{get_emoji('vm_lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
         total = item["price"] * count
         if data["balance"] < total:
             return await ctx.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 (you have **{data['balance']:,}**)."))
@@ -970,11 +970,11 @@ class EconomyCog(commands.Cog):
                              help="{ 'en': 'sell a treat back for some coins 💰', 'de': 'verkauf etwas aus deinem Bag', 'es': 'vende algo de tu inventario 💰' }")
     async def sell(self, ctx: commands.Context, item_id: str, count: int = 1):
         if count <= 0:
-            return await ctx.send(view=_info_view("❌ Bad amount", "Count must be at least 1."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
         iid = item_id.lower()
         item = get_item(iid)
         if not item:
-            return await ctx.send(view=_info_view("❌ Unknown item", f"No item called `{item_id}`."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
         data = self.get_user_economy_data(ctx.author.id)
         have = int(data["inventory"].get(iid, 0))
         if have < count:
@@ -998,7 +998,7 @@ class EconomyCog(commands.Cog):
         iid = item_id.lower()
         item = get_item(iid)
         if not item:
-            return await ctx.send(view=_info_view("❌ Unknown item", f"No item called `{item_id}`."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
         data = self.get_user_economy_data(ctx.author.id)
         if int(data["inventory"].get(iid, 0)) < 1:
             return await ctx.send(view=_info_view("📦 None in bag", f"You don't have any **{item['name']}**."))
@@ -1092,9 +1092,9 @@ class EconomyCog(commands.Cog):
             try:
                 amt = int(amount)
             except ValueError:
-                return await ctx.send(view=_info_view("❌ Bad amount", "Use a number or `all`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
         if amt <= 0:
-            return await ctx.send(view=_info_view("❌ Nothing to deposit", "Either your wallet is empty or your vault is full."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
         if amt > data["balance"]:
             return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag doesn't have that much."))
         if amt > free:
@@ -1119,9 +1119,9 @@ class EconomyCog(commands.Cog):
             try:
                 amt = int(amount)
             except ValueError:
-                return await ctx.send(view=_info_view("❌ Bad amount", "Use a number or `all`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
         if amt <= 0:
-            return await ctx.send(view=_info_view("❌ Nothing to withdraw", "Your vault is empty."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to withdraw", "Your vault is empty."))
         if amt > data["bank"]:
             return await ctx.send(view=_info_view("🏦 Not enough", "You don't have that much stored."))
 
@@ -1191,7 +1191,7 @@ class EconomyCog(commands.Cog):
     @lottery.command(name="buy", description="Buy lottery tickets")
     async def lottery_buy(self, ctx: commands.Context, count: int = 1):
         if count <= 0:
-            return await ctx.send(view=_info_view("❌ Bad amount", "Count must be at least 1."))
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
         cost = LOTTERY_TICKET_PRICE * count
         data = self.get_user_economy_data(ctx.author.id)
         if data["balance"] < cost:

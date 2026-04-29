@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import math
 import os
+import requests
+import unicodedata
 from io import BytesIO
 from typing import Iterable
 
@@ -113,6 +115,7 @@ def _reg(size: int) -> ImageFont.FreeTypeFont:
 
 
 def _rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
+    """Mask for rounded rectangle."""
     mask = Image.new("L", size, 0)
     ImageDraw.Draw(mask).rounded_rectangle(
         [0, 0, size[0] - 1, size[1] - 1], radius=radius, fill=255
@@ -121,6 +124,7 @@ def _rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
 
 
 def _vertical_gradient(size: tuple[int, int], top: tuple[int, int, int], bot: tuple[int, int, int]) -> Image.Image:
+    """Vertical gradient from top to bottom."""
     w, h = size
     img = Image.new("RGB", (w, h))
     px = img.load()
@@ -135,6 +139,8 @@ def _vertical_gradient(size: tuple[int, int], top: tuple[int, int, int], bot: tu
 
 
 def _make_canvas(width: int, height: int, radius: int = 26) -> Image.Image:
+    """Base canvas with gradient background, subtle vignette, and gold border."""
+    # gradient background
     grad = _vertical_gradient((width, height), BG_TOP, BG_BOT).convert("RGBA")
     grad.putalpha(_rounded_mask((width, height), radius))
 
@@ -218,6 +224,7 @@ def _circle_avatar(raw: bytes | None, size: int) -> Image.Image:
 
 
 def _draw_circle_outline(canvas: Image.Image, cx: int, cy: int, r: int, color, width: int = 4):
+    """Draw a circle outline on the canvas."""
     d = ImageDraw.Draw(canvas)
     d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=width)
 
@@ -235,6 +242,7 @@ def _format_amount(n: int) -> str:
 
 
 def _truncate(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
+    """Truncate text to fit within max_w, adding ellipsis if needed."""
     if font.getlength(text) <= max_w:
         return text
     while text and font.getlength(text + "…") > max_w:
@@ -256,9 +264,21 @@ def _render_emoji(emoji: str, size: int) -> Image.Image:
     if response.status_code != 200:
         raise ValueError(f"Twemoji asset not found for {emoji} ({code})")
 
-    img = Image.open(io.BytesIO(response.content)).convert("RGBA")
+    img = Image.open(BytesIO(response.content)).convert("RGBA")
     img = img.resize((size, size), Image.LANCZOS)
     return img
+
+
+def _normalize_text(text: str) -> str:
+    """Normalize text to remove font modifiers (bold, italic, script, fraktur, etc.)."""
+    # NFKD decomposes styled characters into base characters + modifiers
+    decomposed = unicodedata.normalize("NFKD", text)
+
+    # Keep only characters that are not combining marks
+    # (font modifiers become combining marks after NFKD)
+    cleaned = "".join(c for c in decomposed if not unicodedata.combining(c))
+
+    return cleaned
 
 
 # ── Stat chip ──────────────────────────────────────────────────────────────
@@ -511,6 +531,27 @@ def _render_reward_sync(
     text_x = av_x + av_size + 24
     title_font = _bold(28)
     sub_font   = _reg(16)
+    # render emojis in the title
+    text_parts = title.split(" ")
+    for i, part in enumerate(text_parts):
+        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+            emoji = _render_emoji(part, 28)
+            canvas.alpha_composite(emoji, (36 + i * 36, 54))
+            text_parts[i] = "  "  # remove the emoji from the title
+        else:
+            text_parts[i] = part
+        title = " ".join(text_parts)
+    # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
+    name = _normalize_text(name)
+    text_parts = name.split(" ")
+    for i, part in enumerate(text_parts):
+        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+            emoji = _render_emoji(part, 28)
+            canvas.alpha_composite(emoji, (36 + i * 36, 54))
+            text_parts[i] = "  "  # remove the emoji from the title
+        else:
+            text_parts[i] = part
+        name = " ".join(text_parts)
     d.text(
         (text_x, av_y + 4),
         _truncate(f"{title} — {name}", title_font, REWARD_W - text_x - 36),
@@ -542,6 +583,15 @@ def _render_reward_sync(
 
     # Footer
     if footer:
+        text_parts = footer.split(" ")
+        for i, part in enumerate(text_parts):
+            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+                emoji = _render_emoji(part, 28)
+                canvas.alpha_composite(emoji, (36 + i * 36, 54))
+                text_parts[i] = "  "  # remove the emoji from the title
+            else:
+                text_parts[i] = part
+            footer = " ".join(text_parts)
         d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
 
     out = BytesIO()
@@ -604,6 +654,15 @@ def _render_leaderboard_sync(
 
     # Header
     d.text((36, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(16))
+    text_parts = title.split(" ")
+    for i, part in enumerate(text_parts):
+        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅")):
+            emoji = _render_emoji(part, 28)
+            canvas.alpha_composite(emoji, (36 + i * 36, 54))
+            text_parts[i] = "  "  # remove the emoji from the title
+        else:
+            text_parts[i] = part
+        title = " ".join(text_parts)
     d.text((36, 54), title, fill=CREAM, font=_bold(28))
     page_text = f"Page {page}/{pages}"
     pf = _reg(14)
@@ -636,6 +695,17 @@ def _render_leaderboard_sync(
         nf = _bold(20)
         nx = 28 + 64 + (LB_ROW_H - 16) + 14
         max_name_w = LB_W - 56 - 220 - (nx - 28)
+        # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
+        name = _normalize_text(name)
+        text_parts = name.split(" ")
+        for i, part in enumerate(text_parts):
+            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+                emoji = _render_emoji(part, 28)
+                canvas.alpha_composite(emoji, (36 + i * 36, 54))
+                text_parts[i] = "  "  # remove the emoji from the title
+            else:
+                text_parts[i] = part
+            name = " ".join(text_parts)
         d.text((nx, y + 14), _truncate(name, nf, max_name_w), fill=CREAM, font=nf)
 
         # total
