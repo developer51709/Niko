@@ -114,7 +114,6 @@ class AIActionsExperimentAbout(discord.ui.LayoutView):
         self.container.add_item(discord.ui.TextDisplay(content="**How it works**\nWhen talking to the AI, you can ask it to perform actions on your behalf. For example, you can ask it to create a channel or role. The AI will then perform the action on your behalf."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
-        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.add_item(self.container)
 
 class BetterContextExperimentAbout(discord.ui.LayoutView):

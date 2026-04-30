@@ -73,7 +73,9 @@
     },
     "1476077046873460837": {
         "personality": "cafe",
-        "enabled": "True"
+        "enabled": "True",
+        "ai_actions_experiment": "True",
+        "better_context_experiment": "True"
     },
     "1468349313443696817": {
         "personality": "cafe",
@@ -113,7 +115,8 @@
         "experiments": {
             "ai_actions": "True"
         },
-        "ai_actions_experiment": "True"
+        "ai_actions_experiment": "True",
+        "better_context_experiment": "True"
     },
     "1442547737492066466": {
         "personality": "cafe",
@@ -164,9 +167,9 @@
         "enabled": "True"
     },
     "1498374522360041514": {
-        "personality": "cafe",
+        "personality": "normal",
         "enabled": "True",
-        "ai_actions_experiment": "False"
+        "ai_actions_experiment": "True"
     },
     "1498242400563499009": {
         "personality": "cafe",

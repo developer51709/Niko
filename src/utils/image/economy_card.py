@@ -293,6 +293,47 @@ def _strip_discord_emoji(text: str) -> str:
     return _DISCORD_EMOJI_RE.sub("", text).strip()
 
 
+def render_text_with_emojis(
+    canvas: Image.Image,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    start_x: int,
+    start_y: int,
+    emoji_size: int = 28,
+    fill="white"
+):
+    """
+    Render text with inline emojis onto a Pillow canvas.
+    Emojis are rendered exactly where they appear in the string.
+    """
+
+    EMOJI_SET = {
+        "🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅",
+        "💸", "💵", "💴", "💶", "💷", "✨", "🍯",
+        "☕", "👮", "😈", "🛡️"
+    }
+
+    draw = ImageDraw.Draw(canvas)
+    x = start_x
+
+    i = 0
+    while i < len(text):
+        char = text[i]
+
+        # Check if this character is an emoji we support
+        if char in EMOJI_SET:
+            emoji_img = _render_emoji(char, emoji_size)
+            canvas.alpha_composite(emoji_img, (int(x), int(start_y)))
+            x += emoji_img.width + 2
+            i += 1
+            continue
+
+        # Normal text rendering
+        draw.text((x, start_y), char, font=font, fill=fill)
+        x += draw.textlength(char, font=font)
+        i += 1
+
+
 # ── Stat chip ──────────────────────────────────────────────────────────────
 
 
@@ -543,34 +584,15 @@ def _render_reward_sync(
     text_x = av_x + av_size + 24
     title_font = _bold(28)
     sub_font   = _reg(16)
-    # render emojis in the title
-    text_parts = title.split(" ")
-    for i, part in enumerate(text_parts):
-        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕")):
-            emoji = _render_emoji(part, 28)
-            canvas.alpha_composite(emoji, (36 + i * 36, 54))
-            text_parts[i] = "  "  # remove the emoji from the title
-        else:
-            text_parts[i] = part
-        title = " ".join(text_parts)
-    # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
-    name = _normalize_text(name)
-    # THIS IS COMMENTED BECAUSE IT KEEPS RENDERING INCORRECTLY!
-    # text_parts = name.split(" ")
-    # for i, part in enumerate(text_parts):
-    #     if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
-    #         emoji = _render_emoji(part, 28)
-    #         canvas.alpha_composite(emoji, (36 + i * 36, 54))
-    #         text_parts[i] = "  "  # remove the emoji from the title
-    #     else:
-    #         text_parts[i] = part
-    #     name = " ".join(text_parts)
-    d.text(
-        (text_x, av_y + 4),
-        _truncate(f"{title} — {name}", title_font, REWARD_W - text_x - 36),
-        fill=CREAM,
-        font=title_font,
-    )
+    name       = _normalize_text(name)
+    title      = f"{title} — {name}"
+    title      = render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, CREAM)
+    # d.text(
+    #     (text_x, av_y + 4),
+    #     _truncate(f"{title} — {name}", title_font, REWARD_W - text_x - 36),
+    #     fill=CREAM,
+    #     font=title_font,
+    # )
     subtitle = _normalize_text(subtitle)
     d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
 
@@ -597,21 +619,8 @@ def _render_reward_sync(
 
     # Footer
     if footer:
-        text_parts = footer.split(" ")
-        for i, part in enumerate(text_parts):
-            # some footers have multiple emojis together and must be handled properly
-            # e.g. "🍯✨" should be rendered as two separate emojis
-            emoji_parts = []
-            for char in part:
-                if char.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
-                    emoji_parts.append(char)
-                    text_parts[i] = "  "  # remove the emoji from the title
-                    emoji = _render_emoji(char, 28)
-                    canvas.alpha_composite(emoji, (36 + i * 36, REWARD_H - 38))
-                else:
-                    text_parts[i] = part
-            footer = " ".join(text_parts)
-        d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
+        render_text_with_emojis(canvas, footer, _reg(14), 36, REWARD_H - 38, 14, CREAM_DIM)
+        # d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
