@@ -109,11 +109,37 @@ class AIActionsExperimentAbout(discord.ui.LayoutView):
         self.container = discord.ui.Container()
         self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} AI Actions Experiment"))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="This experiment allows the AI to perform actions on your behalf. This includes things like creating channels, roles, and more."))
+        self.container.add_item(discord.ui.TextDisplay(content="This experiment lets Niko take real action on your server when you ask in natural language."))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**How it works**\nWhen talking to the AI, you can ask it to perform actions on your behalf. For example, you can ask it to create a channel or role. The AI will then perform the action on your behalf."))
+        self.container.add_item(discord.ui.TextDisplay(
+            content=(
+                "**What Niko can do**\n"
+                "• Polls — *create a quick poll in chat*\n"
+                "• Moderation — *kick, ban, unban, time-out, remove time-out, warn, purge messages*\n"
+                "• Server management — *create/delete/rename channels, set channel topic, "
+                "create/delete roles, give or take a role, change a member's nickname*"
+            )
+        ))
+        self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(
+            content=(
+                "**How it works**\n"
+                "Just talk to Niko (e.g. *“ban this user for spam”* or *“make a channel called announcements”*).\n"
+                "Before anything happens, Niko shows a confirmation card with the exact action and waits for "
+                "you to click **Confirm** or **Cancel** — only the person who asked can answer."
+            )
+        ))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
+        self.container.add_item(discord.ui.TextDisplay(
+            content=(
+                "**Permissions**\n"
+                "Niko will only run an action if **both** you and Niko hold the Discord permission required for it "
+                "(Kick Members, Ban Members, Moderate Members, Manage Messages, Manage Channels, Manage Roles, "
+                "Manage Nicknames). Otherwise the request is refused."
+            )
+        ))
+        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is experimental — always double-check the confirmation card before clicking Confirm."))
         self.add_item(self.container)
 
 class BetterContextExperimentAbout(discord.ui.LayoutView):

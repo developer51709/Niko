@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "ztlLIwwfdFbQLpD3TsXWm"
@@ -36,3 +35,21 @@ id = "xwr7OSW3w3FgT14ildhCc"
 uri = "file://src/assets/emojis/icon_voicemaster.png"
 type = "image"
 title = "voicemaster microphone icon"
+
+[[outputs]]
+id = "ZZTP96NdL_eQYdh3dVMjm"
+uri = "file://attached_assets/caption_preview/caption_top.png"
+type = "image"
+title = "Caption (top) — long text + emoji"
+
+[[outputs]]
+id = "H-Kqu8wr478lK4rt4Odjf"
+uri = "file://attached_assets/caption_preview/caption_bottom.png"
+type = "image"
+title = "Caption (bottom) — short text"
+
+[[outputs]]
+id = "C01udD4QYhO743Y7maO4g"
+uri = "file://attached_assets/caption_preview/caption_long.png"
+type = "image"
+title = "Caption (top) — multi-line wrap"

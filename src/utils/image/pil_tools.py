@@ -76,7 +76,7 @@ def draw_text_with_emojis(
         if m and m.start() == i:
             emoji_id = m.group(1)
             emoji_img = _render_custom_emoji(emoji_id, emoji_size)
-            canvas.alpha_composite(emoji_img, (cursor_x, y - emoji_size // 2))
+            canvas.alpha_composite(emoji_img, (int(cursor_x), int(y - emoji_size // 2)))
             cursor_x += emoji_size + 2
             i = m.end()
             continue
@@ -86,7 +86,7 @@ def draw_text_with_emojis(
         if m and m.start() == i:
             emoji_char = m.group(0)
             emoji_img = _render_twemoji(emoji_char, emoji_size)
-            canvas.alpha_composite(emoji_img, (cursor_x, y - emoji_size // 2))
+            canvas.alpha_composite(emoji_img, (int(cursor_x), int(y - emoji_size // 2)))
             cursor_x += emoji_size + 2
             i = m.end()
             continue
@@ -257,72 +257,175 @@ def deepfry_image(raw: BytesIO) -> BytesIO:
     return buf
 
 
+# ── Font loading (cached, with safe system-font fallback) ──────────────────
+_CAPTION_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "DejaVuSans-Bold.ttf",
+    "LiberationSans-Bold.ttf",
+    "arial.ttf",
+]
+
+_CAPTION_FONT_PATH: str | None = None
+_CAPTION_FONT_RESOLVED: bool = False
+_CAPTION_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+
+
+def _resolve_caption_font_path() -> str | None:
+    global _CAPTION_FONT_PATH, _CAPTION_FONT_RESOLVED
+    if _CAPTION_FONT_RESOLVED:
+        return _CAPTION_FONT_PATH
+    for cand in _CAPTION_FONT_CANDIDATES:
+        try:
+            ImageFont.truetype(cand, 12)
+            _CAPTION_FONT_PATH = cand
+            _CAPTION_FONT_RESOLVED = True
+            return cand
+        except (IOError, OSError):
+            continue
+    _CAPTION_FONT_RESOLVED = True
+    return None
+
+
 def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
     size = max(12, int(width * scale))
+    return _caption_font(size)
+
+
+def _caption_font(size: int) -> ImageFont.FreeTypeFont:
+    """Return a TrueType font at the requested size, cached per size.
+
+    Falls back to PIL's default bitmap font only if no system TrueType font
+    can be located — which produces readable (though small) text instead of
+    the unreadable mojibake produced by ``arial.ttf`` not existing.
+    """
+    cached = _CAPTION_FONT_CACHE.get(size)
+    if cached is not None:
+        return cached
+    path = _resolve_caption_font_path()
+    if path:
+        try:
+            f = ImageFont.truetype(path, size)
+            _CAPTION_FONT_CACHE[size] = f
+            return f
+        except Exception:
+            pass
     try:
-        return ImageFont.truetype("arial.ttf", size)
-    except Exception:
-        return ImageFont.load_default(size)
+        f = ImageFont.load_default(size)
+    except TypeError:
+        f = ImageFont.load_default()
+    _CAPTION_FONT_CACHE[size] = f
+    return f
+
+
+def _wrap_to_pixel_width(
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    max_width: int,
+) -> list[str]:
+    """Greedy word-wrap by measured pixel width, with hard breaks for long words."""
+    measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    lines: list[str] = []
+    for paragraph in text.split("\n"):
+        words = paragraph.split(" ")
+        current = ""
+        for word in words:
+            # Hard-break tokens that exceed the line width by themselves.
+            if measure.textlength(word, font=font) > max_width and word:
+                if current:
+                    lines.append(current)
+                    current = ""
+                buf = ""
+                for ch in word:
+                    trial = buf + ch
+                    if measure.textlength(trial, font=font) > max_width and buf:
+                        lines.append(buf)
+                        buf = ch
+                    else:
+                        buf = trial
+                current = buf
+                continue
+
+            trial = word if not current else (current + " " + word)
+            if measure.textlength(trial, font=font) <= max_width:
+                current = trial
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        elif not words:
+            lines.append("")
+    return lines or [""]
 
 
 def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> Image.Image:
     width, height = img.size
-    font_size = max(12, int(width * 0.05))
+
+    # Font sized relative to the image, but with sensible bounds so very
+    # small or very large pictures still produce a legible caption.
+    font_size = max(20, min(72, int(width * 0.075)))
+    font = _caption_font(font_size)
+
+    # Side padding for the text. Caption width is image width minus 2× padding.
+    side_padding = max(16, int(width * 0.04))
+    text_max_width = max(1, width - side_padding * 2)
+
+    # Pixel-accurate wrapping
+    lines = _wrap_to_pixel_width(text, font, text_max_width)
+
+    # Use real font metrics for line spacing (consistent across line counts).
     try:
-        font = ImageFont.truetype("arial.ttf", font_size)
+        ascent, descent = font.getmetrics()
+        line_height = ascent + descent
     except Exception:
-        font = ImageFont.load_default(font_size)
+        bbox_one = ImageDraw.Draw(img).textbbox((0, 0), "Ay", font=font)
+        line_height = bbox_one[3] - bbox_one[1]
 
-    # Wrap text into multiple lines
-    wrapped = textwrap.fill(text, width=int(width / (font_size * 0.6)))
+    line_spacing = int(line_height * 0.18)
+    text_block_h = line_height * len(lines) + line_spacing * max(0, len(lines) - 1)
 
-    dummy = ImageDraw.Draw(img)
-    bbox = dummy.multiline_textbbox((0, 0), wrapped, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
-
-    padding_y = int(text_h * 0.18)
-    block_height = text_h + padding_y * 2
+    pad_y = max(12, int(font_size * 0.45))
+    block_height = text_block_h + pad_y * 2
 
     new_height = height + block_height
-    canvas = Image.new("RGBA", (width, int(new_height)), (255, 255, 255, 0))
+    canvas = Image.new("RGBA", (width, new_height), (255, 255, 255, 0))
     draw = ImageDraw.Draw(canvas)
 
     if position == "top":
         draw.rectangle([0, 0, width, block_height], fill="white")
-        text_center_y = block_height // 2
+        block_top = 0
         paste_y = block_height
     else:
         canvas.paste(img, (0, 0))
         draw.rectangle([0, height, width, height + block_height], fill="white")
-        text_center_y = height + block_height // 2
+        block_top = height
         paste_y = 0
 
-    # --- render each line separately to avoid multiline issues ---
-    lines = wrapped.split("\n")
-    line_count = len(lines)
-    # approximate per-line height from total bbox
-    line_height = text_h / max(line_count, 1)
-
-    # y of the center of the first line
-    current_y = text_center_y - (text_h / 2) + (line_height / 2)
-
-    for line in lines:
+    measure = ImageDraw.Draw(canvas)
+    text_top = block_top + pad_y
+    for i, line in enumerate(lines):
+        line_w = measure.textlength(line, font=font)
+        x = int((width - line_w) // 2)
+        # draw_text_with_emojis uses anchor="lm" → y is the line's vertical centre
+        baseline_y = text_top + i * (line_height + line_spacing) + line_height // 2
         draw_text_with_emojis(
             canvas,
-            width // 10,             # still horizontally centered
-            int(current_y),
-            line,                    # single line, no '\n'
+            x,
+            baseline_y,
+            line,
             font=font,
             fill="black",
-            stroke_width=2,
+            stroke_width=0,
             stroke_fill="white",
-            emoji_size=int(font_size * 1.2),
+            emoji_size=int(font_size * 1.1),
         )
-        current_y += line_height
 
     if position == "top":
-        canvas.paste(img, (0, int(paste_y)))
+        canvas.paste(img, (0, paste_y))
 
     return canvas
 

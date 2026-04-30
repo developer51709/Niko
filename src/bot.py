@@ -521,23 +521,8 @@ async def on_message(msg: discord.Message):
 
         # ── AI Actions: handle structured action responses ─────────────
         if isinstance(reply, dict):
-            action = reply.get("action")
-            if action == "create_poll":
-                question = reply.get("question", "Poll")
-                options = reply.get("options", [])[:9]
-                if options:
-                    number_emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"]
-                    lines = [f"**📊 {question}**\n"]
-                    for i, opt in enumerate(options):
-                        lines.append(f"{number_emojis[i]} {opt}")
-                    poll_msg = await msg.channel.send("\n".join(lines))
-                    for i in range(len(options)):
-                        try:
-                            await poll_msg.add_reaction(number_emojis[i])
-                        except Exception:
-                            pass
-                    return
-            # Fallback for unknown actions
+            from utils.ai_actions import dispatch_ai_action
+            await dispatch_ai_action(self, msg, reply)
             return
 
         if not isinstance(reply, str) or len(reply) < 1:
