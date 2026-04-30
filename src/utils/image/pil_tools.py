@@ -7,69 +7,103 @@ import requests
 from utils import logging
 
 
-# Regex to detect emoji codepoints
+# Unicode emoji detection
 EMOJI_RE = re.compile(
-    "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F900-\U0001F9FF\U0001F638-\U0001F63A\U0001F47E]+"
+    "[\U0001F600-\U0001F64F"
+    "\U0001F300-\U0001F5FF"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F700-\U0001F77F"
+    "\U0001F900-\U0001F9FF"
+    "\U0001F1E6-\U0001F1FF"
+    "]+"
 )
 
-# experimental discord custom emoji support
-DISCORD_EMOJI_RE = re.compile(r"<a?:[a-zA-Z0-9_]+:(\d+)>")
+DISCORD_EMOJI_RE = re.compile(r"<a?:[A-Za-z0-9_~\-]+:(\d+)>")
 
 def get_emoji_url(emoji_id: str) -> str:
     return f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
 
-def _draw_custom_emojis(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_film):
+# Cache to avoid re-downloading
+_EMOJI_CACHE = {}
+
+def _load_image_from_url(url: str) -> Image.Image:
+    if url in _EMOJI_CACHE:
+        return _EMOJI_CACHE[url].copy()
+
+    r = requests.get(url, timeout=5)
+    img = Image.open(BytesIO(r.content)).convert("RGBA")
+    _EMOJI_CACHE[url] = img
+    return img.copy()
+
+def _render_twemoji(char: str, size: int) -> Image.Image:
+    codepoints = "-".join(f"{ord(c):x}" for c in char)
+    url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{codepoints}.png"
+    img = _load_image_from_url(url)
+    return img.resize((size, size), Image.LANCZOS)
+
+def _render_custom_emoji(emoji_id: str, size: int) -> Image.Image:
+    url = get_emoji_url(emoji_id)
+    img = _load_image_from_url(url)
+    return img.resize((size, size), Image.LANCZOS)
+
+# ---------------------------------------------------------
+# UNIVERSAL INLINE TEXT + EMOJI RENDERER
+# ---------------------------------------------------------
+
+def draw_text_with_emojis(
+    canvas: Image.Image,
+    x: int,
+    y: int,
+    text: str,
+    font,
+    fill="black",
+    stroke_width=0,
+    stroke_fill="white",
+    emoji_size=32,
+):
+    """
+    Render a SINGLE line of text with inline Unicode + Discord custom emojis.
+    Line wrapping must be handled by the caller.
+    """
+    draw = ImageDraw.Draw(canvas)
     cursor_x = x
-    cursor_y = y
-    width, height = canvas.size
-    font_size = max(45, int(width * 0.05))
-    # print notice
-    return logging.warning("pil_tools", "Custom emoji support is not yet implemented.")
+    i = 0
 
-def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
-    cursor_x = x
-    cursor_y = y
-    width, height = canvas.size
-    font_size = max(45, int(width * 0.05))
+    while i < len(text):
 
-    tokens = EMOJI_RE.split(text)
-    emojis = EMOJI_RE.findall(text)
+        # Discord custom emoji: <:name:id> or <a:name:id>
+        m = DISCORD_EMOJI_RE.search(text, i)
+        if m and m.start() == i:
+            emoji_id = m.group(1)
+            emoji_img = _render_custom_emoji(emoji_id, emoji_size)
+            canvas.alpha_composite(emoji_img, (cursor_x, y - emoji_size // 2))
+            cursor_x += emoji_size + 2
+            i = m.end()
+            continue
 
-    for i, token in enumerate(tokens):
-        if token:
-            draw.text(
-                (cursor_x, cursor_y),
-                token,
-                font=font,
-                fill=fill,
-                stroke_width=stroke_width,
-                stroke_fill=stroke_fill,
-                anchor="lm",
-            )
-            cursor_x += draw.textlength(token, font=font)
+        # Unicode emoji
+        m = EMOJI_RE.search(text, i)
+        if m and m.start() == i:
+            emoji_char = m.group(0)
+            emoji_img = _render_twemoji(emoji_char, emoji_size)
+            canvas.alpha_composite(emoji_img, (cursor_x, y - emoji_size // 2))
+            cursor_x += emoji_size + 2
+            i = m.end()
+            continue
 
-        if i < len(emojis):
-            emoji = emojis[i]
-            codepoints = "-".join(f"{ord(c):x}" for c in emoji)
-            url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{codepoints}.png"
-
-            try:
-                r = requests.get(url, timeout=5)
-                tw = Image.open(BytesIO(r.content)).convert("RGBA")
-                tw = tw.resize((font_size, font_size), Image.LANCZOS)
-                canvas.paste(tw, (int(cursor_x), int(cursor_y - font_size * 0.5)), tw)
-                cursor_x += font_size
-            except Exception:
-                draw.text(
-                    (cursor_x, cursor_y),
-                    emoji,
-                    font=font,
-                    fill=fill,
-                    stroke_width=stroke_width,
-                    stroke_fill=stroke_fill,
-                    anchor="lm",
-                )
-                cursor_x += draw.textlength(emoji, font=font)
+        # Normal text
+        char = text[i]
+        draw.text(
+            (cursor_x, y),
+            char,
+            font=font,
+            fill=fill,
+            stroke_width=stroke_width,
+            stroke_fill=stroke_fill,
+            anchor="lm",
+        )
+        cursor_x += draw.textlength(char, font=font)
+        i += 1
 
 
 def process_image_animated(raw: BytesIO, effect_fn):
@@ -233,12 +267,13 @@ def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
 
 def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> Image.Image:
     width, height = img.size
-    font_size = max(45, int(width * 0.09))
+    font_size = max(12, int(width * 0.05))
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
     except Exception:
         font = ImageFont.load_default(font_size)
 
+    # Wrap text into multiple lines
     wrapped = textwrap.fill(text, width=int(width / (font_size * 0.6)))
 
     dummy = ImageDraw.Draw(img)
@@ -255,25 +290,36 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
 
     if position == "top":
         draw.rectangle([0, 0, width, block_height], fill="white")
-        text_y = block_height // 2
+        text_center_y = block_height // 2
         paste_y = block_height
     else:
         canvas.paste(img, (0, 0))
         draw.rectangle([0, height, width, height + block_height], fill="white")
-        text_y = height + block_height // 2
+        text_center_y = height + block_height // 2
         paste_y = 0
 
-    _draw_twemoji_text(
-        canvas,
-        draw,
-        width // 2 - text_w // 2,
-        text_y,
-        wrapped,
-        font,
-        fill="black",
-        stroke_width=6,
-        stroke_fill="white",
-    )
+    # --- render each line separately to avoid multiline issues ---
+    lines = wrapped.split("\n")
+    line_count = len(lines)
+    # approximate per-line height from total bbox
+    line_height = text_h / max(line_count, 1)
+
+    # y of the center of the first line
+    current_y = text_center_y - (text_h / 2) + (line_height / 2)
+
+    for line in lines:
+        draw_text_with_emojis(
+            canvas,
+            width // 10,             # still horizontally centered
+            int(current_y),
+            line,                    # single line, no '\n'
+            font=font,
+            fill="black",
+            stroke_width=2,
+            stroke_fill="white",
+            emoji_size=int(font_size * 1.2),
+        )
+        current_y += line_height
 
     if position == "top":
         canvas.paste(img, (0, int(paste_y)))
