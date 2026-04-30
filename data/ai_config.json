@@ -128,7 +128,9 @@
     },
     "1497372474919227456": {
         "personality": "cafe",
-        "enabled": "True"
+        "enabled": "True",
+        "ai_actions_experiment": "True",
+        "better_context_experiment": "True"
     },
     "1493718664908902602": {
         "personality": "cafe",

@@ -522,6 +522,7 @@ async def on_message(msg: discord.Message):
         # ── AI Actions: handle structured action responses ─────────────
         if isinstance(reply, dict):
             from utils.ai_actions import dispatch_ai_action
+            self = bot
             await dispatch_ai_action(self, msg, reply)
             return
 
