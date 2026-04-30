@@ -115,7 +115,7 @@ class Introduction(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# 📌 **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content="-# 📌 **Need help?**\n-# Ask in the [support server](https://discord.gg/3JFbm2wfNk) or check the [documentation](https://developer51709.github.io/Niko/docs)"
             )
         )
 

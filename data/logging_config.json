@@ -167,5 +167,18 @@
         "server": null,
         "voice": null,
         "disabled": []
+    },
+    "1148779504274247761": {
+        "moderation": 1499475360247447633,
+        "automod": 1499475552418136295,
+        "messages": null,
+        "channels": null,
+        "members": null,
+        "captcha": null,
+        "invites": 1499474598293672216,
+        "roles": null,
+        "server": null,
+        "voice": null,
+        "disabled": []
     }
 }

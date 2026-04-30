@@ -175,5 +175,11 @@
         "personality": "cafe",
         "enabled": "True",
         "ai_actions_experiment": "False"
+    },
+    "1148779504274247761": {
+        "personality": "normal",
+        "enabled": "True",
+        "ai_actions_experiment": "True",
+        "better_context_experiment": "True"
     }
 }

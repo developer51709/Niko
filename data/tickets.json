@@ -220,14 +220,6 @@
         "opener_id": 983383480333393950,
         "claimed_by": null,
         "status": "open"
-      },
-      {
-        "channel_id": 1498659597181911050,
-        "message_id": 1498659598780076093,
-        "category": "Staff Application",
-        "opener_id": 1344209369205706802,
-        "claimed_by": null,
-        "status": "open"
       }
     ]
   },
@@ -241,6 +233,28 @@
     "panel_channel_id": null,
     "panel_message_id": null,
     "support_roles": [],
+    "open_tickets": []
+  },
+  "1148779504274247761": {
+    "guild_id": 1148779504274247761,
+    "panel_title": "Astralis.Shop Tickets",
+    "panel_description": "To place an order please press the button below and then select the product you would like to purchase.",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/attachments/1499474525820158143/1499481842192089209/Screenshot_2026-04-30_at_1.43.34_PM.png?ex=69f4f4ca&is=69f3a34a&hm=5764f164c023e6c5346c01ad7f4b4c3dc87756720111b2986c39372eb2108e97&",
+    "panel_categories": [
+      "Discord Nitro",
+      "Server Boosts",
+      "Discord Server Members",
+      "Nitro Tokens & Boost Bots",
+      "Other/Custom Order"
+    ],
+    "panel_channel_id": 1148779504274247769,
+    "panel_message_id": 1499468690024825017,
+    "support_roles": [
+      1149836186295206009,
+      1148779504274247767,
+      1148779504274247766
+    ],
     "open_tickets": []
   }
 }
