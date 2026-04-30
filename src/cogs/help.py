@@ -699,7 +699,8 @@ def _general_text(bot: commands.Bot, lang: str) -> str:
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website](https://developer51709.github.io/Niko) • "
-        f"[Support Server](https://dsc.gg/aether-lounge)"
+        f"[Support Server](https://discord.gg/3JFbm2wfNk) • "
+        f"[Community Server](https://dsc.gg/aether-lounge)"
     )
 
 
