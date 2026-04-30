@@ -792,7 +792,7 @@ class EconomyCog(commands.Cog):
 
         await self._send_reward_card(
             ctx, title=title, subtitle=subtitle, amount=amount, accent=accent,
-            footer="-# `use lockpick` before your next attempt for +25% success.",
+            footer="Tip: use a lockpick before your next attempt for +25% success.",
         )
 
     @commands.hybrid_command(name="rob", description="Try to rob another user",

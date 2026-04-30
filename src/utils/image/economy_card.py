@@ -534,7 +534,7 @@ def _render_reward_sync(
     # render emojis in the title
     text_parts = title.split(" ")
     for i, part in enumerate(text_parts):
-        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕")):
             emoji = _render_emoji(part, 28)
             canvas.alpha_composite(emoji, (36 + i * 36, 54))
             text_parts[i] = "  "  # remove the emoji from the title
@@ -543,21 +543,23 @@ def _render_reward_sync(
         title = " ".join(text_parts)
     # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
     name = _normalize_text(name)
-    text_parts = name.split(" ")
-    for i, part in enumerate(text_parts):
-        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
-            emoji = _render_emoji(part, 28)
-            canvas.alpha_composite(emoji, (36 + i * 36, 54))
-            text_parts[i] = "  "  # remove the emoji from the title
-        else:
-            text_parts[i] = part
-        name = " ".join(text_parts)
+    # THIS IS COMMENTED BECAUSE IT KEEPS RENDERING INCORRECTLY!
+    # text_parts = name.split(" ")
+    # for i, part in enumerate(text_parts):
+    #     if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
+    #         emoji = _render_emoji(part, 28)
+    #         canvas.alpha_composite(emoji, (36 + i * 36, 54))
+    #         text_parts[i] = "  "  # remove the emoji from the title
+    #     else:
+    #         text_parts[i] = part
+    #     name = " ".join(text_parts)
     d.text(
         (text_x, av_y + 4),
         _truncate(f"{title} — {name}", title_font, REWARD_W - text_x - 36),
         fill=CREAM,
         font=title_font,
     )
+    subtitle = _normalize_text(subtitle)
     d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
 
     # Big amount block (right side panel)
@@ -585,12 +587,17 @@ def _render_reward_sync(
     if footer:
         text_parts = footer.split(" ")
         for i, part in enumerate(text_parts):
-            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
-                emoji = _render_emoji(part, 28)
-                canvas.alpha_composite(emoji, (36 + i * 36, 54))
-                text_parts[i] = "  "  # remove the emoji from the title
-            else:
-                text_parts[i] = part
+            # some footers have multiple emojis together and must be handled properly
+            # e.g. "🍯✨" should be rendered as two separate emojis
+            emoji_parts = []
+            for char in part:
+                if char.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
+                    emoji_parts.append(char)
+                    text_parts[i] = "  "  # remove the emoji from the title
+                    emoji = _render_emoji(char, 28)
+                    canvas.alpha_composite(emoji, (36 + i * 36, REWARD_H - 38))
+                else:
+                    text_parts[i] = part
             footer = " ".join(text_parts)
         d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
 
@@ -699,7 +706,7 @@ def _render_leaderboard_sync(
         name = _normalize_text(name)
         text_parts = name.split(" ")
         for i, part in enumerate(text_parts):
-            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨")):
+            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
                 emoji = _render_emoji(part, 28)
                 canvas.alpha_composite(emoji, (36 + i * 36, 54))
                 text_parts[i] = "  "  # remove the emoji from the title

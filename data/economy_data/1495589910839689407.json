@@ -1,8 +1,8 @@
 {
-  "balance": 2542,
+  "balance": 2692,
   "inventory": {},
   "bank": 0,
-  "net_worth": 2542,
+  "net_worth": 2692,
   "daily_streak": 1,
   "last_daily": 1777315657,
   "last_work": 1777321405,
@@ -18,7 +18,7 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 1460,
+  "total_earned": 1610,
   "total_spent": 23,
   "xp": 12,
   "level": 0,
@@ -29,6 +29,12 @@
   "effects": {},
   "lottery_tickets": 0,
   "transactions": [
+    {
+      "ts": 1777488833,
+      "kind": "rob_apology",
+      "amount": 150,
+      "note": "from ! - Nyxen"
+    },
     {
       "ts": 1777321405,
       "kind": "work",
@@ -51,5 +57,5 @@
   "achievements": [
     "first_paycheck"
   ],
-  "last_interest_day": "2026-04-29"
+  "last_interest_day": "2026-04-30"
 }
