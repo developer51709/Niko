@@ -20,10 +20,17 @@ class ExperimentsView(discord.ui.LayoutView):
         self.container.add_item(discord.ui.TextDisplay(content="> These are experimental features that are still under development. They may not work as expected and may change at any time."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="**AI Actions**"))
-        self.container.add_item(discord.ui.TextDisplay(content="This experiment allows the AI to perform actions on your behalf. This includes things like creating channels, roles, and more."))
+        self.container.add_item(discord.ui.TextDisplay(content="Allows the AI to perform real Discord actions on your behalf — such as creating polls — when you ask it to in chat."))
         self.container.add_item(discord.ui.ActionRow(
             ExperimentToggle(self.bot, "ai_actions", self.guild_id),
             ExperimentAboutButton(self.bot, "ai_actions")
+        ))
+        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**Better Context**"))
+        self.container.add_item(discord.ui.TextDisplay(content="Gives the AI awareness of the last 5 channel messages and the message being replied to, so it can respond more naturally in ongoing conversations."))
+        self.container.add_item(discord.ui.ActionRow(
+            ExperimentToggle(self.bot, "better_context", self.guild_id),
+            ExperimentAboutButton(self.bot, "better_context")
         ))
         self.add_item(self.container)
 
@@ -34,20 +41,15 @@ class ExperimentAboutButton(discord.ui.Button):
         super().__init__(label="About", style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction):
-        # send the experiment about view as an ephemeral message
-        view = discord.ui.LayoutView()
         if self.experiment == "ai_actions":
             view = AIActionsExperimentAbout(self.bot)
+        elif self.experiment == "better_context":
+            view = BetterContextExperimentAbout(self.bot)
         else:
-            # unknown experiment
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Unknown Experiment"
-                ),
-                discord.ui.TextDisplay(
-                    content="The about page for this experiment could not be found."
-                )
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Unknown Experiment"),
+                discord.ui.TextDisplay(content="The about page for this experiment could not be found.")
             )
             view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -114,6 +116,21 @@ class AIActionsExperimentAbout(discord.ui.LayoutView):
         self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.add_item(self.container)
+
+class BetterContextExperimentAbout(discord.ui.LayoutView):
+    def __init__(self, bot: commands.Bot):
+        super().__init__()
+        self.bot = bot
+        self.container = discord.ui.Container()
+        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} Better Context Experiment"))
+        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="Gives Niko awareness of recent conversation history so responses feel more natural and connected to what's happening in the channel."))
+        self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**What it adds**\n• The last 5 non-bot messages in the channel\n• The content of any message being replied to\n\nNiko uses this extra context to understand the flow of conversation before responding."))
+        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
+        self.add_item(self.container)
+
 
 class ExperimentsButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot):

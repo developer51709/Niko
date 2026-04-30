@@ -256,20 +256,23 @@ def get_favorability(user_id: int) -> int:
 # -----------------------------
 # Generate reply
 # -----------------------------
-def generate_reply(user_id, server, message, username):
+def generate_reply(user_id, server, message, username, *,
+                   context_messages=None, replied_content=None, ai_actions_enabled=False):
     ai_status = get_ai_config(server.id, "enabled")
     if ai_status == "True":
         if AI_ENABLED:
             personality = get_ai_config(server.id, "personality")
-            if personality == "normal":
-                SYSTEM_PROMPT = SYSTEM_PROMPT_NORMAL
-            else:
-                SYSTEM_PROMPT = SYSTEM_PROMPT_CAFE
+            SYSTEM_PROMPT = SYSTEM_PROMPT_NORMAL if personality == "normal" else SYSTEM_PROMPT_CAFE
             try:
                 if AI_MODE == "NIKOAPI":
                     return generate_reply_nikoapi(bot, user_id, server, message, username, SYSTEM_PROMPT)
                 if AI_MODE == "OPENAI":
-                    return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+                    return generate_reply_openai(
+                        bot, user_id, server, message, username, SYSTEM_PROMPT,
+                        context_messages=context_messages,
+                        replied_content=replied_content,
+                        ai_actions_enabled=ai_actions_enabled,
+                    )
                 else:
                     return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
             except Exception:
@@ -346,6 +349,45 @@ bot = commands.Bot(
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | None = None
 
+
+# ── Slash-command blacklist check (runs before every slash/context command) ──
+@bot.tree.interaction_check
+async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
+    bm = BlacklistManager()
+    user_entry = bm.get_user_entry(interaction.user.id)
+    if user_entry:
+        reason = user_entry.get("reason") or "No reason provided."
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+            accent_colour=discord.Color.red()
+        ))
+        try:
+            await interaction.response.send_message(view=view, ephemeral=True)
+        except Exception:
+            pass
+        return False
+    if interaction.guild:
+        guild_entry = bm.get_guild_entry(interaction.guild.id)
+        if guild_entry:
+            reason = guild_entry.get("reason") or "No reason provided."
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+                accent_colour=discord.Color.red()
+            ))
+            try:
+                await interaction.response.send_message(view=view, ephemeral=True)
+            except Exception:
+                pass
+            return False
+    return True
+
+
 @bot.event
 async def on_message(msg: discord.Message):
     if msg.author.bot:
@@ -417,45 +459,99 @@ async def on_message(msg: discord.Message):
     bl = await blacklist_check(msg)
     if bl:
         return
-    
+
+    # ── Better Context experiment ──────────────────────────────────────
+    replied_content = None
+    context_messages = None
+    ai_actions_enabled = False
+
+    if guild:
+        better_ctx = get_ai_config(guild.id, "better_context_experiment") == "True"
+        if better_ctx:
+            # Grab replied-to message
+            if msg.reference and msg.reference.message_id:
+                try:
+                    ref_msg = msg.reference.cached_message or await msg.channel.fetch_message(msg.reference.message_id)
+                    if ref_msg and ref_msg.content:
+                        replied_content = f"{ref_msg.author.display_name}: {ref_msg.content[:300]}"
+                except Exception:
+                    pass
+            # Grab last 5 channel messages (excluding the triggering message)
+            try:
+                history = []
+                async for m in msg.channel.history(limit=6, before=msg):
+                    if not m.author.bot:
+                        history.append(f"{m.author.display_name}: {m.content[:200]}")
+                    if len(history) >= 5:
+                        break
+                if history:
+                    context_messages = "\n".join(reversed(history))
+            except Exception:
+                pass
+
+        ai_actions_enabled = get_ai_config(guild.id, "ai_actions_experiment") == "True"
+
     async with msg.channel.typing():
+        import functools
         reply = await loop.run_in_executor(
             None,
-            generate_reply,
-            msg.author.id,
-            guild,
-            user_input,
-            msg.author.display_name
+            functools.partial(
+                generate_reply,
+                msg.author.id,
+                guild,
+                user_input,
+                msg.author.display_name,
+                context_messages=context_messages,
+                replied_content=replied_content,
+                ai_actions_enabled=ai_actions_enabled,
+            )
         )
 
         if reply == "ai_disabled_global":
             view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### ⚠️ AI Disabled"
-                ),
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content="### ⚠️ AI Disabled"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"The AI is currently disabled by the bot owner."
-                )
-            )
-            view.add_item(container)
+                discord.ui.TextDisplay(content="The AI is currently disabled by the bot owner.")
+            ))
             return await msg.channel.send(view=view)
 
         if reply == "ai_disabled_guild":
             return
 
-        if len(reply) > 1800:
-            reply = reply[:1800] + "..."
-        elif len(reply) < 1:
+        # ── AI Actions: handle structured action responses ─────────────
+        if isinstance(reply, dict):
+            action = reply.get("action")
+            if action == "create_poll":
+                question = reply.get("question", "Poll")
+                options = reply.get("options", [])[:9]
+                if options:
+                    number_emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"]
+                    lines = [f"**📊 {question}**\n"]
+                    for i, opt in enumerate(options):
+                        lines.append(f"{number_emojis[i]} {opt}")
+                    poll_msg = await msg.channel.send("\n".join(lines))
+                    for i in range(len(options)):
+                        try:
+                            await poll_msg.add_reaction(number_emojis[i])
+                        except Exception:
+                            pass
+                    return
+            # Fallback for unknown actions
+            return
+
+        if not isinstance(reply, str) or len(reply) < 1:
             reply = "An error occured... 🥀"
             if DEBUG_MODE == "True":
                 logging.error("AIGeneration", "Error: Empty response generated.")
 
+        if len(reply) > 1800:
+            reply = reply[:1800] + "..."
+
         mentions = discord.AllowedMentions.none()
         try:
             await msg.reply(reply, allowed_mentions=mentions)
-        except Exception as e:
+        except Exception:
             await msg.channel.send(reply, allowed_mentions=mentions)
 
 # -----------------------------

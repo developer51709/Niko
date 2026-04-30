@@ -203,6 +203,84 @@ def _cv2(text: str) -> discord.ui.LayoutView:
 
 
 # ───────────────────────────────────────────────────
+#  CONFIRMATION VIEW (kick / ban)
+# ───────────────────────────────────────────────────
+
+import asyncio as _asyncio
+
+
+class _ModConfirmView(discord.ui.LayoutView):
+    """LayoutView with Confirm + Cancel buttons for kick/ban confirmation."""
+
+    def __init__(self, prompt: str, *, invoker_id: int, timeout: float = 30.0):
+        super().__init__(timeout=timeout)
+        self.invoker_id = invoker_id
+        self.confirmed: bool | None = None
+        self._event = _asyncio.Event()
+
+        self._confirm_btn = discord.ui.Button(
+            label="Confirm",
+            style=discord.ButtonStyle.danger,
+            emoji=get_emoji("icon_tick") or "✅",
+        )
+        self._cancel_btn = discord.ui.Button(
+            label="Cancel",
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("icon_cross") or "❌",
+        )
+        self._confirm_btn.callback = self._on_confirm
+        self._cancel_btn.callback = self._on_cancel
+
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=prompt),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(self._confirm_btn, self._cancel_btn),
+        ))
+
+    async def _check_invoker(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.invoker_id:
+            err = discord.ui.LayoutView()
+            err.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=f"{get_emoji('icon_cross')} Only the command invoker can use these buttons.")
+            ))
+            await interaction.response.send_message(view=err, ephemeral=True)
+            return False
+        return True
+
+    async def _on_confirm(self, interaction: discord.Interaction):
+        if not await self._check_invoker(interaction):
+            return
+        self.confirmed = True
+        self._confirm_btn.disabled = True
+        self._cancel_btn.disabled = True
+        await interaction.response.edit_message(view=self)
+        self._event.set()
+
+    async def _on_cancel(self, interaction: discord.Interaction):
+        if not await self._check_invoker(interaction):
+            return
+        self.confirmed = False
+        self._confirm_btn.disabled = True
+        self._cancel_btn.disabled = True
+        cancelled = discord.ui.LayoutView()
+        cancelled.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"{get_emoji('icon_cross')} Action cancelled.")
+        ))
+        await interaction.response.edit_message(view=cancelled)
+        self._event.set()
+
+    async def on_timeout(self):
+        if self.confirmed is None:
+            self.confirmed = False
+            self._event.set()
+
+    async def wait_for_response(self) -> bool:
+        """Block until confirmed or timed out; returns True if confirmed."""
+        await self._event.wait()
+        return bool(self.confirmed)
+
+
+# ───────────────────────────────────────────────────
 #  MODERATION COG
 # ───────────────────────────────────────────────────
 
@@ -219,14 +297,36 @@ class Moderation(commands.Cog):
         return self.bot.get_cog("ServerLogger")
 
     # ──── KICK / BAN / UNBAN ───────────────────────
-    # help command uses json for multilangual help
     @commands.hybrid_command(description="Kick a member from the server", help="{ 'en': 'Kick a member from the server.', 'de': 'Mitglied kicken.', 'es': 'Expulsa a un miembro del servidor.' }")
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="kick"))
-        await member.kick(reason=reason)
-        await ctx.send(view=_cv2(msg(ctx, "kicked", member=member, reason=reason)))
+
+        prompt = (
+            f"### 👟 Confirm Kick\n"
+            f"Are you sure you want to kick **{member}** (`{member.id}`)?\n"
+            f"**Reason:** {reason}"
+        )
+        confirm_view = _ModConfirmView(prompt, invoker_id=ctx.author.id)
+        confirm_msg = await ctx.send(view=confirm_view)
+
+        if not await confirm_view.wait_for_response():
+            return
+
+        try:
+            await member.kick(reason=reason)
+        except discord.Forbidden:
+            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} I don't have permission to kick that member."))
+        except discord.HTTPException as e:
+            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} Failed to kick: {e}"))
+
+        result_view = _cv2(msg(ctx, "kicked", member=member, reason=reason))
+        try:
+            await confirm_msg.edit(view=result_view)
+        except Exception:
+            await ctx.send(view=result_view)
+
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Action:** Kick\n"
@@ -243,19 +343,39 @@ class Moderation(commands.Cog):
     async def ban(self, ctx, member: discord.User = None, *, reason: str = "No reason provided"):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
-                
-        await ctx.guild.ban(member, reason=reason, delete_message_days=7)
-        await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
-        guild = ctx.guild
-        moderator = ctx.author
+
+        prompt = (
+            f"### 🔨 Confirm Ban\n"
+            f"Are you sure you want to ban **{member}** (`{member.id}`)?\n"
+            f"**Reason:** {reason}"
+        )
+        confirm_view = _ModConfirmView(prompt, invoker_id=ctx.author.id)
+        confirm_msg = await ctx.send(view=confirm_view)
+
+        if not await confirm_view.wait_for_response():
+            return
+
+        try:
+            await ctx.guild.ban(member, reason=reason, delete_message_days=7)
+        except discord.Forbidden:
+            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} I don't have permission to ban that user."))
+        except discord.HTTPException as e:
+            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} Failed to ban: {e}"))
+
+        result_view = _cv2(msg(ctx, "banned", member=member, reason=reason))
+        try:
+            await confirm_msg.edit(view=result_view)
+        except Exception:
+            await ctx.send(view=result_view)
+
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Action:** Ban\n"
-            f"**Reason:** {reason or 'No reason provided'}\n"
-            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
         )
         await self.logger().log_event(
-            guild, "moderation", "Ban", body, 
+            ctx.guild, "moderation", "Ban", body,
             target_id=member.id, action_key="Ban"
         )
 

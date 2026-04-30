@@ -113,7 +113,7 @@
         "experiments": {
             "ai_actions": "True"
         },
-        "ai_actions_experiment": "False"
+        "ai_actions_experiment": "True"
     },
     "1442547737492066466": {
         "personality": "cafe",

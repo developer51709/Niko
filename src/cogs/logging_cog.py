@@ -1051,12 +1051,50 @@ class ServerLogger(commands.Cog):
         content = message.content or "*No text content*"
         if len(content) > 900:
             content = content[:900] + "…"
+
+        attachment_note = ""
+        if message.attachments:
+            names = ", ".join(f"`{a.filename}`" for a in message.attachments)
+            attachment_note = f"\n**Attachments ({len(message.attachments)}):** {names}"
+
         body = (
             f"**Author:** {message.author.mention} (`{message.author}`)\n"
             f"**Channel:** {message.channel.mention}\n"
             f"**Content:**\n{content}"
+            f"{attachment_note}"
         )
         await self.log_event(message.guild, "messages", "Message Deleted", body, target_id=message.author.id)
+
+        # Re-upload any cached attachment bytes to the log channel
+        if message.attachments:
+            self._reload()
+            cfg = self._get_cfg(message.guild.id)
+            if "messages" not in cfg.get("disabled", []):
+                log_channel_id = cfg.get("messages")
+                log_channel = message.guild.get_channel(log_channel_id) if log_channel_id else None
+                if log_channel:
+                    import aiohttp
+                    import io
+                    files = []
+                    async with aiohttp.ClientSession() as session:
+                        for att in message.attachments:
+                            try:
+                                async with session.get(att.proxy_url) as resp:
+                                    if resp.status == 200:
+                                        data = await resp.read()
+                                        files.append(discord.File(io.BytesIO(data), filename=att.filename))
+                            except Exception:
+                                pass
+                    if files:
+                        try:
+                            await log_channel_limiter.acquire((message.guild.id, log_channel.id))
+                            await log_channel.send(
+                                content=f"-# Attachments from deleted message by {message.author.mention}:",
+                                files=files,
+                                allowed_mentions=discord.AllowedMentions.none(),
+                            )
+                        except Exception as e:
+                            logging.error("logging_cog", f"Failed to re-upload deleted attachments: {e}")
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):

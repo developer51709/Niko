@@ -281,6 +281,18 @@ def _normalize_text(text: str) -> str:
     return cleaned
 
 
+import re as _re
+_DISCORD_EMOJI_RE = _re.compile(r"<a?:[A-Za-z0-9_]{1,32}:\d{15,21}>")
+
+
+def _strip_discord_emoji(text: str) -> str:
+    """Remove Discord custom emoji tags (<:name:id> / <a:name:id>) from text.
+
+    PIL cannot render these and they would show as garbled characters.
+    """
+    return _DISCORD_EMOJI_RE.sub("", text).strip()
+
+
 # ── Stat chip ──────────────────────────────────────────────────────────────
 
 
@@ -405,7 +417,7 @@ def _render_balance_sync(
     sub_font = _reg(15)
     d.text(
         (name_x, avatar_y + 6),
-        _truncate(name, name_font, CARD_W - name_x - 40),
+        _truncate(_strip_discord_emoji(name), name_font, CARD_W - name_x - 40),
         fill=CREAM,
         font=name_font,
     )
@@ -414,7 +426,7 @@ def _render_balance_sync(
         job_line = f"{job_emoji}  " + job_line
     d.text(
         (name_x, avatar_y + 44),
-        job_line,
+        _strip_discord_emoji(job_line),
         fill=CREAM_DIM,
         font=sub_font,
     )
@@ -713,7 +725,7 @@ def _render_leaderboard_sync(
             else:
                 text_parts[i] = part
             name = " ".join(text_parts)
-        d.text((nx, y + 14), _truncate(name, nf, max_name_w), fill=CREAM, font=nf)
+        d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=CREAM, font=nf)
 
         # total
         amt = f"{int(total):,}"
