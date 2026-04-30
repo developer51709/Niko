@@ -310,7 +310,9 @@ def render_text_with_emojis(
     EMOJI_SET = {
         "🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅",
         "💸", "💵", "💴", "💶", "💷", "✨", "🍯",
-        "☕", "👮", "😈", "🛡️"
+        "☕", "👮", "😈", "🛡️", "💎", "🍬", "🔥",
+        "📋", "🪙", "🏦", "💼", "📜", "🎒", "🧪",
+        "🎟️", "🎰", "🍀", "🕒", "📊", "💸", "💳"
     }
 
     draw = ImageDraw.Draw(canvas)
@@ -587,14 +589,9 @@ def _render_reward_sync(
     name       = _normalize_text(name)
     title      = f"{title} — {name}"
     title      = render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, CREAM)
-    # d.text(
-    #     (text_x, av_y + 4),
-    #     _truncate(f"{title} — {name}", title_font, REWARD_W - text_x - 36),
-    #     fill=CREAM,
-    #     font=title_font,
-    # )
     subtitle = _normalize_text(subtitle)
-    d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
+    render_text_with_emojis(canvas, subtitle, sub_font, text_x, av_y + 42, 16, CREAM_DIM)
+    # d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
 
     # Big amount block (right side panel)
     panel_w = 280
@@ -682,20 +679,13 @@ def _render_leaderboard_sync(
 
     # Header
     d.text((36, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(16))
-    text_parts = title.split(" ")
-    for i, part in enumerate(text_parts):
-        if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅")):
-            emoji = _render_emoji(part, 28)
-            canvas.alpha_composite(emoji, (36 + i * 36, 54))
-            text_parts[i] = "  "  # remove the emoji from the title
-        else:
-            text_parts[i] = part
-        title = " ".join(text_parts)
-    d.text((36, 54), title, fill=CREAM, font=_bold(28))
+    render_text_with_emojis(canvas, title, _bold(28), 36, 54, 28, CREAM)
+    # d.text((36, 54), title, fill=CREAM, font=_bold(28))
     page_text = f"Page {page}/{pages}"
     pf = _reg(14)
     pw = int(pf.getlength(page_text))
-    d.text((LB_W - 36 - pw, 60), page_text, fill=CREAM_DIM, font=pf)
+    render_text_with_emojis(canvas, page_text, pf, LB_W - 36 - pw, 60, 14, CREAM_DIM)
+    # d.text((LB_W - 36 - pw, 60), page_text, fill=CREAM_DIM, font=pf)
 
     y = 110
     medals = {1: "1st", 2: "2nd", 3: "3rd"}
@@ -713,7 +703,8 @@ def _render_leaderboard_sync(
         rank_text = medals.get(rank, f"#{rank}")
         rf = _bold(22 if is_top3 else 18)
         rw = int(rf.getlength(rank_text))
-        d.text((28 + (60 - rw) // 2, y + (LB_ROW_H - 28) // 2), rank_text, fill=accent, font=rf)
+        render_text_with_emojis(canvas, rank_text, rf, 28 + (60 - rw) // 2, y + (LB_ROW_H - 28) // 2, 28, accent)
+        # d.text((28 + (60 - rw) // 2, y + (LB_ROW_H - 28) // 2), rank_text, fill=accent, font=rf)
 
         # avatar
         av = _circle_avatar(avatar, LB_ROW_H - 16)
@@ -725,16 +716,8 @@ def _render_leaderboard_sync(
         max_name_w = LB_W - 56 - 220 - (nx - 28)
         # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
         name = _normalize_text(name)
-        text_parts = name.split(" ")
-        for i, part in enumerate(text_parts):
-            if part.startswith(("🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅", "💸", "💵", "💴", "💶", "💷", "✨", "🍯", "☕", "👮", "😈", "🛡️")):
-                emoji = _render_emoji(part, 28)
-                canvas.alpha_composite(emoji, (36 + i * 36, 54))
-                text_parts[i] = "  "  # remove the emoji from the title
-            else:
-                text_parts[i] = part
-            name = " ".join(text_parts)
-        d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=CREAM, font=nf)
+        render_text_with_emojis(canvas, name, nf, nx, y + 14, 20, CREAM)
+        # d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=CREAM, font=nf)
 
         # total
         amt = f"{int(total):,}"
