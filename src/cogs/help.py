@@ -89,7 +89,7 @@ _UI_STRINGS: dict[str, dict] = {
         "general_about_title":  "**About Niko**",
         "general_about_body": (
             "Niko is a cozy, AI-powered Discord bot with a café personality — "
-            "bilingual (EN/DE), packed with economy, leveling, music, moderation, and more!"
+            "trilingual (EN/DE/ES), packed with economy, leveling, music, moderation, and more!"
         ),
         "general_links_title":  "**{icon} Links**",
     },
@@ -139,7 +139,7 @@ _UI_STRINGS: dict[str, dict] = {
         "general_about_title":  "**Über Niko**",
         "general_about_body": (
             "Niko ist ein gemütlicher, KI-gestützter Discord-Bot mit Café-Persönlichkeit — "
-            "zweisprachig (DE/EN), vollgepackt mit Wirtschaft, Leveling, Musik, Moderation und mehr!"
+            "dreisprachig (EN/DE/ES), vollgepackt mit Wirtschaft, Leveling, Musik, Moderation und mehr!"
         ),
         "general_links_title":  "**{icon} Links**",
     },
@@ -699,7 +699,7 @@ def _general_text(bot: commands.Bot, lang: str) -> str:
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website](https://developer51709.github.io/Niko) • "
-        f"[Support Server](https://dsc.gg/astral-haven)"
+        f"[Support Server](https://dsc.gg/aether-lounge)"
     )
 
 
