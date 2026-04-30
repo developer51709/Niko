@@ -10,12 +10,59 @@ import os
 import random
 import time
 
-SHOE_FILE = "blackjack_shoe.json"
-CARD_BACK = "🂠"
+from config.emojis import get_emoji
+from utils.paginator import PaginatedView, paginate
+from utils.image.blackjack import render_table
+
+SHOE_FILE   = "blackjack_shoe.json"
+IMAGE_NAME  = "blackjack.png"
 
 ACCENT_GREEN = discord.Colour(0x57F287)
-ACCENT_RED = discord.Colour(0xED4245)
-ACCENT_GOLD = discord.Colour(0xFEE75C)
+ACCENT_RED   = discord.Colour(0xED4245)
+ACCENT_GOLD  = discord.Colour(0xFEE75C)
+ACCENT_BLUE  = discord.Colour(0x5865F2)
+
+
+# ============================
+#  PREFIX RESOLVER
+# ============================
+
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
 
 # ============================
 #  SHOE MANAGER (PERSISTENT)
@@ -35,7 +82,7 @@ class Shoe:
                     self.cards = data.get("cards", [])
                     if len(self.cards) > 0:
                         return
-            except:
+            except Exception:
                 pass
         self.reset_shoe()
 
@@ -66,20 +113,6 @@ class Shoe:
 #  CARD UTILITIES
 # ============================
 
-CARD_EMOJIS = {
-    "AS": "🂡", "2S": "🂢", "3S": "🂣", "4S": "🂤", "5S": "🂥", "6S": "🂦",
-    "7S": "🂧", "8S": "🂨", "9S": "🂩", "10S": "🂪", "JS": "🂫", "QS": "🂭", "KS": "🂮",
-    "AH": "🂱", "2H": "🂲", "3H": "🂳", "4H": "🂴", "5H": "🂵", "6H": "🂶",
-    "7H": "🂷", "8H": "🂸", "9H": "🂹", "10H": "🂺", "JH": "🂻", "QH": "🂽", "KH": "🂾",
-    "AD": "🃁", "2D": "🃂", "3D": "🃃", "4D": "🃄", "5D": "🃅", "6D": "🃆",
-    "7D": "🃇", "8D": "🃈", "9D": "🃉", "10D": "🃊", "JD": "🃋", "QD": "🃍", "KD": "🃎",
-    "AC": "🃑", "2C": "🃒", "3C": "🃓", "4C": "🃔", "5C": "🃕", "6C": "🃖",
-    "7C": "🃗", "8C": "🃘", "9C": "🃙", "10C": "🃚", "JC": "🃛", "QC": "🃝", "KC": "🃞",
-}
-
-def card_emoji(card):
-    return CARD_EMOJIS.get(card, card)
-
 def hand_value(cards):
     value = 0
     aces = 0
@@ -87,7 +120,7 @@ def hand_value(cards):
         rank = card[:-1]
         if rank.isdigit():
             value += int(rank)
-        elif rank in ["J", "Q", "K"]:
+        elif rank in ("J", "Q", "K"):
             value += 10
         else:
             value += 11
@@ -96,6 +129,7 @@ def hand_value(cards):
         value -= 10
         aces -= 1
     return value
+
 
 def is_blackjack(cards):
     return len(cards) == 2 and hand_value(cards) == 21
@@ -117,7 +151,7 @@ class BlackjackGame:
     def initial_deal(self):
         p1 = [self.shoe.draw(), self.shoe.draw()]
         d1 = [self.shoe.draw(), self.shoe.draw()]
-        self.hands = [{"cards": p1, "bet": self.bet, "finished": False}]
+        self.hands  = [{"cards": p1, "bet": self.bet, "finished": False}]
         self.dealer = d1
 
     def can_split(self):
@@ -179,104 +213,62 @@ class BlackjackGame:
 
 
 # ============================
-#  CONTAINER VIEW BUILDERS
+#  CONTAINER VIEW BUILDER
 # ============================
 
-def _hand_body(game: BlackjackGame, reveal_dealer: bool) -> str:
-    lines = []
-    for i, hand in enumerate(game.hands):
-        cards = " ".join(card_emoji(c) for c in hand["cards"])
-        value = hand_value(hand["cards"])
-        lines.append(f"**Your Hand #{i+1}** — Bet: {hand['bet']}\n{cards} — Value: **{value}**")
-
-    if reveal_dealer:
-        dealer_cards = " ".join(card_emoji(c) for c in game.dealer)
-        dealer_value = hand_value(game.dealer)
-        lines.append(f"**Dealer**\n{dealer_cards} — Value: **{dealer_value}**")
-    else:
-        dealer_cards = f"{card_emoji(game.dealer[0])} {CARD_BACK}"
-        lines.append(f"**Dealer**\n{dealer_cards}")
-
-    return "\n\n".join(lines)
-
-
-def build_hand_view(ctx, game: BlackjackGame, reveal_dealer: bool = False, title: str = "Blackjack") -> discord.ui.LayoutView:
-    """Display-only hand view (no buttons)."""
-    view = discord.ui.LayoutView()
-    container = discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### 🎰 {title}"),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=_hand_body(game, reveal_dealer)),
-        accent_colour=ACCENT_GREEN
-    )
-    view.add_item(container)
-    return view
-
-
-def build_interactive_hand_view(ctx, game: BlackjackGame, reveal_dealer: bool = False, title: str = "Blackjack") -> discord.ui.LayoutView:
-    """Hand view with Hit / Stand / Double / Split / Insurance buttons."""
-    view = discord.ui.LayoutView(timeout=30)
-    view.ctx = ctx
+def _build_view(
+    *,
+    with_buttons: bool,
+    game: BlackjackGame | None = None,
+    accent: discord.Colour = ACCENT_GREEN,
+    insurance_only: bool = False,
+) -> discord.ui.LayoutView:
+    """
+    Build a LayoutView containing the rendered table image and (optionally)
+    the action buttons.  When `with_buttons` is True the view exposes:
+        * `view.choice` — set to the clicked button value, or None on timeout
+        * `view.stop()` is called automatically when a button is pressed
+    """
+    view = discord.ui.LayoutView(timeout=60)
     view.choice = None
 
-    async def _check(interaction: discord.Interaction) -> bool:
-        return interaction.user.id == ctx.author.id
-
-    view.interaction_check = _check
-
-    class _Btn(discord.ui.Button):
-        def __init__(self_, label, style, value, disabled=False):
-            super().__init__(label=label, style=style, disabled=disabled)
-            self_.value = value
-        async def callback(self_, interaction):
-            view.choice = self_.value
-            view.stop()
-            await interaction.response.defer()
-
-    container = discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### 🎰 {title}"),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=_hand_body(game, reveal_dealer)),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(
-            _Btn("Hit", discord.ButtonStyle.green, "hit"),
-            _Btn("Stand", discord.ButtonStyle.red, "stand"),
-            _Btn("Double", discord.ButtonStyle.blurple, "double", disabled=not game.can_double()),
-            _Btn("Split", discord.ButtonStyle.gray, "split", disabled=not game.can_split()),
-            _Btn("Insurance", discord.ButtonStyle.green, "insurance", disabled=not game.can_insure()),
+    items = [
+        discord.ui.MediaGallery(
+            discord.MediaGalleryItem(media=f"attachment://{IMAGE_NAME}")
         ),
-        accent_colour=ACCENT_GREEN
-    )
-    view.add_item(container)
-    return view
+    ]
 
+    if with_buttons and game is not None:
+        class _Btn(discord.ui.Button):
+            def __init__(self_, label, style, value, disabled=False):
+                super().__init__(label=label, style=style, disabled=disabled)
+                self_.value = value
 
-def build_next_hand_view(ctx) -> discord.ui.LayoutView:
-    view = discord.ui.LayoutView(timeout=30)
-    view.ctx = ctx
-    view.choice = None
+            async def callback(self_, interaction: discord.Interaction):
+                view.choice = self_.value
+                view.stop()
+                try:
+                    await interaction.response.defer()
+                except discord.InteractionResponded:
+                    pass
 
-    async def _check(interaction: discord.Interaction) -> bool:
-        return interaction.user.id == ctx.author.id
+        if insurance_only:
+            row = discord.ui.ActionRow(
+                _Btn("Take Insurance", discord.ButtonStyle.green,   "insurance"),
+                _Btn("Decline",        discord.ButtonStyle.gray,    "decline"),
+            )
+        else:
+            row = discord.ui.ActionRow(
+                _Btn("Hit",       discord.ButtonStyle.green,   "hit"),
+                _Btn("Stand",     discord.ButtonStyle.red,     "stand"),
+                _Btn("Double",    discord.ButtonStyle.blurple, "double",  disabled=not game.can_double()),
+                _Btn("Split",     discord.ButtonStyle.gray,    "split",   disabled=not game.can_split()),
+            )
 
-    view.interaction_check = _check
+        items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        items.append(row)
 
-    class _NextBtn(discord.ui.Button):
-        def __init__(self_):
-            super().__init__(label="Next Hand", style=discord.ButtonStyle.green)
-        async def callback(self_, interaction):
-            view.choice = "next"
-            view.stop()
-            await interaction.response.defer()
-
-    container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Blackjack"),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Hand complete. Ready for the next hand?"),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(_NextBtn()),
-        accent_colour=ACCENT_GOLD
-    )
+    container = discord.ui.Container(*items, accent_colour=accent)
     view.add_item(container)
     return view
 
@@ -290,9 +282,34 @@ class Blackjack(commands.Cog):
         self.bot = bot
         self.shoe = Shoe()
 
-    @commands.command(name="blackjack")
-    async def blackjack(self, ctx, amount: int = None):
-        """Play a full casino‑grade blackjack game."""
+    @commands.hybrid_group(
+        name="blackjack",
+        description="Play a full casino-grade blackjack game",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega un blackjack de casino completo' }"
+    )
+    async def blackjack(self, ctx):
+        if ctx.invoked_subcommand is None:
+            prefix = await _resolve_prefix(self.bot, ctx)
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### 🎰 Blackjack Help"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"**{prefix}blackjack play <amount>** - Play a game of blackjack.\n**{prefix}blackjack tutorial** - Learn how to play blackjack."
+                )
+            )
+            view.add_item(container)
+            await ctx.send(view=view)
+
+    @blackjack.command(
+        name="play",
+        description="Play a game of blackjack",
+        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega una partida de blackjack' }"
+    )
+    async def blackjack_play(self, ctx, amount: int = None):
+        """Play a full casino-grade blackjack game with a rendered table image."""
         if amount is None or amount <= 0:
             return await ctx.send("You must bet more than 0 coins.")
 
@@ -312,78 +329,169 @@ class Blackjack(commands.Cog):
         dealer_has_blackjack = is_blackjack(game.dealer)
         player_has_blackjack = is_blackjack(game.hands[0]["cards"])
 
-        # Insurance option
+        # ── Helpers ────────────────────────────────────────────────────────
+        async def _render(reveal_dealer: bool, title: str, status: str = "", status_color=(255, 215, 0)):
+            return await render_table(
+                game.hands,
+                game.dealer,
+                reveal_dealer=reveal_dealer,
+                current_hand_index=game.current_hand,
+                title=title,
+                status=status,
+                status_color=status_color,
+            )
+
+        def _attach_check(view: discord.ui.LayoutView):
+            async def _check(interaction: discord.Interaction) -> bool:
+                if interaction.user.id != ctx.author.id:
+                    try:
+                        await interaction.response.send_message(
+                            "This isn't your blackjack game.", ephemeral=True
+                        )
+                    except discord.InteractionResponded:
+                        pass
+                    return False
+                return True
+            view.interaction_check = _check
+
+        msg: discord.Message | None = None
+
+        async def _send_or_edit(buf, view: discord.ui.LayoutView):
+            nonlocal msg
+            file = discord.File(buf, filename=IMAGE_NAME)
+            if msg is None:
+                msg = await ctx.send(view=view, file=file)
+            else:
+                await msg.edit(view=view, attachments=[file])
+
+        # ── Insurance prompt ───────────────────────────────────────────────
         if game.can_insure() and not dealer_has_blackjack:
-            view = build_interactive_hand_view(ctx, game, reveal_dealer=False, title="Insurance?")
-            msg = await ctx.send(view=view)
+            buf  = await _render(reveal_dealer=False, title="Insurance?",
+                                 status="Dealer is showing an Ace.", status_color=(255, 215, 0))
+            view = _build_view(with_buttons=True, game=game, accent=ACCENT_GOLD, insurance_only=True)
+            _attach_check(view)
+            await _send_or_edit(buf, view)
             await view.wait()
             if view.choice == "insurance":
                 game.take_insurance()
 
-        # Dealer blackjack resolution
+        # ── Dealer blackjack resolution ────────────────────────────────────
         if dealer_has_blackjack:
-            await ctx.send(view=build_hand_view(ctx, game, reveal_dealer=True, title="Dealer Blackjack!"))
+            payout = 0
             if game.insurance_bet > 0:
-                user_data["balance"] += game.insurance_bet * 2
-            user_data["balance"] -= amount
+                payout += game.insurance_bet * 2  # 2:1 insurance payout
+            payout -= amount
+            user_data["balance"] += payout
             user_data["last_blackjack"] = time.time()
             economy.save_economy_data()
-            return
 
-        # Player blackjack
+            status = f"{payout:+d} coins"
+            status_color = (87, 242, 135) if payout >= 0 else (237, 90, 96)
+            buf  = await _render(reveal_dealer=True, title="Dealer Blackjack",
+                                 status=status, status_color=status_color)
+            view = _build_view(with_buttons=False, accent=ACCENT_RED)
+            return await _send_or_edit(buf, view)
+
+        # ── Player natural blackjack ───────────────────────────────────────
         if player_has_blackjack:
             winnings = game.settle_blackjack()
             user_data["balance"] += winnings
             user_data["last_blackjack"] = time.time()
             economy.save_economy_data()
-            return await ctx.send(view=build_hand_view(ctx, game, reveal_dealer=False, title="Blackjack! You win 3:2"))
 
-        # PLAYER TURN
-        msg = None
-        for hand_index in range(len(game.hands)):
+            buf  = await _render(reveal_dealer=True, title="Blackjack! 3:2",
+                                 status=f"+{winnings} coins", status_color=(87, 242, 135))
+            view = _build_view(with_buttons=False, accent=ACCENT_GOLD)
+            return await _send_or_edit(buf, view)
+
+        # ── PLAYER TURN ────────────────────────────────────────────────────
+        hand_index = 0
+        while hand_index < len(game.hands):
             game.current_hand = hand_index
 
             while not game.hands[hand_index]["finished"]:
-                view = build_interactive_hand_view(ctx, game, reveal_dealer=False, title=f"Your Hand #{hand_index+1}")
-                if msg is None:
-                    msg = await ctx.send(view=view)
-                else:
-                    await msg.edit(view=view)
+                title = f"Hand #{hand_index+1}" if len(game.hands) > 1 else "Your Move"
+                buf   = await _render(reveal_dealer=False, title=title)
+                view  = _build_view(with_buttons=True, game=game, accent=ACCENT_GREEN)
+                _attach_check(view)
+                await _send_or_edit(buf, view)
 
                 await view.wait()
+                choice = view.choice
 
-                if view.choice == "hit":
+                if choice == "hit":
                     game.hands[hand_index]["cards"].append(game.shoe.draw())
                     if hand_value(game.hands[hand_index]["cards"]) > 21:
                         game.hands[hand_index]["finished"] = True
-                elif view.choice == "stand":
+                elif choice == "double":
+                    if game.can_double() and user_data["balance"] >= game.hands[hand_index]["bet"]:
+                        game.double_down()
+                    else:
+                        game.hands[hand_index]["finished"] = True
+                elif choice == "split":
+                    if game.can_split() and user_data["balance"] >= game.hands[hand_index]["bet"]:
+                        game.split()
+                    else:
+                        game.hands[hand_index]["finished"] = True
+                else:
+                    # "stand", timeout, or unrecognised — finish the hand
                     game.hands[hand_index]["finished"] = True
-                elif view.choice == "double":
-                    game.double_down()
-                elif view.choice == "split":
-                    game.split()
-                elif view.choice == "insurance":
-                    game.take_insurance()
 
-            if hand_index < len(game.hands) - 1:
-                view = build_next_hand_view(ctx)
-                await msg.edit(view=view)
-                await view.wait()
+            hand_index += 1
 
-        # DEALER TURN
+        # ── DEALER TURN ────────────────────────────────────────────────────
         game.dealer_play()
 
-        # PAYOUTS
-        total_result = 0
-        for hand in game.hands:
-            total_result += game.settle_hand(hand)
-
+        # ── PAYOUTS ────────────────────────────────────────────────────────
+        total_result = sum(game.settle_hand(h) for h in game.hands)
         user_data["balance"] += total_result
         user_data["last_blackjack"] = time.time()
         economy.save_economy_data()
 
-        title = "🎉 You Win!" if total_result > 0 else "💀 You Lose!" if total_result < 0 else "🤝 Push"
-        await ctx.send(view=build_hand_view(ctx, game, reveal_dealer=True, title=title))
+        if total_result > 0:
+            title  = "You Win"
+            status = f"+{total_result} coins"
+            color  = (87, 242, 135)
+            accent = ACCENT_GREEN
+        elif total_result < 0:
+            title  = "You Lose"
+            status = f"{total_result} coins"
+            color  = (237, 90, 96)
+            accent = ACCENT_RED
+        else:
+            title  = "Push"
+            status = "Bet returned"
+            color  = (255, 215, 0)
+            accent = ACCENT_GOLD
+
+        # No active hand once the round is settled
+        game.current_hand = -1
+        for h in game.hands:
+            h["finished"] = True
+
+        buf  = await _render(reveal_dealer=True, title=title, status=status, status_color=color)
+        view = _build_view(with_buttons=False, accent=accent)
+        await _send_or_edit(buf, view)
+
+    # This command is a tutorial for people who don't know how to play blackjack
+    @blackjack.command(
+        name="tutorial",
+        description="Learn how to play blackjack",
+        help="{ 'en': 'learn how to play blackjack', 'de': 'lerne, wie man Blackjack spielt', 'es': 'aprende a jugar blackjack' }"
+    )
+    async def blackjack_tutorial(self, ctx):
+        """Learn how to play blackjack."""
+        # Paginated tutorial via the shared PaginatedView
+        pages = [
+            "## **Page 1 — What Is Blackjack? (The Goal of the Game)**\nBlackjack (also called **21**) is a simple card game where **you play against the dealer**, not the other players.\nYour goal is to get a hand value **closer to 21 than the dealer** *without going over 21*. Going over 21 is called **busting**, and it means you automatically lose.\n\nBlackjack is played with one or more standard 52‑card decks. Each round begins with everyone placing a bet. After that, the dealer gives each player **two cards face‑up**, and gives themselves **one face‑up card and one face‑down card**.",
+            "## **Page 2 — Understanding Card Values (No Math Skills Needed!)**\nBlackjack uses very simple card values:\n- **Number cards (2–10):** worth their number\n- **Face cards (J, Q, K):** worth **10**\n- **Ace:** worth **1 or 11**, whichever helps your hand more\n\nYou don’t need to calculate anything complicated — just add the values together.\nExample:\n- A **7** and a **King** = **17**\n- An **Ace** and a **6** = **7 or 17** (the Ace adjusts automatically)\n\nA hand with an Ace that can count as 11 without busting is called a **soft hand**.\nA hand where the Ace must count as 1 is a **hard hand**.",
+            "## **Page 3 — What Happens at the Start of a Round**\nA typical round looks like this:\n1. You place your bet.\n2. You receive **two cards face‑up**.\n3. The dealer receives **one face‑up card** and **one face‑down card** (the “hole card”).\n4. If you have an **Ace + 10‑value card**, that’s a **Blackjack**, also called a **natural**.\n   - A natural Blackjack usually pays **3:2**, though some tables pay **6:5** (which is worse for players).\n\nIf you don’t have a natural, you choose what to do next.",
+            "## **Page 4 — Your Options: Hit, Stand, Double, Split, Surrender**\nYou can choose from several actions:\n\n### **Hit**\nAsk for another card. Use this when your hand is low and you want to improve it.\n\n### **Stand**\nKeep your current hand and end your turn.\n\n### **Double Down**/nDouble your bet and receive **exactly one more card**.\nThis is best when you have a strong starting hand (like 10 or 11).\n\n### **Split**\nIf your two cards have the **same value**, you can split them into **two separate hands**, doubling your bet.\nEach new hand gets one extra card.\n\n### **Surrender** (not always available)\nYou give up your hand immediately and get **half your bet back**.\n\n### **Insurance**\nA side bet offered only when the dealer shows an Ace.\nIt pays **2:1** if the dealer has Blackjack — but statistically, it’s usually a bad bet.",
+            "## **Page 5 — Dealer Rules**\nThe dealer must follow strict rules:\n- The dealer must **hit until reaching 17 or higher**.\n- Most casinos require the dealer to stand on **all 17s**, but some require hitting on a “soft 17.”\n- If the dealer busts (goes over 21), **all players who didn’t bust win**.\n\nYou don’t need to guess what the dealer will do — the rules are fixed.",
+            "## **Page 6 — How You Win (and What a Push Is)**\nAfter all players finish their turns, the dealer reveals their hidden card and plays their hand. Then:\n\n- If your total is **closer to 21 than the dealer**, you win.\n- If your total is **lower**, you lose.\n- If both totals are **equal**, it’s a **push** (tie) — you get your bet back.\n\nA natural Blackjack (Ace + 10‑value card) pays **3:2** at most tables, but some pay **6:5**, which is worse for players. Avoid 6:5 tables when possible."
+        ]
+        view = PaginatedView(title="Blackjack Tutorial", pages=pages)
+        await ctx.send(view=view)
 
 
 # ============================

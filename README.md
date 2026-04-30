@@ -20,6 +20,12 @@
 
 ---
 
+## 🔗 Links
+- **Support Server** — https://dsc.gg/astral-haven
+- **Bot Invite** — https://discord.com/oauth2/authorize?client_id=1484653109576732692
+
+---
+
 ## 🌸 Overview
 Niko is a warm, bilingual Discord bot powered by a local LLM (TinyLlama). With a soft café‑bestie personality, Niko chats naturally, remembers past interactions, and brings a lo‑fi aesthetic to any community.
 

@@ -1,0 +1,61 @@
+{
+  "balance": 0,
+  "inventory": {},
+  "bank": 0,
+  "net_worth": 0,
+  "daily_streak": 1,
+  "last_daily": 1777315568,
+  "last_work": 1777321294,
+  "last_crime": 1777315704,
+  "last_rob": 0,
+  "last_heist": 0,
+  "last_slots": 0,
+  "last_blackjack": 1777321309.2981603,
+  "last_roulette": 0,
+  "last_casino": 0,
+  "last_gamble": 0,
+  "last_bet": 0,
+  "last_race": 0,
+  "last_fight": 0,
+  "last_duel": 0,
+  "total_earned": 1893,
+  "total_spent": 0,
+  "xp": 24,
+  "level": 0,
+  "job": "barista",
+  "times_worked": 2,
+  "bank_tier": 0,
+  "last_interest": 0,
+  "effects": {},
+  "lottery_tickets": 0,
+  "transactions": [
+    {
+      "ts": 1777321294,
+      "kind": "work",
+      "amount": 117,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777315704,
+      "kind": "crime",
+      "amount": 381,
+      "note": "successful heist"
+    },
+    {
+      "ts": 1777315568,
+      "kind": "daily",
+      "amount": 1200,
+      "note": "day 1 \u2022 x1.2"
+    },
+    {
+      "ts": 1777314477,
+      "kind": "work",
+      "amount": 95,
+      "note": "Barista shift"
+    }
+  ],
+  "achievements": [
+    "first_paycheck"
+  ],
+  "last_interest_day": "2026-04-30"
+}

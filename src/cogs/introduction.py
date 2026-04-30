@@ -20,6 +20,46 @@ MAIN_CHANNEL_NAMES = [
     "💬general",
 ]
 
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "."
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
 class Introduction(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -31,7 +71,9 @@ class Introduction(commands.Cog):
         # 1. Prefer channels with common "main chat" names
         for name in MAIN_CHANNEL_NAMES:
             for channel in guild.text_channels:
-                if channel.name.lower() == name.lower():
+                if name.lower() in channel.name.lower():
+                    if "unverified" in channel.name.lower():
+                        continue
                     perms = channel.permissions_for(guild.me)
                     if perms.send_messages:
                         debug("Introduction", f"Preferred channel found: #{channel.name}")
@@ -52,6 +94,7 @@ class Introduction(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         info("Introduction", f"Joined new guild: {guild.name} ({guild.id})")
+        prefix = await _resolve_prefix(self.bot, guild)
 
         # Build introduction UI using your custom components
         view = discord.ui.LayoutView()
@@ -68,7 +111,7 @@ class Introduction(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**To get started, type `{self.bot.command_prefix}help` or just say “hey niko” in the chat.**"
+                content=f"**To get started, type `{prefix}help` or just say “hey niko” in the chat.**"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(

@@ -4,11 +4,20 @@
     "welcome_description": "Welcome to the offcial Linavo support server {user}!",
     "welcome_color": null,
     "welcome_image": null,
-    "rules_channel": 1482835540477874250,
-    "rules_message_id": 1484920850821025994,
-    "rules_text": null,
-    "rules_role_id": null,
+    "rules_channel": 1482835683994239127,
+    "rules_message_id": 1489124623457980618,
+    "rules_text": "> All server members and staff are required to follow these rules.\n### 1. Treat everyone with respect\n- Discrimination, harassment, or hateful behavior of any kind will not be tolerated.\n### 2. Keep conversations appropriate\n- This server is a professional environment. Avoid NSFW content, excessive profanity, or anything that could make others uncomfortable.\n### 3. No spam or self\u2011promotion\n- Unsolicited advertising, mass pinging, link spam, or promoting your own services without staff approval is prohibited.\n### 4. Follow Discord\u2019s Terms of Service\n- All members must comply with Discord\u2019s ToS and Community Guidelines. If Discord doesn\u2019t allow it, neither do we.\n### 5. Use channels for their intended purpose\n- Post in the correct channels to keep the server organized. If you\u2019re unsure where something goes, ask a staff member.\n### 6. Do not impersonate staff or bots\n- Pretending to be a moderator, admin, or official Linavo Bot Hosting representative is strictly forbidden.\n### 7. Protect your privacy and others\u2019\n- Do not share personal information\u2014yours or anyone else\u2019s. This includes addresses, passwords, tokens, or account details.\n### 8. No malicious activity\n- Any attempt to distribute malware, exploit bots, attack servers, or engage in harmful behavior will result in an immediate ban.\n### 9. Respect staff decisions\n- Moderators and admins have the final say. If you disagree with a decision, discuss it calmly and privately.\n### 10. Have fun and help the community grow\n- We\u2019re here to build, learn, and support each other. Keep the environment friendly and collaborative.",
+    "rules_role_id": 1482871232260214886,
     "role_menu_channel": null,
     "role_menu_message_id": null,
-    "role_menu_options": null
+    "role_menu_options": null,
+    "autorole_ids": [
+        1482871232260214886
+    ],
+    "captcha_enabled": false,
+    "captcha_channel_id": null,
+    "captcha_panel_message_id": null,
+    "captcha_add_role_ids": null,
+    "captcha_remove_role_ids": null,
+    "captcha_kick_on_fail": false
 }

@@ -1,0 +1,38 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "ztlLIwwfdFbQLpD3TsXWm"
+uri = "file://src/assets/emojis/icon_general.png"
+type = "image"
+title = "general category icon"
+
+[[generated]]
+id = "HFWw5X2qh9kSW37CR4mNV"
+uri = "file://src/assets/emojis/icon_gambling.png"
+type = "image"
+title = "gambling dice icon"
+
+[[generated]]
+id = "U2_XqoAcaRzQ-4DrMJGza"
+uri = "file://src/assets/emojis/icon_roleplay.png"
+type = "image"
+title = "roleplay theater masks icon"
+
+[[generated]]
+id = "UJugBC2VAfFCR5ENrJtdY"
+uri = "file://src/assets/emojis/icon_info.png"
+type = "image"
+title = "info circle icon"
+
+[[generated]]
+id = "un-jvCsw6lfEiN-FW5pIQ"
+uri = "file://src/assets/emojis/icon_nsfw.png"
+type = "image"
+title = "18 plus nsfw icon"
+
+[[generated]]
+id = "xwr7OSW3w3FgT14ildhCc"
+uri = "file://src/assets/emojis/icon_voicemaster.png"
+type = "image"
+title = "voicemaster microphone icon"

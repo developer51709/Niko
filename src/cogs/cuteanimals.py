@@ -1,10 +1,9 @@
 from discord.ext import commands
+import asyncio
 import requests
 import discord
 import random
-
-# personality mode: "normal" or "cafe"
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -23,6 +22,12 @@ MESSAGES = {
             "sending_cat": "Hier ist eine Katze:",
             "sending_dog": "Hier ist ein Hund:",
         },
+        "es": {
+            "fetch_fail": "No pude traer un animalito ahora mismo.",
+            "sending_random": "Aquí tienes un {animal} aleatorio:",
+            "sending_cat": "Aquí tienes un gato:",
+            "sending_dog": "Aquí tienes un perro:",
+        },
     },
 
     "cafe": {
@@ -38,6 +43,12 @@ MESSAGES = {
             "sending_cat": "brühe dir ein kleines kätzchen auf ☕🐱",
             "sending_dog": "serviere dir einen warmen flauschigen hund aus dem café ☕🐶",
         },
+        "es": {
+            "fetch_fail": "ay no pude traer un animalito ahora 😭☕",
+            "sending_random": "okey amix, aquí tienes un {animal} acogedor ☕✨",
+            "sending_cat": "te preparo un gatito bien suave ☕🐱",
+            "sending_dog": "te sirvo un perrito calentito recién salido del café ☕🐶",
+        },
     },
 
     # future personalities can be added here
@@ -50,15 +61,13 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
-def get_personality():
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
-
-
 def msg(ctx, key, **kwargs):
-    personality = get_personality()
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
 
     # try personality + lang
@@ -129,12 +138,12 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cuteanimal",
-        help="get a cozy random animal pic ☕✨ | zeigt ein zufälliges süßes tier"
+        help="{ 'en': 'get a cozy random animal pic ☕✨', 'de': 'zeigt ein zufälliges süßes tier' }"
     )
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
         animal, (url, api_type) = random.choice(list(self.animal_apis.items()))
-        response = requests.get(url)
+        response = await asyncio.to_thread(requests.get, url, timeout=10)
         data = response.json()
 
         img_url = self.extract_url(api_type, data)
@@ -167,11 +176,13 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cat",
-        help="get a cozy lil kitty ☕🐱 | zeigt ein süßes kätzchen"
+        help="{ 'en': 'get a cozy lil kitty ☕🐱', 'de': 'zeigt ein süßes kätzchen' }"
     )
     async def cat(self, ctx):
         """Sends a random cat image."""
-        response = requests.get("https://api.thecatapi.com/v1/images/search")
+        response = await asyncio.to_thread(
+            requests.get, "https://api.thecatapi.com/v1/images/search", timeout=10
+        )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -192,11 +203,13 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="dog",
-        help="get a warm fluffy doggo ☕🐶 | zeigt einen süßen hund"
+        help="{ 'en': 'get a warm fluffy doggo ☕🐶', 'de': 'zeigt einen süßen hund' }"
     )
     async def dog(self, ctx):
         """Sends a random dog image."""
-        response = requests.get("https://dog.ceo/api/breeds/image/random")
+        response = await asyncio.to_thread(
+            requests.get, "https://dog.ceo/api/breeds/image/random", timeout=10
+        )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(

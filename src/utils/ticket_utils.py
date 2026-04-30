@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pathlib import Path
 import json
 
@@ -9,6 +9,7 @@ DATA_PATH = Path("data")
 DATA_FILE = DATA_PATH / "tickets.json"
 
 _ticket_configs: Dict[int, TicketConfig] = {}
+_loaded = False
 
 
 def _ensure_data_dir():
@@ -16,11 +17,12 @@ def _ensure_data_dir():
 
 
 def _load_all() -> None:
-    global _ticket_configs
+    global _ticket_configs, _loaded
     _ensure_data_dir()
 
     if not DATA_FILE.exists():
         _ticket_configs = {}
+        _loaded = True
         return
 
     with DATA_FILE.open("r", encoding="utf-8") as f:
@@ -38,11 +40,13 @@ def _load_all() -> None:
             panel_categories=data.get("panel_categories") or [],
             panel_channel_id=data.get("panel_channel_id"),
             panel_message_id=data.get("panel_message_id"),
+            support_roles=data.get("support_roles") or [],
             open_tickets=data.get("open_tickets") or [],
         )
         cfgs[gid] = cfg
 
     _ticket_configs = cfgs
+    _loaded = True
 
 
 def _save_all() -> None:
@@ -59,6 +63,7 @@ def _save_all() -> None:
             "panel_categories": cfg.panel_categories,
             "panel_channel_id": cfg.panel_channel_id,
             "panel_message_id": cfg.panel_message_id,
+            "support_roles": cfg.support_roles,
             "open_tickets": cfg.open_tickets,
         }
 
@@ -67,7 +72,7 @@ def _save_all() -> None:
 
 
 def get_ticket_config(guild_id: int) -> TicketConfig:
-    if not _ticket_configs:
+    if not _loaded:
         _load_all()
 
     cfg = _ticket_configs.get(guild_id)
@@ -84,6 +89,15 @@ def update_ticket_config(guild_id: int, cfg: TicketConfig) -> None:
 
 
 def get_all_ticket_configs() -> List[TicketConfig]:
-    if not _ticket_configs:
+    if not _loaded:
         _load_all()
     return list(_ticket_configs.values())
+
+
+def find_open_ticket(guild_id: int, channel_id: int) -> Optional[dict]:
+    """Return the open-ticket entry for a given channel, or None."""
+    cfg = get_ticket_config(guild_id)
+    for t in cfg.open_tickets:
+        if t.get("channel_id") == channel_id:
+            return t
+    return None

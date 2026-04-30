@@ -4,9 +4,9 @@ from utils import logging as log
 from utils.logging import info, success, warning, error, debug
 from config.emojis import get_emoji
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  BILINGUAL MESSAGE TABLE
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 MESSAGES = {
     "en": {
@@ -47,10 +47,6 @@ MESSAGES = {
 
         # nick
         "nick_changed":     "✏️ Changed nickname for **{member}** to `{nickname}`.",
-
-        # modlog
-        "modlog_set":       "### {emoji} Mod-Log Channel Set\nMod-Log channel set to {channel}",
-        "modlog_removed":   "### {emoji} Mod-Log Channel Removed\nTo set a mod-log channel, use `{prefix}setmodlog #channel`",
 
         # badwords
         "badwords_none":    "No blocked words set for this server.",
@@ -108,10 +104,6 @@ MESSAGES = {
         # nick
         "nick_changed":     "✏️ Spitzname von **{member}** zu `{nickname}` geändert.",
 
-        # modlog
-        "modlog_set":       "### {emoji} Mod-Log-Kanal gesetzt\nMod-Log-Kanal wurde auf {channel} gesetzt.",
-        "modlog_removed":   "### {emoji} Mod-Log-Kanal entfernt\nVerwende `{prefix}setmodlog #kanal`, um einen Kanal zu setzen.",
-
         # badwords
         "badwords_none":    "Keine gesperrten Wörter für diesen Server.",
         "badwords_added":   "`{word}` zur Sperrliste hinzugefügt.",
@@ -129,6 +121,62 @@ MESSAGES = {
         "wl_users":         "**Benutzer auf Whitelist**\n{users}\n\n",
         "wl_roles":         "**Rollen auf Whitelist**\n{roles}",
     },
+    "es": {
+        # generic
+        "no_member":        "Por favor especifica un miembro al que {action}.",
+        "no_user_id":       "Por favor proporciona un ID de usuario para desbanear.",
+        "no_amount":        "Por favor especifica una cantidad de mensajes a borrar.",
+        "no_duration":      "Por favor especifica una duración en segundos.",
+        "no_nickname":      "Por favor especifica un nuevo apodo.",
+        "no_word":          "Por favor especifica una palabra.",
+        "no_channel":       "Por favor especifica un miembro cuyos mensajes borrar.",
+
+        # kick / ban / unban
+        "kicked":           "### 👟 Usuario Expulsado\n**{member}** ha sido expulsado.\n**Razón:** {reason}",
+        "banned":           "### 🔨 Usuario Baneado\n**{member}** ha sido baneado.\n**Razón:** {reason}",
+        "unbanned":         "### ✅ Usuario Desbaneado\n**{user}** ha sido desbaneado.",
+
+        # warn
+        "warned":           "### ⚠️ Usuario Advertido\n**{member}** ha sido advertido.\n**Razón:** {reason}",
+        "no_warnings":      "{member} no tiene advertencias.",
+        "warnings_title":   "### ⚠️ Advertencias de {member}\n",
+        "warnings_cleared": "✅ Advertencias borradas para {member}.",
+        "no_member_warns":  "Por favor especifica un miembro cuyas advertencias borrar.",
+
+        # mute / unmute
+        "muted":            "🔇 **{member}** silenciado | Razón: {reason}",
+        "tempmuted":        "⏳ **{member}** silenciado por `{duration}s` | Razón: {reason}",
+        "unmuted":          "🔊 **{member}** desilenciado.",
+
+        # clear / purge
+        "cleared":          "🧹 Borrados `{count}` mensajes.",
+        "purged":           "🧹 Borrados `{count}` mensajes de **{member}**.",
+
+        # slowmode / lock / unlock
+        "slowmode_set":     "🐢 Modo lento ajustado a `{seconds}` segundos.",
+        "locked":           "🔒 Canal bloqueado.",
+        "unlocked":         "🔓 Canal desbloqueado.",
+
+        # nick
+        "nick_changed":     "✏️ Apodo de **{member}** cambiado a `{nickname}`.",
+
+        # badwords
+        "badwords_none":    "No hay palabras bloqueadas configuradas para este servidor.",
+        "badwords_added":   "Se añadió `{word}` a la lista de palabras bloqueadas.",
+        "badwords_removed": "Se eliminó `{word}` de la lista de palabras bloqueadas.",
+        "badwords_cleared": "Se eliminaron todas las palabras bloqueadas para este servidor.",
+
+        # whitelist
+        "wl_user_added":    "✅ {target} añadido a la lista blanca de automod.",
+        "wl_user_removed":  "✅ {target} eliminado de la lista blanca de automod.",
+        "wl_role_added":    "✅ {target} añadido a la lista blanca de automod.",
+        "wl_role_removed":  "✅ {target} eliminado de la lista blanca de automod.",
+        "wl_invalid_type":  "Tipo inválido. Usa `user` o `role`.",
+        "wl_empty":         "No hay usuarios ni roles en la lista blanca.",
+        "wl_title":         "### 🔓 Lista Blanca de AutoMod\n",
+        "wl_users":         "**Usuarios en Lista Blanca**\n{users}\n\n",
+        "wl_roles":         "**Roles en Lista Blanca**\n{roles}",
+    },
 }
 
 
@@ -136,6 +184,8 @@ def get_lang(ctx: commands.Context) -> str:
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
@@ -152,9 +202,9 @@ def _cv2(text: str) -> discord.ui.LayoutView:
     return view
 
 
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 #  MODERATION COG
-# ─────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────
 
 class Moderation(commands.Cog):
     """Staff-facing moderation commands."""
@@ -165,43 +215,74 @@ class Moderation(commands.Cog):
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
 
-    # ──── KICK / BAN / UNBAN ────────────────────────────────
+    def logger(self):
+        return self.bot.get_cog("ServerLogger")
 
-    @commands.command(help="Kick a member from the server. | Mitglied kicken.")
+    # ──── KICK / BAN / UNBAN ───────────────────────
+    # help command uses json for multilangual help
+    @commands.hybrid_command(description="Kick a member from the server", help="{ 'en': 'Kick a member from the server.', 'de': 'Mitglied kicken.', 'es': 'Expulsa a un miembro del servidor.' }")
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="kick"))
         await member.kick(reason=reason)
         await ctx.send(view=_cv2(msg(ctx, "kicked", member=member, reason=reason)))
-        await self.utils().log_action(ctx.guild, "Kick", f"{member} was kicked by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Kick\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Kick", body,
+            target_id=member.id, action_key="Kick"
+        )
 
-    @commands.command(help="Ban a member from the server. | Mitglied bannen.")
+    @commands.hybrid_command(description="Ban a member from the server", help="{ 'en': 'Ban a member from the server.', 'de': 'Mitglied bannen.', 'es': 'Banea a un miembro del servidor.' }")
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
+    async def ban(self, ctx, member: discord.User = None, *, reason: str = "No reason provided"):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
-        await member.ban(reason=reason)
-        try:
-            await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
-        except Exception as e:
-            error("moderation", f"Error sending ban message: {e}")
-            await ctx.send(f"{get_emoji('icon_tick')} Banned {member} | Reason: {reason}")
-        await self.utils().log_action(ctx.guild, "Ban", f"{member} was banned by {ctx.author}.\nReason: {reason}")
+                
+        await ctx.guild.ban(member, reason=reason, delete_message_days=7)
+        await ctx.send(view=_cv2(msg(ctx, "banned", member=member, reason=reason)))
+        guild = ctx.guild
+        moderator = ctx.author
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Ban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.logger().log_event(
+            guild, "moderation", "Ban", body, 
+            target_id=member.id, action_key="Ban"
+        )
 
-    @commands.command(help="Unban a user by ID. | Benutzer per ID entbannen.")
+    @commands.hybrid_command(description="Unban a user by ID", help="{ 'en': 'Unban a member from the server.', 'de': 'Mitglied entbannen.', 'es': 'Desbanea a un miembro del servidor.' }")
     @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id: int = None):
+    async def unban(self, ctx, user_id = None, reason = None):
         if not user_id:
             return await ctx.send(msg(ctx, "no_user_id"))
         user = await self.bot.fetch_user(user_id)
         await ctx.guild.unban(user)
         await ctx.send(view=_cv2(msg(ctx, "unbanned", user=user)))
-        await self.utils().log_action(ctx.guild, "Unban", f"{user} was unbanned by {ctx.author}.")
+        guild = ctx.guild
+        moderator = ctx.author
+        body = (
+            f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
+            f"**Action:** Unban\n"
+            f"**Reason:** {reason or 'No reason provided'}\n"
+            f"**Moderator:** {moderator.mention if moderator else 'Unknown'}"
+        )
+        await self.logger().log_event(
+            guild, "moderation", "Unban", body, 
+            target_id=user.id, action_key="Unban"
+        )
 
-    # ──── WARN ──────────────────────────────────────────────
+    # ──── WARN ─────────────────────────────────────
 
-    @commands.command(help="Warn a member. | Mitglied verwarnen.")
+    @commands.hybrid_command(description="Warn a member", help="{ 'en': 'Warn a member.', 'de': 'Mitglied verwarnen.', 'es': 'Advierte a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
     async def warn(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         utils = self.utils()
@@ -209,9 +290,18 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member", action="warn"))
         utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
         await ctx.send(view=_cv2(msg(ctx, "warned", member=member, reason=reason)))
-        await utils.log_action(ctx.guild, "Warn", f"{member} was warned by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Warn\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Warn", body,
+            target_id=member.id, action_key="Warn"
+        )
 
-    @commands.command(help="View a member's warnings. | Verwarnungen anzeigen.")
+    @commands.hybrid_command(description="View a member's warnings", help="{ 'en': 'View a members warnings.', 'de': 'Verwarnungen anzeigen.', 'es': 'Ver las advertencias de un miembro.' }")
     @commands.has_permissions(moderate_members=True)
     async def warnings(self, ctx, member: discord.Member = None):
         utils = self.utils()
@@ -228,7 +318,7 @@ class Moderation(commands.Cog):
 
         await ctx.send(view=_cv2(lines))
 
-    @commands.command(help="Clear all warnings for a member. | Verwarnungen löschen.")
+    @commands.hybrid_command(description="Clear all warnings for a member", help="{ 'en': 'Clear all warnings for a member.', 'de': 'Verwarnungen löschen.', 'es': 'Borra todas las advertencias de un miembro.' }")
     @commands.has_permissions(moderate_members=True)
     async def clearwarnings(self, ctx, member: discord.Member = None):
         utils = self.utils()
@@ -236,16 +326,26 @@ class Moderation(commands.Cog):
             return await ctx.send(msg(ctx, "no_member_warns"))
         utils.clear_warnings(ctx.guild.id, member.id)
         await ctx.send(msg(ctx, "warnings_cleared", member=member))
-        await utils.log_action(ctx.guild, "Clear Warnings", f"{ctx.author} cleared warnings for {member}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Clear Warnings\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Clear Warnings", body,
+            target_id=member.id
+        )
 
-    # ──── MUTE / UNMUTE / TEMPMUTE ──────────────────────────
+    # ──── MUTE / UNMUTE / TEMPMUTE ─────────────────
 
-    @commands.command(help="Mute a member. | Mitglied stummschalten.")
+    @commands.hybrid_command(description="Mute a member", help="{ 'en': 'Mute a member.', 'de': 'Mitglied stummschalten.', 'es': 'Silencia a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
     async def mute(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="mute"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.mute_member(ctx.guild, member, duration=None, reason=reason)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -255,16 +355,27 @@ class Moderation(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
-        await utils.log_action(ctx.guild, "Mute", f"{member} was muted by {ctx.author}.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Mute\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Mute", body,
+            target_id=member.id, action_key="Mute"
+        )
 
-    @commands.command(help="Temporarily mute a member (seconds). | Zeitlich stummschalten.")
+    @commands.hybrid_command(description="Temporarily mute a member (seconds)", help="{ 'en': 'Temporarily mute a member (seconds).', 'de': 'Zeitlich stummschalten.', 'es': 'Silencia temporalmente a un miembro (segundos).' }")
     @commands.has_permissions(moderate_members=True)
-    async def tempmute(self, ctx, member: discord.Member = None, duration: int = None, *, reason: str = "No reason provided"):
+    async def tempmute(self, ctx, member: discord.Member = None, duration = None, *, reason: str = "No reason provided"):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="tempmute"))
         if not duration:
             return await ctx.send(msg(ctx, "no_duration"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.mute_member(ctx.guild, member, duration=duration, reason=reason)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -274,112 +385,168 @@ class Moderation(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
-        await utils.log_action(ctx.guild, "Tempmute", f"{member} was tempmuted by {ctx.author} for {duration}s.\nReason: {reason}")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Tempmute\n"
+            f"**Duration:** {duration}s\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Tempmute", body,
+            target_id=member.id, action_key="Tempmute"
+        )
 
-    @commands.command(help="Unmute a member. | Stummschaltung aufheben.")
+    @commands.hybrid_command(description="Unmute a member", help="{ 'en': 'Unmute a member.', 'de': 'Stummschaltung aufheben.', 'es': 'Quita el silencio a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx, member: discord.Member = None):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
         await utils.unmute_member(member, reason=f"Unmuted by {ctx.author}")
         await ctx.send(msg(ctx, "unmuted", member=member))
-        await utils.log_action(ctx.guild, "Unmute", f"{member} was unmuted by {ctx.author}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** Unmute\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Unmute", body,
+            target_id=member.id
+        )
 
-    # ──── CLEAR / PURGE ─────────────────────────────────────
+    # ──── CLEAR / PURGE ────────────────────────────
 
-    @commands.command(help="Clear messages in this channel. | Nachrichten löschen.")
+    @commands.hybrid_command(description="Clear messages in this channel", help="{ 'en': 'Clear messages in this channel.', 'de': 'Nachrichten löschen.', 'es': 'Borra mensajes en este canal.' }")
     @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx, amount: int = None):
+    async def clear(self, ctx, amount = None):
         if not amount:
             return await ctx.send(msg(ctx, "no_amount"))
-        await ctx.message.delete()
+        amount = int(amount)
+        if ctx.interaction is not None:
+            await ctx.defer(ephemeral=True)
+        else:
+            try:
+                await ctx.message.delete()
+            except (discord.HTTPException, AttributeError):
+                pass
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
-        await self.utils().log_action(ctx.guild, "Clear", f"{ctx.author} deleted {len(deleted)} messages in {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Messages Deleted:** {len(deleted)}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Clear", body,
+            action_key="Clear"
+        )
 
-    @commands.command(help="Purge messages from a specific user. | Nachrichten eines Nutzers löschen.")
+    @commands.hybrid_command(description="Purge messages from a specific user", help="{ 'en': 'Purge messages from a specific user.', 'de': 'Nachrichten eines Nutzers löschen.', 'es': 'Elimina mensajes de un usuario específico.' }")
     @commands.has_permissions(manage_messages=True)
     async def purge(self, ctx, member: discord.Member = None, amount: int = 100):
         if not member:
             return await ctx.send(msg(ctx, "no_channel"))
         def check(m):
             return m.author.id == member.id
-        await ctx.message.delete()
+        if ctx.interaction is not None:
+            await ctx.defer(ephemeral=True)
+        else:
+            try:
+                await ctx.message.delete()
+            except (discord.HTTPException, AttributeError):
+                pass
         deleted = await ctx.channel.purge(limit=amount, check=check)
         await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
-        await self.utils().log_action(ctx.guild, "Purge", f"{ctx.author} purged {len(deleted)} messages from {member} in {ctx.channel.mention}.")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Messages Deleted:** {len(deleted)}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "messages", "Purge", body,
+            target_id=member.id, action_key="Purge"
+        )
 
-    # ──── SLOWMODE / LOCK / UNLOCK ──────────────────────────
+    # ──── SLOWMODE / LOCK / UNLOCK ─────────────────
 
-    @commands.command(help="Set slowmode in this channel (seconds). | Langsammodus setzen.")
+    @commands.hybrid_command(description="Set slowmode in this channel (seconds)", help="{ 'en': 'Set slowmode in this channel (seconds).', 'de': 'Langsammodus setzen.', 'es': 'Establece el modo lento en este canal (segundos).' }")
     @commands.has_permissions(manage_channels=True)
     async def slowmode(self, ctx, seconds: int = 0):
         await ctx.channel.edit(slowmode_delay=seconds)
         await ctx.send(msg(ctx, "slowmode_set", seconds=seconds))
 
-    @commands.command(help="Lock this channel. | Kanal sperren.")
+    @commands.hybrid_command(description="Lock this channel", help="{ 'en': 'Lock this channel.', 'de': 'Kanal sperren.', 'es': 'Bloquea este canal.' }")
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send(msg(ctx, "locked"))
-        await self.utils().log_action(ctx.guild, "Lock", f"{ctx.author} locked {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "channels", "Lock", body,
+            channel_id=ctx.channel.id, action_key="Lock"
+        )
 
-    @commands.command(help="Unlock this channel. | Kanal entsperren.")
+    @commands.hybrid_command(description="Unlock this channel", help="{ 'en': 'Unlock this channel.', 'de': 'Kanal entsperren.', 'es': 'Desbloquea este canal.' }")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
         await ctx.send(msg(ctx, "unlocked"))
-        await self.utils().log_action(ctx.guild, "Unlock", f"{ctx.author} unlocked {ctx.channel.mention}.")
+        body = (
+            f"**Channel:** {ctx.channel.mention}\n"
+            f"**Moderator:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "channels", "Unlock", body,
+            channel_id=ctx.channel.id, action_key="Unlock"
+        )
 
-    # ──── NICKNAME ───────────────────────────────────────────
+    # ──── NICKNAME ─────────────────────────────────
 
-    @commands.command(help="Change a member's nickname. | Spitznamen ändern.")
+    @commands.hybrid_command(description="Change a member's nickname", help="{ 'en': 'Change a members nickname.', 'de': 'Spitznamen ändern.', 'es': 'Cambia el apodo de un miembro.' }")
     @commands.has_permissions(manage_nicknames=True)
-    async def nick(self, ctx, member: discord.Member = None, *, nickname: str = None):
+    async def nick(self, ctx, member: discord.Member = None, *, nickname = None):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="rename"))
         if not nickname:
             return await ctx.send(msg(ctx, "no_nickname"))
         await member.edit(nick=nickname)
         await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname))
-        await self.utils().log_action(ctx.guild, "Nickname Changed", f"{ctx.author} changed {member}'s nickname to `{nickname}`")
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**New Nickname:** `{nickname}`\n"
+            f"**Changed By:** {ctx.author.mention}"
+        )
+        await self.logger().log_event(
+            ctx.guild, "moderation", "Nickname Changed", body,
+            target_id=member.id
+        )
 
-    # ──── MODLOG CONFIG ──────────────────────────────────────
+    # ──── BLOCKED WORD LIST ────────────────────────
 
-    @commands.command(help="Set the mod-log channel. | Mod-Log-Kanal setzen.")
-    @commands.has_permissions(manage_guild=True)
-    async def setmodlog(self, ctx, channel: discord.TextChannel = None):
-        prefix = self.bot.command_prefix
-        utils = self.utils()
-        cid = channel.id if channel else None
-        utils.set_modlog_channel(ctx.guild.id, cid)
-        if channel:
-            emoji = get_emoji("icon_tick")
-            text = msg(ctx, "modlog_set", channel=channel.mention, emoji=emoji)
-        else:
-            emoji = get_emoji("icon_cross")
-            text = msg(ctx, "modlog_removed", prefix=prefix, emoji=emoji)
-        await ctx.send(view=_cv2(text))
-
-    # ──── BLOCKED WORD LIST ──────────────────────────────────
-
-    @commands.group(name="badwords", invoke_without_command=True)
+    @commands.hybrid_group(name="badwords", invoke_without_command=True, description="Manage the blocked word list", help="{ 'en': 'Manage the blocked word list.', 'de': 'Verwalte die Liste blockierter Wörter.', 'es': 'Gestiona la lista de palabras bloqueadas.' }")
     @commands.has_permissions(manage_guild=True)
     async def badwords(self, ctx):
         """Show the blocked word list."""
         utils = self.utils()
         words = utils.get_blocked_words(ctx.guild.id)
         if not words:
-            return await ctx.send(msg(ctx, "badwords_none"))
+            return await ctx.send(f"{msg(ctx, 'badwords_none')}\n-# Use `{ctx.prefix}badwords add <word>` to add a word.")
         text = "### 🚫 Blocked Words\n" + "\n".join(f"- {w}" for w in words)
+        text += f"\n\n-# Use `{ctx.prefix}badwords add <word>` to add a word."
         await ctx.send(view=_cv2(text))
 
-    @badwords.command(name="add")
+    @badwords.command(name="add", description="Add a blocked word")
     @commands.has_permissions(manage_guild=True)
     async def badwords_add(self, ctx, *, word: str = None):
         utils = self.utils()
@@ -388,7 +555,7 @@ class Moderation(commands.Cog):
         utils.add_blocked_word(ctx.guild.id, word)
         await ctx.send(msg(ctx, "badwords_added", word=word))
 
-    @badwords.command(name="remove")
+    @badwords.command(name="remove", description="Remove a blocked word")
     @commands.has_permissions(manage_guild=True)
     async def badwords_remove(self, ctx, *, word: str = None):
         utils = self.utils()
@@ -397,16 +564,16 @@ class Moderation(commands.Cog):
         utils.remove_blocked_word(ctx.guild.id, word)
         await ctx.send(msg(ctx, "badwords_removed", word=word))
 
-    @badwords.command(name="clear")
+    @badwords.command(name="clear", description="Clear all blocked words")
     @commands.has_permissions(manage_guild=True)
     async def badwords_clear(self, ctx):
         utils = self.utils()
         utils.clear_blocked_words(ctx.guild.id)
         await ctx.send(msg(ctx, "badwords_cleared"))
 
-    # ──── WHITELIST ──────────────────────────────────────────
+    # ──── WHITELIST ────────────────────────────────
 
-    @commands.group(name="whitelist", aliases=["wl"], invoke_without_command=True)
+    @commands.hybrid_group(name="whitelist", aliases=["wl"], invoke_without_command=True, description="Manage the automod whitelist", help="{ 'en': 'Manage the automod whitelist.', 'de': 'Verwalte die Automod-Whitelist.', 'es': 'Gestiona la lista blanca de automod.' }")
     @commands.has_permissions(manage_guild=True)
     async def whitelist(self, ctx):
         """Show the automod whitelist."""
@@ -434,9 +601,9 @@ class Moderation(commands.Cog):
             + msg(ctx, "wl_users", users=users_text)
             + msg(ctx, "wl_roles", roles=roles_text)
         )
-        await ctx.send(view=_cv2(text))
+        await ctx.send(view=_cv2(text), allowed_mentions=discord.AllowedMentions.none())
 
-    @whitelist.command(name="add")
+    @whitelist.command(name="add", description="Add a user or role to the automod whitelist")
     @commands.has_permissions(manage_guild=True)
     async def whitelist_add(self, ctx, target_type: str = None, target: str = None):
         """Add a user or role to the automod whitelist.
@@ -455,7 +622,7 @@ class Moderation(commands.Cog):
             if not member:
                 return await ctx.send(msg(ctx, "no_member", action="whitelist"))
             utils.add_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_added", target=member.mention))
+            await ctx.send(msg(ctx, "wl_user_added", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
 
         else:  # role
             role = None
@@ -466,9 +633,9 @@ class Moderation(commands.Cog):
             if not role:
                 return await ctx.send("Could not find that role.")
             utils.add_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_added", target=role.mention))
+            await ctx.send(msg(ctx, "wl_role_added", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
-    @whitelist.command(name="remove", aliases=["rm"])
+    @whitelist.command(name="remove", aliases=["rm"], description="Remove a user or role from the automod whitelist")
     @commands.has_permissions(manage_guild=True)
     async def whitelist_remove(self, ctx, target_type: str = None, target: str = None):
         """Remove a user or role from the automod whitelist.
@@ -487,7 +654,7 @@ class Moderation(commands.Cog):
             if not member:
                 return await ctx.send(msg(ctx, "no_member", action="remove from whitelist"))
             utils.remove_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_removed", target=member.mention))
+            await ctx.send(msg(ctx, "wl_user_removed", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
 
         else:  # role
             role = None
@@ -498,7 +665,22 @@ class Moderation(commands.Cog):
             if not role:
                 return await ctx.send("Could not find that role.")
             utils.remove_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_removed", target=role.mention))
+            await ctx.send(msg(ctx, "wl_role_removed", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
+
+    @commands.hybrid_command(name="setmodlog", description="Set the moderation log channel (deprecated)", help="{ 'en': 'Set the moderation log channel.', 'de': 'Moderationslog-Kanal setzen.', 'es': 'Establece el canal de registro de moderación.' }")
+    async def setmodlog(self, ctx):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content="### Important Notice"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="This command has been moved to the new logging system and is scheduled for removal in a future update. Please use `.logging` instead."
+            )
+        )
+        view.add_item(container)
+        await ctx.reply(view=view)
 
 
 async def setup(bot):

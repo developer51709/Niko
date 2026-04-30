@@ -5,6 +5,12 @@ from utils.translator import Translator
 from discord.ext import commands
 from discord import app_commands
 
+class LanguageSelectView(discord.ui.LayoutView):
+    def __init__(self, message: discord.Message, locale: discord.Locale) -> None:
+        self.message = message
+        self.locale = locale
+        super().__init__()
+
 class ContextMenu(commands.Cog):
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -12,7 +18,7 @@ class ContextMenu(commands.Cog):
         self.context_commands = [
             app_commands.ContextMenu(
                 name = "Translate",
-                callback = self.translate_to_your_language,
+                callback = self.translate_message,
                 type = discord.AppCommandType.message,
             )
         ]
@@ -62,7 +68,7 @@ class ContextMenu(commands.Cog):
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
 
-    async def translate_to_your_language(self, interaction: discord.Interaction, message: discord.Message) -> None:
+    async def translate_message(self, interaction: discord.Interaction, message: discord.Message) -> None:
         await self.translate(interaction, message, interaction.locale)
 
 

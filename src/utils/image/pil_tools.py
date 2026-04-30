@@ -1,0 +1,526 @@
+from io import BytesIO
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance, ImageDraw, ImageFont
+import random
+import textwrap
+import re
+import requests
+from utils import logging
+
+
+# Regex to detect emoji codepoints
+EMOJI_RE = re.compile(
+    "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F900-\U0001F9FF\U0001F638-\U0001F63A\U0001F47E]+"
+)
+
+# experimental discord custom emoji support
+DISCORD_EMOJI_RE = re.compile(r"<a?:[a-zA-Z0-9_]+:(\d+)>")
+
+def get_emoji_url(emoji_id: str) -> str:
+    return f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
+
+def _draw_custom_emojis(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_film):
+    cursor_x = x
+    cursor_y = y
+    width, height = canvas.size
+    font_size = max(45, int(width * 0.05))
+    # print notice
+    return logging.warning("pil_tools", "Custom emoji support is not yet implemented.")
+
+def _draw_twemoji_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill, stroke_width, stroke_fill):
+    cursor_x = x
+    cursor_y = y
+    width, height = canvas.size
+    font_size = max(45, int(width * 0.05))
+
+    tokens = EMOJI_RE.split(text)
+    emojis = EMOJI_RE.findall(text)
+
+    for i, token in enumerate(tokens):
+        if token:
+            draw.text(
+                (cursor_x, cursor_y),
+                token,
+                font=font,
+                fill=fill,
+                stroke_width=stroke_width,
+                stroke_fill=stroke_fill,
+                anchor="lm",
+            )
+            cursor_x += draw.textlength(token, font=font)
+
+        if i < len(emojis):
+            emoji = emojis[i]
+            codepoints = "-".join(f"{ord(c):x}" for c in emoji)
+            url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{codepoints}.png"
+
+            try:
+                r = requests.get(url, timeout=5)
+                tw = Image.open(BytesIO(r.content)).convert("RGBA")
+                tw = tw.resize((font_size, font_size), Image.LANCZOS)
+                canvas.paste(tw, (int(cursor_x), int(cursor_y - font_size * 0.5)), tw)
+                cursor_x += font_size
+            except Exception:
+                draw.text(
+                    (cursor_x, cursor_y),
+                    emoji,
+                    font=font,
+                    fill=fill,
+                    stroke_width=stroke_width,
+                    stroke_fill=stroke_fill,
+                    anchor="lm",
+                )
+                cursor_x += draw.textlength(emoji, font=font)
+
+
+def process_image_animated(raw: BytesIO, effect_fn):
+    img = Image.open(raw)
+
+    if not getattr(img, "is_animated", False):
+        return effect_fn(raw)
+
+    frames = []
+    durations = []
+
+    for frame_index in range(img.n_frames):
+        img.seek(frame_index)
+        frame = img.convert("RGBA")
+
+        buf = BytesIO()
+        frame.save(buf, format="PNG")
+        buf.seek(0)
+
+        processed = Image.open(effect_fn(buf)).convert("RGBA")
+        frames.append(processed)
+        durations.append(img.info.get("duration", 50))
+
+    out = BytesIO()
+    frames[0].save(
+        out,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        loop=0,
+        duration=durations,
+        disposal=2,
+        transparency=0,
+    )
+    out.seek(0)
+    return out
+
+
+def _open_rgba(raw: BytesIO) -> Image.Image:
+    raw.seek(0)
+    return Image.open(raw).convert("RGBA")
+
+
+# ───────────────────── existing effects ────────────
+
+def grayscale(raw: BytesIO) -> BytesIO:
+    img = _open_rgba(raw)
+    gray = ImageOps.grayscale(img).convert("RGBA")
+    buf = BytesIO()
+    gray.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def invert_colors(raw: BytesIO) -> BytesIO:
+    img = _open_rgba(raw)
+    rgb = img.convert("RGB")
+    inv = ImageOps.invert(rgb).convert("RGBA")
+    buf = BytesIO()
+    inv.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def blur_image(raw: BytesIO, radius: float = 4.0) -> BytesIO:
+    img = _open_rgba(raw)
+    blurred = img.filter(ImageFilter.GaussianBlur(radius=radius))
+    buf = BytesIO()
+    blurred.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def pixelate_image(raw: BytesIO, factor: int = 12) -> BytesIO:
+    img = _open_rgba(raw)
+    w, h = img.size
+    small = img.resize(
+        (max(1, w // factor), max(1, h // factor)),
+        resample=Image.NEAREST
+    )
+    pixelated = small.resize((w, h), resample=Image.NEAREST)
+    buf = BytesIO()
+    pixelated.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def deepfry_image(raw: BytesIO) -> BytesIO:
+    img = _open_rgba(raw).convert("RGB")
+    w, h = img.size
+
+    img = ImageEnhance.Color(img).enhance(5.0)
+    img = ImageEnhance.Contrast(img).enhance(4.0)
+    img = ImageEnhance.Sharpness(img).enhance(10.0)
+
+    r, g, b = img.split()
+    r = r.point(lambda i: min(255, i + 40))
+    g = g.point(lambda i: min(255, i + 10))
+    img = Image.merge("RGB", (r, g, b))
+
+    pixels = img.load()
+
+    burnout_count = int(w * h * 0.08)
+    for _ in range(burnout_count):
+        x = random.randint(0, w - 1)
+        y = random.randint(0, h - 1)
+        pixels[x, y] = (
+            random.randint(200, 255),
+            random.randint(180, 255),
+            random.randint(0, 80),
+        )
+
+    noise_count = int(w * h * 0.15)
+    for _ in range(noise_count):
+        x = random.randint(0, w - 1)
+        y = random.randint(0, h - 1)
+        rv, gv, bv = pixels[x, y]
+        n = random.randint(-50, 50)
+        pixels[x, y] = (
+            max(0, min(255, rv + n)),
+            max(0, min(255, gv + n)),
+            max(0, min(255, bv + n)),
+        )
+
+    r, g, b = img.split()
+
+    def shift_channel(channel: Image.Image, dx: int, dy: int) -> Image.Image:
+        return channel.transform(
+            (w, h),
+            Image.AFFINE,
+            (1, 0, dx, 0, 1, dy),
+            resample=Image.BICUBIC,
+        )
+
+    r_shift = shift_channel(r, random.randint(-4, 4), random.randint(-2, 2))
+    g_shift = shift_channel(g, random.randint(-3, 3), random.randint(-2, 2))
+    b_shift = shift_channel(b, random.randint(-5, 5), random.randint(-3, 3))
+
+    img = Image.merge("RGB", (r_shift, g_shift, b_shift))
+
+    draw = ImageDraw.Draw(img)
+    for y in range(0, h, 3):
+        draw.line([(0, y), (w, y)], fill=(0, 0, 0, 40), width=1)
+
+    halo = img.filter(ImageFilter.GaussianBlur(radius=3))
+    img = Image.blend(img, halo, alpha=0.25)
+
+    buf = BytesIO()
+    img.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
+    size = max(12, int(width * scale))
+    try:
+        return ImageFont.truetype("arial.ttf", size)
+    except Exception:
+        return ImageFont.load_default(size)
+
+
+def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> Image.Image:
+    width, height = img.size
+    font_size = max(45, int(width * 0.09))
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except Exception:
+        font = ImageFont.load_default(font_size)
+
+    wrapped = textwrap.fill(text, width=int(width / (font_size * 0.6)))
+
+    dummy = ImageDraw.Draw(img)
+    bbox = dummy.multiline_textbbox((0, 0), wrapped, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+
+    padding_y = int(text_h * 0.18)
+    block_height = text_h + padding_y * 2
+
+    new_height = height + block_height
+    canvas = Image.new("RGBA", (width, int(new_height)), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    if position == "top":
+        draw.rectangle([0, 0, width, block_height], fill="white")
+        text_y = block_height // 2
+        paste_y = block_height
+    else:
+        canvas.paste(img, (0, 0))
+        draw.rectangle([0, height, width, height + block_height], fill="white")
+        text_y = height + block_height // 2
+        paste_y = 0
+
+    _draw_twemoji_text(
+        canvas,
+        draw,
+        width // 2 - text_w // 2,
+        text_y,
+        wrapped,
+        font,
+        fill="black",
+        stroke_width=6,
+        stroke_fill="white",
+    )
+
+    if position == "top":
+        canvas.paste(img, (0, int(paste_y)))
+
+    return canvas
+
+
+def caption_top(raw: BytesIO, text: str) -> BytesIO:
+    img = _open_rgba(raw)
+    out = _draw_caption_block(img, text, position="top")
+    buf = BytesIO()
+    out.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def caption_bottom(raw: BytesIO, text: str) -> BytesIO:
+    img = _open_rgba(raw)
+    out = _draw_caption_block(img, text, position="bottom")
+    buf = BytesIO()
+    out.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def meme_top_bottom(raw: BytesIO, top: str, bottom: str) -> BytesIO:
+    img = _open_rgba(raw)
+    width, height = img.size
+    font = _get_font(width, scale=0.08)
+    draw = ImageDraw.Draw(img)
+
+    def draw_centered(text: str, y: int):
+        wrapped = textwrap.fill(text, width=20)
+        draw.multiline_text(
+            (width // 2, y),
+            wrapped,
+            font=font,
+            fill="white",
+            anchor="ma",
+            align="center",
+            stroke_width=3,
+            stroke_fill="black",
+        )
+
+    if top:
+        draw_centered(top, 20)
+    if bottom:
+        draw_centered(bottom, height - 40)
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+# ───────────────────── new effects ─────────────────
+
+def sepia(raw: BytesIO) -> BytesIO:
+    """Classic warm brown sepia tone."""
+    img = _open_rgba(raw).convert("L").convert("RGB")
+    r, g, b = img.split()
+    r = r.point(lambda i: min(255, int(i * 1.08)))
+    g = g.point(lambda i: min(255, int(i * 0.85)))
+    b = b.point(lambda i: min(255, int(i * 0.65)))
+    out = Image.merge("RGB", (r, g, b))
+    buf = BytesIO()
+    out.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def vaporwave(raw: BytesIO) -> BytesIO:
+    """Retrowave pink/purple palette with scanlines."""
+    img = _open_rgba(raw).convert("RGB")
+    w, h = img.size
+
+    r, g, b = img.split()
+    r = r.point(lambda i: min(255, int(i * 1.1 + 40)))
+    g = g.point(lambda i: min(255, int(i * 0.6)))
+    b = b.point(lambda i: min(255, int(i * 1.4 + 50)))
+    img = Image.merge("RGB", (r, g, b))
+
+    # Horizontal scanlines
+    draw = ImageDraw.Draw(img)
+    for y in range(0, h, 4):
+        draw.line([(0, y), (w, y)], fill=(20, 0, 40), width=1)
+
+    # Dreamy soft blur
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.7))
+
+    buf = BytesIO()
+    img.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def glitch_effect(raw: BytesIO) -> BytesIO:
+    """RGB channel shift + horizontal slice corruption + noise blocks."""
+    img = _open_rgba(raw)
+    w, h = img.size
+
+    # 1. RGB channel offset
+    r, g, b, a = img.split()
+    shift_x = random.randint(6, 20)
+    r = r.transform((w, h), Image.AFFINE, (1, 0, shift_x, 0, 1, 0), resample=Image.NEAREST)
+    b = b.transform((w, h), Image.AFFINE, (1, 0, -shift_x, 0, 1, 0), resample=Image.NEAREST)
+    result = Image.merge("RGBA", (r, g, b, a))
+
+    # 2. Horizontal slice shifts (no pixel loops — use paste)
+    for _ in range(random.randint(6, 14)):
+        y0 = random.randint(0, max(1, h - 12))
+        sh = random.randint(2, 10)
+        dx = random.randint(-40, 40)
+        y1 = min(y0 + sh, h)
+        strip = result.crop((0, y0, w, y1))
+        result.paste(strip, (dx, y0))
+
+    # 3. Random color noise bars
+    draw = ImageDraw.Draw(result)
+    for _ in range(random.randint(4, 10)):
+        x1 = random.randint(0, max(1, w - 20))
+        y1 = random.randint(0, max(1, h - 4))
+        x2 = min(x1 + random.randint(30, 120), w)
+        y2 = min(y1 + random.randint(1, 3), h)
+        draw.rectangle(
+            [x1, y1, x2, y2],
+            fill=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 210)
+        )
+
+    buf = BytesIO()
+    result.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def edge_detect(raw: BytesIO) -> BytesIO:
+    """Highlight edges in the image."""
+    img = _open_rgba(raw).convert("RGB")
+    edges = img.filter(ImageFilter.FIND_EDGES)
+    buf = BytesIO()
+    edges.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def emboss(raw: BytesIO) -> BytesIO:
+    """3D emboss / raised-relief effect."""
+    img = _open_rgba(raw).convert("RGB")
+    embossed = img.filter(ImageFilter.EMBOSS)
+    # Boost contrast so the emboss pops
+    embossed = ImageEnhance.Contrast(embossed).enhance(2.5)
+    buf = BytesIO()
+    embossed.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def rotate_image(raw: BytesIO, angle: float = 90.0) -> BytesIO:
+    """Rotate the image clockwise by the given angle."""
+    img = _open_rgba(raw)
+    rotated = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
+    buf = BytesIO()
+    rotated.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def mirror_image(raw: BytesIO) -> BytesIO:
+    """Flip the image horizontally (left ↔ right)."""
+    img = _open_rgba(raw)
+    mirrored = ImageOps.mirror(img)
+    buf = BytesIO()
+    mirrored.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def flip_image(raw: BytesIO) -> BytesIO:
+    """Flip the image vertically (top ↔ bottom)."""
+    img = _open_rgba(raw)
+    flipped = ImageOps.flip(img)
+    buf = BytesIO()
+    flipped.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def sharpen_image(raw: BytesIO) -> BytesIO:
+    """Aggressive unsharp-mask sharpening."""
+    img = _open_rgba(raw)
+    sharpened = img.filter(ImageFilter.UnsharpMask(radius=2, percent=250, threshold=3))
+    sharpened = ImageEnhance.Sharpness(sharpened).enhance(2.0)
+    buf = BytesIO()
+    sharpened.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def posterize_image(raw: BytesIO, bits: int = 3) -> BytesIO:
+    """Reduce color depth for a flat, poster-art look."""
+    img = _open_rgba(raw).convert("RGB")
+    posterized = ImageOps.posterize(img, bits)
+    buf = BytesIO()
+    posterized.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def vignette(raw: BytesIO, strength: float = 0.75) -> BytesIO:
+    """Dark feathered vignette around the edges."""
+    img = _open_rgba(raw)
+    w, h = img.size
+
+    # Build a white-centre → black-edge radial mask
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    steps = 120
+    for i in range(steps, 0, -1):
+        ratio = i / steps
+        rw = int(w * ratio)
+        rh = int(h * ratio)
+        x0 = (w - rw) // 2
+        y0 = (h - rh) // 2
+        brightness = int(255 * (1 - (1 - ratio) * strength * 2.2))
+        brightness = max(0, min(255, brightness))
+        draw.ellipse([x0, y0, x0 + rw, y0 + rh], fill=brightness)
+
+    # Black overlay dimmed by inverse of mask
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+    overlay.putalpha(ImageOps.invert(mask))
+    result = Image.alpha_composite(img, overlay)
+
+    buf = BytesIO()
+    result.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def oil_paint(raw: BytesIO) -> BytesIO:
+    """Simulate an oil painting with multiple median-filter passes + colour boost."""
+    img = _open_rgba(raw).convert("RGB")
+    for _ in range(5):
+        img = img.filter(ImageFilter.MedianFilter(size=5))
+    img = ImageEnhance.Color(img).enhance(2.2)
+    img = ImageEnhance.Contrast(img).enhance(1.3)
+    img = ImageEnhance.Sharpness(img).enhance(0.3)
+    buf = BytesIO()
+    img.convert("RGBA").save(buf, format="PNG")
+    buf.seek(0)
+    return buf

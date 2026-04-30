@@ -90,6 +90,9 @@ class SQLitePool:
                 return None
             return raw[0]
 
+    async def fetchone(self, query: str, *args):
+        return await self.fetchrow(query, *args)
+
 
 async def create_pool(db_path: str) -> SQLitePool:
     db = await aiosqlite.connect(db_path)

@@ -12,28 +12,235 @@
     ],
     "panel_channel_id": 1488008643101065278,
     "panel_message_id": 1488262594111344772,
+    "support_roles": [],
     "open_tickets": [
       {
-        "channel_id": 1487909060408905841,
-        "message_id": 1487909062128439296,
-        "category": "General",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      },
-      {
-        "channel_id": 1488262605062803587,
-        "message_id": 1488262606362775703,
-        "category": "General",
-        "opener_id": 1479968201319125013,
-        "status": "open"
-      },
-      {
-        "channel_id": 1488262830233882684,
-        "message_id": 1488262831823650846,
+        "channel_id": 1494039330987970681,
+        "message_id": 1494039332321755278,
         "category": "SelfBot",
-        "opener_id": 1479968201319125013,
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494040146973294623,
+        "message_id": 1494040149011468308,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494043388528562366,
+        "message_id": 1494043393863581908,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
+        "status": "open"
+      },
+      {
+        "channel_id": 1494045023149363241,
+        "message_id": 1494045024697061446,
+        "category": "NukeBot",
+        "opener_id": 1492310425348608170,
         "status": "open"
       }
     ]
+  },
+  "1470878953743974587": {
+    "guild_id": 1470878953743974587,
+    "panel_title": "\ud835\udc76\ud835\udc91\ud835\udc86\ud835\udc8f \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95",
+    "panel_description": "\ud835\udc7b\ud835\udc90 \ud835\udc90\ud835\udc91\ud835\udc86\ud835\udc8f \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95 \ud835\udc91\ud835\udc8d\ud835\udc86\ud835\udc82\ud835\udc94\ud835\udc86 \ud835\udc84\ud835\udc8d\ud835\udc8a\ud835\udc84\ud835\udc8c \ud835\udc95\ud835\udc89\ud835\udc86 \ud835\udc83\ud835\udc96\ud835\udc95\ud835\udc95\ud835\udc90\ud835\udc8f \ud835\udc83\ud835\udc86\ud835\udc8d\ud835\udc90\ud835\udc98 \ud835\udc82\ud835\udc8f\ud835\udc85 \ud835\udc94\ud835\udc86\ud835\udc8d\ud835\udc86\ud835\udc84\ud835\udc95 \ud835\udc82 \ud835\udc95\ud835\udc8a\ud835\udc84\ud835\udc8c\ud835\udc86\ud835\udc95 \ud835\udc84\ud835\udc82\ud835\udc95\ud835\udc86\ud835\udc88\ud835\udc90\ud835\udc93\ud835\udc9a.",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "Community support",
+      "Bot support",
+      "NikoAPI support"
+    ],
+    "panel_channel_id": 1472038470313705675,
+    "panel_message_id": 1491898738359275643,
+    "support_roles": [],
+    "open_tickets": [
+      {
+        "channel_id": 1494389983551819836,
+        "message_id": 1494389989063000155,
+        "category": "Community support",
+        "opener_id": 1256296452045668382,
+        "status": "open"
+      },
+      {
+        "channel_id": 1498031277234978950,
+        "message_id": 1498031279004717269,
+        "category": "Community support",
+        "opener_id": 1414184882917347419,
+        "claimed_by": null,
+        "status": "open"
+      }
+    ]
+  },
+  "1487540573870100661": {
+    "guild_id": 1487540573870100661,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": 1492596494719520922,
+    "panel_message_id": 1492750423814049813,
+    "support_roles": [],
+    "open_tickets": [
+      {
+        "channel_id": 1492750512120922264,
+        "message_id": 1492750514063016078,
+        "category": "General",
+        "opener_id": 1477125396339097723,
+        "status": "open"
+      }
+    ]
+  },
+  "1492884874040705024": {
+    "guild_id": 1492884874040705024,
+    "panel_title": "\ud835\ude74\ud835\ude8c\ud835\ude95\ud835\ude92\ud835\ude99\ud835\ude9d\ud835\udea2\ud835\udea1 \ud835\ude7b\ud835\ude7b\ud835\ude72 \ud835\ude83\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d\ud835\ude9c",
+    "panel_description": "\ud835\ude7e\ud835\ude99\ud835\ude8e\ud835\ude97 \ud835\ude8a \ud835\ude9d\ud835\ude92\ud835\ude8c\ud835\ude94\ud835\ude8e\ud835\ude9d \ud835\ude8b\ud835\ude8e\ud835\ude95\ud835\ude98\ud835\udea0 \ud835\ude8f\ud835\ude98\ud835\ude9b \ud835\ude91\ud835\ude8e\ud835\ude95\ud835\ude99 \ud835\udea0\ud835\ude92\ud835\ude9d\ud835\ude91 \ud835\ude9d\ud835\ude91\ud835\ude8e \ud835\ude8b\ud835\ude98\ud835\ude9d\ud835\ude9c.",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/icons/1492884874040705024/f1095f27b697bd98a2889d144f2fe8ed.png?size=1024",
+    "panel_categories": [
+      "Raidbot",
+      "Nukebot",
+      "Moderation bot",
+      "General"
+    ],
+    "panel_channel_id": 1493962341249843392,
+    "panel_message_id": 1493962990385631303,
+    "support_roles": [],
+    "open_tickets": [
+      {
+        "channel_id": 1494029539620163614,
+        "message_id": 1494029540677259396,
+        "category": "Moderation bot",
+        "opener_id": 1469774231121301546,
+        "status": "open"
+      }
+    ]
+  },
+  "1443314822182732010": {
+    "guild_id": 1443314822182732010,
+    "panel_title": "Open a fucking ticket",
+    "panel_description": "no clue why you would need to open a ticket but whatever",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/icons/1443314822182732010/87d65130c84fdac3293449f9100d02e2.png?size=1024",
+    "panel_categories": [],
+    "panel_channel_id": 1495258758883049645,
+    "panel_message_id": 1495258834866802768,
+    "support_roles": [],
+    "open_tickets": []
+  },
+  "1495899475456032911": {
+    "guild_id": 1495899475456032911,
+    "panel_title": "an average ticket panel frfr",
+    "panel_description": "use the button to open a ticket :P\nif you open multiple for no reason then you are stupid ngl \ud83d\ude16",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": 1495932591050719243,
+    "panel_message_id": 1495932645907890196,
+    "support_roles": [],
+    "open_tickets": [
+      {
+        "channel_id": 1495933482352775259,
+        "message_id": 1495933484995182783,
+        "category": "General",
+        "opener_id": 1495589910839689407,
+        "status": "open"
+      }
+    ]
+  },
+  "1495662474672738377": {
+    "guild_id": 1495662474672738377,
+    "panel_title": "Support Tickets",
+    "panel_description": "Use the button below to open a ticket.",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/attachments/1495932591050719243/1496649043127042058/background.png?ex=69eaa68a&is=69e9550a&hm=8e13bdf9fb9b5bdc40db7b4a718da834ecf27c34b9d255a95d24607c81f61202&",
+    "panel_categories": [],
+    "panel_channel_id": 1496163458503278702,
+    "panel_message_id": 1496671047875825828,
+    "support_roles": [],
+    "open_tickets": [
+      {
+        "channel_id": 1496671910476648458,
+        "message_id": 1496671911537807490,
+        "category": "General",
+        "opener_id": 1495618222488162439,
+        "status": "open"
+      }
+    ]
+  },
+  "1497250915034337330": {
+    "guild_id": 1497250915034337330,
+    "panel_title": "Niko Support Tickets",
+    "panel_description": "**Ticket Rules:**\n- Do not open multiple tickets\n- Only open a ticket if you need help with the bot\n- Do not open a ticket and then ignore the staff who are trying to help",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "General Help",
+      "Bug Report"
+    ],
+    "panel_channel_id": 1497253295184543847,
+    "panel_message_id": 1497254635189174312,
+    "support_roles": [],
+    "open_tickets": []
+  },
+  "1496921270279868487": {
+    "guild_id": 1496921270279868487,
+    "panel_title": "Aether Lounge Tickets",
+    "panel_description": "Use the button to open a ticket.\n\n**Do not open multiple tickets or you will be ignored**",
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [
+      "Report a member or staff",
+      "Staff Application",
+      "Other"
+    ],
+    "panel_channel_id": 1497727505006723162,
+    "panel_message_id": 1497728192377520222,
+    "support_roles": [
+      1497305596196683796
+    ],
+    "open_tickets": [
+      {
+        "channel_id": 1498022453379600424,
+        "message_id": 1498022453962739925,
+        "category": "Other",
+        "opener_id": 1475010378114269290,
+        "claimed_by": null,
+        "status": "open"
+      },
+      {
+        "channel_id": 1498139571182108714,
+        "message_id": 1498139572771622932,
+        "category": "Other",
+        "opener_id": 983383480333393950,
+        "claimed_by": null,
+        "status": "open"
+      },
+      {
+        "channel_id": 1498659597181911050,
+        "message_id": 1498659598780076093,
+        "category": "Staff Application",
+        "opener_id": 1344209369205706802,
+        "claimed_by": null,
+        "status": "open"
+      }
+    ]
+  },
+  "1495114388225659090": {
+    "guild_id": 1495114388225659090,
+    "panel_title": null,
+    "panel_description": null,
+    "panel_color": null,
+    "panel_image": null,
+    "panel_categories": [],
+    "panel_channel_id": null,
+    "panel_message_id": null,
+    "support_roles": [],
+    "open_tickets": []
   }
 }

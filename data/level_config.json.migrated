@@ -1,0 +1,50 @@
+{
+    "1483458369627885608": {
+        "xp_enabled": true,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    },
+    "1483456156276883456": {
+        "xp_enabled": false,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    },
+    "1436901011179569298": {
+        "xp_enabled": false,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    },
+    "1470154675394314393": {
+        "xp_enabled": true,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    },
+    "1487916721192042738": {
+        "xp_enabled": true,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    },
+    "1475891013305499678": {
+        "xp_enabled": true,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": null,
+        "level_up_message": null,
+        "level_roles": {}
+    }
+}

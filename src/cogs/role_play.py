@@ -1,8 +1,7 @@
 import discord
 import random
 from discord.ext import commands
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -19,6 +18,13 @@ MESSAGES = {
             "kill_desc": "{author} hat {target} getötet!",
             "kill_footer": "*Das ist ein Witz, töte bitte niemanden wirklich.*",
             "kiss_desc": "{author} hat {target} geküsst! 💋",
+        },
+        "es": {
+            "need_mention": "¡Tienes que mencionar a alguien para usar este comando!",
+            "hug_desc": "¡{author} abrazó a {target}! :hugging:",
+            "kill_desc": "¡{author} mató a {target}!",
+            "kill_footer": "*Es una broma, no mates a nadie de verdad.*",
+            "kiss_desc": "¡{author} besó a {target}! 💋",
         }
     },
     "cafe": {
@@ -35,6 +41,13 @@ MESSAGES = {
             "kill_desc": "oh nein! {author} hat {target} spielerisch ausgeschaltet! ☕💀",
             "kill_footer": "*das ist nur café-roleplay, niemand wurde wirklich verletzt ☕*",
             "kiss_desc": "omg! {author} hat {target} einen süßen Café-Kuss gegeben! ☕️💋",
+        },
+        "es": {
+            "need_mention": "¿con quién hacemos esto? ¡menciona a un amix! ☕✨",
+            "hug_desc": "¡omg! {author} le dio a {target} un abrazo grande y calentito del café ☕💖",
+            "kill_desc": "¡oh no! {author} eliminó a {target} en plan jugando ☕💀",
+            "kill_footer": "*esto es solo roleplay del café, nadie salió herido de verdad ☕*",
+            "kiss_desc": "¡omg! {author} le dio a {target} un besito dulce del café ☕️💋",
         }
     }
 }
@@ -43,10 +56,12 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 def msg(ctx, key, **kwargs):
-    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
     if text is None:
@@ -103,7 +118,10 @@ class RolePlayCog(commands.Cog):
     # -----------------------------
     # PREFIX COMMANDS
     # -----------------------------
-    @commands.command(name="hug")
+    @commands.command(
+        name="hug",
+        help="Give someone a hug! 💖"
+    )
     async def hug(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))
@@ -111,7 +129,8 @@ class RolePlayCog(commands.Cog):
         gifs = [
             "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
             "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
-            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
+            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp",
+            "https://nekos.best/api/v2/hug/c8fee249-64d4-4041-895c-0dcacb821c10.gif"
         ]
 
         await self.send_roleplay(
@@ -121,7 +140,10 @@ class RolePlayCog(commands.Cog):
             random.choice(gifs)
         )
 
-    @commands.command(name="kill")
+    @commands.command(
+        name="kill",
+        help="Playfully kill someone! 💀"
+    )
     async def kill(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))
@@ -138,7 +160,10 @@ class RolePlayCog(commands.Cog):
             footer=msg(ctx, "kill_footer")
         )
 
-    @commands.command(name="kiss")
+    @commands.command(
+        name="kiss",
+        help="Give someone a kiss! 💋"
+    )
     async def kiss(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send(msg(ctx, "need_mention"))
@@ -165,7 +190,8 @@ class RolePlayCog(commands.Cog):
         gifs = [
             "https://static.klipy.com/ii/e293a233a303a98e471f78d04e13a1b0/88/68/BrZiPlu3.webp",
             "https://static.klipy.com/ii/935d7ab9d8c6202580a668421940ec81/f4/97/FWkQ3IhM.webp",
-            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp"
+            "https://static.klipy.com/ii/c3a19a0b747a76e98651f2b9a3cca5ff/8a/00/V2DQIgua.webp",
+            "https://nekos.best/api/v2/hug/c8fee249-64d4-4041-895c-0dcacb821c10.gif"
         ]
         await self.send_roleplay(
             interaction,

@@ -1,38 +1,39 @@
 import discord
 from discord.ext import commands
+from config.emojis import get_emoji
 
 
 class UtilityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="ping")
+    @commands.hybrid_command(name="ping", description="Check the bot's latency")
     async def ping(self, ctx):
-        """Pong!"""
-        await ctx.send("Pong!")
-
-    @commands.command(name="echo")
-    async def echo(self, ctx, *, message: str):
-        """Echoes the user's message."""
-        await ctx.send(f"{message}\n-# Sent by {ctx.author.display_name}")
-
-    
-    @commands.command(name="nitro")
-    async def nitro(self, ctx):
-        """FREE NITRO!!!"""
-        rickroll_gif = "https://csyn.me/assets/rickroll.gif"
+        """Check the bot's latency."""
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="### No nitro here! ☕"
+                content=f"### 🏓 Pong!"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem(media=rickroll_gif)
+            discord.ui.TextDisplay(
+                content=f"**Latency:** {round(self.bot.latency * 1000)}ms"
             )
         )
         view.add_item(container)
         await ctx.send(view=view)
+
+    @commands.hybrid_command(
+        name="echo",
+        description="Echoes the user's message"
+    )
+    @commands.has_permissions(manage_messages=True)
+    async def echo(self, ctx, *, message: str):
+        """Echoes the user's message."""
+        try:
+            await ctx.send(f"{message}\n-# Sent by {ctx.author.mention}", allowed_mentions=discord.AllowedMentions.none())
+        except discord.Forbidden:
+            pass
 
     @commands.command(name="partnership_request")
     async def partnership_request(self, ctx, invite: str = None):
@@ -53,62 +54,6 @@ class UtilityCog(commands.Cog):
             await ctx.send("Partnership request sent successfully!")
         else:
             await ctx.send("Error: Log channel not found.")
-
-    @commands.command(name="boring")
-    async def boring(self, ctx):
-        """A boring command."""
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### ☕ What did you expect?"
-            ),
-            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"I bet you thought this command would do something cool, but no. It's just boring. 😔"
-            ),
-            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"-# Maybe try `{self.bot.command_prefix}notboring`?"
-            )
-        ))
-        await ctx.send(view=view)
-
-    @commands.command(name="notboring")
-    async def notboring(self, ctx):
-        """A not boring command."""
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content="### ☕ I lied."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"This command is actually in fact quite boring."
-            ),
-            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"-# Please forgive me 😭"
-            )
-        ))
-        await ctx.send(view=view)
-
-    @commands.command(name="crazy")
-    async def crazy(self, ctx):
-        """Crazy? I was crazy once..."""
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=(
-                    "### ☕ Crazy?\n"
-                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
-                    "A rubber room with rats. And rats make me crazy.\n\n"
-                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
-                    "A rubber room with rats. And rats make me crazy.\n\n"
-                    "Crazy? I was crazy once..."
-                )
-            )
-        ))
-        await ctx.send(view=view)
 
 
 async def setup(bot):

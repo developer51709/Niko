@@ -9,8 +9,7 @@ import platform
 import psutil
 import os
 from config.emojis import get_emoji
-
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -34,6 +33,9 @@ MESSAGES = {
             "userinfo_roles": "Roles",
 
             "avatar_title": "{user}'s Avatar",
+
+            "banner_title": "{user}'s Banner",
+            "banner_none": "{user} does not have a banner.",
 
             "about_title": "About Niko",
             "about_desc": (
@@ -119,6 +121,9 @@ MESSAGES = {
 
             "avatar_title": "{user}s Avatar",
 
+            "banner_title": "{user}s Banner",
+            "banner_none": "{user} hat kein Banner.",
+
             "about_title": "Über Niko",
             "about_desc": (
                 "Niko ist ein freundlicher, verspielter und sehr sozialer KI-Begleiter, "
@@ -180,6 +185,92 @@ MESSAGES = {
             "invite_title": "Niko einladen",
             "invite_link": "Klicke hier, um Niko auf deinen Server einzuladen",
         },
+        "es": {
+            "serverinfo_title": "Información del Servidor",
+            "serverinfo_name": "Nombre del Servidor",
+            "serverinfo_id": "ID del Servidor",
+            "serverinfo_members": "Cantidad de Miembros",
+            "serverinfo_users": "Cantidad de Usuarios",
+            "serverinfo_bots": "Cantidad de Bots",
+            "serverinfo_roles": "Cantidad de Roles",
+            "serverinfo_created": "Servidor Creado",
+            "serverinfo_owner": "Dueño del Servidor",
+
+            "userinfo_title": "Información del Usuario",
+            "userinfo_username": "Nombre de Usuario",
+            "userinfo_id": "ID de Usuario",
+            "userinfo_created": "Cuenta Creada",
+            "userinfo_joined": "Se Unió al Servidor",
+            "userinfo_toprole": "Rol Más Alto",
+            "userinfo_roles": "Roles",
+
+            "avatar_title": "Avatar de {user}",
+
+            "banner_title": "Banner de {user}",
+            "banner_none": "{user} no tiene banner.",
+
+            "about_title": "Acerca de Niko",
+            "about_desc": (
+                "Niko es una IA amigable, juguetona y muy social diseñada para ser un compañero "
+                "entretenido en tu servidor de Discord. Le encanta charlar, ayudar y hacer que "
+                "tu comunidad se sienta más viva."
+            ),
+            "about_dev": "Desarrollador",
+            "about_lib": "Librería",
+            "about_servers": "Servidores",
+            "about_footer": "¡Gracias por usar a Niko!",
+
+            "creator_title": "Creador",
+            "creator_desc": "Niko fue creado por **{creator}**.",
+            "creator_tag": "Tag del Creador",
+            "creator_id": "ID de Usuario",
+            "creator_project": "Proyecto",
+
+            "roleinfo_title": "Información del Rol",
+            "roleinfo_name": "Nombre del Rol",
+            "roleinfo_id": "ID del Rol",
+            "roleinfo_color": "Color del Rol",
+            "roleinfo_position": "Posición del Rol",
+            "roleinfo_members": "Miembros con el Rol",
+            "roleinfo_need_role": "¡Por favor especifica un rol! Ejemplo: `!roleinfo @Rol`",
+
+            "servericon_title": "Icono del Servidor",
+
+            "serverbanner_title": "Banner del Servidor",
+            "serverbanner_none": "Este servidor no tiene banner.",
+
+            "booststats_title": "Estadísticas de Boost",
+            "booststats_count": "Cantidad de Boosts",
+            "booststats_tier": "Nivel de Boost",
+            "booststats_boosters": "Boosters",
+
+            "spotify_not_member": "Solo puedo ver la actividad de Spotify de los miembros del servidor.",
+            "spotify_not_listening": "{user} no está escuchando Spotify.",
+            "spotify_title": "{user} está escuchando Spotify",
+            "spotify_track": "Canción",
+            "spotify_artist": "Artista",
+            "spotify_album": "Álbum",
+            "spotify_duration": "Duración",
+            "spotify_started": "Empezó",
+            "spotify_ends": "Termina",
+            "spotify_footer": "El estado de Spotify se actualiza en tiempo real.",
+
+            "debuginfo_title": "Información de Depuración",
+            "debuginfo_uptime": "Tiempo Activo",
+            "debuginfo_model": "Modelo de IA",
+            "debuginfo_commands": "Cantidad de Comandos",
+            "debuginfo_ping": "Latencia",
+            "debuginfo_cpu": "Uso de CPU",
+            "debuginfo_ram": "Uso de Memoria",
+
+            "hostinfo_title": "Información del Host",
+            "hostinfo_hostname": "Nombre del Host",
+            "hostinfo_os": "SO",
+            "hostinfo_cpu": "CPU",
+            "hostinfo_ram": "RAM",
+            "invite_title": "Invitar a Niko",
+            "invite_link": "Haz clic aquí para invitar a Niko a tu servidor",
+        },
     },
 
     "cafe": {
@@ -203,6 +294,9 @@ MESSAGES = {
             "userinfo_roles": "roles",
 
             "avatar_title": "{user}'s cute lil avatar ☕",
+
+            "banner_title": "{user}'s banner ✨️",
+            "banner_none": "{user} doesn't have a banner yet 😔",
 
             "about_title": "☕ about niko",
             "about_desc": (
@@ -233,7 +327,7 @@ MESSAGES = {
             "serverbanner_title": "☕ server banner",
             "serverbanner_none": "aww this café doesn't have a banner yet ☕",
 
-            "booststats_title": "☕ boost vibes",
+            "booststats_title": "boost vibes",
             "booststats_count": "boost count",
             "booststats_tier": "boost tier",
             "booststats_boosters": "boosters",
@@ -262,7 +356,7 @@ MESSAGES = {
             "hostinfo_os": "os",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
-            "invite_title": "☕️ invite niko",
+            "invite_title": "invite niko",
             "invite_link": "click here to invite niko to your café",
         },
 
@@ -286,6 +380,9 @@ MESSAGES = {
             "userinfo_roles": "rollen",
 
             "avatar_title": "{user}s süßer avatar ☕",
+
+            "banner_title": "{user}s banner ✨️",
+            "banner_none": "{user} hat noch kein banner 😔",
 
             "about_title": "☕ über niko",
             "about_desc": (
@@ -316,7 +413,7 @@ MESSAGES = {
             "serverbanner_title": "☕ server-banner",
             "serverbanner_none": "aww dieses café hat noch kein banner ☕",
 
-            "booststats_title": "☕ boost-vibes",
+            "booststats_title": "boost-vibes",
             "booststats_count": "boosts",
             "booststats_tier": "boost-stufe",
             "booststats_boosters": "booster",
@@ -345,7 +442,7 @@ MESSAGES = {
             "hostinfo_os": "betriebssystem",
             "hostinfo_cpu": "cpu",
             "hostinfo_ram": "ram",
-            "invite_title": "☕️ niko einladen",
+            "invite_title": "niko einladen",
             "invite_link": "klicke hier, um niko in dein café einzuladen",
         },
     },
@@ -356,15 +453,13 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
-def get_personality():
-    return PERSONALITY if PERSONALITY in ("normal", "cafe") else "normal"
-
-
 def msg(ctx, key, **kwargs):
-    personality = get_personality()
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
 
     block = MESSAGES.get(personality, {}).get(lang, {})
@@ -376,6 +471,8 @@ def msg(ctx, key, **kwargs):
         text = MESSAGES["normal"].get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
+    if text == key:
+        text = "-# 𝙴𝚛𝚛𝚘𝚛: 𝚝𝚎𝚡𝚝 𝚘𝚛 𝚝𝚛𝚊𝚗𝚜𝚕𝚊𝚝𝚒𝚘𝚗 𝚗𝚘𝚝 𝚏𝚘𝚞𝚗𝚍"
 
     return text.format(**kwargs) if kwargs else text
 
@@ -425,9 +522,11 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="serverinfo",
-        help="peek at cozy server stats ☕ | zeigt server-infos"
+        aliases=["si", "server"],
+        description="View server info",
+        help="{ 'en': 'peek at cozy server stats ☕', 'de': 'zeigt server-infos', 'es': 'mira info del servidor ☕' }"
     )
     async def serverinfo(self, ctx):
         server = ctx.guild
@@ -443,7 +542,7 @@ class InfoCog(commands.Cog):
             f"**{msg(ctx, 'serverinfo_users')}:** `{humans}`\n"
             f"**{msg(ctx, 'serverinfo_bots')}:** `{bots}`\n"
             f"**{msg(ctx, 'serverinfo_roles')}:** `{len(server.roles)}`\n"
-            f"**{msg(ctx, 'serverinfo_created')}:** `{server.created_at:%Y-%m-%d}`\n"
+            f"**{msg(ctx, 'serverinfo_created')}:** <t:{int(server.created_at.timestamp())}:f> (<t:{int(server.created_at.timestamp())}:R>)\n"
             f"**{msg(ctx, 'serverinfo_owner')}:** {server.owner}"
         )
         await ctx.send(view=cv2_text(text, thumbnail_url=icon_url))
@@ -451,22 +550,23 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # USER INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="userinfo",
-        help="see cute lil user details ☕ | benutzer-infos anzeigen"
+        description="View user info",
+        help="{ 'en': 'see cute lil user details ☕', 'de': 'benutzer-infos anzeigen', 'es': 'mira detalles del usuario ☕' }"
     )
     async def userinfo(self, ctx, member: discord.Member = None):
         target = member or ctx.author
         avatar_url = target.avatar.url if target.avatar else None
 
         roles = [r.name for r in target.roles if r.name != "@everyone"]
-        joined = f"`{target.joined_at:%Y-%m-%d}`" if target.joined_at else "`N/A`"
+        joined = f"<t:{int(target.joined_at.timestamp())}:f> (<t:{int(target.joined_at.timestamp())}:R>)" if target.joined_at else "`N/A`"
 
         text = (
             f"### {msg(ctx, 'userinfo_title')}\n"
             f"**{msg(ctx, 'userinfo_username')}:** `{target.display_name}`\n"
             f"**{msg(ctx, 'userinfo_id')}:** `{target.id}`\n"
-            f"**{msg(ctx, 'userinfo_created')}:** `{target.created_at:%Y-%m-%d}`\n"
+            f"**{msg(ctx, 'userinfo_created')}:** <t:{int(target.created_at.timestamp())}:f> (<t:{int(target.created_at.timestamp())}:R>)\n"
             f"**{msg(ctx, 'userinfo_joined')}:** {joined}\n"
             f"**{msg(ctx, 'userinfo_toprole')}:** `{target.top_role.name}`\n"
             f"**{msg(ctx, 'userinfo_roles')}:** `{', '.join(roles) if roles else 'None'}`"
@@ -476,9 +576,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # AVATAR
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="avatar",
-        help="peek at someone's cute avatar 👤 | avatar anzeigen"
+        description="View someone's avatar",
+        help="{ 'en': 'peek at someones cute avatar 👤', 'de': 'avatar anzeigen', 'es': 'mira el avatar de alguien 👤' }"
     )
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -487,11 +588,29 @@ class InfoCog(commands.Cog):
         await ctx.send(view=cv2_image(text, image_url=avatar_url))
 
     # -------------------------------
+    # BANNER
+    # -------------------------------
+    @commands.hybrid_command(
+        name="banner",
+        description="View someone's banner",
+        help="{ 'en': 'see someones banner 🖼', 'de': 'banner anzeigen', 'es': 'mira el banner de alguien 🖼' }"
+    )
+    async def banner(self, ctx, member: discord.Member = None):
+        target = member or ctx.author
+        target = await self.bot.fetch_user(target.id)
+        banner_url = target.banner.url if target.banner else None
+        if not banner_url:
+            return await ctx.send(msg(ctx, "banner_none", user=target.display_name))
+        text = f"### {msg(ctx, 'banner_title', user=target.display_name)}"
+        await ctx.send(view=cv2_image(text, image_url=banner_url))
+
+    # -------------------------------
     # ABOUT
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="about",
-        help="learn about Niko ☕ | über Niko"
+        description="Learn about Niko",
+        help="{ 'en': 'learn about Niko ☕', 'de': 'über Niko', 'es': 'aprende sobre Niko ☕' }"
     )
     async def about(self, ctx):
         bot_user = self.bot.user
@@ -552,9 +671,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # CREATOR
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="creator",
-        help="meet Niko's creator ☕ | entwickler-infos"
+        description="Meet Niko's creator",
+        help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko ☕' }"
     )
     async def creator(self, ctx):
         creator = await self.bot.fetch_user(1479968201319125013)
@@ -602,9 +722,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # ROLE INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="roleinfo",
-        help="see cozy role details ☕ | rollen-infos anzeigen"
+        description="View role info",
+        help="{ 'en': 'see cozy role details ☕', 'de': 'rollen-infos anzeigen', 'es': 'mira detalles del rol ☕' }"
     )
     async def roleinfo(self, ctx, role: discord.Role = None):
         if role is None:
@@ -623,9 +744,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER ICON
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="servericon",
-        help="show the server's cute icon 📍 | server-icon anzeigen"
+        description="Show the server's icon",
+        help="{ 'en': 'show the servers cute icon 📍', 'de': 'server-icon anzeigen', 'es': 'muestra el icono del servidor 📍' }"
     )
     async def servericon(self, ctx):
         server = ctx.guild
@@ -636,9 +758,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SERVER BANNER
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="serverbanner",
-        help="show the server's banner 🖼 | server-banner anzeigen"
+        description="Show the server's banner",
+        help="{ 'en': 'show the servers banner 🖼', 'de': 'server-banner anzeigen', 'es': 'muestra el banner del servidor 🖼' }"
     )
     async def serverbanner(self, ctx):
         server = ctx.guild
@@ -650,14 +773,15 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # BOOST STATS
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="booststats",
-        help="see the server's boost vibes ☕ | boost-infos anzeigen"
+        description="View the server's boost stats",
+        help="{ 'en': 'see the servers boost vibes ☕', 'de': 'boost-infos anzeigen', 'es': 'mira las estadísticas de boost del servidor ☕' }"
     )
     async def booststats(self, ctx):
         server = ctx.guild
         text = (
-            f"### {msg(ctx, 'booststats_title')}\n"
+            f"### {get_emoji('icon_boost')} {msg(ctx, 'booststats_title')}\n"
             f"**{msg(ctx, 'booststats_count')}:** `{server.premium_subscription_count}`\n"
             f"**{msg(ctx, 'booststats_tier')}:** `{server.premium_tier}`\n"
             f"**{msg(ctx, 'booststats_boosters')}:** `{len(server.premium_subscribers)}`"
@@ -667,9 +791,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # SPOTIFY
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="spotify",
-        help="see what someone is vibing to on Spotify 🎧 | spotify-infos anzeigen"
+        description="See what someone's listening to on Spotify",
+        help="{ 'en': 'see what someone is vibing to on Spotify 🎧', 'de': 'spotify-infos anzeigen', 'es': 'mira qué escucha alguien en Spotify 🎧' }"
     )
     async def spotify(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -720,16 +845,19 @@ class InfoCog(commands.Cog):
                     emoji=get_emoji("spotify"),
                     url=f"https://open.spotify.com/track/{spotify.track_id}"
                 )
-            )
+            ),
+            accent_colour=discord.Color.green()
         )
+        view.add_item(container)
         await ctx.send(view=view)
 
     # -------------------------------
     # DEBUG INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="debuginfo",
-        help="view debug info 👾 | debug-infos anzeigen"
+        description="View bot debug info",
+        help="{ 'en': 'view debug info 👾', 'de': 'debug-infos anzeigen', 'es': 'mira info de depuración 👾' }"
     )
     async def debuginfo(self, ctx):
         uptime_seconds = int(time.time() - self.bot.start_time)
@@ -754,9 +882,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # HOST INFO
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="hostinfo",
-        help="view host info 💻 | host-infos anzeigen"
+        description="View bot host info",
+        help="{ 'en': 'view host info 💻', 'de': 'host-infos anzeigen', 'es': 'mira info del host 💻' }"
     )
     async def hostinfo(self, ctx):
         hostname = platform.node()
@@ -776,9 +905,10 @@ class InfoCog(commands.Cog):
     # -------------------------------
     # INVITE
     # -------------------------------
-    @commands.command(
+    @commands.hybrid_command(
         name="invite",
-        help="get Niko's invite link ☕️ | einladungslink für Niko"
+        description="Get Niko's invite link",
+        help="{ 'en': 'get Nikos invite link ☕️', 'de': 'einladungslink für Niko', 'es': 'obtén el enlace de invitación de Niko ☕️' }"
     )
     async def invite(self, ctx):
         bot_user = self.bot.user
@@ -786,7 +916,7 @@ class InfoCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
+                content=f"### {get_emoji('icon_invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
             )
         )
         view.add_item(container)

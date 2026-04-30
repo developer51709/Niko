@@ -7,17 +7,59 @@ import os
 
 slots_cooldown = os.getenv("SLOTS_COOLDOWN") or 60
 
+# Prefix resolver (required for dynamic prefixes to work)
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "!"
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
 class Slots(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.group(
+    @commands.hybrid_group(
         name="slots",
-        help="play a casino-style 3×3 slot machine 🎰 | spiele ein Casino-Slot-Spiel"
+        description="Play a casino-style 3x3 slot machine",
+        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel', 'es': 'juega una tragamonedas 3×3 estilo casino 🎰' }"
     )
     async def slots(self, ctx):
         if ctx.invoked_subcommand is None:
-            prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
+            prefix = await _resolve_prefix(self.bot, ctx)
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -31,7 +73,7 @@ class Slots(commands.Cog):
             view.add_item(container)
             await ctx.send(view=view)
 
-    @slots.command(name="play")
+    @slots.command(name="play", description="Play a game of slots")
     async def slots_play(self, ctx, amount: int = None):
         """Play a casino‑style 3×3 slot machine."""
         # Economy access
@@ -182,7 +224,7 @@ class Slots(commands.Cog):
         await msg.edit(view=result_view)
 
     # payouts subcommand (!slots payouts)
-    @slots.command(name="payouts")
+    @slots.command(name="payouts", description="View the slots payout table")
     async def slots_payouts(self, ctx):
         """View the slots payout table."""
         view = discord.ui.LayoutView()

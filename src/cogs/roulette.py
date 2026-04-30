@@ -363,7 +363,7 @@ class Roulette(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="roulette")
+    @commands.hybrid_command(name="roulette", description="Play interactive European roulette", help="{ 'en': 'play interactive European roulette 🎡', 'de': 'spiele interaktives europäisches Roulette 🎡', 'es': 'juega ruleta europea interactiva 🎡' }")
     async def roulette(self, ctx):
         """Play interactive European roulette."""
 

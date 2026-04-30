@@ -1,0 +1,27 @@
+{
+    "welcome_channel": 1495662475780292760,
+    "welcome_title": "Welcome to the server!",
+    "welcome_description": "Hello {user},\nwelcome to Ecliptyx Account Gen/Giveaway Server!\nThis is where we run giveaways and also where you can find our account gen bot!",
+    "welcome_color": 5793266,
+    "welcome_image": null,
+    "rules_channel": 1496144308443680893,
+    "rules_message_id": 1496160518589649088,
+    "rules_text": "- Follow the Discord ToS and Community Guidelines\n-# **Punishment:** depends on the severity of the violation\n- Do not use alts to join a giveaway multiple times\n-# **Punishment:** blacklist from future giveaways\n- Do not beg staff for roles or Nitro\n-# **Punishment:** mute\n\n-# All members and staff are required to follow these rules.",
+    "rules_role_id": 1496162484111937648,
+    "role_menu_channel": null,
+    "role_menu_message_id": null,
+    "role_menu_options": null,
+    "autorole_ids": [
+        1496145080195481731
+    ],
+    "captcha_enabled": true,
+    "captcha_channel_id": 1496144394011803778,
+    "captcha_panel_message_id": 1496144551193350235,
+    "captcha_add_role_ids": [
+        1496145026038628484
+    ],
+    "captcha_remove_role_ids": [
+        1496145080195481731
+    ],
+    "captcha_kick_on_fail": false
+}

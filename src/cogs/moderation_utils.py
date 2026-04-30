@@ -11,12 +11,11 @@ MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 
 DEFAULT_GUILD_CONFIG = {
-    "modlog_channel": None,
     "automod": {
-        "antispam":     True,
-        "antilink":     True,
+        "antispam":     False,
+        "antilink":     False,
         "badwords":     True,
-        "massmention":  True,
+        "massmention":  False,
         "antinuke":     False,
         "antiraid":     False,
         "antiraid_ext": False,
@@ -133,32 +132,23 @@ class ModerationUtils(commands.Cog):
     def save_mod_config(self):
         self.save_config()
 
-    def set_modlog_channel(self, guild_id: int, channel_id):
-        cfg = self.get_guild_config(guild_id)
-        cfg["modlog_channel"] = channel_id
-        self.save_config()
-
     def save_config(self):
         save_json(CONFIG_FILE, self.config)
 
     # ---------- MODLOG ----------
 
-    async def log_action(self, guild: discord.Guild, title: str, description: str):
-        cfg = self.get_guild_config(guild.id)
-        channel_id = cfg.get("modlog_channel")
-        if not channel_id:
-            return
-        channel = guild.get_channel(channel_id)
-        if not channel:
-            return
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### 🔔 {title}\n{description}")
-        ))
-        try:
-            await channel.send(view=view)
-        except Exception:
-            pass
+    async def log_action(
+        self,
+        guild: discord.Guild,
+        title: str,
+        description: str,
+        target: discord.Member | discord.User | None = None,
+        moderator: discord.Member | None = None,
+    ):
+        """Delegate to the ServerLogger cog for structured, categorised logging."""
+        logger = self.bot.get_cog("ServerLogger")
+        if logger:
+            await logger.log_action(guild, title, description, target=target, moderator=moderator)
 
     # ---------- WARN SYSTEM ----------
 
@@ -169,7 +159,7 @@ class ModerationUtils(commands.Cog):
         self.warns[gid][uid].append({
             "mod": moderator_id,
             "reason": reason,
-            "time": datetime.utcnow().isoformat(),
+            "time": datetime.now(timezone.utc).isoformat(),
         })
         save_json(WARN_FILE, self.warns)
 
@@ -185,23 +175,43 @@ class ModerationUtils(commands.Cog):
 
     # ---------- MUTE SYSTEM ----------
 
-    async def ensure_mute_role(self, guild: discord.Guild) -> discord.Role:
+    async def ensure_mute_role(self, guild: discord.Guild, *, verify_perms: bool = False) -> discord.Role:
         role = discord.utils.get(guild.roles, name="Muted")
-        if role:
-            return role
-        perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
-        role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
-        for channel in guild.channels:
-            try:
-                await channel.set_permissions(role, send_messages=False, speak=False, add_reactions=False)
-            except Exception:
-                continue
+        created = False
+        if not role:
+            perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
+            role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
+            created = True
+        # Only walk every channel when the role was just created, or
+        # when the caller explicitly asks to verify (avoids slash-interaction
+        # timeouts caused by N HTTP calls on every mute/unmute).
+        if created or verify_perms:
+            for channel in guild.channels:
+                try:
+                    await channel.set_permissions(
+                        role,
+                        send_messages=False,
+                        speak=False,
+                        add_reactions=False,
+                        use_application_commands=False,
+                        use_external_apps=False,
+                        reason="Verify mute role permissions",
+                    )
+                except Exception:
+                    continue
         return role
 
     async def mute_member(self, guild: discord.Guild, member: discord.Member, duration=None, reason=None):
         role = await self.ensure_mute_role(guild)
-        await member.add_roles(role, reason=reason or "Muted")
-        gid = str(member.guild.id)
+        try:
+            await member.add_roles(role, reason=reason or "Muted")
+        except Exception:
+            try:
+                member = guild.get_member(member.id)
+                await member.add_roles(role, reason=reason or "Muted")
+            except Exception:
+                pass
+        gid = str(guild.id)
         uid = str(member.id)
         until = None
         if duration:
@@ -221,7 +231,7 @@ class ModerationUtils(commands.Cog):
     async def mute_watcher(self):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             changed = False
             for gid, users in list(self.mutes.items()):
                 guild = self.bot.get_guild(int(gid))

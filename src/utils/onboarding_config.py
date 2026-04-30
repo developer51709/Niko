@@ -1,6 +1,6 @@
 import json
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 
 DATA_DIR = "data/onboarding"
 
@@ -25,6 +25,17 @@ class OnboardingConfig:
     role_menu_message_id: int | None = None
     role_menu_options: list[dict] | None = None  # [{role_id, label, description, emoji}]
 
+    # Autoroles — assigned immediately when a member joins
+    autorole_ids: list[int] | None = None  # list of role IDs
+
+    # Captcha verification
+    captcha_enabled: bool = False
+    captcha_channel_id: int | None = None          # channel where the verification panel lives
+    captcha_panel_message_id: int | None = None    # persistent panel message id
+    captcha_add_role_ids: list[int] | None = None  # roles to ADD after successful verification
+    captcha_remove_role_ids: list[int] | None = None  # roles to REMOVE after successful verification
+    captcha_kick_on_fail: bool = False             # kick member after 3 wrong answers
+
 
 def _get_path(guild_id: int) -> str:
     return os.path.join(DATA_DIR, f"{guild_id}.json")
@@ -40,7 +51,9 @@ def load_config(guild_id: int) -> OnboardingConfig:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    return OnboardingConfig(**data)
+    known = {f.name for f in fields(OnboardingConfig)}
+    filtered = {k: v for k, v in data.items() if k in known}
+    return OnboardingConfig(**filtered)
 
 
 def save_config(guild_id: int, cfg: OnboardingConfig):

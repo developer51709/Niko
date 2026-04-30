@@ -1,510 +1,1250 @@
-# economy.py cog
-# This cog handles the economy system for the bot.
-# It includes commands for checking balance, transferring money, and more.
+# economy.py — premium café economy cog
+#
+# Adds image-card driven balance/profile/work/daily/leaderboard, a job ladder
+# with XP/levels, a tiered bank with daily interest, an expanded shop with
+# usable consumables and upgrades, a weekly lottery, transaction history and
+# an achievement system.
+#
+# Backwards-compat: the legacy `get_user_economy_data(user_id)` and
+# `save_economy_data()` API is preserved, so blackjack/slots/roulette/gambling
+# cogs continue to work without modification.
 
-import discord
-from discord.ext import commands
-import random
+from __future__ import annotations
+
+import asyncio
+import datetime
 import json
 import os
+import random
 import time
+import uuid
+from io import BytesIO
+
+import discord
+from discord.ext import commands, tasks
+
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
+from utils.ai_config import get_personality
 from config.emojis import get_emoji
+from utils.economy_jobs import (
+    JOBS, DEFAULT_JOB, get_job,
+    SHOP_ITEMS, get_item,
+    BANK_TIERS, bank_info, bank_cap, bank_name, bank_rate, max_bank_tier,
+    xp_to_next, total_xp_for_level, level_from_total_xp, add_xp,
+    LOTTERY_TICKET_PRICE, LOTTERY_DRAW_INTERVAL, LOTTERY_HOUSE_RAKE, LOTTERY_BASE_POT,
+    COOLDOWN_DAILY, COOLDOWN_WORK, COOLDOWN_CRIME, COOLDOWN_ROB,
+)
+from utils.image.economy_card import (
+    render_balance_card, render_reward_card, render_leaderboard_card,
+    fetch_avatar_bytes,
+    ACCENT_GOLD, ACCENT_GREEN, ACCENT_RED,
+)
 
-# personality mode: "normal" or "cafe"
-PERSONALITY = "cafe"
-
+# ── Bilingual messages ───────────────────────────────────────────────────────
 MESSAGES = {
     "normal": {
         "en": {
-            "balance": "{name}'s balance is {balance} coins.",
-            "daily_wait": "You can only claim your daily reward once every 24 hours.",
-            "daily_success": "You claimed your daily reward of {reward} coins!",
-            "work_wait": "You can only work once every hour.",
-            "work_success": "You worked and earned {reward} coins!",
+            "daily_wait":     "You can only claim your daily reward once every 24 hours.",
+            "daily_success":  "You claimed your daily reward of {reward} coins!",
+            "work_wait":      "You can only work once every hour.",
+            "work_success":   "You worked and earned {reward} coins!",
+            "level_up":       "You leveled up! You are now level {level}.",
         },
         "de": {
-            "balance": "Das Guthaben von {name} beträgt {balance} Münzen.",
-            "daily_wait": "Du kannst deine tägliche Belohnung nur alle 24 Stunden abholen.",
-            "daily_success": "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
-            "work_wait": "Du kannst nur einmal pro Stunde arbeiten.",
-            "work_success": "Du hast gearbeitet und {reward} Münzen verdient!",
-        }
+            "daily_wait":     "Du kannst deine tägliche Belohnung nur alle 24 Stunden abholen.",
+            "daily_success":  "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
+            "work_wait":      "Du kannst nur einmal pro Stunde arbeiten.",
+            "work_success":   "Du hast gearbeitet und {reward} Münzen verdient!",
+            "level_up":       "Du bist aufgestiegen! Du bist jetzt Level {level}.",
+        },
+        "es": {
+            "daily_wait":     "Solo puedes reclamar tu recompensa diaria una vez cada 24 horas.",
+            "daily_success":  "¡Has reclamado tu recompensa diaria de {reward} monedas!",
+            "work_wait":      "Solo puedes trabajar una vez cada hora.",
+            "work_success":   "¡Trabajaste y ganaste {reward} monedas!",
+            "level_up":       "¡Has subido de nivel! Ahora eres nivel {level}.",
+        },
     },
     "cafe": {
         "en": {
-            "balance": "hey! {name} has {balance} coins in their pastry bag 🥐✨",
-            "daily_wait": "patience, bestie! your daily treats aren't ready yet. try again in a bit ☕🍰",
-            "daily_success": "yesss! you got your daily {reward} coins. go buy something cute! 🍬✨",
-            "work_wait": "you're working too hard! take a coffee break and come back in an hour ☕💤",
-            "work_success": "good job! you worked a shift and earned {reward} coins for the tip jar 🍯✨",
+            "daily_wait":     "patience, bestie! your daily treats aren't ready yet ☕🍰",
+            "daily_success":  "yesss! you got your daily {reward} coins. go buy something cute! 🍬✨",
+            "work_wait":      "you're working too hard! take a coffee break ☕💤",
+            "work_success":   "good job! you worked a shift and earned {reward} coins for the tip jar 🍯✨",
+            "level_up":       "level up! you're now level {level} ✨ keep grinding bestie",
         },
         "de": {
-            "balance": "hey! {name} hat {balance} Münzen in der Gebäcktasche 🥐✨",
-            "daily_wait": "Geduld, Liebes! Deine täglichen Leckereien sind noch nicht fertig. Versuch es später nochmal ☕🍰",
-            "daily_success": "yesss! Du hast deine täglichen {reward} Münzen bekommen. Geh dir was Schönes kaufen! 🍬✨",
-            "work_wait": "Du arbeitest zu hart! Mach eine Kaffeepause und komm in einer Stunde wieder ☕💤",
-            "work_success": "Gute Arbeit! Du hast eine Schicht gearbeitet und {reward} Münzen für das Trinkgeldglas verdient 🍯✨",
-        }
-    }
+            "daily_wait":     "Geduld, Liebes! Deine täglichen Leckereien sind noch nicht fertig ☕🍰",
+            "daily_success":  "yesss! Du hast deine täglichen {reward} Münzen bekommen 🍬✨",
+            "work_wait":      "Du arbeitest zu hart! Mach eine Kaffeepause ☕💤",
+            "work_success":   "Gute Arbeit! Du hast eine Schicht gearbeitet und {reward} Münzen verdient 🍯✨",
+            "level_up":       "Aufstieg! Du bist jetzt Level {level} ✨",
+        },
+        "es": {
+            "daily_wait":     "¡paciencia, amix! tus delicias diarias aún no están listas ☕🍰",
+            "daily_success":  "¡yesss! recibiste tus {reward} monedas diarias 🍬✨",
+            "work_wait":      "¡estás trabajando demasiado! tómate un descanso ☕💤",
+            "work_success":   "¡buen trabajo! ganaste {reward} monedas para el bote de propinas 🍯✨",
+            "level_up":       "¡subiste de nivel! ahora eres nivel {level} ✨",
+        },
+    },
 }
 
-def get_lang(ctx):
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        if str(ctx.guild.preferred_locale).lower().startswith("de"):
+
+def get_lang(ctx) -> str:
+    if ctx and getattr(ctx, "guild", None) and getattr(ctx.guild, "preferred_locale", None):
+        loc = str(ctx.guild.preferred_locale).lower()
+        if loc.startswith("de"):
             return "de"
+        if loc.startswith("es"):
+            return "es"
     return "en"
 
-def msg(ctx, key, **kwargs):
-    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+
+def msg(ctx, key: str, **kwargs) -> str:
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"].get(lang, {}).get(key, key)
     return text.format(**kwargs) if kwargs else text
 
+
+# ── Prefix resolver (used by tip text in cards) ──────────────────────────────
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    raw = bot.command_prefix
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+    try:
+        message = getattr(ctx_or_interaction, "message", None)
+        if message is None and isinstance(ctx_or_interaction, discord.Interaction):
+            message = ctx_or_interaction.message
+        if message is None:
+            return "."
+        prefixes = raw(bot, message)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+    return "."
+
+
+# ── Default user shape ──────────────────────────────────────────────────────
+def _default_user() -> dict:
+    return {
+        # money
+        "balance":       100,
+        "bank":          0,
+        "net_worth":     100,
+        "total_earned":  100,
+        "total_spent":   0,
+        # career
+        "xp":            0,
+        "level":         0,
+        "job":           DEFAULT_JOB,
+        "times_worked":  0,
+        # bank
+        "bank_tier":     0,
+        "last_interest": 0,
+        # streaks / cooldowns
+        "daily_streak":  0,
+        "last_daily":    0,
+        "last_work":     0,
+        "last_crime":    0,
+        "last_rob":      0,
+        "last_heist":    0,
+        "last_slots":    0,
+        "last_blackjack": 0,
+        "last_roulette": 0,
+        "last_casino":   0,
+        "last_gamble":   0,
+        "last_bet":      0,
+        "last_race":     0,
+        "last_fight":    0,
+        "last_duel":     0,
+        # inventory: dict[item_id, count]
+        "inventory":     {},
+        # one-shot effects pending consumption
+        "effects":       {},   # e.g. {"work_cooldown_half": True, "crime_boost": 1, "rob_shield": 1, "lottery_boost": 1}
+        # lottery
+        "lottery_tickets": 0,
+        # transaction log (most recent first, capped)
+        "transactions":  [],
+        # achievements (list of ids)
+        "achievements":  [],
+    }
+
+
+def _migrate_user(data: dict) -> dict:
+    """Fill in any missing fields and convert legacy shapes in-place."""
+    defaults = _default_user()
+    for k, v in defaults.items():
+        if k not in data:
+            data[k] = v if not isinstance(v, (dict, list)) else (dict(v) if isinstance(v, dict) else list(v))
+
+    # legacy inventory was a list of item ids
+    inv = data.get("inventory")
+    if isinstance(inv, list):
+        counts: dict[str, int] = {}
+        for it in inv:
+            if not isinstance(it, str):
+                continue
+            counts[it] = counts.get(it, 0) + 1
+        data["inventory"] = counts
+    elif not isinstance(inv, dict):
+        data["inventory"] = {}
+
+    # always recompute net worth on access
+    data["net_worth"] = int(data.get("balance", 0)) + int(data.get("bank", 0))
+    return data
+
+
+# ── Achievements ────────────────────────────────────────────────────────────
+ACHIEVEMENTS = {
+    "first_paycheck": {"name": "First Paycheck",   "emoji": "💼", "test": lambda d: d["times_worked"] >= 1},
+    "regular":        {"name": "Café Regular",     "emoji": "☕", "test": lambda d: d["times_worked"] >= 25},
+    "shift_lead":     {"name": "Shift Lead",       "emoji": "📋", "test": lambda d: d["times_worked"] >= 100},
+    "saver":          {"name": "Tin-Jar Saver",    "emoji": "🪙", "test": lambda d: d["bank"] >= 10_000},
+    "vault_keeper":   {"name": "Vault Keeper",     "emoji": "🏦", "test": lambda d: d["bank"] >= 100_000},
+    "millionaire":    {"name": "Millionaire",      "emoji": "💰", "test": lambda d: d["net_worth"] >= 1_000_000},
+    "streak_7":       {"name": "Week-long Habit",  "emoji": "🔥", "test": lambda d: d["daily_streak"] >= 7},
+    "streak_30":      {"name": "Café Devotee",     "emoji": "🌟", "test": lambda d: d["daily_streak"] >= 30},
+    "owner":          {"name": "Café Owner",       "emoji": "👑", "test": lambda d: d.get("job") == "owner"},
+}
+
+
+def _check_achievements(data: dict) -> list[str]:
+    """Return a list of newly-unlocked achievement names (mutates `data`)."""
+    earned = set(data.get("achievements", []))
+    newly = []
+    for aid, meta in ACHIEVEMENTS.items():
+        if aid in earned:
+            continue
+        try:
+            if meta["test"](data):
+                earned.add(aid)
+                newly.append(meta["name"] + " " + meta["emoji"])
+        except Exception:
+            continue
+    data["achievements"] = sorted(earned)
+    return newly
+
+
+# ── Transaction log ─────────────────────────────────────────────────────────
+def _log_tx(data: dict, kind: str, amount: int, note: str = ""):
+    txs = data.setdefault("transactions", [])
+    txs.insert(0, {
+        "ts":     int(time.time()),
+        "kind":   kind,
+        "amount": int(amount),
+        "note":   note[:80],
+    })
+    del txs[40:]  # cap
+
+
+# ── Lottery state file ──────────────────────────────────────────────────────
+LOTTERY_FILE = "data/economy_data/_lottery.json"
+
+
+def _load_lottery() -> dict:
+    if os.path.exists(LOTTERY_FILE):
+        try:
+            with open(LOTTERY_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"pot": LOTTERY_BASE_POT, "next_draw": int(time.time()) + LOTTERY_DRAW_INTERVAL, "last_winner": None, "last_pot": 0}
+
+
+def _save_lottery(state: dict) -> None:
+    try:
+        with open(LOTTERY_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    except Exception as exc:
+        log.error("Economy", f"Could not save lottery state: {exc}")
+
+
+# ── Small layout helpers ────────────────────────────────────────────────────
+ACCENT_BROWN = discord.Colour(0xC8853F)
+
+
+def _info_view(title: str, body: str, accent: discord.Colour = ACCENT_BROWN) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {title}"),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=body),
+        accent_colour=accent,
+    )
+    view.add_item(container)
+    return view
+
+
+def _card_view(title: str, image_name: str, footer_lines: list[str], accent: discord.Colour = ACCENT_BROWN) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {title}"),
+        discord.ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{image_name}")),
+        accent_colour=accent,
+    )
+    if footer_lines:
+        container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        for line in footer_lines:
+            container.add_item(discord.ui.TextDisplay(content=line))
+    view.add_item(container)
+    return view
+
+
+def _fmt_remaining(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cog
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 class EconomyCog(commands.Cog):
-    def __init__(self, bot):
-       self.bot = bot
-       self.economy_data = self.load_economy_data()
+    """Premium café economy with image cards, jobs, banking and a lottery."""
 
-    # Create a directory for economy data if it doesn't exist
-    if not os.path.exists("data/economy_data"):
-        log.info("Economy", "economy_data directory not found. Creating directory...")
-        os.makedirs("data/economy_data")
-        log.success("Economy", "economy_data directory created successfully. Continuing...")
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
 
-    # Load economy data from economy_data directory
-    def load_economy_data(self):
-        economy_data = {}
-        if os.path.exists("data/economy_data"):
-            for filename in os.listdir("data/economy_data"):
-                if filename.endswith(".json"):
-                    try:
-                        with open(os.path.join("data/economy_data", filename), "r") as f:
-                            user_id = filename[:-5]
-                            economy_data[user_id] = json.load(f)
-                    except Exception as e:
-                        log.error("Economy", f"Error loading {filename}: {e}")
-        return economy_data
+        if not os.path.exists("data/economy_data"):
+            log.info("Economy", "economy_data directory not found. Creating directory…")
+            os.makedirs("data/economy_data")
+            log.success("Economy", "economy_data directory created. Continuing…")
 
-    # Save economy data to economy_data directory per user
-    def save_economy_data(self):
+        self.economy_data: dict[str, dict] = self._load_all()
+        self.lottery: dict = _load_lottery()
+
+        # background task — bank interest (daily) + lottery draw check (hourly)
+        self._tick_task.start()
+
+    def cog_unload(self):
+        try:
+            self._tick_task.cancel()
+        except Exception:
+            pass
+
+    # ── Persistence (legacy API kept for blackjack/slots/roulette/gambling) ──
+    def _load_all(self) -> dict[str, dict]:
+        out: dict[str, dict] = {}
+        if not os.path.exists("data/economy_data"):
+            return out
+        for filename in os.listdir("data/economy_data"):
+            if not filename.endswith(".json") or filename.startswith("_"):
+                continue
+            try:
+                with open(os.path.join("data/economy_data", filename), "r") as f:
+                    uid = filename[:-5]
+                    raw = json.load(f)
+                    out[uid] = _migrate_user(raw)
+            except Exception as e:
+                log.error("Economy", f"Error loading {filename}: {e}")
+        return out
+
+    # alias for backwards-compat with other cogs
+    def load_economy_data(self) -> dict[str, dict]:
+        return self._load_all()
+
+    def save_economy_data(self) -> None:
         if not os.path.exists("data/economy_data"):
             os.makedirs("data/economy_data")
-        for user_id, data in self.economy_data.items():
-            with open(os.path.join("data/economy_data", f"{user_id}.json"), "w") as f:
-                json.dump(data, f, indent=4)
+        for uid, data in self.economy_data.items():
+            try:
+                # always normalize before writing
+                _migrate_user(data)
+                with open(os.path.join("data/economy_data", f"{uid}.json"), "w") as f:
+                    json.dump(data, f, indent=2)
+            except Exception as exc:
+                log.error("Economy", f"Could not save {uid}: {exc}")
 
-    # Get user economy data
-    def get_user_economy_data(self, user_id):
+    def get_user_economy_data(self, user_id) -> dict:
         uid = str(user_id)
         if uid not in self.economy_data:
-            self.economy_data[uid] = {
-                "balance": 100, 
-                "inventory": [], 
-                "bank": 0, 
-                "net_worth": 100, 
-                "daily_streak": 0, 
-                "last_daily": 0, 
-                "last_work": 0, 
-                "last_crime": 0, 
-                "last_rob": 0, 
-                "last_heist": 0, 
-                "last_slots": 0, 
-                "last_blackjack": 0, 
-                "last_roulette": 0, 
-                "last_casino": 0, 
-                "last_gamble": 0, 
-                "last_bet": 0, 
-                "last_race": 0, 
-                "last_fight": 0, 
-                "last_duel": 0
-            }
-        
-        # Ensure net_worth is always up to date
-        self.economy_data[uid]["net_worth"] = self.economy_data[uid].get("balance", 0) + self.economy_data[uid].get("bank", 0)
-        return self.economy_data[uid]
+            self.economy_data[uid] = _default_user()
+        return _migrate_user(self.economy_data[uid])
 
-    # -----------------------------
-    # Economy Commands
-    # -----------------------------
+    # ── Internal helpers ────────────────────────────────────────────────────
+    def _credit(self, data: dict, amount: int, kind: str, note: str = ""):
+        amount = int(amount)
+        data["balance"] = int(data.get("balance", 0)) + amount
+        if amount > 0:
+            data["total_earned"] = int(data.get("total_earned", 0)) + amount
+        else:
+            data["total_spent"] = int(data.get("total_spent", 0)) + abs(amount)
+        _log_tx(data, kind, amount, note)
 
-    # !balance command
-    @commands.command(name="balance", aliases=["bal", "wallet"], help="check your pastry bag balance 🥐✨ | sieh nach, wie viele Münzen du hast")
-    async def balance(self, ctx, member: discord.Member = None):
-        '''Check your balance or another user's balance.'''
-        target = member or ctx.author
-        user_data = self.get_user_economy_data(target.id)
-        balance = user_data["balance"]
-        bank = user_data["bank"]
-        prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else self.bot.command_prefix[0]
-
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('credit_card')} Wallet\nUser: {target.display_name}"
-                ),
-                discord.ui.TextDisplay(
-                    content=f"-# **Tip:** Use `{prefix}deposit` to safely store your coins in the bank! 🏦✨️"
-                ),
-                accessory=discord.ui.Thumbnail(target.display_avatar.url)
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"**Cash**\n{balance} 🥐\n**Bank**\n{bank} 🏦\n**Total**\n{user_data['net_worth']} ✨"
-            ),
-            accent_colour=discord.Colour(0xFFA500)
+    def _net_rank(self, uid: str) -> int | None:
+        sorted_users = sorted(
+            ((u, d.get("balance", 0) + d.get("bank", 0)) for u, d in self.economy_data.items()),
+            key=lambda x: x[1], reverse=True,
         )
-        view.add_item(container)
-        
-        await ctx.send(view=view)
+        for i, (u, _) in enumerate(sorted_users, start=1):
+            if u == uid:
+                return i
+        return None
 
-    # !daily command
-    @commands.command(name="daily", help="claim your daily treats 🍬✨ | hol dir deine täglichen Belohnungen")
-    async def daily(self, ctx):
-        '''Claim your daily reward.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        current_time = int(time.time())
-        if current_time - user_data["last_daily"] < 86400:
-            remaining = 86400 - (current_time - user_data["last_daily"])
-            hours = remaining // 3600
-            minutes = (remaining % 3600) // 60
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### ⏳️ Daily Reward Cooldown"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"Patience! Your treats are still baking. Try again in {hours}h {minutes}m. ☕🍰"
-                )
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
-        else:
-            daily_reward = 1000
-            user_data["balance"] += daily_reward
-            user_data["last_daily"] = current_time
+    async def _send_balance_card(self, ctx, target: discord.Member, *, title: str = "Wallet"):
+        data = self.get_user_economy_data(target.id)
+        avatar_bytes = await fetch_avatar_bytes(str(target.display_avatar.replace(size=256, format="png")), size=256)
+
+        lvl = int(data.get("level", 0))
+        in_lvl = int(data.get("xp", 0)) - total_xp_for_level(lvl)
+        nxt = xp_to_next(lvl)
+        job = get_job(data.get("job"))
+        cap = bank_cap(int(data.get("bank_tier", 0)))
+        tier_name = bank_name(int(data.get("bank_tier", 0)))
+        rank = self._net_rank(str(target.id))
+
+        buf = await render_balance_card(
+            avatar_bytes=avatar_bytes,
+            name=target.display_name,
+            cash=int(data.get("balance", 0)),
+            bank=int(data.get("bank", 0)),
+            bank_cap_v=cap,
+            bank_tier_name=tier_name,
+            net_worth=int(data.get("balance", 0)) + int(data.get("bank", 0)),
+            level=lvl,
+            xp_in_level=max(0, in_lvl),
+            xp_for_next=nxt,
+            job_name=job["name"],
+            job_emoji="",  # PIL/DejaVu can't render color emoji — keep image text clean
+            daily_streak=int(data.get("daily_streak", 0)),
+            rank=rank,
+            title=title,
+        )
+        prefix = await _resolve_prefix(self.bot, ctx)
+        view = _card_view(
+            title=f"{get_emoji('credit_card')} {title}",
+            image_name="balance.png",
+            footer_lines=[
+                f"-# Use `{prefix}deposit` / `{prefix}withdraw` to manage your vault.",
+                f"-# `{prefix}work` to earn, `{prefix}daily` for treats, `{prefix}shop` to spend.",
+            ],
+        )
+        await ctx.send(view=view, file=discord.File(buf, "balance.png"))
+
+    async def _send_reward_card(
+        self,
+        ctx,
+        *,
+        title: str,
+        subtitle: str,
+        amount: int,
+        accent,
+        footer: str = "",
+        announce: str | None = None,
+    ):
+        data = self.get_user_economy_data(ctx.author.id)
+        avatar_bytes = await fetch_avatar_bytes(
+            str(ctx.author.display_avatar.replace(size=256, format="png")), size=256
+        )
+        new_balance = int(data.get("balance", 0))
+        buf = await render_reward_card(
+            avatar_bytes=avatar_bytes,
+            name=ctx.author.display_name,
+            title=title,
+            subtitle=subtitle,
+            amount=amount,
+            new_balance=new_balance,
+            accent=accent,
+            footer=footer,
+        )
+        view = _card_view(
+            title=f"### {title}".replace("###", "").strip() or title,
+            image_name="reward.png",
+            footer_lines=[announce] if announce else [],
+        )
+        await ctx.send(view=view, file=discord.File(buf, "reward.png"))
+
+    # ── Background tick: bank interest + lottery draw ───────────────────────
+    @tasks.loop(minutes=30)
+    async def _tick_task(self):
+        try:
+            await self._apply_bank_interest()
+            await self._maybe_draw_lottery()
+        except Exception as exc:
+            log.error("Economy", f"Tick task failed: {exc}")
+
+    @_tick_task.before_loop
+    async def _before_tick(self):
+        await self.bot.wait_until_ready()
+        # Stagger start so this never lines up with a heavy event burst
+        await asyncio.sleep(20)
+
+    async def _apply_bank_interest(self):
+        """Daily compound interest based on bank tier."""
+        now = int(time.time())
+        today_utc = datetime.datetime.utcfromtimestamp(now).strftime("%Y-%m-%d")
+        changed = 0
+        for uid, data in self.economy_data.items():
+            if data.get("last_interest_day") == today_utc:
+                continue
+            tier = int(data.get("bank_tier", 0))
+            cap = bank_cap(tier)
+            rate = bank_rate(tier)
+            bank = int(data.get("bank", 0))
+            if bank <= 0:
+                data["last_interest_day"] = today_utc
+                continue
+            principal = min(bank, cap)
+            interest = int(principal * rate)
+            if interest <= 0:
+                data["last_interest_day"] = today_utc
+                continue
+            data["bank"] = bank + interest
+            data["total_earned"] = int(data.get("total_earned", 0)) + interest
+            data["last_interest_day"] = today_utc
+            _log_tx(data, "interest", interest, f"daily {bank_name(tier)} interest")
+            changed += 1
+        if changed:
             self.save_economy_data()
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### 🍬 Daily Reward Claimed!"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=msg(ctx, "daily_success", reward=daily_reward)
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
+            log.info("Economy", f"Applied bank interest to {changed} accounts.")
 
-    # !work command
-    @commands.command(name="work", help="work a shift at the café ☕ | arbeite eine Schicht im Café")
-    async def work(self, ctx):
-        '''Work to earn money.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        current_time = int(time.time())
-        if current_time - user_data["last_work"] < 3600:
-            remaining = 3600 - (current_time - user_data["last_work"])
-            minutes = remaining // 60
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### ⏳️ Work Cooldown"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"You're on break! Take it easy for another {minutes} minutes. ☕💤"
-                )
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
+    async def _maybe_draw_lottery(self):
+        now = int(time.time())
+        if now < int(self.lottery.get("next_draw", 0)):
+            return
+        # collect tickets
+        entrants: list[tuple[str, int]] = []
+        total_tickets = 0
+        for uid, data in self.economy_data.items():
+            tix = int(data.get("lottery_tickets", 0))
+            if tix > 0:
+                entrants.append((uid, tix))
+                total_tickets += tix
+
+        pot = int(self.lottery.get("pot", LOTTERY_BASE_POT))
+        if not entrants or total_tickets <= 0 or pot <= 0:
+            # roll over
+            self.lottery["next_draw"] = now + LOTTERY_DRAW_INTERVAL
+            _save_lottery(self.lottery)
+            return
+
+        # weighted pick
+        roll = random.randint(1, total_tickets)
+        cur = 0
+        winner_id = entrants[-1][0]
+        for uid, tix in entrants:
+            cur += tix
+            if roll <= cur:
+                winner_id = uid
+                break
+
+        rake = int(pot * LOTTERY_HOUSE_RAKE)
+        payout = pot - rake
+
+        winner_data = self.get_user_economy_data(winner_id)
+        self._credit(winner_data, payout, "lottery", f"weekly draw winner ({total_tickets} tickets)")
+
+        # reset everyone's tickets
+        for uid, _ in entrants:
+            d = self.economy_data.get(uid)
+            if d is not None:
+                d["lottery_tickets"] = 0
+
+        self.lottery = {
+            "pot":         max(LOTTERY_BASE_POT, rake),
+            "next_draw":   now + LOTTERY_DRAW_INTERVAL,
+            "last_winner": winner_id,
+            "last_pot":    payout,
+        }
+        _save_lottery(self.lottery)
+        self.save_economy_data()
+        log.info("Economy", f"Lottery: paid {payout:,} coins to {winner_id} (next pot starts at {self.lottery['pot']:,}).")
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Commands
+    # ─────────────────────────────────────────────────────────────────────
+
+    # ── balance / profile ──
+    @commands.hybrid_command(name="balance", aliases=["bal", "wallet"], description="Check your premium café wallet card",
+                             help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🥐✨' }")
+    async def balance(self, ctx: commands.Context, member: discord.Member = None):
+        target = member or ctx.author
+        await self._send_balance_card(ctx, target, title="Wallet")
+
+    @commands.hybrid_command(name="profile", aliases=["prof", "stats"], description="Full café profile card",
+                             help="{ 'en': 'view a full café profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }")
+    async def profile(self, ctx: commands.Context, member: discord.Member = None):
+        target = member or ctx.author
+        # send the card
+        await self._send_balance_card(ctx, target, title="Profile")
+        # plus a small extras panel: badges + recent tx
+        data = self.get_user_economy_data(target.id)
+        ach = data.get("achievements", [])
+        ach_line = ", ".join(f"{ACHIEVEMENTS[a]['emoji']} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS) or "*no badges yet — go earn some!*"
+        txs = data.get("transactions", [])[:5]
+        if txs:
+            lines = []
+            for t in txs:
+                sign = "+" if t["amount"] >= 0 else "−"
+                lines.append(f"`{t['kind'][:10]:<10}` {sign}{abs(t['amount']):,}  ·  {t.get('note','')}")
+            tx_block = "\n".join(lines)
         else:
-            work_reward = random.randint(50, 200)
-            user_data["balance"] += work_reward
-            user_data["last_work"] = current_time
-            self.save_economy_data()
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### 🍯 Work Shift Complete!"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=msg(ctx, "work_success", reward=work_reward)
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
+            tx_block = "*no transactions yet*"
+        view = _info_view(
+            f"📜 {target.display_name}'s Extras",
+            f"**Badges**\n{ach_line}\n\n**Recent activity**\n{tx_block}",
+        )
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    # !crime command
-    @commands.command(name="crime", help="try to steal some extra treats 😈 | versuch, ein paar extra Leckereien zu stibitzen")
-    async def crime(self, ctx):
-        '''Commit a crime to earn money.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        current_time = int(time.time())
-        if current_time - user_data["last_crime"] < 3600:
-            await ctx.send("The shopkeeper is watching! Wait an hour before trying anything sneaky again. 👮‍♂️")
+    # ── daily ──
+    @commands.hybrid_command(name="daily", description="Claim your daily treats with streak bonus",
+                             help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tus golosinas diarias 🍬✨' }")
+    async def daily(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        now = int(time.time())
+        elapsed = now - int(data.get("last_daily", 0))
+
+        if elapsed < COOLDOWN_DAILY:
+            remain = COOLDOWN_DAILY - elapsed
+            return await ctx.send(view=_info_view(
+                "⏳ Daily on cooldown",
+                f"Patience! Your treats are still baking.\nCome back in **{_fmt_remaining(remain)}**. ☕🍰",
+            ))
+
+        # streak: keep if claimed within 48h, else reset to 1
+        streak = int(data.get("daily_streak", 0))
+        if elapsed > 2 * COOLDOWN_DAILY:
+            streak = 1
         else:
-            success = random.random() > 0.5
-            if success:
-                reward = random.randint(200, 500)
-                user_data["balance"] += reward
-                await ctx.send(f"You successfully swiped {reward} coins from the tip jar! 🍯✨")
-            else:
-                loss = random.randint(100, 300)
-                user_data["balance"] = max(0, user_data["balance"] - loss)
-                await ctx.send(f"Caught! You had to pay {loss} coins in fines. 😭👮‍♂️")
-            
-            user_data["last_crime"] = current_time
-            self.save_economy_data()
+            streak += 1
+        # multiplier caps at 7 days for a 2.4x bonus
+        multiplier = 1 + min(streak, 7) * 0.2
+        base = 1000
+        reward = int(base * multiplier)
 
-    # !rob command
-    @commands.command(name="rob", help="try to rob another user 🔫 | versuch, einen anderen Nutzer auszurauben")
-    async def rob(self, ctx, member: discord.Member):
-        '''Rob another user to earn money.'''
-        if member.id == ctx.author.id:
-            return await ctx.send("You can't rob yourself, silly! ☕")
-            
-        user_data = self.get_user_economy_data(ctx.author.id)
-        target_data = self.get_user_economy_data(member.id)
-        current_time = int(time.time())
-        
-        if user_data["balance"] < 100:
-            return await ctx.send("You need at least 100 coins to plan a robbery! 🥐")
-        if target_data["balance"] < 100:
-            return await ctx.send("They don't even have 100 coins... leave them alone! 😭")
-            
-        if current_time - user_data['last_rob'] < 3600:
-            return await ctx.send("You're still laying low. Try again in an hour! 🕵️‍♂️")
-            
-        success = random.random() > 0.6
+        self._credit(data, reward, "daily", f"day {streak} • x{multiplier:.1f}")
+        data["daily_streak"] = streak
+        data["last_daily"] = now
+        _check_achievements(data)
+        self.save_economy_data()
+
+        await self._send_reward_card(
+            ctx,
+            title="🍬 Daily Treats",
+            subtitle=f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}",
+            amount=reward,
+            accent=ACCENT_GOLD,
+            footer=msg(ctx, "daily_success", reward=reward),
+        )
+
+    # ── work ──
+    @commands.hybrid_command(name="work", description="Work a shift at your current café job",
+                             help="{ 'en': 'work a shift at your current café job ☕', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno en el café ☕' }")
+    async def work(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        now = int(time.time())
+        job = get_job(data.get("job"))
+        cd = int(job.get("cooldown", COOLDOWN_WORK))
+
+        # consumable: halve next work cooldown
+        effects = data.setdefault("effects", {})
+        if effects.get("work_cooldown_half"):
+            cd = cd // 2
+
+        elapsed = now - int(data.get("last_work", 0))
+        if elapsed < cd:
+            return await ctx.send(view=_info_view(
+                "⏳ On a coffee break",
+                f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. ☕💤",
+            ))
+
+        # one-shot: clear cooldown buff if it was used
+        if effects.get("work_cooldown_half"):
+            effects.pop("work_cooldown_half", None)
+
+        reward = random.randint(int(job["min_pay"]), int(job["max_pay"]))
+        self._credit(data, reward, "work", f"{job['name']} shift")
+        data["last_work"] = now
+        data["times_worked"] = int(data.get("times_worked", 0)) + 1
+
+        # XP + level up
+        new_lvl, gained_levels, leveled = add_xp(data, int(job.get("xp_per_shift", 10)))
+        announce = msg(ctx, "level_up", level=new_lvl) if leveled else None
+
+        newly = _check_achievements(data)
+        self.save_economy_data()
+
+        subtitle = f"{job['emoji']} {job['name']} shift  •  +{job.get('xp_per_shift', 10)} XP"
+        footer = msg(ctx, "work_success", reward=reward)
+        if newly:
+            footer += "  •  unlocked: " + ", ".join(newly)
+        await self._send_reward_card(
+            ctx,
+            title="🍯 Shift complete",
+            subtitle=subtitle,
+            amount=reward,
+            accent=ACCENT_GREEN,
+            footer=footer,
+            announce=announce,
+        )
+
+    # ── jobs ──
+    @commands.hybrid_group(name="job", description="Browse, apply for, and manage your café job",
+                           help="{ 'en': 'manage your café career 💼', 'de': 'verwalte deinen Café-Job', 'es': 'gestiona tu carrera en el café 💼' }",
+                           invoke_without_command=True)
+    async def job(self, ctx: commands.Context):
+        await self._job_list(ctx)
+
+    async def _job_list(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        cur = data.get("job")
+        lines = []
+        for jid, j in JOBS.items():
+            tag = "  ← **current**" if jid == cur else ""
+            lock = "" if data["level"] >= j["min_level"] else f"  {get_emoji('vm_lock')} lvl {j['min_level']}"
+            lines.append(f"{j['emoji']} **{j['name']}** `({jid})`{tag}{lock}\n-# {j['min_pay']}–{j['max_pay']} coins/shift • +{j['xp_per_shift']} XP\n-# *{j['description']}*")
+        prefix = await _resolve_prefix(self.bot, ctx)
+        await ctx.send(view=_info_view(
+            "💼 Café Job Board",
+            "\n\n".join(lines) + f"\n\n-# Apply with `{prefix}job apply <id>` once you meet the level requirement.",
+        ))
+
+    @job.command(name="list", description="See all available café jobs")
+    async def job_list(self, ctx: commands.Context):
+        await self._job_list(ctx)
+
+    @job.command(name="info", description="Show details for a job")
+    async def job_info(self, ctx: commands.Context, job_id: str):
+        j = JOBS.get(job_id.lower())
+        if not j:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+        body = (f"{j['emoji']} **{j['name']}**\n*{j['description']}*\n\n"
+                f"• Min level: **{j['min_level']}**\n"
+                f"• Pay range: **{j['min_pay']:,} – {j['max_pay']:,}** coins/shift\n"
+                f"• XP per shift: **+{j['xp_per_shift']}**\n"
+                f"• Cooldown: **{_fmt_remaining(j.get('cooldown', 3600))}**")
+        await ctx.send(view=_info_view(f"💼 {j['name']}", body))
+
+    @job.command(name="apply", description="Apply for a job (must meet the level requirement)")
+    async def job_apply(self, ctx: commands.Context, job_id: str):
+        data = self.get_user_economy_data(ctx.author.id)
+        jid = job_id.lower()
+        j = JOBS.get(jid)
+        if not j:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+        if data["level"] < j["min_level"]:
+            return await ctx.send(view=_info_view(
+                f"{get_emoji('vm_lock')} Not yet",
+                f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
+            ))
+        data["job"] = jid
+        _check_achievements(data)
+        self.save_economy_data()
+        await ctx.send(view=_info_view(
+            f"{get_emoji('icon_tick')} Hired!",
+            f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
+        ))
+
+    @job.command(name="quit", description="Quit your current job and go back to barista")
+    async def job_quit(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        if data.get("job") == DEFAULT_JOB:
+            return await ctx.send(view=_info_view("ℹ️ Nothing to quit", "You're already a barista."))
+        data["job"] = DEFAULT_JOB
+        self.save_economy_data()
+        await ctx.send(view=_info_view("📤 Resigned", "You're back to **Barista** ☕."))
+
+    # ── crime / rob ──
+    @commands.hybrid_command(name="crime", description="Try to steal some extra treats",
+                             help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas golosinas extra 😈' }")
+    async def crime(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        now = int(time.time())
+        if now - int(data.get("last_crime", 0)) < COOLDOWN_CRIME:
+            remain = COOLDOWN_CRIME - (now - int(data["last_crime"]))
+            return await ctx.send(view=_info_view(
+                "👮 Lay low",
+                f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
+            ))
+
+        effects = data.setdefault("effects", {})
+        boost = 0.25 if effects.pop("crime_boost", 0) else 0.0
+        success = random.random() < (0.5 + boost)
+
         if success:
-            amount = random.randint(10, min(target_data["balance"], 500))
-            user_data["balance"] += amount
-            target_data["balance"] -= amount
-            await ctx.send(f"Success! You robbed {member.display_name} and made off with {amount} coins! 💰✨")
+            reward = random.randint(200, 500)
+            self._credit(data, reward, "crime", "successful heist")
+            title, subtitle, amount, accent = ("😈 Got away!", "You swiped from the tip jar.", reward, ACCENT_GOLD)
+        else:
+            loss = random.randint(100, 300)
+            loss = min(loss, int(data.get("balance", 0)))
+            self._credit(data, -loss, "crime_fine", "caught and fined")
+            title, subtitle, amount, accent = ("👮 Caught!", "You had to pay a fine.", -loss, ACCENT_RED)
+
+        data["last_crime"] = now
+        _check_achievements(data)
+        self.save_economy_data()
+
+        await self._send_reward_card(
+            ctx, title=title, subtitle=subtitle, amount=amount, accent=accent,
+            footer="Tip: use a lockpick before your next attempt for +25% success.",
+        )
+
+    @commands.hybrid_command(name="rob", description="Try to rob another user",
+                             help="{ 'en': 'try to rob another user 🔫', 'de': 'rauber jemanden aus', 'es': 'intenta robar a otro 🔫' }")
+    async def rob(self, ctx: commands.Context, member: discord.Member):
+        if member.id == ctx.author.id:
+            return await ctx.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+        if member.bot:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
+
+        data   = self.get_user_economy_data(ctx.author.id)
+        target = self.get_user_economy_data(member.id)
+        now = int(time.time())
+
+        if data["balance"] < 100:
+            return await ctx.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
+        if target["balance"] < 100:
+            return await ctx.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
+        if now - int(data.get("last_rob", 0)) < COOLDOWN_ROB:
+            remain = COOLDOWN_ROB - (now - int(data["last_rob"]))
+            return await ctx.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
+
+        # target's rob_shield burns first
+        target_effects = target.setdefault("effects", {})
+        if target_effects.pop("rob_shield", 0):
+            data["last_rob"] = now
+            self.save_economy_data()
+            return await ctx.send(view=_info_view(
+                "🛡️ Blocked!",
+                f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
+            ))
+
+        success = random.random() < 0.4
+        if success:
+            amount = random.randint(10, min(target["balance"], 500))
+            self._credit(data, amount, "rob", f"from {member.display_name}")
+            self._credit(target, -amount, "robbed", f"by {ctx.author.display_name}")
+            title, subtitle, accent = ("💰 Score!", f"You robbed {member.display_name}.", ACCENT_GOLD)
+            shown_amount = amount
         else:
             loss = 150
-            user_data["balance"] = max(0, user_data["balance"] - loss)
-            await ctx.send(f"Failed! You got caught and had to pay {loss} coins to {member.display_name} as apology. 😭🥐")
-            target_data["balance"] += loss
-            
-        user_data["last_rob"] = current_time
+            loss = min(loss, int(data.get("balance", 0)))
+            self._credit(data, -loss, "rob_fail", f"caught by {member.display_name}")
+            self._credit(target, loss, "rob_apology", f"from {ctx.author.display_name}")
+            title, subtitle, accent = ("👮 Caught!", f"You had to pay {member.display_name} as apology.", ACCENT_RED)
+            shown_amount = -loss
+
+        data["last_rob"] = now
+        _check_achievements(data)
+        self.save_economy_data()
+        await self._send_reward_card(ctx, title=title, subtitle=subtitle, amount=shown_amount, accent=accent)
+
+    # ── pay ──
+    @commands.hybrid_command(name="pay", aliases=["give"], description="Send coins to another user",
+                             help="{ 'en': 'send coins to another user 💸🥐', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🥐' }")
+    async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
+        if not member or member.bot or member.id == ctx.author.id:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad target", "Pick a real person other than yourself."))
+        if amount <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
+
+        data   = self.get_user_economy_data(ctx.author.id)
+        target = self.get_user_economy_data(member.id)
+        if data["balance"] < amount:
+            return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag is too light for that."))
+
+        self._credit(data, -amount, "pay", f"to {member.display_name}")
+        self._credit(target, amount, "received", f"from {ctx.author.display_name}")
         self.save_economy_data()
 
-    # !pay command
-    @commands.command(name="pay", help="share some treats with a friend 💸🥐 | teile deine Leckereien mit einem Freund")
-    async def pay(self, ctx, member: discord.Member = None, amount: int = None):
-        '''pay another user 💸💰 | bezahl einen anderen Nutzer'''
-        if not member:
-            return await ctx.send("Please specify a user to pay. 🥐")
-        if not amount or amount <= 0:
-            return await ctx.send("Please specify a valid amount to pay. ☕")
-        user_data = self.get_user_economy_data(ctx.author.id)
-        target_data = self.get_user_economy_data(member.id)
-        if user_data["balance"] < amount:
-            await ctx.send("You don't have enough coins in your pastry bag! 🥐")
-        else:
-            user_data["balance"] -= amount
-            target_data["balance"] += amount
-            self.save_economy_data()
-            await ctx.send(f"You gave {member.display_name} {amount} coins! 💸✨")
+        await ctx.send(view=_info_view(
+            "💸 Transfer complete",
+            f"You sent **{amount:,}** 🥐 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🥐",
+        ), allowed_mentions=discord.AllowedMentions.none())
 
-    # !leaderboard command
-    @commands.command(name="leaderboard", aliases=["lb", "top"], help="see who has the most treats 🏆🥐 | sieh nach, wer die meisten Leckereien hat")
-    async def leaderboard(self, ctx):
-        '''View the economy leaderboard.'''
+    # ── leaderboard (image card, paginated) ──
+    @commands.hybrid_command(name="leaderboard", aliases=["lb", "top"], description="See the café rich list as image cards",
+                             help="{ 'en': 'see who has the most treats 🏆🥐', 'de': 'sieh die reichsten Gäste', 'es': 'mira quién tiene más 🏆🥐' }")
+    async def leaderboard(self, ctx: commands.Context):
         sorted_users = sorted(
             self.economy_data.items(),
-            key=lambda x: x[1]["balance"] + x[1].get("bank", 0),
+            key=lambda x: x[1].get("balance", 0) + x[1].get("bank", 0),
             reverse=True,
         )
-
         if not sorted_users:
-            return await ctx.send("no one has any coins yet — the café is just opening! ☕")
+            return await ctx.send(view=_info_view("☕ Quiet café", "No one has any coins yet — the café is just opening!"))
 
+        # take top 10 only for the visual card
+        top = sorted_users[:10]
+        # fetch avatars in parallel
+        async def _entry(idx_uid):
+            i, (uid, d) = idx_uid
+            user = self.bot.get_user(int(uid)) or await self.bot.fetch_user(int(uid)) if uid.isdigit() else None
+            if user is None:
+                try:
+                    user = await self.bot.fetch_user(int(uid))
+                except Exception:
+                    user = None
+            avatar = None
+            name = uid
+            if user is not None:
+                avatar = await fetch_avatar_bytes(str(user.display_avatar.replace(size=128, format="png")), size=128)
+                name = user.display_name if hasattr(user, "display_name") else user.name
+            return {"rank": i + 1, "name": name, "total": int(d.get("balance", 0) + d.get("bank", 0)), "avatar": avatar}
+
+        entries = await asyncio.gather(*(_entry(item) for item in enumerate(top)))
+        buf = await render_leaderboard_card(title="🏆 Café Rich List", entries=entries, page=1, pages=1)
+
+        view = _card_view(
+            title="🏆 Leaderboard",
+            image_name="leaderboard.png",
+            footer_lines=[f"-# Showing top **{len(entries)}** of **{len(sorted_users)}** café-goers."],
+        )
+        await ctx.send(view=view, file=discord.File(buf, "leaderboard.png"), allowed_mentions=discord.AllowedMentions.none())
+
+    # ── shop / buy / sell / use / inventory ──
+    @commands.hybrid_command(name="shop", description="Browse the café boutique",
+                             help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }")
+    async def shop(self, ctx: commands.Context, category: str = None):
+        prefix = await _resolve_prefix(self.bot, ctx)
+        cats = ("consumable", "upgrade", "collectible")
+        if category and category.lower() not in cats:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown category", f"Try one of: {', '.join('`' + c + '`' for c in cats)}"))
+        cat_filter = category.lower() if category else None
+
+        sections: dict[str, list[str]] = {c: [] for c in cats}
+        data = self.get_user_economy_data(ctx.author.id)
+        lvl = int(data.get("level", 0))
+        for iid, item in SHOP_ITEMS.items():
+            if cat_filter and item["category"] != cat_filter:
+                continue
+            lock = "" if lvl >= item.get("min_level", 0) else f"  {get_emoji('icon_lock')} lvl {item['min_level']}"
+            sections[item["category"]].append(
+                f"{item['emoji']} **{item['name']}** `({iid})` — **{item['price']:,}** 🥐{lock}\n-# *{item['description']}*"
+            )
+
+        body_blocks = []
+        labels = {"consumable": "🧪 Consumables", "upgrade": "🏦 Upgrades", "collectible": "🎖️ Collectibles"}
+        for c in cats:
+            if sections[c]:
+                body_blocks.append(f"**{labels[c]}**\n" + "\n\n".join(sections[c]))
+        if not body_blocks:
+            return await ctx.send(view=_info_view("☕ Empty shelves", "Nothing in stock for that category."))
+
+        body = "\n\n".join(body_blocks) + f"\n\n-# Buy with `{prefix}buy <id> [count]`. Use with `{prefix}use <id>`."
+        await ctx.send(view=_info_view("🛍️ Niko's Café Boutique", body))
+
+    @commands.hybrid_command(name="buy", description="Buy an item from the shop",
+                             help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf etwas im Shop', 'es': 'compra algo en la tienda 🍰✨' }")
+    async def buy(self, ctx: commands.Context, item_id: str, count: int = 1):
+        if count <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+        item = get_item(item_id)
+        if not item:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Out of stock", f"No item called `{item_id}`."))
+        data = self.get_user_economy_data(ctx.author.id)
+        if data["level"] < item.get("min_level", 0):
+            return await ctx.send(view=_info_view(f"{get_emoji('vm_lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
+        total = item["price"] * count
+        if data["balance"] < total:
+            return await ctx.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 (you have **{data['balance']:,}**)."))
+
+        self._credit(data, -total, "buy", f"{count}x {item['name']}")
+        inv = data["inventory"]
+        inv[item_id.lower()] = int(inv.get(item_id.lower(), 0)) + count
+        _check_achievements(data)
+        self.save_economy_data()
+
+        await ctx.send(view=_info_view(
+            "🛍️ Purchase complete",
+            f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🥐.\n-# New balance: **{data['balance']:,}** 🥐",
+        ))
+
+    @commands.hybrid_command(name="sell", description="Sell an item back from your inventory",
+                             help="{ 'en': 'sell a treat back for some coins 💰', 'de': 'verkauf etwas aus deinem Bag', 'es': 'vende algo de tu inventario 💰' }")
+    async def sell(self, ctx: commands.Context, item_id: str, count: int = 1):
+        if count <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+        iid = item_id.lower()
+        item = get_item(iid)
+        if not item:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
+        data = self.get_user_economy_data(ctx.author.id)
+        have = int(data["inventory"].get(iid, 0))
+        if have < count:
+            return await ctx.send(view=_info_view("📦 Not enough", f"You only have **{have}** of those."))
+
+        gain = int(item.get("sell", item["price"] // 3)) * count
+        self._credit(data, gain, "sell", f"{count}x {item['name']}")
+        data["inventory"][iid] = have - count
+        if data["inventory"][iid] <= 0:
+            del data["inventory"][iid]
+        self.save_economy_data()
+
+        await ctx.send(view=_info_view(
+            "💰 Sold",
+            f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🥐.\n-# New balance: **{data['balance']:,}** 🥐",
+        ))
+
+    @commands.hybrid_command(name="use", description="Use a consumable or upgrade item",
+                             help="{ 'en': 'use a consumable from your bag 🧪', 'de': 'benutze ein Item aus deinem Bag', 'es': 'usa un objeto de tu inventario 🧪' }")
+    async def use(self, ctx: commands.Context, item_id: str):
+        iid = item_id.lower()
+        item = get_item(iid)
+        if not item:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
+        data = self.get_user_economy_data(ctx.author.id)
+        if int(data["inventory"].get(iid, 0)) < 1:
+            return await ctx.send(view=_info_view("📦 None in bag", f"You don't have any **{item['name']}**."))
+        if item["category"] == "collectible":
+            return await ctx.send(view=_info_view("🎖️ Collectible", "Collectibles can't be used — they're for showing off on your profile."))
+
+        effect = item.get("effect")
+        msg_text = ""
+        effects = data.setdefault("effects", {})
+
+        if effect == "work_cooldown_half":
+            effects["work_cooldown_half"] = True
+            msg_text = "Your next work cooldown will be cut in half. ☕✨"
+        elif effect == "crime_boost":
+            effects["crime_boost"] = 1
+            msg_text = "Your next crime gets +25% success. 🔓"
+        elif effect == "rob_shield":
+            effects["rob_shield"] = 1
+            msg_text = "The next robbery against you will be blocked. 🛡️"
+        elif effect == "lottery_boost":
+            effects["lottery_boost"] = 1
+            msg_text = "Your next lottery purchase counts double. 🍀"
+        elif effect == "xp_potion":
+            new_lvl, _, leveled = add_xp(data, 75)
+            msg_text = f"+75 XP. " + (f"You leveled up to **{new_lvl}**! ✨" if leveled else "")
+        elif effect == "bank_tier_up":
+            cur = int(data.get("bank_tier", 0))
+            if cur >= max_bank_tier():
+                return await ctx.send(view=_info_view("🏦 Already top tier", "Your vault is already a Diamond Vault — the best of the best."))
+            data["bank_tier"] = cur + 1
+            msg_text = f"Your vault is now a **{bank_name(data['bank_tier'])}** with cap **{bank_cap(data['bank_tier']):,}** and **{int(bank_rate(data['bank_tier'])*100*10)/10}%** daily interest. 🏦✨"
+        else:
+            return await ctx.send(view=_info_view("🤔 No effect", "This item doesn't seem to do anything right now."))
+
+        # consume one
+        data["inventory"][iid] = int(data["inventory"][iid]) - 1
+        if data["inventory"][iid] <= 0:
+            del data["inventory"][iid]
+        self.save_economy_data()
+        await ctx.send(view=_info_view(f"{item['emoji']} {item['name']} used", msg_text))
+
+    @commands.hybrid_command(name="inventory", aliases=["inv", "bag"], description="View your inventory grouped by category",
+                             help="{ 'en': 'check your collection of treats 🎒✨', 'de': 'sieh dir deinen Bag an', 'es': 'revisa tu inventario 🎒✨' }")
+    async def inventory(self, ctx: commands.Context, member: discord.Member = None):
+        target = member or ctx.author
+        data = self.get_user_economy_data(target.id)
+        inv = data.get("inventory", {})
+        if not inv:
+            return await ctx.send(view=_info_view("🎒 Empty bag", "Nothing here yet — try the `shop`!"))
+
+        groups = {"consumable": [], "upgrade": [], "collectible": [], "other": []}
+        for iid, count in sorted(inv.items()):
+            item = get_item(iid)
+            if not item:
+                groups["other"].append(f"• `{iid}` × **{count}**")
+                continue
+            groups[item["category"]].append(f"{item['emoji']} **{item['name']}** × **{count}**  -# *{item['description']}*")
+
+        labels = {"consumable": "🧪 Consumables", "upgrade": "🏦 Upgrades", "collectible": "🎖️ Collectibles", "other": "📦 Misc"}
+        body_parts = []
+        for cat, items in groups.items():
+            if items:
+                body_parts.append(f"**{labels[cat]}**\n" + "\n".join(items))
+        body = "\n\n".join(body_parts)
+        await ctx.send(view=_info_view(f"🎒 {target.display_name}'s Bag", body))
+
+    # ── bank: deposit / withdraw / upgrade ──
+    @commands.hybrid_group(name="bank", description="Manage your café vault: deposit, withdraw, upgrade",
+                           help="{ 'en': 'manage your café vault 🏦', 'de': 'verwalte deinen Tresor', 'es': 'gestiona tu bóveda 🏦' }",
+                           invoke_without_command=True)
+    async def bank(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        tier = int(data.get("bank_tier", 0))
+        cap = bank_cap(tier)
+        rate = bank_rate(tier)
+        body = (f"**{bank_name(tier)}** — tier **{tier+1}/{len(BANK_TIERS)}**\n"
+                f"• Stored: **{int(data['bank']):,}** / **{cap:,}** 🏦\n"
+                f"• Daily interest: **{rate*100:.2f}%** (auto-credited every 24h)\n\n"
+                f"-# Use `bank deposit`, `bank withdraw` or `bank upgrade` to manage.")
+        await ctx.send(view=_info_view("🏦 Your Vault", body))
+
+    @bank.command(name="deposit", description="Move cash from wallet into the vault")
+    async def bank_deposit(self, ctx: commands.Context, amount: str):
+        data = self.get_user_economy_data(ctx.author.id)
+        cap = bank_cap(int(data.get("bank_tier", 0)))
+        free = max(0, cap - int(data["bank"]))
+
+        if amount.lower() == "all":
+            amt = min(int(data["balance"]), free)
+        else:
+            try:
+                amt = int(amount)
+            except ValueError:
+                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+        if amt <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
+        if amt > data["balance"]:
+            return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag doesn't have that much."))
+        if amt > free:
+            return await ctx.send(view=_info_view(
+                "🏦 Vault full",
+                f"You can store at most **{free:,}** more 🥐 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
+            ))
+
+        data["balance"] -= amt
+        data["bank"]    += amt
+        _log_tx(data, "deposit", amt, "wallet → vault")
+        _check_achievements(data)
+        self.save_economy_data()
+        await ctx.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🥐 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
+
+    @bank.command(name="withdraw", description="Move coins from the vault back to your wallet")
+    async def bank_withdraw(self, ctx: commands.Context, amount: str):
+        data = self.get_user_economy_data(ctx.author.id)
+        if amount.lower() == "all":
+            amt = int(data["bank"])
+        else:
+            try:
+                amt = int(amount)
+            except ValueError:
+                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+        if amt <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to withdraw", "Your vault is empty."))
+        if amt > data["bank"]:
+            return await ctx.send(view=_info_view("🏦 Not enough", "You don't have that much stored."))
+
+        data["bank"]    -= amt
+        data["balance"] += amt
+        _log_tx(data, "withdraw", amt, "vault → wallet")
+        self.save_economy_data()
+        await ctx.send(view=_info_view("🥐 Withdrawn", f"Took **{amt:,}** 🥐 from your vault.\n-# Wallet: **{data['balance']:,}** 🥐"))
+
+    @bank.command(name="upgrade", description="Pay to upgrade your vault to the next tier")
+    async def bank_upgrade(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        cur = int(data.get("bank_tier", 0))
+        if cur >= max_bank_tier():
+            return await ctx.send(view=_info_view("🏆 Maxed out", "Your vault is already a **Diamond Vault** — the highest tier."))
+        next_tier = cur + 1
+        # cost = 50% of next-tier cap
+        cost = bank_cap(next_tier) // 2
+        if data["balance"] + data["bank"] < cost:
+            return await ctx.send(view=_info_view(
+                "💸 Not enough net worth",
+                f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🥐 (paid from wallet first, then vault).",
+            ))
+
+        # pay from wallet first
+        from_wallet = min(int(data["balance"]), cost)
+        from_bank   = cost - from_wallet
+        data["balance"] -= from_wallet
+        data["bank"]    -= from_bank
+        data["bank_tier"] = next_tier
+        _log_tx(data, "upgrade", -cost, f"vault → {bank_name(next_tier)}")
+        self.save_economy_data()
+        await ctx.send(view=_info_view(
+            "🏦 Vault upgraded",
+            f"Welcome to your shiny new **{bank_name(next_tier)}**!\n"
+            f"• New cap: **{bank_cap(next_tier):,}** 🥐\n"
+            f"• Daily interest: **{bank_rate(next_tier)*100:.2f}%**",
+        ))
+
+    # ── lottery ──
+    @commands.hybrid_group(name="lottery", aliases=["lotto"], description="Play the weekly café lottery",
+                           help="{ 'en': 'play the weekly café lottery 🎰', 'de': 'spiele die wöchentliche Lotterie', 'es': 'juega la lotería semanal 🎰' }",
+                           invoke_without_command=True)
+    async def lottery(self, ctx: commands.Context):
+        await self._lottery_info(ctx)
+
+    async def _lottery_info(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        now = int(time.time())
+        remain = max(0, int(self.lottery.get("next_draw", now)) - now)
+        last = self.lottery.get("last_winner")
+        last_block = ""
+        if last:
+            user = self.bot.get_user(int(last)) if last.isdigit() else None
+            who = user.display_name if user else last
+            last_block = f"\n-# Last winner: **{who}** scooped **{int(self.lottery.get('last_pot', 0)):,}** 🥐"
+        body = (f"💸 **Pot**: **{int(self.lottery['pot']):,}** 🥐\n"
+                f"🕒 **Next draw**: in **{_fmt_remaining(remain)}**\n"
+                f"🎟️ **Your tickets**: **{int(data.get('lottery_tickets', 0))}**\n\n"
+                f"Tickets cost **{LOTTERY_TICKET_PRICE:,}** 🥐 each. Buy with `lottery buy <count>`.{last_block}")
+        await ctx.send(view=_info_view("🎰 Café Lottery", body))
+
+    @lottery.command(name="info", description="Show the current lottery pot, draw time and your tickets")
+    async def lottery_info(self, ctx: commands.Context):
+        await self._lottery_info(ctx)
+
+    @lottery.command(name="buy", description="Buy lottery tickets")
+    async def lottery_buy(self, ctx: commands.Context, count: int = 1):
+        if count <= 0:
+            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+        cost = LOTTERY_TICKET_PRICE * count
+        data = self.get_user_economy_data(ctx.author.id)
+        if data["balance"] < cost:
+            return await ctx.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🥐."))
+        # lucky charm: doubles ticket count
+        effects = data.setdefault("effects", {})
+        bonus_mult = 2 if effects.pop("lottery_boost", 0) else 1
+        added = count * bonus_mult
+
+        self._credit(data, -cost, "lottery_buy", f"{count} tickets" + (" (lucky x2)" if bonus_mult > 1 else ""))
+        data["lottery_tickets"] = int(data.get("lottery_tickets", 0)) + added
+        # add to pot (full price goes in, no cut)
+        self.lottery["pot"] = int(self.lottery.get("pot", 0)) + cost
+        _save_lottery(self.lottery)
+        self.save_economy_data()
+
+        await ctx.send(view=_info_view(
+            "🎟️ Tickets bought",
+            f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
+            f"• Spent **{cost:,}** 🥐\n"
+            f"• Pot is now **{int(self.lottery['pot']):,}** 🥐"
+            + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else ""),
+        ))
+
+    # ── transactions ──
+    @commands.hybrid_command(name="transactions", aliases=["tx", "history"], description="See your recent transactions",
+                             help="{ 'en': 'see your last transactions 📜', 'de': 'sieh deine letzten Transaktionen', 'es': 'mira tus últimas transacciones 📜' }")
+    async def transactions(self, ctx: commands.Context):
+        data = self.get_user_economy_data(ctx.author.id)
+        txs = data.get("transactions", [])
+        if not txs:
+            return await ctx.send(view=_info_view("📜 No history", "No transactions yet."))
         lines = []
-        for i, (user_id, data) in enumerate(sorted_users, start=1):
-            user = self.bot.get_user(int(user_id))
-            name = user.display_name if user else f"User {user_id}"
-            total = data["balance"] + data.get("bank", 0)
-            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
-            lines.append(f"{medal} {name} — {total:,} 🥐")
+        for t in txs[:25]:
+            sign = "+" if t["amount"] >= 0 else "−"
+            ts = datetime.datetime.utcfromtimestamp(int(t["ts"])).strftime("%m-%d %H:%M")
+            lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🥐  ·  {t.get('note','')}")
+        await ctx.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
 
-        pages = paginate(lines, per_page=10)
-        view = PaginatedView(
-            title="☕ café rich list 🥐✨",
-            pages=pages,
-            icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
-        )
-        await ctx.send(view=view)
-
-    # !shop command
-    @commands.command(name="shop", help="browse the café boutique 🛍️✨ | stöbere in der Café-Boutique")
-    async def shop(self, ctx):
-        '''View the shop.'''
-        shop_items = {
-            "coffee": {"name": "Premium Coffee", "price": 500, "description": "A warm cup of high-quality coffee."},
-            "cake": {"name": "Strawberry Cake", "price": 1200, "description": "A delicious slice of strawberry cake."},
-            "badge": {"name": "Café Regular Badge", "price": 5000, "description": "Show everyone you're a regular here!"}
-        }
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content="### Niko's Café Boutique 🛍️✨"
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            accent_colour=discord.Colour(0xFFA500),
-        )
-        for item_id, item_data in shop_items.items():
-            container.add_item(
-                discord.ui.TextDisplay(
-                    content=f"**{item_data['name']} — {item_data['price']} 🥐**\n{item_data['description']}"
-                ),
-            )
-        view.add_item(container)
-        await ctx.send(view=view)
-
-    # !buy command
-    @commands.command(name="buy", help="buy a treat from the shop 🍰✨ | kauf dir eine Leckerei im Shop")
-    async def buy(self, ctx, item_id: str = None):
-        '''Buy an item from the shop.'''
-        if not item_id:
-            return await ctx.send("What would you like to buy? 🥐")
-        user_data = self.get_user_economy_data(ctx.author.id)
-        shop_items = {
-            "coffee": {"name": "Premium Coffee", "price": 500},
-            "cake": {"name": "Strawberry Cake", "price": 1200},
-            "badge": {"name": "Café Regular Badge", "price": 5000}
-        }
-        item_id = item_id.lower()
-        if item_id not in shop_items:
-            await ctx.send("We don't have that in stock! 🥐")
-        elif user_data["balance"] < shop_items[item_id]["price"]:
-            await ctx.send("You don't have enough coins in your bag! 🥐")
-        else:
-            user_data["balance"] -= shop_items[item_id]["price"]
-            user_data["inventory"].append(item_id)
-            self.save_economy_data()
-            await ctx.send(f"You bought a {shop_items[item_id]['name']}! Enjoy! 🍰✨")
-
-    # !inventory command
-    @commands.command(name="inventory", aliases=["inv"], help="check your collection of treats 🎒✨ | sieh dir deine gesammelten Leckereien an")
-    async def inventory(self, ctx):
-        '''View your inventory.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        if not user_data["inventory"]:
-            return await ctx.send("Your bag is empty! Go buy some treats! 🥐")
-            
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {ctx.author.display_name}'s Bag 🎒"
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            # blue accent colour
-            accent_colour=discord.Colour(0x0000FF)
-        )
-        for item in user_data["inventory"]:
-            container.add_item(
-                discord.ui.TextDisplay(
-                    content=f"**→ {item}**"
-                )
-            )
-        view.add_item(container)
-        await ctx.send(view=view)
-
-    # !sell command
-    @commands.command(name="sell", help="sell back a treat for some coins 💰 | verkauf eine Leckerei gegen Münzen")
-    async def sell(self, ctx, item_id: str = None):
-        '''Sell an item from your inventory.'''
-        if not item_id:
-            return await ctx.send("What would you like to sell? 🥐")
-        user_data = self.get_user_economy_data(ctx.author.id)
-        shop_items = {
-            "coffee": {"name": "Premium Coffee", "price": 250},
-            "cake": {"name": "Strawberry Cake", "price": 600},
-            "badge": {"name": "Café Regular Badge", "price": 2500}
-        }
-        item_id = item_id.lower()
-        if item_id not in user_data["inventory"]:
-            await ctx.send("You don't have that in your bag! 🥐")
-        else:
-            sell_price = shop_items.get(item_id, {"price": 50})["price"]
-            user_data["balance"] += sell_price
-            user_data["inventory"].remove(item_id)
-            self.save_economy_data()
-            await ctx.send(f"Sold your {item_id} for {sell_price} coins! 💰")
-
-    # !bank command (Handled by balance embed, but kept for legacy)
-    @commands.command(name="bank", help="check your vault balance 🏦 | sieh dir dein Tresorguthaben an")
-    async def bank(self, ctx):
-        '''View your bank balance.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        await ctx.send(f"You have {user_data['bank']} coins safely tucked away in your vault! 🏦✨")
-
-    # !deposit command
-    @commands.command(name="deposit", aliases=["dep"], help="put coins in the safety vault 🏦 | zahl Münzen in den Safe ein")
-    async def deposit(self, ctx, amount: str):
-        '''Deposit money into the bank.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        
-        if amount.lower() == "all":
-            amount = user_data["balance"]
-        else:
-            try:
-                amount = int(amount)
-            except ValueError:
-                return await ctx.send("Please specify a valid number or 'all'! 🥐")
-                
-        if amount <= 0:
-            return await ctx.send("You can't deposit nothing! ☕")
-        if user_data["balance"] < amount:
-            return await ctx.send("You don't have that many coins in your pastry bag! 🥐")
-            
-        user_data["balance"] -= amount
-        user_data["bank"] += amount
-        self.save_economy_data()
-        await ctx.send(f"Deposited {amount} coins into your vault! 🏦✨")
-
-    # !withdraw command
-    @commands.command(name="withdraw", aliases=["with"], help="take coins from the vault 🥐 | nimm Münzen aus dem Safe")
-    async def withdraw(self, ctx, amount: str):
-        '''Withdraw money from the bank.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        
-        if amount.lower() == "all":
-            amount = user_data["bank"]
-        else:
-            try:
-                amount = int(amount)
-            except ValueError:
-                return await ctx.send("Please specify a valid number or 'all'! 🥐")
-                
-        if amount <= 0:
-            return await ctx.send("You can't withdraw nothing! ☕")
-        if user_data["bank"] < amount:
-            return await ctx.send("You don't have that many coins in your vault! 🏦")
-            
-        user_data["bank"] -= amount
-        user_data["balance"] += amount
-        self.save_economy_data()
-        await ctx.send(f"Withdrew {amount} coins from your vault! 🥐✨")
-
-    # !networth command
-    @commands.command(name="networth", aliases=["nw"], help="calculate your total café fortune 📊🥐 | berechne dein gesamtes Café-Vermögen")
-    async def networth(self, ctx):
-        '''View your net worth.'''
-        user_data = self.get_user_economy_data(ctx.author.id)
-        net_worth = user_data["balance"] + user_data["bank"]
-        await ctx.send(f"Your total net worth is {net_worth} coins! You're quite the regular! 📊🥐✨")
-        
+    # ── networth ──
+    @commands.hybrid_command(name="networth", aliases=["nw"], description="Quick net worth summary",
+                             help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🥐' }")
+    async def networth(self, ctx: commands.Context, member: discord.Member = None):
+        target = member or ctx.author
+        data = self.get_user_economy_data(target.id)
+        nw = int(data["balance"]) + int(data["bank"])
+        rank = self._net_rank(str(target.id))
+        body = (f"💼 **{target.display_name}** is worth **{nw:,}** 🥐\n"
+                f"• Cash: **{int(data['balance']):,}**\n"
+                f"• Bank: **{int(data['bank']):,}** ({bank_name(int(data.get('bank_tier', 0)))})\n"
+                f"• Rank: **#{rank}**" if rank else "")
+        await ctx.send(view=_info_view("📊 Net Worth", body))
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(EconomyCog(bot))

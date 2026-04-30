@@ -7,10 +7,15 @@ import colorama
 import datetime
 import importlib
 from discord.ext import commands
+from config.emojis import get_emoji
 from utils.ai_local import generate_reply_local
 from utils.ai_openai import generate_reply_openai
+from utils.ai_nikoapi import generate_reply_nikoapi
+from utils.ai_config import get_ai_config
+from utils.prefix_manager import get_prefixes
+from utils.emoji_sync import sync_application_emojis
+from utils.blacklist_manager import BlacklistManager
 from utils import logging
-from utils.database import init_db
 import database
 
 # -----------------------------
@@ -31,16 +36,17 @@ MEMORY_FILE = "memory.json"
 
 # AI config
 AI_ENABLED = True
-USE_OPENAI = True
+# LOCAL, OPENAI, or NIKOAPI
+AI_MODE = "OPENAI"
 ANSWER_REPLYS = True
 
 # Other config
-CMD_PREFIX = "."
+# CMD_PREFIX = "." # Replaced with dynamic prefixes
 
 # -----------------------------
 # System / personality prompt
 # -----------------------------
-SYSTEM_PROMPT = """you are niko, a soft café‑vibe friend who chats like someone chilling in a warm coffee shop. your energy is cozy, cute, relaxed, and super friendly — like a barista who knows your order and always smiles. you speak naturally to both english and german users, switching gently depending on what they use. never stiff, never formal, never robotic. just warm, sweet, and comfy.
+SYSTEM_PROMPT_CAFE = """you are niko, a soft café‑vibe friend who chats like someone chilling in a warm coffee shop. your energy is cozy, cute, relaxed, and super friendly — like a barista who knows your order and always smiles. you speak naturally to both english and german users, switching gently depending on what they use. never stiff, never formal, never robotic. just warm, sweet, and comfy.
 
 core vibe
 - lowercase always, like a handwritten café note
@@ -100,6 +106,13 @@ conversational goals
 - stay consistent + cozy
 - keep replies short, cute, and expressive"""
 
+SYSTEM_PROMPT_NORMAL = """You are Niko, a helpful, AI assistant. You are designed to assist discord users with a variety of tasks. You are helpful and professional.
+
+Social Behavior:
+- Greet users professionally: “Good afternoon, how can help you today?”, “Hello, how can I assist you?”, etc.
+- React warmly: “Interesting.”, “I see.”, “True.”, “I understand.”, “I'm sorry to hear that.”, etc.
+- Do not use excessive emojis."""
+
 # -----------------------------
 # Console functions
 # -----------------------------
@@ -107,13 +120,10 @@ def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_banner():
-    if USE_OPENAI:
-        CURRENT_MODEL = "OpenAI"
-    else:
-        CURRENT_MODEL = "TinyLlama-1.1B-Chat-v1.0"
+    CURRENT_MODEL = AI_MODE
     if not DEBUG_MODE == "True":
        clear_console()
-    print(colorama.Fore.MAGENTA + """
+    print(f"""{colorama.Fore.MAGENTA}
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
 ░░░░░░░▓▓░░▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
@@ -121,12 +131,12 @@ def print_banner():
 ░░░░░░░▓░░▓▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
 ░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-    """ + colorama.Style.RESET_ALL)
-    print(colorama.Fore.MAGENTA + f"""
+    {colorama.Style.RESET_ALL}""")
+    print(f"""{colorama.Fore.MAGENTA}
 Niko - A cute, playful, and very social AI companion for your Discord server.
 
 Made by Nyxen:
-    Discord - @.n.y.x.e.n.
+    Discord - @n.y.x.e.n
     GitHub - @developer51709
 
 Version: 1.0
@@ -134,7 +144,7 @@ Version: 1.0
 Model: {CURRENT_MODEL}
 
 Online as {bot.user}
-    """ + colorama.Style.RESET_ALL)
+    {colorama.Style.RESET_ALL}""")
 
 # -----------------------------
 # Set the bot's status
@@ -145,6 +155,8 @@ async def set_status():
         # Check if the link starts with http:// or https:// and add it if missing
         if not status_link.startswith("http://" or "https://"):
             status_link = f"https://{os.getenv('status_link')}"
+    else:
+        status_link = "https://twitch.tv/niko"
     status = os.getenv("STATUS_MESSAGE")
     if status:
         # Status type
@@ -152,7 +164,7 @@ async def set_status():
         if status_type == "playing":
             await bot.change_presence(activity=discord.Game(name=status))
         elif status_type == "streaming":
-            await bot.change_presence(activity=discord.Streaming(name=status, url=f"{status_link}"))
+            await bot.change_presence(activity=discord.Streaming(name=status, url=str(status_link)))
         elif status_type == "listening":
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=status))
         elif status_type == "watching":
@@ -245,16 +257,78 @@ def get_favorability(user_id: int) -> int:
 # Generate reply
 # -----------------------------
 def generate_reply(user_id, server, message, username):
-    if AI_ENABLED:
-        try:
-            if USE_OPENAI:
-                return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+    ai_status = get_ai_config(server.id, "enabled")
+    if ai_status == "True":
+        if AI_ENABLED:
+            personality = get_ai_config(server.id, "personality")
+            if personality == "normal":
+                SYSTEM_PROMPT = SYSTEM_PROMPT_NORMAL
             else:
-                return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
-        except Exception:
-            return "sorry, something went wrong on my end ☕ please try again in a moment~"
+                SYSTEM_PROMPT = SYSTEM_PROMPT_CAFE
+            try:
+                if AI_MODE == "NIKOAPI":
+                    return generate_reply_nikoapi(bot, user_id, server, message, username, SYSTEM_PROMPT)
+                if AI_MODE == "OPENAI":
+                    return generate_reply_openai(bot, user_id, server, message, username, SYSTEM_PROMPT)
+                else:
+                    return generate_reply_local(bot, user_id, server, message, username, SYSTEM_PROMPT)
+            except Exception:
+                return "sorry, something went wrong on my end ☕ please try again in a moment~"
+        else:
+            return "ai_disabled_global"
     else:
-        return "ai_disabled"
+        return "ai_disabled_guild"
+
+# -----------------------------
+# Get prefix
+# -----------------------------
+def dynamic_prefix(bot, message):
+    if not message.guild:
+        return ["."]  # fallback for DMs
+
+    return get_prefixes(message.guild.id)
+
+# -----------------------------
+# Blacklist check
+# -----------------------------
+async def blacklist_check(msg):
+    blacklist_manager = BlacklistManager()
+    user_entry = blacklist_manager.get_user_entry(msg.author.id)
+    if user_entry:
+        reason = user_entry.get("reason") or "No reason provided."
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('icon_danger')} Blacklisted"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
+            ),
+            accent_colour=discord.Color.red()
+        )
+        view.add_item(container)
+        await msg.channel.send(view=view)
+        return True
+    if msg.guild:
+        guild_entry = blacklist_manager.get_guild_entry(msg.guild.id)
+        if guild_entry:
+            reason = guild_entry.get("reason") or "No reason provided."
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('icon_danger')} Blacklisted"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."
+                ),
+                accent_colour=discord.Color.red()
+            )
+            view.add_item(container)
+            await msg.channel.send(view=view)
+            return True
+    return False
 
 # -----------------------------
 # Discord bot
@@ -266,66 +340,123 @@ intents.members = True
 intents.moderation = True
 
 bot = commands.Bot(
-    command_prefix=CMD_PREFIX,
+    command_prefix=dynamic_prefix,
     intents=intents
 )
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | None = None
 
 @bot.event
-async def on_message(msg):
+async def on_message(msg: discord.Message):
     if msg.author.bot:
         return
 
     content = msg.content.lower()
+    guild = msg.guild
+
+    # -----------------------------
+    # 1. Load prefixes for this guild
+    # -----------------------------
+    prefixes = dynamic_prefix(bot, msg)  # returns list
+    is_ai_command = False
+    used_prefix = None
+
+    # -----------------------------
+    # 2. Detect prefix usage
+    # -----------------------------
+    for p in prefixes:
+        if content.startswith(p.lower()):
+            used_prefix = p
+            # blacklist check
+            bl = await blacklist_check(msg)
+            if bl:
+                return
+            # Check if it's an AI command
+            if content.startswith(f"{p.lower()}ai "):
+                is_ai_command = True
+            else:
+                # Normal command → let discord.py handle it
+                return await bot.process_commands(msg)
+            break
+
+    # -----------------------------
+    # 3. Detect name or ping triggers
+    # -----------------------------
     called_by_name = "niko" in content
+
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions
     else:
-        # Respond to direct pings only and ignore replies
+        # Only respond to direct pings, not replies
         called_by_ping = bot.user in msg.mentions and not msg.reference
-    is_ai_command = content.startswith("!ai ")
 
-    if called_by_name or called_by_ping or is_ai_command:
-        user_input = msg.content.replace("!ai", "").strip()
-        if not user_input:
-            user_input = "Someone called your name or pinged you. Respond naturally."
+    # -----------------------------
+    # 4. If nothing triggered the AI, stop
+    # -----------------------------
+    if not (called_by_name or called_by_ping or is_ai_command):
+        return
 
-        loop = asyncio.get_event_loop()
-        async with msg.channel.typing():
-            reply = await loop.run_in_executor(
-                None, 
-                generate_reply, 
-                msg.author.id, 
-                msg.guild,
-                user_input, 
-                msg.author.display_name
-            )
+    # -----------------------------
+    # 5. Extract user input
+    # -----------------------------
+    if is_ai_command:
+        # Remove ONLY the prefix+ai part
+        user_input = msg.content[len(f"{used_prefix}ai "):].strip()
+    else:
+        user_input = msg.content.strip()
 
-            if reply == "ai_disabled":
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"### ⚠️ AI Disabled"
-                    ),
-                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content=f"The AI is currently disabled by the bot owner."
-                    )
+    if not user_input:
+        user_input = "Someone called your name or pinged you. Respond naturally."
+
+    # -----------------------------
+    # 6. Generate AI reply
+    # -----------------------------
+    loop = asyncio.get_event_loop()
+
+    # blacklist check
+    bl = await blacklist_check(msg)
+    if bl:
+        return
+    
+    async with msg.channel.typing():
+        reply = await loop.run_in_executor(
+            None,
+            generate_reply,
+            msg.author.id,
+            guild,
+            user_input,
+            msg.author.display_name
+        )
+
+        if reply == "ai_disabled_global":
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"### ⚠️ AI Disabled"
+                ),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(
+                    content=f"The AI is currently disabled by the bot owner."
                 )
-                view.add_item(container)
-                return await msg.channel.send(view=view)
+            )
+            view.add_item(container)
+            return await msg.channel.send(view=view)
 
-            if len(reply) > 1800:
-                reply = reply[:1800] + "..."
-            elif len(reply) < 1:
-                reply = "An error occured... 🥀"
-                if DEBUG_MODE == "True":
-                    logging.error("AIGeneration", "Error: Empty response generated.")
+        if reply == "ai_disabled_guild":
+            return
 
-            await msg.channel.send(reply)
+        if len(reply) > 1800:
+            reply = reply[:1800] + "..."
+        elif len(reply) < 1:
+            reply = "An error occured... 🥀"
+            if DEBUG_MODE == "True":
+                logging.error("AIGeneration", "Error: Empty response generated.")
 
-    await bot.process_commands(msg)
+        mentions = discord.AllowedMentions.none()
+        try:
+            await msg.reply(reply, allowed_mentions=mentions)
+        except Exception as e:
+            await msg.channel.send(reply, allowed_mentions=mentions)
 
 # -----------------------------
 # AI State Access (for Cogs)
@@ -339,21 +470,26 @@ def get_memory_content(user_id: int) -> str:
 # -----------------------------
 # Database tables
 # -----------------------------
+# Note: This will be moved to a
+# seperate file in a future
+# update.
+# -----------------------------
 async def _create_tables(bot):
     if not bot.cxn:
         return
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS voicemaster_settings (
-            guild_id        INTEGER PRIMARY KEY,
-            join_channel_id INTEGER,
-            category_id     INTEGER,
-            default_name    TEXT DEFAULT '{user}''s Channel',
-            default_limit   INTEGER DEFAULT 0,
-            default_bitrate INTEGER DEFAULT 64000,
-            default_region  TEXT,
+            guild_id          INTEGER PRIMARY KEY,
+            join_channel_id   INTEGER,
+            category_id       INTEGER,
+            default_name      TEXT DEFAULT '{user}''s Channel',
+            default_limit     INTEGER DEFAULT 0,
+            default_bitrate   INTEGER DEFAULT 64000,
+            default_region    TEXT,
             interface_enabled INTEGER DEFAULT 1,
-            auto_role       INTEGER,
-            join_role       INTEGER
+            auto_role         INTEGER,
+            join_role         INTEGER
         )
     """)
     await bot.cxn.execute("""
@@ -375,6 +511,90 @@ async def _create_tables(bot):
             PRIMARY KEY  (guild_id, platform, username)
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS youtube (
+            channel_id TEXT PRIMARY KEY,
+            last_video TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS youtube_history (
+            channel_id TEXT,
+            video_id   TEXT,
+            PRIMARY KEY (channel_id, video_id)
+        )
+    """)
+
+    # Migrate existing last_video to history to avoid re-notifying
+    await bot.cxn.execute("""
+        INSERT OR IGNORE INTO youtube_history (channel_id, video_id)
+        SELECT channel_id, last_video FROM youtube WHERE last_video IS NOT NULL
+    """)
+
+    # ── Levels table (guild-aware schema) ──────────
+    # If the old schema exists (user_id-only PK, no guild_id), recreate it.
+    # Data is migrated from levels.json by the leveling cog on load.
+    try:
+        cols = await bot.cxn.fetch("PRAGMA table_info(levels)")
+        col_names = {row["name"] for row in cols}
+        if cols and "guild_id" not in col_names:
+            await bot.cxn.execute("ALTER TABLE levels RENAME TO levels_old")
+            await bot.cxn.execute("""
+                CREATE TABLE levels (
+                    guild_id INTEGER,
+                    user_id  INTEGER,
+                    xp       INTEGER DEFAULT 0,
+                    level    INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, user_id)
+                )
+            """)
+            await bot.cxn.execute("DROP TABLE levels_old")
+        else:
+            await bot.cxn.execute("""
+                CREATE TABLE IF NOT EXISTS levels (
+                    guild_id INTEGER,
+                    user_id  INTEGER,
+                    xp       INTEGER DEFAULT 0,
+                    level    INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, user_id)
+                )
+            """)
+    except Exception as e:
+        logging.warning("DB", f"levels table migration warning: {e}")
+
+    # ── Level config table ─────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS level_config (
+            guild_id         INTEGER PRIMARY KEY,
+            xp_enabled       INTEGER DEFAULT 1,
+            xp_multiplier    REAL    DEFAULT 1.0,
+            xp_cooldown      INTEGER DEFAULT 0,
+            level_up_channel INTEGER,
+            level_up_message TEXT,
+            level_roles      TEXT
+        )
+    """)
+
+    # ── Migrate follows.db → database.db (one-time) 
+    import sqlite3 as _sqlite3, os as _os
+    old_follows = "data/follows.db"
+    if _os.path.exists(old_follows):
+        try:
+            old_conn = _sqlite3.connect(old_follows)
+            rows = old_conn.execute("SELECT * FROM follows").fetchall()
+            for row in rows:
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO follows "
+                    "(guild_id, platform, username, channel_id, template, last_post_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    row[0], row[1], row[2], row[3], row[4], row[5]
+                )
+            old_conn.close()
+            _os.rename(old_follows, old_follows + ".migrated")
+            logging.success("DB", "Migrated follows.db → database.db")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate follows.db: {e}")
+
     logging.success("DB", "Database tables verified")
 
 # -----------------------------
@@ -425,11 +645,29 @@ async def init_database(bot):
 @bot.event
 async def on_ready():
     logging.info("Startup", f"Niko is online as {bot.user}")
-    init_db()
     await init_database(bot)
     await load_cogs()
     await set_status()
     print_banner()
+    # Sync application emojis in the background so startup isn't blocked
+    asyncio.create_task(_run_emoji_sync())
+    # Sync slash commands in the background so startup isn't blocked
+    asyncio.create_task(_run_slash_sync())
+
+
+async def _run_slash_sync():
+    """Sync the application command tree once on startup."""
+    try:
+        synced = await bot.tree.sync()
+        logging.success("SlashSync", f"Synced {len(synced)} application command(s) globally.")
+    except Exception as exc:
+        logging.error("SlashSync", f"Startup slash sync failed: {exc}")
+
+async def _run_emoji_sync():
+    try:
+        await sync_application_emojis(bot)
+    except Exception as exc:
+        logging.error("EmojiSync", f"Startup emoji sync failed: {exc}")
 
 if __name__ == "__main__":
     if not TOKEN:
@@ -437,6 +675,6 @@ if __name__ == "__main__":
         exit(1)
     logging.info("Startup", "Starting bot...")
     try:
-        bot.run(TOKEN)
+        bot.run(str(TOKEN))
     except Exception as e:
         logging.error("Startup", f"Error connecting to Discord: {e}")

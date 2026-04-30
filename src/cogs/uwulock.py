@@ -7,11 +7,9 @@ import os
 import re
 import random
 from typing import Dict, List, Any
+from utils.ai_config import get_personality
 
 DATA_FILE = "data/uwulock.json"
-
-# personality mode: "normal" or "cafe"
-PERSONALITY = "cafe"
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -30,6 +28,12 @@ MESSAGES = {
             "fetch_fail": "Konnte die uwu‑Nachricht nicht verarbeiten.",
             "no_permission": "Du benötigst Administratorrechte.",
         },
+        "es": {
+            "uwu_locked": "{mention} ha sido uwu-bloqueado/a.",
+            "uwu_unlocked": "{mention} ha sido des-uwu-bloqueado/a.",
+            "fetch_fail": "No pude procesar el mensaje uwu.",
+            "no_permission": "Necesitas permisos de administrador.",
+        },
     },
 
     "cafe": {
@@ -45,6 +49,12 @@ MESSAGES = {
             "fetch_fail": "aww ich konnte die uwu‑nachricht gerade nicht verarbeiten 😭☕",
             "no_permission": "du brauchst admin‑rechte dafür ☕💛",
         },
+        "es": {
+            "uwu_locked": "okey amix… {mention} ya está uwu-bloqueado/a ☕💖",
+            "uwu_unlocked": "des-uwu-eado a {mention} — vuelve a ser libre ☕🌿",
+            "fetch_fail": "ay no pude procesar ese mensajito uwu 😭☕",
+            "no_permission": "necesitas perms de admin para esto cariño ☕💛",
+        },
     },
 
     # future personalities can be added here
@@ -57,15 +67,13 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
-def get_personality():
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
-
-
 def msg(ctx, key, **kwargs):
-    personality = get_personality()
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
 
     block = MESSAGES.get(personality, {}).get(lang, {})
@@ -116,7 +124,7 @@ class UwULock(commands.Cog):
     # -----------------------------
     @commands.command(
         name="uwulock",
-        help="uwu‑lock a user so their messages become uwu‑ified ☕ | uwu‑lockt einen nutzer"
+        help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified ☕', 'de': 'uwu‑lockt einen nutzer' }"
     )
     @commands.bot_has_permissions(administrator=True)
     @commands.has_permissions(administrator=True)
@@ -128,8 +136,7 @@ class UwULock(commands.Cog):
         if guild_id not in self.data:
             self.data[guild_id] = {}
 
-        key = f"{user_id}:{channel_id}"
-        existing = self.data[guild_id].get(key)
+        existing = self.data[guild_id].get(channel_id, {}).get(user_id)
 
         # -----------------------------
         # UN‑UWULOCK
@@ -144,14 +151,14 @@ class UwULock(commands.Cog):
                 except Exception:
                     pass
 
-            del self.data[guild_id][key]
+            del self.data[guild_id][channel_id][user_id]
             self.save_data()
             return await ctx.send(msg(ctx, "uwu_unlocked", mention=user.mention))
 
         # -----------------------------
         # UWULOCK
         # -----------------------------
-        self.data[guild_id] = {}
+        self.data[guild_id][user_id] = {}
 
         try:
             webhook = await ctx.channel.create_webhook(
@@ -169,9 +176,7 @@ class UwULock(commands.Cog):
                 reason=f"uwulocked by {ctx.author}",
             )
 
-        self.data[guild_id][key] = {
-            "user_id": user_id,
-            "channel_id": channel_id,
+        self.data[guild_id].setdefault(channel_id, {})[user_id] = {
             "webhook": webhook.url,
         }
         self.save_data()
@@ -230,8 +235,7 @@ class UwULock(commands.Cog):
         if guild_id not in self.data:
             return
 
-        key = f"{user_id}:{channel_id}"
-        entry = self.data[guild_id].get(key)
+        entry = self.data[guild_id].get(channel_id, {}).get(user_id)
 
         if not entry:
             return

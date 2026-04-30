@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
-
-PERSONALITY = "cafe"
+from config.emojis import get_emoji
+from utils.ai_config import get_personality
 
 MESSAGES = {
     "normal": {
@@ -14,6 +14,11 @@ MESSAGES = {
             "favor_score": "{name} hat einen Beliebtheitswert von **{score}** bei Niko.",
             "no_memory": "Kein Speicher für {name} gefunden.",
             "memory_title": "Speicher für {name}",
+        },
+        "es": {
+            "favor_score": "{name} tiene una puntuación de favoritismo de **{score}** con Niko.",
+            "no_memory": "No hay memoria registrada para {name}.",
+            "memory_title": "Memoria de {name}",
         }
     },
     "cafe": {
@@ -26,6 +31,11 @@ MESSAGES = {
             "favor_score": "{name} und ich haben einen Vibe-Wert von **{score}**! ☕✨",
             "no_memory": "ich habe noch keine Notizen über {name}... wir sollten mehr plaudern! ☕📝",
             "memory_title": "☕ Café-Notizen über {name}",
+        },
+        "es": {
+            "favor_score": "{name} y yo tenemos una puntuación de vibras de **{score}**! ☕✨",
+            "no_memory": "aún no tengo apuntes sobre {name}… ¡deberíamos charlar más! ☕📝",
+            "memory_title": "☕ apuntes del café sobre {name}",
         }
     }
 }
@@ -34,10 +44,12 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 def msg(ctx, key, **kwargs):
-    personality = PERSONALITY if PERSONALITY in MESSAGES else "normal"
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
     text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
     if text is None:
@@ -49,7 +61,7 @@ class AICog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="favor", help="check our vibe score ☕✨ | sieh dir unseren Vibe-Wert an")
+    @commands.command(name="favor", help="{ 'en': 'check our vibe score ☕✨', 'de': 'sieh dir unseren Vibe-Wert an' }")
     async def favor(self, ctx, member: discord.Member = None):
         """Display the favorability score for a user."""
         from bot import get_favorability_score
@@ -57,7 +69,7 @@ class AICog(commands.Cog):
         score = get_favorability_score(target.id)
         await ctx.send(msg(ctx, "favor_score", name=target.display_name, score=score))
 
-    @commands.command(name="memory", help="see my café notes on you ☕📝 | sieh dir meine Café-Notizen an")
+    @commands.command(name="memory", help="{ 'en': 'see my café notes on you ☕📝', 'de': 'sieh dir meine Café-Notizen an' }")
     async def memory(self, ctx, member: discord.Member = None):
         """Display the memory content for a user."""
         from bot import get_memory_content
@@ -78,7 +90,7 @@ class AICog(commands.Cog):
             except Exception as e:
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"### ❌ Error\nFailed to display memory:\n```\n{e}\n```")
+                    discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Error\nFailed to display memory:\n```\n{e}\n```")
                 ))
                 await ctx.send(view=view)
 

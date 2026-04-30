@@ -2,9 +2,7 @@ import discord
 from discord.ext import commands
 import aiohttp
 import random
-
-# personality mode: "normal" or "cafe"
-PERSONALITY = "cafe"
+from utils.ai_config import get_personality
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -21,6 +19,11 @@ MESSAGES = {
             "no_safe_memes": "Keine sicheren Memes verfügbar.",
             "meme_title_prefix": "",
         },
+        "es": {
+            "fetch_fail": "No pude traer memes ahora mismo.",
+            "no_safe_memes": "No hay memes seguros disponibles ahora mismo.",
+            "meme_title_prefix": "",
+        },
     },
 
     "cafe": {
@@ -34,6 +37,11 @@ MESSAGES = {
             "no_safe_memes": "keine sicheren memes im café gerade 😭☕",
             "meme_title_prefix": "☕ meme des moments — ",
         },
+        "es": {
+            "fetch_fail": "ay no pude traer memes ahora 😭☕",
+            "no_safe_memes": "no hay memes seguros en el café ahora mismo 😭☕",
+            "meme_title_prefix": "☕ meme del momento — ",
+        },
     },
 
     # future personalities can be added here
@@ -46,15 +54,13 @@ def get_lang(ctx):
     if ctx and ctx.guild and ctx.guild.preferred_locale:
         if str(ctx.guild.preferred_locale).lower().startswith("de"):
             return "de"
+        if str(ctx.guild.preferred_locale).lower().startswith("es"):
+            return "es"
     return "en"
 
 
-def get_personality():
-    return PERSONALITY if PERSONALITY in MESSAGES else "normal"
-
-
 def msg(ctx, key, **kwargs):
-    personality = get_personality()
+    personality = get_personality(ctx)
     lang = get_lang(ctx)
 
     # try personality + lang
@@ -87,7 +93,7 @@ class Meme(commands.Cog):
 
     @commands.command(
         name="meme",
-        help="get a cozy random meme ☕✨ | holt ein zufälliges meme"
+        help="{ 'en': 'get a cozy random meme ☕✨', 'de': 'holt ein zufälliges meme' }"
     )
     async def meme(self, ctx):
         """Fetch a random meme using meme-api.com"""
@@ -112,7 +118,7 @@ class Meme(commands.Cog):
         meme = random.choice(memes)
 
         # personality-aware embed styling
-        personality = get_personality()
+        personality = get_personality(ctx)
         lang = get_lang(ctx)
 
         title_prefix = msg(ctx, "meme_title_prefix")
