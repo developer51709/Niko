@@ -54,3 +54,4 @@ PyNaCl
 requests
 spotipy
 wavelink
+openai

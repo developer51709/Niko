@@ -23,10 +23,18 @@ _fallback_idx = 0
 def _get_client():
     global client
     if client is None:
-        client = OpenAI(
-            api_key=os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"),
-            base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"),
-        )
+        # Prefer a direct OpenAI API key when set; fall back to the Replit
+        # AI integration proxy (AI_INTEGRATIONS_OPENAI_*) otherwise.
+        direct_key = os.environ.get("OPENAI_API_KEY")
+        integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+        integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+
+        if direct_key:
+            client = OpenAI(api_key=direct_key)
+        elif integration_key and integration_url:
+            client = OpenAI(api_key=integration_key, base_url=integration_url)
+        else:
+            client = OpenAI(api_key=integration_key)
     return client
 
 
