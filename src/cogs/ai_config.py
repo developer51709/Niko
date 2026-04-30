@@ -54,29 +54,31 @@ class ExperimentAboutButton(discord.ui.Button):
 
 class ExperimentToggle(discord.ui.Button):
     def __init__(self, bot: commands.Bot, experiment: str, guild_id: int):
-        # the emoji and text will be set based on the current status of the experiment
         self.bot = bot
         self.experiment = experiment
-        self.current_status = get_ai_config(guild_id, f"{experiment}_experiment")
-        if self.current_status == "True":
-            self.emoji = get_emoji("icon_tick")
-            self.label = "Enabled"
-            self.style = discord.ButtonStyle.green
+        self.guild_id = guild_id
+        current_status = get_ai_config(guild_id, f"{experiment}_experiment")
+        if current_status == "True":
+            emoji = get_emoji("icon_tick")
+            label = "Enabled"
+            style = discord.ButtonStyle.green
         else:
-            self.emoji = get_emoji("icon_cross")
-            self.label = "Disabled"
-            self.style = discord.ButtonStyle.red
-        super().__init__(label=self.label, style=self.style, emoji=self.emoji)
+            emoji = get_emoji("icon_cross")
+            label = "Disabled"
+            style = discord.ButtonStyle.red
+        super().__init__(label=label, style=style, emoji=emoji)
 
     async def callback(self, interaction: discord.Interaction):
-        # require manage guild perm
         if not interaction.user.guild_permissions.manage_guild:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=f"### {get_emoji('icon_danger')} Error"
                 ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.Separator(
+                    visible=True,
+                    spacing=discord.SeparatorSpacing.small
+                ),
                 discord.ui.TextDisplay(
                     content="You need the `manage_guild` permission to use this button."
                 ),
@@ -85,14 +87,14 @@ class ExperimentToggle(discord.ui.Button):
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
         guild_id = interaction.guild.id
-        current_status = get_ai_config(guild_id, "experiments")[self.experiment]
+        current_status = get_ai_config(guild_id, f"{self.experiment}_experiment")
         if current_status == "True":
-            set_ai_config(guild_id, "experiments", {self.experiment: "False"})
+            set_ai_config(guild_id, f"{self.experiment}_experiment", "False")
             self.emoji = get_emoji("icon_cross")
             self.label = "Disabled"
             self.style = discord.ButtonStyle.red
         else:
-            set_ai_config(guild_id, "experiments", {self.experiment: "True"})
+            set_ai_config(guild_id, f"{self.experiment}_experiment", "True")
             self.emoji = get_emoji("icon_tick")
             self.label = "Enabled"
             self.style = discord.ButtonStyle.green
@@ -106,9 +108,12 @@ class AIActionsExperimentAbout(discord.ui.LayoutView):
         self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} AI Actions Experiment"))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="This experiment allows the AI to perform actions on your behalf. This includes things like creating channels, roles, and more."))
+        self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**How it works**\nWhen talking to the AI, you can ask it to perform actions on your behalf. For example, you can ask it to create a channel or role. The AI will then perform the action on your behalf."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.add_item(self.container)
 
 class ExperimentsButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot):
