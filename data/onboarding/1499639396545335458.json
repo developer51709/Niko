@@ -1,0 +1,21 @@
+{
+    "welcome_channel": 1499738252117020722,
+    "welcome_title": "# **\ud83d\udc4b Welcome to NullScripts!**",
+    "welcome_description": "Hello, {user}\n\nWelcome to **NullScripts**, your hub for automation tools, ethical cybersecurity utilities, and powerful scripting resources.  \nWe\u2019re excited to have you here \u2014 whether you're learning, building, or exploring advanced automation, you\u2019re in the right place.\n\nBefore you get started, please take a moment to review the essential information below:\n\n## **\ud83d\udcd8 Server Rules**\nAll members must follow our community rules to keep the server safe, organized, and compliant with Discord\u2019s policies.\n\n\ud83d\udd17 **Rules:** https://discord.com/channels/1499639396545335458/1499733708054204568/1499737891343958027\n\n## **\ud83d\udee0\ufe0f Tool Usage Guidelines & Terms**\nIf you plan to use any of our free or paid tools, you must read the guidelines and terms for the tools channel.\n\n\ud83d\udd17 **Tools Guidelines & ToS:** https://discord.com/channels/1499639396545335458/1499736154608504885/1499736458099949690\n\n## **\ud83d\udccc What You Can Expect Here**\n- Ethical automation tools  \n- Educational cybersecurity resources  \n- Free and premium utilities  \n- A supportive community of developers and learners  \n- Staff ready to help when needed  \n\n## **\u2714\ufe0f Get Started**\nOnce you\u2019ve reviewed the rules and guidelines, feel free to explore the channels, ask questions, and start building.\n\nWelcome to the community \u2014 let\u2019s innovate responsibly.",
+    "welcome_color": 5793266,
+    "welcome_image": null,
+    "rules_channel": 1499733708054204568,
+    "rules_message_id": 1499734165942177792,
+    "rules_text": "1. Follow the Discord ToS and Community Guidelines",
+    "rules_role_id": null,
+    "role_menu_channel": null,
+    "role_menu_message_id": null,
+    "role_menu_options": null,
+    "autorole_ids": null,
+    "captcha_enabled": false,
+    "captcha_channel_id": null,
+    "captcha_panel_message_id": null,
+    "captcha_add_role_ids": null,
+    "captcha_remove_role_ids": null,
+    "captcha_kick_on_fail": false
+}

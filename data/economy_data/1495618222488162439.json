@@ -1,11 +1,11 @@
 {
-  "balance": 5334,
+  "balance": 5714,
   "inventory": {},
-  "bank": 5075,
-  "net_worth": 10409,
+  "bank": 5100,
+  "net_worth": 10814,
   "daily_streak": 3,
   "last_daily": 1777559851,
-  "last_work": 1777557972,
+  "last_work": 1777608200,
   "last_crime": 1777483926,
   "last_rob": 1777488833,
   "last_heist": 0,
@@ -18,17 +18,35 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 6505,
+  "total_earned": 6910,
   "total_spent": 350,
-  "xp": 156,
+  "xp": 180,
   "level": 1,
   "job": "barista",
-  "times_worked": 13,
+  "times_worked": 15,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 1,
   "transactions": [
+    {
+      "ts": 1777608200,
+      "kind": "work",
+      "amount": 203,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777594177,
+      "kind": "interest",
+      "amount": 25,
+      "note": "daily Tin Jar interest"
+    },
+    {
+      "ts": 1777592119,
+      "kind": "work",
+      "amount": 177,
+      "note": "Barista shift"
+    },
     {
       "ts": 1777559851,
       "kind": "daily",
@@ -195,5 +213,5 @@
   "achievements": [
     "first_paycheck"
   ],
-  "last_interest_day": "2026-04-30"
+  "last_interest_day": "2026-05-01"
 }
