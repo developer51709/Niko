@@ -191,8 +191,9 @@
         "ai_actions_experiment": "False"
     },
     "1499639396545335458": {
-        "personality": "cafe",
+        "personality": "normal",
         "enabled": "True",
-        "ai_actions_experiment": "False"
+        "ai_actions_experiment": "True",
+        "better_context_experiment": "False"
     }
 }

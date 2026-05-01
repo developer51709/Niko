@@ -256,5 +256,22 @@
       1148779504274247766
     ],
     "open_tickets": []
+  },
+  "1499639396545335458": {
+    "guild_id": 1499639396545335458,
+    "panel_title": "Tickets",
+    "panel_description": "To open a ticket please use the button below and select a category.",
+    "panel_color": null,
+    "panel_image": "https://cdn.discordapp.com/attachments/1499797984521490513/1499803106446147826/Screenshot_2026-05-01_at_11.01.11_AM.png?ex=69f61ffd&is=69f4ce7d&hm=51235209ce000f2e80ba5c0f67cd972f47e77b9f8f9b3c1ecb9e862bd8e9e32c&",
+    "panel_categories": [
+      "Request a script",
+      "Report an issue",
+      "Purchase a script",
+      "Other"
+    ],
+    "panel_channel_id": 1499807683023474768,
+    "panel_message_id": 1499808894938124330,
+    "support_roles": [],
+    "open_tickets": []
   }
 }

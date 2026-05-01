@@ -11,7 +11,9 @@
     "role_menu_channel": null,
     "role_menu_message_id": null,
     "role_menu_options": null,
-    "autorole_ids": null,
+    "autorole_ids": [
+        1499744265553707060
+    ],
     "captcha_enabled": false,
     "captcha_channel_id": null,
     "captcha_panel_message_id": null,
