@@ -1,16 +1,16 @@
 {
-  "balance": 2907,
+  "balance": 3058,
   "inventory": {},
-  "bank": 10000,
-  "net_worth": 12907,
+  "bank": 10050,
+  "net_worth": 13108,
   "daily_streak": 4,
   "last_daily": 1777653071,
-  "last_work": 1777653085,
+  "last_work": 1777674094,
   "last_crime": 1777483926,
   "last_rob": 1777488833,
   "last_heist": 0,
   "last_slots": 1777430253.1915667,
-  "last_blackjack": 1777430283.9116228,
+  "last_blackjack": 1777674202.3093665,
   "last_roulette": 0,
   "last_casino": 0,
   "last_gamble": 0,
@@ -18,17 +18,29 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 9003,
+  "total_earned": 9194,
   "total_spent": 350,
-  "xp": 204,
+  "xp": 216,
   "level": 1,
   "job": "barista",
-  "times_worked": 17,
+  "times_worked": 18,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 1,
   "transactions": [
+    {
+      "ts": 1777680983,
+      "kind": "interest",
+      "amount": 50,
+      "note": "daily Tin Jar interest"
+    },
+    {
+      "ts": 1777674094,
+      "kind": "work",
+      "amount": 141,
+      "note": "Barista shift"
+    },
     {
       "ts": 1777653122,
       "kind": "deposit",
@@ -238,5 +250,5 @@
     "first_paycheck",
     "saver"
   ],
-  "last_interest_day": "2026-05-01"
+  "last_interest_day": "2026-05-02"
 }
