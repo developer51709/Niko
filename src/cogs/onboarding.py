@@ -12,6 +12,7 @@ from utils.onboarding_config import OnboardingConfig, load_all_configs
 from utils.captcha_gen import generate_captcha
 from utils.ratelimit import role_assign_limiter, welcome_limiter
 from config.emojis import get_emoji
+from config import links
 
 _pending_verifications: dict[int, dict] = {}
 
@@ -705,7 +706,7 @@ class AutoroleSetupView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             ),
             accent_colour=discord.Colour(0xFEE75C),
         )
@@ -1291,7 +1292,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(ToggleKickBtn(), ClearAddRolesBtn(), ClearRemoveRolesBtn()),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             ),
             accent_colour=discord.Colour(0x57F287),
         )
@@ -1505,7 +1506,7 @@ class OnboardingSetupView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             ),
             accent_colour=discord.Colour(0x5865F2)
         )
@@ -1528,7 +1529,7 @@ class RoleMenuSetupView(discord.ui.LayoutView):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             ),
             accent_colour=discord.Colour(0x57F287)
         )
@@ -1564,7 +1565,7 @@ class Onboarding(commands.Cog):
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"-# **Need help?**\n-# Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                    content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
                 )
             )
             view.add_item(container)

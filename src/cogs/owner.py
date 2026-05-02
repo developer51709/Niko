@@ -10,6 +10,7 @@ import sys
 import asyncio
 from utils.paginator import PaginatedView, paginate
 from config.emojis import get_emoji
+from config import links
 from .error_handler import is_owner
 # image extractor used for setpfp and setbanner
 from utils.image.extractor import extract_image_from_message
@@ -564,7 +565,7 @@ class OwnerCog(commands.Cog):
                 discord.ui.Button(
                     label="Support Server",
                     style=discord.ButtonStyle.link,
-                    url="https://discord.gg/C845M9PXbP",
+                    url=links.SUPPORT_SERVER,
                     emoji=get_emoji("discord")
                 )
             )
@@ -830,7 +831,7 @@ class OwnerCog(commands.Cog):
                                 ),
                                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                                 discord.ui.TextDisplay(
-                                    content="-# If you believe this is a mistake, please open a ticket in the [support server](https://dsc.gg/astral-haven)."
+                                    content=f"-# If you believe this is a mistake, please open a ticket in the [support server]({links.SUPPORT_SERVER})."
                                 ),
                                 accent_colour=discord.Color.red()
                             )

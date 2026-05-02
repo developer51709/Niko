@@ -4,6 +4,7 @@
 import discord
 from discord.ext import commands
 from utils.logging import info, success, warning, error, debug
+from config import links
 
 MAIN_CHANNEL_NAMES = [
     "general",
@@ -115,7 +116,7 @@ class Introduction(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# 📌 **Need help?**\n-# Ask in the [support server](https://discord.gg/3JFbm2wfNk) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# 📌 **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             )
         )
 

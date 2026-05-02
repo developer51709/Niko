@@ -10,6 +10,7 @@ import psutil
 import os
 from config.emojis import get_emoji
 from utils.ai_config import get_personality
+from config import links
 
 MESSAGES = {
     "normal": {
@@ -644,24 +645,24 @@ class InfoCog(commands.Cog):
                     label="GitHub", 
                     style=discord.ButtonStyle.link, 
                     emoji=get_emoji("github"), 
-                    url="https://github.com/developer51709/Niko"
+                    url=links.GITHUB
                 ),
                 discord.ui.Button(
                     label="Website", 
                     style=discord.ButtonStyle.link, 
                     emoji=get_emoji("website"),
-                    url="https://developer51709.github.io/Niko"),
+                    url=links.WEBSITE),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
                     label="ToS", 
                     style=discord.ButtonStyle.link, 
-                    url="https://developer51709.github.io/Niko/tos.html"
+                    url=links.TOS
                 ),
                 discord.ui.Button(
                     label="Privacy Policy", 
                     style=discord.ButtonStyle.link, 
-                    url="https://developer51709.github.io/Niko/privacy.html"
+                    url=links.PRIVACY
                 ),
             )
         )

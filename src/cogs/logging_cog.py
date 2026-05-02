@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 
 from utils import logging
+from config import links
 from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
 
@@ -779,7 +780,7 @@ class LoggingSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(_SetAllBtn(), _ClearAllBtn()),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# **Need help?** Ask in the [support server](https://dsc.gg/astral-haven) or check the [documentation](https://developer51709.github.io/Niko/docs)"
+                content=f"-# **Need help?** Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
             ),
             accent_colour=discord.Colour(0x5865F2),
         )

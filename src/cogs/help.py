@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
+from config import links
 
 PAGE_SIZE = 8
 
@@ -698,9 +699,9 @@ def _general_text(bot: commands.Bot, lang: str) -> str:
         f"{_ui(lang, 'general_links_title', icon=get_emoji('icon_link'))}\n"
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
-        f"[Website](https://developer51709.github.io/Niko) • "
-        f"[Support Server](https://discord.gg/3JFbm2wfNk) • "
-        f"[Community Server](https://dsc.gg/aether-lounge)"
+        f"[Website]({links.WEBSITE}) • "
+        f"[Support Server]({links.SUPPORT_SERVER}) • "
+        f"[Community Server]({links.COMMUNITY_SERVER})"
     )
 
 

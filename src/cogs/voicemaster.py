@@ -11,12 +11,13 @@ from utils import decorators
 from utils import logging
 import utils.emojis as E
 from config.emojis import get_emoji
+from config import links
 
 COLOR_DEFAULT = 0xFFFFFF
 COLOR_SUCCESS = 0x00CC66
 COLOR_ERROR = 0xFF0000
 
-SUPPORT_URL = "https://dsc.gg/astral-haven"
+SUPPORT_URL = links.SUPPORT_SERVER
 BOT_NAME = "Niko"
 
 def make_container(text: str, accent: int = COLOR_DEFAULT) -> ui.LayoutView:
