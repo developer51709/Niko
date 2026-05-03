@@ -200,5 +200,15 @@
         "personality": "cafe",
         "enabled": "True",
         "ai_actions_experiment": "False"
+    },
+    "1484163911971246175": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1499827795990417649": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
     }
 }
