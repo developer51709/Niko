@@ -1,11 +1,13 @@
 {
-  "balance": 5296,
-  "inventory": {},
-  "bank": 10150,
-  "net_worth": 15446,
-  "daily_streak": 5,
-  "last_daily": 1777811569,
-  "last_work": 1777811611,
+  "balance": 2779,
+  "inventory": {
+    "regular_badge": 1
+  },
+  "bank": 10000,
+  "net_worth": 12779,
+  "daily_streak": 6,
+  "last_daily": 1777900393,
+  "last_work": 1777900409,
   "last_crime": 1777483926,
   "last_rob": 1777488833,
   "last_heist": 0,
@@ -18,17 +20,47 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 11547,
-  "total_spent": 350,
-  "xp": 240,
-  "level": 1,
+  "total_earned": 13880,
+  "total_spent": 5350,
+  "xp": 252,
+  "level": 2,
   "job": "barista",
-  "times_worked": 20,
+  "times_worked": 21,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
   "lottery_tickets": 1,
   "transactions": [
+    {
+      "ts": 1777900658,
+      "kind": "deposit",
+      "amount": 50,
+      "note": "wallet \u2192 vault"
+    },
+    {
+      "ts": 1777900635,
+      "kind": "withdraw",
+      "amount": 200,
+      "note": "vault \u2192 wallet"
+    },
+    {
+      "ts": 1777900502,
+      "kind": "buy",
+      "amount": -5000,
+      "note": "1x Caf\u00e9 Regular Badge"
+    },
+    {
+      "ts": 1777900409,
+      "kind": "work",
+      "amount": 133,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1777900393,
+      "kind": "daily",
+      "amount": 2200,
+      "note": "day 6 \u2022 x2.2"
+    },
     {
       "ts": 1777898886,
       "kind": "interest",
@@ -237,36 +269,6 @@
       "ts": 1777261949,
       "kind": "work",
       "amount": 99,
-      "note": "Barista shift"
-    },
-    {
-      "ts": 1777261937,
-      "kind": "daily",
-      "amount": 1200,
-      "note": "day 1 \u2022 x1.2"
-    },
-    {
-      "ts": 1777248028,
-      "kind": "interest",
-      "amount": 20,
-      "note": "daily Tin Jar interest"
-    },
-    {
-      "ts": 1777226629,
-      "kind": "work",
-      "amount": 85,
-      "note": "Barista shift"
-    },
-    {
-      "ts": 1777223583,
-      "kind": "deposit",
-      "amount": 2000,
-      "note": "wallet \u2192 vault"
-    },
-    {
-      "ts": 1777223027,
-      "kind": "work",
-      "amount": 159,
       "note": "Barista shift"
     }
   ],
