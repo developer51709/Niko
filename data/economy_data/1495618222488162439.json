@@ -1,13 +1,13 @@
 {
-  "balance": 2779,
+  "balance": 9996,
   "inventory": {
     "regular_badge": 1
   },
   "bank": 10000,
-  "net_worth": 12779,
-  "daily_streak": 6,
-  "last_daily": 1777900393,
-  "last_work": 1777900409,
+  "net_worth": 19996,
+  "daily_streak": 7,
+  "last_daily": 1778073075,
+  "last_work": 1778073092,
   "last_crime": 1777483926,
   "last_rob": 1777488833,
   "last_heist": 0,
@@ -20,17 +20,47 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 13880,
+  "total_earned": 21097,
   "total_spent": 5350,
-  "xp": 252,
+  "xp": 264,
   "level": 2,
   "job": "barista",
-  "times_worked": 21,
+  "times_worked": 22,
   "bank_tier": 0,
   "last_interest": 0,
   "effects": {},
-  "lottery_tickets": 1,
+  "lottery_tickets": 0,
   "transactions": [
+    {
+      "ts": 1778073192,
+      "kind": "withdraw",
+      "amount": 50,
+      "note": "vault \u2192 wallet"
+    },
+    {
+      "ts": 1778073092,
+      "kind": "work",
+      "amount": 87,
+      "note": "Barista shift"
+    },
+    {
+      "ts": 1778073075,
+      "kind": "daily",
+      "amount": 2400,
+      "note": "day 7 \u2022 x2.4"
+    },
+    {
+      "ts": 1778071199,
+      "kind": "lottery",
+      "amount": 4680,
+      "note": "weekly draw winner (1 tickets)"
+    },
+    {
+      "ts": 1778071199,
+      "kind": "interest",
+      "amount": 50,
+      "note": "daily Tin Jar interest"
+    },
     {
       "ts": 1777900658,
       "kind": "deposit",
@@ -240,41 +270,12 @@
       "kind": "lottery_buy",
       "amount": -200,
       "note": "1 tickets"
-    },
-    {
-      "ts": 1777315682,
-      "kind": "rob",
-      "amount": 23,
-      "note": "from \ud835\ude15\ud835\ude26\ud835\ude39\ud835\ude30"
-    },
-    {
-      "ts": 1777314466,
-      "kind": "work",
-      "amount": 134,
-      "note": "Barista shift"
-    },
-    {
-      "ts": 1777288925,
-      "kind": "work",
-      "amount": 184,
-      "note": "Barista shift"
-    },
-    {
-      "ts": 1777262135,
-      "kind": "deposit",
-      "amount": 970,
-      "note": "wallet \u2192 vault"
-    },
-    {
-      "ts": 1777261949,
-      "kind": "work",
-      "amount": 99,
-      "note": "Barista shift"
     }
   ],
   "achievements": [
     "first_paycheck",
-    "saver"
+    "saver",
+    "streak_7"
   ],
-  "last_interest_day": "2026-05-04"
+  "last_interest_day": "2026-05-06"
 }

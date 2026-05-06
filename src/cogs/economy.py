@@ -930,10 +930,10 @@ class EconomyCog(commands.Cog):
             )
 
         body_blocks = []
-        labels = {"consumable": "🧪 Consumables", "upgrade": "🏦 Upgrades", "collectible": "🎖️ Collectibles"}
+        labels = {"consumable": "Consumables", "upgrade": "Upgrades", "collectible": "Collectibles"}
         for c in cats:
             if sections[c]:
-                body_blocks.append(f"**{labels[c]}**\n" + "\n\n".join(sections[c]))
+                body_blocks.append(f"### **{labels[c]}**\n" + "\n\n".join(sections[c]))
         if not body_blocks:
             return await ctx.send(view=_info_view("☕ Empty shelves", "Nothing in stock for that category."))
 
