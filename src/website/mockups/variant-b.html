@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Variant B — Minimal & Crisp</title>
+<style>
+  :root{--bg:#faf7f3;--bg2:#f2ede6;--bg3:#e8e0d6;--accent:#b8622e;--accent2:#d97c42;--accentLight:rgba(184,98,46,.1);--text:#1a1510;--muted:#7a6e65;--border:rgba(26,21,16,.1);--r:12px;--font:system-ui,-apple-system,"Inter",sans-serif}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6}
+  /* NAV */
+  nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:.8rem 2rem;background:rgba(250,247,243,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+  .logo{font-weight:800;font-size:1.05rem;letter-spacing:.01em;color:var(--text)}
+  .logo em{color:var(--accent);font-style:normal}
+  .nav-links{display:flex;align-items:center;gap:.3rem}
+  .nav-link{padding:.35rem .85rem;border-radius:999px;font-size:.82rem;color:var(--muted);text-decoration:none;transition:color .18s,background .18s;cursor:pointer;border:none;background:none;font-family:inherit}
+  .nav-link:hover{color:var(--text);background:rgba(0,0,0,.06)}
+  .nav-link.active{color:var(--accent);background:var(--accentLight);font-weight:600}
+  .btn-nav{padding:.42rem 1.1rem;border-radius:999px;background:var(--text);color:#fff;border:none;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;transition:background .18s,transform .15s}
+  .btn-nav:hover{background:#2d2520;transform:translateY(-1px)}
+  /* HERO */
+  .hero{max-width:1060px;margin:0 auto;padding:5rem 2rem 4.5rem;display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center}
+  .hero-eyebrow{display:flex;align-items:center;gap:.5rem;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:700;margin-bottom:1.1rem}
+  .hero-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  h1{font-size:clamp(2rem,3.5vw,2.8rem);font-weight:900;line-height:1.12;letter-spacing:-.03em;margin-bottom:.9rem;color:var(--text)}
+  .hero-sub{color:var(--muted);font-size:1rem;margin-bottom:2rem;max-width:420px;line-height:1.7}
+  .hero-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:2.5rem}
+  .btn{display:inline-flex;align-items:center;gap:.45rem;padding:.65rem 1.4rem;border-radius:999px;font-size:.88rem;font-weight:600;cursor:pointer;text-decoration:none;transition:all .18s;border:none;font-family:inherit}
+  .btn-primary{background:var(--text);color:#fff}
+  .btn-primary:hover{background:#2d2520;transform:translateY(-1px)}
+  .btn-outline{background:transparent;color:var(--text);border:1.5px solid var(--border)}
+  .btn-outline:hover{background:rgba(0,0,0,.05)}
+  /* Stats row */
+  .stats{display:flex;gap:2rem;flex-wrap:wrap}
+  .stat-val{font-size:1.6rem;font-weight:800;color:var(--text);line-height:1;letter-spacing:-.02em}
+  .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-top:.1rem}
+  /* Hero art — right panel */
+  .hero-right{display:flex;flex-direction:column;gap:.8rem}
+  .art-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:1.2rem 1.4rem;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+  .art-card-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;font-size:.75rem;font-weight:600;color:var(--muted)}
+  .art-tag{display:inline-flex;align-items:center;gap:.3rem;background:rgba(34,197,94,.1);color:#16a34a;border-radius:999px;padding:.15rem .55rem;font-size:.65rem;font-weight:700}
+  .art-msg-text{font-size:.85rem;color:var(--text);line-height:1.5}
+  .art-bar-wrap{margin-top:.5rem;height:4px;border-radius:2px;background:var(--bg2);overflow:hidden}
+  .art-bar{height:100%;border-radius:2px;background:var(--accent);width:65%}
+  .art-chip-row{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}
+  .art-chip{background:var(--accentLight);color:var(--accent);border-radius:999px;padding:.2rem .6rem;font-size:.68rem;font-weight:600}
+  /* FEATURES */
+  .section{max-width:1060px;margin:0 auto;padding:4rem 2rem}
+  .section-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:2.5rem;gap:1rem}
+  .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-weight:700;margin-bottom:.4rem}
+  .section-title{font-size:1.8rem;font-weight:800;letter-spacing:-.02em;color:var(--text)}
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:16px;overflow:hidden}
+  .feat-card{background:var(--bg);padding:1.8rem;border:none;transition:background .18s}
+  .feat-card:hover{background:var(--bg2)}
+  .feat-icon{font-size:1.5rem;margin-bottom:.75rem}
+  .feat-title{font-size:.93rem;font-weight:700;margin-bottom:.3rem;color:var(--text)}
+  .feat-text{font-size:.8rem;color:var(--muted);line-height:1.55}
+  /* COMMANDS */
+  .cmd-section{max-width:1060px;margin:0 auto;padding:4rem 2rem}
+  .cmd-search-wrap{position:relative;margin:2rem 0 1rem}
+  .cmd-search{width:100%;padding:.75rem 1rem .75rem 2.8rem;background:#fff;border:1.5px solid var(--border);border-radius:var(--r);color:var(--text);font-size:.88rem;outline:none;font-family:inherit;transition:border-color .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .cmd-search:focus{border-color:var(--accent)}
+  .cmd-search-icon{position:absolute;left:.9rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.4}
+  .cmd-filters{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.4rem}
+  .filter-chip{padding:.32rem .85rem;border-radius:999px;font-size:.78rem;cursor:pointer;transition:all .15s;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:inherit}
+  .filter-chip.on{background:var(--text);border-color:var(--text);color:#fff}
+  .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem}
+  .cmd-card{background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:.9rem 1.1rem;transition:border-color .15s,box-shadow .15s}
+  .cmd-card:hover{border-color:rgba(184,98,46,.3);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+  .cmd-name{font-family:ui-monospace,"Cascadia Code",monospace;font-size:.8rem;color:var(--accent);font-weight:700;margin-bottom:.2rem}
+  .cmd-desc{font-size:.78rem;color:var(--muted);line-height:1.45}
+  .cmd-tag{display:inline-block;background:var(--bg2);border-radius:4px;padding:.07rem .4rem;font-size:.65rem;color:var(--muted);margin-top:.35rem}
+  /* DIVIDER */
+  .divider{max-width:1060px;margin:0 auto;height:1px;background:var(--border)}
+  /* FOOTER */
+  footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;max-width:1060px;margin:0 auto;font-size:.8rem;color:var(--muted)}
+  footer a{color:var(--muted);text-decoration:none;transition:color .15s}
+  footer a:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">niko <em>☕</em></span>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Home</a>
+    <a class="nav-link" href="#">Commands</a>
+    <a class="nav-link" href="#">Docs</a>
+    <a class="nav-link" href="#">Dashboard</a>
+    <div style="width:1px;height:16px;background:var(--border);margin:0 .3rem"></div>
+    <button class="nav-link active">EN</button>
+    <button class="nav-link">DE</button>
+    <button class="nav-link">ES</button>
+    <a class="btn-nav" href="#">Invite Niko</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div>
+    <div class="hero-eyebrow"><span class="hero-dot"></span>Discord Bot</div>
+    <h1>your cozy café‑vibe discord companion</h1>
+    <p class="hero-sub">warm, friendly, trilingual — niko brings soft vibes, AI chat, music, and community tools to your server.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#">Invite Niko</a>
+      <a class="btn btn-outline" href="#">View Commands</a>
+      <a class="btn btn-outline" href="#">Dashboard</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-val">55</div><div class="stat-label">Servers</div></div>
+      <div class="stat"><div class="stat-val">1,342</div><div class="stat-label">Users</div></div>
+      <div class="stat"><div class="stat-val">76</div><div class="stat-label">Commands</div></div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="art-card">
+      <div class="art-card-head">🧠 AI Chat <span class="art-tag">● Online</span></div>
+      <div class="art-msg-text">hey bestie, what can i brew for you today? ☕✨</div>
+    </div>
+    <div class="art-card">
+      <div class="art-card-head">🎵 Now Playing</div>
+      <div class="art-msg-text" style="font-size:.82rem">lofi beats to chill/study to</div>
+      <div class="art-bar-wrap"><div class="art-bar"></div></div>
+      <div style="font-size:.7rem;color:var(--muted);margin-top:.3rem">3:24 / 5:12</div>
+    </div>
+    <div class="art-card">
+      <div class="art-card-head">⭐ Level Up!</div>
+      <div class="art-msg-text" style="font-size:.82rem">you reached <strong>level 12</strong> — keep going!</div>
+      <div class="art-chip-row">
+        <span class="art-chip">+180 XP</span>
+        <span class="art-chip">Rank: #4</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="section">
+  <div class="section-head">
+    <div>
+      <div class="section-label">Features</div>
+      <div class="section-title">everything niko can do</div>
+    </div>
+  </div>
+  <div class="feat-grid">
+    <div class="feat-card"><div class="feat-icon">🧠</div><div class="feat-title">AI Chat</div><div class="feat-text">Memory-aware AI with café personality and favorability. EN/DE/ES.</div></div>
+    <div class="feat-card"><div class="feat-icon">🎵</div><div class="feat-title">Music</div><div class="feat-text">Lavalink + Spotify. Queue, loop, autoplay from Last.fm.</div></div>
+    <div class="feat-card"><div class="feat-icon">⭐</div><div class="feat-title">Leveling</div><div class="feat-text">XP, roles, live panel, custom messages, per-guild config.</div></div>
+    <div class="feat-card"><div class="feat-icon">🥐</div><div class="feat-title">Economy</div><div class="feat-text">Jobs, bank, shop, casino, lottery — full image cards.</div></div>
+    <div class="feat-card"><div class="feat-icon">🛡️</div><div class="feat-title">Moderation</div><div class="feat-text">AutoMod, anti-raid, anti-spam, filters, mod log.</div></div>
+    <div class="feat-card"><div class="feat-icon">🎉</div><div class="feat-title">Community</div><div class="feat-text">Giveaways, polls, tickets, starboard, birthdays.</div></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="cmd-section">
+  <div class="section-head">
+    <div>
+      <div class="section-label">Commands</div>
+      <div class="section-title">browse all 76 commands</div>
+    </div>
+  </div>
+  <div class="cmd-search-wrap">
+    <span class="cmd-search-icon">🔍</span>
+    <input class="cmd-search" placeholder="Search commands…" />
+  </div>
+  <div class="cmd-filters">
+    <button class="filter-chip on">All</button>
+    <button class="filter-chip">Economy 🥐</button>
+    <button class="filter-chip">Music 🎵</button>
+    <button class="filter-chip">Leveling ⭐</button>
+    <button class="filter-chip">Moderation 🛡️</button>
+    <button class="filter-chip">AI 🧠</button>
+    <button class="filter-chip">Fun 🎲</button>
+    <button class="filter-chip">Utility 🔧</button>
+  </div>
+  <div class="cmd-grid">
+    <div class="cmd-card"><div class="cmd-name">/balance [user]</div><div class="cmd-desc">Image wallet card — cash, bank, level, XP, rank.</div><span class="cmd-tag">economy</span></div>
+    <div class="cmd-card"><div class="cmd-name">/daily</div><div class="cmd-desc">Claim daily treat — streak multiplier up to ×2.4.</div><span class="cmd-tag">economy</span></div>
+    <div class="cmd-card"><div class="cmd-name">/play [query|url]</div><div class="cmd-desc">Queue from YouTube, Spotify, or direct URL.</div><span class="cmd-tag">music</span></div>
+    <div class="cmd-card"><div class="cmd-name">/level [user]</div><div class="cmd-desc">XP, level, and server rank card.</div><span class="cmd-tag">leveling</span></div>
+    <div class="cmd-card"><div class="cmd-name">/automod</div><div class="cmd-desc">Interactive AutoMod dashboard — spam, links, raids.</div><span class="cmd-tag">moderation</span></div>
+    <div class="cmd-card"><div class="cmd-name">/giveaway</div><div class="cmd-desc">Interactive setup with requirements and auto-draw.</div><span class="cmd-tag">community</span></div>
+  </div>
+</section>
+
+<footer>
+  <span>made with love by nyxen ☕</span>
+  <div style="display:flex;gap:1.2rem">
+    <a href="#">ToS</a>
+    <a href="#">Privacy</a>
+    <a href="#">GitHub</a>
+  </div>
+</footer>
+<script>
+  document.querySelectorAll('.filter-chip').forEach(c=>{
+    c.addEventListener('click',()=>{document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('on'));c.classList.add('on')})
+  })
+</script>
+</body>
+</html>
