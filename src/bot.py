@@ -9,10 +9,10 @@ import datetime
 import importlib
 from discord.ext import commands
 from config.emojis import get_emoji
-from utils.ai_local import generate_reply_local
-from utils.ai_openai import generate_reply_openai
-from utils.ai_nikoapi import generate_reply_nikoapi
-from utils.ai_config import get_ai_config
+from utils.ai.local import generate_reply_local
+from utils.ai.openai_client import generate_reply_openai
+from utils.ai.nikoapi import generate_reply_nikoapi
+from utils.ai.config import get_ai_config
 from utils.prefix_manager import get_prefixes
 from utils.emoji_sync import sync_application_emojis
 from utils.blacklist_manager import BlacklistManager
@@ -562,7 +562,7 @@ async def on_message(msg: discord.Message):
 
         # ── AI Actions: handle structured action responses ─────────────
         if isinstance(reply, dict):
-            from utils.ai_actions import dispatch_ai_action
+            from utils.ai.actions import dispatch_ai_action
             self = bot
             await dispatch_ai_action(self, msg, reply)
             return

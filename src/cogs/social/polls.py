@@ -20,7 +20,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 DATA_FILE = "data/polls.json"
 LETTER_EMOJIS = ["🇦", "🇧", "🇨", "🇩", "🇪", "🇫", "🇬", "🇭", "🇮", "🇯"]

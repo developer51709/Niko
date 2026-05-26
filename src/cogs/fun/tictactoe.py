@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from typing import List
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 # -----------------------------
 # MESSAGE DICTIONARY

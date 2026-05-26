@@ -7,7 +7,7 @@ import os
 import re
 import random
 from typing import Dict, List, Any
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 DATA_FILE = "data/uwulock.json"
 

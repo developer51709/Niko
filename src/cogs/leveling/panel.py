@@ -6,7 +6,7 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 from config.emojis import get_emoji
 
 # ───────────────────────────────────────────────────

@@ -3,13 +3,13 @@ import discord
 from discord.ext import commands
 from discord.ui import Modal, TextInput
 
-from utils.onboarding_utils import (
+from utils.onboarding.utils import (
     get_config,
     update_config,
     build_welcome_view,
 )
-from utils.onboarding_config import OnboardingConfig, load_all_configs
-from utils.captcha_gen import generate_captcha
+from utils.onboarding.config import OnboardingConfig, load_all_configs
+from utils.onboarding.captcha import generate_captcha
 from utils.ratelimit import role_assign_limiter, welcome_limiter
 from config.emojis import get_emoji
 from config import links

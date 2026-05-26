@@ -32,7 +32,7 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils import logging as log
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 # ──────────────────────────────────────────────────
 #  CONSTANTS

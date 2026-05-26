@@ -24,7 +24,7 @@ import discord
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 DATA_FILE = "data/birthdays.json"
 DATE_RE = re.compile(r"^\s*(\d{1,2})[-/](\d{1,2})\s*$")

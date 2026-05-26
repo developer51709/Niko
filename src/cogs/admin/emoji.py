@@ -9,7 +9,7 @@ from typing import Optional
 import zipfile
 import asyncio
 from utils import logging as log
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 MESSAGES = {
     "normal": {

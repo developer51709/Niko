@@ -2,7 +2,7 @@
 import datetime
 from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError
 import os
-from utils.memory import (
+from utils.ai.memory import (
     get_user_memory,
     get_conversation_history,
     get_favorability,

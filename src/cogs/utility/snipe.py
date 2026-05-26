@@ -5,7 +5,7 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 MAX_HISTORY = 10   # deleted messages kept per channel
 MAX_CONTENT = 900  # characters shown before truncation

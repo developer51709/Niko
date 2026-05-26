@@ -1,6 +1,6 @@
 # utils/ai_local.py
 import datetime
-from utils.memory import (
+from utils.ai.memory import (
     get_user_memory,
     get_conversation_history,
     get_favorability,

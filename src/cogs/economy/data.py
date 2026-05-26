@@ -25,7 +25,7 @@ from discord.ext import commands, tasks
 
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 from config.emojis import get_emoji
 from utils.economy_jobs import (
     JOBS, DEFAULT_JOB, get_job,

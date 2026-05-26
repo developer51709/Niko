@@ -1,4 +1,4 @@
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 
 
 def get_lang(ctx) -> str:

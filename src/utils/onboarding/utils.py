@@ -1,5 +1,5 @@
 import discord
-from utils.onboarding_config import load_config, save_config, OnboardingConfig
+from utils.onboarding.config import load_config, save_config, OnboardingConfig
 
 
 def get_config(guild_id: int) -> OnboardingConfig:

@@ -10,7 +10,7 @@ import asyncio
 from colorama import Fore, Style, init as colorama_init
 from config.emojis import get_emoji
 from utils import logging
-from utils.ai_debugging import send_debug_report
+from utils.ai.debugging import send_debug_report
 from utils.blacklist_manager import BlacklistManager
 
 # ── Prefix-command errors ───────────────────────────────────────────────

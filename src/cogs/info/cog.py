@@ -9,7 +9,7 @@ import platform
 import psutil
 import os
 from config.emojis import get_emoji
-from utils.ai_config import get_personality
+from utils.ai.config import get_personality
 from config import links
 
 MESSAGES = {

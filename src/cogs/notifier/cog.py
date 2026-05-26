@@ -19,11 +19,11 @@ from discord.ext import commands, tasks
 from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
-from utils.youtube  import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
-from utils.twitter  import fetch_latest_tweet, validate_twitter_username
-from utils.tiktok   import fetch_latest_tiktok, validate_tiktok_username
-from utils.bluesky  import fetch_latest_bluesky, validate_bluesky_handle
-from utils.reddit   import fetch_latest_reddit, validate_reddit
+from utils.social.youtube import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
+from utils.social.twitter import fetch_latest_tweet, validate_twitter_username
+from utils.social.tiktok import fetch_latest_tiktok, validate_tiktok_username
+from utils.social.bluesky import fetch_latest_bluesky, validate_bluesky_handle
+from utils.social.reddit import fetch_latest_reddit, validate_reddit
 
 # ─────────────────────────────────────────
 #  Platform registry

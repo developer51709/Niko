@@ -16,7 +16,7 @@ import logging
 import logging.handlers
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init as colorama_init
-from utils.ai_debugging import send_debug_report
+from utils.ai.debugging import send_debug_report
 
 colorama_init(autoreset=True)
 

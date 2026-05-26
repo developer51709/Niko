@@ -29,14 +29,14 @@ import discord
 from discord.ext import commands
 from discord.ui import Modal, TextInput
 
-from utils.ticket_utils import (
+from utils.tickets.utils import (
     get_ticket_config,
     update_ticket_config,
     get_all_ticket_configs,
     find_open_ticket,
 )
-from utils.ticket_config import TicketConfig
-from utils.ai_config import get_personality
+from utils.tickets.config import TicketConfig
+from utils.ai.config import get_personality
 from config.emojis import get_emoji
 
 
