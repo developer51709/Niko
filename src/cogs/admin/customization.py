@@ -7,7 +7,7 @@ import os
 import base64
 from utils import logging
 from config.emojis import get_emoji
-from .error_handler import is_owner
+from cogs.system.error_handler import is_owner
 
 # ---------- Helpers ----------
 

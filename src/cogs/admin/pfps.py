@@ -9,7 +9,7 @@ import os
 import random
 import asyncio
 from config.emojis import get_emoji
-from .error_handler import is_owner
+from cogs.system.error_handler import is_owner
 from utils.image.extractor import extract_image_from_message, extract_images_from_message
 from utils import logging
 

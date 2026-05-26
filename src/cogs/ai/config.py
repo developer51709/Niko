@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 import json
 from config.emojis import get_emoji
-from .error_handler import is_owner, under_development
+from cogs.system.error_handler import is_owner, under_development
 from utils.ai_config import set_ai_config, get_ai_config
 
 

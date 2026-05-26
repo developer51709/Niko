@@ -9,7 +9,7 @@ import asyncio
 from utils import logging
 from utils.image.extractor import extract_image_from_message
 from config.emojis import get_emoji
-from .error_handler import is_premium
+from cogs.system.error_handler import is_premium
 
 BASE_URL = "https://ofkulvdrcwpsebewszsz.supabase.co/functions/v1"
 

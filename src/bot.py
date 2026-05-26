@@ -685,11 +685,17 @@ async def _create_tables(bot):
 async def load_cogs():
     print(f"{colorama.Fore.YELLOW}Loading cogs...{colorama.Style.RESET_ALL}")
 
-    for filename in os.listdir("./src/cogs"):
-        if not filename.endswith(".py"):
-            continue
+    for item in os.listdir("./src/cogs"):
+        item_path = os.path.join("./src/cogs", item)
 
-        module_name = f"cogs.{filename[:-3]}"
+        # Flat .py file (skip __init__.py and __pycache__)
+        if os.path.isfile(item_path) and item.endswith(".py") and item != "__init__.py":
+            module_name = f"cogs.{item[:-3]}"
+        # Package directory with __init__.py
+        elif os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, "__init__.py")):
+            module_name = f"cogs.{item}"
+        else:
+            continue
 
         try:
             # Import the module WITHOUT loading it as an extension yet
@@ -698,15 +704,15 @@ async def load_cogs():
             # Check for DNL flag
             if getattr(module, "DNL", False):
                 reason = getattr(module, "DNL_REASON", "No reason provided")
-                print(f"{colorama.Fore.YELLOW}Skipped loading cog: {filename[:-3]} (Reason: {reason}){colorama.Style.RESET_ALL}")
+                print(f"{colorama.Fore.YELLOW}Skipped loading cog: {module_name} (Reason: {reason}){colorama.Style.RESET_ALL}")
                 continue
 
             # Safe to load
             await bot.load_extension(module_name)
-            print(f"{colorama.Fore.GREEN}Loaded cog: {filename[:-3]}{colorama.Style.RESET_ALL}")
+            print(f"{colorama.Fore.GREEN}Loaded cog: {module_name}{colorama.Style.RESET_ALL}")
 
         except Exception as e:
-            print(f"{colorama.Fore.RED}Failed to load cog {filename[:-3]}: {e}{colorama.Style.RESET_ALL}")
+            print(f"{colorama.Fore.RED}Failed to load cog {module_name}: {e}{colorama.Style.RESET_ALL}")
 
 # -----------------------------
 # Initialize database

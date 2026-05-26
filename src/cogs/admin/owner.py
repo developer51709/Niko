@@ -11,7 +11,7 @@ import asyncio
 from utils.paginator import PaginatedView, paginate
 from config.emojis import get_emoji
 from config import links
-from .error_handler import is_owner
+from cogs.system.error_handler import is_owner
 # image extractor used for setpfp and setbanner
 from utils.image.extractor import extract_image_from_message
 from utils.blacklist_manager import BlacklistManager
