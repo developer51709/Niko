@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import requests
 import discord
@@ -119,32 +120,72 @@ Social Behavior:
 def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def print_banner():
-    CURRENT_MODEL = AI_MODE
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
+
+def _vis(s: str) -> int:
+    """Visible (display) length of a string — ANSI escape codes have zero width."""
+    return len(_ANSI_RE.sub('', s))
+
+def print_banner(guild_count: int = 0):
     if not DEBUG_MODE == "True":
-       clear_console()
-    print(f"""{colorama.Fore.MAGENTA}
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
-░░░░░░░▓▓░░▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
-░░░░░░░▓░▓░▓░░░▓░░░▓▓░░░▓░░░▓░░░░░░░
-░░░░░░░▓░░▓▓░░░▓░░░▓░▓░░▓░░░▓░░░░░░░
-░░░░░░░▓░░░▓░▓▓▓▓▓░▓░░▓░░▓▓▓░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-    {colorama.Style.RESET_ALL}""")
-    print(f"""{colorama.Fore.MAGENTA}
-Niko - A cute, playful, and very social AI companion for your Discord server.
+        clear_console()
 
-Made by Nyxen:
-    Discord - @n.y.x.e.n
-    GitHub - @developer51709
+    R  = colorama.Style.RESET_ALL
+    M  = colorama.Fore.MAGENTA
+    BR = colorama.Style.BRIGHT
+    C  = colorama.Fore.CYAN
+    W  = colorama.Fore.WHITE
+    DM = colorama.Style.DIM
 
-Version: 1.0
+    IW = 55  # visible chars between the two │ border chars
 
-Model: {CURRENT_MODEL}
+    def bline(content: str = "") -> str:
+        pad = max(0, IW - _vis(content))
+        return f"{M}{BR}│{R}{content}{' ' * pad}{M}{BR}│{R}"
 
-Online as {bot.user}
-    {colorama.Style.RESET_ALL}""")
+    def div(left: str = "├", right: str = "┤") -> str:
+        return f"{M}{BR}{left}{'─' * IW}{right}{R}"
+
+    art = [
+        f"  {W}{BR} ███╗   ██╗ ██╗██╗  ██╗  ██████╗ {R}",
+        f"  {W}{BR} ████╗  ██║ ██║██║ ██╔╝ ██╔═══██╗{R}",
+        f"  {W}{BR} ██╔██╗ ██║ ██║█████╔╝  ██║   ██║{R}",
+        f"  {W}{BR} ██║╚██╗██║ ██║██╔═██╗  ██║   ██║{R}",
+        f"  {W}{BR} ██║ ╚████║ ██║██║  ██╗ ╚██████╔╝{R}",
+        f"  {W}{BR} ╚═╝  ╚═══╝ ╚═╝╚═╝  ╚═╝  ╚═════╝ {R}",
+    ]
+
+    def irow(lk: str, lv: str, rk: str = "", rv: str = "") -> str:
+        left = f"  {DM}{lk:<7}{R}  {W}{lv}{R}"
+        if not rk:
+            return bline(left)
+        gap   = max(2, 30 - _vis(left))
+        right = f"{' ' * gap}{DM}{rk:<8}{R}  {W}{rv}{R}"
+        return bline(left + right)
+
+    guild_str  = str(guild_count)
+    user_count = f"{len(bot.users):,}"
+
+    rows = [
+        "",
+        div("╭", "╮"),
+        bline(),
+        *[bline(a) for a in art],
+        bline(),
+        bline(f"  {C}a cozy cafe AI companion for Discord{R}"),
+        bline(f"  {DM}bilingual  ·  modular  ·  33+ cogs{R}"),
+        bline(),
+        div(),
+        bline(),
+        irow("bot",     str(bot.user),  "servers", guild_str),
+        irow("version", "1.0",          "users",   user_count),
+        irow("model",   AI_MODE,        "author",  "@n.y.x.e.n"),
+        bline(),
+        div("╰", "╯"),
+        "",
+    ]
+
+    print("\n".join(rows))
 
 # -----------------------------
 # Set the bot's status
@@ -230,18 +271,18 @@ def update_user_memory(user_id: int, message: str, role: str = "User"):
     # Update persistent character profile
     prev = _memory_data["users"].get(uid, "")
     _memory_data["users"][uid] = (prev + "\n" + message).strip()
-    
+
     # Update short-term conversation history
     if "conversations" not in _memory_data:
         _memory_data["conversations"] = {}
-    
+
     if uid not in _memory_data["conversations"]:
         _memory_data["conversations"][uid] = []
-    
+
     _memory_data["conversations"][uid].append({"role": role, "content": message})
     # Keep only last 10 exchanges to prevent context bloat
     _memory_data["conversations"][uid] = _memory_data["conversations"][uid][-10:]
-    
+
     save_memory()
 
 def adjust_favorability(user_id: int, delta: int = 1):
@@ -736,7 +777,7 @@ async def on_ready():
     await init_database(bot)
     await load_cogs()
     await set_status()
-    print_banner()
+    print_banner(guild_count=len(bot.guilds))
     # Sync application emojis in the background so startup isn't blocked
     asyncio.create_task(_run_emoji_sync())
     # Sync slash commands in the background so startup isn't blocked

@@ -41,6 +41,14 @@ LEVEL_COLORS = {
     "ERROR":   Fore.RED,
 }
 
+LEVEL_LABELS = {
+    "DEBUG":   "DEBUG",
+    "INFO":    "INFO",
+    "SUCCESS": "SUCCESS",
+    "WARNING": "WARNING",
+    "ERROR":   "ERROR",
+}
+
 # -----------------------------------
 # Register SUCCESS log level
 # -----------------------------------
@@ -58,18 +66,23 @@ logging.Logger.success = _success_method
 # Console formatter (colourised)
 # -----------------------------------
 class ConsoleFormatter(logging.Formatter):
+    _LEVEL_WIDTH  = 7    # longest label is "WARNING" / "SUCCESS" = 7
+    _MODULE_WIDTH = 18   # module name column
+
     def format(self, record):
-        level = record.levelname.upper()
+        level  = record.levelname.upper()
         module = record.name
-        timestamp = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
+        time   = self.formatTime(record, "%H:%M:%S")
 
-        padded_level = f"{level:<8}"
-        level_color  = LEVEL_COLORS.get(level, "")
-        level_str    = f"{level_color}[ {padded_level} ]{Style.RESET_ALL}"
-        module_str   = f"{BOLD}{CYAN}[ {module} ]{Style.RESET_ALL}"
-        timestamp_str = f"{GRAY}{timestamp}{Style.RESET_ALL}"
+        level_color = LEVEL_COLORS.get(level, "")
+        label       = LEVEL_LABELS.get(level, level)
 
-        return f"{level_str} {module_str} {timestamp_str}: {record.getMessage()}"
+        time_part   = f"{GRAY}{time}{Style.RESET_ALL}"
+        level_part  = f"{level_color}{Style.BRIGHT}{label:<{self._LEVEL_WIDTH}}{Style.RESET_ALL}"
+        module_part = f"{BOLD}{CYAN}{module:<{self._MODULE_WIDTH}}{Style.RESET_ALL}"
+        msg_part    = f"{level_color}{record.getMessage()}{Style.RESET_ALL}"
+
+        return f"  {time_part}  {level_part}  {module_part}  {msg_part}"
 
 
 # -----------------------------------
@@ -202,7 +215,7 @@ class AIDebugHandler(logging.Handler):
             asyncio.create_task(send_debug_report(self.bot, error))
         except Exception:
             pass
-        
+
 
 
 # -----------------------------------
