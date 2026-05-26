@@ -5,136 +5,187 @@
   <title>Niko — Cozy Café Discord Bot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- SEO -->
-  <meta name="description" content="Niko is a friendly, bilingual Discord bot with a cozy café vibe. Features include AI chat, music, leveling, moderation, community engagement, and more.">
-  <meta name="keywords" content="discord bot, niko bot, cozy discord bot, cafe discord bot, bilingual discord bot, german discord bot, english discord bot, ai discord bot, music bot, leveling bot, moderation bot, fun discord bot, community bot, aesthetic discord bot, cafe aesthetic bot, lo-fi discord bot">
-
-  <!-- Open Graph (Discord, Facebook, Reddit, etc.) -->
+  <meta name="description" content="Niko is a friendly, trilingual Discord bot with a cozy café vibe. AI chat, music, leveling, moderation, economy, and more.">
   <meta property="og:title" content="Niko — Cozy Café Discord Bot">
-  <meta property="og:description" content="A warm, bilingual Discord bot with a cozy café vibe. Music, AI chat, leveling, moderation, and more.">
+  <meta property="og:description" content="A warm, trilingual Discord bot with a cozy café vibe. Music, AI chat, leveling, moderation, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://developer51709.github.io/Niko">
-  <!-- <meta property="og:image" content="https://developer51709.github.io/Niko/og-image.png"> -->
-  <meta property="og:site_name" content="Niko Bot">
-
-  <!-- Twitter / X Card -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Niko — Cozy Café Discord Bot">
-  <meta name="twitter:description" content="A warm, bilingual Discord bot with a cozy café vibe. Music, AI chat, leveling, moderation, and more.">
-  <!-- <meta name="twitter:image" content="https://developer51709.github.io/Niko/og-image.png"> -->
-  <!-- <meta name="twitter:creator" content="@developer51709"> -->
-
-  <!-- Theme color for embeds -->
-  <meta name="theme-color" content="#c58b6b">
+  <meta name="theme-color" content="#d9956d">
 </head>
 <body class="page page--fade-in">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
   <header class="header">
-    <div class="header__left">
-      <span class="logo">niko ☕</span>
-    </div>
-    <div class="header__right">
-      <a href="docs/index.html" class="btn btn--ghost" style="font-size:.8rem;padding:.35rem .85rem">Docs</a>
-      <a href="dashboard.html" class="btn btn--ghost" style="font-size:.8rem;padding:.35rem .85rem">Dashboard</a>
+    <a href="index.html" class="logo link--transition">niko <em>☕</em></a>
+
+    <nav class="nav-center">
+      <a href="index.html"     class="nav-link link--transition"><span id="nav-home">Home</span></a>
+      <a href="commands.html"  class="nav-link link--transition"><span id="nav-commands">Commands</span></a>
+      <a href="docs/index.html" class="nav-link link--transition"><span id="nav-docs">Docs</span></a>
+      <a href="dashboard.html" class="nav-link link--transition"><span id="nav-dashboard">Dashboard</span></a>
+    </nav>
+
+    <div class="nav-right">
+      <div class="nav-sep"></div>
       <button class="lang-toggle" data-lang="en">EN</button>
       <button class="lang-toggle" data-lang="de">DE</button>
+      <button class="lang-toggle" data-lang="es">ES</button>
+      <div class="nav-sep"></div>
+      <a id="btn-invite-2" href="https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands"
+         class="btn btn--primary btn--sm lang-fade">Invite Niko ✨</a>
     </div>
   </header>
 
+  <!-- ── Main ─────────────────────────────────────────────────────────── -->
   <main class="main">
+
+    <!-- Hero -->
     <section class="hero">
       <div class="hero__content">
-        <h1 id="hero-title" class="lang-fade"></h1>
-        <p id="hero-sub" class="lang-fade"></p>
+        <div class="hero-tag">☕ Café-Vibe Discord Bot</div>
+        <h1 id="hero-title" class="lang-fade">your cozy <span>café‑vibe</span> discord companion</h1>
+        <p id="hero-sub" class="lang-fade">warm, friendly, trilingual — niko brings soft vibes, AI chat, music, and community tools to your server.</p>
+
         <div class="hero__buttons">
-          <a id="btn-invite" href="https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands" class="btn btn--primary lang-fade"></a>
-          <a id="btn-commands" href="#features" class="btn btn--ghost lang-fade"></a>
-          <a href="dashboard.html" class="btn btn--ghost">Dashboard</a>
-          <a href="https://github.com/developer51709/Niko" class="btn btn--ghost" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a id="btn-invite"
+             href="https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands"
+             class="btn btn--primary lang-fade">Invite Niko ✨</a>
+          <a id="btn-commands" href="commands.html" class="btn btn--ghost lang-fade link--transition">View Commands</a>
+          <a id="btn-dashboard" href="dashboard.html" class="btn btn--ghost lang-fade link--transition">Dashboard</a>
         </div>
-        <!-- Live stats bar -->
-        <div id="stats-bar" style="display:flex;gap:1.4rem;margin-top:1.2rem;font-size:.78rem;color:var(--muted);flex-wrap:wrap"></div>
+
+        <!-- Live stats -->
+        <div class="hero-stats" id="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat__val" id="stat-servers">—</span>
+            <span class="hero-stat__label">Servers</span>
+          </div>
+          <div class="hero-stat-sep"></div>
+          <div class="hero-stat">
+            <span class="hero-stat__val" id="stat-users">—</span>
+            <span class="hero-stat__label">Users</span>
+          </div>
+          <div class="hero-stat-sep"></div>
+          <div class="hero-stat">
+            <span class="hero-stat__val" id="stat-cmds">—</span>
+            <span class="hero-stat__label">Commands</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Art panel -->
       <div class="hero__art">
-        <img src="coffee.svg" alt="Coffee cup" class="coffee-svg" />
+        <div class="art-panel">
+          <span class="art-icon">☕</span>
+          <div class="art-chip">Niko is online</div>
+          <div class="art-msg">
+            <strong>🧠 AI Chat</strong>
+            hey bestie, what can i brew for you today? ✨
+          </div>
+          <div class="art-msg">
+            <strong>🎵 Now Playing</strong>
+            lofi beats to chill/study to — 3:24 / 5:12
+          </div>
+          <div class="art-msg">
+            <strong>⭐ Level Up!</strong>
+            you reached level 12 — keep going! 🌟
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="section section--cards">
-      <h2 id="features-title" class="lang-fade"></h2>
+    <div class="divider"></div>
+
+    <!-- Features -->
+    <section id="features" class="section">
+      <div class="section__label">Features</div>
+      <h2 id="features-title" class="section__title lang-fade">everything niko can do</h2>
+      <p id="features-sub" class="section__sub lang-fade">a full-featured bot with a consistent café personality across every feature.</p>
       <div class="cards">
         <article class="card">
-          <h3 id="feat-personality-title" class="lang-fade"></h3>
-          <p id="feat-personality-text" class="lang-fade"></p>
+          <div class="card-icon">🧠</div>
+          <h3 id="feat-personality-title" class="lang-fade">AI chat</h3>
+          <p  id="feat-personality-text" class="lang-fade">memory-aware AI with café personality, favorability, and bilingual replies.</p>
         </article>
         <article class="card">
-          <h3 id="feat-music-title" class="lang-fade"></h3>
-          <p id="feat-music-text" class="lang-fade"></p>
+          <div class="card-icon">🎵</div>
+          <h3 id="feat-music-title" class="lang-fade">music</h3>
+          <p  id="feat-music-text" class="lang-fade">lavalink + spotify, queue management, loop modes, and Last.fm autoplay.</p>
         </article>
         <article class="card">
-          <h3 id="feat-level-title" class="lang-fade"></h3>
-          <p id="feat-level-text" class="lang-fade"></p>
+          <div class="card-icon">⭐</div>
+          <h3 id="feat-level-title" class="lang-fade">leveling & stats</h3>
+          <p  id="feat-level-text" class="lang-fade">custom XP, role rewards, per-guild config, and a live management panel.</p>
         </article>
         <article class="card">
-          <h3 id="feat-fun-title" class="lang-fade"></h3>
-          <p id="feat-fun-text" class="lang-fade"></p>
+          <div class="card-icon">🥐</div>
+          <h3 id="feat-fun-title" class="lang-fade">economy</h3>
+          <p  id="feat-fun-text" class="lang-fade">jobs, bank, shop, casino, lottery — full café-themed economy with image cards.</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">🛡️</div>
+          <h3 id="feat-mod-title" class="lang-fade">moderation</h3>
+          <p  id="feat-mod-text" class="lang-fade">automod dashboard, anti-raid, anti-spam, bad-word filters, mod log.</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">🎉</div>
+          <h3 id="feat-community-title" class="lang-fade">community</h3>
+          <p  id="feat-community-text" class="lang-fade">giveaways, polls, tickets, suggestions, starboard, and birthdays.</p>
         </article>
       </div>
     </section>
 
-    <section class="section section--split">
+    <div class="divider"></div>
+
+    <!-- Personality / Trilingual split -->
+    <section class="section--split">
       <div class="split__block">
-        <h2 id="personality-title" class="lang-fade"></h2>
-        <p id="personality-text" class="lang-fade"></p>
+        <h2 id="personality-title" class="lang-fade">personality modes</h2>
+        <p  id="personality-text"  class="lang-fade">niko can speak plainly or like a soft café barista — and is ready for future moods.</p>
         <ul class="pill-list">
           <li>normal 🫗</li>
           <li>café ☕</li>
         </ul>
       </div>
       <div class="split__block">
-        <h2 id="bilingual-title" class="lang-fade"></h2>
+        <h2 id="bilingual-title" class="lang-fade">trilingual by design</h2>
         <div class="example-card">
-          <div>
-            <h4>EN</h4>
-            <p>“brewing your track bestie ☕🎶”</p>
-          </div>
-          <div>
-            <h4>DE</h4>
-            <p>„brühe deinen track auf liebchen ☕🎶“</p>
-          </div>
+          <div><h4>EN</h4><p>"brewing your track bestie ☕🎶"</p></div>
+          <div><h4>DE</h4><p>„brühe deinen track auf ☕🎶"</p></div>
+          <div><h4>ES</h4><p>"preparando tu canción ☕🎶"</p></div>
         </div>
       </div>
     </section>
+
   </main>
 
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
   <footer class="footer">
-    <div>
-      <span id="footer-text" class="lang-fade"></span>
-    </div>
+    <span id="footer-text" class="lang-fade">made with love by nyxen ☕</span>
     <nav class="footer__nav">
-      <a href="tos.html" id="nav-tos" class="link--transition lang-fade">ToS</a>
+      <a href="tos.html"     id="nav-tos"     class="link--transition lang-fade">ToS</a>
       <a href="privacy.html" id="nav-privacy" class="link--transition lang-fade">Privacy</a>
+      <a href="https://github.com/developer51709/Niko" target="_blank" rel="noopener noreferrer">GitHub</a>
     </nav>
   </footer>
 
   <script src="script.js"></script>
   <script>
-    // Fetch live bot stats and populate the stats bar
+    function fmtNum(n) {
+      if (!n) return '—';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return n.toLocaleString();
+    }
     fetch('/api/botstats').then(r => r.json()).then(s => {
-      const bar = document.getElementById('stats-bar');
-      if (!bar) return;
-      const items = [
-        { label: 'servers', value: s.guild_count },
-        { label: 'users',   value: s.user_count  },
-        { label: 'commands',value: s.command_count },
-      ];
-      bar.innerHTML = items.filter(i => i.value).map(i =>
-        `<span style="display:flex;align-items:center;gap:.3rem">
-           <span style="color:var(--accent);font-weight:600">${Number(i.value).toLocaleString()}</span>
-           ${i.label}
-         </span>`
-      ).join('<span style="opacity:.25">·</span>');
-    }).catch(() => {});
+      const el = id => document.getElementById(id);
+      if (el('stat-servers')) el('stat-servers').textContent = fmtNum(s.guild_count);
+      if (el('stat-users'))   el('stat-users').textContent   = fmtNum(s.user_count);
+      if (el('stat-cmds'))    el('stat-cmds').textContent    = s.command_count || '76';
+    }).catch(() => {
+      ['stat-servers','stat-users','stat-cmds'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+    });
   </script>
 </body>
 </html>

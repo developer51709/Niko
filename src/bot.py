@@ -779,6 +779,7 @@ async def on_ready():
     await set_status()
     print_banner(guild_count=len(bot.guilds))
     _write_bot_stats()
+    _write_commands()
     # Sync application emojis in the background so startup isn't blocked
     asyncio.create_task(_run_emoji_sync())
     # Sync slash commands in the background so startup isn't blocked
@@ -802,6 +803,84 @@ def _write_bot_stats():
             json.dump(payload, f)
     except Exception as exc:
         logging.error("Startup", f"Could not write bot_stats.json: {exc}")
+
+
+def _write_commands():
+    """Export all registered slash commands to data/commands.json for the website."""
+    CATEGORY_MAP = {
+        "Economy":       "economy",
+        "Casino":        "fun",
+        "Music":         "music",
+        "Leveling":      "leveling",
+        "Moderation":    "moderation",
+        "Automod":       "moderation",
+        "Admin":         "moderation",
+        "Logging":       "moderation",
+        "AI":            "ai",
+        "Fun":           "fun",
+        "Roleplay":      "fun",
+        "Utility":       "utility",
+        "Info":          "utility",
+        "Help":          "utility",
+        "System":        "utility",
+        "Voicemaster":   "utility",
+        "Notifier":      "utility",
+        "Reminders":     "utility",
+        "Tags":          "utility",
+        "Giveaway":      "community",
+        "Tickets":       "community",
+        "Onboarding":    "community",
+        "Social":        "community",
+        "Polls":         "community",
+        "Suggestions":   "community",
+        "Starboard":     "community",
+        "Birthdays":     "community",
+        "Highlights":    "community",
+    }
+
+    try:
+        from discord import app_commands
+        commands_data = []
+
+        def process_cmd(cmd, parent_name=None):
+            cog = getattr(cmd, "binding", None)
+            cog_name = type(cog).__name__ if cog else "Utility"
+            category = CATEGORY_MAP.get(cog_name, "utility")
+            name = f"{parent_name} {cmd.name}" if parent_name else cmd.name
+            commands_data.append({
+                "name":        name,
+                "description": getattr(cmd, "description", "") or "",
+                "category":    category,
+            })
+            # Recurse into sub-commands of a group
+            if isinstance(cmd, app_commands.Group):
+                for sub in cmd.commands:
+                    process_cmd(sub, parent_name=cmd.name)
+
+        for cmd in bot.tree.get_commands():
+            process_cmd(cmd)
+
+        commands_data.sort(key=lambda x: (x["category"], x["name"]))
+
+        os.makedirs("data", exist_ok=True)
+        with open("data/commands.json", "w") as f:
+            json.dump(commands_data, f)
+
+        # Also update command_count in bot_stats
+        try:
+            stats_path = "data/bot_stats.json"
+            if os.path.exists(stats_path):
+                with open(stats_path) as f:
+                    stats = json.load(f)
+                stats["command_count"] = len(commands_data)
+                with open(stats_path, "w") as f:
+                    json.dump(stats, f)
+        except Exception:
+            pass
+
+        logging.success("Startup", f"Exported {len(commands_data)} command(s) to data/commands.json")
+    except Exception as exc:
+        logging.error("Startup", f"Could not write commands.json: {exc}")
 
 
 async def _run_slash_sync():

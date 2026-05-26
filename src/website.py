@@ -211,6 +211,16 @@ def auth_status():
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+@app.route("/api/commands")
+def api_commands():
+    """Public endpoint — returns all bot commands from the JSON written by the bot on startup."""
+    cmds = load_json("data/commands.json", [])
+    category = request.args.get("category", "").strip().lower()
+    if category:
+        cmds = [c for c in cmds if c.get("category") == category]
+    return jsonify(cmds)
+
+
 @app.route("/api/botstats")
 def api_botstats():
     stats = load_json(BOT_STATS, {})

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Niko — Commands</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="Browse all of Niko's commands — search by name, filter by category.">
+  <meta name="theme-color" content="#d9956d">
+  <style>
+    .example-card { grid-template-columns: repeat(3, 1fr); }
+  </style>
+</head>
+<body class="page page--fade-in">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <header class="header">
+    <a href="index.html" class="logo link--transition">niko <em>☕</em></a>
+
+    <nav class="nav-center">
+      <a href="index.html"      class="nav-link link--transition"><span id="nav-home">Home</span></a>
+      <a href="commands.html"   class="nav-link active link--transition"><span id="nav-commands">Commands</span></a>
+      <a href="docs/index.html" class="nav-link link--transition"><span id="nav-docs">Docs</span></a>
+      <a href="dashboard.html"  class="nav-link link--transition"><span id="nav-dashboard">Dashboard</span></a>
+    </nav>
+
+    <div class="nav-right">
+      <div class="nav-sep"></div>
+      <button class="lang-toggle" data-lang="en">EN</button>
+      <button class="lang-toggle" data-lang="de">DE</button>
+      <button class="lang-toggle" data-lang="es">ES</button>
+      <div class="nav-sep"></div>
+      <a id="btn-invite-2"
+         href="https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands"
+         class="btn btn--primary btn--sm lang-fade">Invite Niko ✨</a>
+    </div>
+  </header>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Commands hero -->
+    <div class="cmds-hero">
+      <div class="section__label" id="cmds-label">Commands</div>
+      <h1 class="section__title" id="cmds-title">Browse all commands</h1>
+      <p class="section__sub" id="cmds-sub">Search by name, filter by category — updated automatically from the live bot.</p>
+    </div>
+
+    <!-- Controls -->
+    <div class="cmd-controls">
+      <div class="cmd-search-wrap">
+        <span class="cmd-search-icon">🔍</span>
+        <input
+          class="cmd-search"
+          id="cmd-search"
+          type="search"
+          placeholder="Search commands…"
+          autocomplete="off"
+        />
+      </div>
+      <div class="cmd-filters" id="cmd-filters">
+        <!-- Filter chips injected by JS -->
+      </div>
+    </div>
+
+    <!-- Count -->
+    <p class="cmd-meta" id="cmd-meta"></p>
+
+    <!-- Grid -->
+    <div class="cmd-grid" id="cmd-grid">
+      <div class="cmd-empty" id="cmd-loading">Loading commands…</div>
+    </div>
+
+  </main>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <span id="footer-text" class="lang-fade">made with love by nyxen ☕</span>
+    <nav class="footer__nav">
+      <a href="tos.html"     id="nav-tos"     class="link--transition lang-fade">ToS</a>
+      <a href="privacy.html" id="nav-privacy" class="link--transition lang-fade">Privacy</a>
+      <a href="https://github.com/developer51709/Niko" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+  /* ── Commands page logic ──────────────────────────────────────────── */
+
+  const CATEGORY_META = {
+    economy:    { label: { en: 'Economy',    de: 'Wirtschaft',  es: 'Economía'    }, emoji: '🥐' },
+    music:      { label: { en: 'Music',      de: 'Musik',       es: 'Música'      }, emoji: '🎵' },
+    leveling:   { label: { en: 'Leveling',   de: 'Level',       es: 'Niveles'     }, emoji: '⭐' },
+    moderation: { label: { en: 'Moderation', de: 'Moderation',  es: 'Moderación'  }, emoji: '🛡️' },
+    ai:         { label: { en: 'AI',         de: 'KI',          es: 'IA'          }, emoji: '🧠' },
+    fun:        { label: { en: 'Fun',        de: 'Spaß',        es: 'Diversión'   }, emoji: '🎲' },
+    utility:    { label: { en: 'Utility',    de: 'Nützliches',  es: 'Utilidad'    }, emoji: '🔧' },
+    community:  { label: { en: 'Community',  de: 'Community',   es: 'Comunidad'   }, emoji: '🎉' },
+  };
+
+  const META_STRINGS = {
+    en: {
+      label: 'Commands', title: 'Browse all commands',
+      sub: 'Search by name, filter by category — updated automatically from the live bot.',
+      showing: (n, total) => `Showing <strong>${n}</strong> of <strong>${total}</strong> commands`,
+      no_results: 'No commands match your search.',
+      loading: 'Loading commands…',
+      error: 'Could not load commands. Make sure the bot is running.',
+      all: 'All',
+    },
+    de: {
+      label: 'Befehle', title: 'Alle Befehle durchsuchen',
+      sub: 'Nach Name suchen, nach Kategorie filtern — automatisch aktualisiert.',
+      showing: (n, total) => `Zeige <strong>${n}</strong> von <strong>${total}</strong> Befehlen`,
+      no_results: 'Keine Befehle gefunden.',
+      loading: 'Lade Befehle…',
+      error: 'Befehle konnten nicht geladen werden. Stell sicher, dass der Bot läuft.',
+      all: 'Alle',
+    },
+    es: {
+      label: 'Comandos', title: 'Explorar todos los comandos',
+      sub: 'Busca por nombre, filtra por categoría — actualizado automáticamente.',
+      showing: (n, total) => `Mostrando <strong>${n}</strong> de <strong>${total}</strong> comandos`,
+      no_results: 'Ningún comando coincide con tu búsqueda.',
+      loading: 'Cargando comandos…',
+      error: 'No se pudieron cargar los comandos. Asegúrate de que el bot esté en línea.',
+      all: 'Todo',
+    },
+  };
+
+  let ALL_COMMANDS  = [];
+  let activeFilter  = 'all';
+  let searchQuery   = '';
+  let searchTimer   = null;
+
+  function getLang() {
+    return (typeof currentLang !== 'undefined' && currentLang) || localStorage.getItem('niko_lang') || 'en';
+  }
+
+  function catLabel(key) {
+    const lang  = getLang();
+    const meta  = CATEGORY_META[key];
+    if (!meta) return key;
+    return `${meta.emoji} ${meta.label[lang] || meta.label.en}`;
+  }
+
+  function buildFilters(commands) {
+    const cats = [...new Set(commands.map(c => c.category))].sort();
+    const lang = getLang();
+    const m = META_STRINGS[lang] || META_STRINGS.en;
+    const wrap = document.getElementById('cmd-filters');
+    if (!wrap) return;
+
+    wrap.innerHTML = '';
+    const allChip = document.createElement('button');
+    allChip.className = 'filter-chip' + (activeFilter === 'all' ? ' active' : '');
+    allChip.textContent = m.all;
+    allChip.dataset.cat = 'all';
+    allChip.addEventListener('click', () => setFilter('all'));
+    wrap.appendChild(allChip);
+
+    cats.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-chip' + (activeFilter === cat ? ' active' : '');
+      btn.innerHTML = catLabel(cat);
+      btn.dataset.cat = cat;
+      btn.addEventListener('click', () => setFilter(cat));
+      wrap.appendChild(btn);
+    });
+  }
+
+  function setFilter(cat) {
+    activeFilter = cat;
+    document.querySelectorAll('.filter-chip').forEach(b => {
+      b.classList.toggle('active', b.dataset.cat === cat);
+    });
+    renderCommands();
+  }
+
+  function renderCommands() {
+    const lang = getLang();
+    const m    = META_STRINGS[lang] || META_STRINGS.en;
+    const grid = document.getElementById('cmd-grid');
+    const meta = document.getElementById('cmd-meta');
+    if (!grid) return;
+
+    let filtered = ALL_COMMANDS;
+    if (activeFilter !== 'all') filtered = filtered.filter(c => c.category === activeFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(c =>
+        c.name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (meta) meta.innerHTML = m.showing(filtered.length, ALL_COMMANDS.length);
+
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="cmd-empty">${m.no_results}</div>`;
+      return;
+    }
+
+    grid.innerHTML = filtered.map(cmd => {
+      const catMeta = CATEGORY_META[cmd.category];
+      const tagText = catMeta ? `${catMeta.emoji} ${catMeta.label[lang] || catMeta.label.en}` : cmd.category;
+      return `
+        <div class="cmd-card">
+          <div class="cmd-card__name">/${escHtml(cmd.name)}</div>
+          <div class="cmd-card__desc">${escHtml(cmd.description || '')}</div>
+          <span class="cmd-card__tag">${tagText}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  function updatePageStrings() {
+    const lang = getLang();
+    const m    = META_STRINGS[lang] || META_STRINGS.en;
+    const el   = id => document.getElementById(id);
+    if (el('cmds-label')) el('cmds-label').textContent = m.label;
+    if (el('cmds-title')) el('cmds-title').textContent = m.title;
+    if (el('cmds-sub'))   el('cmds-sub').textContent   = m.sub;
+    if (el('cmd-search')) el('cmd-search').placeholder = lang === 'de' ? 'Befehle suchen…' : lang === 'es' ? 'Buscar comandos…' : 'Search commands…';
+    if (ALL_COMMANDS.length) { buildFilters(ALL_COMMANDS); renderCommands(); }
+  }
+
+  async function loadCommands() {
+    const lang = getLang();
+    const m    = META_STRINGS[lang] || META_STRINGS.en;
+    const grid = document.getElementById('cmd-grid');
+
+    try {
+      const r = await fetch('/api/commands');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      ALL_COMMANDS = await r.json();
+
+      if (!ALL_COMMANDS.length) {
+        if (grid) grid.innerHTML = `<div class="cmd-empty">${m.error}</div>`;
+        return;
+      }
+
+      buildFilters(ALL_COMMANDS);
+      renderCommands();
+    } catch {
+      if (grid) grid.innerHTML = `<div class="cmd-empty">${m.error}</div>`;
+    }
+  }
+
+  // Search with debounce
+  const searchInput = document.getElementById('cmd-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', e => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchQuery = e.target.value.trim();
+        renderCommands();
+      }, 220);
+    });
+  }
+
+  // Re-render when language changes (hook into applyLang)
+  const _origApplyLang = typeof applyLang !== 'undefined' ? applyLang : null;
+  // Listen for lang changes via storage (if script.js fires after this)
+  window.addEventListener('storage', e => {
+    if (e.key === 'niko_lang') { updatePageStrings(); }
+  });
+  // Also poll currentLang after a short delay
+  let _lastLang = getLang();
+  setInterval(() => {
+    const l = getLang();
+    if (l !== _lastLang) { _lastLang = l; updatePageStrings(); }
+  }, 300);
+
+  loadCommands();
+  </script>
+</body>
+</html>
