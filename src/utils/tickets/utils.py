@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 from pathlib import Path
 import json
 
-from .ticket_config import TicketConfig
+from .config import TicketConfig
 
 DATA_PATH = Path("data")
 DATA_FILE = DATA_PATH / "tickets.json"

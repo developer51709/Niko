@@ -778,10 +778,30 @@ async def on_ready():
     await load_cogs()
     await set_status()
     print_banner(guild_count=len(bot.guilds))
+    _write_bot_stats()
     # Sync application emojis in the background so startup isn't blocked
     asyncio.create_task(_run_emoji_sync())
     # Sync slash commands in the background so startup isn't blocked
     asyncio.create_task(_run_slash_sync())
+
+
+def _write_bot_stats():
+    """Write a small JSON file consumed by the web dashboard."""
+    try:
+        os.makedirs("data", exist_ok=True)
+        user_count = sum(g.member_count or 0 for g in bot.guilds)
+        payload = {
+            "guild_count":  len(bot.guilds),
+            "guild_ids":    [g.id for g in bot.guilds],
+            "user_count":   user_count,
+            "command_count": 76,
+            "version":      "1.0",
+            "uptime_since": datetime.datetime.utcnow().isoformat(),
+        }
+        with open("data/bot_stats.json", "w") as f:
+            json.dump(payload, f)
+    except Exception as exc:
+        logging.error("Startup", f"Could not write bot_stats.json: {exc}")
 
 
 async def _run_slash_sync():

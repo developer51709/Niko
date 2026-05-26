@@ -400,6 +400,50 @@
         </table>
       </div>
 
+      <!-- OAuth / Dashboard -->
+      <div class="docs-section" id="oauth">
+        <h2>🔐 Dashboard & OAuth Setup</h2>
+        <p style="color:var(--muted);font-size:.88rem;line-height:1.65;margin-bottom:1rem">
+          The Niko dashboard lets server admins view economy leaderboards, level data, and configure
+          AutoMod and AI settings through a web UI. Logging in requires a Discord OAuth2 client secret.
+        </p>
+
+        <table class="cmd-table" style="margin-bottom:1.2rem">
+          <thead><tr><th>Endpoint</th><th>Auth required</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /auth/login</code></td><td>No</td><td>Redirects to Discord OAuth2 authorization page.</td></tr>
+            <tr><td><code>GET /auth/callback</code></td><td>No</td><td>Receives the OAuth code, exchanges it for an access token, and sets the session cookie.</td></tr>
+            <tr><td><code>GET /auth/logout</code></td><td>No</td><td>Clears the session and redirects to the landing page.</td></tr>
+            <tr><td><code>GET /auth/status</code></td><td>No</td><td>Returns <code>{"authenticated": bool, "oauth_available": bool, "user": {...}}</code>.</td></tr>
+            <tr><td><code>GET /api/botstats</code></td><td>No</td><td>Public stats: guild count, user count, command count, economy users.</td></tr>
+            <tr><td><code>GET /api/me</code></td><td>✓</td><td>Current Discord user object.</td></tr>
+            <tr><td><code>GET /api/guilds</code></td><td>✓</td><td>Servers where the user has Manage Server permission AND Niko is present.</td></tr>
+            <tr><td><code>GET /api/guild/:id/overview</code></td><td>✓</td><td>Economy snapshot, level top-5, and moderation summary for a server.</td></tr>
+            <tr><td><code>GET /api/guild/:id/economy</code></td><td>✓</td><td>Full economy leaderboard (top 25 by net worth).</td></tr>
+            <tr><td><code>GET /api/guild/:id/levels</code></td><td>✓</td><td>Level leaderboard — PostgreSQL first, JSON fallback.</td></tr>
+            <tr><td><code>GET /api/guild/:id/config</code></td><td>✓</td><td>Combined config: <code>moderation</code>, <code>ai</code>, <code>leveling</code>.</td></tr>
+            <tr><td><code>POST /api/guild/:id/config/automod</code></td><td>✓</td><td>Save AutoMod toggles: <code>antispam</code>, <code>antilink</code>, <code>badwords</code>, <code>massmention</code>, <code>antiraid_ext</code>.</td></tr>
+            <tr><td><code>POST /api/guild/:id/config/ai</code></td><td>✓</td><td>Save AI settings: <code>enabled</code> (bool), <code>personality</code> (<code>"cafe"</code> | <code>"normal"</code>).</td></tr>
+          </tbody>
+        </table>
+
+        <p style="color:var(--muted);font-size:.85rem;font-weight:600;margin-bottom:.5rem">Enable OAuth login</p>
+        <ol style="color:var(--muted);font-size:.86rem;line-height:1.9;padding-left:1.3rem;margin-bottom:1rem">
+          <li>Go to <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--accent)">discord.com/developers/applications</a> and open your bot's application.</li>
+          <li>Navigate to <strong>OAuth2</strong> and copy (or reset) the <strong>Client Secret</strong>.</li>
+          <li>In Replit, open the <strong>Secrets</strong> tab and add a new secret: <code>DISCORD_CLIENT_SECRET</code> = your copied value.</li>
+          <li>Under <strong>OAuth2 → Redirects</strong>, add: <code>https://&lt;your-replit-domain&gt;/auth/callback</code></li>
+          <li>Restart the <strong>Start the website</strong> workflow — the login button on <code>/dashboard</code> will now be active.</li>
+        </ol>
+
+        <p style="color:var(--muted);font-size:.85rem;font-weight:600;margin-bottom:.5rem">Session security</p>
+        <p style="color:var(--muted);font-size:.86rem;line-height:1.65">
+          Sessions are signed with the <code>SESSION_SECRET</code> Replit secret (already configured).
+          Tokens are stored server-side in the signed cookie only — never exposed to the client.
+          The OAuth state parameter prevents CSRF attacks during the redirect flow.
+        </p>
+      </div>
+
       <!-- Admin -->
       <div class="docs-section" id="admin">
         <h2>👑 Admin & System</h2>

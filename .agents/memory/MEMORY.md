@@ -1,0 +1,2 @@
+- [Tickets utils import](tickets-utils-import.md) — `utils/tickets/utils.py` must import from `.config`, not `.ticket_config`; stale name causes cog load failure.
+- [Dashboard OAuth pattern](dashboard-oauth.md) — Flask sessions + Discord OAuth flow; graceful degradation when DISCORD_CLIENT_SECRET absent; bot_stats.json written on_ready.

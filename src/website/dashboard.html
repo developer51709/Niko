@@ -6,21 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* ── Dashboard layout ──────────────────────────────────── */
+    /* ── Layout ──────────────────────────────────────────────── */
     body { overflow-x: hidden; }
 
     .dash-wrap {
       display: grid;
       grid-template-columns: 220px 1fr;
-      grid-template-rows: auto 1fr;
       min-height: 100vh;
     }
 
-    /* sidebar */
+    /* ── Sidebar ─────────────────────────────────────────────── */
     .sidebar {
-      grid-row: 1 / 3;
       background: #120f0c;
-      border-right: 1px solid rgba(217,149,109,.12);
+      border-right: 1px solid rgba(217,149,109,.1);
       display: flex;
       flex-direction: column;
       padding: 1.5rem 0;
@@ -30,838 +28,1085 @@
       overflow-y: auto;
     }
     .sidebar__logo {
-      padding: 0 1.25rem 1.5rem;
-      font-size: 1.15rem;
+      padding: 0 1.25rem 1.4rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      letter-spacing: .05em;
       color: var(--accent);
       border-bottom: 1px solid rgba(217,149,109,.1);
-      margin-bottom: 1rem;
+      margin-bottom: .8rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
     }
+    .sidebar__logo span { font-size: .7rem; color: var(--muted); font-weight: 400; }
     .sidebar__section {
-      padding: .3rem 1rem .1rem;
+      padding: .3rem 1rem .15rem;
       font-size: .65rem;
       text-transform: uppercase;
       letter-spacing: .12em;
       color: var(--accent-soft);
-      margin-top: .6rem;
+      margin-top: .5rem;
     }
     .sidebar__link {
       display: flex;
       align-items: center;
-      gap: .65rem;
-      padding: .55rem 1.25rem;
+      gap: .6rem;
+      padding: .5rem 1.2rem;
       color: var(--muted);
-      text-decoration: none;
-      font-size: .88rem;
+      font-size: .87rem;
       border-left: 3px solid transparent;
-      transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
       cursor: pointer;
+      transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+      text-decoration: none;
+      user-select: none;
     }
-    .sidebar__link:hover,
-    .sidebar__link.active {
-      color: var(--text);
-      background: rgba(217,149,109,.07);
-      border-left-color: var(--accent);
-    }
-    .sidebar__link.active { color: var(--accent); font-weight: 600; }
-    .sidebar__icon { font-size: 1rem; width: 1.1rem; text-align: center; }
+    .sidebar__link:hover { color: var(--text); background: rgba(217,149,109,.06); border-left-color: rgba(217,149,109,.3); }
+    .sidebar__link.active { color: var(--accent); background: rgba(217,149,109,.08); border-left-color: var(--accent); font-weight: 600; }
+    .sidebar__icon { width: 1rem; text-align: center; font-size: .95rem; }
     .sidebar__bottom {
       margin-top: auto;
       padding: 1rem 1.25rem 0;
       border-top: 1px solid rgba(217,149,109,.1);
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
     }
-    .sidebar__badge {
+    .online-badge {
       display: inline-flex;
       align-items: center;
       gap: .4rem;
-      background: rgba(217,149,109,.1);
-      border: 1px solid rgba(217,149,109,.2);
+      background: rgba(93,224,160,.1);
+      border: 1px solid rgba(93,224,160,.2);
       border-radius: 999px;
       padding: .3rem .75rem;
-      font-size: .75rem;
-      color: var(--accent);
+      font-size: .72rem;
+      color: #5de0a0;
     }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: #5de0a0; display: inline-block; }
+    .online-dot { width: 7px; height: 7px; border-radius: 50%; background: #5de0a0; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-    /* top bar */
+    /* ── Top bar ─────────────────────────────────────────────── */
     .topbar {
       background: rgba(18,15,12,.95);
       border-bottom: 1px solid rgba(217,149,109,.1);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: .85rem 1.5rem;
-      backdrop-filter: blur(8px);
+      padding: .8rem 1.5rem;
       position: sticky;
       top: 0;
       z-index: 10;
+      backdrop-filter: blur(8px);
+      gap: 1rem;
     }
-    .topbar__title { font-size: 1rem; font-weight: 600; color: var(--text); }
-    .topbar__actions { display: flex; align-items: center; gap: .8rem; }
-    .server-select {
-      appearance: none;
+    .topbar__title { font-size: .95rem; font-weight: 600; color: var(--text); }
+    .topbar__right { display: flex; align-items: center; gap: .75rem; }
+    .guild-chip {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
       background: var(--card);
       border: 1px solid rgba(217,149,109,.2);
       border-radius: var(--radius-md);
-      color: var(--text);
+      padding: .35rem .8rem;
       font-size: .82rem;
-      padding: .4rem 2rem .4rem .75rem;
+      color: var(--text);
       cursor: pointer;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b8ada0' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right .6rem center;
+      transition: border-color var(--transition-fast);
     }
-    .prototype-pill {
-      background: rgba(255, 183, 77, .12);
-      border: 1px solid rgba(255,183,77,.3);
-      color: #ffc84a;
-      font-size: .72rem;
-      border-radius: 999px;
-      padding: .25rem .7rem;
-    }
-
-    /* main content */
-    .dash-main {
-      padding: 1.5rem 1.75rem 2.5rem;
-      overflow-y: auto;
-    }
-
-    /* prototype notice */
-    .notice {
+    .guild-chip:hover { border-color: var(--accent); }
+    .guild-chip img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+    .avatar-chip {
       display: flex;
       align-items: center;
-      gap: .75rem;
+      gap: .45rem;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .avatar-chip img { width: 26px; height: 26px; border-radius: 50%; }
+    .topbar-btn {
+      font-size: .78rem;
+      color: var(--muted);
+      text-decoration: none;
+      padding: .3rem .65rem;
+      border-radius: 8px;
+      transition: color var(--transition-fast), background var(--transition-fast);
+    }
+    .topbar-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
+
+    /* ── Main content ────────────────────────────────────────── */
+    .dash-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .dash-main {
+      padding: 1.5rem 1.75rem 2.5rem;
+      flex: 1;
+    }
+
+    /* ── Overlay screens ─────────────────────────────────────── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at top, #2a2218 0, #1a1410 55%, #0f0c09 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 0;
+      animation: fadeInUp .4s ease-out both;
+    }
+    .overlay.hidden { display: none; }
+
+    /* Login card */
+    .login-card {
+      background: #1e1a16;
+      border: 1px solid rgba(217,149,109,.2);
+      border-radius: 20px;
+      padding: 2.5rem 2.25rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+    .login-card__logo { font-size: 2.2rem; margin-bottom: .5rem; }
+    .login-card__title { font-size: 1.4rem; font-weight: 700; margin-bottom: .35rem; }
+    .login-card__sub { font-size: .85rem; color: var(--muted); margin-bottom: 1.75rem; line-height: 1.5; }
+    .btn-discord {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .6rem;
+      background: #5865F2;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: .75rem 1.5rem;
+      font-size: .95rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      text-decoration: none;
+      transition: background var(--transition-fast), transform var(--transition-fast);
+    }
+    .btn-discord:hover { background: #4752C4; transform: translateY(-1px); }
+    .btn-discord svg { width: 20px; height: 20px; fill: white; flex-shrink: 0; }
+    .login-card__note { margin-top: 1rem; font-size: .75rem; color: rgba(184,173,160,.45); }
+    .oauth-missing-note {
       background: rgba(255,183,77,.07);
       border: 1px solid rgba(255,183,77,.2);
-      border-radius: var(--radius-md);
-      padding: .75rem 1rem;
-      margin-bottom: 1.5rem;
-      font-size: .85rem;
+      border-radius: 10px;
+      padding: .9rem 1rem;
       color: #ffc84a;
+      font-size: .82rem;
+      line-height: 1.55;
+      text-align: left;
+      margin-top: .5rem;
     }
-    .notice__icon { font-size: 1.1rem; }
-    .notice a { color: #ffc84a; text-underline-offset: 3px; }
+    .oauth-missing-note code {
+      background: rgba(255,183,77,.15);
+      border-radius: 4px;
+      padding: .1rem .35rem;
+      font-size: .78em;
+    }
 
-    /* stat grid */
+    /* Guild picker */
+    .guild-picker-card {
+      background: #1e1a16;
+      border: 1px solid rgba(217,149,109,.2);
+      border-radius: 20px;
+      padding: 2rem 2rem 1.5rem;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+    .guild-picker-card h2 { font-size: 1.1rem; margin: 0 0 .3rem; }
+    .guild-picker-card p { font-size: .83rem; color: var(--muted); margin: 0 0 1.2rem; }
+    .guild-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: .6rem;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+    .guild-item {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      padding: .65rem .85rem;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(217,149,109,.1);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: .84rem;
+      color: var(--text);
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+    }
+    .guild-item:hover { background: rgba(217,149,109,.1); border-color: var(--accent); transform: translateY(-1px); }
+    .guild-item img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .guild-item-initials {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--bg-alt);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; color: var(--accent);
+      flex-shrink: 0;
+    }
+    .guild-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .guild-none {
+      text-align: center;
+      color: var(--muted);
+      font-size: .85rem;
+      padding: 1.5rem;
+    }
+    .guild-picker-footer {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(217,149,109,.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Stat cards ──────────────────────────────────────────── */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: .9rem;
+      margin-bottom: 1.4rem;
     }
     .stat-card {
       background: var(--card);
       border: 1px solid rgba(217,149,109,.1);
       border-radius: var(--radius-md);
-      padding: 1.1rem 1.2rem;
+      padding: 1rem 1.1rem;
       position: relative;
       overflow: hidden;
       transition: transform var(--transition-fast), box-shadow var(--transition-fast);
     }
     .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,.5); }
-    .stat-card__label {
-      font-size: .72rem;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--muted);
-      margin-bottom: .35rem;
-    }
-    .stat-card__value {
-      font-size: 1.9rem;
-      font-weight: 700;
-      color: var(--text);
-      line-height: 1;
-      margin-bottom: .3rem;
-    }
-    .stat-card__sub { font-size: .78rem; color: var(--muted); }
-    .stat-card__accent {
-      position: absolute;
-      right: -10px; top: -10px;
-      font-size: 3rem;
-      opacity: .07;
-      user-select: none;
-    }
-    .stat-card--servers .stat-card__value { color: #d9956d; }
-    .stat-card--users .stat-card__value { color: #89c4e1; }
-    .stat-card--commands .stat-card__value { color: #a8e6b0; }
-    .stat-card--uptime .stat-card__value { color: #c8a2f5; }
+    .stat-card__label { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .3rem; }
+    .stat-card__value { font-size: 1.75rem; font-weight: 700; line-height: 1; margin-bottom: .25rem; }
+    .stat-card__sub { font-size: .76rem; color: var(--muted); }
+    .stat-card__bg { position: absolute; right: -8px; top: -8px; font-size: 2.8rem; opacity: .07; user-select: none; pointer-events: none; }
 
-    /* two-col layout */
-    .dash-cols {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.2rem;
-      margin-bottom: 1.5rem;
-    }
-    .dash-panel {
+    /* ── Panels ──────────────────────────────────────────────── */
+    .panel {
       background: var(--card);
       border: 1px solid rgba(217,149,109,.1);
       border-radius: var(--radius-md);
       overflow: hidden;
+      margin-bottom: 1.1rem;
     }
-    .dash-panel__header {
+    .panel__head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: .85rem 1.1rem;
+      padding: .8rem 1.1rem;
       border-bottom: 1px solid rgba(217,149,109,.08);
     }
-    .dash-panel__title {
-      font-size: .85rem;
-      font-weight: 600;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-    }
-    .dash-panel__action {
-      font-size: .75rem;
-      color: var(--accent);
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .dash-panel__body { padding: .8rem 1.1rem; }
+    .panel__title { font-size: .85rem; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: .45rem; }
+    .panel__action { font-size: .75rem; color: var(--accent); cursor: pointer; text-decoration: none; }
+    .panel__body { padding: .85rem 1.1rem; }
 
-    /* activity feed */
-    .activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
-    .activity-item {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-      padding: .5rem .7rem;
-      border-radius: 8px;
-      background: rgba(255,255,255,.03);
-      font-size: .82rem;
-    }
-    .activity-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .activity-dot--green { background: #5de0a0; }
-    .activity-dot--blue  { background: #89c4e1; }
-    .activity-dot--amber { background: #ffc84a; }
-    .activity-dot--rose  { background: #f08080; }
-    .activity-dot--purple{ background: #c8a2f5; }
-    .activity-item__text { flex: 1; color: var(--muted); }
-    .activity-item__text strong { color: var(--text); }
-    .activity-item__time { font-size: .72rem; color: rgba(184,173,160,.5); }
+    /* ── Two-column grid ─────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
 
-    /* leaderboard */
-    .lb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+    /* ── Leaderboard ─────────────────────────────────────────── */
+    .lb { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .45rem; }
     .lb-row {
       display: grid;
       grid-template-columns: 1.8rem 1fr auto;
       align-items: center;
-      gap: .6rem;
-      padding: .5rem .7rem;
-      border-radius: 8px;
+      gap: .55rem;
+      padding: .45rem .6rem;
+      border-radius: 7px;
       background: rgba(255,255,255,.03);
-      font-size: .83rem;
+      font-size: .82rem;
       transition: background var(--transition-fast);
     }
     .lb-row:hover { background: rgba(255,255,255,.06); }
-    .lb-rank { font-size: .75rem; font-weight: 700; color: var(--muted); text-align: center; }
-    .lb-rank--1 { color: #ffd700; }
-    .lb-rank--2 { color: #c0c0c0; }
-    .lb-rank--3 { color: #cd7f32; }
-    .lb-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .lb-value { color: var(--accent); font-weight: 600; font-size: .8rem; white-space: nowrap; }
+    .lb-rank { font-size: .72rem; font-weight: 700; color: var(--muted); text-align: center; }
+    .lb-rank.gold   { color: #ffd700; }
+    .lb-rank.silver { color: #c0c0c0; }
+    .lb-rank.bronze { color: #cd7f32; }
+    .lb-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-val  { color: var(--accent); font-weight: 600; font-size: .78rem; white-space: nowrap; }
+    .lb-empty { text-align: center; color: var(--muted); font-size: .83rem; padding: 1rem; }
 
-    /* command categories */
-    .section-label {
-      font-size: .8rem;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--accent-soft);
-      margin: 1.4rem 0 .7rem;
-      font-weight: 600;
-    }
-    .cmd-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: .8rem;
-      margin-bottom: 1.2rem;
-    }
-    .cmd-card {
-      background: var(--card);
-      border: 1px solid rgba(217,149,109,.1);
-      border-radius: var(--radius-md);
-      padding: .85rem 1rem;
-      transition: border-color var(--transition-fast), transform var(--transition-fast);
-    }
-    .cmd-card:hover { border-color: rgba(217,149,109,.3); transform: translateY(-1px); }
-    .cmd-card__name {
-      font-family: ui-monospace, 'Cascadia Code', monospace;
-      font-size: .82rem;
-      color: var(--accent);
-      margin-bottom: .3rem;
-      font-weight: 600;
-    }
-    .cmd-card__desc { font-size: .79rem; color: var(--muted); line-height: 1.4; }
-    .cmd-card__tag {
-      display: inline-block;
-      background: rgba(217,149,109,.1);
-      border-radius: 999px;
-      padding: .1rem .5rem;
-      font-size: .66rem;
-      color: var(--accent-soft);
-      margin-top: .4rem;
-    }
+    /* ── Activity feed ───────────────────────────────────────── */
+    .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+    .feed-item { display: flex; align-items: center; gap: .65rem; padding: .45rem .6rem; border-radius: 7px; background: rgba(255,255,255,.03); font-size: .81rem; }
+    .feed-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .feed-text { flex: 1; color: var(--muted); }
+    .feed-text strong { color: var(--text); }
+    .feed-time { font-size: .7rem; color: rgba(184,173,160,.4); white-space: nowrap; }
 
-    /* toggle panels */
-    .section-view { display: none; }
-    .section-view.visible { display: block; }
-
-    /* mini progress bar */
-    .prog-bar {
-      height: 4px;
-      border-radius: 2px;
-      background: rgba(255,255,255,.08);
-      margin-top: .35rem;
-      overflow: hidden;
-    }
-    .prog-bar__fill {
-      height: 100%;
-      border-radius: 2px;
-      background: linear-gradient(90deg, var(--accent), #e5a878);
-    }
-
-    /* settings form */
-    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .setting-block {
-      background: var(--card);
-      border: 1px solid rgba(217,149,109,.1);
-      border-radius: var(--radius-md);
-      padding: 1rem 1.1rem;
-    }
-    .setting-block__label { font-size: .78rem; color: var(--muted); margin-bottom: .5rem; }
-    .setting-block__title { font-size: .9rem; font-weight: 600; color: var(--text); margin-bottom: .6rem; }
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; font-size: .83rem; color: var(--muted); }
-    .toggle {
-      position: relative; width: 38px; height: 20px;
-    }
-    .toggle input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider {
-      position: absolute; inset: 0;
-      background: rgba(255,255,255,.1);
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background .2s;
-    }
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      background: white;
-      left: 3px; top: 3px;
-      transition: transform .2s;
-    }
-    .toggle input:checked + .toggle-slider { background: var(--accent); }
-    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
-    .coming-soon-note {
-      font-size: .75rem;
+    /* ── Toggle rows ─────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .4rem 0;
+      font-size: .83rem;
       color: var(--muted);
-      font-style: italic;
-      margin-top: .5rem;
+      border-bottom: 1px solid rgba(255,255,255,.04);
     }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-row span { color: var(--text); }
+    .toggle { position: relative; width: 36px; height: 19px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: rgba(255,255,255,.1); border-radius: 999px; cursor: pointer; transition: background .2s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; left: 3px; top: 3px; transition: transform .2s; }
+    .toggle input:checked + .toggle-slider { background: var(--accent); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(17px); }
 
-    /* responsive */
-    @media (max-width: 860px) {
+    /* ── Section views ───────────────────────────────────────── */
+    .sec { display: none; }
+    .sec.visible { display: block; }
+
+    /* ── Save banner ─────────────────────────────────────────── */
+    .save-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(217,149,109,.1);
+      border: 1px solid rgba(217,149,109,.25);
+      border-radius: var(--radius-md);
+      padding: .65rem 1rem;
+      margin-bottom: 1rem;
+      font-size: .83rem;
+      color: var(--text);
+    }
+    .save-bar.hidden { display: none; }
+
+    /* ── Progress bar ────────────────────────────────────────── */
+    .prog { height: 4px; border-radius: 2px; background: rgba(255,255,255,.07); margin-top: .3rem; overflow: hidden; }
+    .prog__fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), #e5a878); }
+
+    /* ── Section label ───────────────────────────────────────── */
+    .sec-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent-soft); margin: 1.4rem 0 .7rem; font-weight: 600; }
+
+    /* ── Command cards ───────────────────────────────────────── */
+    .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: .75rem; margin-bottom: 1.1rem; }
+    .cmd-card { background: var(--card); border: 1px solid rgba(217,149,109,.1); border-radius: var(--radius-md); padding: .8rem .95rem; transition: border-color var(--transition-fast), transform var(--transition-fast); }
+    .cmd-card:hover { border-color: rgba(217,149,109,.3); transform: translateY(-1px); }
+    .cmd-card__name { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: .8rem; color: var(--accent); margin-bottom: .25rem; font-weight: 600; }
+    .cmd-card__desc { font-size: .78rem; color: var(--muted); line-height: 1.4; }
+    .cmd-tag { display: inline-block; background: rgba(217,149,109,.1); border-radius: 999px; padding: .08rem .45rem; font-size: .65rem; color: var(--accent-soft); margin-top: .35rem; }
+
+    /* ── Toast ───────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #2a2218;
+      border: 1px solid rgba(217,149,109,.25);
+      border-radius: 10px;
+      padding: .7rem 1.1rem;
+      font-size: .83rem;
+      color: var(--text);
+      z-index: 999;
+      box-shadow: 0 8px 28px rgba(0,0,0,.5);
+      animation: fadeInUp .3s ease-out both;
+      max-width: 320px;
+    }
+    .toast.toast--error { border-color: rgba(240,128,128,.3); color: #f08080; }
+    .toast.toast--ok    { border-color: rgba(93,224,160,.3); color: #5de0a0; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 820px) {
       .dash-wrap { grid-template-columns: 1fr; }
-      .sidebar { display: none; }
-      .dash-cols { grid-template-columns: 1fr; }
-      .settings-grid { grid-template-columns: 1fr; }
+      .sidebar   { display: none; }
+      .two-col   { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body class="page page--fade-in">
-<div class="dash-wrap">
 
-  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY: Loading
+════════════════════════════════════════════════════════════ -->
+<div class="overlay" id="ov-loading">
+  <div class="spinner"></div>
+  <p style="color:var(--muted);font-size:.85rem;margin-top:1rem">Loading dashboard…</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY: Login
+════════════════════════════════════════════════════════════ -->
+<div class="overlay hidden" id="ov-login">
+  <div class="login-card">
+    <div class="login-card__logo">☕</div>
+    <div class="login-card__title">niko dashboard</div>
+    <div class="login-card__sub">Sign in with Discord to manage your servers, view economy stats, configure moderation, and more.</div>
+
+    <!-- Shown when OAuth is available -->
+    <div id="login-oauth-on">
+      <a class="btn-discord" href="/auth/login">
+        <svg viewBox="0 0 127.14 96.36"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.14ZM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.1 12.69-11.44 12.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.1 12.69-11.43 12.69Z"/></svg>
+        Sign in with Discord
+      </a>
+      <p class="login-card__note">Niko will only see servers where she's already a member.</p>
+    </div>
+
+    <!-- Shown when OAuth is NOT configured -->
+    <div id="login-oauth-off" style="display:none">
+      <div class="oauth-missing-note">
+        <strong>OAuth not configured.</strong><br>
+        To enable Discord login, add <code>DISCORD_CLIENT_SECRET</code> to your Replit secrets, then restart the website workflow.<br><br>
+        Find your Client Secret at <strong>discord.com/developers/applications</strong> → your app → <strong>OAuth2</strong>.
+      </div>
+      <p class="login-card__note" style="margin-top:.85rem">Bot data is fully functional — only the login flow requires this secret.</p>
+    </div>
+  </div>
+  <a href="index.html" style="margin-top:1.25rem;font-size:.78rem;color:rgba(184,173,160,.5);text-decoration:none">← Back to site</a>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY: Guild Picker
+════════════════════════════════════════════════════════════ -->
+<div class="overlay hidden" id="ov-guilds">
+  <div class="guild-picker-card">
+    <h2>Select a server</h2>
+    <p>Servers where you have Manage Server permission and Niko is present.</p>
+    <div class="guild-grid" id="guild-grid">
+      <div class="spinner" style="margin:1.5rem auto"></div>
+    </div>
+    <div class="guild-picker-footer">
+      <span id="guild-count-label"></span>
+      <a href="/auth/logout" style="color:var(--muted);text-decoration:none;font-size:.75rem">Log out</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN DASHBOARD
+════════════════════════════════════════════════════════════ -->
+<div class="dash-wrap" id="dash-app" style="display:none">
+
+  <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar__logo">niko ☕ <span style="font-size:.7rem;color:var(--muted);font-weight:400">dashboard</span></div>
+    <div class="sidebar__logo">niko ☕ <span>dashboard</span></div>
 
-    <span class="sidebar__section">Overview</span>
-    <a class="sidebar__link active" onclick="showSection('overview')">
-      <span class="sidebar__icon">🏠</span> Overview
-    </a>
-    <a class="sidebar__link" onclick="showSection('commands')">
-      <span class="sidebar__icon">⌨️</span> Commands
-    </a>
+    <span class="sidebar__section">Main</span>
+    <div class="sidebar__link active" onclick="showSec('overview')"><span class="sidebar__icon">🏠</span> Overview</div>
+    <div class="sidebar__link" onclick="showSec('commands')"><span class="sidebar__icon">⌨️</span> Commands</div>
 
-    <span class="sidebar__section">Management</span>
-    <a class="sidebar__link" onclick="showSection('economy')">
-      <span class="sidebar__icon">🥐</span> Economy
-    </a>
-    <a class="sidebar__link" onclick="showSection('leveling')">
-      <span class="sidebar__icon">⭐</span> Leveling
-    </a>
-    <a class="sidebar__link" onclick="showSection('moderation')">
-      <span class="sidebar__icon">🛡️</span> Moderation
-    </a>
-    <a class="sidebar__link" onclick="showSection('music')">
-      <span class="sidebar__icon">🎵</span> Music
-    </a>
+    <span class="sidebar__section">Data</span>
+    <div class="sidebar__link" onclick="showSec('economy')"><span class="sidebar__icon">🥐</span> Economy</div>
+    <div class="sidebar__link" onclick="showSec('leveling')"><span class="sidebar__icon">⭐</span> Leveling</div>
 
     <span class="sidebar__section">Config</span>
-    <a class="sidebar__link" onclick="showSection('settings')">
-      <span class="sidebar__icon">⚙️</span> Settings
-    </a>
+    <div class="sidebar__link" onclick="showSec('moderation')"><span class="sidebar__icon">🛡️</span> Moderation</div>
+    <div class="sidebar__link" onclick="showSec('ai')"><span class="sidebar__icon">🧠</span> AI & Chat</div>
 
     <div class="sidebar__bottom">
-      <div class="sidebar__badge"><span class="dot"></span> Niko is online</div>
-      <div style="margin-top:.6rem;font-size:.72rem;color:var(--muted)">
-        v1.0 · 55 servers
-      </div>
-      <a href="index.html" style="display:block;margin-top:.8rem;font-size:.78rem;color:var(--accent);text-decoration:none;opacity:.7">← Back to site</a>
+      <div class="online-badge"><span class="online-dot"></span> Niko is online</div>
+      <div id="sb-stats" style="font-size:.72rem;color:var(--muted)">…</div>
+      <a href="index.html" style="font-size:.78rem;color:var(--accent);text-decoration:none;opacity:.7">← Back to site</a>
+      <a href="/auth/logout" style="font-size:.75rem;color:var(--muted);text-decoration:none;opacity:.6">Log out</a>
     </div>
   </aside>
 
-  <!-- ── Right side ────────────────────────────────────────────── -->
-  <div style="display:flex;flex-direction:column;min-width:0">
-
+  <!-- Right column -->
+  <div class="dash-col">
     <!-- Top bar -->
     <div class="topbar">
       <span class="topbar__title" id="topbar-title">Overview</span>
-      <div class="topbar__actions">
-        <select class="server-select">
-          <option>Niko's Test Server</option>
-          <option>Café Lounge</option>
-          <option>RAGE ESTABLISHMENT</option>
-        </select>
-        <span class="prototype-pill">🔧 Prototype</span>
+      <div class="topbar__right">
+        <div class="guild-chip" id="guild-chip" onclick="openGuildPicker()">
+          <span id="guild-chip-icon">🏠</span>
+          <span id="guild-chip-name">Select server</span>
+          <span style="color:var(--muted);font-size:.7rem">▾</span>
+        </div>
+        <div class="avatar-chip" id="avatar-chip" style="display:none">
+          <img id="user-avatar" src="" alt="" />
+          <span id="user-name"></span>
+        </div>
+        <a class="topbar-btn" href="/auth/logout">Log out</a>
       </div>
     </div>
 
-    <!-- Main -->
+    <!-- Content -->
     <div class="dash-main">
 
-      <!-- Prototype notice -->
-      <div class="notice">
-        <span class="notice__icon">☕</span>
-        <span>This is a <strong>design prototype</strong>. Full Discord OAuth login and live data are coming soon — all stats and activity shown here are illustrative.</span>
+      <!-- ── OVERVIEW ─────────────────────────────────────────── -->
+      <div class="sec visible" id="sec-overview">
+        <div class="stats-grid" id="ov-stats">
+          <div class="stat-card"><div class="stat-card__label">Servers</div><div class="stat-card__value" id="ov-servers" style="color:#d9956d">—</div><div class="stat-card__bg">🏠</div></div>
+          <div class="stat-card"><div class="stat-card__label">Users</div><div class="stat-card__value" id="ov-users" style="color:#89c4e1">—</div><div class="stat-card__bg">👥</div></div>
+          <div class="stat-card"><div class="stat-card__label">Commands</div><div class="stat-card__value" id="ov-cmds" style="color:#a8e6b0">—</div><div class="stat-card__bg">⌨️</div></div>
+          <div class="stat-card"><div class="stat-card__label">Economy Users</div><div class="stat-card__value" id="ov-eco-users" style="color:#c8a2f5">—</div><div class="stat-card__bg">🥐</div></div>
+        </div>
+
+        <div class="two-col">
+          <!-- Economy top -->
+          <div class="panel">
+            <div class="panel__head">
+              <span class="panel__title">🏆 Economy Top 5</span>
+              <span class="panel__action" onclick="showSec('economy')">Full view →</span>
+            </div>
+            <div class="panel__body">
+              <ul class="lb" id="ov-eco-lb"><li class="lb-empty">Loading…</li></ul>
+            </div>
+          </div>
+          <!-- Level top -->
+          <div class="panel">
+            <div class="panel__head">
+              <span class="panel__title">⭐ Level Top 5</span>
+              <span class="panel__action" onclick="showSec('leveling')">Full view →</span>
+            </div>
+            <div class="panel__body">
+              <ul class="lb" id="ov-lvl-lb"><li class="lb-empty">Loading…</li></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mod quick status -->
+        <div class="panel" id="ov-mod-panel">
+          <div class="panel__head">
+            <span class="panel__title">🛡️ Moderation at a Glance</span>
+            <span class="panel__action" onclick="showSec('moderation')">Configure →</span>
+          </div>
+          <div class="panel__body" id="ov-mod-body">
+            <span style="color:var(--muted);font-size:.83rem">Loading…</span>
+          </div>
+        </div>
       </div>
 
-      <!-- ── OVERVIEW ─────────────────────────────────────────── -->
-      <div class="section-view visible" id="sec-overview">
-
-        <div class="stats-grid">
-          <div class="stat-card stat-card--servers">
-            <div class="stat-card__label">Servers</div>
-            <div class="stat-card__value">55</div>
-            <div class="stat-card__sub">↑ 3 this week</div>
-            <div class="stat-card__accent">🏠</div>
-          </div>
-          <div class="stat-card stat-card--users">
-            <div class="stat-card__label">Users</div>
-            <div class="stat-card__value">1,342</div>
-            <div class="stat-card__sub">across all servers</div>
-            <div class="stat-card__accent">👥</div>
-          </div>
-          <div class="stat-card stat-card--commands">
-            <div class="stat-card__label">Commands today</div>
-            <div class="stat-card__value">847</div>
-            <div class="stat-card__sub">most: /balance, /work</div>
-            <div class="stat-card__accent">⌨️</div>
-          </div>
-          <div class="stat-card stat-card--uptime">
-            <div class="stat-card__label">Uptime</div>
-            <div class="stat-card__value">99.8%</div>
-            <div class="stat-card__sub">last 30 days</div>
-            <div class="stat-card__accent">💜</div>
-          </div>
-        </div>
-
-        <div class="dash-cols">
-          <!-- Activity -->
-          <div class="dash-panel">
-            <div class="dash-panel__header">
-              <span class="dash-panel__title">🕐 Recent Activity</span>
-              <a class="dash-panel__action">View all</a>
-            </div>
-            <div class="dash-panel__body">
-              <ul class="activity-list">
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--green"></span>
-                  <span class="activity-item__text"><strong>nyxenwastaken</strong> levelled up to 12 in Café Lounge</span>
-                  <span class="activity-item__time">2m ago</span>
-                </li>
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--amber"></span>
-                  <span class="activity-item__text"><strong>odd1111man.</strong> claimed daily reward — streak 7🔥</span>
-                  <span class="activity-item__time">5m ago</span>
-                </li>
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--blue"></span>
-                  <span class="activity-item__text">Giveaway ended in <strong>#events</strong> — winner: roadkill1875</span>
-                  <span class="activity-item__time">12m ago</span>
-                </li>
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--rose"></span>
-                  <span class="activity-item__text"><strong>nexo_8</strong> was warned for spam in VANTA RAIDING</span>
-                  <span class="activity-item__time">24m ago</span>
-                </li>
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--purple"></span>
-                  <span class="activity-item__text"><strong>cmbpro.</strong> opened ticket #47 in RAGE ESTABLISHMENT</span>
-                  <span class="activity-item__time">31m ago</span>
-                </li>
-                <li class="activity-item">
-                  <span class="activity-dot activity-dot--green"></span>
-                  <span class="activity-item__text">New server joined — <strong>Boi✌😳</strong></span>
-                  <span class="activity-item__time">1h ago</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Economy leaderboard -->
-          <div class="dash-panel">
-            <div class="dash-panel__header">
-              <span class="dash-panel__title">🏆 Economy Leaderboard</span>
-              <a class="dash-panel__action" onclick="showSection('economy')">Full view →</a>
-            </div>
-            <div class="dash-panel__body">
-              <ul class="lb-list">
-                <li class="lb-row">
-                  <span class="lb-rank lb-rank--1">🥇</span>
-                  <span class="lb-name">nyxenwastaken</span>
-                  <span class="lb-value">1,284,500 🥐</span>
-                </li>
-                <li class="lb-row">
-                  <span class="lb-rank lb-rank--2">🥈</span>
-                  <span class="lb-name">odd1111man.</span>
-                  <span class="lb-value">892,340 🥐</span>
-                </li>
-                <li class="lb-row">
-                  <span class="lb-rank lb-rank--3">🥉</span>
-                  <span class="lb-name">cmbpro.</span>
-                  <span class="lb-value">741,880 🥐</span>
-                </li>
-                <li class="lb-row">
-                  <span class="lb-rank">#4</span>
-                  <span class="lb-name">nexo_8</span>
-                  <span class="lb-value">620,110 🥐</span>
-                </li>
-                <li class="lb-row">
-                  <span class="lb-rank">#5</span>
-                  <span class="lb-name">roadkill1875</span>
-                  <span class="lb-value">498,720 🥐</span>
-                </li>
-                <li class="lb-row">
-                  <span class="lb-rank">#6</span>
-                  <span class="lb-name">.whimpe</span>
-                  <span class="lb-value">365,990 🥐</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature usage -->
-        <div class="dash-panel" style="margin-bottom:1rem">
-          <div class="dash-panel__header">
-            <span class="dash-panel__title">📊 Feature Usage (this week)</span>
-          </div>
-          <div class="dash-panel__body" style="display:grid;gap:.8rem">
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">Economy</span><span style="color:var(--accent)">34%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:34%"></div></div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">Leveling / XP</span><span style="color:var(--accent)">22%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:22%"></div></div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">Music</span><span style="color:var(--accent)">18%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:18%"></div></div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">Moderation</span><span style="color:var(--accent)">13%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:13%"></div></div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">AI Chat</span><span style="color:var(--accent)">9%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:9%"></div></div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem"><span style="color:var(--text)">Other</span><span style="color:var(--muted)">4%</span></div>
-              <div class="prog-bar"><div class="prog-bar__fill" style="width:4%;background:var(--muted)"></div></div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /overview -->
-
-      <!-- ── COMMANDS ─────────────────────────────────────────── -->
-      <div class="section-view" id="sec-commands">
-        <p class="section-label">Economy</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">/balance [user]</div><div class="cmd-card__desc">Show a premium image wallet card with cash, bank, level, XP, and rank.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/profile [user]</div><div class="cmd-card__desc">Full profile card plus badge showcase and recent transaction history.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/daily</div><div class="cmd-card__desc">Claim your daily treat. Streak multiplier up to ×2.4 at day 7.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/work</div><div class="cmd-card__desc">Work a shift at your current café job and earn coins + XP.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/job list · info · apply · quit</div><div class="cmd-card__desc">Browse and manage your career — from barista all the way to café owner.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/shop [category]</div><div class="cmd-card__desc">Browse consumables, upgrades, and collectibles in the café boutique.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/buy · /sell · /use · /inventory</div><div class="cmd-card__desc">Purchase items, sell them back, activate consumables, or inspect your bag.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/bank deposit · withdraw · upgrade</div><div class="cmd-card__desc">Manage your tiered vault (Tin Jar → Diamond Vault) with daily interest.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/lottery info · buy</div><div class="cmd-card__desc">Buy tickets for the weekly café lottery draw. Pot rolls over each week.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/crime · /rob [user]</div><div class="cmd-card__desc">Try your luck at petty crime or robbing another user's wallet.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/pay [user] [amount]</div><div class="cmd-card__desc">Transfer coins directly to another server member.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/leaderboard · /networth · /transactions</div><div class="cmd-card__desc">See the rich list image card, your net worth rank, or your TX history.</div></div>
-        </div>
-
-        <p class="section-label">Leveling</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">/level [user]</div><div class="cmd-card__desc">Check current XP, level, and rank on this server.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/level-leaderboard</div><div class="cmd-card__desc">Paginated leaderboard for the current server's XP rankings.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/levelpanel</div><div class="cmd-card__desc">Interactive admin panel to configure XP, cooldowns, roles, and announcements.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/levelconfig toggle · multiplier · cooldown</div><div class="cmd-card__desc">Fine-tune XP gain per-server without opening the full panel.</div></div>
-        </div>
-
-        <p class="section-label">Moderation</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">/kick · /ban · /unban</div><div class="cmd-card__desc">Standard member management actions, logged to mod-log channel.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/warn · /warnings · /clearwarnings</div><div class="cmd-card__desc">Issue, view, and clear warnings for any server member.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/mute · /tempmute · /unmute</div><div class="cmd-card__desc">Silence members temporarily or indefinitely.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/purge [amount]</div><div class="cmd-card__desc">Bulk-delete up to 100 messages at once.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/automod</div><div class="cmd-card__desc">Interactive dashboard: anti-spam, anti-link, bad words, mass mention, raid protection.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/whitelist add · remove</div><div class="cmd-card__desc">Exempt users or roles from all automod checks.</div></div>
-        </div>
-
-        <p class="section-label">Music</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">/play [query or URL]</div><div class="cmd-card__desc">Queue a track from YouTube, Spotify, or direct URL via Lavalink.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/queue · /skip · /stop · /pause · /resume</div><div class="cmd-card__desc">Full playback control with a live now-playing card.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/loop · /shuffle · /volume</div><div class="cmd-card__desc">Loop modes (off / track / queue), shuffle queue, set volume.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/nowplaying</div><div class="cmd-card__desc">Live progress-bar card for the current track with interactive buttons.</div></div>
-        </div>
-
-        <p class="section-label">Community & Utility</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">/giveaway start</div><div class="cmd-card__desc">Interactive CV2 giveaway setup: prize, duration, winners, join requirements.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/poll · /suggest</div><div class="cmd-card__desc">Create live multi-option polls or a suggestion board with admin approval.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/ticket · /close · /delete</div><div class="cmd-card__desc">Persistent ticket system with per-guild category and support role config.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/remind · /birthday · /highlight</div><div class="cmd-card__desc">Personal reminders, birthday announcements, and keyword DM notifications.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/tag create · edit · delete · [name]</div><div class="cmd-card__desc">Per-guild custom text snippets for quick responses.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/starboard · /afk · /snipe</div><div class="cmd-card__desc">Auto-mirror starred messages, set AFK status, or snipe deleted messages.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/translate · /define</div><div class="cmd-card__desc">Translate text to any language or look up a dictionary definition.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/notifier add · remove</div><div class="cmd-card__desc">Subscribe a channel to YouTube, Twitter, TikTok, Bluesky, or Reddit feeds.</div></div>
-        </div>
-
-        <p class="section-label">AI & Fun</p>
-        <div class="cmd-grid">
-          <div class="cmd-card"><div class="cmd-card__name">@Niko [message]</div><div class="cmd-card__desc">Chat with Niko! She remembers your past conversations and adjusts her vibe based on favorability.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/favor [user]</div><div class="cmd-card__desc">Check your current favorability score with Niko.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/ai-personality · /ai-language</div><div class="cmd-card__desc">Switch between normal and café personalities, or set response language.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/imagine [prompt]</div><div class="cmd-card__desc">AI image generation directly in Discord.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/blackjack · /slots · /roulette</div><div class="cmd-card__desc">Visual casino games with image cards and economy integration.</div></div>
-          <div class="cmd-card"><div class="cmd-card__name">/hug · /pat · /kiss · /boop [user]</div><div class="cmd-card__desc">Cute anime-gif roleplay actions for café vibes.</div></div>
-        </div>
-      </div><!-- /commands -->
-
       <!-- ── ECONOMY ──────────────────────────────────────────── -->
-      <div class="section-view" id="sec-economy">
-        <div class="dash-cols" style="margin-bottom:1rem">
-          <div class="dash-panel">
-            <div class="dash-panel__header"><span class="dash-panel__title">🏆 Net Worth — Top 10</span></div>
-            <div class="dash-panel__body">
-              <ul class="lb-list">
-                <li class="lb-row"><span class="lb-rank lb-rank--1">🥇</span><span class="lb-name">nyxenwastaken</span><span class="lb-value">1,284,500</span></li>
-                <li class="lb-row"><span class="lb-rank lb-rank--2">🥈</span><span class="lb-name">odd1111man.</span><span class="lb-value">892,340</span></li>
-                <li class="lb-row"><span class="lb-rank lb-rank--3">🥉</span><span class="lb-name">cmbpro.</span><span class="lb-value">741,880</span></li>
-                <li class="lb-row"><span class="lb-rank">#4</span><span class="lb-name">nexo_8</span><span class="lb-value">620,110</span></li>
-                <li class="lb-row"><span class="lb-rank">#5</span><span class="lb-name">roadkill1875</span><span class="lb-value">498,720</span></li>
-                <li class="lb-row"><span class="lb-rank">#6</span><span class="lb-name">.whimpe</span><span class="lb-value">365,990</span></li>
-                <li class="lb-row"><span class="lb-rank">#7</span><span class="lb-name">zackisthatinvincible</span><span class="lb-value">280,450</span></li>
-                <li class="lb-row"><span class="lb-rank">#8</span><span class="lb-name">roadkill1875</span><span class="lb-value">194,300</span></li>
-                <li class="lb-row"><span class="lb-rank">#9</span><span class="lb-name">user_9</span><span class="lb-value">88,120</span></li>
-                <li class="lb-row"><span class="lb-rank">#10</span><span class="lb-name">user_10</span><span class="lb-value">52,000</span></li>
-              </ul>
-            </div>
-          </div>
-          <div class="dash-panel">
-            <div class="dash-panel__header"><span class="dash-panel__title">📊 Economy Stats</span></div>
-            <div class="dash-panel__body" style="display:flex;flex-direction:column;gap:.9rem">
-              <div class="stat-card stat-card--servers" style="padding:.8rem 1rem">
-                <div class="stat-card__label">Total coins in circulation</div>
-                <div class="stat-card__value" style="font-size:1.5rem">12.4M 🥐</div>
-              </div>
-              <div class="stat-card stat-card--users" style="padding:.8rem 1rem">
-                <div class="stat-card__label">Lottery pot (current)</div>
-                <div class="stat-card__value" style="font-size:1.5rem">48,500 🥐</div>
-                <div class="stat-card__sub">draws in 4d 12h</div>
-              </div>
-              <div class="stat-card stat-card--commands" style="padding:.8rem 1rem">
-                <div class="stat-card__label">Daily claims today</div>
-                <div class="stat-card__value" style="font-size:1.5rem">142</div>
-              </div>
-            </div>
-          </div>
+      <div class="sec" id="sec-economy">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-card__label">Total net worth</div><div class="stat-card__value" id="eco-total" style="color:#d9956d;font-size:1.4rem">—</div><div class="stat-card__bg">🥐</div></div>
+          <div class="stat-card"><div class="stat-card__label">Richest player</div><div class="stat-card__value" id="eco-top-val" style="color:#ffd700;font-size:1.4rem">—</div><div class="stat-card__sub" id="eco-top-name"></div><div class="stat-card__bg">👑</div></div>
+          <div class="stat-card"><div class="stat-card__label">Active users</div><div class="stat-card__value" id="eco-count" style="color:#a8e6b0">—</div><div class="stat-card__bg">👥</div></div>
         </div>
-        <div class="notice" style="background:rgba(93,224,160,.06);border-color:rgba(93,224,160,.2);color:#5de0a0">
-          <span>🔮</span>
-          <span>Full per-server economy management — reset balances, set multipliers, configure item prices — coming with Discord OAuth login.</span>
+        <div class="panel">
+          <div class="panel__head">
+            <span class="panel__title">📊 Net Worth Leaderboard</span>
+          </div>
+          <div class="panel__body">
+            <ul class="lb" id="eco-lb"><li class="lb-empty">Loading…</li></ul>
+          </div>
         </div>
       </div>
 
       <!-- ── LEVELING ─────────────────────────────────────────── -->
-      <div class="section-view" id="sec-leveling">
-        <div class="dash-cols" style="margin-bottom:1rem">
-          <div class="dash-panel">
-            <div class="dash-panel__header"><span class="dash-panel__title">⭐ Level Leaderboard</span></div>
-            <div class="dash-panel__body">
-              <ul class="lb-list">
-                <li class="lb-row"><span class="lb-rank lb-rank--1">🥇</span><span class="lb-name">zackisthatinvincible</span><span class="lb-value">Lv 9</span></li>
-                <li class="lb-row"><span class="lb-rank lb-rank--2">🥈</span><span class="lb-name">.whimpe</span><span class="lb-value">Lv 9</span></li>
-                <li class="lb-row"><span class="lb-rank lb-rank--3">🥉</span><span class="lb-name">nexo_8</span><span class="lb-value">Lv 8</span></li>
-                <li class="lb-row"><span class="lb-rank">#4</span><span class="lb-name">cmbpro.</span><span class="lb-value">Lv 9</span></li>
-                <li class="lb-row"><span class="lb-rank">#5</span><span class="lb-name">nyxenwastaken</span><span class="lb-value">Lv 3</span></li>
-              </ul>
-            </div>
+      <div class="sec" id="sec-leveling">
+        <div class="panel" style="margin-bottom:1rem">
+          <div class="panel__head"><span class="panel__title">⭐ XP Leaderboard</span></div>
+          <div class="panel__body">
+            <ul class="lb" id="lvl-lb"><li class="lb-empty">Loading…</li></ul>
           </div>
-          <div class="dash-panel">
-            <div class="dash-panel__header"><span class="dash-panel__title">⚙️ Leveling Config (preview)</span></div>
-            <div class="dash-panel__body" style="display:flex;flex-direction:column;gap:.7rem;font-size:.83rem">
-              <div class="toggle-row"><span style="color:var(--text)">XP enabled</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-              <div class="toggle-row"><span style="color:var(--text)">Level-up announcements</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-              <div style="color:var(--muted)">XP multiplier: <strong style="color:var(--text)">1.0×</strong></div>
-              <div style="color:var(--muted)">Cooldown: <strong style="color:var(--text)">60s</strong></div>
-              <div style="color:var(--muted)">Level-up channel: <strong style="color:var(--text)">#general</strong></div>
-              <div class="coming-soon-note">Live editing coming with Discord OAuth.</div>
-            </div>
+        </div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">⚙️ Leveling Config</span></div>
+          <div class="panel__body" id="lvl-cfg-body">
+            <span style="color:var(--muted);font-size:.83rem">Loading…</span>
           </div>
         </div>
       </div>
 
       <!-- ── MODERATION ───────────────────────────────────────── -->
-      <div class="section-view" id="sec-moderation">
-        <div class="stats-grid" style="margin-bottom:1.2rem">
-          <div class="stat-card"><div class="stat-card__label">Warnings issued</div><div class="stat-card__value" style="color:#f08080">24</div><div class="stat-card__sub">this month</div></div>
-          <div class="stat-card"><div class="stat-card__label">Messages purged</div><div class="stat-card__value" style="color:#ffc84a">1,240</div><div class="stat-card__sub">automod + manual</div></div>
-          <div class="stat-card"><div class="stat-card__label">Bans</div><div class="stat-card__value" style="color:#f08080">3</div><div class="stat-card__sub">this month</div></div>
-          <div class="stat-card"><div class="stat-card__label">Tickets opened</div><div class="stat-card__value" style="color:#89c4e1">47</div><div class="stat-card__sub">12 open</div></div>
+      <div class="sec" id="sec-moderation">
+        <div class="save-bar hidden" id="mod-save-bar">
+          <span>You have unsaved changes.</span>
+          <button class="btn btn--primary" style="font-size:.8rem;padding:.4rem .9rem" onclick="saveAutomod()">Save changes</button>
         </div>
-        <div class="dash-panel" style="margin-bottom:1rem">
-          <div class="dash-panel__header"><span class="dash-panel__title">🛡️ AutoMod Config (preview)</span></div>
-          <div class="dash-panel__body" style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;font-size:.83rem">
-            <div class="toggle-row"><span style="color:var(--text)">Anti-spam</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span style="color:var(--text)">Anti-link</span><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span style="color:var(--text)">Bad words filter</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span style="color:var(--text)">Mass mention guard</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span style="color:var(--text)">Ext. app raid protect</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span style="color:var(--text)">Log to mod channel</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">🛡️ AutoMod Settings</span></div>
+          <div class="panel__body" id="mod-cfg-body">
+            <span style="color:var(--muted);font-size:.83rem">Loading…</span>
           </div>
         </div>
-        <div class="notice" style="background:rgba(240,128,128,.06);border-color:rgba(240,128,128,.2);color:#f08080">
-          <span>🔐</span><span>Real-time moderation controls require Discord OAuth. Use <strong>!automod</strong> in your server to configure now.</span>
-        </div>
-      </div>
-
-      <!-- ── MUSIC ────────────────────────────────────────────── -->
-      <div class="section-view" id="sec-music">
-        <div class="dash-panel" style="margin-bottom:1rem">
-          <div class="dash-panel__header"><span class="dash-panel__title">🎵 Now Playing</span><span class="prototype-pill">Prototype</span></div>
-          <div class="dash-panel__body">
-            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-              <div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#2d2420,#4a3828);display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0">🎶</div>
-              <div>
-                <div style="font-weight:600;color:var(--text)">lofi hip hop radio — beats to study/relax</div>
-                <div style="font-size:.8rem;color:var(--muted)">Lofi Girl · YouTube · requested by nyxenwastaken</div>
-              </div>
-            </div>
-            <div class="prog-bar" style="height:6px;margin-bottom:.4rem"><div class="prog-bar__fill" style="width:43%"></div></div>
-            <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)"><span>1:47</span><span>4:12</span></div>
-            <div style="display:flex;gap:.6rem;margin-top:.8rem">
-              <button class="btn btn--ghost" style="font-size:.8rem;padding:.4rem .9rem">⏮ Prev</button>
-              <button class="btn btn--primary" style="font-size:.8rem;padding:.4rem .9rem">⏸ Pause</button>
-              <button class="btn btn--ghost" style="font-size:.8rem;padding:.4rem .9rem">⏭ Skip</button>
-              <button class="btn btn--ghost" style="font-size:.8rem;padding:.4rem .9rem">🔁 Loop</button>
-            </div>
-          </div>
-        </div>
-        <div class="dash-panel">
-          <div class="dash-panel__header"><span class="dash-panel__title">📋 Queue (5 tracks)</span></div>
-          <div class="dash-panel__body">
-            <ul class="activity-list">
-              <li class="activity-item"><span class="activity-dot activity-dot--green"></span><span class="activity-item__text"><strong>#1</strong> lofi hip hop radio (playing)</span><span class="activity-item__time">4:12</span></li>
-              <li class="activity-item"><span class="activity-dot activity-dot--blue"></span><span class="activity-item__text"><strong>#2</strong> Chill Beats Playlist</span><span class="activity-item__time">3:47</span></li>
-              <li class="activity-item"><span class="activity-dot activity-dot--blue"></span><span class="activity-item__text"><strong>#3</strong> Aesthetic Morning Playlist</span><span class="activity-item__time">5:12</span></li>
-              <li class="activity-item"><span class="activity-dot activity-dot--blue"></span><span class="activity-item__text"><strong>#4</strong> Jazz Hop Café</span><span class="activity-item__time">4:55</span></li>
-              <li class="activity-item"><span class="activity-dot activity-dot--blue"></span><span class="activity-item__text"><strong>#5</strong> Study With Me — Café Ambience</span><span class="activity-item__time">6:20</span></li>
-            </ul>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">⚠️ Recent Warnings</span></div>
+          <div class="panel__body" id="mod-warns-body">
+            <span style="color:var(--muted);font-size:.83rem">Loading…</span>
           </div>
         </div>
       </div>
 
-      <!-- ── SETTINGS ─────────────────────────────────────────── -->
-      <div class="section-view" id="sec-settings">
-        <div class="settings-grid">
-          <div class="setting-block">
-            <div class="setting-block__label">Bot Personality</div>
-            <div class="setting-block__title">AI & Response Style</div>
-            <div class="toggle-row"><span>Café personality</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>Trilingual (EN/DE/ES)</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>AI memory enabled</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="coming-soon-note">Requires Discord OAuth to save.</div>
+      <!-- ── AI & CHAT ────────────────────────────────────────── -->
+      <div class="sec" id="sec-ai">
+        <div class="save-bar hidden" id="ai-save-bar">
+          <span>You have unsaved changes.</span>
+          <button class="btn btn--primary" style="font-size:.8rem;padding:.4rem .9rem" onclick="saveAI()">Save changes</button>
+        </div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">🧠 AI Personality</span></div>
+          <div class="panel__body" id="ai-cfg-body">
+            <span style="color:var(--muted);font-size:.83rem">Loading…</span>
           </div>
-          <div class="setting-block">
-            <div class="setting-block__label">Economy</div>
-            <div class="setting-block__title">Economy System</div>
-            <div class="toggle-row"><span>Economy enabled</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>Lottery enabled</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>Bank interest</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="coming-soon-note">Requires Discord OAuth to save.</div>
-          </div>
-          <div class="setting-block">
-            <div class="setting-block__label">Notifications</div>
-            <div class="setting-block__title">Channels</div>
-            <div class="toggle-row"><span>Mod log</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>Level-up announcements</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="toggle-row"><span>Birthday announcements</span><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-            <div class="coming-soon-note">Requires Discord OAuth to save.</div>
-          </div>
-          <div class="setting-block">
-            <div class="setting-block__label">Prefix</div>
-            <div class="setting-block__title">Command Prefix</div>
-            <div style="display:flex;gap:.5rem;margin-top:.3rem">
-              <input value="!" style="flex:1;background:var(--bg);border:1px solid rgba(217,149,109,.2);border-radius:8px;padding:.45rem .7rem;color:var(--text);font-size:.85rem" />
-              <button class="btn btn--ghost" style="font-size:.8rem">Save</button>
-            </div>
-            <div class="coming-soon-note" style="margin-top:.5rem">Requires Discord OAuth to save.</div>
-          </div>
+        </div>
+      </div>
+
+      <!-- ── COMMANDS ─────────────────────────────────────────── -->
+      <div class="sec" id="sec-commands">
+        <div class="sec-label">Economy</div>
+        <div class="cmd-grid">
+          <div class="cmd-card"><div class="cmd-card__name">/balance [user]</div><div class="cmd-card__desc">Image wallet card — cash, bank, level, XP, rank.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/daily</div><div class="cmd-card__desc">Claim daily treat — streak up to ×2.4 multiplier.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/work</div><div class="cmd-card__desc">Work your current café job for coins + XP.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/job list · apply · quit</div><div class="cmd-card__desc">Career ladder from Barista to Café Owner.</div><span class="cmd-tag">group</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/shop [category]</div><div class="cmd-card__desc">Consumables, upgrades, collectibles boutique.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/bank deposit · withdraw · upgrade</div><div class="cmd-card__desc">Tiered vault with daily compound interest.</div><span class="cmd-tag">group</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/lottery buy · info</div><div class="cmd-card__desc">Weekly jackpot lottery with rolling pot.</div><span class="cmd-tag">group</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/leaderboard · /networth</div><div class="cmd-card__desc">Image rich-list and net worth rank.</div><span class="cmd-tag">hybrid</span></div>
+        </div>
+        <div class="sec-label">Leveling</div>
+        <div class="cmd-grid">
+          <div class="cmd-card"><div class="cmd-card__name">/level [user]</div><div class="cmd-card__desc">XP, level, and server rank.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/level-leaderboard</div><div class="cmd-card__desc">Paginated server XP rankings.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/levelpanel</div><div class="cmd-card__desc">Interactive admin panel for all leveling settings.</div><span class="cmd-tag">admin</span></div>
+        </div>
+        <div class="sec-label">Music</div>
+        <div class="cmd-grid">
+          <div class="cmd-card"><div class="cmd-card__name">/play [query|url]</div><div class="cmd-card__desc">Queue from YouTube, Spotify, or direct URL.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/nowplaying · /queue</div><div class="cmd-card__desc">Live now-playing card and queue view.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/loop · /shuffle · /volume</div><div class="cmd-card__desc">Loop modes, shuffle queue, set volume.</div><span class="cmd-tag">hybrid</span></div>
+        </div>
+        <div class="sec-label">Moderation</div>
+        <div class="cmd-grid">
+          <div class="cmd-card"><div class="cmd-card__name">/kick · /ban · /warn · /mute</div><div class="cmd-card__desc">Full member management, logged to mod channel.</div><span class="cmd-tag">admin</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/automod</div><div class="cmd-card__desc">Interactive dashboard — spam, links, words, raid protection.</div><span class="cmd-tag">admin</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/purge [n] · /lock · /slowmode</div><div class="cmd-card__desc">Channel management tools.</div><span class="cmd-tag">admin</span></div>
+        </div>
+        <div class="sec-label">AI & Fun</div>
+        <div class="cmd-grid">
+          <div class="cmd-card"><div class="cmd-card__name">@Niko [message]</div><div class="cmd-card__desc">Chat with Niko — memory, favorability, bilingual replies.</div><span class="cmd-tag">event</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/imagine [prompt]</div><div class="cmd-card__desc">AI image generation in-channel.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/blackjack · /slots · /roulette</div><div class="cmd-card__desc">Image-card casino games with economy integration.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/giveaway · /poll · /ticket</div><div class="cmd-card__desc">Community tools with interactive CV2 setup.</div><span class="cmd-tag">hybrid</span></div>
+          <div class="cmd-card"><div class="cmd-card__name">/translate · /remind · /highlight</div><div class="cmd-card__desc">Utility commands — translate text, reminders, keyword DMs.</div><span class="cmd-tag">hybrid</span></div>
         </div>
       </div>
 
     </div><!-- /dash-main -->
-  </div><!-- /right side -->
+  </div><!-- /dash-col -->
 </div><!-- /dash-wrap -->
 
 <script>
-  const sections = ['overview','commands','economy','leveling','moderation','music','settings'];
-  const titleMap = {
-    overview: 'Overview',
-    commands: 'Command Reference',
-    economy: 'Economy',
-    leveling: 'Leveling',
-    moderation: 'Moderation',
-    music: 'Music Player',
-    settings: 'Settings',
-  };
+/* ══════════════════════════════════════════════════════════
+   State
+═══════════════════════════════════════════════════════════ */
+let STATE = {
+  user:      null,
+  guilds:    [],
+  guild:     null,   // currently selected guild
+  config:    {},
+  modDirty:  false,
+  aiDirty:   false,
+};
 
-  function showSection(name) {
-    sections.forEach(s => {
-      document.getElementById('sec-' + s)?.classList.remove('visible');
-    });
-    document.getElementById('sec-' + name)?.classList.add('visible');
-    document.querySelectorAll('.sidebar__link').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.sidebar__link').forEach(el => {
-      if (el.getAttribute('onclick')?.includes(name)) el.classList.add('active');
-    });
-    document.getElementById('topbar-title').textContent = titleMap[name] || name;
+/* ══════════════════════════════════════════════════════════
+   Helpers
+═══════════════════════════════════════════════════════════ */
+function fmtNum(n) {
+  if (n == null || n === '—') return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+  return n.toLocaleString();
+}
+
+function avatarUrl(user) {
+  if (!user?.avatar) return `https://cdn.discordapp.com/embed/avatars/${(parseInt(user?.discriminator||0) % 5)}.png`;
+  return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=64`;
+}
+
+async function apiFetch(url, opts = {}) {
+  const r = await fetch(url, { credentials: 'same-origin', ...opts });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw Object.assign(new Error(j.error || r.statusText), { status: r.status });
   }
+  return r.json();
+}
+
+function showOverlay(id) {
+  ['ov-loading','ov-login','ov-guilds'].forEach(x =>
+    document.getElementById(x)?.classList.add('hidden'));
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
+  const app = document.getElementById('dash-app');
+  if (id === 'none') app.style.display = 'grid';
+  else app.style.display = 'none';
+}
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = `toast ${type ? 'toast--' + type : ''}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function showSec(name) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('visible'));
+  document.getElementById('sec-' + name)?.classList.add('visible');
+  document.querySelectorAll('.sidebar__link').forEach(l => {
+    l.classList.toggle('active', l.getAttribute('onclick')?.includes(`'${name}'`));
+  });
+  const titles = { overview:'Overview', economy:'Economy', leveling:'Leveling',
+                   moderation:'Moderation', ai:'AI & Chat', commands:'Commands' };
+  document.getElementById('topbar-title').textContent = titles[name] || name;
+
+  // Lazy-load section data when first viewed
+  if (name === 'economy' && STATE.guild) loadEconomy();
+  if (name === 'leveling' && STATE.guild) loadLevels();
+  if (name === 'moderation' && STATE.guild) loadModConfig();
+  if (name === 'ai' && STATE.guild) loadAIConfig();
+}
+
+/* ══════════════════════════════════════════════════════════
+   Boot
+═══════════════════════════════════════════════════════════ */
+async function boot() {
+  showOverlay('ov-loading');
+
+  // Check auth state
+  let status;
+  try { status = await apiFetch('/auth/status'); }
+  catch { status = { authenticated: false, oauth_available: false }; }
+
+  if (!status.authenticated) {
+    // Decide which login UI to show
+    if (!status.oauth_available) {
+      document.getElementById('login-oauth-on').style.display  = 'none';
+      document.getElementById('login-oauth-off').style.display = 'block';
+    }
+    showOverlay('ov-login');
+    return;
+  }
+
+  STATE.user = status.user;
+
+  // Populate avatar chip
+  const chip = document.getElementById('avatar-chip');
+  chip.style.display = 'flex';
+  document.getElementById('user-avatar').src = avatarUrl(STATE.user);
+  document.getElementById('user-name').textContent = STATE.user.global_name || STATE.user.username;
+
+  // Load public bot stats
+  try {
+    const stats = await apiFetch('/api/botstats');
+    document.getElementById('ov-servers').textContent   = fmtNum(stats.guild_count)   || '—';
+    document.getElementById('ov-users').textContent     = fmtNum(stats.user_count)    || '—';
+    document.getElementById('ov-cmds').textContent      = fmtNum(stats.command_count) || '76';
+    document.getElementById('ov-eco-users').textContent = fmtNum(stats.economy_users) || '—';
+    document.getElementById('sb-stats').textContent     = `v${stats.version || '1.0'} · ${stats.guild_count || '—'} servers`;
+  } catch {}
+
+  // Open guild picker
+  openGuildPicker();
+}
+
+/* ══════════════════════════════════════════════════════════
+   Guild picker
+═══════════════════════════════════════════════════════════ */
+async function openGuildPicker() {
+  showOverlay('ov-guilds');
+  const grid = document.getElementById('guild-grid');
+  grid.innerHTML = '<div class="spinner" style="margin:1.5rem auto"></div>';
+
+  try {
+    STATE.guilds = await apiFetch('/api/guilds');
+  } catch {
+    STATE.guilds = [];
+  }
+
+  document.getElementById('guild-count-label').textContent =
+    STATE.guilds.length ? `${STATE.guilds.length} server${STATE.guilds.length === 1 ? '' : 's'}` : '';
+
+  if (!STATE.guilds.length) {
+    grid.innerHTML = '<div class="guild-none">No mutual servers found where Niko is present and you have Manage Server permission.</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  for (const g of STATE.guilds) {
+    const el = document.createElement('div');
+    el.className = 'guild-item';
+    const imgHtml = g.icon_url
+      ? `<img src="${g.icon_url}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="guild-item-initials" style="display:none">${g.name.charAt(0)}</div>`
+      : `<div class="guild-item-initials">${g.name.charAt(0)}</div>`;
+    el.innerHTML = `${imgHtml}<span class="guild-item-name">${escHtml(g.name)}</span>`;
+    el.onclick = () => selectGuild(g);
+    grid.appendChild(el);
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+async function selectGuild(guild) {
+  STATE.guild = guild;
+
+  // Update guild chip in topbar
+  const chip     = document.getElementById('guild-chip');
+  const iconEl   = document.getElementById('guild-chip-icon');
+  const nameEl   = document.getElementById('guild-chip-name');
+  nameEl.textContent = guild.name;
+  if (guild.icon_url) {
+    iconEl.innerHTML = `<img src="${guild.icon_url}" style="width:18px;height:18px;border-radius:50%;object-fit:cover" alt="" />`;
+  } else {
+    iconEl.textContent = guild.name.charAt(0);
+  }
+
+  showOverlay('none');
+  showSec('overview');
+  loadOverview();
+}
+
+/* ══════════════════════════════════════════════════════════
+   Overview
+═══════════════════════════════════════════════════════════ */
+function rankClass(i) {
+  return i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+}
+function rankLabel(i) {
+  return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+}
+
+function renderLb(ulId, rows, valFn) {
+  const ul = document.getElementById(ulId);
+  if (!rows?.length) { ul.innerHTML = '<li class="lb-empty">No data yet.</li>'; return; }
+  ul.innerHTML = rows.map((r, i) => `
+    <li class="lb-row">
+      <span class="lb-rank ${rankClass(i)}">${rankLabel(i)}</span>
+      <span class="lb-name">${escHtml(r.display || r.user_id || '?')}</span>
+      <span class="lb-val">${valFn(r)}</span>
+    </li>`).join('');
+}
+
+async function loadOverview() {
+  if (!STATE.guild) return;
+  try {
+    const data = await apiFetch(`/api/guild/${STATE.guild.id}/overview`);
+
+    // Economy top-5
+    renderLb('ov-eco-lb', data.economy?.top?.slice(0,5),
+      r => `${fmtNum(r.net_worth)} 🥐`);
+
+    // Level top-5
+    renderLb('ov-lvl-lb', data.leveling?.top?.slice(0,5),
+      r => `Lv ${r.level}`);
+
+    // Moderation summary
+    const mod  = data.moderation || {};
+    const body = document.getElementById('ov-mod-body');
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:.82rem">
+        <div><div style="color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">Warnings</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#f08080">${mod.warn_count ?? 0}</div></div>
+        <div><div style="color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">AutoMod</div>
+          <div style="font-size:1rem;font-weight:600;color:${mod.automod_active ? '#5de0a0' : '#f08080'}">${mod.automod_active ? 'Active' : 'Off'}</div></div>
+      </div>`;
+  } catch (e) {
+    console.error('loadOverview:', e);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Economy
+═══════════════════════════════════════════════════════════ */
+async function loadEconomy() {
+  if (!STATE.guild) return;
+  try {
+    const rows = await apiFetch(`/api/guild/${STATE.guild.id}/economy`);
+    document.getElementById('eco-count').textContent = fmtNum(rows.length);
+    const total = rows.reduce((s, r) => s + (r.net_worth||0), 0);
+    document.getElementById('eco-total').textContent = fmtNum(total) + ' 🥐';
+    if (rows.length) {
+      document.getElementById('eco-top-val').textContent = fmtNum(rows[0].net_worth) + ' 🥐';
+      document.getElementById('eco-top-name').textContent = `user ${rows[0].user_id}`;
+    }
+    renderLb('eco-lb', rows.slice(0,20), r =>
+      `${fmtNum(r.net_worth)} 🥐`);
+  } catch (e) { console.error('loadEconomy:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Leveling
+═══════════════════════════════════════════════════════════ */
+async function loadLevels() {
+  if (!STATE.guild) return;
+  try {
+    const rows = await apiFetch(`/api/guild/${STATE.guild.id}/levels`);
+    renderLb('lvl-lb', rows.slice(0,20), r => `Lv ${r.level} · ${fmtNum(r.xp)} XP`);
+
+    const cfg   = (await apiFetch(`/api/guild/${STATE.guild.id}/config`)).leveling || {};
+    STATE.config.leveling = cfg;
+    const body = document.getElementById('lvl-cfg-body');
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;font-size:.83rem">
+        <div class="toggle-row"><span>XP enabled</span>
+          <label class="toggle"><input type="checkbox" ${cfg.xp_enabled !== false ? 'checked' : ''} disabled><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row"><span>Level-up announcements</span>
+          <label class="toggle"><input type="checkbox" ${cfg.level_up_channel ? 'checked' : ''} disabled><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div style="display:flex;gap:2rem;margin-top:.8rem;font-size:.83rem">
+        <div><span style="color:var(--muted)">Multiplier: </span><strong>${cfg.xp_multiplier ?? 1}×</strong></div>
+        <div><span style="color:var(--muted)">Cooldown: </span><strong>${cfg.xp_cooldown ?? 60}s</strong></div>
+      </div>
+      <p style="font-size:.76rem;color:var(--muted);margin-top:.8rem">Use <code style="background:rgba(217,149,109,.1);color:var(--accent);padding:.1rem .35rem;border-radius:4px">/levelpanel</code> in Discord to edit leveling settings live.</p>`;
+  } catch (e) { console.error('loadLevels:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Moderation
+═══════════════════════════════════════════════════════════ */
+async function loadModConfig() {
+  if (!STATE.guild) return;
+  const body = document.getElementById('mod-cfg-body');
+  try {
+    const cfg   = await apiFetch(`/api/guild/${STATE.guild.id}/config`);
+    const mod   = cfg.moderation || {};
+    const am    = mod.automod || {};
+    STATE.config.mod = { ...am };
+
+    const flags = [
+      { key:'antispam',    label:'Anti-spam' },
+      { key:'antilink',    label:'Anti-link' },
+      { key:'badwords',    label:'Bad-word filter' },
+      { key:'massmention', label:'Mass-mention guard' },
+      { key:'antiraid_ext',label:'External app raid protection' },
+    ];
+
+    body.innerHTML = flags.map(f => `
+      <div class="toggle-row">
+        <span>${f.label}</span>
+        <label class="toggle">
+          <input type="checkbox" id="am-${f.key}" ${am[f.key] ? 'checked' : ''}
+            onchange="onModChange()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`).join('') + `
+      <div style="margin-top:.8rem;font-size:.8rem;color:var(--muted)">
+        Spam threshold: <strong style="color:var(--text)">${mod.spam_threshold ?? 6}</strong> msgs ·
+        Max mentions: <strong style="color:var(--text)">${mod.max_mentions ?? 5}</strong>
+      </div>`;
+
+    // Warn log
+    const warns  = cfg.moderation?.warns || {};
+    const wbody  = document.getElementById('mod-warns-body');
+    const entries = Object.entries(warns).flatMap(([uid, list]) =>
+      (list||[]).map(w => ({ uid, ...w }))).slice(-8).reverse();
+    if (!entries.length) {
+      wbody.innerHTML = '<p style="color:var(--muted);font-size:.83rem">No warnings logged yet.</p>';
+    } else {
+      wbody.innerHTML = `<ul class="lb">${entries.map(w => `
+        <li class="lb-row" style="grid-template-columns:1fr 2fr auto">
+          <span class="lb-name">User ${w.uid}</span>
+          <span style="color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(w.reason||'')}</span>
+          <span style="font-size:.72rem;color:rgba(184,173,160,.4)">${w.time ? w.time.split('T')[0] : ''}</span>
+        </li>`).join('')}</ul>`;
+    }
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--muted);font-size:.83rem">Could not load config: ${e.message}</p>`;
+  }
+}
+
+function onModChange() {
+  STATE.modDirty = true;
+  document.getElementById('mod-save-bar').classList.remove('hidden');
+}
+
+async function saveAutomod() {
+  if (!STATE.guild) return;
+  const payload = {};
+  ['antispam','antilink','badwords','massmention','antiraid_ext'].forEach(k => {
+    const el = document.getElementById(`am-${k}`);
+    if (el) payload[k] = el.checked;
+  });
+  try {
+    await apiFetch(`/api/guild/${STATE.guild.id}/config/automod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    toast('AutoMod settings saved.', 'ok');
+    STATE.modDirty = false;
+    document.getElementById('mod-save-bar').classList.add('hidden');
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   AI Config
+═══════════════════════════════════════════════════════════ */
+async function loadAIConfig() {
+  if (!STATE.guild) return;
+  const body = document.getElementById('ai-cfg-body');
+  try {
+    const cfg = (await apiFetch(`/api/guild/${STATE.guild.id}/config`)).ai || {};
+    STATE.config.ai = { ...cfg };
+    const enabled     = cfg.enabled !== 'False';
+    const isCafe      = (cfg.personality || 'cafe') === 'cafe';
+
+    body.innerHTML = `
+      <div class="toggle-row" style="margin-bottom:.6rem">
+        <span>AI chat enabled</span>
+        <label class="toggle"><input type="checkbox" id="ai-enabled" ${enabled ? 'checked' : ''} onchange="onAIChange()"><span class="toggle-slider"></span></label>
+      </div>
+      <div style="margin: .8rem 0 .5rem;font-size:.82rem;color:var(--muted)">Personality mode</div>
+      <div style="display:flex;gap:.5rem">
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.83rem;cursor:pointer">
+          <input type="radio" name="ai-personality" value="cafe" ${isCafe ? 'checked' : ''} onchange="onAIChange()"> ☕ Café (warm bestie)
+        </label>
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.83rem;cursor:pointer">
+          <input type="radio" name="ai-personality" value="normal" ${!isCafe ? 'checked' : ''} onchange="onAIChange()"> 💬 Normal
+        </label>
+      </div>
+      <p style="font-size:.76rem;color:var(--muted);margin-top:1rem">AI is powered by OpenAI (via Replit integration). Memory and favorability scores are stored in <code style="background:rgba(217,149,109,.1);color:var(--accent);padding:.1rem .35rem;border-radius:4px">memory.json</code>.</p>`;
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--muted);font-size:.83rem">Could not load AI config: ${e.message}</p>`;
+  }
+}
+
+function onAIChange() {
+  STATE.aiDirty = true;
+  document.getElementById('ai-save-bar').classList.remove('hidden');
+}
+
+async function saveAI() {
+  if (!STATE.guild) return;
+  const enabled = document.getElementById('ai-enabled')?.checked ?? true;
+  const personality = document.querySelector('input[name="ai-personality"]:checked')?.value ?? 'cafe';
+  try {
+    await apiFetch(`/api/guild/${STATE.guild.id}/config/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, personality }),
+    });
+    toast('AI settings saved.', 'ok');
+    STATE.aiDirty = false;
+    document.getElementById('ai-save-bar').classList.add('hidden');
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Start
+═══════════════════════════════════════════════════════════ */
+boot();
 </script>
 </body>
 </html>

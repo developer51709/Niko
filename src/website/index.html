@@ -49,8 +49,11 @@
         <div class="hero__buttons">
           <a id="btn-invite" href="https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands" class="btn btn--primary lang-fade"></a>
           <a id="btn-commands" href="#features" class="btn btn--ghost lang-fade"></a>
-          <a id="btn-github" href="https://github.com/developer51709/Niko" class="btn btn--ghost lang-fade" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="dashboard.html" class="btn btn--ghost">Dashboard</a>
+          <a href="https://github.com/developer51709/Niko" class="btn btn--ghost" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
+        <!-- Live stats bar -->
+        <div id="stats-bar" style="display:flex;gap:1.4rem;margin-top:1.2rem;font-size:.78rem;color:var(--muted);flex-wrap:wrap"></div>
       </div>
       <div class="hero__art">
         <img src="coffee.svg" alt="Coffee cup" class="coffee-svg" />
@@ -115,5 +118,23 @@
   </footer>
 
   <script src="script.js"></script>
+  <script>
+    // Fetch live bot stats and populate the stats bar
+    fetch('/api/botstats').then(r => r.json()).then(s => {
+      const bar = document.getElementById('stats-bar');
+      if (!bar) return;
+      const items = [
+        { label: 'servers', value: s.guild_count },
+        { label: 'users',   value: s.user_count  },
+        { label: 'commands',value: s.command_count },
+      ];
+      bar.innerHTML = items.filter(i => i.value).map(i =>
+        `<span style="display:flex;align-items:center;gap:.3rem">
+           <span style="color:var(--accent);font-weight:600">${Number(i.value).toLocaleString()}</span>
+           ${i.label}
+         </span>`
+      ).join('<span style="opacity:.25">·</span>');
+    }).catch(() => {});
+  </script>
 </body>
 </html>
