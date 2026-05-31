@@ -222,42 +222,44 @@ async def set_status():
         await bot.change_presence(activity=activity)
 
 # Experimental: Spoof client properties
-async def patch_identify(device: str):
+def patch_identify(device: str):
     """
+    Patches discord.py's IDENTIFY payload to spoof the client device.
     device: 'normal', 'mobile_ios', 'mobile_android', 'vr'
+
+    Uses discord.py v2 property key format (no $ prefix).
+    Wraps the original identify so intents, shards, presence and hooks
+    are still handled correctly — only the 'properties' field is replaced.
     """
     import discord.gateway as gateway
 
-    original_identify = gateway.DiscordWebSocket.identify
+    _PROPS = {
+        "mobile_ios":     {"os": "iOS",     "browser": "Discord iOS",     "device": "Discord iOS"},
+        "mobile_android": {"os": "Android", "browser": "Discord Android", "device": "Discord Android"},
+        "vr":             {"os": "Android", "browser": "Oculus",          "device": "Oculus"},
+        "normal":         {"os": "Windows", "browser": "Discord",         "device": "Discord"},
+    }
+    target_props = _PROPS.get(device, _PROPS["normal"])
+
+    _original_identify = gateway.DiscordWebSocket.identify
 
     async def identify_spoof(self):
-        # Build a payload similar to discord.py's identify but with spoofed properties
-        if device == "mobile_ios":
-            props = {"$os": "iOS", "$browser": "Discord iOS", "$device": "Discord iOS", "$referrer": "", "$referring_domain": ""}
-        elif device == "mobile_android":
-            props = {"$os": "Android", "$browser": "Discord Android", "$device": "Discord Android", "$referrer": "", "$referring_domain": ""}
-        elif device == "vr":
-            # VR client string may vary; this is a commonly used value in community forks
-            props = {"$os": "Android", "$browser": "Oculus", "$device": "Oculus", "$referrer": "", "$referring_domain": ""}
-        else:
-            # default desktop-like identify
-            props = {"$os": "Windows", "$browser": "Discord", "$device": "Discord", "$referrer": "", "$referring_domain": ""}
+        # Temporarily wrap send_as_json so we can swap just the properties
+        # field inside the IDENTIFY op, letting discord.py build everything
+        # else (intents, shard, presence, hooks) exactly as normal.
+        _orig_send = self.send_as_json
 
-        payload = {
-            "op": self.IDENTIFY,
-            "d": {
-                "token": self.token,
-                "properties": props,
-                "compress": True,
-                "large_threshold": getattr(self, "large_threshold", 250),
-                "v": getattr(self, "version", 3)
-            }
-        }
+        async def _intercept(data):
+            if isinstance(data, dict) and data.get("op") == self.IDENTIFY:
+                data["d"]["properties"] = target_props
+            await _orig_send(data)
 
-        # send the spoofed identify payload
-        await self.send_as_json(payload)
+        self.send_as_json = _intercept
+        try:
+            await _original_identify(self)
+        finally:
+            self.send_as_json = _orig_send
 
-    # Replace the method on the class
     gateway.DiscordWebSocket.identify = identify_spoof
 
 # -----------------------------
