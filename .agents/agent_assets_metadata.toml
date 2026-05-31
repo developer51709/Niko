@@ -53,3 +53,9 @@ id = "C01udD4QYhO743Y7maO4g"
 uri = "file://attached_assets/caption_preview/caption_long.png"
 type = "image"
 title = "Caption (top) — multi-line wrap"
+
+[[outputs]]
+id = "-sB3UGiV1QXTFxS4UxSeJ"
+uri = "file://docs/undocumented_endpoints.md"
+type = "text"
+title = "Undocumented & Lightly-Documented Discord Endpoints"
