@@ -239,34 +239,85 @@ def patch_identify(device: str):
     """
     import discord.gateway as gateway
 
-    _PROPS = {
-        "mobile_ios":     {"os": "iOS",     "browser": "Discord iOS",     "device": "Discord iOS"},
-        "mobile_android": {"os": "Android", "browser": "Discord Android", "device": "Discord Android"},
-        # Meta renamed Oculus → Quest in 2021; "Quest" is the current app identifier.
-        # Discord no longer renders a VR headset icon — shows as desktop dot.
-        "vr":             {"os": "Android", "browser": "Quest",           "device": "Quest"},
+    # Each entry is (properties_dict, extra_identify_fields).
+    # extra_identify_fields are merged into the top-level 'd' object of the
+    # IDENTIFY op — this is how real clients advertise capabilities, locale, etc.
+    # beyond the minimal set discord.py sends.
+    _DEVICES: dict[str, tuple[dict, dict]] = {
+        "mobile_ios": (
+            {"os": "iOS", "browser": "Discord iOS", "device": "Discord iOS",
+             "system_locale": "en-US", "browser_version": "", "os_version": "",
+             "referrer": "", "referring_domain": "",
+             "referrer_current": "", "referring_domain_current": "",
+             "release_channel": "stable", "client_build_number": 0,
+             "native_build_number": None, "client_event_source": None},
+            {"capabilities": 30717},
+        ),
+        "mobile_android": (
+            {"os": "Android", "browser": "Discord Android", "device": "Discord Android",
+             "system_locale": "en-US", "browser_version": "", "os_version": "",
+             "referrer": "", "referring_domain": "",
+             "referrer_current": "", "referring_domain_current": "",
+             "release_channel": "stable", "client_build_number": 0,
+             "native_build_number": None, "client_event_source": None},
+            {"capabilities": 30717},
+        ),
+        # Meta Quest (née Oculus) — uses the full extended IDENTIFY payload that
+        # the native Quest Discord app sends, including a Quest-specific capabilities
+        # value and richer properties. This is the gateway-level approach that goes
+        # beyond simple property spoofing and is required for Discord to recognise
+        # the session as a VR device rather than a desktop client.
+        "vr": (
+            {"os": "Android", "browser": "Quest", "device": "Quest",
+             "system_locale": "en-US", "browser_version": "", "os_version": "12",
+             "referrer": "", "referring_domain": "",
+             "referrer_current": "", "referring_domain_current": "",
+             "release_channel": "stable", "client_build_number": 0,
+             "native_build_number": None, "client_event_source": None},
+            # capabilities: 125 is the bitmask sent by the Quest Discord client —
+            # a limited subset that excludes desktop-only features.
+            {"capabilities": 125},
+        ),
         # Discord Activities / embedded apps identifier.
-        "embedded":       {"os": "Linux",   "browser": "Discord Embedded", "device": ""},
-        "normal":         {"os": "Windows", "browser": "Discord",         "device": ""},
+        "embedded": (
+            {"os": "Linux", "browser": "Discord Embedded", "device": "",
+             "system_locale": "en-US", "browser_version": "", "os_version": "",
+             "referrer": "", "referring_domain": "",
+             "referrer_current": "", "referring_domain_current": "",
+             "release_channel": "stable", "client_build_number": 0,
+             "native_build_number": None, "client_event_source": None},
+            {"capabilities": 8189},
+        ),
+        "normal": (
+            {"os": "Windows", "browser": "Discord", "device": "",
+             "system_locale": "en-US", "browser_version": "", "os_version": "",
+             "referrer": "", "referring_domain": "",
+             "referrer_current": "", "referring_domain_current": "",
+             "release_channel": "stable", "client_build_number": 0,
+             "native_build_number": None, "client_event_source": None},
+            {"capabilities": 16381},
+        ),
     }
-    target_props = _PROPS.get(device, _PROPS["normal"])
 
-    if device == "vr":
-        logging.warning("DeviceSpoof", "VR/Quest mode active — Discord no longer renders a VR headset icon; bot will show as a desktop client.")
-    elif device not in _PROPS:
+    if device not in _DEVICES:
         logging.warning("DeviceSpoof", f"Unknown STATUS_DEVICE '{device}', falling back to 'normal'.")
+
+    target_props, target_extra = _DEVICES.get(device, _DEVICES["normal"])
+    logging.info("DeviceSpoof", f"Patching gateway IDENTIFY — device={device!r}, capabilities={target_extra.get('capabilities')}")
 
     _original_identify = gateway.DiscordWebSocket.identify
 
     async def identify_spoof(self):
-        # Temporarily wrap send_as_json so we can swap just the properties
-        # field inside the IDENTIFY op, letting discord.py build everything
-        # else (intents, shard, presence, hooks) exactly as normal.
+        # Temporarily wrap send_as_json so we can inject both the extended
+        # properties and the extra top-level fields (capabilities, etc.) into
+        # the IDENTIFY op while letting discord.py build everything else
+        # (intents, shard, presence, hooks) correctly.
         _orig_send = self.send_as_json
 
         async def _intercept(data):
             if isinstance(data, dict) and data.get("op") == self.IDENTIFY:
                 data["d"]["properties"] = target_props
+                data["d"].update(target_extra)
             await _orig_send(data)
 
         self.send_as_json = _intercept
