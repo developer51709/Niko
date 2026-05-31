@@ -1,4 +1,6 @@
 from .panel import *
+import asyncio
+from utils.discord_extras import burst_react
 
 class Leveling(commands.Cog):
     """Cozy bilingual leveling system with guild config support."""
@@ -187,7 +189,8 @@ class Leveling(commands.Cog):
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
-                    await lu_channel.send(view=view)
+                    lu_msg = await lu_channel.send(view=view)
+                    asyncio.create_task(burst_react(self.bot, lu_channel.id, lu_msg.id, "🎉"))
                 log.debug("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass

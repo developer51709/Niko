@@ -261,21 +261,36 @@ def _check_perms(msg: discord.Message, perm: str, *, action_label: str):
 # ────────────────────────────────────────────────────────────────────
 
 async def _do_create_poll(bot, msg: discord.Message, args: dict) -> None:
-    question = (args.get("question") or "Poll").strip()[:256]
-    options = [str(o).strip() for o in (args.get("options") or []) if str(o).strip()][:9]
+    import datetime
+    question = (args.get("question") or "Poll").strip()[:300]
+    options = [str(o).strip() for o in (args.get("options") or []) if str(o).strip()][:10]
     if len(options) < 2:
         await msg.channel.send(view=_error_view("A poll needs at least two options."))
         return
-    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
-    lines = [f"**📊 {question}**\n"]
-    for i, opt in enumerate(options):
-        lines.append(f"{number_emojis[i]} {opt}")
-    poll_msg = await msg.channel.send("\n".join(lines))
-    for i in range(len(options)):
-        try:
-            await poll_msg.add_reaction(number_emojis[i])
-        except Exception:
-            pass
+
+    # Use Discord's native Poll feature — shows progress bars and a clean poll card
+    poll = discord.Poll(
+        question=question,
+        duration=datetime.timedelta(hours=24),
+        multiple=False,
+    )
+    for opt in options:
+        poll.add_answer(text=opt[:55])
+
+    try:
+        await msg.channel.send(poll=poll)
+    except discord.HTTPException:
+        # Fallback: legacy reaction poll (for channels that don't support native polls)
+        number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
+        lines = [f"**📊 {question}**\n"]
+        for i, opt in enumerate(options):
+            lines.append(f"{number_emojis[i]} {opt}")
+        poll_msg = await msg.channel.send("\n".join(lines))
+        for i in range(len(options)):
+            try:
+                await poll_msg.add_reaction(number_emojis[i])
+            except Exception:
+                pass
 
 
 # ── Moderation actions ──────────────────────────────────────────────

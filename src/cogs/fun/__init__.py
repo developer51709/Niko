@@ -1,4 +1,4 @@
-from . import general, roleplay, animals, memes, connect_four, tictactoe, nsfw, uwulock, bnuy
+from . import general, roleplay, animals, memes, connect_four, tictactoe, nsfw, uwulock, bnuy, soundboard
 
 
 async def setup(bot):
@@ -11,3 +11,4 @@ async def setup(bot):
     await nsfw.setup(bot)
     await uwulock.setup(bot)
     await bnuy.setup(bot)
+    await soundboard.setup(bot)

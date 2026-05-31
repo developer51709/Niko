@@ -1,4 +1,5 @@
 from .views import *
+from utils.discord_extras import set_voice_status
 
 class MusicSystem(commands.Cog):
     """Music system — artwork cards, control panel, multi-source, autoplay."""
@@ -140,6 +141,20 @@ class MusicSystem(commands.Cog):
         self.bot.loop.create_task(self.startup_connect(retry_delay=10))
 
     @commands.Cog.listener()
+    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload) -> None:
+        """Auto-set voice channel status to the current track title when a song starts."""
+        player = payload.player
+        if player is None or not getattr(player, "channel", None):
+            return
+        track = payload.track
+        if not track:
+            return
+        title  = (track.title  or "Unknown")[:80]
+        artist = (track.author or "")[:40]
+        status = f"🎵 {title}" + (f" · {artist}" if artist else "")
+        asyncio.create_task(set_voice_status(self.bot, player.channel.id, status))
+
+    @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
         player = payload.player
         if player is None:
@@ -185,6 +200,8 @@ class MusicSystem(commands.Cog):
         # Nothing more to play — idle grace period then disconnect
         await asyncio.sleep(IDLE_TIMEOUT)
         if player and not player.playing:
+            if getattr(player, "channel", None):
+                await set_voice_status(self.bot, player.channel.id, None)
             try:
                 await player.disconnect()
             except Exception:
@@ -510,6 +527,8 @@ class MusicSystem(commands.Cog):
             return await ctx.send(msg(ctx, "disconnect_nothing"))
         state = self._state(ctx.guild.id)
         state["np_message"] = None
+        if getattr(player, "channel", None):
+            asyncio.create_task(set_voice_status(self.bot, player.channel.id, None))
         await player.disconnect()
         await ctx.send(msg(ctx, "disconnect_ok"))
 
