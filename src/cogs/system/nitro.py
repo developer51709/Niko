@@ -264,7 +264,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             mid = int(message_id)
         except ValueError:
             await interaction.response.send_message(
-                view=_cv("❌ Invalid message ID."), ephemeral=True
+                view=_cv(f"{get_emoji('icon_cross')} Invalid message ID."), ephemeral=True
             )
             return
 
@@ -280,7 +280,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             )
         else:
             await interaction.followup.send(
-                view=_cv("❌ Could not forward that message. Check that I have permission to send in the destination channel and the message exists."),
+                view=_cv(f"{get_emoji('icon_cross')} Could not forward that message. Check that I have permission to send in the destination channel and the message exists."),
                 ephemeral=True,
             )
 
@@ -298,7 +298,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         try:
             raw = await self.bot.http.get_all_guild_stickers(interaction.guild_id)
         except Exception as e:
-            await interaction.followup.send(view=_cv(f"❌ {e}"), ephemeral=True)
+            await interaction.followup.send(view=_cv(f"{get_emoji('icon_cross')} {e}"), ephemeral=True)
             return
 
         if not raw:
@@ -326,13 +326,13 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         try:
             raw = await self.bot.http.get_all_guild_stickers(interaction.guild_id)
         except Exception as e:
-            await interaction.followup.send(view=_cv(f"❌ {e}"), ephemeral=True)
+            await interaction.followup.send(view=_cv(f"{get_emoji('icon_cross')} {e}"), ephemeral=True)
             return
 
         match = next((s for s in raw if s["name"].lower() == name.lower()), None)
         if not match:
             await interaction.followup.send(
-                view=_cv(f"❌ No sticker named **{name}** found. Use `/sticker list`."),
+                view=_cv(f"{get_emoji('icon_cross')} No sticker named **{name}** found. Use `/sticker list`."),
                 ephemeral=True,
             )
             return
@@ -377,12 +377,12 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             mid = int(message_id)
         except ValueError:
             await interaction.response.send_message(
-                view=_cv("❌ Invalid message ID."), ephemeral=True
+                view=_cv(f"{get_emoji('icon_cross')} Invalid message ID."), ephemeral=True
             )
             return
 
         await interaction.response.defer(ephemeral=True)
-        await burst_react(self.bot, interaction.channel_id, mid, emoji)
+        await burst_react(self.bot, int(str(interaction.channel_id)), mid, emoji)
         await interaction.followup.send(
             view=_cv(f"### {emoji} Burst reaction sent! ✨", colour=discord.Colour(0xfee75c)),
             ephemeral=True,
@@ -402,7 +402,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         vc = interaction.guild.me.voice
         if not vc or not isinstance(vc.channel, discord.StageChannel):
             await interaction.response.send_message(
-                view=_cv("❌ Niko must be in a Stage channel first."), ephemeral=True
+                view=_cv(f"{get_emoji('icon_cross')} Niko must be in a Stage channel first."), ephemeral=True
             )
             return
 
