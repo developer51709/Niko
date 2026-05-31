@@ -43,7 +43,7 @@ args = "python src/website.py"
 [userenv]
 
 [userenv.shared]
-STATUS_TYPE = "streaming"
+STATUS_TYPE = "playing"
 STATUS_LINK = ""
 DEBUG_MODE = "True"
 ROULETTE_COOLDOWN = ""
@@ -51,6 +51,7 @@ BLACKJACK_COOLDOWN = ""
 SLOTS_COOLDOWN = ""
 STATUS_MESSAGE = ".help | \"hey niko\""
 AI_DEBUG_CHANNEL = "1484360619607195658"
+STATUS_DEVICE = "mobile_android"
 
 [[ports]]
 localPort = 5000

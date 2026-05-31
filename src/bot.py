@@ -193,26 +193,72 @@ def print_banner(guild_count: int = 0):
 async def set_status():
     status_link = os.getenv("STATUS_LINK")
     if status_link:
-        # Check if the link starts with http:// or https:// and add it if missing
-        if not status_link.startswith("http://" or "https://"):
-            status_link = f"https://{os.getenv('status_link')}"
+        if not (status_link.startswith("http://") or status_link.startswith("https://")):
+            status_link = f"https://{status_link}"
     else:
         status_link = "https://twitch.tv/niko"
+
     status = os.getenv("STATUS_MESSAGE")
+    status_type = os.getenv("STATUS_TYPE", "playing").lower()
+
+    # --- ACTIVITY TYPES ---
     if status:
-        # Status type
-        status_type = os.getenv("STATUS_TYPE", "playing")
         if status_type == "playing":
-            await bot.change_presence(activity=discord.Game(name=status))
+            activity = discord.Game(name=status)
+
         elif status_type == "streaming":
-            await bot.change_presence(activity=discord.Streaming(name=status, url=str(status_link)))
+            activity = discord.Streaming(name=status, url=status_link)
+
         elif status_type == "listening":
-            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=status))
+            activity = discord.Activity(type=discord.ActivityType.listening, name=status)
+
         elif status_type == "watching":
-            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
+            activity = discord.Activity(type=discord.ActivityType.watching, name=status)
+
         else:
-            logging.warning("Startup", "Invalid status type. Defaulting to 'playing'.")
-            await bot.change_presence(activity=discord.Game(name=status))
+            logging.warning("RPC", "Invalid status type. Defaulting to 'playing'.")
+            activity = discord.Game(name=status)
+
+        await bot.change_presence(activity=activity)
+
+# Experimental: Spoof client properties
+async def patch_identify(device: str):
+    """
+    device: 'normal', 'mobile_ios', 'mobile_android', 'vr'
+    """
+    import discord.gateway as gateway
+
+    original_identify = gateway.DiscordWebSocket.identify
+
+    async def identify_spoof(self):
+        # Build a payload similar to discord.py's identify but with spoofed properties
+        if device == "mobile_ios":
+            props = {"$os": "iOS", "$browser": "Discord iOS", "$device": "Discord iOS", "$referrer": "", "$referring_domain": ""}
+        elif device == "mobile_android":
+            props = {"$os": "Android", "$browser": "Discord Android", "$device": "Discord Android", "$referrer": "", "$referring_domain": ""}
+        elif device == "vr":
+            # VR client string may vary; this is a commonly used value in community forks
+            props = {"$os": "Android", "$browser": "Oculus", "$device": "Oculus", "$referrer": "", "$referring_domain": ""}
+        else:
+            # default desktop-like identify
+            props = {"$os": "Windows", "$browser": "Discord", "$device": "Discord", "$referrer": "", "$referring_domain": ""}
+
+        payload = {
+            "op": self.IDENTIFY,
+            "d": {
+                "token": self.token,
+                "properties": props,
+                "compress": True,
+                "large_threshold": getattr(self, "large_threshold", 250),
+                "v": getattr(self, "version", 3)
+            }
+        }
+
+        # send the spoofed identify payload
+        await self.send_as_json(payload)
+
+    # Replace the method on the class
+    gateway.DiscordWebSocket.identify = identify_spoof
 
 # -----------------------------
 # Model download
@@ -777,6 +823,8 @@ async def on_ready():
     await init_database(bot)
     await load_cogs()
     await set_status()
+    device_choice = os.getenv("STATUS_DEVICE", "normal").lower()  # normal, mobile_ios, mobile_android, vr
+    await patch_identify(device_choice)
     print_banner(guild_count=len(bot.guilds))
     _write_bot_stats()
     _write_commands()
