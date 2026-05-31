@@ -825,8 +825,6 @@ async def on_ready():
     await init_database(bot)
     await load_cogs()
     await set_status()
-    device_choice = os.getenv("STATUS_DEVICE", "normal").lower()  # normal, mobile_ios, mobile_android, vr
-    await patch_identify(device_choice)
     print_banner(guild_count=len(bot.guilds))
     _write_bot_stats()
     _write_commands()
@@ -952,6 +950,10 @@ if __name__ == "__main__":
         logging.error("Startup", "Error:\nMissing bot Token.\n\nSolution:\nSet DISCORD_BOT_TOKEN in the Environment variables or create a .env file in the project directory.")
         exit(1)
     logging.info("Startup", "Starting bot...")
+    # Patch the gateway IDENTIFY method before connecting so Discord receives
+    # the spoofed device on the very first handshake (affects visible status).
+    device_choice = os.getenv("STATUS_DEVICE", "normal").lower()
+    patch_identify(device_choice)
     try:
         bot.run(str(TOKEN))
     except Exception as e:
