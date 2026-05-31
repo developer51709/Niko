@@ -225,21 +225,36 @@ async def set_status():
 def patch_identify(device: str):
     """
     Patches discord.py's IDENTIFY payload to spoof the client device.
-    device: 'normal', 'mobile_ios', 'mobile_android', 'vr'
+    device: 'normal', 'mobile_ios', 'mobile_android', 'vr', 'embedded'
 
     Uses discord.py v2 property key format (no $ prefix).
     Wraps the original identify so intents, shards, presence and hooks
     are still handled correctly — only the 'properties' field is replaced.
+
+    NOTE on VR: Discord discontinued the Oculus client integration when Meta
+    rebranded. The current Meta Quest app identifies as "Quest". Discord's
+    gateway only renders a distinct visible status icon for the two mobile
+    strings ("Discord iOS" / "Discord Android"). VR and embedded both connect
+    successfully but appear as a desktop dot in most Discord clients.
     """
     import discord.gateway as gateway
 
     _PROPS = {
         "mobile_ios":     {"os": "iOS",     "browser": "Discord iOS",     "device": "Discord iOS"},
         "mobile_android": {"os": "Android", "browser": "Discord Android", "device": "Discord Android"},
-        "vr":             {"os": "Android", "browser": "Oculus",          "device": "Oculus"},
-        "normal":         {"os": "Windows", "browser": "Discord",         "device": "Discord"},
+        # Meta renamed Oculus → Quest in 2021; "Quest" is the current app identifier.
+        # Discord no longer renders a VR headset icon — shows as desktop dot.
+        "vr":             {"os": "Android", "browser": "Quest",           "device": "Quest"},
+        # Discord Activities / embedded apps identifier.
+        "embedded":       {"os": "Linux",   "browser": "Discord Embedded", "device": ""},
+        "normal":         {"os": "Windows", "browser": "Discord",         "device": ""},
     }
     target_props = _PROPS.get(device, _PROPS["normal"])
+
+    if device == "vr":
+        logging.warning("DeviceSpoof", "VR/Quest mode active — Discord no longer renders a VR headset icon; bot will show as a desktop client.")
+    elif device not in _PROPS:
+        logging.warning("DeviceSpoof", f"Unknown STATUS_DEVICE '{device}', falling back to 'normal'.")
 
     _original_identify = gateway.DiscordWebSocket.identify
 
