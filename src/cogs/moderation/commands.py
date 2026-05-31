@@ -2,7 +2,27 @@ import discord
 from discord.ext import commands
 from utils import logging as log
 from utils.logging import info, success, warning, error, debug
+from utils.ratelimit import purge_limiter
 from config.emojis import get_emoji
+
+
+async def _chunked_purge(channel, limit: int, check=None) -> list:
+    """
+    Delete messages in chunks of 100, acquiring purge_limiter between each
+    batch so we stay below Discord's bulk-delete rate limit and avoid
+    flooding the console with rate-limit warnings.
+    """
+    deleted = []
+    remaining = limit
+    while remaining > 0:
+        chunk = min(remaining, 100)
+        await purge_limiter.acquire(channel.id)
+        batch = await channel.purge(limit=chunk, check=check)
+        deleted.extend(batch)
+        remaining -= chunk
+        if len(batch) < chunk:
+            break
+    return deleted
 
 # ───────────────────────────────────────────────────
 #  BILINGUAL MESSAGE TABLE
@@ -552,7 +572,7 @@ class Moderation(commands.Cog):
                 await ctx.message.delete()
             except (discord.HTTPException, AttributeError):
                 pass
-        deleted = await ctx.channel.purge(limit=amount)
+        deleted = await _chunked_purge(ctx.channel, amount)
         await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
         body = (
             f"**Channel:** {ctx.channel.mention}\n"
@@ -578,7 +598,7 @@ class Moderation(commands.Cog):
                 await ctx.message.delete()
             except (discord.HTTPException, AttributeError):
                 pass
-        deleted = await ctx.channel.purge(limit=amount, check=check)
+        deleted = await _chunked_purge(ctx.channel, amount, check=check)
         await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"

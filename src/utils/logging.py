@@ -258,6 +258,20 @@ if webhook_url:
     webhook_handler.setLevel(LOG_LEVEL["WEBHOOK"])
     root.addHandler(webhook_handler)
 
+# ── Suppress discord.py's default log setup ─────────────────────────────────
+# discord.py will try to add its own StreamHandler in bot.run() unless we pass
+# log_handler=None.  We also quiet the internal loggers that generate routine
+# noise (especially rate-limit warnings triggered by bulk operations) so the
+# console only shows output from our own custom logging calls.
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord.client").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+logging.getLogger("discord.voice_client").setLevel(logging.WARNING)
+# discord.http logs a WARNING for every rate-limit hit (e.g. bulk-delete).
+# Set to ERROR so routine bulk-operation throttling stays off the console.
+logging.getLogger("discord.http").setLevel(logging.ERROR)
+logging.getLogger("discord.player").setLevel(logging.WARNING)
+
 
 # -----------------------------------
 # Runtime configuration helpers

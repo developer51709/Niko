@@ -88,3 +88,9 @@ welcome_limiter = RateLimiter(rate=3, per=5.0)
 # One bucket per guild — used by autorole assignment so a join wave
 # doesn't burn through the guild's role-edit budget.
 role_assign_limiter = RateLimiter(rate=5, per=5.0)
+
+# One bucket per channel — used by purge/clear commands.
+# Discord's bulk-delete endpoint allows ~1 request per second per channel;
+# we stay just below that to prevent rate-limit warning floods in the console
+# when moderators purge large numbers of messages.
+purge_limiter = RateLimiter(rate=1, per=1.1)
