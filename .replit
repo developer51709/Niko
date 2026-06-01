@@ -52,6 +52,7 @@ SLOTS_COOLDOWN = ""
 STATUS_MESSAGE = ".help | \"hey niko\""
 AI_DEBUG_CHANNEL = "1484360619607195658"
 STATUS_DEVICE = "embedded"
+SHARD_COUNT = "3"
 
 [[ports]]
 localPort = 5000
