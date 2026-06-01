@@ -72,3 +72,14 @@ def adjust_favorability(user_id: int, delta: int = 1):
 
 def get_favorability(user_id: int) -> int:
     return _memory_data["favorability"].get(str(user_id), 0)
+
+
+# ── Public aliases used by cogs ───────────────────────────────────────────────
+def get_favorability_score(user_id: int) -> int:
+    """Alias for get_favorability — returns the vibe score for a user."""
+    return get_favorability(user_id)
+
+
+def get_memory_content(user_id: int) -> str:
+    """Return the long-term memory string for a user (empty str if none)."""
+    return get_user_memory(user_id)

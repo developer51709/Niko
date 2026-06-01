@@ -35,6 +35,8 @@ def resolve_msg(ctx, messages: dict, key: str, **kwargs) -> str:
 
     text = messages.get(personality, {}).get(lang, {}).get(key)
     if text is None:
+        text = messages.get(personality, {}).get("en", {}).get(key)
+    if text is None:
         text = messages.get("normal", {}).get(lang, {}).get(key)
     if text is None:
         text = messages.get("normal", {}).get("en", {}).get(key, key)

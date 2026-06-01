@@ -51,7 +51,7 @@ class AICog(commands.Cog):
     @commands.command(name="favor", help="{ 'en': 'check our vibe score ☕✨', 'de': 'sieh dir unseren Vibe-Wert an' }")
     async def favor(self, ctx, member: discord.Member = None):
         """Display the favorability score for a user."""
-        from bot import get_favorability_score
+        from utils.ai.memory import get_favorability_score
         target = member or ctx.author
         score = get_favorability_score(target.id)
         await ctx.send(msg(ctx, "favor_score", name=target.display_name, score=score))
@@ -59,7 +59,7 @@ class AICog(commands.Cog):
     @commands.command(name="memory", help="{ 'en': 'see my café notes on you ☕📝', 'de': 'sieh dir meine Café-Notizen an' }")
     async def memory(self, ctx, member: discord.Member = None):
         """Display the memory content for a user."""
-        from bot import get_memory_content
+        from utils.ai.memory import get_memory_content
         target = member or ctx.author
         mem = get_memory_content(target.id)
         if not mem:

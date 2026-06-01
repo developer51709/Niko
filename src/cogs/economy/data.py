@@ -26,6 +26,7 @@ from discord.ext import commands, tasks
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 from config.emojis import get_emoji
 from utils.economy_jobs import (
     JOBS, DEFAULT_JOB, get_job,
@@ -92,23 +93,7 @@ MESSAGES = {
 }
 
 
-def get_lang(ctx) -> str:
-    if ctx and getattr(ctx, "guild", None) and getattr(ctx.guild, "preferred_locale", None):
-        loc = str(ctx.guild.preferred_locale).lower()
-        if loc.startswith("de"):
-            return "de"
-        if loc.startswith("es"):
-            return "es"
-    return "en"
-
-
-def msg(ctx, key: str, **kwargs) -> str:
-    personality = get_personality(ctx)
-    lang = get_lang(ctx)
-    text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key, key)
-    return text.format(**kwargs) if kwargs else text
+msg = make_msg(MESSAGES)
 
 
 # ── Prefix resolver (used by tip text in cards) ──────────────────────────────
