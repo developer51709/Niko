@@ -667,6 +667,119 @@ class OwnerCog(commands.Cog):
         await message.delete()
 
     # -------------------------------
+    # Shard info (Owner)
+    # -------------------------------
+    @commands.command(name="shardinfo")
+    @is_owner()
+    async def shard_info(self, ctx):
+        """View detailed sharding information."""
+        if not self.bot.shards:
+            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+
+        lines = []
+        for shard_id, shard in self.bot.shards.items():
+            latency_ms = round(shard.latency * 1000)
+            lines.append(f"**Shard {shard_id}**\n-# Latency: {latency_ms}ms")
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"## 🔀 Shard Information\n-# Total Shards: {self.bot.shard_count}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+        for line in lines:
+            container.add_item(discord.ui.TextDisplay(content=line))
+        view.add_item(container)
+        await ctx.send(view=view)
+
+    # -------------------------------
+    # Shard stats (Owner)
+    # -------------------------------
+    @commands.command(name="shardstats")
+    @is_owner()
+    async def shard_stats(self, ctx):
+        """View comprehensive shard statistics."""
+        if not self.bot.shards:
+            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+
+        shard_guilds = {}
+        shard_members = {}
+        total_guilds = 0
+        total_members = 0
+
+        # Count guilds and members per shard
+        for guild in self.bot.guilds:
+            shard_id = guild.shard_id or 0
+            shard_guilds[shard_id] = shard_guilds.get(shard_id, 0) + 1
+            total_guilds += 1
+            if guild.member_count:
+                shard_members[shard_id] = shard_members.get(shard_id, 0) + guild.member_count
+                total_members += guild.member_count
+
+        lines = []
+        for shard_id in range(self.bot.shard_count):
+            guild_count = shard_guilds.get(shard_id, 0)
+            member_count = shard_members.get(shard_id, 0)
+            shard = self.bot.shards.get(shard_id)
+            latency = f"{round(shard.latency * 1000)}ms" if shard else "N/A"
+            lines.append(
+                f"**Shard {shard_id}**\n"
+                f"-# Guilds: {guild_count} · Members: {member_count:,} · Latency: {latency}"
+            )
+
+        pages = paginate(lines, per_page=8)
+        view = PaginatedView(
+            title=f"📊 Shard Statistics\n-# Total: {total_guilds} guilds · {total_members:,} members",
+            pages=pages
+        )
+        await ctx.send(view=view)
+
+    # -------------------------------
+    # Shard health (Owner)
+    # -------------------------------
+    @commands.command(name="shardhealth")
+    @is_owner()
+    async def shard_health(self, ctx):
+        """Check the health of all shards."""
+        if not self.bot.shards:
+            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+
+        healthy = 0
+        unhealthy = []
+
+        for shard_id, shard in self.bot.shards.items():
+            latency = shard.latency
+            if latency < 0.5:
+                healthy += 1
+            else:
+                unhealthy.append((shard_id, latency))
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"## 💊 Shard Health\n-# Healthy: {healthy}/{self.bot.shard_count}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+
+        if unhealthy:
+            issues = "\n".join(
+                f"**Shard {sid}:** {round(lat * 1000)}ms"
+                for sid, lat in unhealthy
+            )
+            container.add_item(discord.ui.TextDisplay(
+                content=f"⚠️ **Issues Detected:**\n{issues}"
+            ))
+        else:
+            container.add_item(discord.ui.TextDisplay(
+                content="✅ All shards are healthy!"
+            ))
+
+        view.add_item(container)
+        await ctx.send(view=view)
+
+    # -------------------------------
     # Blacklist commands
     # -------------------------------
     @commands.group(

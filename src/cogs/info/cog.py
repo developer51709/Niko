@@ -99,7 +99,13 @@ MESSAGES = {
             "hostinfo_cpu": "CPU",
             "hostinfo_ram": "RAM",
             "invite_title": "Invite Niko",
-            "invite_link": "Click here to invite Niko to your server"
+            "invite_link": "Click here to invite Niko to your server",
+
+            "shardinfo_title": "Shard Information",
+            "shardinfo_total": "Total Shards",
+            "shardinfo_guild_count": "Guilds",
+            "shardinfo_member_count": "Members",
+            "shardinfo_latency": "Latency"
         },
 
         "de": {
@@ -186,6 +192,12 @@ MESSAGES = {
             "hostinfo_ram": "RAM",
             "invite_title": "Niko einladen",
             "invite_link": "Klicke hier, um Niko auf deinen Server einzuladen",
+
+            "shardinfo_title": "Shard-Informationen",
+            "shardinfo_total": "Gesamtshards",
+            "shardinfo_guild_count": "Server",
+            "shardinfo_member_count": "Mitglieder",
+            "shardinfo_latency": "Latenz"
         },
         "es": {
             "serverinfo_title": "Información del Servidor",
@@ -272,6 +284,12 @@ MESSAGES = {
             "hostinfo_ram": "RAM",
             "invite_title": "Invitar a Niko",
             "invite_link": "Haz clic aquí para invitar a Niko a tu servidor",
+
+            "shardinfo_title": "Información de Shard",
+            "shardinfo_total": "Shards Totales",
+            "shardinfo_guild_count": "Servidores",
+            "shardinfo_member_count": "Miembros",
+            "shardinfo_latency": "Latencia"
         },
     },
 
@@ -360,6 +378,12 @@ MESSAGES = {
             "hostinfo_ram": "ram",
             "invite_title": "invite niko",
             "invite_link": "click here to invite niko to your café",
+
+            "shardinfo_title": "☕ shard vibes",
+            "shardinfo_total": "total shards",
+            "shardinfo_guild_count": "cafés",
+            "shardinfo_member_count": "cozy folks",
+            "shardinfo_latency": "latency"
         },
 
         "de": {
@@ -446,6 +470,12 @@ MESSAGES = {
             "hostinfo_ram": "ram",
             "invite_title": "niko einladen",
             "invite_link": "klicke hier, um niko in dein café einzuladen",
+
+            "shardinfo_title": "☕ shard-gefühle",
+            "shardinfo_total": "gesamt-shards",
+            "shardinfo_guild_count": "cafés",
+            "shardinfo_member_count": "gemütliche leute",
+            "shardinfo_latency": "latenz"
         },
     },
 }
@@ -878,6 +908,53 @@ class InfoCog(commands.Cog):
             f"{get_emoji('ram')} **{msg(ctx, 'hostinfo_ram')}:** `{ram}GB`"
         )
         await ctx.send(view=cv2_text(text))
+
+    # -------------------------------
+    # SHARDS
+    # -------------------------------
+    @commands.hybrid_command(
+        name="shards",
+        description="View information about the bot's shards",
+        help="{ 'en': 'view bot shard information', 'de': 'shard-informationen ansehen', 'es': 'ver información de shards' }"
+    )
+    async def shards_command(self, ctx):
+        """Display current shard information."""
+        if not self.bot.shards:
+            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+
+        shard_guilds = {}
+        shard_members = {}
+        total_guilds = 0
+        total_members = 0
+
+        # Count guilds and members per shard
+        for guild in self.bot.guilds:
+            shard_id = guild.shard_id or 0
+            shard_guilds[shard_id] = shard_guilds.get(shard_id, 0) + 1
+            total_guilds += 1
+            if guild.member_count:
+                shard_members[shard_id] = shard_members.get(shard_id, 0) + guild.member_count
+                total_members += guild.member_count
+
+        lines = []
+        for shard_id in range(self.bot.shard_count):
+            guild_count = shard_guilds.get(shard_id, 0)
+            member_count = shard_members.get(shard_id, 0)
+            shard = self.bot.shards.get(shard_id)
+            latency = f"{round(shard.latency * 1000)}ms" if shard else "N/A"
+            lines.append(
+                f"**Shard {shard_id}**\n"
+                f"-# {msg(ctx, 'shardinfo_guild_count')}: {guild_count} · "
+                f"{msg(ctx, 'shardinfo_member_count')}: {member_count:,} · "
+                f"{msg(ctx, 'shardinfo_latency')}: {latency}"
+            )
+
+        pages = paginate(lines, per_page=8)
+        view = PaginatedView(
+            title=f"🔀 {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
+            pages=pages
+        )
+        await ctx.send(view=view)
 
     # -------------------------------
     # INVITE
