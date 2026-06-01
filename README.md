@@ -1,5 +1,7 @@
 <div align="center">
 
+![Niko Banner](banner.png)
+
 # ☕ Niko Discord Bot
 *A cozy, trilingual café-themed companion for your server*
 
