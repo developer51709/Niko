@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from typing import List
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -70,35 +71,7 @@ MESSAGES = {
     # future personalities can be added here
 }
 
-# -----------------------------
-# LANGUAGE + PERSONALITY HELPERS
-# -----------------------------
-def get_lang(ctx):
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        if str(ctx.guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(ctx.guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
-
-
-def msg(ctx, key, **kwargs):
-    personality = get_personality(ctx)
-    lang = get_lang(ctx)
-
-    block = MESSAGES.get(personality, {}).get(lang, {})
-    text = block.get(key)
-
-    if text is None:
-        text = MESSAGES.get(personality, {}).get("en", {}).get(key)
-
-    if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key)
-
-    if text is None:
-        text = MESSAGES["normal"]["en"].get(key, key)
-
-    return text.format(**kwargs) if kwargs else text
+msg = make_msg(MESSAGES)
 
 
 # -----------------------------

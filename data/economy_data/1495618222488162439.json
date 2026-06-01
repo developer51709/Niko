@@ -3,8 +3,8 @@
   "inventory": {
     "regular_badge": 1
   },
-  "bank": 10150,
-  "net_worth": 21510,
+  "bank": 10200,
+  "net_worth": 21560,
   "daily_streak": 1,
   "last_daily": 1780124385,
   "last_work": 1780124361,
@@ -20,7 +20,7 @@
   "last_race": 0,
   "last_fight": 0,
   "last_duel": 0,
-  "total_earned": 22611,
+  "total_earned": 22661,
   "total_spent": 5350,
   "xp": 276,
   "level": 2,
@@ -31,6 +31,12 @@
   "effects": {},
   "lottery_tickets": 0,
   "transactions": [
+    {
+      "ts": 1780272067,
+      "kind": "interest",
+      "amount": 50,
+      "note": "daily Tin Jar interest"
+    },
     {
       "ts": 1780200180,
       "kind": "interest",
@@ -264,12 +270,6 @@
       "kind": "work",
       "amount": 150,
       "note": "Barista shift"
-    },
-    {
-      "ts": 1777467930,
-      "kind": "work",
-      "amount": 107,
-      "note": "Barista shift"
     }
   ],
   "achievements": [
@@ -277,5 +277,5 @@
     "saver",
     "streak_7"
   ],
-  "last_interest_day": "2026-05-31"
+  "last_interest_day": "2026-06-01"
 }

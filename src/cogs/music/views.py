@@ -33,6 +33,7 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils import logging as log
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 
 # ──────────────────────────────────────────────────
 #  CONSTANTS
@@ -245,27 +246,7 @@ MESSAGES = {
 }
 
 
-def get_lang(ctx: commands.Context) -> str:
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        if str(ctx.guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(ctx.guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
-
-
-def msg(ctx: commands.Context, key: str, **kwargs) -> str:
-    personality = get_personality(ctx)
-    lang        = get_lang(ctx)
-    base        = MESSAGES.get(personality, {})
-    text        = base.get(lang, {}).get(key)
-    if text is None:
-        text = base.get("en", {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"]["en"].get(key, key)
-    return text.format(**kwargs) if kwargs else text
+msg = make_msg(MESSAGES)
 
 
 # ──────────────────────────────────────────────────

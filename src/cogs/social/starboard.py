@@ -22,6 +22,7 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 
 DATA_FILE = "data/starboard.json"
 DEFAULT_THRESHOLD = 3
@@ -120,12 +121,7 @@ def _personality(ctx) -> str:
     return get_personality(s)
 
 
-def msg(ctx, key: str, **kw) -> str:
-    p = _personality(ctx)
-    lang = _lang(ctx)
-    table = MESSAGES.get(p, MESSAGES["normal"])
-    text = table.get(lang, {}).get(key) or table.get("en", {}).get(key) or MESSAGES["normal"]["en"].get(key, key)
-    return text.format(**kw) if kw else text
+msg = make_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:

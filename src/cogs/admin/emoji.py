@@ -10,6 +10,7 @@ import zipfile
 import asyncio
 from utils import logging as log
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 
 MESSAGES = {
     "normal": {
@@ -126,21 +127,7 @@ MESSAGES = {
     }
 }
 
-def get_lang(ctx):
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        if str(ctx.guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(ctx.guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
-
-def msg(ctx, key, **kwargs):
-    personality = get_personality(ctx)
-    lang = get_lang(ctx)
-    text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key, key)
-    return text.format(**kwargs) if kwargs else text
+msg = make_msg(MESSAGES)
 
 EMOJI_REGEX = re.compile(r"<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]+):(?P<id>[0-9]+)>")
 URL_REGEX = re.compile(r"https?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+")

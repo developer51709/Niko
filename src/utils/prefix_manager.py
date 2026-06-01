@@ -69,3 +69,10 @@ def reset_prefixes(guild_id: int):
 
     data[gid] = DEFAULT_PREFIXES.copy()
     _save_all(data)
+
+
+def dynamic_prefix(bot, message):
+    """Command-prefix callable for discord.py — returns list of prefixes for the guild."""
+    if not message.guild:
+        return ["."]
+    return get_prefixes(message.guild.id)

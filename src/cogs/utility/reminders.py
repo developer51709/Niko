@@ -23,6 +23,7 @@ from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 
 DATA_FILE = "data/reminders.json"
 
@@ -119,16 +120,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-def msg(ctx, key: str, **kwargs) -> str:
-    p = get_personality(ctx) if isinstance(ctx, commands.Context) else "cafe"
-    lang = _lang(ctx)
-    table = MESSAGES.get(p, MESSAGES["normal"])
-    text = (
-        table.get(lang, {}).get(key)
-        or table.get("en", {}).get(key)
-        or MESSAGES["normal"]["en"].get(key, key)
-    )
-    return text.format(**kwargs) if kwargs else text
+msg = make_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:

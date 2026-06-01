@@ -263,8 +263,11 @@ def print_banner(bot, guild_count: int = 0):
     guild_str  = str(guild_count)
     user_count = f"{len(bot.users):,}"
 
-    # Resolve AI_MODE from __main__ so the banner always reflects the live value
-    ai_mode = getattr(sys.modules.get('__main__'), 'AI_MODE', 'OPENAI')
+    # Resolve AI_MODE from utils.ai.reply
+    try:
+        from utils.ai.reply import AI_MODE as ai_mode
+    except Exception:
+        ai_mode = "OPENAI"
 
     rows = [
         "",

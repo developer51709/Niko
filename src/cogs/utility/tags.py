@@ -23,6 +23,7 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
+from utils.i18n import make_msg
 from utils.paginator import paginate, PaginatedView
 
 DATA_FILE = "data/tags.json"
@@ -130,12 +131,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-def msg(ctx, key: str, **kw) -> str:
-    p = get_personality(ctx) if isinstance(ctx, commands.Context) else "cafe"
-    lang = _lang(ctx)
-    table = MESSAGES.get(p, MESSAGES["normal"])
-    text = table.get(lang, {}).get(key) or table.get("en", {}).get(key) or MESSAGES["normal"]["en"].get(key, key)
-    return text.format(**kw) if kw else text
+msg = make_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:

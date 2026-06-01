@@ -1,2 +1,5 @@
 - [Tickets utils import](tickets-utils-import.md) — `utils/tickets/utils.py` must import from `.config`, not `.ticket_config`; stale name causes cog load failure.
 - [Dashboard OAuth pattern](dashboard-oauth.md) — Flask sessions + Discord OAuth flow; graceful degradation when DISCORD_CLIENT_SECRET absent; bot_stats.json written on_ready.
+- [i18n make_msg vs make_flat_msg](i18n-pattern.md) — use make_msg for personality-aware MESSAGES {personality→lang→key}; make_flat_msg for flat {lang→key}; both live in utils/i18n.py.
+- [Mixin cog pattern](mixin-cog-pattern.md) — discord.py picks up @commands decorators from plain mixin classes; main Cog class uses multiple inheritance; self.utils()/self.logger() resolve at runtime via the Cog instance.
+- [AutoShardedBot switch](autoshard.md) — bot.py uses commands.AutoShardedBot with optional SHARD_COUNT env; shard_count=None lets Discord auto-determine; dynamic_prefix in utils/prefix_manager.py.
