@@ -1,4 +1,12 @@
 import os
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env file from the src directory
+load_dotenv(Path(__file__).parent / ".env")
+
 import discord
 from discord.ext import commands
 

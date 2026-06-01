@@ -1,5 +1,6 @@
 discord.py>=2.7.1
 davey
+python-dotenv
 requests
 psutil
 colorama
