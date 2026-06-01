@@ -11,6 +11,7 @@ import os
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
+from utils.paginator import PaginatedView, paginate
 from config import links
 
 MESSAGES = {
@@ -379,7 +380,7 @@ MESSAGES = {
             "invite_title": "invite niko",
             "invite_link": "click here to invite niko to your café",
 
-            "shardinfo_title": "☕ shard vibes",
+            "shardinfo_title": "shard vibes",
             "shardinfo_total": "total shards",
             "shardinfo_guild_count": "cafés",
             "shardinfo_member_count": "cozy folks",
@@ -471,7 +472,7 @@ MESSAGES = {
             "invite_title": "niko einladen",
             "invite_link": "klicke hier, um niko in dein café einzuladen",
 
-            "shardinfo_title": "☕ shard-gefühle",
+            "shardinfo_title": "shard-gefühle",
             "shardinfo_total": "gesamt-shards",
             "shardinfo_guild_count": "cafés",
             "shardinfo_member_count": "gemütliche leute",
@@ -951,7 +952,7 @@ class InfoCog(commands.Cog):
 
         pages = paginate(lines, per_page=8)
         view = PaginatedView(
-            title=f"🔀 {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
+            title=f"{get_emoji('icon_host')} {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
             pages=pages
         )
         await ctx.send(view=view)

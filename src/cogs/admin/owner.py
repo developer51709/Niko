@@ -684,7 +684,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"## 🔀 Shard Information\n-# Total Shards: {self.bot.shard_count}"
+                content=f"## {get_emoji('icon_host')} Shard Information\n-# Total Shards: {self.bot.shard_count}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -730,7 +730,7 @@ class OwnerCog(commands.Cog):
 
         pages = paginate(lines, per_page=8)
         view = PaginatedView(
-            title=f"📊 Shard Statistics\n-# Total: {total_guilds} guilds · {total_members:,} members",
+            title=f"{get_emoji('icon_stats')} Shard Statistics\n-# Total: {total_guilds} guilds · {total_members:,} members",
             pages=pages
         )
         await ctx.send(view=view)
@@ -758,7 +758,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"## 💊 Shard Health\n-# Healthy: {healthy}/{self.bot.shard_count}"
+                content=f"## {get_emoji('icon_leveling')} Shard Health\n-# Healthy: {healthy}/{self.bot.shard_count}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -769,11 +769,11 @@ class OwnerCog(commands.Cog):
                 for sid, lat in unhealthy
             )
             container.add_item(discord.ui.TextDisplay(
-                content=f"⚠️ **Issues Detected:**\n{issues}"
+                content=f"{get_emoji('icon_danger')} **Issues Detected:**\n{issues}"
             ))
         else:
             container.add_item(discord.ui.TextDisplay(
-                content="✅ All shards are healthy!"
+                content=f"{get_emoji('icon_tick')} All shards are healthy!"
             ))
 
         view.add_item(container)
