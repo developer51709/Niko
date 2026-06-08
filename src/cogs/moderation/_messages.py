@@ -145,7 +145,10 @@ async def _chunked_purge(channel, limit: int, check=None) -> list:
     while remaining > 0:
         chunk = min(remaining, 100)
         await purge_limiter.acquire(channel.id)
-        batch = await channel.purge(limit=chunk, check=check)
+        kwargs = {"limit": chunk}
+        if callable(check):
+            kwargs["check"] = check
+        batch = await channel.purge(**kwargs)
         deleted.extend(batch)
         remaining -= chunk
         if len(batch) < chunk:
