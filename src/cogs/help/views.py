@@ -173,13 +173,13 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("Ticket",         f"{get_emoji('icon_ticket')}"),
     ("Image Tools",    f"{get_emoji('icon_image')}"),
     ("Giveaway",       f"{get_emoji('icon_giveaway')}"),
-    ("Reminders",      f"{get_emoji('icon_loading')}"),
+    ("Reminders",      f"{get_emoji('icon_reminder')}"),
     ("Tags",           f"{get_emoji('icon_message')}"),
     ("Birthdays",      f"{get_emoji('icon_heart')}"),
     ("Highlights",     f"{get_emoji('icon_lightbulb')}"),
     ("Polls",          f"{get_emoji('icon_lightbulb')}"),
     ("Suggestions",    f"{get_emoji('icon_lightbulb')}"),
-    ("Starboard",      f"{get_emoji('icon_important')}"),
+    ("Starboard",      f"{get_emoji('star')}"),
     ("Customization",  f"{get_emoji('icon_edit')}"),
 ]
 
@@ -837,7 +837,7 @@ class HelpDropdown(discord.ui.Select):
                     ),
                     value=f"{_DROPDOWN_NAV_VALUE}:{next_page_idx}",
                     description=_ui(lang, "dropdown_more_desc"),
-                    emoji="➡️",
+                    emoji=get_emoji("arrow_right"),
                 )
             )
 

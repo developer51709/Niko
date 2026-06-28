@@ -4,6 +4,10 @@
 
 # emojis for the bot
 def get_emoji(emoji_name: str):
+    if emoji_name == "arrow_left":
+        return "<:arrow_left:1520894734934216756>"
+    if emoji_name == "arrow_right":
+        return "<:arrow_right:1520895041135186140>"
     if emoji_name == "automod":
         return "<:Automod:1520827279209664695>"
     if emoji_name == "bot_owner":
@@ -138,6 +142,8 @@ def get_emoji(emoji_name: str):
         return "<:icon_question:1520861865817800755>"
     if emoji_name == "icon_refresh":
         return "<:icon_refresh:1520861868766269481>"
+    if emoji_name == "icon_reminder":
+        return "<:icon_reminder:1520898535976075344>"
     if emoji_name == "icon_roleplay":
         return "<:icon_roleplay:1520851083986075851>"
     if emoji_name == "icon_rewind":
@@ -184,6 +190,8 @@ def get_emoji(emoji_name: str):
         return "<:soundcloud:1520827768038756574>"
     if emoji_name == "spotify":
         return "<:spotify:1520827772069740705>"
+    if emoji_name == "star":
+        return "<:star:1520898541424218283>"
     if emoji_name == "tiktok":
         return "<:tiktok:1520827778344161390>"
     if emoji_name == "twitterx":
