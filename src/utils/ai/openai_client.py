@@ -1,4 +1,4 @@
-# utils/ai_openai.py
+# utils/ai/openai_client.py
 import datetime
 from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError
 import os
@@ -19,13 +19,18 @@ _FALLBACK_REPLIES = [
 ]
 _fallback_idx = 0
 
+# ── Token budget constants ─────────────────────────────────────────────────────
+_CONV_HISTORY_TURNS   = 3    # recent turns kept for short-term context
+_USER_MEMORY_MAX      = 300  # chars kept from long-term memory string
+_CTX_MSG_MAX_PER_LINE = 120  # chars per context-message line
+_CTX_MSG_MAX_LINES    = 3    # max channel-history lines passed
+_REPLIED_CONTENT_MAX  = 200  # chars for replied-message snippet
+
 
 def _get_client():
     global client
     if client is None:
-        # Prefer a direct OpenAI API key when set; fall back to the Replit
-        # AI integration proxy (AI_INTEGRATIONS_OPENAI_*) otherwise.
-        direct_key = os.environ.get("OPENAI_API_KEY")
+        direct_key      = os.environ.get("OPENAI_API_KEY")
         integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
         integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
@@ -41,6 +46,7 @@ def _get_client():
 def _reset_client():
     global client
     client = None
+
 
 _USER_ARG = {
     "type": "string",
@@ -340,46 +346,57 @@ def generate_reply_openai(
 ):
     import json as _json
 
-    member_count = len(bot.users)
-    server_name = server.name
+    server_name  = server.name if server else "DM"
+    member_count = len(server.members) if server else 0
 
-    user_mem = get_user_memory(user_id)
-    conv_history = get_conversation_history(user_id)
-    favor = get_favorability(user_id)
+    # ── Pull memory — apply size caps to save tokens ──────────────────
+    user_mem     = get_user_memory(user_id)
+    if user_mem:
+        user_mem = user_mem[-_USER_MEMORY_MAX:]
+    conv_history = get_conversation_history(user_id, limit=_CONV_HISTORY_TURNS)
+    favor        = get_favorability(user_id)
 
     if favor > 15:
-        fav_label = f"{username} is one of your absolute favorites on this server."
+        fav_label = f"{username} is one of your absolute favorites."
     elif favor > 8:
-        fav_label = f"You like {username} a lot and consider them top-tier."
+        fav_label = f"You like {username} a lot."
     elif favor > 3:
         fav_label = f"You have a good impression of {username}."
     elif favor > 0:
         fav_label = f"You are warming up to {username}."
     else:
-        fav_label = f"You don't know {username} very well yet."
+        fav_label = f"You don't know {username} well yet."
 
-    # ── Build prompt ───────────────────────────────────────────────────
-    prompt_parts = [
-        SYSTEM_PROMPT,
-        f"\nUser: {username}",
-        f"Impression: {fav_label}",
-        f"Server: {server_name}",
-        f"Members: {member_count}",
-        f"Time: {datetime.datetime.utcnow().strftime('%A, %B %d, %Y, %I:%M %p')} UTC",
-    ]
-
-    if replied_content:
-        prompt_parts.append(f"\nThis message is a reply to:\n{replied_content}")
+    # ── Trim context helpers if they arrived oversized ─────────────────
+    if replied_content and len(replied_content) > _REPLIED_CONTENT_MAX:
+        replied_content = replied_content[:_REPLIED_CONTENT_MAX]
 
     if context_messages:
-        prompt_parts.append(f"\nRecent channel messages (oldest → newest):\n{context_messages}")
+        lines = context_messages.splitlines()[:_CTX_MSG_MAX_LINES]
+        lines = [ln[:_CTX_MSG_MAX_PER_LINE] for ln in lines]
+        context_messages = "\n".join(lines)
+
+    # ── Build a compact user message (system prompt NOT repeated here) ─
+    user_parts = [
+        f"[{datetime.datetime.utcnow().strftime('%a %d %b %Y %H:%M')} UTC | {server_name} | {member_count} members]",
+        f"User: {username} | {fav_label}",
+    ]
+
+    if user_mem:
+        user_parts.append(f"Memory: {user_mem}")
+
+    if replied_content:
+        user_parts.append(f"Replying to: {replied_content}")
+
+    if context_messages:
+        user_parts.append(f"Recent chat:\n{context_messages}")
 
     if conv_history:
-        prompt_parts.append(f"\nYour conversation history with {username}:\n{conv_history}")
+        user_parts.append(f"History:\n{conv_history}")
 
-    prompt_parts.append(f"\nCurrent message from {username}:\n{message}")
+    user_parts.append(f"\n{username}: {message}")
 
-    prompt = "\n".join(prompt_parts)
+    user_content = "\n".join(user_parts)
 
     global _fallback_idx
     try:
@@ -387,13 +404,13 @@ def generate_reply_openai(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
+                {"role": "user",   "content": user_content},
             ],
             max_tokens=300,
             temperature=0.7,
         )
         if ai_actions_enabled:
-            create_kwargs["tools"] = _AI_ACTIONS_TOOLS
+            create_kwargs["tools"]       = _AI_ACTIONS_TOOLS
             create_kwargs["tool_choice"] = "auto"
 
         response = _get_client().chat.completions.create(**create_kwargs)
@@ -415,15 +432,12 @@ def generate_reply_openai(
     # ── Handle AI Actions tool call ────────────────────────────────────
     if ai_actions_enabled and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
         tool_call = choice.message.tool_calls[0]
-        fn_name = tool_call.function.name
+        fn_name   = tool_call.function.name
         try:
             fn_args = _json.loads(tool_call.function.arguments)
         except Exception:
             fn_args = {}
 
-        # Return a generic action dict — the bot dispatches it through
-        # ai_actions.dispatch_ai_action which handles permission checks
-        # and CV2 confirmations for every supported action.
         action_payload = {"action": fn_name}
         if isinstance(fn_args, dict):
             action_payload.update(fn_args)
@@ -432,7 +446,7 @@ def generate_reply_openai(
     clean = (choice.message.content or "").strip()
 
     update_user_memory(user_id, message, role=username)
-    update_user_memory(user_id, clean, role="Niko")
+    update_user_memory(user_id, clean,   role="Niko")
     adjust_favorability(user_id, delta=1)
 
     return clean

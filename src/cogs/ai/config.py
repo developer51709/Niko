@@ -320,15 +320,16 @@ class AIConfig(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(
+    @commands.hybrid_command(
         name="ai-config",
+        description="Configure the AI settings for this server",
         help="Configure the AI settings for your server."
     )
     @commands.has_permissions(manage_guild=True)
     async def ai_config(self, ctx: commands.Context):
-        # this function will ensure that the guild has a config entry in the ai_config.json file
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer(ephemeral=False)
         get_ai_config(ctx.guild.id, "enabled")
-        # send the panel
         view = AIConfigPanel(ctx, self.bot)
         await ctx.send(view=view)
 

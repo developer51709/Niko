@@ -74,6 +74,15 @@ def get_favorability(user_id: int) -> int:
     return _memory_data["favorability"].get(str(user_id), 0)
 
 
+def clear_conversation_history(user_id: int) -> None:
+    """Erase both the short-term conversation history and long-term memory for a user."""
+    uid = str(user_id)
+    _memory_data.get("conversations", {}).pop(uid, None)
+    _memory_data.get("users", {}).pop(uid, None)
+    _memory_data.get("favorability", {}).pop(uid, None)
+    save_memory()
+
+
 # ── Public aliases used by cogs ───────────────────────────────────────────────
 def get_favorability_score(user_id: int) -> int:
     """Alias for get_favorability — returns the vibe score for a user."""

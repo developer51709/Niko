@@ -929,7 +929,7 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
     join_t = discord.ui.TextInput(label="Join threshold (members)", placeholder="e.g. 10")
     join_i = discord.ui.TextInput(label="Time window (seconds)", placeholder="e.g. 10")
     action = discord.ui.TextInput(
-        label="Action (kick / ban / softban / slowmode / lockdown)",
+        label="Action: kick/ban/softban/lockdown",
         placeholder="kick", max_length=10)
     new_days  = discord.ui.TextInput(
         label="New account filter (days, 0 = off)",
