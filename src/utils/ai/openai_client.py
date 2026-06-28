@@ -401,7 +401,7 @@ def generate_reply_openai(
     global _fallback_idx
     try:
         create_kwargs = dict(
-            model="gpt-4o-mini",
+            model="Meta-Llama-3.3-70B-Instruct",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},
