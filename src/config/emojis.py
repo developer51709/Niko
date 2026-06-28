@@ -190,8 +190,12 @@ def get_emoji(emoji_name: str):
         return "<:twitterx:1520827785176678580>"
     if emoji_name == "icon_voicemaster":
         return "<:icon_voicemaster:1520864687460454500>"
+    if emoji_name == "vm_hide":
+        return "<:vm_hide:1520887954137157714>"
     if emoji_name == "vm_lock":
         return "<:vm_lock:1520864690732011743>"
+    if emoji_name == "vm_unhide":
+        return "<:vm_unhide:1520888521571700966>"
     if emoji_name == "vm_unlock":
         return "<:vm_unlock:1520864694955409469>"
     if emoji_name == "wavelink":

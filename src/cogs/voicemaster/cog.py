@@ -87,13 +87,13 @@ INTERFACE_TITLE = "## VoiceMaster | Interface"
 INTERFACE_COMMANDS = (
     f"{get_emoji('vm_lock')} — [`Lock`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('vm_unlock')} — [`Unlock`]({SUPPORT_URL}) the voice channel\n"
-    f"{E.GHOST} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
-    f"{E.REVEAL} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('vm_hide')} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('vm_unhide')} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('owner_icon')} — [`Claim`]({SUPPORT_URL}) the voice channel\n"
     f"{E.DISCONNECT} — [`Disconnect`]({SUPPORT_URL}) a member\n"
     f"{E.INFO} — [`View`]({SUPPORT_URL}) channel information\n"
     f"{get_emoji('icon_plus')} — [`Increase`]({SUPPORT_URL}) the user limit\n"
-    f"{E.DECREASE} — [`Decrease`]({SUPPORT_URL}) the user limit"
+    f"{get_emoji('icon_minus')} — [`Decrease`]({SUPPORT_URL}) the user limit"
 )
 
 async def success(ctx: commands.Context, message: str):
@@ -125,14 +125,14 @@ class VoiceMasterInterface(discord.ui.LayoutView):
 
         btn_lock       = discord.ui.Button(emoji=get_emoji('vm_lock'),       style=discord.ButtonStyle.gray, custom_id="vm_lock")
         btn_unlock     = discord.ui.Button(emoji=get_emoji('vm_unlock'),     style=discord.ButtonStyle.gray, custom_id="vm_unlock")
-        btn_ghost      = discord.ui.Button(emoji=E.GHOST,      style=discord.ButtonStyle.gray, custom_id="vm_ghost")
-        btn_reveal     = discord.ui.Button(emoji=E.REVEAL,     style=discord.ButtonStyle.gray, custom_id="vm_reveal")
+        btn_ghost      = discord.ui.Button(emoji=get_emoji('vm_hide'),      style=discord.ButtonStyle.gray, custom_id="vm_ghost")
+        btn_reveal     = discord.ui.Button(emoji=get_emoji('vm_unhide'),     style=discord.ButtonStyle.gray, custom_id="vm_reveal")
         btn_claim      = discord.ui.Button(emoji=get_emoji('owner_icon'),      style=discord.ButtonStyle.gray, custom_id="vm_claim")
 
         btn_disconnect = discord.ui.Button(emoji=E.DISCONNECT, style=discord.ButtonStyle.gray, custom_id="vm_disconnect")
         btn_info       = discord.ui.Button(emoji=E.INFO,       style=discord.ButtonStyle.gray, custom_id="vm_info")
         btn_increase   = discord.ui.Button(emoji=get_emoji('icon_plus'),   style=discord.ButtonStyle.gray, custom_id="vm_increase")
-        btn_decrease   = discord.ui.Button(emoji=E.DECREASE,   style=discord.ButtonStyle.gray, custom_id="vm_decrease")
+        btn_decrease   = discord.ui.Button(emoji=get_emoji('icon_minus'),   style=discord.ButtonStyle.gray, custom_id="vm_decrease")
 
         btn_lock.callback       = self._on_lock
         btn_unlock.callback     = self._on_unlock
@@ -240,12 +240,12 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             elif action == "ghost":
                 await cog.ghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {E.GHOST} Voice channel hidden.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('vm_hide')} Voice channel hidden.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "unghost":
                 await cog.unghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {E.REVEAL} Voice channel revealed.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('vm_unhide')} Voice channel revealed.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "claim":
                 if await cog.claim_channel(channel, interaction.user):
@@ -268,7 +268,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             elif action == "decrease_limit":
                 await cog.decrease_limit(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {E.DECREASE} User limit decreased.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('icon_minus')} User limit decreased.", accent=COLOR_SUCCESS), ephemeral=True
                 )
         except Exception as exc:
             logging.error("VoiceMaster", f"Interface action '{action}' error: {exc}")
@@ -734,7 +734,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.ghost_channel(channel, ctx.author)
-            await ctx.success(f"{E.GHOST} Voice channel hidden.")
+            await ctx.success(f"{get_emoji('vm_hide')} Voice channel hidden.")
         except Exception as e:
             logging.error("VoiceMaster", f"Ghost error: {e}")
             await ctx.fail("Failed to hide the voice channel.")
@@ -750,7 +750,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.unghost_channel(channel, ctx.author)
-            await ctx.success(f"{E.REVEAL} Voice channel revealed.")
+            await ctx.success(f"{get_emoji('vm_unhide')} Voice channel revealed.")
         except Exception as e:
             logging.error("VoiceMaster", f"Unghost error: {e}")
             await ctx.fail("Failed to reveal the voice channel.")
