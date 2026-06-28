@@ -162,7 +162,7 @@ def create_commit_card(author, message, sha):
             y = draw_text_with_twemoji(img, 70, y, line, font_body, (230, 230, 230))
 
     # Watermark glow
-    watermark = "Astral Haven Development"
+    watermark = "developer51709/Niko | GitHub Notifications"
     wm_w, wm_h = draw.textbbox((0, 0), watermark, font=font_watermark)[2:]
 
     glow = Image.new("RGBA", img.size)
