@@ -21,16 +21,16 @@
 
 | | |
 |---|---|
-| **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1484653109576732692&permissions=8&scope=bot%20applications.commands) |
-| **Website** | [niko bot website](https://nikodiscordbot.developer51709.repl.co) |
-| **Support Server** | [dsc.gg/astral-haven](https://dsc.gg/astral-haven) |
+| **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1520558530472448170) |
+| **Website** | [niko bot website](https://developer51709.github.io/Niko) |
+| **Support Server** | [discord.gg/UfDBUGcKqY](https://discord.gg/UfDBUGcKqY) |
 | **GitHub** | [developer51709/Niko](https://github.com/developer51709/Niko) |
 
 ---
 
 ## 🌸 Overview
 
-Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personality. She is powered by OpenAI for natural conversation, remembers past interactions per user, and brings a lo-fi aesthetic to any community. With 20+ cog groups and 76 slash commands, Niko covers everything from a premium economy system and Lavalink music to moderation, giveaways, ticketing, social media notifiers, and more — all wrapped in an interactive Components v2 UI.
+Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personality. He is powered by OpenAI for natural conversation, remembers past interactions per user, and brings a lo-fi aesthetic to any community. With 20+ cog groups and 76 slash commands, Niko covers everything from a premium economy system and Lavalink music to moderation, giveaways, ticketing, social media notifiers, and more — all wrapped in an interactive Components v2 UI.
 
 **Current stats:** 55 servers · 1,342 users · 76 slash commands
 
@@ -39,7 +39,7 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 ## ✨ Feature Highlights
 
 ### 🧠 AI & Personality
-- **OpenAI-powered chat** — mention Niko to start a conversation; she adapts her tone based on your favorability score and past memory
+- **OpenAI-powered chat** — mention Niko to start a conversation; he adapts his tone based on your favorability score and past memory
 - **Trilingual** — responds in English, German, or Spanish; auto-detects language
 - **Multi-personality** — *café* (warm bestie) and *normal* modes, configurable per server
 - **AI image generation** — `/imagine` produces images in-channel
@@ -89,10 +89,10 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 ### 🎰 Casino
 Blackjack, Slots, Roulette — all with PIL image cards and full economy integration
 
-### 🌐 Website & Dashboard
+### 🌐 Website & Dashboard (Under Development)
 - Public landing page with bilingual toggle (EN/DE)
 - Full command documentation page
-- Dashboard prototype (Discord OAuth integration coming soon)
+- Dashboard prototype
 
 ---
 
@@ -174,13 +174,13 @@ src/
 3. Optionally start the **Start the website** workflow to serve the landing page
 4. In your server, use `!levelpanel` and `!automod` to configure per-guild settings interactively
 
-**Requirements:** Python 3.10+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via Replit integration)
+**Requirements:** Python 3.10+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
 
 ---
 
 ## 📜 Commands (summary)
 
-> Full interactive documentation: **[docs page](https://nikodiscordbot.developer51709.repl.co/docs)**
+> Full interactive documentation: **[docs page](https://developer51709.github.io/Niko/docs)**
 
 | Category | Key Commands |
 |---|---|
@@ -214,6 +214,6 @@ All user-facing responses use **discord.ui.LayoutView (Components v2)** featurin
 
 *Niko — making your Discord server cozier, one cup at a time ☕*
 
-*Built by [@n.y.x.e.n](https://github.com/developer51709)*
+*Built by [@nyxenwastaken](https://github.com/developer51709)*
 
 </div>
