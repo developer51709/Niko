@@ -8,7 +8,7 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils.i18n import make_msg
 
-SUPPORT = "https://discord.gg/3JFbm2wfNk"
+SUPPORT = "https://discord.gg/UfDBUGcKqY"
 EFFECTIVE_DATE = "2025-01-01"
 
 MESSAGES = {

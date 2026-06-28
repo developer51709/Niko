@@ -176,7 +176,7 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("Reminders",      f"{get_emoji('icon_reminder')}"),
     ("Tags",           f"{get_emoji('icon_message')}"),
     ("Birthdays",      f"{get_emoji('icon_heart')}"),
-    ("Highlights",     f"{get_emoji('icon_notepad')}"),
+    ("Highlights",     f"{get_emoji('notepad')}"),
     ("Polls",          f"{get_emoji('icon_question')}"),
     ("Suggestions",    f"{get_emoji('icon_lightbulb')}"),
     ("Starboard",      f"{get_emoji('star')}"),
@@ -358,7 +358,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Host and manage giveaways in your server!"
         ),
         "Reminders": (
-            f"{get_emoji('icon_loading')} **Reminder Commands**\n"
+            f"{get_emoji('icon_reminder')} **Reminder Commands**\n"
             "> Schedule personal reminders, list and manage them."
         ),
         "Tags": (
@@ -370,11 +370,11 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Set and announce server member birthdays."
         ),
         "Highlights": (
-            f"{get_emoji('icon_lightbulb')} **Highlight Commands**\n"
+            f"{get_emoji('notepad')} **Highlight Commands**\n"
             "> Get DMed when keywords you care about are mentioned."
         ),
         "Polls": (
-            f"{get_emoji('icon_lightbulb')} **Poll Commands**\n"
+            f"{get_emoji('icon_question')} **Poll Commands**\n"
             "> Multi-option polls with live vote buttons."
         ),
         "Suggestions": (
@@ -382,7 +382,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Submit and vote on server suggestions; admins can approve or deny."
         ),
         "Starboard": (
-            f"{get_emoji('icon_important')} **Starboard Commands**\n"
+            f"{get_emoji('star')} **Starboard Commands**\n"
             "> Auto-mirror popular messages (⭐) to a starboard channel."
         ),
         "Customization": (
@@ -469,7 +469,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Gewinnspiele auf deinem Server veranstalten und verwalten!"
         ),
         "Reminders": (
-            f"{get_emoji('icon_loading')} **Erinnerungs-Befehle**\n"
+            f"{get_emoji('icon_reminder')} **Erinnerungs-Befehle**\n"
             "> Persönliche Erinnerungen planen, anzeigen und verwalten."
         ),
         "Tags": (
@@ -481,11 +481,11 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Geburtstage von Mitgliedern setzen und ankündigen."
         ),
         "Highlights": (
-            f"{get_emoji('icon_lightbulb')} **Highlight-Befehle**\n"
+            f"{get_emoji('notepad')} **Highlight-Befehle**\n"
             "> Lass dir per DM Bescheid geben, wenn deine Schlüsselwörter genannt werden."
         ),
         "Polls": (
-            f"{get_emoji('icon_lightbulb')} **Umfrage-Befehle**\n"
+            f"{get_emoji('icon_question')} **Umfrage-Befehle**\n"
             "> Mehrfach-Umfragen mit Live-Vote-Buttons."
         ),
         "Suggestions": (
@@ -493,7 +493,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Vorschläge einreichen und abstimmen; Admins können annehmen oder ablehnen."
         ),
         "Starboard": (
-            f"{get_emoji('icon_important')} **Starboard-Befehle**\n"
+            f"{get_emoji('star')} **Starboard-Befehle**\n"
             "> Beliebte Nachrichten (⭐) automatisch in einen Starboard-Kanal spiegeln."
         ),
         "Customization": (
@@ -580,7 +580,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> ¡Organiza y gestiona sorteos en tu servidor!"
         ),
         "Reminders": (
-            f"{get_emoji('icon_loading')} **Comandos de Recordatorios**\n"
+            f"{get_emoji('icon_reminder')} **Comandos de Recordatorios**\n"
             "> Programa recordatorios personales, lístalos y gestiónalos."
         ),
         "Tags": (
@@ -592,11 +592,11 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Establece y anuncia cumpleaños de los miembros del servidor."
         ),
         "Highlights": (
-            f"{get_emoji('icon_lightbulb')} **Comandos de Highlights**\n"
+            f"{get_emoji('notepad')} **Comandos de Highlights**\n"
             "> Recibe DMs cuando se mencionan tus palabras clave."
         ),
         "Polls": (
-            f"{get_emoji('icon_lightbulb')} **Comandos de Encuestas**\n"
+            f"{get_emoji('icon_question')} **Comandos de Encuestas**\n"
             "> Encuestas multi-opción con botones de voto en vivo."
         ),
         "Suggestions": (
@@ -604,7 +604,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Envía y vota sugerencias; los admins pueden aprobar o denegar."
         ),
         "Starboard": (
-            f"{get_emoji('icon_important')} **Comandos del Starboard**\n"
+            f"{get_emoji('star')} **Comandos del Starboard**\n"
             "> Refleja automáticamente mensajes populares (⭐) a un canal starboard."
         ),
         "Customization": (
@@ -621,7 +621,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Gambling":      ["Blackjack", "Roulette", "Slots", "GamblingCog"],
     "Economy":       ["EconomyCog"],
     "Roleplay":      ["RolePlayCog"],
-    "Info":          ["InfoCog"],
+    "Info":          ["InfoCog", "LegalCog"],
     "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog"],
     "AI":            ["AICog", "AIConfig"],
     "Moderation":    ["Moderation"],

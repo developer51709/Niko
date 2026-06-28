@@ -181,7 +181,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "music":
         return "<:music:1520861886944641245>"
     if emoji_name == "notepad":
-        return "<:notepad:0000000000000000001>"
+        return "<:notepad:1520911596371837072>"
     if emoji_name == "owner_icon":
         return "<:owner_icon:1520827756076859594>"
     if emoji_name == "python":
@@ -189,7 +189,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "ram":
         return "<:ram:1520864684222316624>"
     if emoji_name == "scroll":
-        return "<:scroll:1100000000000000000>"
+        return "<:scroll:1520911599324631072>"
     if emoji_name == "soundcloud":
         return "<:soundcloud:1520827768038756574>"
     if emoji_name == "spotify":
