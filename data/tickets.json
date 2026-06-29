@@ -184,7 +184,7 @@
       "Bug Report"
     ],
     "panel_channel_id": 1497253295184543847,
-    "panel_message_id": 1497254635189174312,
+    "panel_message_id": 1520776148181581916,
     "support_roles": [],
     "open_tickets": []
   },
@@ -237,8 +237,8 @@
   },
   "1148779504274247761": {
     "guild_id": 1148779504274247761,
-    "panel_title": "Astralis.Shop Tickets",
-    "panel_description": "To place an order please press the button below and then select the product you would like to purchase.",
+    "panel_title": "Astralis.Shop \u2014 Support Center",
+    "panel_description": "Welcome to the Astralis.Shop Ticket Desk.\n\nPlease open a ticket for:\n- Bulk Nitro code purchases  \n- NullScripts tools & script orders  \n- Bumpify Premium code purchases  \n- Order issues, replacements, or verification  \n- General questions or support  \n\nTicket Guidelines:\n- Be clear and detailed when describing your request  \n- Do not ping staff \u2014 we respond as soon as possible  \n- Provide proof or screenshots if requested  \n- Stay respectful and professional at all times  \n\nClick the button below to begin.",
     "panel_color": null,
     "panel_image": "https://cdn.discordapp.com/attachments/1499474525820158143/1499481842192089209/Screenshot_2026-04-30_at_1.43.34_PM.png?ex=69f4f4ca&is=69f3a34a&hm=5764f164c023e6c5346c01ad7f4b4c3dc87756720111b2986c39372eb2108e97&",
     "panel_categories": [
@@ -248,8 +248,8 @@
       "Nitro Tokens & Boost Bots",
       "Other/Custom Order"
     ],
-    "panel_channel_id": 1148779504274247769,
-    "panel_message_id": 1499468690024825017,
+    "panel_channel_id": 1520835857697734810,
+    "panel_message_id": 1520835911435161711,
     "support_roles": [
       1149836186295206009,
       1148779504274247767,

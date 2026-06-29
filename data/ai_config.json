@@ -75,7 +75,7 @@
         "personality": "cafe",
         "enabled": "True",
         "ai_actions_experiment": "True",
-        "better_context_experiment": "True"
+        "better_context_experiment": "False"
     },
     "1468349313443696817": {
         "personality": "cafe",
@@ -125,7 +125,8 @@
     },
     "1497250915034337330": {
         "personality": "cafe",
-        "enabled": "True"
+        "enabled": "True",
+        "ai_actions_experiment": "True"
     },
     "1497372474919227456": {
         "personality": "normal",
@@ -183,7 +184,7 @@
         "personality": "normal",
         "enabled": "True",
         "ai_actions_experiment": "True",
-        "better_context_experiment": "True"
+        "better_context_experiment": "False"
     },
     "1394377695445647532": {
         "personality": "cafe",
@@ -227,6 +228,71 @@
         "ai_actions_experiment": "False"
     },
     "1510655729546170460": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1513404606812782653": {
+        "personality": "normal",
+        "enabled": "False",
+        "ai_actions_experiment": "False"
+    },
+    "1513174822304350318": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1504100749083410463": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1501940475047710790": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "True"
+    },
+    "1515714016771706990": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1507831740524134491": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1498427047033307186": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1517704128262963411": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1518447806820520019": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "True"
+    },
+    "1504188301173850233": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1519400376254861322": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1517738200796233860": {
+        "personality": "cafe",
+        "enabled": "True",
+        "ai_actions_experiment": "False"
+    },
+    "1246480765974351974": {
         "personality": "cafe",
         "enabled": "True",
         "ai_actions_experiment": "False"
