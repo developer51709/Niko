@@ -1,6 +1,7 @@
 # utils/ai/openai_client.py
 import datetime
-from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError
+import time
+from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError, RateLimitError
 import os
 from utils.ai.memory import (
     get_user_memory,
@@ -19,6 +20,13 @@ _FALLBACK_REPLIES = [
 ]
 _fallback_idx = 0
 
+# ── Rate-limit guard ───────────────────────────────────────────────────────────
+# Maps user_id → unix timestamp when the cooldown expires.
+# When the API returns 429, we stop accepting that user's requests for a while
+# to avoid hammering the endpoint and making the rate limit worse.
+_rl_cooldown: dict[int, float] = {}
+_RL_COOLDOWN_SECS = 30  # seconds to pause per user after a 429
+
 # ── Token budget constants ─────────────────────────────────────────────────────
 _CONV_HISTORY_TURNS   = 3    # recent turns kept for short-term context
 _USER_MEMORY_MAX      = 300  # chars kept from long-term memory string
@@ -34,12 +42,14 @@ def _get_client():
         integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
         integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
+        # max_retries=0 — we handle retries ourselves so the SDK never
+        # silently resends a request that already hit a rate limit.
         if direct_key:
-            client = OpenAI(api_key=direct_key)
+            client = OpenAI(api_key=direct_key, max_retries=0)
         elif integration_key and integration_url:
-            client = OpenAI(api_key=integration_key, base_url=integration_url)
+            client = OpenAI(api_key=integration_key, base_url=integration_url, max_retries=0)
         else:
-            client = OpenAI(api_key=integration_key)
+            client = OpenAI(api_key=integration_key, max_retries=0)
     return client
 
 
@@ -399,6 +409,14 @@ def generate_reply_openai(
     user_content = "\n".join(user_parts)
 
     global _fallback_idx
+
+    # ── Short-circuit if this user is still in a rate-limit cooldown ──
+    now = time.monotonic()
+    cooldown_until = _rl_cooldown.get(user_id, 0)
+    if now < cooldown_until:
+        remaining = int(cooldown_until - now)
+        return f"i'm a little overwhelmed right now ☕ give me ~{remaining}s to catch my breath~"
+
     try:
         create_kwargs = dict(
             model="Meta-Llama-3.3-70B-Instruct",
@@ -414,12 +432,30 @@ def generate_reply_openai(
             create_kwargs["tool_choice"] = "auto"
 
         response = _get_client().chat.completions.create(**create_kwargs)
+
+    except RateLimitError as e:
+        # 429 — do NOT reset the client (it's fine), do NOT retry.
+        # Apply a per-user cooldown so the next call returns immediately
+        # instead of hitting the API again and worsening the rate limit.
+        retry_after = _RL_COOLDOWN_SECS
+        # Honour the Retry-After header if the API returned one
+        try:
+            header_val = getattr(e.response, "headers", {}).get("retry-after")
+            if header_val:
+                retry_after = max(int(float(header_val)), retry_after)
+        except Exception:
+            pass
+        _rl_cooldown[user_id] = time.monotonic() + retry_after
+        print(f"[AI] Rate limited — user {user_id} cooling down for {retry_after}s")
+        return f"i'm a little overwhelmed right now ☕ give me ~{retry_after}s to catch my breath~"
+
     except (NotFoundError, APIConnectionError, APIStatusError) as e:
         _reset_client()
         print(f"OpenAI API error: {e}")
         reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
         _fallback_idx += 1
         return reply
+
     except Exception as e:
         _reset_client()
         print(f"Unexpected OpenAI error: {e}")
