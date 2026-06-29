@@ -101,7 +101,8 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         )
         self.color_input = TextInput(
             label="Color (hex)", 
-            required=False
+            required=False,
+            default=get_config(guild_id).welcome_color or None
         )
 
         self.add_item(self.title_input)
@@ -838,7 +839,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-            
+
         if user.id in _pending_verifications:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
