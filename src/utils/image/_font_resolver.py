@@ -165,12 +165,23 @@ def _find_font(names: list[str]) -> str:
 
 
 def _bitmap_default(size: int) -> ImageFont.ImageFont:
-    """PIL built-in bitmap font — never needs FreeType, always works."""
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        # Pillow < 9.2 — size argument not supported
-        return ImageFont.load_default()
+    """
+    PIL built-in font, chosen to never require the FreeType extension.
+    Pillow 10+ changed load_default(size=N) to call truetype() with a bundled
+    base64-encoded TTF — which fails when _imagingft is absent (Termux without
+    freetype-dev).  The no-argument form load_default() still returns the old
+    fixed-pitch 8 px bitmap glyph set that has existed since PIL 1.x and has
+    zero native-extension dependency.
+    We only use the size= variant when FreeType is confirmed available.
+    """
+    if _FREETYPE_OK:
+        try:
+            return ImageFont.load_default(size=size)
+        except Exception:
+            pass
+    # FreeType unavailable (or size= call failed) — use the tiny bitmap font.
+    # It is small and fixed-pitch but guaranteed to work on every platform.
+    return ImageFont.load_default()
 
 
 # ── Module-level resolved paths (lazy, cached) ───────────────────────────────
