@@ -415,7 +415,7 @@ def generate_reply_openai(
     cooldown_until = _rl_cooldown.get(user_id, 0)
     if now < cooldown_until:
         remaining = int(cooldown_until - now)
-        return f"i'm a little overwhelmed right now ☕ give me ~{remaining}s to catch my breath~"
+        return f"ai_error:rate_limit:{remaining}"
 
     try:
         create_kwargs = dict(
@@ -447,23 +447,41 @@ def generate_reply_openai(
             pass
         _rl_cooldown[user_id] = time.monotonic() + retry_after
         print(f"[AI] Rate limited — user {user_id} cooling down for {retry_after}s")
-        return f"i'm a little overwhelmed right now ☕ give me ~{retry_after}s to catch my breath~"
+        return f"ai_error:rate_limit:{retry_after}"
 
     except (NotFoundError, APIConnectionError, APIStatusError) as e:
+        # Check whether this is a content / safety filter rejection before
+        # treating it as a generic connection problem.
+        is_safety = False
+        try:
+            body     = getattr(e, "body", None) or {}
+            err_code = (body.get("error", {}) or {}).get("code", "") if isinstance(body, dict) else ""
+            err_str  = str(e).lower()
+            if err_code in ("content_filter", "content_policy_violation", "moderated") or \
+               any(k in err_str for k in ("content_filter", "safety", "content_policy", "moderated")):
+                is_safety = True
+        except Exception:
+            pass
+
+        if is_safety:
+            print(f"[AI] Safety filter triggered for user {user_id}")
+            return "ai_error:safety"
+
         _reset_client()
-        print(f"OpenAI API error: {e}")
-        reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
-        _fallback_idx += 1
-        return reply
+        print(f"[AI] API error: {e}")
+        return "ai_error:generic"
 
     except Exception as e:
         _reset_client()
-        print(f"Unexpected OpenAI error: {e}")
-        reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
-        _fallback_idx += 1
-        return reply
+        print(f"[AI] Unexpected error: {e}")
+        return "ai_error:generic"
 
     choice = response.choices[0]
+
+    # ── Safety filter: model declined via finish_reason ────────────────
+    if choice.finish_reason == "content_filter":
+        print(f"[AI] Content filter finish_reason for user {user_id}")
+        return "ai_error:safety"
 
     # ── Handle AI Actions tool call ────────────────────────────────────
     if ai_actions_enabled and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
@@ -486,3 +504,4 @@ def generate_reply_openai(
     adjust_favorability(user_id, delta=1)
 
     return clean
+

@@ -130,13 +130,23 @@ async def handle_message(bot, msg: discord.Message):
         if reply == "ai_disabled_guild":
             return
 
-        # ── 10. AI Actions: structured action response ─────────────────────────
+        # ── 10. AI error sentinels → CV2 error card ────────────────────────────
+        if isinstance(reply, str) and reply.startswith("ai_error:"):
+            from utils.ai.error_views import build_ai_error_view, parse_ai_error
+            kind, cooldown = parse_ai_error(reply)
+            error_view = build_ai_error_view(kind, cooldown)
+            try:
+                return await msg.reply(view=error_view, allowed_mentions=discord.AllowedMentions.none())
+            except Exception:
+                return await msg.channel.send(view=error_view)
+
+        # ── 11. AI Actions: structured action response ─────────────────────────
         if isinstance(reply, dict):
             from utils.ai.actions import dispatch_ai_action
             await dispatch_ai_action(bot, msg, reply)
             return
 
-        # ── 11. Plain text reply ───────────────────────────────────────────────
+        # ── 12. Plain text reply ───────────────────────────────────────────────
         if not isinstance(reply, str) or len(reply) < 1:
             reply = "An error occurred... 🥀"
             if DEBUG_MODE:

@@ -122,7 +122,14 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             ),
         )
 
-        if reply:
+        if isinstance(reply, str) and reply.startswith("ai_error:"):
+            from utils.ai.error_views import build_ai_error_view, parse_ai_error
+            kind, cooldown = parse_ai_error(reply)
+            await interaction.followup.send(
+                view=build_ai_error_view(kind, cooldown),
+                ephemeral=True,
+            )
+        elif reply:
             await interaction.followup.send(
                 view=_cv(f"### ☕ Niko says…\n{reply}", colour=discord.Colour(0xc8a882)),
                 ephemeral=True,
