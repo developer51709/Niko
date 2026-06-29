@@ -80,7 +80,7 @@ class Development(commands.Cog):
     @commands.command(name="devhelp")
     async def dev_help(self, ctx):
         prefix = await _resolve_prefix(self.bot, ctx)
-        
+
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -193,9 +193,13 @@ class Development(commands.Cog):
 
     @commands.command(name="devmem")
     async def dev_memory(self, ctx):
-        process = psutil.Process(os.getpid())
-        mem = process.memory_info().rss / 1024 / 1024
-        await ctx.send(f"Memory usage: `{mem:.2f} MB`")
+        try:
+            process = psutil.Process(os.getpid())
+            mem = process.memory_info().rss / 1024 / 1024
+            mem_str = f"{mem:.2f} MB"
+        except Exception:
+            mem_str = "N/A"
+        await ctx.send(f"Memory usage: `{mem_str}`")
 
     @commands.command(name="devtasks")
     async def dev_tasks(self, ctx):

@@ -14,6 +14,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import asyncio
 import os
+from utils.image._font_resolver import get_bold
 
 
 # ── Layout constants ────────────────────────────────────────────────────────
@@ -43,46 +44,9 @@ TEXT_GREEN       = (87, 242, 135)
 TEXT_RED         = (237, 90, 96)
 
 
-# ── Font loading (cached per size) ──────────────────────────────────────────
-_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-    "DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    "LiberationSans-Bold.ttf",
-    "arial.ttf",
-]
-_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
-_FONT_PATH: str | None = None
-
-
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    global _FONT_PATH
-    if size in _FONT_CACHE:
-        return _FONT_CACHE[size]
-
-    if _FONT_PATH is None:
-        for cand in _FONT_CANDIDATES:
-            try:
-                ImageFont.truetype(cand, 12)
-                _FONT_PATH = cand
-                break
-            except (IOError, OSError):
-                continue
-        if _FONT_PATH is None:
-            _FONT_PATH = ""  # marker — fall back to bitmap default
-
-    if _FONT_PATH:
-        try:
-            f = ImageFont.truetype(_FONT_PATH, size)
-            _FONT_CACHE[size] = f
-            return f
-        except Exception:
-            pass
-
-    f = ImageFont.load_default()
-    _FONT_CACHE[size] = f
-    return f
+# ── Font helper (Termux/Android-safe via shared resolver) ───────────────────
+def _font(size: int) -> ImageFont.ImageFont:
+    return get_bold(size)
 
 
 # ── Suit drawing (vector — no glyph dependency) ─────────────────────────────

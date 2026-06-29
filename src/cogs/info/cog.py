@@ -643,32 +643,32 @@ class InfoCog(commands.Cog):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Invite Niko", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("discord"), 
+                    label="Invite Niko",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("discord"),
                     url=invite_url
                 ),
                 discord.ui.Button(
-                    label="GitHub", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("github"), 
+                    label="GitHub",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("github"),
                     url=links.GITHUB
                 ),
                 discord.ui.Button(
-                    label="Website", 
-                    style=discord.ButtonStyle.link, 
+                    label="Website",
+                    style=discord.ButtonStyle.link,
                     emoji=get_emoji("website"),
                     url=links.WEBSITE),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="ToS", 
-                    style=discord.ButtonStyle.link, 
+                    label="ToS",
+                    style=discord.ButtonStyle.link,
                     url=links.TOS
                 ),
                 discord.ui.Button(
-                    label="Privacy Policy", 
-                    style=discord.ButtonStyle.link, 
+                    label="Privacy Policy",
+                    style=discord.ButtonStyle.link,
                     url=links.PRIVACY
                 ),
             )
@@ -873,8 +873,14 @@ class InfoCog(commands.Cog):
         ai_model = os.getenv("AI_MODEL", "Unknown")
         command_count = len(self.bot.commands)
         ping_latency = round(self.bot.latency * 1000)
-        cpu_usage = psutil.cpu_percent()
-        memory_usage = round(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024), 2)
+        try:
+            cpu_usage = psutil.cpu_percent()
+        except Exception:
+            cpu_usage = "N/A"
+        try:
+            memory_usage = round(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024), 2)
+        except Exception:
+            memory_usage = "N/A"
 
         text = (
             f"### {msg(ctx, 'debuginfo_title')}\n"
@@ -899,7 +905,10 @@ class InfoCog(commands.Cog):
         hostname = platform.node()
         os_info = f"{platform.system()} {platform.release()}"
         cpu = platform.processor() or "N/A"
-        ram = round(psutil.virtual_memory().total / (1024**3), 2)
+        try:
+            ram = round(psutil.virtual_memory().total / (1024**3), 2)
+        except Exception:
+            ram = "N/A"
 
         text = (
             f"### {msg(ctx, 'hostinfo_title')}\n"

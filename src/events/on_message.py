@@ -99,7 +99,7 @@ async def handle_message(bot, msg: discord.Message):
         ai_actions_enabled = get_ai_config(guild.id, "ai_actions_experiment") == "True"
 
     # ── 8. Generate AI reply ──────────────────────────────────────────────────
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     async with msg.channel.typing():
         reply = await loop.run_in_executor(

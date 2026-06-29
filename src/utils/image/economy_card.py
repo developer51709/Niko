@@ -23,6 +23,7 @@ from io import BytesIO
 from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from utils.image._font_resolver import get_bold, get_reg, font_getlength, draw_textlength
 
 
 # ── Palette ─────────────────────────────────────────────────────────────────
@@ -42,73 +43,13 @@ PURPLE_RANK   = (200, 162, 255)
 SHADOW_RGBA   = (0, 0, 0, 130)
 
 
-# ── Font loading (cached per size) ──────────────────────────────────────────
-_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-    "DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    "LiberationSans-Bold.ttf",
-    "arial.ttf",
-]
-_FONT_REGULAR_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    "DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "arial.ttf",
-]
-_FONT_BOLD_PATH: str | None = None
-_FONT_REG_PATH: str | None = None
-_FONT_CACHE: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+# ── Font helpers (Termux/Android-safe via shared resolver) ──────────────────
+def _bold(size: int) -> ImageFont.ImageFont:
+    return get_bold(size)
 
 
-def _resolve_font_path(candidates: list[str]) -> str:
-    for cand in candidates:
-        try:
-            ImageFont.truetype(cand, 12)
-            return cand
-        except (IOError, OSError):
-            continue
-    return ""
-
-
-def _bold(size: int) -> ImageFont.FreeTypeFont:
-    global _FONT_BOLD_PATH
-    if _FONT_BOLD_PATH is None:
-        _FONT_BOLD_PATH = _resolve_font_path(_FONT_CANDIDATES)
-    key = ("b", size)
-    f = _FONT_CACHE.get(key)
-    if f is not None:
-        return f
-    if _FONT_BOLD_PATH:
-        try:
-            f = ImageFont.truetype(_FONT_BOLD_PATH, size)
-            _FONT_CACHE[key] = f
-            return f
-        except Exception:
-            pass
-    f = ImageFont.load_default()
-    _FONT_CACHE[key] = f
-    return f
-
-
-def _reg(size: int) -> ImageFont.FreeTypeFont:
-    global _FONT_REG_PATH
-    if _FONT_REG_PATH is None:
-        _FONT_REG_PATH = _resolve_font_path(_FONT_REGULAR_CANDIDATES)
-    key = ("r", size)
-    f = _FONT_CACHE.get(key)
-    if f is not None:
-        return f
-    if _FONT_REG_PATH:
-        try:
-            f = ImageFont.truetype(_FONT_REG_PATH, size)
-            _FONT_CACHE[key] = f
-            return f
-        except Exception:
-            pass
-    return _bold(size)
+def _reg(size: int) -> ImageFont.ImageFont:
+    return get_reg(size)
 
 
 # ── Primitives ──────────────────────────────────────────────────────────────

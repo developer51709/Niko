@@ -5,6 +5,7 @@ import textwrap
 import re
 import requests
 from utils import logging
+from utils.image._font_resolver import get_bold, draw_textlength
 
 
 # Unicode emoji detection
@@ -102,7 +103,7 @@ def draw_text_with_emojis(
             stroke_fill=stroke_fill,
             anchor="lm",
         )
-        cursor_x += draw.textlength(char, font=font)
+        cursor_x += draw_textlength(draw, char, font=font)
         i += 1
 
 
@@ -257,67 +258,14 @@ def deepfry_image(raw: BytesIO) -> BytesIO:
     return buf
 
 
-# ── Font loading (cached, with safe system-font fallback) ──────────────────
-_CAPTION_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    "DejaVuSans-Bold.ttf",
-    "LiberationSans-Bold.ttf",
-    "arial.ttf",
-]
-
-_CAPTION_FONT_PATH: str | None = None
-_CAPTION_FONT_RESOLVED: bool = False
-_CAPTION_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+# ── Font helpers (delegate to shared resolver with Termux/Android support) ──
+def _caption_font(size: int) -> ImageFont.ImageFont:
+    """Return a bold font at *size*. Termux-safe via _font_resolver."""
+    return get_bold(size)
 
 
-def _resolve_caption_font_path() -> str | None:
-    global _CAPTION_FONT_PATH, _CAPTION_FONT_RESOLVED
-    if _CAPTION_FONT_RESOLVED:
-        return _CAPTION_FONT_PATH
-    for cand in _CAPTION_FONT_CANDIDATES:
-        try:
-            ImageFont.truetype(cand, 12)
-            _CAPTION_FONT_PATH = cand
-            _CAPTION_FONT_RESOLVED = True
-            return cand
-        except (IOError, OSError):
-            continue
-    _CAPTION_FONT_RESOLVED = True
-    return None
-
-
-def _get_font(width: int, scale: float = 0.07) -> ImageFont.FreeTypeFont:
-    size = max(12, int(width * scale))
-    return _caption_font(size)
-
-
-def _caption_font(size: int) -> ImageFont.FreeTypeFont:
-    """Return a TrueType font at the requested size, cached per size.
-
-    Falls back to PIL's default bitmap font only if no system TrueType font
-    can be located — which produces readable (though small) text instead of
-    the unreadable mojibake produced by ``arial.ttf`` not existing.
-    """
-    cached = _CAPTION_FONT_CACHE.get(size)
-    if cached is not None:
-        return cached
-    path = _resolve_caption_font_path()
-    if path:
-        try:
-            f = ImageFont.truetype(path, size)
-            _CAPTION_FONT_CACHE[size] = f
-            return f
-        except Exception:
-            pass
-    try:
-        f = ImageFont.load_default(size)
-    except TypeError:
-        f = ImageFont.load_default()
-    _CAPTION_FONT_CACHE[size] = f
-    return f
+def _get_font(width: int, scale: float = 0.07) -> ImageFont.ImageFont:
+    return get_bold(max(12, int(width * scale)))
 
 
 def _wrap_to_pixel_width(
@@ -333,14 +281,14 @@ def _wrap_to_pixel_width(
         current = ""
         for word in words:
             # Hard-break tokens that exceed the line width by themselves.
-            if measure.textlength(word, font=font) > max_width and word:
+            if draw_textlength(measure, word, font=font) > max_width and word:
                 if current:
                     lines.append(current)
                     current = ""
                 buf = ""
                 for ch in word:
                     trial = buf + ch
-                    if measure.textlength(trial, font=font) > max_width and buf:
+                    if draw_textlength(measure, trial, font=font) > max_width and buf:
                         lines.append(buf)
                         buf = ch
                     else:
@@ -349,7 +297,7 @@ def _wrap_to_pixel_width(
                 continue
 
             trial = word if not current else (current + " " + word)
-            if measure.textlength(trial, font=font) <= max_width:
+            if draw_textlength(measure, trial, font=font) <= max_width:
                 current = trial
             else:
                 if current:
@@ -408,7 +356,7 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
     measure = ImageDraw.Draw(canvas)
     text_top = block_top + pad_y
     for i, line in enumerate(lines):
-        line_w = measure.textlength(line, font=font)
+        line_w = draw_textlength(measure, line, font=font)
         x = int((width - line_w) // 2)
         # draw_text_with_emojis uses anchor="lm" → y is the line's vertical centre
         baseline_y = text_top + i * (line_height + line_spacing) + line_height // 2
