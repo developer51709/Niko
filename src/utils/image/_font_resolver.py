@@ -1,26 +1,49 @@
 """
 Shared PIL font resolution with Termux / Android fallback.
 
-Search order:
-  1. Termux prefix ($PREFIX env var, default /data/data/com.termux/files/usr)
+Search order (only attempted when FreeType is available):
+  1. Termux prefix  ($PREFIX env var, then hard-coded default)
   2. Android system fonts  (/system/fonts, /system/product/fonts, …)
   3. Standard Linux paths  (/usr/share/fonts/…)
   4. macOS paths           (/Library/Fonts, …)
   5. Any .ttf/.otf found anywhere in the above directories
-  6. PIL built-in bitmap font (always succeeds — small but readable)
+
+If the Pillow build on the current platform does NOT include the FreeType
+C extension (_imagingft), every truetype call is skipped entirely and the
+PIL built-in bitmap font is used as the unconditional fallback.  This is
+the situation on Termux when Pillow was installed without FreeType support.
 
 Public API
 ----------
-get_bold(size)         -> ImageFont  (bold / semi-bold TrueType, or bitmap fallback)
-get_reg(size)          -> ImageFont  (regular TrueType, or bold, or bitmap fallback)
-font_getlength(f, txt) -> float      (shim: works for both FreeType and bitmap fonts)
+get_bold(size)         -> ImageFont  (bold TrueType, or bitmap fallback)
+get_reg(size)          -> ImageFont  (regular TrueType, or bold, or bitmap)
+font_getlength(f, txt) -> float      (shim: works for FreeType and bitmap)
+draw_textlength(d,t,f) -> float      (shim: draw.textlength with bbox fallback)
 """
 from __future__ import annotations
 
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-# ── Preferred font filenames, tried in this order ───────────────────────────
+# ── FreeType availability probe ───────────────────────────────────────────────
+# Detect once at import time whether the FreeType C extension is usable.
+# PIL uses a DeferredError sentinel when _imagingft is absent, so trying to
+# call truetype() raises ImportError through exception chaining in a way that
+# can escape a bare `except Exception` block in some Pillow versions.
+# Checking here avoids ever calling truetype() when it can't work.
+
+_FREETYPE_OK: bool = False
+try:
+    # Direct import of the FreeType C extension.
+    # Fails immediately and cleanly if Pillow was built without FreeType
+    # (common on Termux when installed via pip without system freetype-dev).
+    from PIL import _imagingft as _ft_probe  # type: ignore[attr-defined]  # noqa: F401
+    del _ft_probe
+    _FREETYPE_OK = True
+except (ImportError, AttributeError, Exception):
+    _FREETYPE_OK = False
+
+# ── Preferred font filenames, tried in priority order ───────────────────────
 _BOLD_NAMES: list[str] = [
     "DejaVuSans-Bold.ttf",
     "LiberationSans-Bold.ttf",
@@ -49,19 +72,19 @@ _REG_NAMES: list[str] = [
 
 
 def _search_dirs() -> list[str]:
-    """Return candidate directories, Termux / Android first."""
+    """Return candidate font directories, Termux / Android first."""
     dirs: list[str] = []
 
-    # ── Termux ──────────────────────────────────────────────────────────────
+    # Termux: honour $PREFIX (set automatically by Termux)
     prefix = os.environ.get("PREFIX", "")
     if prefix:
         for sub in ("share/fonts/TTF", "share/fonts/truetype", "share/fonts"):
             dirs.append(os.path.join(prefix, sub))
-    # Hard-coded Termux default (in case $PREFIX is unset)
+    # Termux hard-coded default (in case $PREFIX is unset)
     for sub in ("share/fonts/TTF", "share/fonts/truetype", "share/fonts"):
         dirs.append(f"/data/data/com.termux/files/usr/{sub}")
 
-    # ── Android system ───────────────────────────────────────────────────────
+    # Android system fonts
     dirs += [
         "/system/fonts",
         "/system/product/fonts",
@@ -69,7 +92,7 @@ def _search_dirs() -> list[str]:
         "/product/fonts",
     ]
 
-    # ── Standard Linux ───────────────────────────────────────────────────────
+    # Standard Linux
     dirs += [
         "/usr/share/fonts/truetype/dejavu",
         "/usr/share/fonts/dejavu",
@@ -83,7 +106,7 @@ def _search_dirs() -> list[str]:
         "/usr/local/share/fonts",
     ]
 
-    # ── macOS (developer convenience) ───────────────────────────────────────
+    # macOS (developer convenience)
     dirs += [
         "/Library/Fonts",
         "/System/Library/Fonts",
@@ -94,16 +117,24 @@ def _search_dirs() -> list[str]:
 
 
 def _try_load(path: str) -> bool:
+    """Return True only if truetype() succeeds on this path."""
+    if not _FREETYPE_OK:
+        return False  # short-circuit before PIL's deferred error fires
     try:
         ImageFont.truetype(path, 12)
         return True
-    except Exception:
+    except BaseException:
+        # BaseException (not just Exception) catches everything including
+        # re-raised ImportError chains from PIL's DeferredError sentinel.
         return False
 
 
 def _find_font(names: list[str]) -> str:
-    """Return the first resolvable TrueType font path, or ''."""
-    # 1. Bare filename — works if font is on PIL's internal search path
+    """Return the first resolvable TrueType font path, or '' if none found."""
+    if not _FREETYPE_OK:
+        return ""
+
+    # 1. Bare filename — works if PIL's own search path covers it
     for name in names:
         if _try_load(name):
             return name
@@ -117,7 +148,7 @@ def _find_font(names: list[str]) -> str:
             if os.path.isfile(path) and _try_load(path):
                 return path
 
-    # 3. Any .ttf / .otf in the search dirs (Termux with non-DejaVu font packs)
+    # 3. Any .ttf / .otf in the search dirs (e.g. Termux font-* packages)
     for d in _search_dirs():
         if not os.path.isdir(d):
             continue
@@ -134,15 +165,16 @@ def _find_font(names: list[str]) -> str:
 
 
 def _bitmap_default(size: int) -> ImageFont.ImageFont:
-    """PIL built-in bitmap font — always succeeds regardless of platform."""
+    """PIL built-in bitmap font — never needs FreeType, always works."""
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
+        # Pillow < 9.2 — size argument not supported
         return ImageFont.load_default()
 
 
 # ── Module-level resolved paths (lazy, cached) ───────────────────────────────
-_bold_path: str | None = None   # None = not yet resolved
+_bold_path: str | None = None   # None = not yet resolved; "" = no font found
 _reg_path:  str | None = None
 _cache: dict[tuple, ImageFont.ImageFont] = {}
 
@@ -151,19 +183,19 @@ def get_bold(size: int) -> ImageFont.ImageFont:
     """Return a bold TrueType font at *size*, or a bitmap fallback."""
     global _bold_path
     if _bold_path is None:
-        _bold_path = _find_font(_BOLD_NAMES)  # "" means no TrueType found
+        _bold_path = _find_font(_BOLD_NAMES)
 
     key = ("b", size)
     if key in _cache:
         return _cache[key]
 
     font: ImageFont.ImageFont
-    if _bold_path:
+    if _bold_path and _FREETYPE_OK:
         try:
             font = ImageFont.truetype(_bold_path, size)
             _cache[key] = font
             return font
-        except Exception:
+        except BaseException:
             pass
 
     font = _bitmap_default(size)
@@ -179,19 +211,19 @@ def get_reg(size: int) -> ImageFont.ImageFont:
         if not _reg_path:
             if _bold_path is None:
                 _bold_path = _find_font(_BOLD_NAMES)
-            _reg_path = _bold_path  # use bold as regular if nothing else found
+            _reg_path = _bold_path or ""
 
     key = ("r", size)
     if key in _cache:
         return _cache[key]
 
     font: ImageFont.ImageFont
-    if _reg_path:
+    if _reg_path and _FREETYPE_OK:
         try:
             font = ImageFont.truetype(_reg_path, size)
             _cache[key] = font
             return font
-        except Exception:
+        except BaseException:
             pass
 
     font = _bitmap_default(size)
@@ -205,9 +237,9 @@ def font_getlength(font: ImageFont.ImageFont, text: str) -> float:
     """
     Shim for ``font.getlength(text)``.
 
-    ``FreeTypeFont`` has ``.getlength()``; the bitmap ``ImageFont`` returned
-    by ``ImageFont.load_default()`` does **not**.  This shim falls back to
-    ``textbbox`` so code works regardless of which font type is in use.
+    ``FreeTypeFont`` has ``.getlength()``; the bitmap ``ImageFont`` from
+    ``load_default()`` does not.  Falls back to ``textbbox`` so all callers
+    work regardless of which font type is in use.
     """
     try:
         return font.getlength(text)  # type: ignore[attr-defined]
@@ -221,8 +253,7 @@ def draw_textlength(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageF
     """
     Shim for ``draw.textlength(text, font=font)``.
 
-    Older Pillow (<8.0) and some edge-cases lack this method; fall back to
-    ``textbbox`` in that situation.
+    Falls back to ``textbbox`` on older Pillow builds or edge-cases.
     """
     try:
         return draw.textlength(text, font=font)
