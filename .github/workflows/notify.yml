@@ -24,6 +24,8 @@ jobs:
           pip install -r scripts/requirements.txt
 
       - name: Send CV2 Webhook
+        env:
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
         run: |
           python3 scripts/send_cv2_webhook.py \
             "${{ secrets.DISCORD_WEBHOOK }}" \
