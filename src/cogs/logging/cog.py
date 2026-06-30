@@ -18,6 +18,14 @@ class ServerLogger(commands.Cog):
                 self._invite_cache[guild.id] = {inv.code: inv.uses for inv in invites}
             except (discord.Forbidden, discord.HTTPException):
                 pass
+            # Cache vanity invite uses separately under __vanity__
+            if guild.vanity_url_code:
+                try:
+                    vanity = await guild.vanity_invite()
+                    if vanity and vanity.uses is not None:
+                        self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
+                except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                    pass
 
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
@@ -107,6 +115,8 @@ class ServerLogger(commands.Cog):
 
         # ── Detect which invite was used ──────────
         used_invite = None
+        used_vanity = False
+
         try:
             current_invites = await guild.invites()
             cached = self._invite_cache.get(guild.id, {})
@@ -114,11 +124,35 @@ class ServerLogger(commands.Cog):
                 if inv.uses > cached.get(inv.code, 0):
                     used_invite = inv
                     break
-            self._invite_cache[guild.id] = {inv.code: inv.uses for inv in current_invites}
+            # Rebuild cache but preserve the __vanity__ counter
+            new_cache = {inv.code: inv.uses for inv in current_invites}
+            if "__vanity__" in cached:
+                new_cache["__vanity__"] = cached["__vanity__"]
+            self._invite_cache[guild.id] = new_cache
         except (discord.Forbidden, discord.HTTPException):
             pass
 
-        # Log invite usage to the invites category
+        # If no regular invite matched, check the vanity invite
+        if not used_invite and guild.vanity_url_code:
+            try:
+                vanity = await guild.vanity_invite()
+                if vanity and vanity.uses is not None:
+                    cached_vanity = self._invite_cache.get(guild.id, {}).get("__vanity__", 0)
+                    if vanity.uses > cached_vanity:
+                        used_vanity = True
+                        self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
+            except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                pass
+
+        # ── Build join-method label ───────────────
+        if used_invite:
+            join_method = f"Invite `{used_invite.code}`"
+        elif used_vanity:
+            join_method = f"Vanity URL (`/{guild.vanity_url_code}`)"
+        else:
+            join_method = "Unknown — OAuth2, Server Discovery, or deleted invite"
+
+        # ── Log to invites category ───────────────
         if used_invite:
             inv_body = (
                 f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
@@ -130,10 +164,29 @@ class ServerLogger(commands.Cog):
                 guild, "invites", "Invite Used", inv_body,
                 target_id=member.id
             )
+        elif used_vanity:
+            vanity_body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Join Method:** Vanity URL (`/{guild.vanity_url_code}`)"
+            )
+            await self.log_event(
+                guild, "invites", "Vanity Invite Used", vanity_body,
+                target_id=member.id
+            )
+        else:
+            unknown_body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Join Method:** Unknown — likely OAuth2 authorization, Server Discovery, or a deleted invite"
+            )
+            await self.log_event(
+                guild, "invites", "Unknown Join Method", unknown_body,
+                target_id=member.id
+            )
 
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Account Created:** {created} ({account_age} days ago){age_warn}"
+            f"**Account Created:** {created} ({account_age} days ago){age_warn}\n"
+            f"**Join Method:** {join_method}"
         )
         await self.log_event(
             guild, "members", "Member Joined", body,
@@ -337,6 +390,13 @@ class ServerLogger(commands.Cog):
             self._invite_cache[guild.id] = {inv.code: inv.uses for inv in invites}
         except (discord.Forbidden, discord.HTTPException):
             pass
+        if guild.vanity_url_code:
+            try:
+                vanity = await guild.vanity_invite()
+                if vanity and vanity.uses is not None:
+                    self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
+            except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                pass
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite: discord.Invite):

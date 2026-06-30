@@ -111,6 +111,8 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Invite Created": "invites",
     "Invite Deleted": "invites",
     "Invite Used": "invites",
+    "Vanity Invite Used": "invites",
+    "Unknown Join Method": "invites",
     "Channel Updated": "channels",
     "Role Created": "roles",
     "Role Deleted": "roles",
