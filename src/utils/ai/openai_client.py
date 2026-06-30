@@ -347,6 +347,53 @@ _AI_ACTIONS_TOOLS = [
 ]
 
 
+# ── Action-intent keyword sets ─────────────────────────────────────────────────
+# Tools are only attached to the API request when the incoming message clearly
+# signals a moderation or server-management intent.  This avoids sending ~2,000
+# extra tool-definition tokens on every casual chat message.
+
+_ACTION_PHRASES = {
+    # moderation verbs
+    "ban", "unban", "kick", "mute", "unmute", "timeout", "untimeout",
+    "warn", "warning", "strike",
+    # message management
+    "purge", "clear messages", "delete messages", "bulk delete",
+    # channel management
+    "create channel", "delete channel", "rename channel",
+    "make a channel", "set topic", "channel topic",
+    # role management
+    "create role", "delete role", "make a role", "assign role",
+    "give role", "remove role", "take role", "add role",
+    # nickname
+    "nickname", "change nick", "set nick", "rename",
+    # polls
+    "create poll", "make a poll", "start a poll",
+}
+
+# Single words that on their own strongly suggest an action request
+_ACTION_KEYWORDS = {
+    "ban", "unban", "kick", "mute", "unmute", "timeout",
+    "untimeout", "warn", "purge", "poll",
+}
+
+
+def _message_requests_action(message: str) -> bool:
+    """Return True only if the message looks like an explicit action request.
+
+    Keeps token usage low by skipping tool definitions for casual chat.
+    """
+    lower = message.lower()
+    # Quick single-keyword check
+    words = set(lower.split())
+    if words & _ACTION_KEYWORDS:
+        return True
+    # Multi-word phrase check
+    for phrase in _ACTION_PHRASES:
+        if phrase in lower:
+            return True
+    return False
+
+
 def generate_reply_openai(
     bot, user_id: int, server, message: str, username: str, SYSTEM_PROMPT: str,
     *,
@@ -419,7 +466,7 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model="Meta-Llama-3.3-70B-Instruct",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},
@@ -427,7 +474,10 @@ def generate_reply_openai(
             max_tokens=300,
             temperature=0.7,
         )
-        if ai_actions_enabled:
+        # Only attach tool definitions when the message actually requests an
+        # action.  Sending 18 tool schemas on every casual chat message
+        # burns ~2,000 input tokens per request with no benefit.
+        if ai_actions_enabled and _message_requests_action(message):
             create_kwargs["tools"]       = _AI_ACTIONS_TOOLS
             create_kwargs["tool_choice"] = "auto"
 
