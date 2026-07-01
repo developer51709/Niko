@@ -6,6 +6,7 @@ import base64
 import random
 import textwrap
 import re
+import time
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -180,7 +181,11 @@ def subject_line(message: str) -> str:
 
 # -----------------------------------
 # imgbb upload — returns a permanent public URL
+# Retries up to MAX_ATTEMPTS times with exponential back-off.
 # -----------------------------------
+_IMGBB_MAX_ATTEMPTS = 4
+_IMGBB_BACKOFF_BASE = 2   # seconds: 2, 4, 8 …
+
 def upload_to_imgbb(buffer: io.BytesIO) -> str | None:
     api_key = os.environ.get("IMGBB_API_KEY", "")
     if not api_key:
@@ -189,17 +194,37 @@ def upload_to_imgbb(buffer: io.BytesIO) -> str | None:
 
     buffer.seek(0)
     b64 = base64.b64encode(buffer.read()).decode()
-    try:
-        r = requests.post(
-            "https://api.imgbb.com/1/upload",
-            data={"key": api_key, "image": b64},
-            timeout=30,
-        )
-        if r.ok:
-            return r.json()["data"]["display_url"]
-        print(f"[imgbb] upload failed {r.status_code}: {r.text[:120]}")
-    except Exception as e:
-        print(f"[imgbb] upload error: {e}")
+
+    for attempt in range(1, _IMGBB_MAX_ATTEMPTS + 1):
+        try:
+            r = requests.post(
+                "https://api.imgbb.com/1/upload",
+                data={"key": api_key, "image": b64},
+                timeout=30,
+            )
+            if r.ok:
+                url = r.json()["data"]["display_url"]
+                if attempt > 1:
+                    print(f"[imgbb] upload succeeded on attempt {attempt}")
+                return url
+
+            # 400 = bad request (key/payload wrong) — no point retrying
+            if r.status_code == 400:
+                print(f"[imgbb] upload failed with 400 (bad request): {r.text[:120]}")
+                return None
+
+            print(f"[imgbb] attempt {attempt}/{_IMGBB_MAX_ATTEMPTS} failed "
+                  f"{r.status_code}: {r.text[:120]}")
+
+        except Exception as e:
+            print(f"[imgbb] attempt {attempt}/{_IMGBB_MAX_ATTEMPTS} error: {e}")
+
+        if attempt < _IMGBB_MAX_ATTEMPTS:
+            wait = _IMGBB_BACKOFF_BASE ** attempt
+            print(f"[imgbb] retrying in {wait}s…")
+            time.sleep(wait)
+
+    print(f"[imgbb] all {_IMGBB_MAX_ATTEMPTS} upload attempts failed")
     return None
 
 
@@ -290,6 +315,67 @@ def send_cv2(webhook: str, author: str, message: str, sha: str,
 
 
 # -----------------------------------
+# Text-only fallback webhook (no image)
+# -----------------------------------
+def send_text_fallback(webhook: str, author: str, message: str, sha: str,
+                       repo_url: str, commit_url: str) -> bool:
+    repo      = repo_name_from_url(repo_url)
+    short_sha = sha[:10]
+    subject   = subject_line(message)
+
+    payload = {
+        "flags": 1 << 15,
+        "components": [
+            {
+                "type": 17,
+                "accent_color": 0x2d7d46,
+                "components": [
+                    {
+                        "type": 10,
+                        "content": (
+                            f"## ☁️ {subject}\n"
+                            f"-# [`{short_sha}`]({commit_url}) · {repo} · pushed by **{author}**\n"
+                            f"-# *(image card unavailable — upload failed after retries)*"
+                        ),
+                    },
+                    {
+                        "type": 14,
+                        "divider": False,
+                        "spacing": 1,
+                    },
+                    {
+                        "type": 1,
+                        "components": [
+                            {
+                                "type": 2, "style": 5,
+                                "label": "View Repository",
+                                "url": repo_url,
+                            },
+                            {
+                                "type": 2, "style": 5,
+                                "label": "View Commit",
+                                "url": commit_url,
+                            },
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+
+    r = requests.post(
+        f"{webhook}?wait=true&with_components=true",
+        json=payload,
+        timeout=15,
+    )
+    if r.status_code in (200, 204):
+        print(f"[webhook] text-only fallback sent — status {r.status_code}")
+        return True
+    print(f"[webhook] text-only fallback failed {r.status_code}: {r.text[:200]}")
+    return False
+
+
+# -----------------------------------
 # Orchestrator
 # -----------------------------------
 def send_to_webhook(webhook, author, message, sha, repo_url, commit_url):
@@ -300,11 +386,11 @@ def send_to_webhook(webhook, author, message, sha, repo_url, commit_url):
     buffer.seek(0)
 
     image_url = upload_to_imgbb(buffer)
-    if not image_url:
-        print("[webhook] IMGBB_API_KEY must be set as a GitHub Actions secret")
-        return False
+    if image_url:
+        return send_cv2(webhook, author, message, sha, repo_url, commit_url, image_url)
 
-    return send_cv2(webhook, author, message, sha, repo_url, commit_url, image_url)
+    print("[webhook] falling back to text-only notification")
+    return send_text_fallback(webhook, author, message, sha, repo_url, commit_url)
 
 
 # -----------------------------------
@@ -324,4 +410,3 @@ if __name__ == "__main__":
 
     ok = send_to_webhook(_webhook, _author, _message, _sha, _repo_url, _commit_url)
     sys.exit(0 if ok else 1)
-
