@@ -16,8 +16,7 @@ FLUX_MODEL       = "black-forest-labs/FLUX.1-schnell"
 P2P_MODEL        = "timbrooks/instruct-pix2pix"
 INPAINT_MODEL    = "runwayml/stable-diffusion-inpainting"
 
-premium_role_id    = 1493294143600853062
-support_server_id  = 1470878953743974587
+from utils.premium_manager import PremiumManager
 
 
 class AiImageTools(commands.Cog):
@@ -226,16 +225,7 @@ class AiImageTools(commands.Cog):
     # ── Premium check ─────────────────────────────
 
     def check_premium(self, member: discord.Member) -> bool:
-        guild = self.bot.get_guild(support_server_id)
-        if not guild:
-            return False
-        role = guild.get_role(premium_role_id)
-        if not role:
-            return False
-        guild_member = guild.get_member(member.id)
-        if not guild_member:
-            return False
-        return role in guild_member.roles
+        return PremiumManager.is_premium(member.id)
 
     def _premium_required_view(self, detail: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()

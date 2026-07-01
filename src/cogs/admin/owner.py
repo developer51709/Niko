@@ -15,6 +15,7 @@ from cogs.system.error_handler import is_owner
 # image extractor used for setpfp and setbanner
 from utils.image.extractor import extract_image_from_message
 from utils.blacklist_manager import BlacklistManager
+from utils.premium_manager import PremiumManager
 
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
@@ -92,7 +93,7 @@ class OwnerCog(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
-        
+
         prefix = await _resolve_prefix(self.bot, ctx)
         cog = self.bot.get_cog("OwnerCog")
         if not cog:
@@ -1121,6 +1122,109 @@ class OwnerCog(commands.Cog):
             )
             view.add_item(container)
             await ctx.send(view=view)
+
+
+    # -------------------------------
+    # Premium management commands
+    # -------------------------------
+    @commands.group(
+        name="premium",
+        help="Manage premium users.",
+        invoke_without_command=True,
+    )
+    @is_owner()
+    async def premium(self, ctx):
+        """Shows premium subcommand usage."""
+        prefix = await _resolve_prefix(self.bot, ctx)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    f"### {get_emoji('bot_owner')} Premium Management\n"
+                    f"`{prefix}premium add <user>` — grant premium\n"
+                    f"`{prefix}premium remove <user>` — revoke premium\n"
+                    f"`{prefix}premium list` — list all premium users"
+                )
+            ),
+            accent_colour=discord.Color.gold(),
+        ))
+        await ctx.send(view=view)
+
+    @premium.command(name="add", help="Grant premium to a user.")
+    @is_owner()
+    async def premium_add(self, ctx, user: discord.User):
+        added = PremiumManager.add(user.id)
+        if added:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} **{user}** (`{user.id}`) has been granted premium."
+                ),
+                accent_colour=discord.Color.green(),
+            ))
+        else:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_important')} **{user}** already has premium."
+                ),
+                accent_colour=discord.Color.blurple(),
+            ))
+        await ctx.send(view=view)
+
+    @premium.command(name="remove", help="Revoke premium from a user.")
+    @is_owner()
+    async def premium_remove(self, ctx, user: discord.User):
+        removed = PremiumManager.remove(user.id)
+        if removed:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_tick')} Premium revoked from **{user}** (`{user.id}`)."
+                ),
+                accent_colour=discord.Color.green(),
+            ))
+        else:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} **{user}** does not have premium."
+                ),
+                accent_colour=discord.Color.red(),
+            ))
+        await ctx.send(view=view)
+
+    @premium.command(name="list", help="List all premium users.")
+    @is_owner()
+    async def premium_list(self, ctx):
+        user_ids = PremiumManager.list_users()
+        if not user_ids:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_important')} No premium users yet."
+                ),
+                accent_colour=discord.Color.blurple(),
+            ))
+            return await ctx.send(view=view)
+
+        lines = []
+        for uid in user_ids:
+            user = self.bot.get_user(uid)
+            if not user:
+                try:
+                    user = await self.bot.fetch_user(uid)
+                except discord.NotFound:
+                    user = None
+            label = f"**{user}** (`{uid}`)" if user else f"`{uid}`"
+            lines.append(f"• {label}")
+
+        pages = paginate(lines, per_page=10)
+        view = PaginatedView(
+            title=f"⭐ Premium Users — {len(user_ids)} total",
+            pages=pages,
+        )
+        await ctx.send(view=view)
 
 
 async def setup(bot):

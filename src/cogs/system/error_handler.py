@@ -93,37 +93,24 @@ def under_development(feature = None):
     return commands.check(predicate)
 
 def is_premium():
-    # check for the premium role in the main guild
+    """Check whether the invoking user has been granted premium by an owner."""
     async def predicate(ctx):
-        premium_role_id = 1493294143600853062
-        support_server_id = 1470878953743974587
-        # error response
-        error_view = discord.ui.LayoutView()
-        container = discord.ui.Container(
+        from utils.premium_manager import PremiumManager
+        if PremiumManager.is_premium(ctx.author.id):
+            return True
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"### {get_emoji('icon_danger')} Premium Required"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="This feature is only available to premium users. You can get premium by joining the support server and boosting or making a donation to support the bot's development."
-            )
-        )
-        guild = ctx.bot.get_guild(support_server_id)
-        if guild is None:
-            await ctx.send(view=error_view)
-            return False
-        role = guild.get_role(premium_role_id)
-        if role is None:
-            await ctx.send(view=error_view)
-            return False
-        member = guild.get_member(ctx.author.id)
-        if member is None:
-            await ctx.send(view=error_view)
-            return False
-        if role not in member.roles:
-            await ctx.send(view=error_view)
-            return False
-        return True
+                content="This feature is only available to premium users. Contact a bot owner to request access."
+            ),
+            accent_colour=discord.Color.red(),
+        ))
+        await ctx.send(view=view)
+        return False
     return commands.check(predicate)
 
 def is_blacklisted():
