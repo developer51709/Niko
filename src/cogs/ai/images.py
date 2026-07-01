@@ -11,10 +11,10 @@ from utils.image.extractor import extract_image_from_message
 from config.emojis import get_emoji
 
 HF_API_KEY       = os.environ.get("HUGGINGFACE_API_KEY", "")
-HF_ROUTER_BASE   = "https://router.huggingface.co"
-FLUX_MODEL       = "black-forest-labs/FLUX.1-schnell"
-P2P_MODEL        = "timbrooks/instruct-pix2pix"
-INPAINT_MODEL    = "runwayml/stable-diffusion-inpainting"
+HF_INFERENCE_BASE = "https://router.huggingface.co/hf-inference/models"
+FLUX_MODEL        = "black-forest-labs/FLUX.1-schnell"
+P2P_MODEL         = "timbrooks/instruct-pix2pix"
+INPAINT_MODEL     = "runwayml/stable-diffusion-inpainting"
 
 from utils.premium_manager import PremiumManager
 
@@ -79,19 +79,20 @@ class AiImageTools(commands.Cog):
 
     async def GenerateImage(self, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
         """
-        Generate an image via FLUX.1-schnell using the HuggingFace Router
-        OpenAI-compatible images endpoint.
-
+        Generate an image via FLUX.1-schnell using the HuggingFace Inference API.
         Returns (BytesIO, None) on success or (None, error_str) on failure.
         """
-        url = f"{HF_ROUTER_BASE}/v1/images/generations"
+        if not HF_API_KEY:
+            return None, "No `HUGGINGFACE_API_KEY` is configured. Ask a bot owner to add it."
+
+        url = f"{HF_INFERENCE_BASE}/{FLUX_MODEL}"
         payload = {
-            "model": FLUX_MODEL,
-            "prompt": prompt,
-            "response_format": "b64_json",
-            "num_inference_steps": 4,
-            "width": 1024,
-            "height": 1024,
+            "inputs": prompt,
+            "parameters": {
+                "num_inference_steps": 4,
+                "width": 1024,
+                "height": 1024,
+            },
         }
         try:
             async with self.session.post(url, headers=self._hf_headers(), json=payload) as resp:
@@ -101,12 +102,9 @@ class AiImageTools(commands.Cog):
                 if not resp.ok:
                     return None, f"HuggingFace error {resp.status}: {raw.decode(errors='replace')[:200]}"
 
-                data = json.loads(raw)
-                b64  = (data.get("data") or [{}])[0].get("b64_json", "")
-                if not b64:
+                image = await self._parse_hf_image_response(raw, content_type)
+                if not image:
                     return None, "No image data in HuggingFace response."
-
-                image = await self._decode_b64(b64)
                 return image, None
 
         except Exception as e:
@@ -114,7 +112,7 @@ class AiImageTools(commands.Cog):
 
     async def EditImage(self, image_bytes: bytes, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
         """
-        Edit an image using HuggingFace Router hf-inference models.
+        Edit an image using HuggingFace Inference API models.
 
         Priority:
           1. timbrooks/instruct-pix2pix  — instruction-based, no mask required
@@ -124,10 +122,13 @@ class AiImageTools(commands.Cog):
 
         Returns (BytesIO, None) on success or (None, error_str) on failure.
         """
+        if not HF_API_KEY:
+            return None, "No `HUGGINGFACE_API_KEY` is configured. Ask a bot owner to add it."
+
         b64_image = await asyncio.to_thread(lambda: base64.b64encode(image_bytes).decode())
 
         # ── 1. instruct-pix2pix ───────────────────
-        url_p2p   = f"{HF_ROUTER_BASE}/hf-inference/models/{P2P_MODEL}"
+        url_p2p   = f"{HF_INFERENCE_BASE}/{P2P_MODEL}"
         payload_p2p = {
             "inputs": b64_image,
             "parameters": {
@@ -170,7 +171,7 @@ class AiImageTools(commands.Cog):
                 f"could not build inpainting mask: {mask_err}"
             )
 
-        url_inp   = f"{HF_ROUTER_BASE}/hf-inference/models/{INPAINT_MODEL}"
+        url_inp   = f"{HF_INFERENCE_BASE}/{INPAINT_MODEL}"
         payload_inp = {
             "inputs": prompt,
             "parameters": {
@@ -322,4 +323,5 @@ class AiImageTools(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AiImageTools(bot))
+
 
