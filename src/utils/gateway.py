@@ -32,13 +32,13 @@ def patch_identify(device: str):
             {"capabilities": 30717},
         ),
         "vr": (
-            {"os": "Android", "browser": "Quest", "device": "Quest",
-             "system_locale": "en-US", "browser_version": "", "os_version": "12",
+            {"os": "Linux x86_64; Quest 3", "browser": "Discord VR", "device": "Meta Quest",
+             "system_locale": "en-US", "browser_version": "", "os_version": "",
              "referrer": "", "referring_domain": "",
              "referrer_current": "", "referring_domain_current": "",
              "release_channel": "stable", "client_build_number": 0,
              "native_build_number": None, "client_event_source": None},
-            {"capabilities": 125},
+            {"capabilities": 4097},
         ),
         "embedded": (
             {"os": "Linux", "browser": "Discord Embedded", "device": "",
