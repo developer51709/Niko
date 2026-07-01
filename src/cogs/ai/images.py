@@ -13,8 +13,11 @@ from config.emojis import get_emoji
 HF_API_KEY       = os.environ.get("HUGGINGFACE_API_KEY", "")
 HF_INFERENCE_BASE = "https://router.huggingface.co/hf-inference/models"
 FLUX_MODEL        = "black-forest-labs/FLUX.1-schnell"
-P2P_MODEL         = "timbrooks/instruct-pix2pix"
-INPAINT_MODEL     = "runwayml/stable-diffusion-inpainting"
+EDIT_MODELS = [
+    "SG161222/RealVisXL_V4.0",
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    "stabilityai/sdxl-turbo",
+]
 
 from utils.premium_manager import PremiumManager
 
@@ -112,14 +115,8 @@ class AiImageTools(commands.Cog):
 
     async def EditImage(self, image_bytes: bytes, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
         """
-        Edit an image using HuggingFace Inference API models.
-
-        Priority:
-          1. timbrooks/instruct-pix2pix  — instruction-based, no mask required
-          2. runwayml/stable-diffusion-inpainting — mask-based fallback
-             (uses a full-white mask, effectively re-generating the whole image
-              conditioned on the original)
-
+        Edit an image via image-to-image using hf-inference models.
+        Tries EDIT_MODELS in order; returns the first successful result.
         Returns (BytesIO, None) on success or (None, error_str) on failure.
         """
         if not HF_API_KEY:
@@ -127,76 +124,32 @@ class AiImageTools(commands.Cog):
 
         b64_image = await asyncio.to_thread(lambda: base64.b64encode(image_bytes).decode())
 
-        # ── 1. instruct-pix2pix ───────────────────
-        url_p2p   = f"{HF_INFERENCE_BASE}/{P2P_MODEL}"
-        payload_p2p = {
-            "inputs": b64_image,
-            "parameters": {
-                "prompt": prompt,
-                "num_inference_steps": 20,
-                "image_guidance_scale": 1.5,
-                "guidance_scale": 7.5,
-            },
-        }
-        p2p_err = "unknown"
-        try:
-            async with self.session.post(url_p2p, headers=self._hf_headers(), json=payload_p2p) as resp:
-                raw          = await resp.read()
-                content_type = resp.content_type or ""
-                if resp.ok:
-                    image = await self._parse_hf_image_response(raw, content_type)
-                    if image:
-                        return image, None
-                p2p_err = f"{resp.status}: {raw.decode(errors='replace')[:120]}"
-        except Exception as e:
-            p2p_err = str(e)
+        errors = {}
+        for model in EDIT_MODELS:
+            url     = f"{HF_INFERENCE_BASE}/{model}"
+            payload = {
+                "inputs": b64_image,
+                "parameters": {
+                    "prompt": prompt,
+                    "strength": 0.75,
+                    "num_inference_steps": 20,
+                    "guidance_scale": 7.5,
+                },
+            }
+            try:
+                async with self.session.post(url, headers=self._hf_headers(), json=payload) as resp:
+                    raw          = await resp.read()
+                    content_type = resp.content_type or ""
+                    if resp.ok:
+                        image = await self._parse_hf_image_response(raw, content_type)
+                        if image:
+                            return image, None
+                    errors[model] = f"{resp.status}: {raw.decode(errors='replace')[:120]}"
+            except Exception as e:
+                errors[model] = str(e)
 
-        # ── 2. stable-diffusion-inpainting fallback ─
-        # Build a full-white mask (same dimensions as the input image).
-        mask_b64 = None
-        try:
-            from PIL import Image as PILImage
-
-            def _white_mask(img_b: bytes) -> str:
-                with PILImage.open(io.BytesIO(img_b)) as im:
-                    mask = PILImage.new("RGB", im.size, (255, 255, 255))
-                buf = io.BytesIO()
-                mask.save(buf, format="PNG")
-                return base64.b64encode(buf.getvalue()).decode()
-
-            mask_b64 = await asyncio.to_thread(_white_mask, image_bytes)
-        except Exception as mask_err:
-            return None, (
-                f"instruct-pix2pix failed ({p2p_err}); "
-                f"could not build inpainting mask: {mask_err}"
-            )
-
-        url_inp   = f"{HF_INFERENCE_BASE}/{INPAINT_MODEL}"
-        payload_inp = {
-            "inputs": prompt,
-            "parameters": {
-                "image": b64_image,
-                "mask_image": mask_b64,
-                "num_inference_steps": 20,
-            },
-        }
-        try:
-            async with self.session.post(url_inp, headers=self._hf_headers(), json=payload_inp) as resp:
-                raw          = await resp.read()
-                content_type = resp.content_type or ""
-                if resp.ok:
-                    image = await self._parse_hf_image_response(raw, content_type)
-                    if image:
-                        return image, None
-                inp_err = f"{resp.status}: {raw.decode(errors='replace')[:120]}"
-        except Exception as e:
-            inp_err = str(e)
-
-        return None, (
-            f"Both edit models failed.\n"
-            f"• instruct-pix2pix: `{p2p_err}`\n"
-            f"• stable-diffusion-inpainting: `{inp_err}`"
-        )
+        lines = "\n".join(f"• `{m}`: `{e}`" for m, e in errors.items())
+        return None, f"All edit models failed.\n{lines}"
 
     # ── CV2 response builder ──────────────────────
 
@@ -323,5 +276,3 @@ class AiImageTools(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AiImageTools(bot))
-
-
