@@ -182,6 +182,26 @@ def get_emoji(emoji_name: str):
         return "<:music:1520861886944641245>"
     if emoji_name == "notepad":
         return "<:notepad:1520911596371837072>"
+    if emoji_name == "number_eight":
+        return "<:number_eight:1522655574997733517>"
+    if emoji_name == "number_five":
+        return "<:number_five:1522655578026020915>"
+    if emoji_name == "number_four":
+        return "<:number_four:1522655580827816070>"
+    if emoji_name == "number_nine":
+        return "<:number_nine:1522655584141312030>"
+    if emoji_name == "number_one":
+        return "<:number_one:1522653374611193903>"
+    if emoji_name == "number_seven":
+        return "<:number_seven:1522655587089911949>"
+    if emoji_name == "number_six":
+        return "<:number_six:1522655590281777263>"
+    if emoji_name == "number_three":
+        return "<:number_three:1522653377518112939>"
+    if emoji_name == "number_two":
+        return "<:number_two:1522653380433023088>"
+    if emoji_name == "number_zero":
+        return "<:number_zero:1522653383536677047>"
     if emoji_name == "owner_icon":
         return "<:owner_icon:1520827756076859594>"
     if emoji_name == "python":

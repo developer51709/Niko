@@ -24,7 +24,7 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 DATA_FILE = "data/polls.json"
-LETTER_EMOJIS = ["🇦", "🇧", "🇨", "🇩", "🇪", "🇫", "🇬", "🇭", "🇮", "🇯"]
+NUMBER_EMOJIS = [f"{get_emoji('number_zero')}", f"{get_emoji('number_one')}", f"{get_emoji('number_two')}", f"{get_emoji('number_three')}", f"{get_emoji('number_four')}", f"{get_emoji('number_five')}", f"{get_emoji('number_six')}", f"{get_emoji('number_seven')}", f"{get_emoji('number_eight')}", f"{get_emoji('number_nine')}"]
 
 
 MESSAGES = {
@@ -168,7 +168,7 @@ def _build_poll_text(poll: dict, ctx_like) -> str:
     for i, opt in enumerate(poll["options"]):
         pct = round(counts[i] * 100 / total)
         lines.append(msg(ctx_like, "vote_count",
-                         letter=LETTER_EMOJIS[i], opt=opt,
+                         letter=NUMBER_EMOJIS[i], opt=opt,
                          count=counts[i], pct=pct))
     author = ctx_like.guild.get_member(poll["author_id"]) if ctx_like and ctx_like.guild else None
     author_str = author.mention if author else f"<@{poll['author_id']}>"
@@ -180,8 +180,8 @@ def _build_poll_text(poll: dict, ctx_like) -> str:
 class _VoteButton(discord.ui.Button):
     def __init__(self, idx: int, poll_id: int, disabled: bool):
         super().__init__(
-            label=LETTER_EMOJIS[idx][0] if False else "",
-            emoji=LETTER_EMOJIS[idx],
+            label=NUMBER_EMOJIS[idx][0] if False else "",
+            emoji=NUMBER_EMOJIS[idx],
             style=discord.ButtonStyle.secondary,
             custom_id=f"poll:{poll_id}:{idx}",
             disabled=disabled,
