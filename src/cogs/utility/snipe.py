@@ -106,7 +106,7 @@ class _SnipePrev(discord.ui.Button):
         v: SnipeView = self.view
         v.page -= 1
         v._build()
-        await interaction.response.edit_message(view=v)
+        await interaction.response.edit_message(view=v, allowed_mentions=discord.AllowedMentions.none())
 
 
 class _SnipeIndicator(discord.ui.Button):
@@ -125,7 +125,7 @@ class _SnipeNext(discord.ui.Button):
         v: SnipeView = self.view
         v.page += 1
         v._build()
-        await interaction.response.edit_message(view=v)
+        await interaction.response.edit_message(view=v, allowed_mentions=discord.AllowedMentions.none())
 
 
 class SnipeView(discord.ui.LayoutView):
