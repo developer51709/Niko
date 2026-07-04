@@ -41,11 +41,8 @@ ENV/
 memory.json
 blackjack_shoe.json
 uwulock.json
+src/data/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Replit
-.cache/
-.local/
