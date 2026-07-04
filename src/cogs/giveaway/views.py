@@ -79,7 +79,7 @@ def _check_member_meets_reqs(member: discord.Member, reqs: dict) -> str | None:
         age = (now - member.created_at).days
         if age < reqs["account_age_days"]:
             return (
-                f"❌ Your Discord account must be at least "
+                f"{get_emoji('icon_cross')} Your Discord account must be at least "
                 f"**{reqs['account_age_days']}** day(s) old to join "
                 f"this giveaway (yours is **{age}**)."
             )
@@ -87,11 +87,11 @@ def _check_member_meets_reqs(member: discord.Member, reqs: dict) -> str | None:
     if reqs["server_age_days"] > 0:
         joined_at = getattr(member, "joined_at", None)
         if joined_at is None:
-            return "❌ I can't verify how long you've been in this server, so you can't join this giveaway."
+            return "{get_emoji('icon_cross')} I can't verify how long you've been in this server, so you can't join this giveaway."
         days_in = (now - joined_at).days
         if days_in < reqs["server_age_days"]:
             return (
-                f"❌ You must have been in this server for at least "
+                f"{get_emoji('icon_cross')} You must have been in this server for at least "
                 f"**{reqs['server_age_days']}** day(s) to join this giveaway "
                 f"(you've been here **{days_in}**)."
             )
@@ -101,10 +101,10 @@ def _check_member_meets_reqs(member: discord.Member, reqs: dict) -> str | None:
         missing = [rid for rid in reqs["role_ids"] if rid not in member_role_ids]
         if missing:
             mentions = ", ".join(f"<@&{rid}>" for rid in missing)
-            return f"❌ You're missing the required role(s): {mentions}."
+            return f"{get_emoji('icon_cross')} You're missing the required role(s): {mentions}."
 
     if reqs["boost_required"] and getattr(member, "premium_since", None) is None:
-        return "❌ Only members boosting this server can join this giveaway."
+        return "{get_emoji('icon_cross')} Only members boosting this server can join this giveaway."
 
     return None
 
@@ -115,8 +115,8 @@ def _check_member_meets_reqs(member: discord.Member, reqs: dict) -> str | None:
 MESSAGES = {
     "normal": {
         "en": {
-            "giveaway_title":         "🎉 Giveaway",
-            "giveaway_ended_title":   "🎉 Giveaway Ended!",
+            "giveaway_title":         "Giveaway",
+            "giveaway_ended_title":   "Giveaway Ended!",
             "label_prize":            "Prize",
             "label_ends":             "Ends",
             "label_hosted_by":        "Hosted by",
@@ -149,8 +149,8 @@ MESSAGES = {
             "participants_empty":     "Nobody has joined the giveaway yet.",
         },
         "de": {
-            "giveaway_title":         "🎉 Gewinnspiel",
-            "giveaway_ended_title":   "🎉 Gewinnspiel beendet!",
+            "giveaway_title":         "Gewinnspiel",
+            "giveaway_ended_title":   "Gewinnspiel beendet!",
             "label_prize":            "Preis",
             "label_ends":             "Endet",
             "label_hosted_by":        "Veranstaltet von",
@@ -183,8 +183,8 @@ MESSAGES = {
             "participants_empty":     "Noch niemand hat am Gewinnspiel teilgenommen.",
         },
         "es": {
-            "giveaway_title":         "🎉 Sorteo",
-            "giveaway_ended_title":   "🎉 ¡Sorteo Finalizado!",
+            "giveaway_title":         "Sorteo",
+            "giveaway_ended_title":   "¡Sorteo Finalizado!",
             "label_prize":            "Premio",
             "label_ends":             "Finaliza",
             "label_hosted_by":        "Organizado por",
@@ -219,8 +219,8 @@ MESSAGES = {
     },
     "cafe": {
         "en": {
-            "giveaway_title":         "🎉 Giveaway",
-            "giveaway_ended_title":   "🎉 Giveaway Ended ☕",
+            "giveaway_title":         "Giveaway",
+            "giveaway_ended_title":   "Giveaway Ended ☕",
             "label_prize":            "prize",
             "label_ends":             "ends",
             "label_hosted_by":        "brewed by",
@@ -253,8 +253,8 @@ MESSAGES = {
             "participants_empty":     "nobody has joined yet 😔",
         },
         "de": {
-            "giveaway_title":         "🎉 Gewinnspiel",
-            "giveaway_ended_title":   "🎉 Gewinnspiel vorbei ☕",
+            "giveaway_title":         "Gewinnspiel",
+            "giveaway_ended_title":   "Gewinnspiel vorbei ☕",
             "label_prize":            "preis",
             "label_ends":             "endet",
             "label_hosted_by":        "veranstaltet von",
@@ -287,8 +287,8 @@ MESSAGES = {
             "participants_empty":     "noch niemand hat mitgemacht 😔",
         },
         "es": {
-            "giveaway_title":         "🎉 Sorteo",
-            "giveaway_ended_title":   "🎉 Sorteo Terminado ☕",
+            "giveaway_title":         "Sorteo",
+            "giveaway_ended_title":   "Sorteo Terminado ☕",
             "label_prize":            "premio",
             "label_ends":             "termina",
             "label_hosted_by":        "preparado por",
@@ -366,7 +366,7 @@ class _GiveawayJoinBtn(discord.ui.Button):
         super().__init__(
             label="Join",
             style=discord.ButtonStyle.primary,
-            emoji="🎉",
+            emoji=f"{get_emoji('icon_giveaway')}",
             custom_id=f"giveaway_join_{message_id}",
         )
         self._bot = bot
@@ -415,7 +415,7 @@ class _GiveawayManageBtn(discord.ui.Button):
         super().__init__(
             label="Manage",
             style=discord.ButtonStyle.secondary,
-            emoji="⚙️",
+            emoji=f"{get_emoji('icon_settings')}",
             custom_id=f"giveaway_manage_{message_id}",
         )
         self._bot = bot
@@ -488,7 +488,7 @@ class _MgmtEndBtn(discord.ui.Button):
 
 class _MgmtSelectBtn(discord.ui.Button):
     def __init__(self, bot, message_id):
-        super().__init__(label="Select Random", style=discord.ButtonStyle.secondary, emoji="🎲")
+        super().__init__(label="Select Random", style=discord.ButtonStyle.secondary, emoji=f"{get_emoji('icon_gambling')}")
         self._bot        = bot
         self._message_id = message_id
 
@@ -561,7 +561,7 @@ def _build_content_view(prize: str, end_timestamp: int, winners_count: int,
 
     view      = discord.ui.LayoutView()
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {_guild_msg(guild, 'giveaway_title')}"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('icon_giveaway')} {_guild_msg(guild, 'giveaway_title')}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
@@ -587,7 +587,7 @@ def _build_active_view(bot, message_id: int, prize: str, end_timestamp: int,
 
     view      = discord.ui.LayoutView(timeout=None)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {_guild_msg(guild, 'giveaway_title')}"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('icon_giveaway')} {_guild_msg(guild, 'giveaway_title')}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
@@ -627,7 +627,7 @@ def _build_ended_view(guild, prize: str, host_id: int,
 
     view      = discord.ui.LayoutView()
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {_guild_msg(guild, 'giveaway_ended_title')}"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('icon_giveaway')} {_guild_msg(guild, 'giveaway_ended_title')}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=result_text),
         accent_colour=discord.Color.gold()
@@ -825,7 +825,7 @@ class _SetupBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                "❌ Only the host of this setup can configure this giveaway.",
+                f"{get_emoji('icon_cross')} Only the host of this setup can configure this giveaway.",
                 ephemeral=True,
             )
         action = self.action
@@ -870,7 +870,7 @@ class _SetupChannelSelect(discord.ui.ChannelSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                "❌ Only the host can configure this giveaway.", ephemeral=True
+                "{get_emoji('icon_cross')} Only the host can configure this giveaway.", ephemeral=True
             )
         self._setup_view.state.channel_id = self.values[0].id
         await self._setup_view.refresh(interaction)
@@ -887,7 +887,7 @@ class _SetupRoleSelect(discord.ui.RoleSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                "❌ Only the host can configure this giveaway.", ephemeral=True
+                "{get_emoji('icon_cross')} Only the host can configure this giveaway.", ephemeral=True
             )
         self._setup_view.state.requirements["role_ids"] = [r.id for r in self.values]
         await self._setup_view.refresh(interaction)
@@ -938,7 +938,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         start_style = discord.ButtonStyle.success if ready else discord.ButtonStyle.secondary
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### 🎉 Giveaway Setup"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_giveaway')} Giveaway Setup"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=summary),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -958,7 +958,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
                 _SetupBtn("Clear Roles", discord.ButtonStyle.secondary, "🧹", self, "clear_roles"),
             ),
             discord.ui.ActionRow(
-                _SetupBtn("Start Giveaway", start_style,                 "🎉", self, "start"),
+                _SetupBtn("Start Giveaway", start_style,                 f"{get_emoji('icon_giveaway')}", self, "start"),
                 _SetupBtn("Cancel",         discord.ButtonStyle.danger,  "🗑", self, "cancel"),
             ),
             accent_colour=discord.Color.purple(),
@@ -988,14 +988,14 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         s = self.state
         problems = []
         if not s.prize:
-            problems.append("• Prize is not set")
+            problems.append("- Prize is not set")
         if s.duration_s <= 0:
-            problems.append("• Duration is not set")
+            problems.append("- Duration is not set")
         if not s.channel_id:
-            problems.append("• Channel is not set")
+            problems.append("- Channel is not set")
         if problems:
             return await interaction.response.send_message(
-                "❌ Can't start the giveaway yet:\n" + "\n".join(problems),
+                "{get_emoji('icon_cross')} Can't start the giveaway yet:\n" + "\n".join(problems),
                 ephemeral=True,
             )
 
@@ -1003,12 +1003,12 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         channel = guild.get_channel(s.channel_id) if guild else None
         if channel is None:
             return await interaction.response.send_message(
-                "❌ I can't find the configured channel anymore.", ephemeral=True
+                "{get_emoji('icon_cross')} I can't find the configured channel anymore.", ephemeral=True
             )
         me = guild.me if guild else None
         if me and not channel.permissions_for(me).send_messages:
             return await interaction.response.send_message(
-                f"❌ I can't send messages in {channel.mention}.", ephemeral=True
+                f"{get_emoji('icon_cross')} I can't send messages in {channel.mention}.", ephemeral=True
             )
 
         end_time      = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=s.duration_s)
