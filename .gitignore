@@ -42,6 +42,7 @@ memory.json
 blackjack_shoe.json
 uwulock.json
 src/data/
+data/
 
 # OS
 .DS_Store
