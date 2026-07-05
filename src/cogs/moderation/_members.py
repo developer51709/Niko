@@ -278,7 +278,11 @@ class MembersMixin:
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         await utils.unmute_member(member, reason=f"Unmuted by {ctx.author}")
-        await ctx.send(msg(ctx, "unmuted", member=member))
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(ctx, "unmuted", member=member))
+        ))
+        await ctx.send(view=view)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Action:** Unmute\n**Moderator:** {ctx.author.mention}"
