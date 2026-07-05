@@ -255,7 +255,7 @@ class MembersMixin:
             return await ctx.send(msg(ctx, "no_duration"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        await utils.mute_member(ctx.guild, member, duration=duration, reason=reason)
+        await utils.mute_member(ctx.guild, member, duration=int(duration), reason=reason)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "tempmuted", member=member, duration=duration, reason=reason))
