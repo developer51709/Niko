@@ -76,7 +76,7 @@ class Giveaway(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"Use `{ctx.clean_prefix}giveaway start <duration> <winners> <prize>` to start a new giveaway."
+                content=f"Use `{ctx.clean_prefix}giveaway start` to start a new giveaway."
             ),
             accent_colour=discord.Color.purple()
         )
@@ -205,8 +205,8 @@ class Giveaway(commands.Cog):
         )
         # Burst-react on both the original giveaway message and the winner announcement
         if giveaway_msg:
-            asyncio.create_task(burst_react(self.bot, channel_id, giveaway_msg.id, "⭐"))
-        asyncio.create_task(burst_react(self.bot, channel_id, win_msg.id, "🎉"))
+            asyncio.create_task(burst_react(self.bot, channel_id, giveaway_msg.id, f"{get_emoji('icon_star')}"))
+        asyncio.create_task(burst_react(self.bot, channel_id, win_msg.id, f"{get_emoji('icon_giveaway')}"))
 
     @check_giveaways.before_loop
     async def before_check_giveaways(self):

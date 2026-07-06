@@ -40,6 +40,8 @@ def get_emoji(emoji_name: str):
         return "<:dbl:1520827352127377410>"
     if emoji_name == "discord":
         return "<a:discord:1520827356678197300>"
+    if emoji_name == "gift":
+        return "<:gift:1523512341537493044>"
     if emoji_name == "github":
         return "<:github:1520827361422082069>"
     if emoji_name == "hypesquad_balance":
@@ -218,6 +220,8 @@ def get_emoji(emoji_name: str):
         return "<:star:1520898541424218283>"
     if emoji_name == "tiktok":
         return "<:tiktok:1520827778344161390>"
+    if emoji_name == "trash":
+        return "<:trash:1523510470894420009>"
     if emoji_name == "twitterx":
         return "<:twitterx:1520827785176678580>"
     if emoji_name == "icon_voicemaster":

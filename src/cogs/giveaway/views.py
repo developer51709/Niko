@@ -945,21 +945,21 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             discord.ui.TextDisplay(content=f"**Requirements**\n{reqs_text}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _SetupBtn("Prize",    discord.ButtonStyle.primary,   "🎁", self, "prize"),
+                _SetupBtn("Prize",    discord.ButtonStyle.primary,   f"{get_emoji('gift')}", self, "prize"),
                 _SetupBtn("Duration", discord.ButtonStyle.primary,   "⏳", self, "duration"),
                 _SetupBtn("Winners",  discord.ButtonStyle.primary,   "🏆", self, "winners"),
             ),
             discord.ui.ActionRow(_SetupChannelSelect(self)),
             discord.ui.ActionRow(_SetupRoleSelect(self)),
             discord.ui.ActionRow(
-                _SetupBtn("Account Age", discord.ButtonStyle.secondary, "📅", self, "account_age"),
-                _SetupBtn("Server Time", discord.ButtonStyle.secondary, "🏠", self, "server_age"),
-                _SetupBtn(boost_label,   boost_style,                   "💎", self, "boost"),
+                _SetupBtn("Account Age", discord.ButtonStyle.secondary, f"{get_emoji('icon_welcome')}", self, "account_age"),
+                _SetupBtn("Server Time", discord.ButtonStyle.secondary, f"{get_emoji('icon_home')}", self, "server_age"),
+                _SetupBtn(boost_label,   boost_style,                   f"{get_emoji('icon_premium')}", self, "boost"),
                 _SetupBtn("Clear Roles", discord.ButtonStyle.secondary, "🧹", self, "clear_roles"),
             ),
             discord.ui.ActionRow(
                 _SetupBtn("Start Giveaway", start_style,                 f"{get_emoji('icon_giveaway')}", self, "start"),
-                _SetupBtn("Cancel",         discord.ButtonStyle.danger,  "🗑", self, "cancel"),
+                _SetupBtn("Cancel",         discord.ButtonStyle.danger,  f"{get_emoji('trash')}", self, "cancel"),
             ),
             accent_colour=discord.Color.purple(),
         )
