@@ -127,10 +127,10 @@ MESSAGES = {
             "reroll_announce":        "🎉 **Giveaway Reroll!** The new winner for **{prize}** is: {mentions}! Congratulations!",
             "join_success":           "🎉 You have successfully joined the giveaway! Good luck!",
             "join_already":           "✅ You have already joined this giveaway!",
-            "join_ended":             "❌ This giveaway has already ended!",
-            "join_host":              "❌ You cannot join your own giveaway!",
-            "join_bot":               "❌ Bots cannot participate in giveaways!",
-            "no_exist":               "❌ This giveaway doesn't exist anymore.",
+            "join_ended":             "This giveaway has already ended!",
+            "join_host":              "You cannot join your own giveaway!",
+            "join_bot":               "Bots cannot participate in giveaways!",
+            "no_exist":               "This giveaway doesn't exist anymore.",
             "no_perm_manage":         "❌ Only the giveaway host or a server admin can manage this giveaway.",
             "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
             "no_participants_yet":    "Nobody has joined the giveaway yet.",
@@ -161,10 +161,10 @@ MESSAGES = {
             "reroll_announce":        "🎉 **Reroll!** Der neue Gewinner für **{prize}** ist: {mentions}! Glückwunsch!",
             "join_success":           "🎉 Du hast erfolgreich am Gewinnspiel teilgenommen! Viel Glück!",
             "join_already":           "✅ Du hast bereits an diesem Gewinnspiel teilgenommen!",
-            "join_ended":             "❌ Dieses Gewinnspiel ist bereits beendet!",
-            "join_host":              "❌ Du kannst nicht an deinem eigenen Gewinnspiel teilnehmen!",
-            "join_bot":               "❌ Bots können nicht an Gewinnspielen teilnehmen!",
-            "no_exist":               "❌ Dieses Gewinnspiel existiert nicht mehr.",
+            "join_ended":             "Dieses Gewinnspiel ist bereits beendet!",
+            "join_host":              "Du kannst nicht an deinem eigenen Gewinnspiel teilnehmen!",
+            "join_bot":               "Bots können nicht an Gewinnspielen teilnehmen!",
+            "no_exist":               "Dieses Gewinnspiel existiert nicht mehr.",
             "no_perm_manage":         "❌ Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
             "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
             "no_participants_yet":    "Noch niemand hat am Gewinnspiel teilgenommen.",
@@ -195,10 +195,10 @@ MESSAGES = {
             "reroll_announce":        "🎉 **¡Re-sorteo!** El nuevo ganador de **{prize}** es: {mentions}! ¡Felicidades!",
             "join_success":           "🎉 ¡Te has unido al sorteo correctamente! ¡Mucha suerte!",
             "join_already":           "✅ ¡Ya te uniste a este sorteo!",
-            "join_ended":             "❌ ¡Este sorteo ya ha terminado!",
-            "join_host":              "❌ ¡No puedes unirte a tu propio sorteo!",
-            "join_bot":               "❌ ¡Los bots no pueden participar en sorteos!",
-            "no_exist":               "❌ Este sorteo ya no existe.",
+            "join_ended":             "¡Este sorteo ya ha terminado!",
+            "join_host":              "¡No puedes unirte a tu propio sorteo!",
+            "join_bot":               "¡Los bots no pueden participar en sorteos!",
+            "no_exist":               "Este sorteo ya no existe.",
             "no_perm_manage":         "❌ Solo el organizador del sorteo o un admin del servidor puede gestionarlo.",
             "end_confirmed":          "✅ El sorteo ha sido finalizado. Los ganadores han sido anunciados en el canal.",
             "no_participants_yet":    "Nadie se ha unido al sorteo todavía.",
@@ -231,19 +231,19 @@ MESSAGES = {
             "reroll_announce":        "🎉 **reroll time!** the new winner for **{prize}** is: {mentions}! congrats ☕",
             "join_success":           "🎉 you're in! fingers crossed ☕✨",
             "join_already":           "☕ you already joined this one~ sit tight!",
-            "join_ended":             "😔 this giveaway is already over...",
-            "join_host":              "☕ can't join your own giveaway, silly~",
-            "join_bot":               "🤖 bots can't join giveaways, sorry!",
-            "no_exist":               "😔 this giveaway doesn't exist anymore.",
+            "join_ended":             "this giveaway is already over...",
+            "join_host":              "can't join your own giveaway, silly~",
+            "join_bot":               "bots can't join giveaways, sorry!",
+            "no_exist":               "this giveaway doesn't exist anymore.",
             "no_perm_manage":         "☕ only the giveaway host or a server admin can manage this.",
             "end_confirmed":          "✅ giveaway ended~ winners have been announced in the channel ☕",
             "no_participants_yet":    "nobody has joined yet 😔",
             "reroll_no_participants": "😔 nobody joined, so there's no one to reroll!",
             "reroll_not_ended":       "😔 this giveaway isn't over yet! rerolls are only for ended ones~",
             "reroll_not_found":       "😔 couldn't find a giveaway with that message id.",
-            "invalid_duration":       "❌ invalid duration! use numbers with `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`)",
-            "invalid_winners":        "❌ invalid winner count! needs to be a number (e.g. `2`).",
-            "min_one_winner":         "❌ at least 1 winner is needed!",
+            "invalid_duration":       "❌️ invalid duration! use numbers with `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`)",
+            "invalid_winners":        "❌️ invalid winner count! needs to be a number (e.g. `2`).",
+            "min_one_winner":         "❌️ at least 1 winner is needed!",
             "footer_active":          "{count} winner{s} | ends at",
             "manage_title":           "⚙️ giveaway management",
             "manage_info":            "use the buttons below to manage this giveaway ☕",
@@ -265,10 +265,10 @@ MESSAGES = {
             "reroll_announce":        "🎉 **reroll!** der neue gewinner für **{prize}**: {mentions}! glückwunsch ☕",
             "join_success":           "🎉 du bist dabei! drück die daumen ☕✨",
             "join_already":           "☕ du hast schon mitgemacht~ warte einfach!",
-            "join_ended":             "😔 dieses gewinnspiel ist schon vorbei...",
-            "join_host":              "☕ du kannst nicht am eigenen gewinnspiel teilnehmen~",
-            "join_bot":               "🤖 bots können leider nicht mitmachen!",
-            "no_exist":               "😔 dieses gewinnspiel existiert nicht mehr.",
+            "join_ended":             "dieses gewinnspiel ist schon vorbei...",
+            "join_host":              "du kannst nicht am eigenen gewinnspiel teilnehmen~",
+            "join_bot":               "bots können leider nicht mitmachen!",
+            "no_exist":               "dieses gewinnspiel existiert nicht mehr.",
             "no_perm_manage":         "☕ nur der veranstalter oder ein server-admin kann das verwalten.",
             "end_confirmed":          "✅ gewinnspiel beendet~ gewinner wurden im channel bekannt gegeben ☕",
             "no_participants_yet":    "noch niemand hat mitgemacht 😔",
@@ -299,10 +299,10 @@ MESSAGES = {
             "reroll_announce":        "🎉 **¡hora de re-sortear!** el nuevo ganador de **{prize}** es: {mentions}! felicidades ☕",
             "join_success":           "🎉 ¡estás dentro! crucemos los dedos ☕✨",
             "join_already":           "☕ ya te uniste a este~ ¡tranqui!",
-            "join_ended":             "😔 este sorteo ya terminó...",
-            "join_host":              "☕ no puedes unirte a tu propio sorteo, tontito~",
-            "join_bot":               "🤖 ¡los bots no pueden unirse a sorteos, lo siento!",
-            "no_exist":               "😔 este sorteo ya no existe.",
+            "join_ended":             "este sorteo ya terminó...",
+            "join_host":              "no puedes unirte a tu propio sorteo, tontito~",
+            "join_bot":               "¡los bots no pueden unirse a sorteos, lo siento!",
+            "no_exist":               "este sorteo ya no existe.",
             "no_perm_manage":         "☕ solo el organizador o un admin del servidor puede gestionar esto.",
             "end_confirmed":          "✅ sorteo terminado~ los ganadores han sido anunciados en el canal ☕",
             "no_participants_yet":    "todavía nadie se ha unido 😔",
@@ -380,13 +380,13 @@ class _GiveawayJoinBtn(discord.ui.Button):
             message_id,
         )
         if not giveaway:
-            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('icon_cross')} {msg(interaction, 'no_exist')}", ephemeral=True)
         if giveaway["ended"]:
-            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('icon_cross')} {msg(interaction, 'join_ended')}", ephemeral=True)
         if user_id == giveaway["host_id"]:
-            return await interaction.response.send_message(msg(interaction, "join_host"), ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('icon_cross')} {msg(interaction, 'join_host')}", ephemeral=True)
         if interaction.user.bot:
-            return await interaction.response.send_message(msg(interaction, "join_bot"), ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('icon_cross')} {msg(interaction, 'join_bot')}", ephemeral=True)
 
         # Enforce host-configured requirements (account age, server age, roles, boost).
         reqs = _load_reqs(giveaway["requirements"])
@@ -400,12 +400,12 @@ class _GiveawayJoinBtn(discord.ui.Button):
             message_id, user_id
         )
         if existing:
-            return await interaction.response.send_message(msg(interaction, "join_already"), ephemeral=True)
+            return await interaction.response.send_message(msg(interaction, 'join_already'), ephemeral=True)
 
         await self._bot.cxn.execute(
             "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
         )
-        await interaction.response.send_message(msg(interaction, "join_success"), ephemeral=True)
+        await interaction.response.send_message(msg(interaction, 'join_success'), ephemeral=True)
 
 
 class _GiveawayManageBtn(discord.ui.Button):
