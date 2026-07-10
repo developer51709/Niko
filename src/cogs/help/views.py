@@ -760,7 +760,7 @@ async def _command_detail_text(
 
     no_desc = _ui(lang, "no_desc")
     lines   = [
-        f"### 📘 `{cmd.name}`",
+        f"### {get_emoji('icon_question')} `{cmd.name}`",
         "",
         f"**{_ui(lang, 'detail_description')}**\n"
         f"{get_command_help(ctx_or_interaction, cmd) or no_desc}",

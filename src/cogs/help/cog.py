@@ -9,7 +9,7 @@ class HelpCog(commands.Cog):
     @commands.hybrid_command(
         name="help",
         description="Show the help menu",
-        help="{ 'en': 'show the help menu 📘☕', 'de': 'zeige das Hilfemenü 📘☕', 'es': 'muestra el menú de ayuda 📘☕' }",
+        help="{ 'en': 'show the help menu', 'de': 'zeige das Hilfemenü', 'es': 'muestra el menú de ayuda' }",
     )
     async def help(self, ctx: commands.Context, *, command_name: str = None):
         lang = get_lang(ctx)
