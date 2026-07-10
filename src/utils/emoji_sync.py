@@ -27,6 +27,7 @@ import aiohttp
 import discord
 
 from utils import logging
+import socket
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Paths
@@ -99,7 +100,11 @@ async def download_emojis(emojis: List[ParsedEmoji], session: aiohttp.ClientSess
                     pe.asset_path.write_bytes(await resp.read())
                     return pe.emoji_id, True
                 return pe.emoji_id, False
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, socket.gaierror):
+                logging.error("EmojiSync", f"DNS resolution failed for {pe.cdn_url}: {exc}")
+            else:
+                logging.error("EmojiSync", f"Failed to download {pe.discord_name} from {pe.cdn_url}: {exc}")
             return pe.emoji_id, False
 
     tasks = [_fetch(pe) for pe in emojis]
