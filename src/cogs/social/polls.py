@@ -273,7 +273,10 @@ class Polls(commands.Cog):
     )
     @commands.guild_only()
     async def poll(self, ctx: commands.Context):
-        await ctx.send_help(self.poll)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.poll)
+        await ctx.invoke(help_cmd, command_name="poll")
 
     @poll.command(
         name="create",
