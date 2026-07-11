@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -107,6 +108,8 @@ class EffectSelect(discord.ui.Select):
         if not raw:
             return await interaction.response.send_message("No image found.", ephemeral=True)
 
+        await interaction.response.defer()
+
         processors = {
             "grayscale":  (grayscale,       "Grayscale",   "grayscale.gif"),
             "invert":     (invert_colors,   "Invert",      "invert.gif"),
@@ -127,7 +130,10 @@ class EffectSelect(discord.ui.Select):
         }
 
         processor, title, filename = processors[effect]
-        output = process_image_animated(raw, processor)
+        
+        # Run heavy image processing in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
         img = Image.open(output)
         width, height = img.size
@@ -135,7 +141,7 @@ class EffectSelect(discord.ui.Select):
 
         file = discord.File(output, filename=filename)
         view = build_cv2_container(title, filename, width, height)
-        await interaction.response.send_message(view=view, file=file, ephemeral=True)
+        await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
 class EffectSelectView(discord.ui.View):
@@ -172,7 +178,11 @@ class CaptionModal(discord.ui.Modal):
             title = "Caption (Bottom)"
             filename = "caption_bottom.gif"
 
-        output = process_image_animated(raw, processor)
+        await interaction.response.defer()
+
+        # Run heavy image processing in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
         img = Image.open(output)
         width, height = img.size
@@ -204,7 +214,12 @@ class MemeModal(discord.ui.Modal):
         bottom_text = str(self.bottom) or ""
 
         processor = lambda r: meme_top_bottom(r, top_text, bottom_text)
-        output = process_image_animated(raw, processor)
+        
+        await interaction.response.defer()
+
+        # Run heavy image processing in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
         img = Image.open(output)
         width, height = img.size
@@ -213,7 +228,7 @@ class MemeModal(discord.ui.Modal):
         filename = "meme.gif"
         file = discord.File(output, filename=filename)
         view = build_cv2_container("Meme", filename, width, height)
-        await interaction.response.send_message(view=view, file=file, ephemeral=True)
+        await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
 class RotateModal(discord.ui.Modal):
@@ -241,7 +256,12 @@ class RotateModal(discord.ui.Modal):
             return await interaction.response.send_message("No image found.", ephemeral=True)
 
         processor = lambda r: rotate_image(r, angle)
-        output = process_image_animated(raw, processor)
+        
+        await interaction.response.defer()
+
+        # Run heavy image processing in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
         img = Image.open(output)
         width, height = img.size
@@ -250,7 +270,7 @@ class RotateModal(discord.ui.Modal):
         filename = "rotated.gif"
         file = discord.File(output, filename=filename)
         view = build_cv2_container(f"Rotate ({angle:g}°)", filename, width, height)
-        await interaction.response.send_message(view=view, file=file, ephemeral=True)
+        await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
 # ──────────────────────── cog ──────────────────────
@@ -275,7 +295,9 @@ class ImageTools(commands.Cog):
 
     async def _process_and_send_prefix(self, ctx, raw, effect_name, filename, processor):
         async with ctx.typing():
-            output = process_image_animated(raw, processor)
+            # Run heavy image processing in a thread pool to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
             img = Image.open(output)
             width, height = img.size
             output.seek(0)
