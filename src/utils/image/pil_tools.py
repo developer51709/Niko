@@ -43,13 +43,47 @@ def _render_twemoji(char: str, size: int) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 def _render_custom_emoji(emoji_id: str, size: int) -> Image.Image:
-    url = get_emoji_url(emoji_id)
-    img = _load_image_from_url(url)
+    # Try PNG first, but animated emojis may only be available as GIFs.
+    url_png = get_emoji_url(emoji_id)
+    try:
+        img = _load_image_from_url(url_png)
+    except Exception:
+        # fallback to gif variant
+        url_gif = f"https://cdn.discordapp.com/emojis/{emoji_id}.gif"
+        img = _load_image_from_url(url_gif)
     return img.resize((size, size), Image.LANCZOS)
 
 # ---------------------------------------------------------
 # UNIVERSAL INLINE TEXT + EMOJI RENDERER
 # ---------------------------------------------------------
+
+def _tokenize_inline_text(text: str) -> list[dict]:
+    tokens: list[dict] = []
+    i = 0
+    while i < len(text):
+        emoji_match = DISCORD_EMOJI_RE.search(text, i)
+        unicode_match = EMOJI_RE.search(text, i)
+
+        if emoji_match and emoji_match.start() == i:
+            tokens.append({"type": "emoji", "id": emoji_match.group(1), "text": emoji_match.group(0)})
+            i = emoji_match.end()
+            continue
+
+        if unicode_match and unicode_match.start() == i:
+            tokens.append({"type": "unicode_emoji", "text": unicode_match.group(0)})
+            i = unicode_match.end()
+            continue
+
+        next_pos = len(text)
+        if emoji_match:
+            next_pos = min(next_pos, emoji_match.start())
+        if unicode_match:
+            next_pos = min(next_pos, unicode_match.start())
+        tokens.append({"type": "text", "text": text[i:next_pos]})
+        i = next_pos
+
+    return tokens
+
 
 def draw_text_with_emojis(
     canvas: Image.Image,
@@ -68,43 +102,45 @@ def draw_text_with_emojis(
     """
     draw = ImageDraw.Draw(canvas)
     cursor_x = x
-    i = 0
 
-    while i < len(text):
-
-        # Discord custom emoji: <:name:id> or <a:name:id>
-        m = DISCORD_EMOJI_RE.search(text, i)
-        if m and m.start() == i:
-            emoji_id = m.group(1)
-            emoji_img = _render_custom_emoji(emoji_id, emoji_size)
-            canvas.alpha_composite(emoji_img, (int(cursor_x), int(y - emoji_size // 2)))
-            cursor_x += emoji_size + 2
-            i = m.end()
+    for token in _tokenize_inline_text(text):
+        if token["type"] == "emoji":
+            try:
+                emoji_img = _render_custom_emoji(token["id"], emoji_size)
+                ox = int(cursor_x)
+                oy = int(y - emoji_size // 2)
+                # Clamp into canvas bounds so emojis don't render off-canvas
+                ox = max(0, min(ox, canvas.width - emoji_img.width))
+                oy = max(0, min(oy, canvas.height - emoji_img.height))
+                canvas.alpha_composite(emoji_img, (ox, oy))
+                cursor_x += emoji_img.width + 2
+            except Exception:
+                pass
             continue
 
-        # Unicode emoji
-        m = EMOJI_RE.search(text, i)
-        if m and m.start() == i:
-            emoji_char = m.group(0)
-            emoji_img = _render_twemoji(emoji_char, emoji_size)
-            canvas.alpha_composite(emoji_img, (int(cursor_x), int(y - emoji_size // 2)))
-            cursor_x += emoji_size + 2
-            i = m.end()
+        if token["type"] == "unicode_emoji":
+            try:
+                emoji_img = _render_twemoji(token["text"], emoji_size)
+                ox = int(cursor_x)
+                oy = int(y - emoji_size // 2)
+                ox = max(0, min(ox, canvas.width - emoji_img.width))
+                oy = max(0, min(oy, canvas.height - emoji_img.height))
+                canvas.alpha_composite(emoji_img, (ox, oy))
+                cursor_x += emoji_img.width + 2
+            except Exception:
+                pass
             continue
 
-        # Normal text
-        char = text[i]
         draw.text(
             (cursor_x, y),
-            char,
+            token["text"],
             font=font,
             fill=fill,
             stroke_width=stroke_width,
             stroke_fill=stroke_fill,
             anchor="lm",
         )
-        cursor_x += draw_textlength(draw, char, font=font)
-        i += 1
+        cursor_x += draw_textlength(draw, token["text"], font=font)
 
 
 def process_image_animated(raw: BytesIO, effect_fn):
@@ -272,37 +308,86 @@ def _wrap_to_pixel_width(
     text: str,
     font: ImageFont.FreeTypeFont,
     max_width: int,
+    emoji_size: int,
 ) -> list[str]:
     """Greedy word-wrap by measured pixel width, with hard breaks for long words."""
     measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+
+    def _split_discord_emoji_tokens(token: str) -> list[str]:
+        parts: list[str] = []
+        pos = 0
+        for m in DISCORD_EMOJI_RE.finditer(token):
+            if m.start() > pos:
+                parts.append(token[pos:m.start()])
+            parts.append(m.group(0))
+            pos = m.end()
+        if pos < len(token):
+            parts.append(token[pos:])
+        return parts or [token]
+
+    def _is_emoji_token(token: str) -> bool:
+        return bool(DISCORD_EMOJI_RE.fullmatch(token))
+
+    def _segment_width(token: str) -> float:
+        if _is_emoji_token(token):
+            return float(emoji_size + 2)
+        return draw_textlength(measure, token, font=font)
+
     lines: list[str] = []
     for paragraph in text.split("\n"):
         words = paragraph.split(" ")
         current = ""
         for word in words:
-            # Hard-break tokens that exceed the line width by themselves.
-            if draw_textlength(measure, word, font=font) > max_width and word:
+            if word == "":
+                if current:
+                    current += " "
+                else:
+                    current = ""
+                continue
+
+            segments = _split_discord_emoji_tokens(word)
+            for index, segment in enumerate(segments):
+                if not segment:
+                    continue
+
+                segment_width = _segment_width(segment)
+                if _is_emoji_token(segment):
+                    if current:
+                        trial = current + (" " if index == 0 else "") + segment
+                    else:
+                        trial = segment
+                else:
+                    trial = current + (" " if current and index == 0 else "") + segment if current else segment
+
+                trial_width = sum(
+                    _segment_width(part) for part in _split_discord_emoji_tokens(trial)
+                )
+                if trial_width <= max_width:
+                    current = trial
+                    continue
+
                 if current:
                     lines.append(current)
                     current = ""
-                buf = ""
-                for ch in word:
-                    trial = buf + ch
-                    if draw_textlength(measure, trial, font=font) > max_width and buf:
-                        lines.append(buf)
-                        buf = ch
-                    else:
-                        buf = trial
-                current = buf
-                continue
 
-            trial = word if not current else (current + " " + word)
-            if draw_textlength(measure, trial, font=font) <= max_width:
-                current = trial
-            else:
-                if current:
-                    lines.append(current)
-                current = word
+                if _is_emoji_token(segment):
+                    current = segment
+                    continue
+
+                if segment_width > max_width:
+                    buf = ""
+                    for ch in segment:
+                        trial = buf + ch
+                        if _segment_width(trial) > max_width and buf:
+                            lines.append(buf)
+                            buf = ch
+                        else:
+                            buf = trial
+                    current = buf
+                    continue
+
+                current = segment
+
         if current:
             lines.append(current)
         elif not words:
@@ -321,9 +406,29 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
     # Side padding for the text. Caption width is image width minus 2× padding.
     side_padding = max(16, int(width * 0.04))
     text_max_width = max(1, width - side_padding * 2)
+    emoji_size = int(font_size * 1.1)
+
+    def _rendered_text_width(line: str) -> float:
+        parts = []
+        pos = 0
+        for m in DISCORD_EMOJI_RE.finditer(line):
+            if m.start() > pos:
+                parts.append(line[pos:m.start()])
+            parts.append(m.group(0))
+            pos = m.end()
+        if pos < len(line):
+            parts.append(line[pos:])
+        total = 0.0
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        for part in parts:
+            if DISCORD_EMOJI_RE.fullmatch(part):
+                total += float(emoji_size + 2)
+            else:
+                total += draw_textlength(measure, part, font=font)
+        return total
 
     # Pixel-accurate wrapping
-    lines = _wrap_to_pixel_width(text, font, text_max_width)
+    lines = _wrap_to_pixel_width(text, font, text_max_width, emoji_size)
 
     # Use real font metrics for line spacing (consistent across line counts).
     try:
@@ -356,7 +461,7 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
     measure = ImageDraw.Draw(canvas)
     text_top = block_top + pad_y
     for i, line in enumerate(lines):
-        line_w = draw_textlength(measure, line, font=font)
+        line_w = _rendered_text_width(line)
         x = int((width - line_w) // 2)
         # draw_text_with_emojis uses anchor="lm" → y is the line's vertical centre
         baseline_y = text_top + i * (line_height + line_spacing) + line_height // 2
@@ -369,7 +474,7 @@ def _draw_caption_block(img: Image.Image, text: str, position: str = "top") -> I
             fill="black",
             stroke_width=0,
             stroke_fill="white",
-            emoji_size=int(font_size * 1.1),
+            emoji_size=emoji_size,
         )
 
     if position == "top":
