@@ -234,6 +234,8 @@ def get_emoji(emoji_name: str):
         return "<:vm_unhide:1520888521571700966>"
     if emoji_name == "vm_unlock":
         return "<:vm_unlock:1520864694955409469>"
+    if emoji_name == "warning":
+        return "<:warning:1525320354325729410>"
     if emoji_name == "wavelink":
         return "<:wavelink:1520827814352388289>"
     if emoji_name == "website":

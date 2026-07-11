@@ -165,7 +165,7 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("AutoMod",        f"{get_emoji('icon_automod')}"),
     ("EmojiManager",   f"{get_emoji('icon_paint')}"),
     ("Onboarding",     f"{get_emoji('icon_welcome')}"),
-    ("NSFW",           f"{get_emoji('icon_nsfw')}"),
+    ("NSFW",           f"{get_emoji('warning')}"),
     ("Music",          f"{get_emoji('music')}"),
     ("Leveling",       f"{get_emoji('icon_leveling')}"),
     ("Notifier",       f"{get_emoji('icon_megaphone')}"),
