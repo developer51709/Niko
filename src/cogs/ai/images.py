@@ -11,12 +11,11 @@ from utils.image.extractor import extract_image_from_message
 from config.emojis import get_emoji
 
 HF_API_KEY       = os.environ.get("HUGGINGFACE_API_KEY", "")
+FAL_API_KEY      = os.environ.get("FAL_API_KEY", "")
 HF_INFERENCE_BASE = "https://router.huggingface.co/hf-inference/models"
 FLUX_MODEL        = "black-forest-labs/FLUX.1-schnell"
 EDIT_MODELS = [
-    "SG161222/RealVisXL_V4.0",
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    "stabilityai/sdxl-turbo",
+    "https://router.huggingface.co/fal-ai/fal-ai/flux-2/klein/9b/edit?_subdomain=queue",
 ]
 
 from utils.premium_manager import PremiumManager
@@ -35,6 +34,12 @@ class AiImageTools(commands.Cog):
     def _hf_headers(self) -> dict:
         return {
             "Authorization": f"Bearer {HF_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+    def _fal_headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {FAL_API_KEY}",
             "Content-Type": "application/json",
         }
 
@@ -113,7 +118,131 @@ class AiImageTools(commands.Cog):
         except Exception as e:
             return None, str(e)
 
-    async def EditImage(self, image_bytes: bytes, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
+    async def _update_queue_message(self, status_message: discord.Message, prompt: str, status: str, request_id: str | None = None, position: int | None = None, detail: str | None = None):
+        try:
+            await status_message.edit(view=self._queue_view(prompt, status, request_id=request_id, position=position, detail=detail))
+        except Exception:
+            pass
+
+    def _queue_view(self, prompt: str, status: str, request_id: str | None = None, position: int | None = None, detail: str | None = None) -> discord.ui.LayoutView:
+        lines = [
+            f"### {get_emoji('icon_loading')} AI Image Edit",
+            f"-# Status: **{status}**",
+        ]
+        if prompt:
+            lines.append(f"-# Prompt: *{prompt[:200]}*")
+        if position is not None:
+            lines.append(f"-# Queue position: **{position}**")
+        if request_id:
+            lines.append(f"-# Request ID: `{request_id}`")
+        if detail:
+            lines.append(f"-# {detail}")
+
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        )
+        view.add_item(container)
+        return view
+
+    async def _poll_hf_queue(self, response_url: str, prompt: str, status_message: discord.Message | None) -> tuple[io.BytesIO, None] | tuple[None, str]:
+        max_attempts = 24
+        backoff = 1.5
+        last_position = None
+        last_status = None
+
+        for attempt in range(max_attempts):
+            try:
+                # Try without auth first (response_url may be pre-signed)
+                headers = {"Content-Type": "application/json"}
+                async with self.session.get(response_url, headers=headers) as resp:
+                    raw = await resp.read()
+                    content_type = resp.content_type or ""
+
+                    if resp.status in {401, 403}:
+                        # Try Hugging Face token first.
+                        async with self.session.get(response_url, headers=self._hf_headers()) as hf_resp:
+                            raw = await hf_resp.read()
+                            content_type = hf_resp.content_type or ""
+                            resp = hf_resp
+
+                        if not resp.ok and FAL_API_KEY:
+                            # Fallback to FAL API key if the Hugging Face token is rejected.
+                            async with self.session.get(response_url, headers=self._fal_headers()) as fal_resp:
+                                raw = await fal_resp.read()
+                                content_type = fal_resp.content_type or ""
+                                resp = fal_resp
+
+                    if resp.ok:
+                        if "json" in content_type:
+                            try:
+                                data = json.loads(raw)
+                            except Exception:
+                                data = {}
+
+                            status = str(data.get("status", "")).upper()
+                            request_id = data.get("request_id") or data.get("requestId")
+                            position = data.get("queue_position") or data.get("position")
+                            detail = None
+                            if data.get("estimated_time"):
+                                detail = f"Estimated wait: {data.get('estimated_time')}"
+                            elif data.get("message"):
+                                detail = data.get("message")
+
+                            if status == "IN_QUEUE":
+                                if status_message:
+                                    if status != last_status or position != last_position:
+                                        await self._update_queue_message(
+                                            status_message,
+                                            prompt,
+                                            "Queued",
+                                            request_id=request_id,
+                                            position=position,
+                                            detail=detail,
+                                        )
+                                        last_status = status
+                                        last_position = position
+                                await asyncio.sleep(backoff)
+                                backoff = min(8, backoff + 0.5)
+                                continue
+
+                            if status in {"COMPLETED", "SUCCEEDED", "SUCCESS", "DONE"}:
+                                image = await self._parse_hf_image_response(raw, content_type)
+                                if image:
+                                    return image, None
+                                return None, "HuggingFace queue finished but did not return a valid image."
+
+                            if any(k in data for k in ("image", "generated_image", "b64_json")):
+                                image = await self._parse_hf_image_response(raw, content_type)
+                                if image:
+                                    return image, None
+
+                            if status == "FAILED":
+                                error_text = data.get("error") or data.get("detail") or "The queued request failed."
+                                return None, f"HuggingFace queue error: {error_text}"
+
+                            # Still waiting on an unknown JSON response.
+                            await asyncio.sleep(backoff)
+                            backoff = min(8, backoff + 0.5)
+                            continue
+
+                        image = await self._parse_hf_image_response(raw, content_type)
+                        if image:
+                            return image, None
+                        return None, "Unexpected HuggingFace queue response."
+
+                    error_text = raw.decode(errors="replace")[:250]
+                    return None, f"HuggingFace queue polling error {resp.status}: {error_text}"
+            except Exception as e:
+                if attempt == max_attempts - 1:
+                    return None, str(e)
+                await asyncio.sleep(backoff)
+                backoff = min(8, backoff + 0.5)
+
+        return None, "Timed out waiting for HuggingFace queue."
+
+    async def EditImage(self, image_bytes: bytes, prompt: str, status_message: discord.Message | None = None) -> tuple[io.BytesIO, None] | tuple[None, str]:
         """
         Edit an image via image-to-image using hf-inference models.
         Tries EDIT_MODELS in order; returns the first successful result.
@@ -126,7 +255,7 @@ class AiImageTools(commands.Cog):
 
         errors = {}
         for model in EDIT_MODELS:
-            url     = f"{HF_INFERENCE_BASE}/{model}"
+            url = f"{model}"
             payload = {
                 "inputs": b64_image,
                 "parameters": {
@@ -138,9 +267,29 @@ class AiImageTools(commands.Cog):
             }
             try:
                 async with self.session.post(url, headers=self._hf_headers(), json=payload) as resp:
-                    raw          = await resp.read()
+                    raw = await resp.read()
                     content_type = resp.content_type or ""
                     if resp.ok:
+                        if "json" in content_type:
+                            try:
+                                data = json.loads(raw)
+                            except Exception:
+                                data = {}
+
+                            response_url = data.get("response_url") or data.get("responseUrl")
+                            status = str(data.get("status", "")).upper()
+                            if response_url:
+                                if status_message:
+                                    await self._update_queue_message(
+                                        status_message,
+                                        prompt,
+                                        "Queued",
+                                        request_id=data.get("request_id") or data.get("requestId"),
+                                        position=data.get("queue_position") or data.get("position"),
+                                        detail=data.get("message") or data.get("estimated_time"),
+                                    )
+                                return await self._poll_hf_queue(response_url, prompt, status_message)
+
                         image = await self._parse_hf_image_response(raw, content_type)
                         if image:
                             return image, None
@@ -250,28 +399,37 @@ class AiImageTools(commands.Cog):
             view.add_item(container)
             return await ctx.send(view=view)
 
-        async with ctx.typing():
-            raw_bytes    = image_bytes.getvalue()
-            result, err  = await self.EditImage(raw_bytes, prompt)
+        raw_bytes = image_bytes.getvalue()
+        status_view = self._queue_view(prompt, "Submitting request...")
+        try:
+            status_message = await ctx.reply(view=status_view)
+        except Exception:
+            status_message = await ctx.send(view=status_view)
+
+        result, err = await self.EditImage(raw_bytes, prompt, status_message=status_message)
 
         if err:
             try:
-                return await ctx.reply(view=self._error_view(err))
+                await status_message.edit(view=self._error_view(err))
+                return
             except Exception:
                 return await ctx.send(view=self._error_view(err))
 
+        result.seek(0)
         file = discord.File(result, filename="edited_image.png")
         view = self.build_cv2_container(
             f"{get_emoji('icon_image')} Edited Image",
             f"-# Prompt: *{prompt[:200]}*",
             file,
         )
-        result.seek(0)
         file2 = discord.File(result, filename="edited_image.png")
         try:
-            await ctx.reply(view=view, file=file2)
+            await status_message.edit(view=view, attachments=[file2])
         except Exception:
-            await ctx.send(view=view, file=file2)
+            try:
+                await ctx.reply(view=view, file=file2)
+            except Exception:
+                await ctx.send(view=view, file=file2)
 
 
 async def setup(bot: commands.Bot):
