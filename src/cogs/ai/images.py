@@ -6,6 +6,7 @@ import io
 import json
 import base64
 import asyncio
+from urllib.parse import urlparse
 from utils import logging
 from utils.image.extractor import extract_image_from_message
 from config.emojis import get_emoji
@@ -15,7 +16,13 @@ FAL_API_KEY      = os.environ.get("FAL_API_KEY", "")
 HF_INFERENCE_BASE = "https://router.huggingface.co/hf-inference/models"
 FLUX_MODEL        = "black-forest-labs/FLUX.1-schnell"
 EDIT_MODELS = [
+    # black-forest-labs/FLUX.2-klein-9B
     "https://router.huggingface.co/fal-ai/fal-ai/flux-2/klein/9b/edit?_subdomain=queue",
+    "https://router.huggingface.co/replicate/v1/models/black-forest-labs/flux-2-klein-9b/predictions",
+    # Qwen/Qwen-Image-Edit
+    "https://router.huggingface.co/fal-ai/fal-ai/qwen-image-edit?_subdomain=queue",
+    "https://router.huggingface.co/wavespeed/api/v3/wavespeed-ai/qwen-image/edit",
+    "https://router.huggingface.co/replicate/v1/models/qwen/qwen-image-edit/predictions",
 ]
 
 from utils.premium_manager import PremiumManager
@@ -42,6 +49,17 @@ class AiImageTools(commands.Cog):
             "Authorization": f"Bearer {FAL_API_KEY}",
             "Content-Type": "application/json",
         }
+
+    def _detect_mime(self, raw: bytes) -> str:
+        if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if raw.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if raw.startswith(b"GIF87a") or raw.startswith(b"GIF89a"):
+            return "image/gif"
+        if raw.startswith(b"RIFF") and raw[8:12] == b"WEBP":
+            return "image/webp"
+        return "image/png"
 
     async def _decode_b64(self, b64_data: str) -> io.BytesIO:
         return await asyncio.to_thread(lambda: io.BytesIO(base64.b64decode(b64_data)))
@@ -146,94 +164,146 @@ class AiImageTools(commands.Cog):
         view.add_item(container)
         return view
 
-    async def _poll_hf_queue(self, response_url: str, prompt: str, status_message: discord.Message | None) -> tuple[io.BytesIO, None] | tuple[None, str]:
-        max_attempts = 24
+    def _build_queue_urls(self, submit_url: str, response_data: dict) -> tuple[str, str] | tuple[None, None]:
+        """
+        Build the status/result URLs for a fal-ai queue request submitted through
+        the HuggingFace router.
+
+        Hitting fal.ai's own `response_url` directly with an HF bearer token fails
+        with "bearer: unable to decode issuer", because that endpoint expects a
+        fal.ai API key, not an HF token. Instead, per HuggingFace's own fal-ai
+        provider implementation, requests must be routed back through
+        `router.huggingface.co/fal-ai/...` (which knows how to translate the HF
+        token), reusing only the *path* portion of `response_url`.
+        """
+        response_url = response_data.get("response_url") or response_data.get("responseUrl")
+        if not response_url:
+            return None, None
+
+        submit_parsed = urlparse(submit_url)
+        response_parsed = urlparse(response_url)
+
+        if submit_parsed.netloc == "router.huggingface.co":
+            base_url = f"{submit_parsed.scheme}://{submit_parsed.netloc}/fal-ai"
+        else:
+            base_url = f"{response_parsed.scheme}://{response_parsed.netloc}"
+
+        model_path = response_parsed.path
+        query_param = f"?{submit_parsed.query}" if submit_parsed.query else ""
+
+        status_url = f"{base_url}{model_path}/status{query_param}"
+        result_url = f"{base_url}{model_path}{query_param}"
+        logging.debug("AiImageTools", f"[edit-debug] submit_url={submit_url} response_data={response_data} status_url={status_url} result_url={result_url}")
+        return status_url, result_url
+
+    async def _fetch_queue_result_image(self, result_url: str, headers: dict) -> tuple[io.BytesIO, None] | tuple[None, str]:
+        async with self.session.get(result_url, headers=headers) as resp:
+            raw = await resp.read()
+            content_type = resp.content_type or ""
+
+            logging.debug("AiImageTools", f"[edit-debug] result GET {result_url} -> status={resp.status} content_type={content_type} body={raw.decode(errors='replace')[:500]}")
+
+            if not resp.ok:
+                return None, f"HuggingFace queue result error {resp.status}: {raw.decode(errors='replace')[:250]}"
+
+            if "json" in content_type:
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    data = {}
+
+                # fal-ai image models typically return {"images": [{"url": ...}]}
+                # or {"image": {"url": ...}}
+                image_url = None
+                images = data.get("images")
+                if isinstance(images, list) and images:
+                    first = images[0]
+                    image_url = first.get("url") if isinstance(first, dict) else None
+                if not image_url and isinstance(data.get("image"), dict):
+                    image_url = data["image"].get("url")
+
+                if image_url:
+                    async with self.session.get(image_url) as img_resp:
+                        if img_resp.ok:
+                            img_raw = await img_resp.read()
+                            return self._raw_to_bytesio(img_raw), None
+                        return None, f"Failed to download generated image ({img_resp.status})."
+
+                # Fall back to inline base64/image parsing.
+                image = await self._parse_hf_image_response(raw, content_type)
+                if image:
+                    return image, None
+                return None, "HuggingFace queue finished but did not return a valid image."
+
+            image = await self._parse_hf_image_response(raw, content_type)
+            if image:
+                return image, None
+            return None, "Unexpected HuggingFace queue result response."
+
+    async def _poll_hf_queue(self, submit_url: str, response_data: dict, prompt: str, status_message: discord.Message | None) -> tuple[io.BytesIO, None] | tuple[None, str]:
+        status_url, result_url = self._build_queue_urls(submit_url, response_data)
+        if not status_url or not result_url:
+            return None, "HuggingFace queue response did not include a response URL."
+
+        headers = self._hf_headers()
+        max_attempts = 60
         backoff = 1.5
         last_position = None
         last_status = None
 
         for attempt in range(max_attempts):
             try:
-                # Try without auth first (response_url may be pre-signed)
-                headers = {"Content-Type": "application/json"}
-                async with self.session.get(response_url, headers=headers) as resp:
+                async with self.session.get(status_url, headers=headers) as resp:
                     raw = await resp.read()
                     content_type = resp.content_type or ""
 
-                    if resp.status in {401, 403}:
-                        # Try Hugging Face token first.
-                        async with self.session.get(response_url, headers=self._hf_headers()) as hf_resp:
-                            raw = await hf_resp.read()
-                            content_type = hf_resp.content_type or ""
-                            resp = hf_resp
+                    logging.debug("AiImageTools", f"[edit-debug] status GET {status_url} -> status={resp.status} content_type={content_type} body={raw.decode(errors='replace')[:500]}")
 
-                        if not resp.ok and FAL_API_KEY:
-                            # Fallback to FAL API key if the Hugging Face token is rejected.
-                            async with self.session.get(response_url, headers=self._fal_headers()) as fal_resp:
-                                raw = await fal_resp.read()
-                                content_type = fal_resp.content_type or ""
-                                resp = fal_resp
+                    if not resp.ok:
+                        error_text = raw.decode(errors="replace")[:250]
+                        return None, f"HuggingFace queue polling error {resp.status}: {error_text}"
 
-                    if resp.ok:
-                        if "json" in content_type:
-                            try:
-                                data = json.loads(raw)
-                            except Exception:
-                                data = {}
+                    try:
+                        data = json.loads(raw) if "json" in content_type else {}
+                    except Exception:
+                        data = {}
 
-                            status = str(data.get("status", "")).upper()
-                            request_id = data.get("request_id") or data.get("requestId")
-                            position = data.get("queue_position") or data.get("position")
-                            detail = None
-                            if data.get("estimated_time"):
-                                detail = f"Estimated wait: {data.get('estimated_time')}"
-                            elif data.get("message"):
-                                detail = data.get("message")
+                    status = str(data.get("status", "")).upper()
+                    request_id = data.get("request_id") or data.get("requestId")
+                    position = data.get("queue_position") or data.get("position")
+                    detail = None
+                    if data.get("estimated_time"):
+                        detail = f"Estimated wait: {data.get('estimated_time')}"
+                    elif data.get("message"):
+                        detail = data.get("message")
 
-                            if status == "IN_QUEUE":
-                                if status_message:
-                                    if status != last_status or position != last_position:
-                                        await self._update_queue_message(
-                                            status_message,
-                                            prompt,
-                                            "Queued",
-                                            request_id=request_id,
-                                            position=position,
-                                            detail=detail,
-                                        )
-                                        last_status = status
-                                        last_position = position
-                                await asyncio.sleep(backoff)
-                                backoff = min(8, backoff + 0.5)
-                                continue
+                    if status in {"IN_QUEUE", "IN_PROGRESS", "PROCESSING", ""}:
+                        friendly_status = "Processing" if status in {"IN_PROGRESS", "PROCESSING"} else "Queued"
+                        if status_message and (status != last_status or position != last_position):
+                            await self._update_queue_message(
+                                status_message,
+                                prompt,
+                                friendly_status,
+                                request_id=request_id,
+                                position=position,
+                                detail=detail,
+                            )
+                            last_status = status
+                            last_position = position
+                        await asyncio.sleep(backoff)
+                        backoff = min(8, backoff + 0.5)
+                        continue
 
-                            if status in {"COMPLETED", "SUCCEEDED", "SUCCESS", "DONE"}:
-                                image = await self._parse_hf_image_response(raw, content_type)
-                                if image:
-                                    return image, None
-                                return None, "HuggingFace queue finished but did not return a valid image."
+                    if status in {"COMPLETED", "SUCCEEDED", "SUCCESS", "DONE"}:
+                        return await self._fetch_queue_result_image(result_url, headers)
 
-                            if any(k in data for k in ("image", "generated_image", "b64_json")):
-                                image = await self._parse_hf_image_response(raw, content_type)
-                                if image:
-                                    return image, None
+                    if status == "FAILED" or status == "ERROR":
+                        error_text = data.get("error") or data.get("detail") or "The queued request failed."
+                        return None, f"HuggingFace queue error: {error_text}"
 
-                            if status == "FAILED":
-                                error_text = data.get("error") or data.get("detail") or "The queued request failed."
-                                return None, f"HuggingFace queue error: {error_text}"
-
-                            # Still waiting on an unknown JSON response.
-                            await asyncio.sleep(backoff)
-                            backoff = min(8, backoff + 0.5)
-                            continue
-
-                        image = await self._parse_hf_image_response(raw, content_type)
-                        if image:
-                            return image, None
-                        return None, "Unexpected HuggingFace queue response."
-
-                    error_text = raw.decode(errors="replace")[:250]
-                    return None, f"HuggingFace queue polling error {resp.status}: {error_text}"
+                    # Unknown status - keep polling until timeout.
+                    await asyncio.sleep(backoff)
+                    backoff = min(8, backoff + 0.5)
             except Exception as e:
                 if attempt == max_attempts - 1:
                     return None, str(e)
@@ -251,24 +321,26 @@ class AiImageTools(commands.Cog):
         if not HF_API_KEY:
             return None, "No `HUGGINGFACE_API_KEY` is configured. Ask a bot owner to add it."
 
+        mime = self._detect_mime(image_bytes)
         b64_image = await asyncio.to_thread(lambda: base64.b64encode(image_bytes).decode())
+        data_uri = f"data:{mime};base64,{b64_image}"
 
         errors = {}
         for model in EDIT_MODELS:
             url = f"{model}"
+            # fal-ai FLUX.2 [klein] edit models expect a flat payload (not the
+            # generic HF "inputs"/"parameters" envelope): top-level "prompt"
+            # (required) and "image_urls" (required list, URL or data URI).
             payload = {
-                "inputs": b64_image,
-                "parameters": {
-                    "prompt": prompt,
-                    "strength": 0.75,
-                    "num_inference_steps": 20,
-                    "guidance_scale": 7.5,
-                },
+                "prompt": prompt,
+                "image_urls": [data_uri],
+                "num_inference_steps": 4,
             }
             try:
                 async with self.session.post(url, headers=self._hf_headers(), json=payload) as resp:
                     raw = await resp.read()
                     content_type = resp.content_type or ""
+                    logging.debug("AiImageTools", f"[edit-debug] submit POST {url} payload={payload} -> status={resp.status} content_type={content_type} body={raw.decode(errors='replace')[:500]}")
                     if resp.ok:
                         if "json" in content_type:
                             try:
@@ -277,7 +349,6 @@ class AiImageTools(commands.Cog):
                                 data = {}
 
                             response_url = data.get("response_url") or data.get("responseUrl")
-                            status = str(data.get("status", "")).upper()
                             if response_url:
                                 if status_message:
                                     await self._update_queue_message(
@@ -288,7 +359,7 @@ class AiImageTools(commands.Cog):
                                         position=data.get("queue_position") or data.get("position"),
                                         detail=data.get("message") or data.get("estimated_time"),
                                     )
-                                return await self._poll_hf_queue(response_url, prompt, status_message)
+                                return await self._poll_hf_queue(url, data, prompt, status_message)
 
                         image = await self._parse_hf_image_response(raw, content_type)
                         if image:
