@@ -326,7 +326,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Set up welcome messages and roles for new members."
         ),
         "NSFW": (
-            f"{get_emoji('icon_nsfw')} **NSFW Commands**\n"
+            f"{get_emoji('warning')} **NSFW Commands**\n"
             "> These commands only work in NSFW-marked channels."
         ),
         "Music": (
