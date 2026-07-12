@@ -257,9 +257,10 @@ class Suggestions(commands.Cog):
     )
     @commands.guild_only()
     async def suggest(self, ctx: commands.Context, *, text: str = None):
-        if text:
-            return await self._submit(ctx, text)
-        await ctx.send_help(self.suggest)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.suggest)
+        await ctx.invoke(help_cmd, command_name="suggest")
 
     @suggest.command(
         name="submit",
