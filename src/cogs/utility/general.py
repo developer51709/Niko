@@ -30,30 +30,18 @@ class UtilityCog(commands.Cog):
     @commands.has_permissions(manage_messages=True)
     async def echo(self, ctx, *, message: str):
         """Echoes the user's message."""
-        try:
-            await ctx.send(f"{message}\n-# Sent by {ctx.author.mention}", allowed_mentions=discord.AllowedMentions.none())
-        except discord.Forbidden:
-            pass
+        MAX_LEN = 1950
 
-    @commands.command(name="partnership_request")
-    async def partnership_request(self, ctx, invite: str = None):
-        """Send a partnership request to the bot admins."""
-        requester = ctx.author
-        log_channel = self.bot.get_channel(1462614744052797683)
-        if not invite:
-            await ctx.send("Please provide an invite link for your server. Example: `!partnership_request https://discord.gg/yourinvite`")
-            return
-        if log_channel:
-            view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### 🤝 Partnership Request\n**Requested by:** {requester.display_name}\n**Invite:** {invite}"
-                )
-            ))
-            await log_channel.send(view=view)
-            await ctx.send("Partnership request sent successfully!")
+        if len(message) > MAX_LEN:
+            await ctx.send(
+                f"{message[:MAX_LEN]}...\n-# Sent by {ctx.author.mention}",
+                allowed_mentions=discord.AllowedMentions.none()
+            )
         else:
-            await ctx.send("Error: Log channel not found.")
+            await ctx.send(
+                f"{message}\n-# Sent by {ctx.author.mention}",
+                allowed_mentions=discord.AllowedMentions.none()
+            )
 
 
 async def setup(bot):
