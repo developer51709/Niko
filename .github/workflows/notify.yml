@@ -1,0 +1,36 @@
+name: Send Commit Notification
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Send CV2 Webhook
+        env:
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+        run: |
+          python3 scripts/send_cv2_webhook.py \
+            "${{ secrets.DISCORD_WEBHOOK }}" \
+            "${{ github.event.head_commit.author.name }}" \
+            "${{ github.event.head_commit.message }}" \
+            "${{ github.sha }}" \
+            "${{ github.event.repository.html_url }}" \
+            "${{ github.event.head_commit.url }}"

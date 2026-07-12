@@ -1,0 +1,557 @@
+# utils/ai/openai_client.py
+import datetime
+import time
+from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError, RateLimitError
+import os
+from utils.ai.memory import (
+    get_user_memory,
+    get_conversation_history,
+    get_favorability,
+    update_user_memory,
+    adjust_favorability
+)
+
+client = None
+
+_FALLBACK_REPLIES = [
+    "sorry, my mind went blank for a sec ☕ try again in a moment~",
+    "hmm, i seem to be a little out of it right now... give me a moment ☕",
+    "i didn't quite catch that — my thoughts are a bit fuzzy today 🌿 try again shortly!",
+]
+_fallback_idx = 0
+
+# ── Rate-limit guard ───────────────────────────────────────────────────────────
+# Maps user_id → unix timestamp when the cooldown expires.
+# When the API returns 429, we stop accepting that user's requests for a while
+# to avoid hammering the endpoint and making the rate limit worse.
+_rl_cooldown: dict[int, float] = {}
+_RL_COOLDOWN_SECS = 30  # seconds to pause per user after a 429
+
+# ── Token budget constants ─────────────────────────────────────────────────────
+_CONV_HISTORY_TURNS   = 3    # recent turns kept for short-term context
+_USER_MEMORY_MAX      = 300  # chars kept from long-term memory string
+_CTX_MSG_MAX_PER_LINE = 120  # chars per context-message line
+_CTX_MSG_MAX_LINES    = 3    # max channel-history lines passed
+_REPLIED_CONTENT_MAX  = 200  # chars for replied-message snippet
+
+
+def _get_client():
+    global client
+    if client is None:
+        direct_key      = os.environ.get("OPENAI_API_KEY")
+        integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+        integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+
+        # max_retries=0 — we handle retries ourselves so the SDK never
+        # silently resends a request that already hit a rate limit.
+        if direct_key:
+            client = OpenAI(api_key=direct_key, max_retries=0)
+        elif integration_key and integration_url:
+            client = OpenAI(api_key=integration_key, base_url=integration_url, max_retries=0)
+        else:
+            client = OpenAI(api_key=integration_key, max_retries=0)
+    return client
+
+
+def _reset_client():
+    global client
+    client = None
+
+
+_USER_ARG = {
+    "type": "string",
+    "description": (
+        "The target user. Prefer a numeric Discord user ID. A raw mention "
+        "like <@123> or a plain username are also accepted."
+    ),
+}
+_CHANNEL_ARG = {
+    "type": "string",
+    "description": (
+        "The target channel. Prefer a numeric channel ID. A channel "
+        "mention like <#123> or a plain channel name are also accepted."
+    ),
+}
+_ROLE_ARG = {
+    "type": "string",
+    "description": (
+        "The target role. Prefer a numeric role ID. A role mention like "
+        "<@&123> or a plain role name are also accepted."
+    ),
+}
+_REASON_ARG = {
+    "type": "string",
+    "description": "Short audit-log reason. Defaults to 'No reason provided'.",
+}
+
+
+_AI_ACTIONS_TOOLS = [
+    # ── Non-destructive ────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "create_poll",
+            "description": "Create a poll in the current channel when the user asks for one.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "The poll question."},
+                    "options": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of 2–9 answer options.",
+                        "minItems": 2,
+                        "maxItems": 9,
+                    },
+                },
+                "required": ["question", "options"],
+            },
+        },
+    },
+
+    # ── Moderation ─────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "kick_member",
+            "description": "Kick a member from the server. Requires Kick Members permission.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG, "reason": _REASON_ARG},
+                "required": ["user"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ban_member",
+            "description": "Ban a user from the server. Requires Ban Members permission.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user": _USER_ARG,
+                    "reason": _REASON_ARG,
+                    "delete_message_days": {
+                        "type": "integer",
+                        "description": "Days of recent messages to delete (0–7). Defaults to 0.",
+                        "minimum": 0,
+                        "maximum": 7,
+                    },
+                },
+                "required": ["user"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "unban_user",
+            "description": "Unban a user. Provide their numeric user ID. Requires Ban Members.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG, "reason": _REASON_ARG},
+                "required": ["user"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "timeout_member",
+            "description": "Time-out (mute) a member for a duration in seconds. Requires Moderate Members.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user": _USER_ARG,
+                    "duration_seconds": {
+                        "type": "integer",
+                        "description": "Duration in seconds (1 to 2,419,200 = 28 days).",
+                        "minimum": 1,
+                        "maximum": 2419200,
+                    },
+                    "reason": _REASON_ARG,
+                },
+                "required": ["user", "duration_seconds"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_timeout",
+            "description": "Remove an active time-out from a member. Requires Moderate Members.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG},
+                "required": ["user"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "warn_member",
+            "description": "Add a warning to a member's record. Requires Moderate Members.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG, "reason": _REASON_ARG},
+                "required": ["user", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "purge_messages",
+            "description": "Bulk-delete the most recent N messages (1–100) in a channel. Requires Manage Messages.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "channel": _CHANNEL_ARG,
+                },
+                "required": ["amount"],
+            },
+        },
+    },
+
+    # ── Server management ──────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "create_channel",
+            "description": "Create a new text or voice channel. Requires Manage Channels.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Channel name (lowercase, dashes preferred)."},
+                    "type": {"type": "string", "enum": ["text", "voice"], "description": "Channel type."},
+                    "topic": {"type": "string", "description": "Optional topic for text channels."},
+                    "category": {"type": "string", "description": "Optional category ID or name to create the channel in."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_channel",
+            "description": "Delete a channel. Requires Manage Channels.",
+            "parameters": {
+                "type": "object",
+                "properties": {"channel": _CHANNEL_ARG},
+                "required": ["channel"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rename_channel",
+            "description": "Rename a channel. Requires Manage Channels.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": _CHANNEL_ARG,
+                    "name": {"type": "string", "description": "New channel name."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_channel_topic",
+            "description": "Set the topic of a text channel. Requires Manage Channels.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": _CHANNEL_ARG,
+                    "topic": {"type": "string", "description": "New topic (max 1024 chars). Empty string clears it."},
+                },
+                "required": ["topic"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_role",
+            "description": "Create a new role. Requires Manage Roles.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Role name."},
+                    "colour": {"type": "string", "description": "Optional hex colour like #ff8800."},
+                    "hoist": {"type": "boolean", "description": "Display members with this role separately."},
+                    "mentionable": {"type": "boolean", "description": "Allow @-mentioning the role."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_role",
+            "description": "Delete a role. Requires Manage Roles.",
+            "parameters": {
+                "type": "object",
+                "properties": {"role": _ROLE_ARG},
+                "required": ["role"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "assign_role",
+            "description": "Give a role to a member. Requires Manage Roles.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG, "role": _ROLE_ARG},
+                "required": ["user", "role"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_role",
+            "description": "Remove a role from a member. Requires Manage Roles.",
+            "parameters": {
+                "type": "object",
+                "properties": {"user": _USER_ARG, "role": _ROLE_ARG},
+                "required": ["user", "role"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "change_nickname",
+            "description": "Change a member's nickname. Empty string resets to their username. Requires Manage Nicknames.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user": _USER_ARG,
+                    "nickname": {"type": "string", "description": "New nickname (max 32 chars). Empty string resets."},
+                },
+                "required": ["user"],
+            },
+        },
+    },
+]
+
+
+# ── Action-intent keyword sets ─────────────────────────────────────────────────
+# Tools are only attached to the API request when the incoming message clearly
+# signals a moderation or server-management intent.  This avoids sending ~2,000
+# extra tool-definition tokens on every casual chat message.
+
+_ACTION_PHRASES = {
+    # moderation verbs
+    "ban", "unban", "kick", "mute", "unmute", "timeout", "untimeout",
+    "warn", "warning", "strike",
+    # message management
+    "purge", "clear messages", "delete messages", "bulk delete",
+    # channel management
+    "create channel", "delete channel", "rename channel",
+    "make a channel", "set topic", "channel topic",
+    # role management
+    "create role", "delete role", "make a role", "assign role",
+    "give role", "remove role", "take role", "add role",
+    # nickname
+    "nickname", "change nick", "set nick", "rename",
+    # polls
+    "create poll", "make a poll", "start a poll",
+}
+
+# Single words that on their own strongly suggest an action request
+_ACTION_KEYWORDS = {
+    "ban", "unban", "kick", "mute", "unmute", "timeout",
+    "untimeout", "warn", "purge", "poll",
+}
+
+
+def _message_requests_action(message: str) -> bool:
+    """Return True only if the message looks like an explicit action request.
+
+    Keeps token usage low by skipping tool definitions for casual chat.
+    """
+    lower = message.lower()
+    # Quick single-keyword check
+    words = set(lower.split())
+    if words & _ACTION_KEYWORDS:
+        return True
+    # Multi-word phrase check
+    for phrase in _ACTION_PHRASES:
+        if phrase in lower:
+            return True
+    return False
+
+
+def generate_reply_openai(
+    bot, user_id: int, server, message: str, username: str, SYSTEM_PROMPT: str,
+    *,
+    context_messages: str = None,
+    replied_content: str = None,
+    ai_actions_enabled: bool = False,
+):
+    import json as _json
+
+    server_name  = server.name if server else "DM"
+    member_count = len(server.members) if server else 0
+
+    # ── Pull memory — apply size caps to save tokens ──────────────────
+    user_mem     = get_user_memory(user_id)
+    if user_mem:
+        user_mem = user_mem[-_USER_MEMORY_MAX:]
+    conv_history = get_conversation_history(user_id, limit=_CONV_HISTORY_TURNS)
+    favor        = get_favorability(user_id)
+
+    if favor > 15:
+        fav_label = f"{username} is one of your absolute favorites."
+    elif favor > 8:
+        fav_label = f"You like {username} a lot."
+    elif favor > 3:
+        fav_label = f"You have a good impression of {username}."
+    elif favor > 0:
+        fav_label = f"You are warming up to {username}."
+    else:
+        fav_label = f"You don't know {username} well yet."
+
+    # ── Trim context helpers if they arrived oversized ─────────────────
+    if replied_content and len(replied_content) > _REPLIED_CONTENT_MAX:
+        replied_content = replied_content[:_REPLIED_CONTENT_MAX]
+
+    if context_messages:
+        lines = context_messages.splitlines()[:_CTX_MSG_MAX_LINES]
+        lines = [ln[:_CTX_MSG_MAX_PER_LINE] for ln in lines]
+        context_messages = "\n".join(lines)
+
+    # ── Build a compact user message (system prompt NOT repeated here) ─
+    user_parts = [
+        f"[{datetime.datetime.utcnow().strftime('%a %d %b %Y %H:%M')} UTC | {server_name} | {member_count} members]",
+        f"User: {username} | {fav_label}",
+    ]
+
+    if user_mem:
+        user_parts.append(f"Memory: {user_mem}")
+
+    if replied_content:
+        user_parts.append(f"Replying to: {replied_content}")
+
+    if context_messages:
+        user_parts.append(f"Recent chat:\n{context_messages}")
+
+    if conv_history:
+        user_parts.append(f"History:\n{conv_history}")
+
+    user_parts.append(f"\n{username}: {message}")
+
+    user_content = "\n".join(user_parts)
+
+    global _fallback_idx
+
+    # ── Short-circuit if this user is still in a rate-limit cooldown ──
+    now = time.monotonic()
+    cooldown_until = _rl_cooldown.get(user_id, 0)
+    if now < cooldown_until:
+        remaining = int(cooldown_until - now)
+        return f"ai_error:rate_limit:{remaining}"
+
+    try:
+        create_kwargs = dict(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": user_content},
+            ],
+            max_tokens=300,
+            temperature=0.7,
+        )
+        # Only attach tool definitions when the message actually requests an
+        # action.  Sending 18 tool schemas on every casual chat message
+        # burns ~2,000 input tokens per request with no benefit.
+        if ai_actions_enabled and _message_requests_action(message):
+            create_kwargs["tools"]       = _AI_ACTIONS_TOOLS
+            create_kwargs["tool_choice"] = "auto"
+
+        response = _get_client().chat.completions.create(**create_kwargs)
+
+    except RateLimitError as e:
+        # 429 — do NOT reset the client (it's fine), do NOT retry.
+        # Apply a per-user cooldown so the next call returns immediately
+        # instead of hitting the API again and worsening the rate limit.
+        retry_after = _RL_COOLDOWN_SECS
+        # Honour the Retry-After header if the API returned one
+        try:
+            header_val = getattr(e.response, "headers", {}).get("retry-after")
+            if header_val:
+                retry_after = max(int(float(header_val)), retry_after)
+        except Exception:
+            pass
+        _rl_cooldown[user_id] = time.monotonic() + retry_after
+        print(f"[AI] Rate limited — user {user_id} cooling down for {retry_after}s")
+        return f"ai_error:rate_limit:{retry_after}"
+
+    except (NotFoundError, APIConnectionError, APIStatusError) as e:
+        # Check whether this is a content / safety filter rejection before
+        # treating it as a generic connection problem.
+        is_safety = False
+        try:
+            body     = getattr(e, "body", None) or {}
+            err_code = (body.get("error", {}) or {}).get("code", "") if isinstance(body, dict) else ""
+            err_str  = str(e).lower()
+            if err_code in ("content_filter", "content_policy_violation", "moderated") or \
+               any(k in err_str for k in ("content_filter", "safety", "content_policy", "moderated")):
+                is_safety = True
+        except Exception:
+            pass
+
+        if is_safety:
+            print(f"[AI] Safety filter triggered for user {user_id}")
+            return "ai_error:safety"
+
+        _reset_client()
+        print(f"[AI] API error: {e}")
+        return "ai_error:generic"
+
+    except Exception as e:
+        _reset_client()
+        print(f"[AI] Unexpected error: {e}")
+        return "ai_error:generic"
+
+    choice = response.choices[0]
+
+    # ── Safety filter: model declined via finish_reason ────────────────
+    if choice.finish_reason == "content_filter":
+        print(f"[AI] Content filter finish_reason for user {user_id}")
+        return "ai_error:safety"
+
+    # ── Handle AI Actions tool call ────────────────────────────────────
+    if ai_actions_enabled and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+        tool_call = choice.message.tool_calls[0]
+        fn_name   = tool_call.function.name
+        try:
+            fn_args = _json.loads(tool_call.function.arguments)
+        except Exception:
+            fn_args = {}
+
+        action_payload = {"action": fn_name}
+        if isinstance(fn_args, dict):
+            action_payload.update(fn_args)
+        return action_payload
+
+    clean = (choice.message.content or "").strip()
+
+    update_user_memory(user_id, message, role=username)
+    update_user_memory(user_id, clean,   role="Niko")
+    adjust_favorability(user_id, delta=1)
+
+    return clean
+

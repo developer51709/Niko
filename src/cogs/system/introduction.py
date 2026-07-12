@@ -1,0 +1,141 @@
+# introduction.py
+# Sends an introduction message when the bot joins a new server
+
+import discord
+from discord.ext import commands
+from utils.logging import info, success, warning, error, debug
+from config import links
+
+MAIN_CHANNEL_NAMES = [
+    "general",
+    "chat",
+    "lobby",
+    "main",
+    "welcome",
+    "home",
+    "community",
+    "discussion",
+    "talk",
+    "general-chat",
+    "🌐general",
+    "💬general",
+]
+
+async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
+    """
+    Resolve the primary prefix for the current context/interaction.
+
+    Supports:
+    - Static string prefix
+    - Static list/tuple of prefixes
+    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
+    """
+    raw = bot.command_prefix
+
+    # Static prefix (string)
+    if isinstance(raw, str):
+        return raw
+
+    # Static list/tuple of prefixes
+    if isinstance(raw, (list, tuple)):
+        return raw[0]
+
+    # Dynamic prefix function
+    try:
+        # Context: has .message
+        msg = getattr(ctx_or_interaction, "message", None)
+
+        # Interaction: use the original message if present
+        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
+            msg = ctx_or_interaction.message
+
+        if msg is None:
+            return "."
+
+        prefixes = raw(bot, msg)
+        if isinstance(prefixes, (list, tuple)) and prefixes:
+            return prefixes[0]
+    except Exception:
+        pass
+
+    # Fallback prefix if everything else fails
+    return "."
+
+class Introduction(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    # --------------------------------
+    # Utility: pick the best channel to send the intro message
+    # --------------------------------
+    def pick_best_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
+        # 1. Prefer channels with common "main chat" names
+        for name in MAIN_CHANNEL_NAMES:
+            for channel in guild.text_channels:
+                if name.lower() in channel.name.lower():
+                    if "unverified" in channel.name.lower():
+                        continue
+                    perms = channel.permissions_for(guild.me)
+                    if perms.send_messages:
+                        debug("Introduction", f"Preferred channel found: #{channel.name}")
+                        return channel
+
+        # 2. Otherwise, pick the first channel where the bot can speak
+        for channel in guild.text_channels:
+            perms = channel.permissions_for(guild.me)
+            if perms.send_messages:
+                debug("Introduction", f"Fallback channel selected: #{channel.name}")
+                return channel
+
+        return None
+
+    # --------------------------------
+    # Event: on_guild_join
+    # --------------------------------
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        info("Introduction", f"Joined new guild: {guild.name} ({guild.id})")
+        prefix = await _resolve_prefix(self.bot, guild)
+
+        # Build introduction UI using your custom components
+        view = discord.ui.LayoutView()
+
+        container = discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content="### Hello, I'm Niko!"
+                ),
+                discord.ui.TextDisplay(
+                    content="> I am a multi-purpose bot for your server. I can help you with moderation, fun commands, music, onboarding, and more!"
+                ),
+                accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"**To get started, type `{prefix}help` or just say “hey niko” in the chat.**"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"-# 📌 **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+            )
+        )
+
+        view.add_item(container)
+
+        # Pick the best channel
+        channel = self.pick_best_channel(guild)
+
+        if channel is None:
+            warning("Introduction", f"No available channel to send introduction message in {guild.name}")
+            return
+
+        # Send the introduction message
+        try:
+            await channel.send(view=view)
+            success("Introduction", f"Sent introduction message in {guild.name} → #{channel.name}")
+        except Exception as e:
+            error("Introduction", f"Failed to send introduction message in {channel.name}: {e}")
+
+
+async def setup(bot):
+    await bot.add_cog(Introduction(bot))
