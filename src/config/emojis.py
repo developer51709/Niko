@@ -65,7 +65,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "icon_categories":
         return "<:icon_categories:1520864681185509396>"
     if emoji_name == "icon_cross":
-        return "<:icon_cross:1520827411510329415>"
+        return "<:icon_cross:1525890239632117800>"
     if emoji_name == "icon_danger":
         return "<:icon_danger:1520827415616557196>"
     if emoji_name == "icon_disk":
@@ -163,7 +163,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "icon_support":
         return "<:icon_support:1520858088301920346>"
     if emoji_name == "icon_tick":
-        return "<:icon_tick:1520827701584203896>"
+        return "<:icon_tick:1525890242446627047>"
     if emoji_name == "icon_ticket":
         return "<:icon_ticket:1520861880699064363>"
     if emoji_name == "icon_trash":
@@ -218,6 +218,10 @@ def get_emoji(emoji_name: str):
         return "<:spotify:1520827772069740705>"
     if emoji_name == "star":
         return "<:star:1520898541424218283>"
+    if emoji_name == "thumbs_down":
+        return "<:thumbs_down:1525890245365858304>"
+    if emoji_name == "thumbs_up":
+        return "<:thumbs_up:1525890248406597874>"
     if emoji_name == "tiktok":
         return "<:tiktok:1520827778344161390>"
     if emoji_name == "trash":

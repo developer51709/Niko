@@ -29,101 +29,101 @@ DATA_FILE = "data/suggestions.json"
 MESSAGES = {
     "normal": {
         "en": {
-            "no_channel":     "❌ No suggestion channel configured. An admin must run `suggest channel <channel>` first.",
-            "submitted":      "✅ Suggestion submitted in {channel} — ID `#{id}`.",
-            "channel_set":    "✅ Suggestion channel set to {channel}.",
+            "no_channel":     "No suggestion channel configured. An admin must run `suggest channel <channel>` first.",
+            "submitted":      "Suggestion submitted in {channel} — ID `#{id}`.",
+            "channel_set":    "Suggestion channel set to {channel}.",
             "config_title":   "### {icon} Suggestion Config",
             "config_body":    "**Channel:** {channel}",
-            "missing":        "⚠️ No suggestion with ID `#{id}` found.",
-            "approved":       "✅ Suggestion `#{id}` approved.",
-            "denied":         "✅ Suggestion `#{id}` denied.",
+            "missing":        "No suggestion with ID `#{id}` found.",
+            "approved":       "Suggestion `#{id}` approved.",
+            "denied":         "Suggestion `#{id}` denied.",
             "title_open":     "### {icon} Suggestion #{id}",
-            "title_approved": "### {icon} Suggestion #{id} · ✅ Approved",
-            "title_denied":   "### {icon} Suggestion #{id} · ❌ Denied",
+            "title_approved": "### {icon} Suggestion #{id} · {tick} Approved",
+            "title_denied":   "### {icon} Suggestion #{id} · {cross} Denied",
             "body":           "{text}\n\n-# By {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**Verdict by {who}:** {reason}",
         },
         "de": {
-            "no_channel":     "❌ Kein Vorschlagskanal konfiguriert. Ein Admin muss zuerst `suggest channel <channel>` ausführen.",
-            "submitted":      "✅ Vorschlag in {channel} eingereicht — ID `#{id}`.",
-            "channel_set":    "✅ Vorschlagskanal auf {channel} gesetzt.",
+            "no_channel":     "Kein Vorschlagskanal konfiguriert. Ein Admin muss zuerst `suggest channel <channel>` ausführen.",
+            "submitted":      "Vorschlag in {channel} eingereicht — ID `#{id}`.",
+            "channel_set":    "Vorschlagskanal auf {channel} gesetzt.",
             "config_title":   "### {icon} Vorschlags-Konfiguration",
             "config_body":    "**Kanal:** {channel}",
-            "missing":        "⚠️ Kein Vorschlag mit ID `#{id}` gefunden.",
-            "approved":       "✅ Vorschlag `#{id}` angenommen.",
-            "denied":         "✅ Vorschlag `#{id}` abgelehnt.",
+            "missing":        "Kein Vorschlag mit ID `#{id}` gefunden.",
+            "approved":       "Vorschlag `#{id}` angenommen.",
+            "denied":         "Vorschlag `#{id}` abgelehnt.",
             "title_open":     "### {icon} Vorschlag #{id}",
-            "title_approved": "### {icon} Vorschlag #{id} · ✅ Angenommen",
-            "title_denied":   "### {icon} Vorschlag #{id} · ❌ Abgelehnt",
+            "title_approved": "### {icon} Vorschlag #{id} · {tick} Angenommen",
+            "title_denied":   "### {icon} Vorschlag #{id} · {cross} Abgelehnt",
             "body":           "{text}\n\n-# Von {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**Urteil von {who}:** {reason}",
         },
         "es": {
-            "no_channel":     "❌ No hay canal de sugerencias configurado. Un admin debe ejecutar `suggest channel <canal>` primero.",
-            "submitted":      "✅ Sugerencia enviada en {channel} — ID `#{id}`.",
-            "channel_set":    "✅ Canal de sugerencias establecido en {channel}.",
+            "no_channel":     "No hay canal de sugerencias configurado. Un admin debe ejecutar `suggest channel <canal>` primero.",
+            "submitted":      "Sugerencia enviada en {channel} — ID `#{id}`.",
+            "channel_set":    "Canal de sugerencias establecido en {channel}.",
             "config_title":   "### {icon} Configuración de Sugerencias",
             "config_body":    "**Canal:** {channel}",
-            "missing":        "⚠️ No se encontró sugerencia con ID `#{id}`.",
-            "approved":       "✅ Sugerencia `#{id}` aprobada.",
-            "denied":         "✅ Sugerencia `#{id}` denegada.",
+            "missing":        "No se encontró sugerencia con ID `#{id}`.",
+            "approved":       "Sugerencia `#{id}` aprobada.",
+            "denied":         "Sugerencia `#{id}` denegada.",
             "title_open":     "### {icon} Sugerencia #{id}",
-            "title_approved": "### {icon} Sugerencia #{id} · ✅ Aprobada",
-            "title_denied":   "### {icon} Sugerencia #{id} · ❌ Denegada",
+            "title_approved": "### {icon} Sugerencia #{id} · {tick} Aprobada",
+            "title_denied":   "### {icon} Sugerencia #{id} · {cross} Denegada",
             "body":           "{text}\n\n-# Por {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**Veredicto de {who}:** {reason}",
         },
     },
     "cafe": {
         "en": {
-            "no_channel":     "❌ no suggestions corner set yet — admin needs to run `suggest channel <channel>` first ☕",
-            "submitted":      "✅ pinned your idea in {channel} — `#{id}` ☕✨",
-            "channel_set":    "✅ suggestions corner is now {channel} ☕",
+            "no_channel":     "no suggestions corner set yet — admin needs to run `suggest channel <channel>` first ☕",
+            "submitted":      "pinned your idea in {channel} — `#{id}` ☕✨",
+            "channel_set":    "suggestions corner is now {channel} ☕",
             "config_title":   "### {icon} suggestions corner ☕",
             "config_body":    "**channel:** {channel}",
-            "missing":        "⚠️ no idea with id `#{id}` here hun~",
-            "approved":       "✅ idea `#{id}` brewed and approved ☕✨",
-            "denied":         "✅ idea `#{id}` gently set aside ☕",
+            "missing":        "no idea with id `#{id}` here hun~",
+            "approved":       "idea `#{id}` brewed and approved ☕✨",
+            "denied":         "idea `#{id}` gently set aside ☕",
             "title_open":     "### {icon} idea #{id} ☕",
-            "title_approved": "### {icon} idea #{id} · ✅ approved ☕✨",
-            "title_denied":   "### {icon} idea #{id} · ❌ set aside ☕",
+            "title_approved": "### {icon} idea #{id} · {tick} approved ☕✨",
+            "title_denied":   "### {icon} idea #{id} · {cross} set aside ☕",
             "body":           "{text}\n\n-# by {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**verdict by {who}:** {reason}",
         },
         "de": {
-            "no_channel":     "❌ noch keine vorschlags-ecke — admin muss erst `suggest channel <channel>` machen ☕",
-            "submitted":      "✅ deine idee in {channel} angepinnt — `#{id}` ☕✨",
-            "channel_set":    "✅ die vorschlags-ecke ist jetzt {channel} ☕",
+            "no_channel":     "noch keine vorschlags-ecke — admin muss erst `suggest channel <channel>` machen ☕",
+            "submitted":      "deine idee in {channel} angepinnt — `#{id}` ☕✨",
+            "channel_set":    "die vorschlags-ecke ist jetzt {channel} ☕",
             "config_title":   "### {icon} vorschlags-ecke ☕",
             "config_body":    "**kanal:** {channel}",
-            "missing":        "⚠️ keine idee mit id `#{id}` hier hun~",
-            "approved":       "✅ idee `#{id}` gebraut und angenommen ☕✨",
-            "denied":         "✅ idee `#{id}` sanft beiseite gelegt ☕",
+            "missing":        "keine idee mit id `#{id}` hier hun~",
+            "approved":       "idee `#{id}` gebraut und angenommen ☕✨",
+            "denied":         "idee `#{id}` sanft beiseite gelegt ☕",
             "title_open":     "### {icon} idee #{id} ☕",
-            "title_approved": "### {icon} idee #{id} · ✅ angenommen ☕✨",
-            "title_denied":   "### {icon} idee #{id} · ❌ beiseite gelegt ☕",
+            "title_approved": "### {icon} idee #{id} · {tick} angenommen ☕✨",
+            "title_denied":   "### {icon} idee #{id} · {cross} beiseite gelegt ☕",
             "body":           "{text}\n\n-# von {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**urteil von {who}:** {reason}",
         },
         "es": {
-            "no_channel":     "❌ aún no hay rincón de sugerencias — un admin debe correr `suggest channel <canal>` primero ☕",
-            "submitted":      "✅ pegué tu idea en {channel} — `#{id}` ☕✨",
-            "channel_set":    "✅ el rincón de sugerencias ahora es {channel} ☕",
+            "no_channel":     "aún no hay rincón de sugerencias — un admin debe correr `suggest channel <canal>` primero ☕",
+            "submitted":      "pegué tu idea en {channel} — `#{id}` ☕✨",
+            "channel_set":    "el rincón de sugerencias ahora es {channel} ☕",
             "config_title":   "### {icon} rincón de sugerencias ☕",
             "config_body":    "**canal:** {channel}",
-            "missing":        "⚠️ no hay idea con id `#{id}` aquí~",
-            "approved":       "✅ idea `#{id}` preparada y aprobada ☕✨",
-            "denied":         "✅ idea `#{id}` apartada con cariño ☕",
+            "missing":        "no hay idea con id `#{id}` aquí~",
+            "approved":       "idea `#{id}` preparada y aprobada ☕✨",
+            "denied":         "idea `#{id}` apartada con cariño ☕",
             "title_open":     "### {icon} idea #{id} ☕",
-            "title_approved": "### {icon} idea #{id} · ✅ aprobada ☕✨",
-            "title_denied":   "### {icon} idea #{id} · ❌ apartada ☕",
+            "title_approved": "### {icon} idea #{id} · {tick} aprobada ☕✨",
+            "title_denied":   "### {icon} idea #{id} · {cross} apartada ☕",
             "body":           "{text}\n\n-# por {author}",
-            "votes":          "👍 `{up}`  👎 `{down}`",
+            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
             "verdict":        "**veredicto de {who}:** {reason}",
         },
     },
@@ -175,7 +175,7 @@ def _save(d: dict):
 
 class _UpBtn(discord.ui.Button):
     def __init__(self, sid: int):
-        super().__init__(emoji="👍", style=discord.ButtonStyle.success,
+        super().__init__(emoji=f"{get_emoji('thumbs_up')}", style=discord.ButtonStyle.success,
                          custom_id=f"sug_up:{sid}")
         self.sid = sid
 
@@ -187,7 +187,7 @@ class _UpBtn(discord.ui.Button):
 
 class _DownBtn(discord.ui.Button):
     def __init__(self, sid: int):
-        super().__init__(emoji="👎", style=discord.ButtonStyle.danger,
+        super().__init__(emoji=f"{get_emoji('thumbs_down')}", style=discord.ButtonStyle.danger,
                          custom_id=f"sug_down:{sid}")
         self.sid = sid
 
@@ -206,11 +206,11 @@ def _build_view(s: dict, ctx_like) -> discord.ui.LayoutView:
     else:
         title_key = "title_open"
 
-    title = msg(ctx_like, title_key, icon=get_emoji("icon_lightbulb"), id=s["id"])
+    title = msg(ctx_like, title_key, icon=get_emoji("icon_lightbulb"), id=s["id"], tick=get_emoji("icon_tick"), cross=get_emoji("icon_cross"))
     author = ctx_like.guild.get_member(s["author_id"]) if (ctx_like and ctx_like.guild) else None
     author_str = author.mention if author else f"<@{s['author_id']}>"
     body = msg(ctx_like, "body", text=s["text"], author=author_str)
-    votes = msg(ctx_like, "votes", up=s.get("up", 0), down=s.get("down", 0))
+    votes = msg(ctx_like, "votes", up=s.get("up", 0), down=s.get("down", 0), up_emoji=get_emoji("thumbs_up"), down_emoji=get_emoji("thumbs_down"))
 
     full = title + "\n" + body + "\n\n" + votes
     if s.get("verdict"):
@@ -273,7 +273,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         ch = ctx.guild.get_channel(g.get("channel_id") or 0) if g.get("channel_id") else None
         if not ch:
-            return await ctx.send(msg(ctx, "no_channel"))
+            return await ctx.send(f"{get_emoji('icon_cross')} {msg(ctx, 'no_channel')}")
         sid = g["next_id"]
         g["next_id"] = sid + 1
 
@@ -301,9 +301,9 @@ class Suggestions(commands.Cog):
             pass
 
         if ctx.interaction:
-            await ctx.send(msg(ctx, "submitted", channel=ch.mention, id=sid), ephemeral=True)
+            await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}", ephemeral=True)
         else:
-            await ctx.send(msg(ctx, "submitted", channel=ch.mention, id=sid))
+            await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}")
 
     @suggest.command(
         name="channel",
@@ -315,7 +315,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         g["channel_id"] = channel.id
         _save(self.data)
-        await ctx.send(msg(ctx, "channel_set", channel=channel.mention))
+        await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'channel_set', channel=channel.mention)}")
 
     @suggest.command(
         name="config",
@@ -354,7 +354,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         s = g["items"].get(str(sid))
         if not s:
-            return await ctx.send(msg(ctx, "missing", id=sid))
+            return await ctx.send(f"{get_emoji('warning')} {msg(ctx, 'missing', id=sid)}")
         s["status"] = status
         s["verdict"] = {"by": ctx.author.mention, "reason": reason[:500]}
         _save(self.data)
@@ -365,7 +365,7 @@ class Suggestions(commands.Cog):
                 await m.edit(view=_build_view(s, ctx))
             except Exception:
                 pass
-        await ctx.send(msg(ctx, ack_key, id=sid))
+        await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, ack_key, id=sid)}")
 
     # ───── voting ───────────────────────────────
 
