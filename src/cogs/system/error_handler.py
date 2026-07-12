@@ -60,7 +60,7 @@ colorama_init(autoreset=True)
 
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
-    1435978243160145981, 
+    1435978243160145981,
     1485732377958416565,
     1492310425348608170,
     1495618222488162439
@@ -101,7 +101,7 @@ def is_premium():
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_danger')} Premium Required"
+                content=f"### {get_emoji('warning')} Premium Required"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -121,7 +121,7 @@ def is_blacklisted():
             reason = user_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
                 accent_colour=discord.Color.red()
@@ -134,7 +134,7 @@ def is_blacklisted():
                 reason = guild_entry.get("reason") or "No reason provided."
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                    discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
                     accent_colour=discord.Color.red()
@@ -154,7 +154,7 @@ class ErrorHandler(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_danger')} {title}"
+                content=f"### {get_emoji('warning')} {title}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -453,7 +453,7 @@ class ErrorHandler(commands.Cog):
         logging.error("error_handler", f"Unexpected error in event {event}: {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=None))
-        
+
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
