@@ -90,8 +90,8 @@ INTERFACE_COMMANDS = (
     f"{get_emoji('vm_hide')} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('vm_unhide')} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('owner_icon')} — [`Claim`]({SUPPORT_URL}) the voice channel\n"
-    f"{E.DISCONNECT} — [`Disconnect`]({SUPPORT_URL}) a member\n"
-    f"{E.INFO} — [`View`]({SUPPORT_URL}) channel information\n"
+    f"{get_emoji('disconnect')} — [`Disconnect`]({SUPPORT_URL}) a member\n"
+    f"{get_emoji('icon_question')} — [`View`]({SUPPORT_URL}) channel information\n"
     f"{get_emoji('icon_plus')} — [`Increase`]({SUPPORT_URL}) the user limit\n"
     f"{get_emoji('icon_minus')} — [`Decrease`]({SUPPORT_URL}) the user limit"
 )
@@ -125,14 +125,14 @@ class VoiceMasterInterface(discord.ui.LayoutView):
 
         btn_lock       = discord.ui.Button(emoji=get_emoji('vm_lock'),       style=discord.ButtonStyle.gray, custom_id="vm_lock")
         btn_unlock     = discord.ui.Button(emoji=get_emoji('vm_unlock'),     style=discord.ButtonStyle.gray, custom_id="vm_unlock")
-        btn_ghost      = discord.ui.Button(emoji=get_emoji('vm_hide'),      style=discord.ButtonStyle.gray, custom_id="vm_ghost")
+        btn_ghost      = discord.ui.Button(emoji=get_emoji('vm_hide'),       style=discord.ButtonStyle.gray, custom_id="vm_ghost")
         btn_reveal     = discord.ui.Button(emoji=get_emoji('vm_unhide'),     style=discord.ButtonStyle.gray, custom_id="vm_reveal")
-        btn_claim      = discord.ui.Button(emoji=get_emoji('owner_icon'),      style=discord.ButtonStyle.gray, custom_id="vm_claim")
+        btn_claim      = discord.ui.Button(emoji=get_emoji('owner_icon'),    style=discord.ButtonStyle.gray, custom_id="vm_claim")
 
-        btn_disconnect = discord.ui.Button(emoji=E.DISCONNECT, style=discord.ButtonStyle.gray, custom_id="vm_disconnect")
-        btn_info       = discord.ui.Button(emoji=E.INFO,       style=discord.ButtonStyle.gray, custom_id="vm_info")
-        btn_increase   = discord.ui.Button(emoji=get_emoji('icon_plus'),   style=discord.ButtonStyle.gray, custom_id="vm_increase")
-        btn_decrease   = discord.ui.Button(emoji=get_emoji('icon_minus'),   style=discord.ButtonStyle.gray, custom_id="vm_decrease")
+        btn_disconnect = discord.ui.Button(emoji=get_emoji('disconnect'),    style=discord.ButtonStyle.gray, custom_id="vm_disconnect")
+        btn_info       = discord.ui.Button(emoji=get_emoji('icon_question'), style=discord.ButtonStyle.gray, custom_id="vm_info")
+        btn_increase   = discord.ui.Button(emoji=get_emoji('icon_plus'),     style=discord.ButtonStyle.gray, custom_id="vm_increase")
+        btn_decrease   = discord.ui.Button(emoji=get_emoji('icon_minus'),    style=discord.ButtonStyle.gray, custom_id="vm_decrease")
 
         btn_lock.callback       = self._on_lock
         btn_unlock.callback     = self._on_unlock
@@ -559,7 +559,7 @@ class VoiceMaster(commands.Cog):
             await self.bot.cxn.execute("DELETE FROM voicemaster_settings WHERE guild_id = $1", ctx.guild.id)
             self._bust_cache(ctx.guild.id)
 
-            await ctx.success(f"{E.TRANSFER} VoiceMaster has been reset.")
+            await ctx.success(f"{get_emoji('icon_refresh')} VoiceMaster has been reset.")
         except Exception as e:
             logging.error("VoiceMaster", f"Reset error: {e}")
             await fail(ctx, "Failed to reset VoiceMaster.")
@@ -920,7 +920,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await member.move_to(None)
-            await ctx.success(f"{E.DISCONNECT} **{member.display_name}** has been disconnected.")
+            await ctx.success(f"{get_emoji('disconnect')} **{member.display_name}** has been disconnected.")
         except Exception as e:
             logging.error("VoiceMaster", f"Disconnect error: {e}")
             await ctx.fail("Failed to disconnect the member.")

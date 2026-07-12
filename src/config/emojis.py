@@ -46,6 +46,8 @@ def get_emoji(emoji_name: str):
         return "<a:credit_card:1520827346926440638>"
     if emoji_name == "dbl":
         return "<:dbl:1520827352127377410>"
+    if emoji_name == "disconnect":
+        return "<:disconnect:1525973417223000214>"
     if emoji_name == "discord":
         return "<a:discord:1520827356678197300>"
     if emoji_name == "gift":
@@ -213,7 +215,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "number_zero":
         return "<:number_zero:1522653383536677047>"
     if emoji_name == "owner_icon":
-        return "<:owner_icon:1520827756076859594>"
+        return "<:owner_icon:1525973423791014060>"
     if emoji_name == "python":
         return "<:python:1520827759578976266>"
     if emoji_name == "ram":
