@@ -9,6 +9,7 @@ import datetime
 import asyncio
 from colorama import Fore, Style, init as colorama_init
 from config.emojis import get_emoji
+from config.ids import OWNER_IDS
 from utils import logging
 from utils.ai.debugging import send_debug_report
 from utils.blacklist_manager import BlacklistManager
@@ -56,15 +57,6 @@ from discord.app_commands import (
 from discord.errors import Forbidden, HTTPException
 
 colorama_init(autoreset=True)
-
-
-# Optional: Add your owner IDs here if you want multiple owners
-OWNER_IDS = {
-    1435978243160145981,
-    1485732377958416565,
-    1492310425348608170,
-    1495618222488162439
-}
 
 
 def is_owner():

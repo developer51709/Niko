@@ -10,6 +10,14 @@ def get_emoji(emoji_name: str):
         return "<:arrow_right:1520895041135186140>"
     if emoji_name == "automod":
         return "<:Automod:1520827279209664695>"
+    if emoji_name == "badge_bugbounty":
+        return "<:badge_bugbounty:1525900304007037048>"
+    if emoji_name == "badge_developer":
+        return "<:badge_developer:1525900307215679558>"
+    if emoji_name == "badge_partner":
+        return "<:badge_partner:1525900310080655530>"
+    if emoji_name == "badge_supporter":
+        return "<:badge_supporter:1525900312735383694>"
     if emoji_name == "bot_owner":
         return "<:bot_owner:1520827283336724510>"
     if emoji_name == "C4Empty":
@@ -167,7 +175,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "icon_ticket":
         return "<:icon_ticket:1520861880699064363>"
     if emoji_name == "icon_trash":
-        return "<:icon_trash:1520827709196865717>"
+        return "<:icon_trash:1525900316183232523>"
     if emoji_name == "icon_utility":
         return "<:icon_utility:1520861883949645875>"
     if emoji_name == "icon_verified":

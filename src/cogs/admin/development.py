@@ -11,14 +11,7 @@ import colorama
 from utils.paginator import PaginatedView, paginate
 from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
 from config.emojis import get_emoji
-
-# Developer user IDs
-DEVELOPERS = {
-    1479968201319125013, # n.y.x.e.n
-    1435978243160145981, # nyxen_alt2
-    1485732377958416565,
-    1495618222488162439  # nyxenwastakeny
-}
+from config.ids import DEVELOPER_IDS
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     """
@@ -72,7 +65,7 @@ class Development(commands.Cog):
     # Developer-only check
     # -------------------------------
     async def cog_check(self, ctx: commands.Context):
-        return ctx.author.id in DEVELOPERS
+        return ctx.author.id in DEVELOPER_IDS
 
     # -------------------------------
     # Developer Help
