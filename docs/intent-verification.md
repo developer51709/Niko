@@ -165,8 +165,9 @@ submit that URL.
 ### "Describe why your bot needs the Presence privileged intent."
 
 > Niko reads presence data to display a member's current online/offline/DND
-> status in the `!userinfo` command. Presence data is never stored and is only
-> read at the moment the command is invoked.
+> status in the `!userinfo` command as well as Spotify status for the `!spotify`
+> command. Presence data is never stored and is only read at the moment the
+> command is invoked.
 
 ---
 
