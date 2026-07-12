@@ -179,7 +179,7 @@ class PrefixConfig(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="prefix-config", help="Configure custom prefixes for this server.")
+    @commands.command(name="prefix", help="Configure custom prefixes for this server.")
     @commands.has_permissions(manage_guild=True)
     async def prefix_config(self, ctx):
         view = PrefixConfigPanel(ctx.guild.id)
