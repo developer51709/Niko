@@ -202,22 +202,44 @@ def upload_to_imgbb(buffer: io.BytesIO) -> str | None:
                 data={"key": api_key, "image": b64},
                 timeout=30,
             )
-            if r.ok:
-                url = r.json()["data"]["display_url"]
+
+            if not r.ok:
+                if r.status_code == 400:
+                    print(f"[imgbb] 400 bad request: {r.text[:120]}")
+                    return None
+
+                print(f"[imgbb] attempt {attempt} failed {r.status_code}: {r.text[:120]}")
+                continue
+
+            # Parse JSON safely
+            try:
+                data = r.json()
+            except Exception as e:
+                print(f"[imgbb] JSON parse error on attempt {attempt}: {e}")
+                continue
+
+            if "data" not in data:
+                print(f"[imgbb] missing 'data' field: {data}")
+                continue
+
+            d = data["data"]
+
+            # IMGBB returns different fields depending on load
+            url = (
+                d.get("display_url")
+                or d.get("url")
+                or d.get("image", {}).get("url")
+            )
+
+            if url:
                 if attempt > 1:
                     print(f"[imgbb] upload succeeded on attempt {attempt}")
                 return url
 
-            # 400 = bad request (key/payload wrong) — no point retrying
-            if r.status_code == 400:
-                print(f"[imgbb] upload failed with 400 (bad request): {r.text[:120]}")
-                return None
-
-            print(f"[imgbb] attempt {attempt}/{_IMGBB_MAX_ATTEMPTS} failed "
-                  f"{r.status_code}: {r.text[:120]}")
+            print(f"[imgbb] no usable URL in response: {data}")
 
         except Exception as e:
-            print(f"[imgbb] attempt {attempt}/{_IMGBB_MAX_ATTEMPTS} error: {e}")
+            print(f"[imgbb] attempt {attempt} error: {e}")
 
         if attempt < _IMGBB_MAX_ATTEMPTS:
             wait = _IMGBB_BACKOFF_BASE ** attempt
