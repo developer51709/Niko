@@ -27,22 +27,22 @@ OXAPAY_KEY: str = os.getenv("OXAPAY_API_KEY", "")
 INVOICE_LIFETIME: int = 60  # minutes
 
 CURRENCIES = [
-    ("USDT", "Tether",   "💵"),
-    ("ETH",  "Ethereum", "🔷"),
-    ("BTC",  "Bitcoin",  "🟠"),
-    ("BNB",  "BNB",      "🟡"),
-    ("LTC",  "Litecoin", "⬜"),
-    ("DOGE", "Dogecoin", "🐕"),
-    ("TRX",  "TRON",     "🔴"),
-    ("XMR",  "Monero",   "🔒"),
+    ("USDT", "Tether",   f"{get_emoji('crypto_tether_usdt')}"),
+    ("ETH",  "Ethereum", f"{get_emoji('crypto_ethereum')}"),
+    ("BTC",  "Bitcoin",  f"{get_emoji('crypto_bitcoin')}"),
+    ("BNB",  "BNB",      f"{get_emoji('crypto_bnb')}"),
+    ("LTC",  "Litecoin", f"{get_emoji('crypto_ltc')}"),
+    ("DOGE", "Dogecoin", f"{get_emoji('crypto_dogecoin')}"),
+    ("TRX",  "TRON",     f"{get_emoji('crypto_tron')}"),
+    ("XMR",  "Monero",   f"{get_emoji('crypto_monero')}"),
 ]
 
 
 # ─────────────────── UI helpers ───────────────────
 
-def _currency_view(cog: "DonationCog", amount: float, user_id: int) -> discord.ui.View:
+def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord.ui.ActionRow:
     """Return a View containing a currency Select for `amount` USD."""
-    view = discord.ui.View(timeout=180)
+    view = discord.ui.ActionRow()
     options = [
         discord.SelectOption(
             label=f"{label} ({code})",
@@ -60,7 +60,7 @@ def _currency_view(cog: "DonationCog", amount: float, user_id: int) -> discord.u
                 "This isn't your donation menu!", ephemeral=True
             )
         sel.disabled = True
-        await interaction.message.edit(view=view)
+        # await interaction.message.edit(view=view)
         await cog._handle_currency_choice(interaction, amount, user_id, sel.values[0])
 
     sel.callback = _cb
@@ -300,18 +300,19 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         f"and role in the support server.\n\n"
                         f"Select a cryptocurrency below to proceed:"
                     )
-                )
+                ),
+                _currency_select(self, amount, ctx.author.id)
             )
         )
 
-        currency_sel = _currency_view(self, amount, ctx.author.id)
+        # currency_sel = _currency_view(self, amount, ctx.author.id)
 
         if ctx.interaction:
             await ctx.interaction.followup.send(view=intro_view, ephemeral=True)
-            await ctx.interaction.followup.send(view=currency_sel, ephemeral=True)
+            # await ctx.interaction.followup.send(view=currency_sel, ephemeral=True)
         else:
             await ctx.send(view=intro_view)
-            await ctx.send(view=currency_sel)
+            # await ctx.send(view=currency_sel)
 
     @commands.hybrid_command(
         name="donationstatus",

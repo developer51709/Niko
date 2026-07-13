@@ -46,6 +46,22 @@ def get_emoji(emoji_name: str):
         return "<:cpu:1520864674361381038>"
     if emoji_name == "credit_card":
         return "<a:credit_card:1520827346926440638>"
+    if emoji_name == "crypto_bitcoin":
+        return "<:crypto_bitcoin:1526343246609911908>"
+    if emoji_name == "crypto_bnb":
+        return "<:crypto_bnb:1526343249755639818>"
+    if emoji_name == "crypto_dogecoin":
+        return "<:crypto_dogecoin:1526343252708692019>"
+    if emoji_name == "crypto_ethereum":
+        return "<:crypto_ethereum:1526343255506157770>"
+    if emoji_name == "crypto_ltc":
+        return "<:crypto_ltc:1526343258739834930>"
+    if emoji_name == "crypto_monero":
+        return "<:crypto_monero:1526343262061989918>"
+    if emoji_name == "crypto_tether_usdt":
+        return "<:crypto_tether_usdt:1526343264834293862>"
+    if emoji_name == "crypto_tron":
+        return "<:crypto_tron:1526343268395126804>"
     if emoji_name == "dbl":
         return "<:dbl:1520827352127377410>"
     if emoji_name == "disconnect":
