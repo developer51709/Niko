@@ -4,6 +4,8 @@
 
 # emojis for the bot
 def get_emoji(emoji_name: str):
+    if emoji_name == "active_developer_badge":
+        return "<:active_developer_badge:1526320574060560424>"
     if emoji_name == "arrow_left":
         return "<:arrow_left:1520894734934216756>"
     if emoji_name == "arrow_right":
@@ -80,8 +82,6 @@ def get_emoji(emoji_name: str):
         return "<:icon_danger:1520827415616557196>"
     if emoji_name == "icon_disk":
         return "<:icon_disk:1520827419362328577>"
-    if emoji_name == "icon_dnd":
-        return "<:icon_dnd:1520827423556501660>"
     if emoji_name == "icon_docs":
         return "<:icon_docs:1520853316609900594>"
     if emoji_name == "icon_economy":
@@ -102,8 +102,6 @@ def get_emoji(emoji_name: str):
         return "<:icon_home:1520854186013626370>"
     if emoji_name == "icon_host":
         return "<:icon_host:1520827503860519104>"
-    if emoji_name == "icon_idle":
-        return "<:icon_idle:1520827507945898125>"
     if emoji_name == "icon_image":
         return "<:icon_image:1520861857051578389>"
     if emoji_name == "icon_important":
@@ -134,10 +132,6 @@ def get_emoji(emoji_name: str):
         return "<:icon_moderation:1520870143293653082>"
     if emoji_name == "icon_nsfw":
         return "<:icon_nsfw:1520827598425292862>"
-    if emoji_name == "icon_offline":
-        return "<:icon_offline:1520827606499328070>"
-    if emoji_name == "icon_online":
-        return "<:icon_online:1520827613273395262>"
     if emoji_name == "icon_paint":
         return "<:icon_paint:1520855743748898938>"
     if emoji_name == "icon_partner":
@@ -228,6 +222,16 @@ def get_emoji(emoji_name: str):
         return "<:spotify:1520827772069740705>"
     if emoji_name == "star":
         return "<:star:1520898541424218283>"
+    if emoji_name == "status_dnd":
+        return "<:status_dnd:1526316331203563620>"
+    if emoji_name == "status_idle":
+        return "<:status_idle:1526316334366068837>"
+    if emoji_name == "status_offline":
+        return "<:status_offline:1526316337272586392>"
+    if emoji_name == "status_online":
+        return "<:status_online:1526316340569178173>"
+    if emoji_name == "status_streaming":
+        return "<:status_streaming:1526316343215919328>"
     if emoji_name == "thumbs_down":
         return "<:thumbs_down:1525890245365858304>"
     if emoji_name == "thumbs_up":
@@ -240,6 +244,8 @@ def get_emoji(emoji_name: str):
         return "<:twitterx:1520827785176678580>"
     if emoji_name == "icon_voicemaster":
         return "<:icon_voicemaster:1520864687460454500>"
+    if emoji_name == "verified_developer_badge":
+        return "<:verified_developer_badge:1526320577676312666>"
     if emoji_name == "vm_hide":
         return "<:vm_hide:1520887954137157714>"
     if emoji_name == "vm_lock":
