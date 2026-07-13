@@ -197,22 +197,33 @@ class ConnectFourButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         game: ConnectFour = self.view.game
         lang: str         = self.view.lang
+        msg_id = interaction.message.id
+        await interaction.response.defer()
 
         # Wrong player
         if interaction.user != game.turn:
             err = _error_view(_t(lang, "not_your_turn"))
-            return await interaction.response.send_message(view=err, ephemeral=True)
+            try:
+                return await interaction.followup.send(view=err, ephemeral=True)
+            except Exception as e:
+                print(f"Connect four error: {e}")
 
         # Column full
         if game.board[0][self.column] != BLANK:
             err = _error_view(_t(lang, "col_full"))
-            return await interaction.response.send_message(view=err, ephemeral=True)
+            try:
+                return await interaction.followup.send(view=err, ephemeral=True)
+            except Exception as e:
+                print(f"Connect four error: {e}")
 
         game.place_move(self.column, interaction.user)
         game.check_game_over()
 
         new_view = ConnectFourView(game, lang)
-        await interaction.response.edit_message(view=new_view)
+        try:
+            await interaction.followup.edit_message(view=new_view, message_id=msg_id)
+        except Exception as e:
+            print(f"Connect four error: {e}")
 
 
 # ───────────────────────────────────────────────────
