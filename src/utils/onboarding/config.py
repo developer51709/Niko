@@ -1,8 +1,24 @@
 import json
 import os
+import secrets
 from dataclasses import dataclass, asdict, fields
 
 DATA_DIR = "data/onboarding"
+
+# ── Role menu types ──────────────────────────────────────────────────────────
+MENU_TYPE_LABELS = {
+    "select_multi":  "Dropdown — Multiple Roles",
+    "select_single": "Dropdown — Single Role",
+    "button_multi":  "Buttons — Multiple Roles",
+    "button_single": "Buttons — Single Role",
+}
+DEFAULT_MENU_TYPE = "select_multi"
+BUTTON_STYLE_NAMES = ("primary", "secondary", "success", "danger")
+
+
+def new_menu_id() -> str:
+    """Short unique id used to key a role menu within a guild's config."""
+    return secrets.token_hex(4)
 
 
 @dataclass
@@ -20,10 +36,19 @@ class OnboardingConfig:
     rules_text: str | None = None
     rules_role_id: int | None = None  # role to assign on acknowledgment
 
-    # Role menu
-    role_menu_channel: int | None = None
-    role_menu_message_id: int | None = None
-    role_menu_options: list[dict] | None = None  # [{role_id, label, description, emoji}]
+    # Role menus — a server can have any number of independent role menus.
+    # menu_id -> {
+    #     "name": str,                 internal identifier, unique per guild
+    #     "title": str,                header shown on the posted menu
+    #     "description": str,          body text shown on the posted menu
+    #     "color": int,                accent colour
+    #     "menu_type": str,            one of MENU_TYPE_LABELS keys
+    #     "max_values": int | None,    optional cap on selectable roles (select_multi only)
+    #     "channel_id": int | None,    channel the menu is posted in
+    #     "message_id": int | None,    posted message id
+    #     "options": [ {role_id, label, description, emoji, style} ],
+    # }
+    role_menus: dict[str, dict] | None = None
 
     # Autoroles — assigned immediately when a member joins
     autorole_ids: list[int] | None = None  # list of role IDs
@@ -53,7 +78,26 @@ def load_config(guild_id: int) -> OnboardingConfig:
 
     known = {f.name for f in fields(OnboardingConfig)}
     filtered = {k: v for k, v in data.items() if k in known}
-    return OnboardingConfig(**filtered)
+    cfg = OnboardingConfig(**filtered)
+
+    # ── migrate legacy single role-menu fields into the new role_menus map ──
+    if not cfg.role_menus and data.get("role_menu_options"):
+        cfg.role_menus = {
+            new_menu_id(): {
+                "name": "default",
+                "title": "Role Selection",
+                "description": "Choose your roles below.",
+                "color": 0x57F287,
+                "menu_type": DEFAULT_MENU_TYPE,
+                "max_values": None,
+                "channel_id": data.get("role_menu_channel"),
+                "message_id": data.get("role_menu_message_id"),
+                "options": data.get("role_menu_options") or [],
+            }
+        }
+        save_config(guild_id, cfg)
+
+    return cfg
 
 
 def save_config(guild_id: int, cfg: OnboardingConfig):

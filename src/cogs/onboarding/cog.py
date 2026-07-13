@@ -43,9 +43,8 @@ class Onboarding(commands.Cog):
     @onboarding.command(name="role-menu")
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
-        """Setup role menu for the server."""
-        prefix = await _resolve_prefix(self.bot, ctx)
-        await ctx.send(view=RoleMenuSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
+        """Create, edit, and manage role menus for the server."""
+        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="autoroles")
     @commands.has_permissions(administrator=True)
@@ -276,8 +275,9 @@ async def setup(bot):
         if cfg.rules_channel and cfg.rules_message_id:
             bot.add_view(RulesAcknowledgeView(guild_id), message_id=cfg.rules_message_id)
 
-        if cfg.role_menu_channel and cfg.role_menu_message_id:
-            bot.add_view(RoleMenuView(guild_id), message_id=cfg.role_menu_message_id)
+        for menu_id, menu in (cfg.role_menus or {}).items():
+            if menu.get("channel_id") and menu.get("message_id"):
+                bot.add_view(RoleMenuView(guild_id, menu_id, cfg=cfg), message_id=menu["message_id"])
 
         if cfg.captcha_channel_id and cfg.captcha_panel_message_id:
             bot.add_view(CaptchaPanelView(guild_id), message_id=cfg.captcha_panel_message_id)
