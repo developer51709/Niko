@@ -50,7 +50,9 @@ def _save(data: dict):
 def _sticky_view(content: str, color: int) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"📌 {content}"),
+        discord.ui.TextDisplay(content=f"## 📌 Sticky Message"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(content=f"{content}"),
         accent_colour=discord.Colour(color),
     ))
     return view
@@ -215,7 +217,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not message.guild or message.author.bot:
+        if not message.guild or message.author.id == self.bot.user.id:
             return
 
         entry = self._get(message.guild.id, message.channel.id)
