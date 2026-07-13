@@ -20,6 +20,8 @@ MESSAGES = {
             "footer":    "Deleted message {cur} of {total}",
             "sticker":   "🎟️ Sticker: {name}",
             "embed_msg": "*(had an embed)*",
+            "cleared":   "🧹 Cleared the snipe history for this channel.",
+            "already_empty": "There's nothing to clear — no recently deleted messages in this channel.",
         },
         "de": {
             "empty":     "Keine kürzlich gelöschten Nachrichten in diesem Kanal.",
@@ -29,6 +31,8 @@ MESSAGES = {
             "footer":    "Gelöschte Nachricht {cur} von {total}",
             "sticker":   "🎟️ Aufkleber: {name}",
             "embed_msg": "*(hatte einen Embed)*",
+            "cleared":   "🧹 Snipe-Verlauf für diesen Kanal wurde gelöscht.",
+            "already_empty": "Es gibt nichts zu löschen — keine kürzlich gelöschten Nachrichten in diesem Kanal.",
         },
         "es": {
             "empty":     "No hay mensajes eliminados recientemente en este canal.",
@@ -38,6 +42,8 @@ MESSAGES = {
             "footer":    "Mensaje eliminado {cur} de {total}",
             "sticker":   "🎟️ Pegatina: {name}",
             "embed_msg": "*(tenía un embed)*",
+            "cleared":   "🧹 Se borró el historial de mensajes cazados de este canal.",
+            "already_empty": "No hay nada que borrar — no hay mensajes eliminados recientemente en este canal.",
         },
     },
     "cafe": {
@@ -49,6 +55,8 @@ MESSAGES = {
             "footer":    "deleted message {cur} of {total} · gone but not forgotten ☕",
             "sticker":   "🎟️ sticker: {name}",
             "embed_msg": "*(had an embed — the mystery deepens ☕)*",
+            "cleared":   "🧹☕ swept the crumbs away — snipe history cleared for this channel.",
+            "already_empty": "nothing to sweep up — this channel's already spotless ☕✨",
         },
         "de": {
             "empty":     "hier wurde kürzlich nichts gelöscht — das café ist sauber ☕✨",
@@ -58,6 +66,8 @@ MESSAGES = {
             "footer":    "gelöschte nachricht {cur} von {total} · weg, aber nicht vergessen ☕",
             "sticker":   "🎟️ aufkleber: {name}",
             "embed_msg": "*(hatte einen embed — das rätsel vertieft sich ☕)*",
+            "cleared":   "🧹☕ krümel weggefegt — snipe-verlauf für diesen kanal gelöscht.",
+            "already_empty": "nichts zu fegen — dieser kanal ist schon blitzsauber ☕✨",
         },
         "es": {
             "empty":     "no se ha borrado nada por aquí últimamente — el café está limpio ☕✨",
@@ -67,6 +77,8 @@ MESSAGES = {
             "footer":    "mensaje eliminado {cur} de {total} · ido pero no olvidado ☕",
             "sticker":   "🎟️ pegatina: {name}",
             "embed_msg": "*(tenía un embed — el misterio se profundiza ☕)*",
+            "cleared":   "🧹☕ se barrieron las migas — historial de mensajes cazados borrado en este canal.",
+            "already_empty": "nada que barrer — este canal ya está reluciente ☕✨",
         },
     },
 }
@@ -278,6 +290,24 @@ class Snipe(commands.Cog):
 
         view = SnipeView(entries=history, ctx=ctx)
         await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+
+    @commands.command(
+        name="clearsnipe",
+        aliases=["cs"],
+        help="{ 'en': 'clear the deleted-message history for this channel ☕🧹', 'de': 'lösche den snipe-verlauf für diesen kanal' }"
+    )
+    @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
+    async def clearsnipe(self, ctx: commands.Context):
+        """Clear the stored deleted-message history for the current channel."""
+        had_history = bool(self._history.pop(ctx.channel.id, None))
+        key = "cleared" if had_history else "already_empty"
+
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg_raw(ctx, key))
+        ))
+        await ctx.send(view=view)
 
 
 async def setup(bot):
