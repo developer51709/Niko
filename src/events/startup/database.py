@@ -127,6 +127,15 @@ async def _create_tables(bot):
         except Exception as e:
             logging.warning("DB", f"Could not migrate follows.db: {e}")
 
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS donors (
+            user_id        INTEGER PRIMARY KEY,
+            total_donated  REAL    DEFAULT 0,
+            last_donation  TEXT,
+            last_track_id  TEXT
+        )
+    """)
+
     logging.success("DB", "Database tables verified")
 
 

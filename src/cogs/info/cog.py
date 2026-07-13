@@ -13,6 +13,8 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
+from config.ids import DEVELOPER_IDS, SUPPORT_GUILD, BUGBOUNTY_ROLE, SUPPORTER_ROLE, PARTNER_ROLE
+from utils.donations import is_supporter
 
 MESSAGES = {
     "normal": {
@@ -519,6 +521,50 @@ def cv2_image(text, image_url):
     return view
 
 
+async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
+    """
+    Return a list of badge emoji strings earned by user_id.
+
+    Checks (in order):
+      1. DEVELOPER_IDS  → badge_developer
+      2. donors DB      → badge_supporter  (works even if not in support server)
+      3. Support server roles:
+           BUGBOUNTY_ROLE → badge_bugbounty
+           SUPPORTER_ROLE → badge_supporter (deduped)
+           PARTNER_ROLE   → badge_partner
+    Gracefully handles users who are not members of the support server.
+    """
+    badges: list[str] = []
+
+    if user_id in DEVELOPER_IDS:
+        badges.append(get_emoji("badge_developer"))
+
+    try:
+        if await is_supporter(bot, user_id):
+            badges.append(get_emoji("badge_supporter"))
+    except Exception:
+        pass
+
+    support_guild = bot.get_guild(SUPPORT_GUILD)
+    if support_guild:
+        try:
+            member = support_guild.get_member(user_id)
+            if member is None:
+                member = await support_guild.fetch_member(user_id)
+            role_ids = {r.id for r in member.roles}
+            if BUGBOUNTY_ROLE and BUGBOUNTY_ROLE in role_ids:
+                badges.append(get_emoji("badge_bugbounty"))
+            supporter_emoji = get_emoji("badge_supporter")
+            if SUPPORTER_ROLE and SUPPORTER_ROLE in role_ids and supporter_emoji not in badges:
+                badges.append(supporter_emoji)
+            if PARTNER_ROLE and PARTNER_ROLE in role_ids:
+                badges.append(get_emoji("badge_partner"))
+        except (discord.NotFound, discord.HTTPException):
+            pass
+
+    return badges
+
+
 class InfoCog(commands.Cog):
     """Cozy bilingual info commands with personality support."""
 
@@ -560,26 +606,111 @@ class InfoCog(commands.Cog):
     # -------------------------------
     @commands.hybrid_command(
         name="userinfo",
+        aliases=["ui", "user"],
         description="View user info",
         help="{ 'en': 'see cute lil user details ☕', 'de': 'benutzer-infos anzeigen', 'es': 'mira detalles del usuario ☕' }"
     )
     async def userinfo(self, ctx, member: discord.Member = None):
+        if ctx.interaction:
+            await ctx.defer()
+
         target = member or ctx.author
         avatar_url = target.avatar.url if target.avatar else None
 
-        roles = [r.name for r in target.roles if r.name != "@everyone"]
-        joined = f"<t:{int(target.joined_at.timestamp())}:f> (<t:{int(target.joined_at.timestamp())}:R>)" if target.joined_at else "`N/A`"
+        # ── Status ────────────────────────────────────────────────────────
+        is_streaming = any(isinstance(a, discord.Streaming) for a in target.activities)
+        if is_streaming:
+            status_emoji = get_emoji("status_streaming")
+            status_text  = "Streaming"
+        else:
+            _status_map = {
+                discord.Status.online:  ("status_online",  "Online"),
+                discord.Status.idle:    ("status_idle",    "Idle"),
+                discord.Status.dnd:     ("status_dnd",     "Do Not Disturb"),
+                discord.Status.offline: ("status_offline", "Offline"),
+            }
+            sk, status_text = _status_map.get(target.status, ("status_offline", "Offline"))
+            status_emoji = get_emoji(sk)
+
+        # ── Discord public-flag badges ─────────────────────────────────────
+        pf = target.public_flags
+        _disc_flag_map = [
+            ("staff",                  None,                        "🛡️"),
+            ("partner",                "icon_partner",             None),
+            ("bug_hunter",             "icon_bug",                 None),
+            ("bug_hunter_level_2",     "icon_bug",                 None),
+            ("hypesquad_bravery",      "hypesquad_bravery",        None),
+            ("hypesquad_brilliance",   "hypesquad_brilliance",     None),
+            ("hypesquad_balance",      "hypesquad_balance",        None),
+            ("early_supporter",        "icon_premium",             None),
+            ("verified_bot_developer", "verified_developer_badge", None),
+            ("active_developer",       "active_developer_badge",   None),
+        ]
+        disc_badges = []
+        seen_disc = set()
+        for flag, ekey, fallback in _disc_flag_map:
+            if getattr(pf, flag, False):
+                token = ekey or fallback
+                if token and token not in seen_disc:
+                    seen_disc.add(token)
+                    disc_badges.append(get_emoji(ekey) if ekey else fallback)
+
+        # ── Niko badges ───────────────────────────────────────────────────
+        niko_badges = await _get_badges(self.bot, target.id)
+
+        badges_section = ""
+        if disc_badges:
+            badges_section += f"\n**Discord Badges:** {' '.join(disc_badges)}"
+        if niko_badges:
+            badges_section += f"\n**Niko Badges:** {' '.join(niko_badges)}"
+
+        # ── Server info ───────────────────────────────────────────────────
+        joined = (
+            f"<t:{int(target.joined_at.timestamp())}:f> "
+            f"(<t:{int(target.joined_at.timestamp())}:R>)"
+            if target.joined_at else "N/A"
+        )
+
+        sorted_members = sorted(
+            [m for m in ctx.guild.members if m.joined_at],
+            key=lambda m: m.joined_at,
+        )
+        join_pos = next(
+            (i + 1 for i, m in enumerate(sorted_members) if m.id == target.id), "?"
+        )
+
+        roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
+        role_display = " ".join(roles[:12])
+        if len(roles) > 12:
+            role_display += f" *+{len(roles) - 12} more*"
+
+        nickname = f"`{target.nick}`" if target.nick else "*none*"
+
+        boost_line = ""
+        if target.premium_since:
+            boost_line = (
+                f"\n**Boosting Since:** "
+                f"<t:{int(target.premium_since.timestamp())}:R>"
+            )
+
+        bot_tag = f" {get_emoji('icon_bot')}" if target.bot else ""
 
         text = (
-            f"### {msg(ctx, 'userinfo_title')}\n"
-            f"**{msg(ctx, 'userinfo_username')}:** `{target.display_name}`\n"
-            f"**{msg(ctx, 'userinfo_id')}:** `{target.id}`\n"
-            f"**{msg(ctx, 'userinfo_created')}:** <t:{int(target.created_at.timestamp())}:f> (<t:{int(target.created_at.timestamp())}:R>)\n"
-            f"**{msg(ctx, 'userinfo_joined')}:** {joined}\n"
-            f"**{msg(ctx, 'userinfo_toprole')}:** `{target.top_role.name}`\n"
-            f"**{msg(ctx, 'userinfo_roles')}:** `{', '.join(roles) if roles else 'None'}`"
+            f"## {target.display_name}{bot_tag}\n"
+            f"{status_emoji} **{status_text}**  ·  `@{target.name}`\n"
+            f"**User ID:** `{target.id}`\n"
+            f"**Account Created:** <t:{int(target.created_at.timestamp())}:f>"
+            f" (<t:{int(target.created_at.timestamp())}:R>)\n"
+            f"\n"
+            f"**Joined Server:** {joined}\n"
+            f"**Join Position:** `#{join_pos}` of `{len(ctx.guild.members)}`\n"
+            f"**Nickname:** {nickname}\n"
+            f"**Top Role:** {target.top_role.mention}\n"
+            f"**Roles ({len(roles)}):** {role_display if roles else '*none*'}"
+            f"{boost_line}"
+            f"{badges_section}"
         )
-        await ctx.send(view=cv2_text(text, thumbnail_url=avatar_url))
+        await ctx.send(view=cv2_text(text, thumbnail_url=avatar_url), allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # AVATAR

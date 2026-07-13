@@ -17,8 +17,7 @@ DEVELOPER_IDS = {
 # support server guild id
 SUPPORT_GUILD = 1497250915034337330
 
-# bugbounty role for the bugbounty badge in the userinfo command
-BUGBOUNTY_ROLE = 0000000000000000000
-
-# supporter role for the supporter badge in the userinfo command
-SUPPORTER_ROLE = 0000000000000000000
+# role ids for the badges in the userinfo command
+BUGBOUNTY_ROLE = 1526272293368496128
+SUPPORTER_ROLE = 1523451924018364569
+PARTNER_ROLE = 1526302927684239482
