@@ -245,15 +245,15 @@ def get_emoji(emoji_name: str):
     if emoji_name == "star":
         return "<:star:1520898541424218283>"
     if emoji_name == "status_dnd":
-        return "<:status_dnd:1526316331203563620>"
+        return "<:status_dnd:1526455311286669423>"
     if emoji_name == "status_idle":
-        return "<:status_idle:1526316334366068837>"
+        return "<:status_idle:1526455314428203199>"
     if emoji_name == "status_offline":
-        return "<:status_offline:1526316337272586392>"
+        return "<:status_offline:1526455317234319461>"
     if emoji_name == "status_online":
-        return "<:status_online:1526316340569178173>"
+        return "<:status_online:1526455320506011728>"
     if emoji_name == "status_streaming":
-        return "<:status_streaming:1526316343215919328>"
+        return "<:status_streaming:1526455323488157766>"
     if emoji_name == "thumbs_down":
         return "<:thumbs_down:1525890245365858304>"
     if emoji_name == "thumbs_up":
