@@ -827,7 +827,7 @@ class OwnerCog(commands.Cog):
             title=f"🔨 Blacklist\n-# Users: {len(user_lines)} · Guilds: {len(guild_lines)}",
             pages=pages
         )
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # INFO — look up a single entry
@@ -862,7 +862,7 @@ class OwnerCog(commands.Cog):
             discord.ui.TextDisplay(content=f"**Reason:** {reason}\n**Added:** {date_str}\n**Added by:** {added_by_str}"),
             accent_colour=discord.Color.red(),
         ))
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # REASON — update reason on an existing entry

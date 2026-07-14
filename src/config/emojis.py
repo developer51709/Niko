@@ -22,6 +22,8 @@ def get_emoji(emoji_name: str):
         return "<:badge_supporter:1525900312735383694>"
     if emoji_name == "bot_owner":
         return "<:bot_owner:1520827283336724510>"
+    if emoji_name == "broom":
+        return "<:broom:1526380226949546225>"
     if emoji_name == "C4Empty":
         return "<:C4Empty:1520827287761850421>"
     if emoji_name == "C4Red":
@@ -121,13 +123,13 @@ def get_emoji(emoji_name: str):
     if emoji_name == "icon_image":
         return "<:icon_image:1520861857051578389>"
     if emoji_name == "icon_important":
-        return "<:icon_important:1520827516334379169>"
+        return "<:icon_important:1526370655409274880>"
     if emoji_name == "icon_invite":
         return "<:icon_invite:1520827520797376532>"
     if emoji_name == "icon_join":
-        return "<:icon_join:1520827524530049115>"
+        return "<:icon_join:1526370658282635435>"
     if emoji_name == "icon_leave":
-        return "<:icon_leave:1520827528913358900>"
+        return "<:icon_leave:1526370661403201666>"
     if emoji_name == "icon_leveling":
         return "<:icon_leveling:1520861860163752057>"
     if emoji_name == "icon_lightbulb":
@@ -226,6 +228,10 @@ def get_emoji(emoji_name: str):
         return "<:number_zero:1522653383536677047>"
     if emoji_name == "owner_icon":
         return "<:owner_icon:1525973423791014060>"
+    if emoji_name == "oxapay":
+        return "<:oxapay:1526370664720629780>"
+    if emoji_name == "pingpong":
+        return "<:pingpong:1526380229868785734>"
     if emoji_name == "python":
         return "<:python:1520827759578976266>"
     if emoji_name == "ram":

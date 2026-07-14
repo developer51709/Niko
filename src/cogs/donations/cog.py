@@ -91,7 +91,7 @@ def _payment_layout(
                     label="Pay Now",
                     style=discord.ButtonStyle.link,
                     url=pay_link,
-                    emoji="💳",
+                    emoji=get_emoji("oxapay"),
                 )
             ),
         )
@@ -301,7 +301,10 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         f"Select a cryptocurrency below to proceed:"
                     )
                 ),
-                _currency_select(self, amount, ctx.author.id)
+                _currency_select(self, amount, ctx.author.id),
+                discord.ui.TextDisplay(
+                    content=f"-# {get_emoji('oxapay')} Powered by OxaPay"
+                )
             )
         )
 
