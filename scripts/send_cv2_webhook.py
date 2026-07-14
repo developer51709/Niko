@@ -421,7 +421,7 @@ def send_to_webhook(webhook, author, message, sha, repo_url, commit_url):
     img.save(buffer, format="PNG")
     buffer.seek(0)
 
-    image_url = upload_to_imgbb(buffer, repo)
+    image_url = upload_to_imgbb(buffer)
     if image_url:
         return send_cv2(webhook, author, message, sha, repo_url, commit_url, image_url)
 
