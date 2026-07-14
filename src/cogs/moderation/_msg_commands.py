@@ -4,6 +4,7 @@ Moderation — message-management commands (clear, purge).
 import discord
 from discord.ext import commands
 from ._messages import msg, _chunked_purge
+from config.emojis import get_emoji
 
 
 class MessagesMixin:
@@ -24,7 +25,7 @@ class MessagesMixin:
             except (discord.HTTPException, AttributeError):
                 pass
         deleted = await _chunked_purge(ctx.channel, amount)
-        await ctx.send(msg(ctx, "cleared", count=len(deleted)), delete_after=5)
+        await ctx.send(f"{get_emoji('broom')} {msg(ctx, 'cleared', count=len(deleted))}", delete_after=5)
         body = (
             f"**Channel:** {ctx.channel.mention}\n"
             f"**Messages Deleted:** {len(deleted)}\n"
@@ -48,7 +49,7 @@ class MessagesMixin:
             except (discord.HTTPException, AttributeError):
                 pass
         deleted = await _chunked_purge(ctx.channel, amount, check=check)
-        await ctx.send(msg(ctx, "purged", count=len(deleted), member=member), delete_after=5)
+        await ctx.send(f"{get_emoji('broom')} {msg(ctx, 'purged', count=len(deleted), member=member)}", delete_after=5)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Channel:** {ctx.channel.mention}\n"
