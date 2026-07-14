@@ -1,3 +1,16 @@
+"""
+cv2 Commit Notification GitHub Action Script
+
+-----
+
+Sends GitHub commit notifications to a Discord server via a webhook with an image card inside a cv2 container.
+Rquires a DISCORD_WEBHOOK and IMGBB_API_KEY environment variable.
+
+Made by Nyxen <3
+- Discord: nyxenwastaken
+- GitHub: https://github.com/developer51709
+"""
+
 import io
 import os
 import json
@@ -117,7 +130,7 @@ def draw_text_with_twemoji(base_img, x, y, text, font, fill):
 # -----------------------------------
 # Main commit card generator
 # -----------------------------------
-def create_commit_card(author, message, sha):
+def create_commit_card(author, message, sha, repo):
     width, height = 1200, 600
     img = generate_nebula(width, height)
     draw = ImageDraw.Draw(img)
@@ -146,7 +159,7 @@ def create_commit_card(author, message, sha):
         for line in textwrap.wrap(raw_line, width=40) or [""]:
             y = draw_text_with_twemoji(img, 70, y, line, font_body, (230, 230, 230))
 
-    watermark = "developer51709/Niko | GitHub Notifications"
+    watermark = f"{repo} | GitHub Notifications"
     wm_w, wm_h = draw.textbbox((0, 0), watermark, font=font_watermark)[2:]
 
     glow = Image.new("RGBA", img.size)
@@ -401,13 +414,14 @@ def send_text_fallback(webhook: str, author: str, message: str, sha: str,
 # Orchestrator
 # -----------------------------------
 def send_to_webhook(webhook, author, message, sha, repo_url, commit_url):
-    img = create_commit_card(author, message, sha)
+    repo = repo_name_from_url(repo_url)
+    img = create_commit_card(author, message, sha, repo)
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
 
-    image_url = upload_to_imgbb(buffer)
+    image_url = upload_to_imgbb(buffer, repo)
     if image_url:
         return send_cv2(webhook, author, message, sha, repo_url, commit_url, image_url)
 
