@@ -953,13 +953,13 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(_SetupRoleSelect(self)),
             discord.ui.ActionRow(
                 _SetupBtn("Account Age", discord.ButtonStyle.secondary, f"{get_emoji('icon_welcome')}", self, "account_age"),
-                _SetupBtn("Server Time", discord.ButtonStyle.secondary, f"{get_emoji('icon_home')}", self, "server_age"),
+                _SetupBtn("Server Time", discord.ButtonStyle.secondary, f"{get_emoji('icon_home')}",    self, "server_age"),
                 _SetupBtn(boost_label,   boost_style,                   f"{get_emoji('icon_premium')}", self, "boost"),
-                _SetupBtn("Clear Roles", discord.ButtonStyle.secondary, "🧹", self, "clear_roles"),
+                _SetupBtn("Clear Roles", discord.ButtonStyle.secondary, f"{get_emoji('broom')}",        self, "clear_roles"),
             ),
             discord.ui.ActionRow(
-                _SetupBtn("Start Giveaway", start_style,                 f"{get_emoji('icon_giveaway')}", self, "start"),
-                _SetupBtn("Cancel",         discord.ButtonStyle.danger,  f"{get_emoji('trash')}", self, "cancel"),
+                _SetupBtn("Start Giveaway", start_style,                f"{get_emoji('icon_giveaway')}", self, "start"),
+                _SetupBtn("Cancel",         discord.ButtonStyle.danger, f"{get_emoji('trash')}",         self, "cancel"),
             ),
             accent_colour=discord.Color.purple(),
         )
