@@ -298,6 +298,17 @@ def get_emoji(emoji_name: str):
         return "<:White7:1520827857016983652>"
     if emoji_name == "youtube":
         return "<:youtube:1520827866588123337>"
+    # aliases — alternate names that map to existing emojis
+    if emoji_name == "icon_check":
+        return "<:icon_tick:1525890242446627047>"
+    if emoji_name == "icon_star":
+        return "<:star:1520898541424218283>"
+    if emoji_name == "icon_music":
+        return "<:music:1520861886944641245>"
+    if emoji_name == "icon_lock":
+        return "<:vm_lock:1520864690732011743>"
+    if emoji_name == "icon_unlock":
+        return "<:vm_unlock:1520864694955409469>"
     # these use two emojis instead of just returning one
     if emoji_name == "enabled":
         return "<:disable_no:1520827872925716580><:enable_yes:1520827877283856445>"
