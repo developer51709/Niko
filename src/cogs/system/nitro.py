@@ -154,7 +154,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         """Right-click a user → quick profile card with level + economy stats."""
         await interaction.response.defer(ephemeral=True)
 
-        lines: list[str] = [f"### {get_emoji('icon_user')} {member.display_name}"]
+        lines: list[str] = [f"### 👤 {member.display_name}"]
 
         # Level stats
         try:

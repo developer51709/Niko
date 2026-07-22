@@ -94,7 +94,7 @@ base URL.
 3. Set `AI_INTEGRATIONS_OPENAI_BASE_URL` to the provider's base URL (see
    table above).
 4. Update the `model` name in `src/utils/ai/openai_client.py` → `generate_reply_openai`
-   (look for `model="gpt-4o-mini"`) to a model the new provider supports.
+   (look for `model="llama-3.1-8b-instant"`) to a model the new provider supports.
 5. Restart the bot.
 
 > **Tip:** The Replit built-in OpenAI integration sets both variables

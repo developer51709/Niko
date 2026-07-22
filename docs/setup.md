@@ -18,12 +18,13 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment Variables
-Create a `.env` file or set the following environment variables:
-- `DISCORD_TOKEN`: Your bot's secret token.
+Create a `src/.env` file (see `src/.env.example`) or set the following environment variables:
+- `DISCORD_BOT_TOKEN`: Your bot's secret token.
 
 ### 4. Run the Bot
+Run from the repository root:
 ```bash
-python bot.py
+python src/bot.py
 ```
 
 ---
@@ -34,6 +35,6 @@ Note:
 ## Hosting on Replit
 If you are using Replit, simply:
 1. Import the repository.
-2. Add your `DISCORD_TOKEN` to the Secrets tool.
+2. Add your `DISCORD_BOT_TOKEN` to the Secrets tool.
 3. Click the "Run" button.
 4. The Agent will handle the environment setup.
