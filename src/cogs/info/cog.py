@@ -785,11 +785,12 @@ class InfoCog(commands.Cog):
                     emoji=get_emoji("github"),
                     url=links.GITHUB
                 ),
-                discord.ui.Button(
-                    label="Website",
-                    style=discord.ButtonStyle.link,
-                    emoji=get_emoji("website"),
-                    url=links.WEBSITE),
+                # discord.ui.Button(
+                #     label="Website",
+                #     style=discord.ButtonStyle.link,
+                #     emoji=get_emoji("website"),
+                #     url=links.WEBSITE
+                # ),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
@@ -816,7 +817,7 @@ class InfoCog(commands.Cog):
         help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko ☕' }"
     )
     async def creator(self, ctx):
-        creator = await self.bot.fetch_user(1479968201319125013)
+        creator = await self.bot.fetch_user(1052690741874401360)
         bot_user = self.bot.user
         avatar_url = creator.avatar.url if creator.avatar else None
 
@@ -837,22 +838,22 @@ class InfoCog(commands.Cog):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Discord Profile", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("discord"), 
+                    label="Discord Profile",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("discord"),
                     url=f"https://discord.com/users/{creator.id}"
                 ),
                 discord.ui.Button(
-                    label="GitHub", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("github"), 
+                    label="GitHub",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("github"),
                     url="https://github.com/developer51709"
                 ),
                 discord.ui.Button(
-                    label="Website", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("website"), 
-                    url="https://nyxen.is-a.dev"),
+                    label="Website",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("website"),
+                    url="https://soren.is-a.dev"),
             )
         )
         view.add_item(container)

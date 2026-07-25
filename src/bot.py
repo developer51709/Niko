@@ -62,19 +62,46 @@ async def on_message(msg: discord.Message):
 
 # ── Entry-point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    if not TOKEN:
-        logging.error(
-            "Startup",
-            "Missing bot token.\n\nSet DISCORD_BOT_TOKEN in the environment variables."
-        )
-        exit(1)
+    import asyncio
+    import signal
 
-    logging.info("Startup", "Starting bot...")
+    async def _shutdown(signal_name: str):
+        logging.info("Shutdown", f"Received {signal_name}, closing bot...")
+        try:
+            await bot.close()
+        except Exception:
+            pass
 
-    device_choice = os.getenv("STATUS_DEVICE", "normal").lower()
-    patch_identify(device_choice)
+    async def main():
+        if not TOKEN:
+            logging.error(
+                "Startup",
+                "Missing bot token.\n\nSet DISCORD_BOT_TOKEN in the environment variables."
+            )
+            return
 
-    try:
-        bot.run(str(TOKEN), log_handler=None)
-    except Exception as e:
-        logging.error("Startup", f"Error connecting to Discord: {e}")
+        logging.info("Startup", "Starting bot...")
+
+        device_choice = os.getenv("STATUS_DEVICE", "normal").lower()
+        patch_identify(device_choice)
+
+        loop = asyncio.get_running_loop()
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_shutdown(s.name)))
+            except NotImplementedError:
+                # Windows or unsupported loop may raise here; ignore
+                pass
+
+        try:
+            await bot.start(str(TOKEN))
+        except Exception as e:
+            logging.error("Startup", f"Error connecting to Discord: {e}")
+        finally:
+            try:
+                await bot.close()
+            except Exception:
+                pass
+
+    asyncio.run(main())
