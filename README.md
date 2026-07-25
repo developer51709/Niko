@@ -19,12 +19,12 @@
 
 ## 🔗 Links
 
-| | |
+| Name | Link |
 |---|---|
 | **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1520558530472448170) |
-| **Website** | [niko bot website](https://developer51709.github.io/Niko) |
 | **Support Server** | [discord.gg/UfDBUGcKqY](https://discord.gg/UfDBUGcKqY) |
 | **GitHub** | [developer51709/Niko](https://github.com/developer51709/Niko) |
+| **Wiki Page** | [Official Wiki](https://app.devin.ai/org/developer51709/wiki/developer51709/Niko?branch=main)
 
 ---
 
@@ -180,8 +180,6 @@ src/
 
 ## 📜 Commands (summary)
 
-> Full interactive documentation: **[docs page](https://developer51709.github.io/Niko/docs)**
-
 | Category | Key Commands |
 |---|---|
 | **Economy** | `/balance` `/daily` `/work` `/job` `/shop` `/bank` `/lottery` `/pay` `/crime` `/rob` |
@@ -214,6 +212,6 @@ All user-facing responses use **discord.ui.LayoutView (Components v2)** featurin
 
 *Niko — making your Discord server cozier, one cup at a time ☕*
 
-*Built by [@nyxenwastaken](https://github.com/developer51709)*
+*Built by [@sorenthedev](https://github.com/developer51709)*
 
 </div>
