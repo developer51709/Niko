@@ -259,7 +259,10 @@ class Reminders(commands.Cog):
         invoke_without_command=True,
     )
     async def reminder(self, ctx: commands.Context):
-        await ctx.send_help(self.reminder)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.reminder)
+        await ctx.invoke(help_cmd, command_name="reminder")
 
     @reminder.command(
         name="set",

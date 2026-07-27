@@ -184,7 +184,10 @@ class Tags(commands.Cog):
     async def tag(self, ctx: commands.Context, *, name: str = None):
         if name:
             return await self._show(ctx, name)
-        await ctx.send_help(self.tag)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.tag)
+        await ctx.invoke(help_cmd, command_name="tag")
 
     @tag.command(
         name="show",
