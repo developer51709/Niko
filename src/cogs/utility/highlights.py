@@ -206,7 +206,10 @@ class Highlights(commands.Cog):
     )
     @commands.guild_only()
     async def highlight(self, ctx: commands.Context):
-        await ctx.send_help(self.highlight)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.highlight)
+        await ctx.invoke(help_cmd, command_name="highlight")
 
     @highlight.command(
         name="add",
