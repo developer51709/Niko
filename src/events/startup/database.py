@@ -136,6 +136,18 @@ async def _create_tables(bot):
         )
     """)
 
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS triggers (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id   INTEGER NOT NULL,
+            trigger    TEXT    NOT NULL,
+            response   TEXT    NOT NULL,
+            match_type TEXT    NOT NULL DEFAULT 'contains',
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     logging.success("DB", "Database tables verified")
 
 

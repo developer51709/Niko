@@ -1,4 +1,4 @@
-from . import owner, development, customization, prefix, emoji, pfps
+from . import owner, development, customization, prefix, emoji, pfps, triggers
 
 
 async def setup(bot):
@@ -8,3 +8,4 @@ async def setup(bot):
     await prefix.setup(bot)
     await emoji.setup(bot)
     await pfps.setup(bot)
+    await triggers.setup(bot)

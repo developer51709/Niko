@@ -493,7 +493,6 @@ class SetWelcomeChannelBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         # author check
-        print(interaction.message)
         if interaction.user != self.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
