@@ -244,6 +244,20 @@ class _CreateButton(discord.ui.Button):
         if v is None:
             log.error("Triggers", "_CreateButton.callback — self.view is None; button was not re-registered after rebuild")
             return
+        if not interaction.user.guild_permissions.manage_guild:
+            perm_error = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Error"
+                ),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to do that."
+                )
+            )
+            perm_error.add_item(container)
+            return await interaction.response.send_message(
+                view=perm_error, ephemeral=True
+            )
         log.debug("Triggers", f"_CreateButton — opening modal for guild {v.guild_id}")
         await interaction.response.send_modal(_CreateTriggerModal(v))
 
@@ -263,6 +277,20 @@ class _EditButton(discord.ui.Button):
         if v is None:
             log.error("Triggers", "_EditButton.callback — self.view is None")
             return
+        if not interaction.user.guild_permissions.manage_guild:
+            perm_error = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Error"
+                ),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to do that."
+                )
+            )
+            perm_error.add_item(container)
+            return await interaction.response.send_message(
+                view=perm_error, ephemeral=True
+            )
         row = v.triggers[v.current_page]
         await interaction.response.send_modal(_EditTriggerModal(v, row))
 
@@ -283,6 +311,20 @@ class _ToggleButton(discord.ui.Button):
         if v is None:
             log.error("Triggers", "_ToggleButton.callback — self.view is None")
             return
+        if not interaction.user.guild_permissions.manage_guild:
+            perm_error = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Error"
+                ),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to do that."
+                )
+            )
+            perm_error.add_item(container)
+            return await interaction.response.send_message(
+                view=perm_error, ephemeral=True
+            )
         row     = v.triggers[v.current_page]
         new_val = 0 if row["enabled"] else 1
         await v.bot.cxn.execute(
@@ -314,6 +356,20 @@ class _DeleteButton(discord.ui.Button):
         if v is None:
             log.error("Triggers", "_DeleteButton.callback — self.view is None")
             return
+        if not interaction.user.guild_permissions.manage_guild:
+            perm_error = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('icon_cross')} Error"
+                ),
+                discord.ui.TextDisplay(
+                    content="You need the `manage_guild` permission to do that."
+                )
+            )
+            perm_error.add_item(container)
+            return await interaction.response.send_message(
+                view=perm_error, ephemeral=True
+            )
         row = v.triggers[v.current_page]
         await v.bot.cxn.execute(
             "DELETE FROM triggers WHERE id = $1 AND guild_id = $2",

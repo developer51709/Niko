@@ -2331,7 +2331,7 @@ class RoleMenuWizardTypeSelect(discord.ui.Select):
         cfg = get_config(guild_id)
         current = cfg.role_menus[menu_id]["menu_type"]
         options = [
-            discord.SelectOption(label=label, value=key, description=WIZARD_TYPE_HINTS.get(key), default=(key == current))
+            discord.SelectOption(label=label, value=key, description=WIZARD_TYPE_HINTS.get(key))
             for key, label in MENU_TYPE_LABELS.items()
         ]
         super().__init__(placeholder="Choose how members will pick roles...", options=options, min_values=1, max_values=1)
