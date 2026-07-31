@@ -700,8 +700,7 @@ def _general_text(bot: commands.Bot, lang: str) -> str:
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website]({links.WEBSITE}) • "
-        f"[Support Server]({links.SUPPORT_SERVER}) • "
-        f"[Community Server]({links.COMMUNITY_SERVER})"
+        f"[Support Server]({links.SUPPORT_SERVER})"
     )
 
 
