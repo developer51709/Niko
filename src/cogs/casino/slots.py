@@ -48,6 +48,7 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     # Fallback prefix if everything else fails
     return "."
 
+
 class Slots(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -55,7 +56,7 @@ class Slots(commands.Cog):
     @commands.hybrid_group(
         name="slots",
         description="Play a casino-style 3x3 slot machine",
-        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel', 'es': 'juega una tragamonedas 3×3 estilo casino 🎰' }"
+        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel', 'es': 'juega una tragamoneda de estilo 3×3 estilo casino 🎰' }"
     )
     async def slots(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -93,9 +94,9 @@ class Slots(commands.Cog):
 
         # Symbol tiers
         COMMON = ["🍒", "🍋", "🍊"]
-        UNCOMMON = ["🍇", "🍉", "🍓"]
-        RARE = ["🍀", "💎"]
-        JACKPOT = ["⭐"]
+        UNCOMMON = ["🍎", "🍇", "🍐"]
+        RARE = ["💎", "🔥"]
+        JACKPOT = ["🪙"]
 
         # Weighted symbol pool
         SYMBOLS = (
@@ -119,9 +120,9 @@ class Slots(commands.Cog):
         # Helper to evaluate paylines
         def evaluate(grid):
             lines = [
-                grid[1],                     # middle row
-                grid[0],                     # top row
-                grid[2],                     # bottom row
+                grid[1],                           # middle row
+                grid[0],                           # top row
+                grid[2],                           # bottom row
                 [grid[0][0], grid[1][1], grid[2][2]],  # diagonal \
                 [grid[0][2], grid[1][1], grid[2][0]]   # diagonal /
             ]
@@ -150,7 +151,7 @@ class Slots(commands.Cog):
             flat = [c for row in grid for c in row]
             if len(set(flat)) == 1:
                 total += amount * 100
-                hits.append(("⭐", "FULL BOARD JACKPOT (100×)"))
+                hits.append(("🪙", "FULL BOARD JACKPOT (100×)"))
 
             return total, hits
 
@@ -189,11 +190,10 @@ class Slots(commands.Cog):
         final_grid = spin_grid()
         winnings, hits = evaluate(final_grid)
 
-        # Update economy
+        # Update economy — always deduct the bet first, then add winnings
+        user_data["balance"] -= amount
         if winnings > 0:
             user_data["balance"] += winnings
-        else:
-            user_data["balance"] -= amount
 
         user_data["last_slots"] = time.time()
         economy = self.bot.get_cog("EconomyCog")
@@ -207,7 +207,7 @@ class Slots(commands.Cog):
             details = "\n".join(f"{sym} — {desc}" for sym, desc in hits)
             description = f"{result_text}\n\n**{details}**\nYou won **{winnings}** coins."
         else:
-            title = "💀 You Lose"
+            title = "😢 You Lose"
             description = f"{result_text}\n\nYou lost **{amount}** coins."
 
         result_view = discord.ui.LayoutView()
@@ -234,7 +234,7 @@ class Slots(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Common Symbols (🍒🍋🍊)**\n2× bet\n\n**Uncommon Symbols (🍇🍉🍓)**\n3× bet\n\n**Rare Symbols (🍀💎)**\n5× bet\n\n**Jackpot Symbol (⭐️)**\n25× bet\n\n**Full Board Jackpot**\n100× bet"
+                content=f"**Common Symbols (🍒🍋🍊)**\n2× bet\n\n**Uncommon Symbols (🍎🍇🍐)**\n3× bet\n\n**Rare Symbols (💎🔥)**\n5× bet\n\n**Jackpot Symbol (🪙 ✨)**\n25× bet\n\n**Full Board Jackpot**\n100× bet"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
