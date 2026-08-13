@@ -42,7 +42,7 @@ CURRENCIES = [
 
 def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord.ui.ActionRow:
     """Return a View containing a currency Select for `amount` USD."""
-    view = discord.ui.ActionRow()
+    row = discord.ui.ActionRow()
     options = [
         discord.SelectOption(
             label=f"{label} ({code})",
@@ -55,17 +55,16 @@ def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord
     sel = discord.ui.Select(placeholder="Choose a cryptocurrency…", options=options)
 
     async def _cb(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         if interaction.user.id != user_id:
-            return await interaction.response.send_message(
+            return await interaction.followup.send_message(
                 "This isn't your donation menu!", ephemeral=True
             )
-        sel.disabled = True
-        # await interaction.message.edit(view=view)
         await cog._handle_currency_choice(interaction, amount, user_id, sel.values[0])
 
     sel.callback = _cb
-    view.add_item(sel)
-    return view
+    row.add_item(sel)
+    return row
 
 
 def _payment_layout(
@@ -223,8 +222,6 @@ class DonationCog(commands.Cog, name="DonationCog"):
         user_id: int,
         currency: str,
     ):
-        await interaction.response.defer(ephemeral=True)
-
         if not OXAPAY_KEY:
             return await interaction.followup.send(
                 f"{get_emoji('icon_danger')} Donations are not configured yet. "
