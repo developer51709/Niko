@@ -2,7 +2,7 @@
 
 ![Niko Banner](docs/assets/niko_banner.png)
 
-# ☕ Niko Discord Bot
+# 🎵 Niko Discord Bot
 *A cozy, trilingual café-themed companion for your server*
 
 ---
@@ -20,7 +20,7 @@
 ## 🔗 Links
 
 | Name | Link |
-|---|---|
+|------|------|
 | **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1520558530472448170) |
 | **Support Server** | [discord.gg/UfDBUGcKqY](https://discord.gg/UfDBUGcKqY) |
 | **GitHub** | [developer51709/Niko](https://github.com/developer51709/Niko) |
@@ -28,7 +28,7 @@
 
 ---
 
-## 🌸 Overview
+## 📋 Overview
 
 Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personality. He is powered by OpenAI for natural conversation, remembers past interactions per user, and brings a lo-fi aesthetic to any community. With 20+ cog groups and 76 slash commands, Niko covers everything from a premium economy system and Lavalink music to moderation, giveaways, ticketing, social media notifiers, and more — all wrapped in an interactive Components v2 UI.
 
@@ -38,7 +38,7 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 
 ## ✨ Feature Highlights
 
-### 🧠 AI & Personality
+### 🤖 AI & Personality
 - **OpenAI-powered chat** — mention Niko to start a conversation; he adapts his tone based on your favorability score and past memory
 - **Trilingual** — responds in English, German, or Spanish; auto-detects language
 - **Multi-personality** — *café* (warm bestie) and *normal* modes, configurable per server
@@ -55,7 +55,7 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 - **Crime & rob** — risk-based side income with item defenses
 - **Transaction log** — full history of every credit and debit
 
-### ⭐ Leveling
+### 📊 Leveling
 - Per-message XP with configurable multiplier and cooldown
 - Per-guild settings: XP toggle, announcement channel, custom level-up messages
 - Role rewards at configurable thresholds
@@ -69,12 +69,12 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 - Last.fm autoplay top-up for endless continuous listening
 
 ### 🛡️ Moderation
-- Full toolset: kick, ban, mute, tempmute, warn, purge, slowmode, lock
+- Full toolkit: kick, ban, mute, tempmute, warn, purge, slowmode, lock
 - **AutoMod dashboard** — anti-spam, anti-link, bad words, mass mention, external app raid protection
 - Whitelist system to exempt trusted users and roles
 - Mod-log channel with rich event embeds
 
-### 🎉 Community
+### 👥 Community
 - **Giveaways** — CV2 setup wizard with join requirements (account age, server age, roles, booster)
 - **Tickets** — persistent per-guild ticket system with category and support-role config
 - **Polls** — live multi-option polls with real-time vote counts
@@ -89,67 +89,70 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 ### 🎰 Casino
 Blackjack, Slots, Roulette — all with PIL image cards and full economy integration
 
+### ⚙️ Admin & Customization
+- **Custom triggers** — create custom trigger-response pairs per server with a permission-gated settings panel and role menu support
+- Prefix management, emoji sync, onboarding configuration
+- Per-guild configurable settings via interactive CV2 panels
+
+### 💝 Donations
+- **OxaPay integration** — accept crypto donations directly through the bot
+- `/donate` command for supporters
+
 ### 🌐 Website & Dashboard (Under Development)
-- Public landing page with bilingual toggle (EN/DE)
+- Public landing page with billing toggle (EN/DE)
 - Full command documentation page
 - Dashboard prototype
 
 ---
 
-## 📁 Project Structure
+## 📂 Project Structure
 
 ```
 src/
-├── bot.py                  # Entry point — loads cogs, syncs slash commands, event loop
-├── website.py              # Flask static server for the website
-│
-├── cogs/                   # Modular feature groups (each is a discord.py Cog)
-│   ├── admin/              # Admin tools, prefix management
-│   ├── ai/                 # AI chat, memory, favorability, image generation
-│   ├── automod/            # AutoMod dashboard, raid protection
-│   ├── casino/             # Blackjack, Slots, Roulette, mini-games
-│   ├── economy/            # Balance, jobs, bank, shop, lottery, achievements
-│   ├── fun/                # Roleplay, memes, animals, AFK, snipe
-│   ├── giveaway/           # CV2 giveaway setup with join requirements
-│   ├── help/               # Dynamic help system
-│   ├── info/               # Serverinfo, userinfo, avatar
-│   ├── leveling/           # XP, levels, leaderboard, level panel
-│   ├── logging/            # Event logger (join/leave/edit/delete)
-│   ├── moderation/         # Kick, ban, warn, mute, purge, mod-log
-│   ├── music/              # Lavalink/wavelink music player
-│   ├── notifier/           # Social media feed subscriptions
-│   ├── onboarding/         # Verification, captcha, role assignment
-│   ├── social/             # Polls, suggestions, starboard, tags, highlights
-│   ├── system/             # Error handler, AI debugging reporter
-│   ├── tickets/            # Persistent ticket system
-│   ├── utility/            # Reminders, birthdays, translate, define
-│   └── voicemaster/        # Dynamic voice channel creation
-│
-├── utils/                  # Shared utility modules
-│   ├── ai/                 # OpenAI client, memory, config, debugging, actions
-│   ├── image/              # PIL economy card renderer
-│   ├── onboarding/         # Captcha generation, config, utils
-│   ├── social/             # Platform scrapers (YouTube, Twitter, TikTok, Bluesky, Reddit)
-│   ├── tickets/            # Ticket config and helpers
-│   ├── emoji_sync.py       # Application emoji download/upload/sync
-│   ├── i18n.py             # Trilingual message system with 4-level fallback
-│   ├── logging.py          # Custom coloured terminal logger
-│   ├── paginator.py        # Shared PaginatedView for CV2 lists
-│   ├── ratelimit.py        # Async rolling-window rate limiter
+├── bot.py            # Entry point — loads cogs, syncs slash commands, event loop
+├── website.py        # Flask static server for the website
+├── cogs/
+│   ├── admin/            # Admin tools, prefix management, custom triggers
+│   ├── ai/               # AI chat, memory, favorability, image generation
+│   ├── automod/          # AutoMod dashboard, raid protection
+│   ├── casino/           # Blackjack, Slots, Roulette, mini-games
+│   ├── donations/        # Crypto donations via OxaPay
+│   ├── economy/          # Balance, jobs, bank, shop, lottery, achievements
+│   ├── fun/              # Roleplay, memes, animals, AFK, snipe
+│   ├── giveaway/         # CV2 giveaway setup with join requirements
+│   ├── help/             # Dynamic help system
+│   ├── info/             # Serverinfo, userinfo, avatar
+│   ├── legal/            # Legal information and terms
+│   ├── leveling/         # XP, levels, leaderboard, level panel
+│   ├── logging/          # Event logger (join/leave/edit/delete)
+│   ├── moderation/       # Kick, ban, warn, mute, purge, mod-log
+│   ├── music/            # Lavalink/wavelink music players
+│   ├── notifier/         # Social media feed subscriptions
+│   ├── onboarding/       # Verification, captcha, role assignment
+│   ├── social/           # Polls, suggestions, starboard, tags, highlights
+│   ├── system/           # Error handler, AI debugging reporter
+│   ├── tickets/          # Persistent ticket system
+│   ├── utility/          # Reminders, birthdays, translate, define
+│   └── voicemaster/      # Dynamic voice channel creation
+├── utils/                # Shared utility modules
+│   ├── ai/               # OpenAI client, memory, config, debugging, actions
+│   ├── image/            # PIL economy card renderer
+│   ├── onboarding/       # Captcha generation, config, utils
+│   ├── social/           # Platform scrapers (YouTube, Twitter, TikTok, Bluesky, Reddit)
+│   ├── tickets/          # Ticket config and helpers
+│   ├── paginator.py      # Shared PaginatedView for CV2 lists
+│   ├── ratelimit.py      # Async rolling-window rate limiters
 │   └── blacklist_manager.py
-│
-├── config/                 # Bot configuration (emojis, AI config, etc.)
-│
-├── website/                # Static website served by website.py
-│   ├── index.html          # Landing page (EN/DE bilingual)
-│   ├── dashboard.html      # Dashboard prototype
-│   ├── docs/index.html     # Full command documentation
-│   ├── styles.css          # Shared café dark aesthetic
+├── config/              # Bot configuration (emojis, AI config, etc.)
+├── website/             # Static website served by website.py
+│   ├── index.html        # Landing page (EN/DE billing)
+│   ├── dashboard.html    # Dashboard prototype
+│   ├── docs/index.html   # Full command documentation
+│   ├── styles.css        # Shared café dark aesthetic
 │   ├── tos.html
 │   └── privacy.html
-│
-└── data/                   # Persistent storage (JSON + SQLite)
-    ├── database.db         # Giveaway data (SQLite)
+└── data/                # Persistent storage (JSON + SQLite)
+    ├── database.db       # Giveaway data (SQLite)
     ├── levels.json
     ├── level_config.json
     ├── mod_config.json
@@ -162,7 +165,7 @@ src/
     ├── polls.json
     ├── suggestions.json
     ├── starboard.json
-    └── economy_data/       # Per-user economy profiles (JSON)
+    └── economy_data/     # Per-user economy profiles (JSON)
 ```
 
 ---
@@ -181,11 +184,12 @@ src/
 ## 📜 Commands (summary)
 
 | Category | Key Commands |
-|---|---|
+|----------|-------------|
 | **Economy** | `/balance` `/daily` `/work` `/job` `/shop` `/bank` `/lottery` `/pay` `/crime` `/rob` |
 | **Leveling** | `/level` `/level-leaderboard` `/levelpanel` `/levelconfig` |
 | **Music** | `/play` `/nowplaying` `/queue` `/skip` `/stop` `/loop` `/shuffle` `/volume` |
 | **Casino** | `/blackjack` `/slots` `/roulette` `/connectfour` `/tictactoe` |
+| **Donations** | `/donate` |
 | **Moderation** | `/kick` `/ban` `/warn` `/mute` `/purge` `/automod` `/whitelist` |
 | **Giveaways** | `/giveaway start/end/reroll/list` |
 | **Tickets** | `/ticket panel/config` `/close` `/delete` |
@@ -193,7 +197,7 @@ src/
 | **AI & Chat** | `@Niko` `/favor` `/memory` `/imagine` `/translate` `/define` |
 | **Fun** | `/hug` `/pat` `/boop` `/meme` `/cat` `/afk` `/snipe` |
 | **Utility** | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` |
-| **Admin** | `/reload` `/sync` `/emojisync` `/onboarding` `/voicemaster` |
+| **Admin** | `/reload` `/sync` `/emojisyng` `/onboarding` `/voicemaster` `/trigger` |
 
 ---
 
@@ -210,7 +214,7 @@ All user-facing responses use **discord.ui.LayoutView (Components v2)** featurin
 
 <div align="center">
 
-*Niko — making your Discord server cozier, one cup at a time ☕*
+*Niko — making your Discord server cozier, one cup at a time 🍵*
 
 *Built by [@sorenthedev](https://github.com/developer51709)*
 
