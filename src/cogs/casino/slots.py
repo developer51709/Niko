@@ -83,7 +83,7 @@ class Slots(commands.Cog):
         balance = user_data["balance"]
 
         # Cooldown
-        if user_data["last_slots"] + slots_cooldown > time.time():
+        if str(user_data["last_slots"]) + str(slots_cooldown) > str(time.time()):
             return await ctx.send(f"You can only play slots once every {slots_cooldown} seconds.")
 
         if amount is None or amount <= 0:
