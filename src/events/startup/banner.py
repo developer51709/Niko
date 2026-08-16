@@ -31,12 +31,12 @@ def print_banner(bot, guild_count: int = 0):
         return f"{M}{BR}{left}{'─' * IW}{right}{R}"
 
     art = [
-        f"  {W}{BR} ███╗   ██╗ ██╗██╗  ██╗  ██████╗ {R}",
-        f"  {W}{BR} ████╗  ██║ ██║██║ ██╔╝ ██╔═══██╗{R}",
-        f"  {W}{BR} ██╔██╗ ██║ ██║█████╔╝  ██║   ██║{R}",
-        f"  {W}{BR} ██║╚██╗██║ ██║██╔═██╗  ██║   ██║{R}",
-        f"  {W}{BR} ██║ ╚████║ ██║██║  ██╗ ╚██████╔╝{R}",
-        f"  {W}{BR} ╚═╝  ╚═══╝ ╚═╝╚═╝  ╚═╝  ╚═════╝ {R}",
+        f"  {W}{BR} ⢸⣷⠀⠀⠀⣷⠀⠀⠀⢀⡀⠀⠀⢰⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀{R}",
+        f"  {W}{BR} ⢸⣿⡄⠀⠀⣿⠀⠀⠸⠿⠉⠀⠀⢸⠁⠀⠀⣀⠀⠀⠀⠀⠀⠀⠀{R}",
+        f"  {W}{BR} ⢸⠀⣿⠀⠀⣿⠀⠀⠀⣶⠀⠀⠀⣿⣠⣾⠿⠋⠀⠀⢀⣶⠷⣶⡀{R}",
+        f"  {W}{BR} ⢸⡀⠘⣷⠀⣿⠀⠀⠀⣿⠀⠀⠀⣿⠋⠀⠀⠀⠀⠀⣿⠀⠀⠀⣿{R}",
+        f"  {W}{BR} ⢸⡇⠀⠹⣆⣿⠀⠀⠀⣿⠀⠀⠀⢻⢷⣦⣤⣤⠀⠀⣿⠀⠀⢠⡿{R}",
+        f"  {W}{BR} ⠀⠷⠀⠀⠙⠟⠀⠀⠀⠛⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠛⠾⠋⠀{R}",
     ]
 
     def irow(lk: str, lv: str, rk: str = "", rv: str = "") -> str:
@@ -61,14 +61,14 @@ def print_banner(bot, guild_count: int = 0):
         bline(),
         *[bline(a) for a in art],
         bline(),
-        bline(f"  {C}a cozy cafe AI companion for Discord{R}"),
+        bline(f"  {C}a cozy AI companion for Discord{R}"),
         bline(f"  {DM}bilingual  ·  modular  ·  33+ cogs{R}"),
         bline(),
         div(),
         bline(),
         irow("bot",     str(bot.user),  "servers", guild_str),
         irow("version", "1.0",          "users",   user_count),
-        irow("model",   ai_mode,        "author",  "@n.y.x.e.n"),
+        irow("model",   ai_mode,        "author",  "@sorenthedev"),
         bline(),
         div("╰", "╯"),
         "",
