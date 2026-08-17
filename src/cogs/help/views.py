@@ -165,7 +165,6 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("AutoMod",        f"{get_emoji('icon_automod')}"),
     ("EmojiManager",   f"{get_emoji('icon_paint')}"),
     ("Onboarding",     f"{get_emoji('icon_welcome')}"),
-    ("NSFW",           f"{get_emoji('warning')}"),
     ("Music",          f"{get_emoji('music')}"),
     ("Leveling",       f"{get_emoji('icon_leveling')}"),
     ("Notifier",       f"{get_emoji('icon_megaphone')}"),
@@ -197,7 +196,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "AutoMod commands",
         "EmojiManager":  "Emoji manager commands",
         "Onboarding":    "Onboarding commands",
-        "NSFW":          "NSFW commands",
         "Music":         "Music commands",
         "Leveling":      "Leveling commands",
         "Notifier":      "Social media notifier",
@@ -227,7 +225,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "Automatische Moderation",
         "EmojiManager":  "Emoji-Verwaltung",
         "Onboarding":    "Willkommens-Einrichtung",
-        "NSFW":          "NSFW-Befehle",
         "Music":         "Musikbefehle",
         "Leveling":      "Leveling-Befehle",
         "Notifier":      "Social-Media-Benachrichtigungen",
@@ -257,7 +254,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "Comandos de automoderación",
         "EmojiManager":  "Gestión de emojis",
         "Onboarding":    "Bienvenida a nuevos miembros",
-        "NSFW":          "Comandos NSFW",
         "Music":         "Comandos de música",
         "Leveling":      "Comandos de niveles",
         "Notifier":      "Notificaciones de redes sociales",
@@ -324,10 +320,6 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
         "Onboarding": (
             f"{get_emoji('icon_welcome')} **Onboarding Commands**\n"
             "> Set up welcome messages and roles for new members."
-        ),
-        "NSFW": (
-            f"{get_emoji('warning')} **NSFW Commands**\n"
-            "> These commands only work in NSFW-marked channels."
         ),
         "Music": (
             f"{get_emoji('music')} **Music Commands**\n"
@@ -436,10 +428,6 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_welcome')} **Onboarding-Befehle**\n"
             "> Richte Willkommensnachrichten und Rollen für neue Mitglieder ein."
         ),
-        "NSFW": (
-            f"{get_emoji('icon_nsfw')} **NSFW-Befehle**\n"
-            "> Diese Befehle funktionieren nur in als NSFW markierten Kanälen."
-        ),
         "Music": (
             f"{get_emoji('music')} **Musikbefehle**\n"
             "> Musik in deinem Sprachkanal abspielen!"
@@ -547,10 +535,6 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_welcome')} **Comandos de Bienvenida**\n"
             "> Configura mensajes de bienvenida y roles para nuevos miembros."
         ),
-        "NSFW": (
-            f"{get_emoji('icon_nsfw')} **Comandos NSFW**\n"
-            "> Estos comandos solo funcionan en canales marcados como NSFW."
-        ),
         "Music": (
             f"{get_emoji('music')} **Comandos de Música**\n"
             "> ¡Reproduce música en tu canal de voz!"
@@ -628,7 +612,6 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "AutoMod":       ["AutoMod"],
     "EmojiManager":  ["EmojiManagerCog"],
     "Onboarding":    ["Onboarding"],
-    "NSFW":          ["NSFW"],
     "Music":         ["MusicSystem"],
     "Leveling":      ["Leveling"],
     "Notifier":      ["Notifier", "YouTube"],
