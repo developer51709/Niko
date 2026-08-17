@@ -1,6 +1,6 @@
 """
 =====================================================
- Astral Haven Development — Secure Zip Utility
+ Kage Labs Development — Secure Zip Utility
 -----------------------------------------------------
  A robust, single-file command-line tool for 
  creating and extracting ZIP archives with optional 
@@ -11,7 +11,7 @@
  minimal external dependencies.
 
  License: MIT License
- Copyright (c) 2026 Astral Haven Development
+ Copyright (c) 2026 Kage Labs LLC
 
  Permission is hereby granted, free of charge, to 
  any person obtaining a copy of this software and 
@@ -53,7 +53,7 @@ from typing import Iterable, List, Optional
 # ----------------------------------------------------------------------
 
 
-TOOL_NAME = "Astral Haven Development — Secure Zip Utility"
+TOOL_NAME = "Kage Labs Development — Secure Zip Utility"
 TOOL_VERSION = "1.0.0"
 
 
@@ -258,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
 def print_version() -> None:
     print_branding()
     print(f"Version: {TOOL_VERSION}")
-    print("Vendor: Astral Haven Development\n")
+    print("Vendor: Kage Labs Development\n")
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
