@@ -20,6 +20,8 @@ _FALLBACK_REPLIES = [
 ]
 _fallback_idx = 0
 
+OPENAI_MODEL = "openai/gpt-oss-20b"
+
 # ── Rate-limit guard ───────────────────────────────────────────────────────────
 # Maps user_id → unix timestamp when the cooldown expires.
 # When the API returns 429, we stop accepting that user's requests for a while
@@ -466,7 +468,7 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model="llama-3.1-8b-instant",
+            model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},
