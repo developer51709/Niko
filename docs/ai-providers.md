@@ -45,8 +45,8 @@ base URL.
 
 ### Rank 2 — **Groq**
 - **Base URL:** `https://api.groq.com/openai/v1`
-- **Free models:** `llama-3.1-8b-instant`, `llama-3.3-70b-versatile`,
-  `mixtral-8x7b-32768`, `gemma2-9b-it`
+- **Free models:** `openai/gpt-oss-20b`, `mixtral-8x7b-32768`,
+  `gemma2-9b-it`
 - **Rate limit:** 30 req/min, 14,400 req/day (free)
 - **Why #2:** Extremely fast inference (LPU hardware), generous daily quota,
   good model quality
