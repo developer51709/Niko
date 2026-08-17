@@ -197,7 +197,7 @@ src/
 | **AI & Chat** | `@Niko` `/favor` `/memory` `/imagine` `/translate` `/define` |
 | **Fun** | `/hug` `/pat` `/boop` `/meme` `/cat` `/afk` `/snipe` |
 | **Utility** | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` |
-| **Admin** | `/reload` `/sync` `/emojisyng` `/onboarding` `/voicemaster` `/trigger` |
+| **Admin** | `/reload` `/sync` `/emojisync` `/onboarding` `/voicemaster` `/trigger` |
 
 ---
 
