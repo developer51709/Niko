@@ -45,7 +45,7 @@ class ShopMixin:
         for iid, item in SHOP_ITEMS.items():
             if cat_filter and item["category"] != cat_filter:
                 continue
-            lock = "" if lvl >= item.get("min_level", 0) else f"  {get_emoji('icon_lock')} lvl {item['min_level']}"
+            lock = "" if lvl >= item.get("min_level", 0) else f"  {get_emoji('vm_lock')} lvl {item['min_level']}"
             sections[item["category"]].append(
                 f"{item['emoji']} **{item['name']}** `({iid})` — **{item['price']:,}** 🥐{lock}\n"
                 f"-# *{item['description']}*"
