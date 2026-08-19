@@ -287,16 +287,17 @@ class RoleMenuOptionModal(Modal):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         cfg = get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None or self.role_id is None:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
             )
 
         style = self.style_input.value.strip().lower() or None
         if style and style not in BUTTON_STYLE_NAMES:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 view=feedback_view(f"Style must be one of: {', '.join(BUTTON_STYLE_NAMES)}.", ok=False), ephemeral=True
             )
 
@@ -306,7 +307,7 @@ class RoleMenuOptionModal(Modal):
             for i, o in enumerate(options)
         )
         if duplicate:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 view=feedback_view("That role is already in this menu.", ok=False), ephemeral=True
             )
 
@@ -323,14 +324,14 @@ class RoleMenuOptionModal(Modal):
             verb = "updated"
         else:
             if len(options) >= 25:
-                return await interaction.response.send_message(
+                return await interaction.followup.send(
                     view=feedback_view("This menu already has the maximum of 25 roles.", ok=False), ephemeral=True
                 )
             options.append(entry)
             verb = "added"
 
         update_config(self.guild_id, cfg)
-        await interaction.response.send_message(view=feedback_view(f"Role option {verb}."), ephemeral=True)
+        await interaction.followup.send(view=feedback_view(f"Role option {verb}."), ephemeral=True)
         next_view = (
             RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id)
             if self.wizard
@@ -1934,6 +1935,7 @@ class AgreeButton(discord.ui.Button):
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         cfg = get_config(self.guild_id)
 
         if not cfg.rules_role_id:
@@ -1945,7 +1947,7 @@ class AgreeButton(discord.ui.Button):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+            return await interaction.followup.send(view=view, ephemeral=True)
 
         role = interaction.guild.get_role(cfg.rules_role_id)
         if not role:
@@ -1957,9 +1959,8 @@ class AgreeButton(discord.ui.Button):
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+            return await interaction.followup.send(view=view, ephemeral=True)
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
         await interaction.user.add_roles(role, reason="Acknowledged rules")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
