@@ -19,13 +19,19 @@ class LeaderboardMixin:
         help="{ 'en': 'see who has the most treats 🏆🥐', 'de': 'sieh die reichsten Gäste', 'es': 'mira quién tiene más 🏆🥐' }"
     )
     async def leaderboard(self, ctx: commands.Context):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         sorted_users = sorted(
             self.economy_data.items(),
             key=lambda x: x[1].get("balance", 0) + x[1].get("bank", 0),
             reverse=True,
         )
         if not sorted_users:
-            return await ctx.send(view=_info_view("☕ Quiet café", "No one has any coins yet — the café is just opening!"))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("☕ Quiet café", "No one has any coins yet — the café is just opening!"))
+            else:
+                return await ctx.send(view=_info_view("☕ Quiet café", "No one has any coins yet — the café is just opening!"))
         # paginate full sorted list into pages of 10
         per_page = 10
         pages_src = [sorted_users[i : i + per_page] for i in range(0, len(sorted_users), per_page)]
@@ -118,4 +124,7 @@ class LeaderboardMixin:
         # render first page and send with the paginated view
         first_buf = await render_leaderboard_card(title="🏆 Café Rich List", entries=pages_entries[0], page=1, pages=total_pages)
         view = _CardView(pages_entries)
-        await ctx.send(view=view, file=discord.File(first_buf, "leaderboard.png"), allowed_mentions=discord.AllowedMentions.none())
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, file=discord.File(first_buf, "leaderboard.png"), allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await ctx.send(view=view, file=discord.File(first_buf, "leaderboard.png"), allowed_mentions=discord.AllowedMentions.none())

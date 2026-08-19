@@ -16,19 +16,31 @@ from ..data import (
 class GamblingMixin:
     """crime and rob commands."""
 
-    @commands.hybrid_command(name="crime",
-                             description="Try to steal some extra treats",
-                             help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas golosinas extra 😈' }")
+
+    @commands.hybrid_command(
+        name="crime",
+        description="Try to steal some extra treats",
+        help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas golosinas extra 😈' }"
+    )
     async def crime(self, ctx: commands.Context):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         import time
         data = self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         if now - int(data.get("last_crime", 0)) < COOLDOWN_CRIME:
             remain = COOLDOWN_CRIME - (now - int(data["last_crime"]))
-            return await ctx.send(view=_info_view(
-                "👮 Lay low",
-                f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
-            ))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(
+                    "👮 Lay low",
+                    f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
+                ))
+            else:
+                return await ctx.send(view=_info_view(
+                    "👮 Lay low",
+                    f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
+                ))
 
         effects = data.setdefault("effects", {})
         boost   = 0.25 if effects.pop("crime_boost", 0) else 0.0
@@ -53,36 +65,66 @@ class GamblingMixin:
             footer="Tip: use a lockpick before your next attempt for +25% success.",
         )
 
-    @commands.hybrid_command(name="rob",
-                             description="Try to rob another user",
-                             help="{ 'en': 'try to rob another user 🔫', 'de': 'rauber jemanden aus', 'es': 'intenta robar a otro 🔫' }")
+
+    @commands.hybrid_command(
+        name="rob",
+        description="Try to rob another user",
+        help="{ 'en': 'try to rob another user 🔫', 'de': 'rauber jemanden aus', 'es': 'intenta robar a otro 🔫' }"
+    )
     async def rob(self, ctx: commands.Context, member: discord.Member):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         import time
         if member.id == ctx.author.id:
-            return await ctx.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+            else:
+                return await ctx.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+
         if member.bot:
-            return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
+            else:
+                return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
 
         data   = self.get_user_economy_data(ctx.author.id)
         target = self.get_user_economy_data(member.id)
         now = int(time.time())
 
         if data["balance"] < 100:
-            return await ctx.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
+            else:
+                return await ctx.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
+
         if target["balance"] < 100:
-            return await ctx.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
+            else:
+                return await ctx.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
+
         if now - int(data.get("last_rob", 0)) < COOLDOWN_ROB:
             remain = COOLDOWN_ROB - (now - int(data["last_rob"]))
-            return await ctx.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
+            else:
+                return await ctx.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
 
         target_effects = target.setdefault("effects", {})
         if target_effects.pop("rob_shield", 0):
             data["last_rob"] = now
             self.save_economy_data()
-            return await ctx.send(view=_info_view(
-                "🛡️ Blocked!",
-                f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
-            ))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(
+                    "🛡️ Blocked!",
+                    f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
+                ))
+            else:
+                return await ctx.send(view=_info_view(
+                    "🛡️ Blocked!",
+                    f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
+                ))
 
         success = random.random() < 0.4
         if success:

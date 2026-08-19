@@ -135,7 +135,10 @@ class EconomyCog(
                 f"-# `{prefix}work` to earn, `{prefix}daily` for treats, `{prefix}shop` to spend.",
             ],
         )
-        await ctx.send(view=view, file=discord.File(buf, "balance.png"))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "balance.png"))
+        else:
+            await ctx.send(view=view, file=discord.File(buf, "balance.png"))
 
     async def _send_reward_card(
         self,
@@ -168,7 +171,10 @@ class EconomyCog(
             image_name="reward.png",
             footer_lines=[announce] if announce else [],
         )
-        await ctx.send(view=view, file=discord.File(buf, "reward.png"))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "reward.png"))
+        else:
+            await ctx.send(view=view, file=discord.File(buf, "reward.png"))
 
     # ── Background tick: bank interest + lottery draw ────────────────────────
     @tasks.loop(minutes=30)
