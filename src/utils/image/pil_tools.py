@@ -173,7 +173,7 @@ def process_image_animated(raw: BytesIO, effect_fn):
         loop=0,
         duration=durations,
         disposal=2,
-        transparency=0,
+        # transparency=0,
     )
     out.seek(0)
     return out
