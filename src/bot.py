@@ -17,6 +17,7 @@ from utils import logging
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database
+from api_server import start_api_server
 
 # ── Config ───────────────────────────────────────────────────────────────────
 TOKEN         = os.getenv("DISCORD_BOT_TOKEN")
@@ -81,6 +82,9 @@ if __name__ == "__main__":
             return
 
         logging.info("Startup", "Starting bot...")
+
+        start_api_server(bot)
+        logging.info("Startup", "Dashboard API started alongside the bot.")
 
         device_choice = os.getenv("STATUS_DEVICE", "normal").lower()
         patch_identify(device_choice)

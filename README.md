@@ -98,10 +98,10 @@ Blackjack, Slots, Roulette — all with PIL image cards and full economy integra
 - **OxaPay integration** — accept crypto donations directly through the bot
 - `/donate` command for supporters
 
-### 🌐 Website & Dashboard (Under Development)
-- Public landing page with billing toggle (EN/DE)
-- Full command documentation page
-- Dashboard prototype
+### 🌐 Website & Dashboard
+- React + Vite public landing page, command directory, docs, and legal pages
+- Discord OAuth dashboard with live bot stats and guild configuration
+- Single-process Flask API served directly by the bot
 
 ---
 
@@ -110,7 +110,8 @@ Blackjack, Slots, Roulette — all with PIL image cards and full economy integra
 ```
 src/
 ├── bot.py            # Entry point — loads cogs, syncs slash commands, event loop
-├── website.py        # Flask static server for the website
+├── api_server.py     # Starts the dashboard API beside the bot
+├── website.py        # Flask API routes and React build server
 ├── cogs/
 │   ├── admin/            # Admin tools, prefix management, custom triggers
 │   ├── ai/               # AI chat, memory, favorability, image generation
@@ -144,13 +145,12 @@ src/
 │   ├── ratelimit.py      # Async rolling-window rate limiters
 │   └── blacklist_manager.py
 ├── config/              # Bot configuration (emojis, AI config, etc.)
-├── website/             # Static website served by website.py
-│   ├── index.html        # Landing page (EN/DE billing)
-│   ├── dashboard.html    # Dashboard prototype
-│   ├── docs/index.html   # Full command documentation
-│   ├── styles.css        # Shared café dark aesthetic
-│   ├── tos.html
-│   └── privacy.html
+├── website/             # Generated React build served by website.py
+│   └── dist/
+├── web/                 # React + Vite dashboard source
+│   ├── src/App.tsx      # Public pages and dashboard views
+│   ├── src/api.ts       # Typed API client
+│   └── src/styles.css   # Design tokens and responsive styles
 └── data/                # Persistent storage (JSON + SQLite)
     ├── database.db       # Giveaway data (SQLite)
     ├── levels.json
@@ -173,11 +173,12 @@ src/
 ## 🚀 Setup
 
 1. Add your `DISCORD_BOT_TOKEN` to environment secrets
-2. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
-3. Optionally start the **Start the website** workflow to serve the landing page
-4. In your server, use `!levelpanel` and `!automod` to configure per-guild settings interactively
+2. Add `DISCORD_CLIENT_SECRET` to enable Discord OAuth dashboard login
+3. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
+4. Run `npm run build` when changing the frontend; the **Run the bot** workflow serves it
+5. In your server, use `!levelpanel` and `!automod` to configure per-guild settings interactively
 
-**Requirements:** Python 3.10+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
+**Requirements:** Python 3.10+, Node.js 20+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
 
 ---
 

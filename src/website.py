@@ -2,8 +2,8 @@
 Niko Dashboard — Flask web server
 ──────────────────────────────────
 Routes:
-  GET  /                        → landing page
-  GET  /dashboard               → dashboard SPA (redirects to dashboard.html)
+  GET  /                        → React landing page
+  GET  /dashboard               → React dashboard
   GET  /auth/login              → redirect to Discord OAuth
   GET  /auth/callback           → handle OAuth code exchange
   GET  /auth/logout             → clear session
@@ -26,6 +26,8 @@ import glob
 import time
 import secrets
 import traceback
+import sqlite3
+from urllib.parse import urlencode
 from functools import wraps
 from flask import (
     Flask, send_from_directory, session,
@@ -46,15 +48,20 @@ MODCFG       = os.path.join(DATA_DIR, "modconfig.json")
 AICFG        = os.path.join(DATA_DIR, "ai_config.json")
 LEVELS_JSON  = os.path.join(DATA_DIR, "levels.json.migrated")
 LEVELCFG_JSON = os.path.join(DATA_DIR, "level_config.json.migrated")
+DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
 
 MANAGE_GUILD_PERM = 0x20  # Discord permission bit
 
 # ── App setup ────────────────────────────────────────────────────────────────
 
-app = Flask(__name__, static_folder="website", static_url_path="")
+WEB_DIST_DIR = os.path.join(os.path.dirname(__file__), "website", "dist")
+app = Flask(__name__, static_folder=WEB_DIST_DIR, static_url_path="")
 app.secret_key = os.environ.get("SESSION_SECRET", secrets.token_hex(32))
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"]   = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+_discord_bot = None
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,9 +69,20 @@ def oauth_enabled() -> bool:
     return bool(DISCORD_CLIENT_SECRET)
 
 
+def configure_bot(bot) -> None:
+    """Give the API access to the live bot for guild and runtime config sync."""
+    global _discord_bot
+    _discord_bot = bot
+
+
 def redirect_uri() -> str:
-    domain = os.environ.get("REPLIT_DEV_DOMAIN", "localhost:5000")
-    return f"https://{domain}/auth/callback"
+    explicit = os.environ.get("DISCORD_REDIRECT_URI")
+    if explicit:
+        return explicit
+    domain = os.environ.get("REPLIT_DEV_DOMAIN")
+    if domain:
+        return f"https://{domain}/auth/callback"
+    return url_for("auth_callback", _external=True)
 
 
 def load_json(path: str, default=None):
@@ -77,12 +95,16 @@ def load_json(path: str, default=None):
 
 def save_json(path: str, data):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(path, "w") as f:
+    temporary = f"{path}.tmp"
+    with open(temporary, "w") as f:
         json.dump(data, f, indent=2)
+    os.replace(temporary, path)
 
 
 def bot_guild_ids() -> set:
     """Return the set of guild IDs the bot is currently in."""
+    if _discord_bot is not None:
+        return {str(guild.id) for guild in _discord_bot.guilds}
     stats = load_json(BOT_STATS, {})
     return {str(g) for g in stats.get("guild_ids", [])}
 
@@ -100,12 +122,85 @@ def require_auth(f):
     """Decorator: return 401 JSON if the session has no Discord user."""
     @wraps(f)
     def _inner(*args, **kwargs):
-        if "user" not in session:
+        if not ensure_access_token():
             return jsonify({
                 "error": "Not authenticated",
                 "login_url": "/auth/login",
             }), 401
         return f(*args, **kwargs)
+    return _inner
+
+
+def ensure_access_token() -> bool:
+    """Keep the OAuth session usable across Discord's short-lived access token."""
+    if "user" not in session:
+        return False
+    expires_at = float(session.get("token_exp", 0))
+    if session.get("access_token") and time.time() < expires_at - 30:
+        return True
+
+    refresh_token = session.get("refresh_token")
+    if not refresh_token or not oauth_enabled():
+        session.clear()
+        return False
+    try:
+        response = req.post(
+            f"{DISCORD_API}/oauth2/token",
+            data={
+                "client_id": DISCORD_CLIENT_ID,
+                "client_secret": DISCORD_CLIENT_SECRET,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        token_data = response.json()
+        session["access_token"] = token_data["access_token"]
+        session["refresh_token"] = token_data.get("refresh_token", refresh_token)
+        session["token_exp"] = time.time() + token_data.get("expires_in", 604800)
+        return True
+    except Exception:
+        session.clear()
+        return False
+
+
+def managed_guild_ids() -> set[str]:
+    """Return manageable mutual guilds, cached briefly in the signed session."""
+    cached_at = session.get("managed_guilds_at", 0)
+    cached_ids = session.get("managed_guild_ids")
+    if cached_ids is not None and time.time() - cached_at < 60:
+        return {str(guild_id) for guild_id in cached_ids}
+
+    if not ensure_access_token():
+        return set()
+    token = session.get("access_token", "")
+    if not token:
+        return set()
+    try:
+        all_guilds = discord_get("/users/@me/guilds", token)
+    except Exception:
+        return set()
+
+    present = bot_guild_ids()
+    manageable = []
+    for guild in all_guilds:
+        permissions = int(guild.get("permissions", 0))
+        if (bool(permissions & MANAGE_GUILD_PERM) or bool(guild.get("owner"))) and str(guild["id"]) in present:
+            manageable.append(str(guild["id"]))
+    session["managed_guild_ids"] = manageable
+    session["managed_guilds_at"] = time.time()
+    return set(manageable)
+
+
+def require_guild_access(f):
+    """Protect a guild route from cross-server reads and writes."""
+    @wraps(f)
+    def _inner(guild_id, *args, **kwargs):
+        if str(guild_id) not in managed_guild_ids():
+            return jsonify({"error": "You do not have Manage Server access to this guild."}), 403
+        return f(guild_id, *args, **kwargs)
     return _inner
 
 
@@ -130,17 +225,18 @@ def auth_login():
             "hint": "Add DISCORD_CLIENT_SECRET to your Replit secrets to enable login.",
         }), 503
 
-    state = secrets.token_urlsafe(16)
+    state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
+    next_path = request.args.get("next", "/dashboard")
+    session["oauth_next"] = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/dashboard"
 
-    params = "&".join([
-        f"client_id={DISCORD_CLIENT_ID}",
-        f"redirect_uri={redirect_uri()}",
-        "response_type=code",
-        "scope=identify%20guilds",
-        f"state={state}",
-        "prompt=none",
-    ])
+    params = urlencode({
+        "client_id": DISCORD_CLIENT_ID,
+        "redirect_uri": redirect_uri(),
+        "response_type": "code",
+        "scope": "identify guilds",
+        "state": state,
+    })
     return redirect(f"https://discord.com/oauth2/authorize?{params}")
 
 
@@ -184,28 +280,41 @@ def auth_callback():
 
     session["user"]         = user
     session["access_token"] = access_token
+    session["refresh_token"] = token_data.get("refresh_token")
     session["token_exp"]    = time.time() + token_data.get("expires_in", 604800)
 
-    return redirect("/dashboard.html")
+    return redirect(session.pop("oauth_next", "/dashboard"))
 
 
 @app.route("/auth/logout")
 def auth_logout():
+    token = session.get("access_token")
+    if token:
+        try:
+            req.post(
+                f"{DISCORD_API}/oauth2/token/revoke",
+                data={"client_id": DISCORD_CLIENT_ID, "client_secret": DISCORD_CLIENT_SECRET, "token": token},
+                timeout=5,
+            )
+        except Exception:
+            pass
     session.clear()
     return redirect("/")
 
 
 @app.route("/auth/status")
 def auth_status():
-    if "user" not in session:
+    if not ensure_access_token():
         return jsonify({
             "authenticated":   False,
             "oauth_available": oauth_enabled(),
         })
+    session.setdefault("csrf_token", secrets.token_urlsafe(24))
     return jsonify({
         "authenticated":   True,
         "oauth_available": True,
         "user":            session["user"],
+        "csrf_token":      session["csrf_token"],
     })
 
 
@@ -219,6 +328,11 @@ def api_commands():
     if category:
         cmds = [c for c in cmds if c.get("category") == category]
     return jsonify(cmds)
+
+
+@app.route("/api/health")
+def api_health():
+    return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
 
 
 @app.route("/api/botstats")
@@ -269,11 +383,14 @@ def api_guilds():
                 "name":     g["name"],
                 "icon_url": icon_url,
             })
+    session["managed_guild_ids"] = [guild["id"] for guild in result]
+    session["managed_guilds_at"] = time.time()
     return jsonify(result)
 
 
 @app.route("/api/guild/<guild_id>/overview")
 @require_auth
+@require_guild_access
 def api_guild_overview(guild_id):
     # ── Economy snapshot ──────────────────────────────────────
     eco_files  = glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))
@@ -326,6 +443,7 @@ def api_guild_overview(guild_id):
 
 @app.route("/api/guild/<guild_id>/economy")
 @require_auth
+@require_guild_access
 def api_guild_economy(guild_id):
     eco_files = glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))
     rows = []
@@ -378,12 +496,14 @@ def _get_levels(guild_id: str) -> list:
 
 @app.route("/api/guild/<guild_id>/levels")
 @require_auth
+@require_guild_access
 def api_guild_levels(guild_id):
     return jsonify(_get_levels(guild_id))
 
 
 @app.route("/api/guild/<guild_id>/config")
 @require_auth
+@require_guild_access
 def api_guild_config(guild_id):
     modcfg  = load_json(MODCFG, {}).get(guild_id, {})
     aicfg   = load_json(AICFG,  {}).get(guild_id, {})
@@ -425,6 +545,7 @@ def api_guild_config(guild_id):
 
 @app.route("/api/guild/<guild_id>/config/automod", methods=["POST"])
 @require_auth
+@require_guild_access
 def api_save_automod(guild_id):
     body = request.get_json(silent=True) or {}
     data = load_json(MODCFG, {})
@@ -440,10 +561,13 @@ def api_save_automod(guild_id):
 
     if "modlog_channel" in body:
         data[guild_id]["modlog_channel"] = body["modlog_channel"]
-    if "spam_threshold" in body:
-        data[guild_id]["spam_threshold"] = int(body["spam_threshold"])
-    if "max_mentions" in body:
-        data[guild_id]["max_mentions"] = int(body["max_mentions"])
+    try:
+        if "spam_threshold" in body:
+            data[guild_id]["spam_threshold"] = max(1, int(body["spam_threshold"]))
+        if "max_mentions" in body:
+            data[guild_id]["max_mentions"] = max(1, int(body["max_mentions"]))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Threshold values must be positive whole numbers."}), 400
 
     save_json(MODCFG, data)
     return jsonify({"ok": True})
@@ -451,6 +575,7 @@ def api_save_automod(guild_id):
 
 @app.route("/api/guild/<guild_id>/config/ai", methods=["POST"])
 @require_auth
+@require_guild_access
 def api_save_ai(guild_id):
     body = request.get_json(silent=True) or {}
     data = load_json(AICFG, {})
@@ -470,17 +595,25 @@ def api_save_ai(guild_id):
 
 @app.route("/")
 def root():
-    return send_from_directory("website", "index.html")
+    return send_from_directory(WEB_DIST_DIR, "index.html")
 
 
 @app.route("/dashboard")
 def dashboard_redirect():
-    return redirect("/dashboard.html")
+    return send_from_directory(WEB_DIST_DIR, "index.html")
+
+
+@app.route("/dashboard.html")
+def legacy_dashboard_redirect():
+    return redirect("/dashboard")
 
 
 @app.route("/<path:path>")
 def static_proxy(path):
-    return send_from_directory("website", path)
+    requested = os.path.join(WEB_DIST_DIR, path)
+    if os.path.isfile(requested):
+        return send_from_directory(WEB_DIST_DIR, path)
+    return send_from_directory(WEB_DIST_DIR, "index.html")
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
