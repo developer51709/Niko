@@ -37,7 +37,7 @@ import requests as req
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DISCORD_CLIENT_ID     = "1484653109576732692"
+DISCORD_CLIENT_ID     = "1520558530472448170"
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_API           = "https://discord.com/api/v10"
 
