@@ -121,6 +121,10 @@ class MongoPool:
         # Handle INSERT OR REPLACE
         if "INSERT OR REPLACE" in query.upper() or "REPLACE INTO" in query.upper():
             return await self._handle_insert_or_replace(query, args)
+
+        # Handle INSERT ... SELECT
+        if "INSERT" in query.upper() and "SELECT" in query.upper():
+            return await self._handle_insert_select(query, args)
         
         # Handle regular INSERT
         if query.upper().startswith("INSERT"):
@@ -467,6 +471,76 @@ class MongoPool:
             doc['_id'] = doc['id']
         
         await collection.replace_one({'_id': doc.get('_id')}, doc, upsert=True)
+
+    async def _handle_insert_select(self, query: str, args: tuple):
+        """
+        Handle SQL:
+            INSERT [OR IGNORE] INTO table (col1, col2)
+            SELECT colA, colB FROM other WHERE ...
+        """
+
+        # Normalize whitespace
+        q = " ".join(query.split())
+
+        # Extract target table + columns + SELECT portion
+        upper = q.upper()
+
+        # Find INTO
+        into_idx = upper.index("INTO") + len("INTO")
+        after_into = q[into_idx:].strip()
+
+        # Table name
+        table = after_into.split(" ", 1)[0].strip()
+
+        # Column list inside parentheses
+        col_start = after_into.index("(")
+        col_end = after_into.index(")")
+        col_list = after_into[col_start + 1:col_end]
+        target_columns = [c.strip() for c in col_list.split(",")]
+
+        # SELECT portion begins after the closing parenthesis
+        select_sql = after_into[col_end + 1:].strip()
+        if not select_sql.upper().startswith("SELECT"):
+            raise ValueError(f"Cannot parse INSERT SELECT query: {query}")
+
+        # Parse SELECT using your existing parser
+        sel_table, sel_columns, where_clause, limit, sel_args = self._parse_select_query(select_sql, args)
+
+        # Fetch rows using your existing SELECT handler
+        rows = await self._handle_select_many(select_sql, sel_args)
+
+        # Prepare target collection
+        collection = self._db[table]
+        inserted = 0
+
+        # SELECT column list
+        select_cols = [c.strip() for c in sel_columns.split(",")]
+
+        for row in rows:
+            doc = {}
+
+            # Build document from SELECT result
+            for target_col, select_col in zip(target_columns, select_cols):
+                doc[target_col] = row.get(select_col)
+
+            # Apply your existing primary-key rules
+            if table == 'participants':
+                doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
+            elif table == 'giveaways':
+                doc['_id'] = doc.get('message_id')
+            elif 'user_id' in doc:
+                doc['_id'] = doc['user_id']
+            elif 'id' in doc:
+                doc['_id'] = doc['id']
+
+            # OR IGNORE behavior: skip if exists
+            if await collection.find_one({'_id': doc.get('_id')}):
+                continue
+
+            await collection.insert_one(doc)
+            inserted += 1
+
+        return inserted
 
     async def _handle_insert(self, query: str, args: tuple):
         """Handle regular INSERT query."""
