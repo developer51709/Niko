@@ -1,5 +1,6 @@
 export type Page = "home" | "commands" | "docs" | "dashboard" | "privacy" | "terms";
 export type DashSection = "overview" | "economy" | "leveling" | "moderation" | "ai";
+export type DashboardView = "overview" | "servers" | "guild";
 
 function normalizedPath(pathname: string) {
   return pathname.replace(/\/+$/, "") || "/";
@@ -19,10 +20,21 @@ export function dashboardPath(guildId?: string, section: DashSection = "overview
   return guildId ? `/dashboard/${guildId}/${section}` : "/dashboard";
 }
 
-export function dashboardRoute(): { guildId: string | null; section: DashSection } {
+export function dashboardServersPath() {
+  return "/dashboard/servers";
+}
+
+export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
   const known: DashSection[] = ["overview", "economy", "leveling", "moderation", "ai"];
+  if (parts[1] === "servers") {
+    return { view: "servers", guildId: null, section: "overview" };
+  }
+  if (!parts[1]) {
+    return { view: "overview", guildId: null, section: "overview" };
+  }
   return {
+    view: "guild",
     guildId: parts[1] || null,
     section: known.includes(parts[2] as DashSection) ? parts[2] as DashSection : "overview",
   };

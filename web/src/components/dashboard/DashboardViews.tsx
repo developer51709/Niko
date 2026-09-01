@@ -1,6 +1,7 @@
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
-import type { BotStats, EconomyRow, GuildConfig, GuildResources, GuildOverview, LevelRow } from "../../types";
+import { displayName, initials } from "../../utils/format";
+import type { BotStats, EconomyRow, Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
 import { LevelingSettings } from "./SettingsViews";
 
 export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
@@ -9,6 +10,76 @@ export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: 
 
 export function StatCard({ label, value, note, accent = "" }: { label: string; value: string; note: string; accent?: string }) {
   return <div className={`dash-stat ${accent}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+}
+
+export function UserOverviewView({ user, overview, guilds, onServers, onManage }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void }) {
+  const installed = guilds.filter((guild) => guild.installed !== false);
+  return <>
+    <DashHeading eyebrow="Personal overview" title="Your Niko snapshot." text="Keep an eye on your progress, then jump into a server when you’re ready to tune the room." />
+    <div className="overview-intro">
+      <div className="profile-card">
+        <span className="profile-avatar">{initials(displayName(user))}</span>
+        <div><span className="panel-kicker">Signed in as</span><h3>{displayName(user)}</h3><p>Personal economy profile</p></div>
+      </div>
+      <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
+    </div>
+    <div className="dash-stats overview-stats">
+      <StatCard label="Net worth" value={formatNumber(overview?.net_worth)} note="Across your Niko profile" accent="accent-orange" />
+      <StatCard label="In your wallet" value={formatNumber(overview?.balance)} note="Ready to spend" accent="accent-violet" />
+      <StatCard label="In your vault" value={formatNumber(overview?.bank)} note="Saved for later" accent="accent-blue" />
+      <StatCard label="Current level" value={formatNumber(overview?.level)} note={overview?.job ? `Working as a ${overview.job}` : "Keep showing up"} accent="accent-green" />
+    </div>
+    <div className="dash-columns overview-columns">
+      <section className="dash-panel">
+        <div className="panel-heading"><div><span className="panel-kicker">Progress</span><h3>Your momentum</h3></div><span className="panel-icon"><Icon name="spark" /></span></div>
+        <div className="metric-list">
+          <div><span>Daily streak</span><strong>{formatNumber(overview?.daily_streak)} <small>days</small></strong></div>
+          <div><span>Achievements</span><strong>{formatNumber(overview?.achievements)} <small>unlocked</small></strong></div>
+          <div><span>Total earned</span><strong>{formatNumber(overview?.total_earned)} <small>coins</small></strong></div>
+          <div><span>Economy standing</span><strong>{overview?.economy_rank ? `#${formatNumber(overview.economy_rank)}` : "—"} <small>{overview?.economy_profiles ? `of ${formatNumber(overview.economy_profiles)}` : ""}</small></strong></div>
+        </div>
+      </section>
+      <section className="dash-panel">
+        <div className="panel-heading"><div><span className="panel-kicker">Quick access</span><h3>Your servers</h3></div><span className="panel-icon"><Icon name="users" /></span></div>
+        <div className="mini-server-list">
+          {installed.slice(0, 4).map((guild) => <button key={guild.id} onClick={() => onManage(guild)}><span className="guild-avatar">{guild.name.slice(0, 1).toUpperCase()}</span><span>{guild.name}</span><Icon name="arrow" /></button>)}
+          {!installed.length && <p className="empty-state compact">Add Niko to a server to start managing it.</p>}
+        </div>
+        <button className="text-link overview-link" onClick={onServers}>View all servers <Icon name="arrow" /></button>
+      </section>
+    </div>
+  </>;
+}
+
+function ServerCard({ guild, onManage }: { guild: Guild; onManage: (guild: Guild) => void }) {
+  const installed = guild.installed !== false;
+  return <article className="server-card">
+    <div className="server-card-heading"><span className="server-avatar">{guild.name.slice(0, 1).toUpperCase()}</span><span className="server-status">{installed ? "Niko is installed" : "Ready to add"}</span></div>
+    <h3>{guild.name}</h3>
+    <p>{installed ? "Open the dashboard to manage Niko’s features and settings." : "You have permission to manage this server. Add Niko to unlock its controls."}</p>
+    {installed ? <button className="button button-muted button-small" onClick={() => onManage(guild)}>Open settings <Icon name="arrow" /></button> : <a className="button button-primary button-small" href={guild.invite_url || "#"} target="_blank" rel="noreferrer">Add Niko <Icon name="external" /></a>}
+  </article>;
+}
+
+export function ServersView({ guilds, onManage }: { guilds: Guild[]; onManage: (guild: Guild) => void }) {
+  const installed = guilds.filter((guild) => guild.installed !== false);
+  const available = guilds.filter((guild) => guild.installed === false);
+  return <>
+    <DashHeading eyebrow="Servers" title="Choose where to work." text="Manage servers with Niko already installed, or add Niko to another server you can administer." />
+    <div className="server-summary">
+      <div><strong>{formatNumber(installed.length)}</strong><span>Connected to Niko</span></div>
+      <div><strong>{formatNumber(available.length)}</strong><span>Ready to add</span></div>
+      <div className="server-summary-note"><Icon name="shield" /><span>Only servers where you have Manage Server access are shown.</span></div>
+    </div>
+    <section className="server-section">
+      <div className="section-heading-row"><div><span className="panel-kicker">Connected</span><h3>Manage a server</h3></div><span className="section-count">{installed.length}</span></div>
+      <div className="server-grid">{installed.map((guild) => <ServerCard key={guild.id} guild={guild} onManage={onManage} />)}{!installed.length && <div className="empty-state"><strong>No connected servers yet.</strong><span>Add Niko below, then come back here to manage it.</span></div>}</div>
+    </section>
+    <section className="server-section">
+      <div className="section-heading-row"><div><span className="panel-kicker">Available to you</span><h3>Add Niko to a server</h3></div><span className="section-count">{available.length}</span></div>
+      <div className="server-grid">{available.map((guild) => <ServerCard key={guild.id} guild={guild} onManage={onManage} />)}{!available.length && <div className="server-note">Niko is already installed in every server you can manage.</div>}</div>
+    </section>
+  </>;
 }
 
 export function RankList({ rows, type }: { rows: (EconomyRow | LevelRow)[]; type: "coins" | "xp" }) {

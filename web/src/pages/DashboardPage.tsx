@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
-import { getAuth, getConfig, getEconomy, getGuilds, getLevels, getOverview, getResources } from "../api";
+import { getAuth, getConfig, getEconomy, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, ModerationView } from "../components/dashboard/SettingsViews";
-import { EconomyView, LevelingView, OverviewView } from "../components/dashboard/DashboardViews";
+import { EconomyView, LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
-import { dashboardPath, dashboardRoute, navigate, type DashSection } from "../router";
-import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, EconomyRow, LevelRow } from "../types";
-import { displayName, initials } from "../utils/format";
+import { dashboardPath, dashboardRoute, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../router";
+import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, EconomyRow, LevelRow, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
   const config = useBotConfig();
   return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card">
-    <span className="auth-mark">n</span><div className="eyebrow">Private workspace</div><h1>Settle in, <em>admin.</em></h1><p>Sign in with Discord to view server insights and manage Niko’s settings.</p>
+    <span className="auth-mark">n</span><div className="eyebrow">Private workspace</div><h1>Settle in, <em>admin.</em></h1><p>Sign in with Discord to see your Niko profile and manage the servers you look after.</p>
     {auth.oauth_available ? <a className="button button-primary full-width" href="/auth/login?next=/dashboard"><Icon name="lock" /> Continue with Discord <Icon name="arrow" /></a> : <div className="notice warning">Discord login is not configured yet. Add <code>DISCORD_CLIENT_SECRET</code> to the environment and restart the bot.</div>}
     {!config && <p className="form-hint">The public bot configuration is still loading.</p>}
     <a className="back-link" href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Return to public site</a>
@@ -50,13 +49,19 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 
+function DashboardLoading() {
+  return <div className="section-loading dashboard-loading" role="status"><div className="loading-ring" /><span>Preparing your dashboard…</span></div>;
+}
+
 export function DashboardPage() {
   const config = useBotConfig();
   const [route, setRoute] = useState(dashboardRoute);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [stats, setStats] = useState<BotStats | null>(null);
+  const [userOverview, setUserOverview] = useState<UserOverview | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [selectedGuild, setSelectedGuild] = useState<Guild | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -66,31 +71,68 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([getAuth(), fetch("/api/botstats").then((response) => response.json() as Promise<BotStats>)])
+    setLoading(true);
+    Promise.all([getAuth(), getStats()])
       .then(([authStatus, botStats]) => {
-        setAuth(authStatus); setStats(botStats);
-        if (authStatus.authenticated) return getGuilds().then(setGuilds);
-        return undefined;
+        setAuth(authStatus);
+        setStats(botStats);
+        if (!authStatus.authenticated) return null;
+        return Promise.all([getUserOverview(), getGuilds()]).then(([profile, availableGuilds]) => {
+          setUserOverview(profile);
+          setGuilds(availableGuilds);
+        });
       })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard unavailable"));
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard unavailable"))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (!guilds.length) return;
-    const remembered = localStorage.getItem("niko-guild");
-    const selected = guilds.find((guild) => guild.id === route.guildId) || guilds.find((guild) => guild.id === remembered) || guilds[0];
-    setSelectedGuild(selected);
-    if (!route.guildId || !guilds.some((guild) => guild.id === route.guildId)) navigate(dashboardPath(selected.id, route.section));
-  }, [guilds, route.guildId, route.section]);
+    if (route.view !== "guild") {
+      setSelectedGuild(null);
+      return;
+    }
+    const selected = guilds.find((guild) => guild.id === route.guildId && guild.installed !== false);
+    if (selected) {
+      setSelectedGuild(selected);
+      localStorage.setItem("niko-guild", selected.id);
+    } else if (route.guildId && guilds.length) {
+      navigate(dashboardServersPath());
+    }
+  }, [guilds, route.guildId, route.view]);
 
-  if (!auth && !error) return <div className="dashboard-state"><div className="loading-ring" /><p>Connecting to Niko…</p></div>;
-  if (error || !auth) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><span className="auth-mark">!</span><div className="eyebrow">Connection issue</div><h1>Couldn’t load<br /><em>your workspace.</em></h1><p>{error || "The dashboard is unavailable."}</p><button className="button button-primary" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button></div></main></>;
+  if (loading || !auth) return <div className="dashboard-state"><div className="loading-ring" /><p>Connecting to Niko…</p></div>;
+  if (error) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><span className="auth-mark">!</span><div className="eyebrow">Connection issue</div><h1>Couldn’t load<br /><em>your workspace.</em></h1><p>{error}</p><button className="button button-primary" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button></div></main></>;
   if (!auth.authenticated) return <AuthCard auth={auth} />;
-  if (!guilds.length) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><span className="auth-mark">n</span><div className="eyebrow">No workspace yet</div><h1>No managed<br /><em>servers found.</em></h1><p>Niko needs to be in a server where your Discord account has Manage Server permission, and Niko must already be installed there.</p><a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">Invite Niko <Icon name="arrow" /></a></div></main></>;
 
-  const changeGuild = (guild: Guild) => { localStorage.setItem("niko-guild", guild.id); navigate(dashboardPath(guild.id, route.section)); };
-  const changeSection = (section: DashSection) => { if (selectedGuild) navigate(dashboardPath(selectedGuild.id, section)); };
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} section={route.section} stats={stats} onGuildChange={changeGuild} onSectionChange={changeSection}>
-    {selectedGuild && <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} />}
+  const changeGuild = (guild: Guild) => {
+    if (guild.installed === false) return;
+    localStorage.setItem("niko-guild", guild.id);
+    navigate(dashboardPath(guild.id, route.section));
+  };
+  const openGuild = (guild: Guild) => {
+    if (guild.installed === false) return;
+    localStorage.setItem("niko-guild", guild.id);
+    navigate(dashboardPath(guild.id, "overview"));
+  };
+  const changeSection = (section: DashSection) => {
+    if (selectedGuild) navigate(dashboardPath(selectedGuild.id, section));
+    else navigate(dashboardPath());
+  };
+  const goHome = () => navigate(dashboardPath());
+  const goServers = () => navigate(dashboardServersPath());
+
+  let content;
+  if (route.view === "servers") {
+    content = <ServersView guilds={guilds} onManage={openGuild} />;
+  } else if (route.view === "guild") {
+    content = selectedGuild
+      ? <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} />
+      : <DashboardLoading />;
+  } else {
+    content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} />;
+  }
+
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection}>
+    {content}
   </DashboardShell>;
 }

@@ -459,10 +459,47 @@ def api_me():
     return jsonify(session["user"])
 
 
+@app.route("/api/me/overview")
+@require_auth
+def api_me_overview():
+    """Return the signed-in user's personal Niko profile and economy snapshot."""
+    user_id = str(session["user"].get("id", ""))
+    profile = load_json(os.path.join(ECONOMY_DIR, f"{user_id}.json"), {})
+    if not isinstance(profile, dict):
+        profile = {}
+
+    profiles = []
+    for filepath in glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json")):
+        data = load_json(filepath, {})
+        if isinstance(data, dict):
+            profiles.append({
+                "user_id": os.path.basename(filepath).replace(".json", ""),
+                "net_worth": int(data.get("net_worth", 0) or 0),
+            })
+    profiles.sort(key=lambda row: row["net_worth"], reverse=True)
+    rank = next(
+        (index + 1 for index, row in enumerate(profiles) if row["user_id"] == user_id),
+        None,
+    )
+
+    return jsonify({
+        "balance": int(profile.get("balance", 0) or 0),
+        "bank": int(profile.get("bank", 0) or 0),
+        "net_worth": int(profile.get("net_worth", 0) or 0),
+        "level": int(profile.get("level", 0) or 0),
+        "job": profile.get("job", "barista"),
+        "daily_streak": int(profile.get("daily_streak", 0) or 0),
+        "achievements": len(profile.get("achievements", [])),
+        "total_earned": int(profile.get("total_earned", 0) or 0),
+        "economy_rank": rank,
+        "economy_profiles": len(profiles),
+    })
+
+
 @app.route("/api/guilds")
 @require_auth
 def api_guilds():
-    """Guilds where the user has Manage Server AND the bot is present."""
+    """Guilds the user can manage, annotated with Niko's install state."""
     token = session.get("access_token", "")
     try:
         all_guilds = discord_get("/users/@me/guilds", token)
@@ -472,22 +509,32 @@ def api_guilds():
     present = bot_guild_ids()
     result  = []
     for g in all_guilds:
-        perms = int(g.get("permissions", 0))
+        try:
+            perms = int(g.get("permissions", 0))
+        except (TypeError, ValueError):
+            perms = 0
         is_admin = bool(perms & (MANAGE_GUILD_PERM | ADMINISTRATOR_PERM)) or bool(g.get("owner"))
-        if str(g["id"]) in present and is_admin:
+        if is_admin:
             icon_hash = g.get("icon")
             icon_url  = (
                 f"https://cdn.discordapp.com/icons/{g['id']}/{icon_hash}.webp?size=64"
                 if icon_hash else None
             )
+            installed = str(g["id"]) in present
             result.append({
                 "id":       g["id"],
                 "name":     g["name"],
                 "icon_url": icon_url,
                 "owner":    bool(g.get("owner")),
                 "permissions": perms,
+                "installed": installed,
+                "invite_url": (
+                    f"https://discord.com/oauth2/authorize?"
+                    f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands', 'guild_id': g['id']})}"
+                    if not installed else None
+                ),
             })
-    session["managed_guild_ids"] = [guild["id"] for guild in result]
+    session["managed_guild_ids"] = [guild["id"] for guild in result if guild["installed"]]
     session["managed_guilds_at"] = time.time()
     return jsonify(result)
 

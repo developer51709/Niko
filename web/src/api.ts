@@ -9,6 +9,7 @@ import type {
   GuildOverview,
   LevelRow,
   PublicConfig,
+  UserOverview,
 } from "./types";
 
 export class ApiError extends Error {
@@ -38,6 +39,7 @@ export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getStats = () => api<BotStats>("/api/botstats");
 export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
+export const getUserOverview = () => api<UserOverview>("/api/me/overview");
 export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/overview`);
 export const getEconomy = (id: string) => api<EconomyRow[]>(`/api/guild/${id}/economy`);
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);

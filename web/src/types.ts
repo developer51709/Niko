@@ -29,6 +29,8 @@ export type Guild = {
   icon_url: string | null;
   owner?: boolean;
   permissions?: number;
+  installed?: boolean;
+  invite_url?: string | null;
 };
 
 export type User = {
@@ -36,6 +38,19 @@ export type User = {
   username?: string;
   global_name?: string;
   avatar?: string | null;
+};
+
+export type UserOverview = {
+  balance: number;
+  bank: number;
+  net_worth: number;
+  level: number;
+  job: string;
+  daily_streak: number;
+  achievements: number;
+  total_earned: number;
+  economy_rank: number | null;
+  economy_profiles: number;
 };
 
 export type EconomyRow = {
