@@ -9,9 +9,9 @@ export function PublicHeader({ page }: { page: Page }) {
     <header className="site-header">
       <Brand />
       <nav className="site-nav" aria-label="Main navigation">
-        <a className={page === "home" ? "active" : ""} href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Home</a>
-        <a className={page === "commands" ? "active" : ""} href="/commands" onClick={(e) => { e.preventDefault(); navigate("/commands"); }}>Commands</a>
-        <a className={page === "docs" ? "active" : ""} href="/docs" onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
+        <a className={page === "home" ? "active" : ""} aria-current={page === "home" ? "page" : undefined} href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Home</a>
+        <a className={page === "commands" ? "active" : ""} aria-current={page === "commands" ? "page" : undefined} href="/commands" onClick={(e) => { e.preventDefault(); navigate("/commands"); }}>Commands</a>
+        <a className={page === "docs" ? "active" : ""} aria-current={page === "docs" ? "page" : undefined} href="/docs" onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
       </nav>
       <div className="header-actions">
         <a className="button button-small button-muted dashboard-link" href="/dashboard" onClick={(e) => { e.preventDefault(); navigate("/dashboard"); }}>

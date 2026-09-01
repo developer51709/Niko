@@ -1,8 +1,12 @@
 export type Page = "home" | "commands" | "docs" | "dashboard" | "privacy" | "terms";
 export type DashSection = "overview" | "economy" | "leveling" | "moderation" | "ai";
 
-export function pageFromPath(): Page {
-  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+function normalizedPath(pathname: string) {
+  return pathname.replace(/\/+$/, "") || "/";
+}
+
+export function pageFromPath(pathname = window.location.pathname): Page {
+  const path = normalizedPath(pathname);
   if (path === "/commands") return "commands";
   if (path === "/docs") return "docs";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
@@ -16,7 +20,7 @@ export function dashboardPath(guildId?: string, section: DashSection = "overview
 }
 
 export function dashboardRoute(): { guildId: string | null; section: DashSection } {
-  const parts = window.location.pathname.split("/").filter(Boolean);
+  const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
   const known: DashSection[] = ["overview", "economy", "leveling", "moderation", "ai"];
   return {
     guildId: parts[1] || null,
@@ -25,6 +29,7 @@ export function dashboardRoute(): { guildId: string | null; section: DashSection
 }
 
 export function navigate(path: string) {
+  if (!path.startsWith("/")) return;
   window.history.pushState({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
   window.scrollTo({ top: 0, behavior: "smooth" });

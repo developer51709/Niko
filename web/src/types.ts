@@ -13,10 +13,14 @@ export type PublicConfig = {
   oauth_available: boolean;
 };
 
+export type CommandType = "slash" | "prefix" | "hybrid" | "context";
+
 export type Command = {
   name: string;
   description: string;
   category: string;
+  type?: CommandType;
+  context_type?: "user" | "message";
 };
 
 export type Guild = {

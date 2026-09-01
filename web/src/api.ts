@@ -23,6 +23,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...options?.headers },
+    cache: "no-store",
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
@@ -49,7 +50,7 @@ export function saveConfig(
   body: Record<string, unknown>,
   csrfToken?: string,
 ) {
-  return api<{ ok: boolean }>(`/api/guild/${id}/config/${section}`, {
+  return api<{ ok: boolean; config?: Record<string, any> }>(`/api/guild/${id}/config/${section}`, {
     method: "POST",
     headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     body: JSON.stringify(body),

@@ -27,6 +27,7 @@ import time
 import secrets
 import traceback
 import sqlite3
+import asyncio
 from urllib.parse import urlencode
 from functools import wraps
 from flask import (
@@ -41,7 +42,8 @@ DISCORD_CLIENT_ID     = "1520558530472448170"
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_API           = "https://discord.com/api/v10"
 
-DATA_DIR     = "data"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 ECONOMY_DIR  = os.path.join(DATA_DIR, "economy_data")
 BOT_STATS    = os.path.join(DATA_DIR, "bot_stats.json")
 MODCFG       = os.path.join(DATA_DIR, "modconfig.json")
@@ -74,6 +76,67 @@ def configure_bot(bot) -> None:
     """Give the API access to the live bot for guild and runtime config sync."""
     global _discord_bot
     _discord_bot = bot
+
+
+def run_on_bot_loop(awaitable, timeout: float = 8):
+    """Run a bot-cog coroutine from Flask's worker thread.
+
+    The dashboard is served by Flask in a separate thread, so reading through
+    the bot's own pool must be scheduled onto the Discord event loop. This
+    keeps the dashboard and the running bot on the same source of truth.
+    """
+    if _discord_bot is None or not _discord_bot.loop.is_running():
+        raise RuntimeError("The Discord bot is not running.")
+    future = asyncio.run_coroutine_threadsafe(awaitable, _discord_bot.loop)
+    return future.result(timeout=timeout)
+
+
+def get_runtime_level_config(guild_id: str) -> dict:
+    """Read leveling settings through the live leveling cog when available."""
+    if _discord_bot is not None:
+        leveling = _discord_bot.get_cog("Leveling")
+        if leveling is not None and hasattr(leveling, "_guild_cfg"):
+            try:
+                return run_on_bot_loop(leveling._guild_cfg(int(guild_id)))
+            except Exception:
+                pass
+
+    # Fallback for a web-only process or a bot that is still starting.
+    level_cfg = {}
+    conn = sqlite_connect()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT xp_enabled, xp_multiplier, xp_cooldown, "
+                "       level_up_channel, level_up_message, level_roles "
+                "FROM level_config WHERE guild_id = ?",
+                (int(guild_id),),
+            )
+            row = cur.fetchone()
+            if row:
+                level_cfg = {
+                    "xp_enabled": bool(row[0]),
+                    "xp_multiplier": row[1],
+                    "xp_cooldown": row[2],
+                    "level_up_channel": str(row[3]) if row[3] else None,
+                    "level_up_message": row[4],
+                    "level_roles": json.loads(row[5] or "{}"),
+                }
+            conn.close()
+        except Exception:
+            conn.close()
+
+    return level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {})
+
+
+@app.after_request
+def prevent_dynamic_cache(response):
+    """Never let auth or dashboard API responses become stale in production."""
+    if request.path.startswith("/api/") or request.path.startswith("/auth/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 def redirect_uri() -> str:
@@ -336,7 +399,21 @@ def auth_status():
 @app.route("/api/commands")
 def api_commands():
     """Public endpoint — returns all bot commands from the JSON written by the bot on startup."""
-    cmds = load_json("data/commands.json", [])
+    raw_commands = load_json("data/commands.json", [])
+    valid_types = {"slash", "prefix", "hybrid", "context"}
+    cmds = []
+    for command in raw_commands if isinstance(raw_commands, list) else []:
+        if not isinstance(command, dict) or not command.get("name"):
+            continue
+        normalized = {
+            "name": str(command["name"]),
+            "description": str(command.get("description") or ""),
+            "category": str(command.get("category") or "utility"),
+            "type": command.get("type") if command.get("type") in valid_types else "slash",
+        }
+        if command.get("context_type") in {"user", "message"}:
+            normalized["context_type"] = command["context_type"]
+        cmds.append(normalized)
     category = request.args.get("category", "").strip().lower()
     if category:
         cmds = [c for c in cmds if c.get("category") == category]
@@ -535,36 +612,8 @@ def api_guild_levels(guild_id):
 @require_guild_access
 def api_guild_config(guild_id):
     modcfg  = get_runtime_moderation_config(guild_id)
-    aicfg   = load_json(AICFG,  {}).get(guild_id, {})
-
-    # Level config — read the same SQLite table used by the leveling cog.
-    level_cfg = {}
-    conn = sqlite_connect()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT xp_enabled, xp_multiplier, xp_cooldown, "
-                "       level_up_channel, level_up_message, level_roles "
-                "FROM level_config WHERE guild_id = ?",
-                (int(guild_id),),
-            )
-            row = cur.fetchone()
-            if row:
-                level_cfg = {
-                    "xp_enabled":       bool(row[0]),
-                    "xp_multiplier":     row[1],
-                    "xp_cooldown":       row[2],
-                    "level_up_channel": str(row[3]) if row[3] else None,
-                    "level_up_message":  row[4],
-                    "level_roles":       json.loads(row[5] or "{}"),
-                }
-            conn.close()
-        except Exception:
-            conn.close()
-
-    if not level_cfg:
-        level_cfg = load_json(LEVELCFG_JSON, {}).get(guild_id, {})
+    aicfg   = load_json(AICFG,  {}).get(str(guild_id), {})
+    level_cfg = get_runtime_level_config(guild_id)
 
     return jsonify({
         "moderation": modcfg,
@@ -608,19 +657,25 @@ def api_guild_resources(guild_id):
 @require_csrf
 def api_save_automod(guild_id):
     body = request.get_json(silent=True) or {}
-    data = load_json(MODCFG, {})
-    if guild_id not in data:
-        data[guild_id] = {}
+    moderation = _discord_bot.get_cog("ModerationUtils") if _discord_bot is not None else None
+    if moderation is not None:
+        guild_config = moderation.get_guild_config(int(guild_id))
+        data = None
+    else:
+        data = load_json(MODCFG, {})
+        if guild_id not in data:
+            data[guild_id] = {}
+        guild_config = data[guild_id]
 
     allowed_flags = {
         "antispam", "antilink", "badwords", "massmention",
         "antinuke", "antiraid", "antiraid_ext",
     }
-    existing = data[guild_id].get("automod", {})
+    existing = guild_config.get("automod", {})
     for key in allowed_flags:
         if key in body.get("automod", {}):
             existing[key] = bool(body["automod"][key])
-    data[guild_id]["automod"] = existing
+    guild_config["automod"] = existing
 
     integer_fields = {
         "spam_threshold": (1, 100),
@@ -635,7 +690,7 @@ def api_save_automod(guild_id):
                 return jsonify({"error": f"{key} must be a whole number."}), 400
             if not minimum <= value <= maximum:
                 return jsonify({"error": f"{key} must be between {minimum} and {maximum}."}), 400
-            data[guild_id][key] = value
+            guild_config[key] = value
 
     nested_fields = {
         "antinuke": {
@@ -654,7 +709,7 @@ def api_save_automod(guild_id):
         incoming = body.get(section)
         if not isinstance(incoming, dict):
             continue
-        target = data[guild_id].setdefault(section, {})
+        target = guild_config.setdefault(section, {})
         for key, (minimum, maximum) in fields.items():
             if key in incoming:
                 try:
@@ -675,13 +730,13 @@ def api_save_automod(guild_id):
         if section == "antiraid_ext" and "ext_app_detection" in incoming:
             target["ext_app_detection"] = bool(incoming["ext_app_detection"])
 
-    save_json(MODCFG, data)
-    if _discord_bot is not None:
-        moderation = _discord_bot.get_cog("ModerationUtils")
-        if moderation is not None:
-            moderation.config[guild_id] = data[guild_id]
-            moderation.save_config()
-    return jsonify({"ok": True})
+    if moderation is not None:
+        moderation.config[str(guild_id)] = guild_config
+        moderation.save_config()
+    else:
+        data[guild_id] = guild_config
+        save_json(MODCFG, data)
+    return jsonify({"ok": True, "config": guild_config})
 
 
 @app.route("/api/guild/<guild_id>/config/ai", methods=["POST"])
@@ -691,6 +746,7 @@ def api_save_automod(guild_id):
 def api_save_ai(guild_id):
     body = request.get_json(silent=True) or {}
     data = load_json(AICFG, {})
+    guild_id = str(guild_id)
     if guild_id not in data:
         data[guild_id] = {"personality": "cafe", "enabled": "True"}
 
@@ -703,7 +759,7 @@ def api_save_ai(guild_id):
             data[guild_id][experiment] = "True" if body[experiment] else "False"
 
     save_json(AICFG, data)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "config": data[guild_id]})
 
 
 @app.route("/api/guild/<guild_id>/config/leveling", methods=["POST"])
@@ -732,6 +788,22 @@ def api_save_leveling(guild_id):
     if message is not None and len(str(message)) > 1000:
         return jsonify({"error": "Level-up message must be 1000 characters or fewer."}), 400
 
+    leveling = _discord_bot.get_cog("Leveling") if _discord_bot is not None else None
+    if leveling is not None and hasattr(leveling, "_guild_cfg") and hasattr(leveling, "_save_guild_cfg"):
+        try:
+            current = run_on_bot_loop(leveling._guild_cfg(int(guild_id)))
+            current.update({
+                "xp_enabled": bool(body.get("xp_enabled", current.get("xp_enabled", True))),
+                "xp_multiplier": multiplier,
+                "xp_cooldown": cooldown,
+                "level_up_channel": int(channel) if channel else None,
+                "level_up_message": message,
+            })
+            run_on_bot_loop(leveling._save_guild_cfg(int(guild_id), current))
+            return jsonify({"ok": True, "config": current})
+        except Exception:
+            return jsonify({"error": "The leveling settings could not be saved through the live bot."}), 503
+
     conn = sqlite_connect()
     if conn is None:
         return jsonify({"error": "The bot database is unavailable."}), 503
@@ -752,7 +824,7 @@ def api_save_leveling(guild_id):
         return jsonify({"error": "The leveling settings could not be saved."}), 500
     finally:
         conn.close()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "config": get_runtime_level_config(guild_id)})
 
 
 # ── Static file serving ──────────────────────────────────────────────────────
@@ -767,6 +839,28 @@ def dashboard_redirect():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
 
+def serve_spa_shell():
+    """Serve the React shell for a client-side route on hard refresh."""
+    return send_from_directory(WEB_DIST_DIR, "index.html")
+
+
+@app.route("/commands")
+@app.route("/docs")
+@app.route("/privacy")
+@app.route("/terms")
+def public_spa_route():
+    return serve_spa_shell()
+
+
+@app.route("/commands/<path:path>")
+@app.route("/docs/<path:path>")
+@app.route("/privacy/<path:path>")
+@app.route("/terms/<path:path>")
+@app.route("/dashboard/<path:path>")
+def nested_spa_route(path):
+    return serve_spa_shell()
+
+
 @app.route("/dashboard.html")
 def legacy_dashboard_redirect():
     return redirect("/dashboard")
@@ -778,6 +872,16 @@ def static_proxy(path):
     if os.path.isfile(requested):
         return send_from_directory(WEB_DIST_DIR, path)
     return send_from_directory(WEB_DIST_DIR, "index.html")
+
+
+@app.errorhandler(404)
+def spa_not_found(error):
+    """Keep browser navigations inside the SPA while preserving API 404s."""
+    if request.path.startswith("/api/") or request.path.startswith("/auth/"):
+        return jsonify({"error": "Not found"}), 404
+    if request.accept_mimetypes.accept_html:
+        return send_from_directory(WEB_DIST_DIR, "index.html")
+    return error
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
