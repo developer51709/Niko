@@ -314,7 +314,7 @@ class Blackjack(commands.Cog):
             return await ctx.send("You must bet more than 0 coins.")
 
         economy = self.bot.get_cog("EconomyCog")
-        user_data = economy.get_user_economy_data(ctx.author.id)
+        user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
 
         if user_data["last_blackjack"] + int(os.getenv("BLACKJACK_COOLDOWN") or 60) > time.time():
@@ -383,7 +383,7 @@ class Blackjack(commands.Cog):
             payout -= amount
             user_data["balance"] += payout
             user_data["last_blackjack"] = time.time()
-            economy.save_economy_data()
+            await economy.save_user_economy_data(ctx.author.id)
 
             status = f"{payout:+d} coins"
             status_color = (87, 242, 135) if payout >= 0 else (237, 90, 96)
@@ -397,7 +397,7 @@ class Blackjack(commands.Cog):
             winnings = game.settle_blackjack()
             user_data["balance"] += winnings
             user_data["last_blackjack"] = time.time()
-            economy.save_economy_data()
+            await economy.save_user_economy_data(ctx.author.id)
 
             buf  = await _render(reveal_dealer=True, title="Blackjack! 3:2",
                                  status=f"+{winnings} coins", status_color=(87, 242, 135))
@@ -446,7 +446,7 @@ class Blackjack(commands.Cog):
         total_result = sum(game.settle_hand(h) for h in game.hands)
         user_data["balance"] += total_result
         user_data["last_blackjack"] = time.time()
-        economy.save_economy_data()
+        await economy.save_user_economy_data(ctx.author.id)
 
         if total_result > 0:
             title  = "You Win"

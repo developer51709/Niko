@@ -27,7 +27,7 @@ class GamblingMixin:
             await ctx.interaction.response.defer()
 
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         if now - int(data.get("last_crime", 0)) < COOLDOWN_CRIME:
             remain = COOLDOWN_CRIME - (now - int(data["last_crime"]))
@@ -58,7 +58,7 @@ class GamblingMixin:
 
         data["last_crime"] = now
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
 
         await self._send_reward_card(
             ctx, title=title, subtitle=subtitle, amount=amount, accent=accent,
@@ -88,8 +88,8 @@ class GamblingMixin:
             else:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
 
-        data   = self.get_user_economy_data(ctx.author.id)
-        target = self.get_user_economy_data(member.id)
+        data   = await self.get_user_economy_data(ctx.author.id)
+        target = await self.get_user_economy_data(member.id)
         now = int(time.time())
 
         if data["balance"] < 100:
@@ -114,7 +114,8 @@ class GamblingMixin:
         target_effects = target.setdefault("effects", {})
         if target_effects.pop("rob_shield", 0):
             data["last_rob"] = now
-            self.save_economy_data()
+            await self.save_user_economy_data(ctx.author.id)
+            await self.save_user_economy_data(member.id)
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
                     "🛡️ Blocked!",
@@ -143,5 +144,6 @@ class GamblingMixin:
 
         data["last_rob"] = now
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
+        await self.save_user_economy_data(member.id)
         await self._send_reward_card(ctx, title=title, subtitle=subtitle, amount=shown_amount, accent=accent)

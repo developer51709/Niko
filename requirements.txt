@@ -8,6 +8,7 @@ discord.py>=2.7.1
 feedparser
 flask
 langdetect
+motor
 openai
 pillow
 psutil

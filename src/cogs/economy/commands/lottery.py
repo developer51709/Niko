@@ -24,8 +24,13 @@ class LotteryMixin:
 
     async def _lottery_info(self, ctx: commands.Context):
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now    = int(time.time())
+        
+        # Load lottery state from database
+        from ..data import _get_lottery_from_db
+        self.lottery = await _get_lottery_from_db(self.bot)
+        
         remain = max(0, int(self.lottery.get("next_draw", now)) - now)
         last   = self.lottery.get("last_winner")
         last_block = ""
@@ -62,7 +67,7 @@ class LotteryMixin:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
 
         cost = LOTTERY_TICKET_PRICE * count
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         if data["balance"] < cost:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🥐."))
@@ -76,8 +81,11 @@ class LotteryMixin:
         self._credit(data, -cost, "lottery_buy", f"{count} tickets" + (" (lucky x2)" if bonus_mult > 1 else ""))
         data["lottery_tickets"] = int(data.get("lottery_tickets", 0)) + added
         self.lottery["pot"] = int(self.lottery.get("pot", 0)) + cost
-        _save_lottery(self.lottery)
-        self.save_economy_data()
+        
+        # Save to database
+        from ..data import _save_lottery_to_db
+        await _save_lottery_to_db(self.bot, self.lottery)
+        await self.save_user_economy_data(ctx.author.id)
 
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(

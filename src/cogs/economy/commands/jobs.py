@@ -23,7 +23,7 @@ class JobsMixin:
         await self._job_list(ctx)
 
     async def _job_list(self, ctx: commands.Context):
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         cur = data.get("job")
         lines = []
         for jid, j in JOBS.items():
@@ -80,7 +80,7 @@ class JobsMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         jid = job_id.lower()
         j = JOBS.get(jid)
         if not j:
@@ -102,7 +102,7 @@ class JobsMixin:
                 ))
         data["job"] = jid
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 f"{get_emoji('icon_tick')} Hired!",
@@ -119,14 +119,14 @@ class JobsMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         if data.get("job") == DEFAULT_JOB:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to quit", "You're already a barista."))
             else:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to quit", "You're already a barista."))
         data["job"] = DEFAULT_JOB
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view("📤 Resigned", "You're back to **Barista** ☕."))
         else:

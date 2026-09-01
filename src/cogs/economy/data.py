@@ -8,6 +8,8 @@
 # Backwards-compat: the legacy `get_user_economy_data(user_id)` and
 # `save_economy_data()` API is preserved, so blackjack/slots/roulette/gambling
 # cogs continue to work without modification.
+#
+# Note: The economy system now uses the bot's database (SQLite or MongoDB) instead of JSON files.
 
 from __future__ import annotations
 
@@ -250,6 +252,135 @@ def _save_lottery(state: dict) -> None:
             json.dump(state, f, indent=2)
     except Exception as exc:
         log.error("Economy", f"Could not save lottery state: {exc}")
+
+
+# ── Database helpers ────────────────────────────────────────────────────────
+async def _get_user_from_db(bot, user_id: int) -> dict | None:
+    """Get user economy data from database."""
+    try:
+        row = await bot.cxn.fetchrow(
+            "SELECT * FROM economy_users WHERE user_id = ?",
+            user_id
+        )
+        if row:
+            data = dict(row)
+            # Deserialize JSON fields
+            data["inventory"] = json.loads(data.get("inventory", "{}"))
+            data["effects"] = json.loads(data.get("effects", "{}"))
+            data["transactions"] = json.loads(data.get("transactions", "[]"))
+            data["achievements"] = json.loads(data.get("achievements", "[]"))
+            return _migrate_user(data)
+    except Exception as e:
+        log.error("Economy", f"Error fetching user {user_id} from database: {e}")
+    return None
+
+
+async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
+    """Save user economy data to database."""
+    try:
+        _migrate_user(data)
+        
+        # Serialize complex fields
+        inventory_json = json.dumps(data.get("inventory", {}))
+        effects_json = json.dumps(data.get("effects", {}))
+        transactions_json = json.dumps(data.get("transactions", []))
+        achievements_json = json.dumps(data.get("achievements", []))
+        
+        # Calculate net worth
+        net_worth = int(data.get("balance", 0)) + int(data.get("bank", 0))
+        
+        await bot.cxn.execute("""
+            INSERT OR REPLACE INTO economy_users (
+                user_id, balance, bank, net_worth, total_earned, total_spent,
+                xp, level, job, times_worked, bank_tier, last_interest,
+                last_interest_day, daily_streak, last_daily, last_work,
+                last_crime, last_rob, last_heist, last_slots, last_blackjack,
+                last_roulette, last_casino, last_gamble, last_bet, last_race,
+                last_fight, last_duel, inventory, effects, lottery_tickets,
+                transactions, achievements
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            user_id,
+            data.get("balance", 100),
+            data.get("bank", 0),
+            net_worth,
+            data.get("total_earned", 100),
+            data.get("total_spent", 0),
+            data.get("xp", 0),
+            data.get("level", 0),
+            data.get("job", "barista"),
+            data.get("times_worked", 0),
+            data.get("bank_tier", 0),
+            data.get("last_interest", 0),
+            data.get("last_interest_day"),
+            data.get("daily_streak", 0),
+            data.get("last_daily", 0),
+            data.get("last_work", 0),
+            data.get("last_crime", 0),
+            data.get("last_rob", 0),
+            data.get("last_heist", 0),
+            data.get("last_slots", 0),
+            data.get("last_blackjack", 0),
+            data.get("last_roulette", 0),
+            data.get("last_casino", 0),
+            data.get("last_gamble", 0),
+            data.get("last_bet", 0),
+            data.get("last_race", 0),
+            data.get("last_fight", 0),
+            data.get("last_duel", 0),
+            inventory_json,
+            effects_json,
+            data.get("lottery_tickets", 0),
+            transactions_json,
+            achievements_json
+        )
+    except Exception as e:
+        log.error("Economy", f"Could not save user {user_id} to database: {e}")
+
+
+async def _get_lottery_from_db(bot) -> dict:
+    """Get lottery state from database."""
+    try:
+        row = await bot.cxn.fetchrow(
+            "SELECT * FROM economy_lottery WHERE id = 1"
+        )
+        if row:
+            return {
+                "pot": row.get("pot", LOTTERY_BASE_POT),
+                "next_draw": row.get("next_draw", int(time.time()) + LOTTERY_DRAW_INTERVAL),
+                "last_winner": row.get("last_winner"),
+                "last_pot": row.get("last_pot", 0)
+            }
+    except Exception as e:
+        log.error("Economy", f"Error fetching lottery from database: {e}")
+    return {"pot": LOTTERY_BASE_POT, "next_draw": int(time.time()) + LOTTERY_DRAW_INTERVAL, "last_winner": None, "last_pot": 0}
+
+
+async def _save_lottery_to_db(bot, state: dict) -> None:
+    """Save lottery state to database."""
+    try:
+        await bot.cxn.execute("""
+            UPDATE economy_lottery
+            SET pot = ?, next_draw = ?, last_winner = ?, last_pot = ?
+            WHERE id = 1
+        """,
+            state.get("pot", LOTTERY_BASE_POT),
+            state.get("next_draw", int(time.time()) + LOTTERY_DRAW_INTERVAL),
+            state.get("last_winner"),
+            state.get("last_pot", 0)
+        )
+    except Exception as e:
+        log.error("Economy", f"Could not save lottery to database: {e}")
+
+
+async def _get_all_users_from_db(bot) -> dict:
+    """Get all users from database for ranking."""
+    try:
+        rows = await bot.cxn.fetch("SELECT user_id, balance, bank FROM economy_users")
+        return {str(row["user_id"]): {"balance": row["balance"], "bank": row["bank"]} for row in rows}
+    except Exception as e:
+        log.error("Economy", f"Error fetching all users from database: {e}")
+    return {}
 
 
 # ── Small layout helpers ────────────────────────────────────────────────────

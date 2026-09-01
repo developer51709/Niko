@@ -44,7 +44,7 @@ class CurrencyMixin:
         from ..data import ACHIEVEMENTS
         target = member or ctx.author
         await self._send_balance_card(ctx, target, title="Profile")
-        data = self.get_user_economy_data(target.id)
+        data = await self.get_user_economy_data(target.id)
         ach = data.get("achievements", [])
         ach_line = (
             ", ".join(f"{ACHIEVEMENTS[a]['emoji']} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
@@ -79,7 +79,7 @@ class CurrencyMixin:
             await ctx.interaction.response.defer()
 
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         elapsed = now - int(data.get("last_daily", 0))
 
@@ -109,7 +109,7 @@ class CurrencyMixin:
         data["daily_streak"] = streak
         data["last_daily"] = now
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
 
         await self._send_reward_card(
             ctx,
@@ -131,7 +131,7 @@ class CurrencyMixin:
             await ctx.interaction.response.defer()
 
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         job = get_job(data.get("job"))
         cd = int(job.get("cooldown", COOLDOWN_WORK))
@@ -165,7 +165,7 @@ class CurrencyMixin:
         announce = msg(ctx, "level_up", level=new_lvl) if leveled else None
 
         newly = _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
 
         subtitle = f"{job['emoji']} {job['name']} shift  •  +{job.get('xp_per_shift', 10)} XP"
         footer = msg(ctx, "work_success", reward=reward)
@@ -199,8 +199,8 @@ class CurrencyMixin:
             else:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
 
-        data   = self.get_user_economy_data(ctx.author.id)
-        target = self.get_user_economy_data(member.id)
+        data   = await self.get_user_economy_data(ctx.author.id)
+        target = await self.get_user_economy_data(member.id)
         if data["balance"] < amount:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your pastry bag is too light for that."))
@@ -209,7 +209,8 @@ class CurrencyMixin:
 
         self._credit(data, -amount, "pay", f"to {member.display_name}")
         self._credit(target, amount, "received", f"from {ctx.author.display_name}")
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
+        await self.save_user_economy_data(member.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "💸 Transfer complete",
@@ -231,7 +232,7 @@ class CurrencyMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         txs = data.get("transactions", [])
         if not txs:
             if ctx.interaction:
@@ -260,9 +261,9 @@ class CurrencyMixin:
             await ctx.interaction.response.defer()
 
         target = member or ctx.author
-        data = self.get_user_economy_data(target.id)
+        data = await self.get_user_economy_data(target.id)
         nw = int(data["balance"]) + int(data["bank"])
-        rank = self._net_rank(str(target.id))
+        rank = await self._net_rank(str(target.id))
         body = (
             f"💼 **{target.display_name}** is worth **{nw:,}** 🥐\n"
             f"• Cash: **{int(data['balance']):,}**\n"

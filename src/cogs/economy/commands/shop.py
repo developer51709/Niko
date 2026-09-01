@@ -40,7 +40,7 @@ class ShopMixin:
 
         cat_filter = category.lower() if category else None
         sections: dict[str, list[str]] = {c: [] for c in cats}
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         lvl  = int(data.get("level", 0))
         for iid, item in SHOP_ITEMS.items():
             if cat_filter and item["category"] != cat_filter:
@@ -93,7 +93,7 @@ class ShopMixin:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Out of stock", f"No item called `{item_id}`."))
 
         # Check if the user meets the level requirements
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         if data["level"] < item.get("min_level", 0):
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('vm_lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
@@ -112,7 +112,7 @@ class ShopMixin:
         inv = data["inventory"]
         inv[item_id.lower()] = int(inv.get(item_id.lower(), 0)) + count
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "🛍️ Purchase complete",
@@ -154,7 +154,7 @@ class ShopMixin:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
 
         # Ensure the user has enough to sell
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         have = int(data["inventory"].get(iid, 0))
         if have < count:
             if ctx.interaction:
@@ -167,7 +167,7 @@ class ShopMixin:
         data["inventory"][iid] = have - count
         if data["inventory"][iid] <= 0:
             del data["inventory"][iid]
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "💰 Sold",
@@ -200,7 +200,7 @@ class ShopMixin:
             else:
                 return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         if int(data["inventory"].get(iid, 0)) < 1:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view("📦 None in bag", f"You don't have any **{item['name']}**."))
@@ -255,7 +255,7 @@ class ShopMixin:
         data["inventory"][iid] = int(data["inventory"][iid]) - 1
         if data["inventory"][iid] <= 0:
             del data["inventory"][iid]
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(f"{item['emoji']} {item['name']} used", msg_text))
         else:
@@ -274,7 +274,7 @@ class ShopMixin:
 
         # Check if the users inventory is empty
         target = member or ctx.author
-        data   = self.get_user_economy_data(target.id)
+        data   = await self.get_user_economy_data(target.id)
         inv    = data.get("inventory", {})
         if not inv:
             if ctx.interaction:

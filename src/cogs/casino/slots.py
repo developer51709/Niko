@@ -79,7 +79,7 @@ class Slots(commands.Cog):
         """Play a casino‑style 3×3 slot machine."""
         # Economy access
         economy = self.bot.get_cog("EconomyCog")
-        user_data = economy.get_user_economy_data(ctx.author.id)
+        user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
 
         # Cooldown
@@ -197,7 +197,7 @@ class Slots(commands.Cog):
 
         user_data["last_slots"] = time.time()
         economy = self.bot.get_cog("EconomyCog")
-        economy.save_economy_data()
+        await economy.save_user_economy_data(ctx.author.id)
 
         # Build result embed
         result_text = grid_to_text(final_grid)

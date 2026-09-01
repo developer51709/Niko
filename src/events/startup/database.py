@@ -5,6 +5,7 @@ Handles connection, table creation, and legacy migrations.
 
 import os
 import sqlite3 as _sqlite3
+import time
 
 import database
 from utils import logging
@@ -148,7 +149,198 @@ async def _create_tables(bot):
         )
     """)
 
+    # Economy tables
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS economy_users (
+            user_id          INTEGER PRIMARY KEY,
+            balance          INTEGER DEFAULT 100,
+            bank             INTEGER DEFAULT 0,
+            net_worth        INTEGER DEFAULT 100,
+            total_earned     INTEGER DEFAULT 100,
+            total_spent      INTEGER DEFAULT 0,
+            xp               INTEGER DEFAULT 0,
+            level            INTEGER DEFAULT 0,
+            job              TEXT    DEFAULT 'barista',
+            times_worked     INTEGER DEFAULT 0,
+            bank_tier        INTEGER DEFAULT 0,
+            last_interest    INTEGER DEFAULT 0,
+            last_interest_day TEXT,
+            daily_streak     INTEGER DEFAULT 0,
+            last_daily       INTEGER DEFAULT 0,
+            last_work        INTEGER DEFAULT 0,
+            last_crime       INTEGER DEFAULT 0,
+            last_rob         INTEGER DEFAULT 0,
+            last_heist       INTEGER DEFAULT 0,
+            last_slots       INTEGER DEFAULT 0,
+            last_blackjack   INTEGER DEFAULT 0,
+            last_roulette    INTEGER DEFAULT 0,
+            last_casino      INTEGER DEFAULT 0,
+            last_gamble      INTEGER DEFAULT 0,
+            last_bet         INTEGER DEFAULT 0,
+            last_race        INTEGER DEFAULT 0,
+            last_fight       INTEGER DEFAULT 0,
+            last_duel        INTEGER DEFAULT 0,
+            inventory        TEXT    DEFAULT '{}',
+            effects          TEXT    DEFAULT '{}',
+            lottery_tickets  INTEGER DEFAULT 0,
+            transactions     TEXT    DEFAULT '[]',
+            achievements     TEXT    DEFAULT '[]'
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS economy_lottery (
+            id          INTEGER PRIMARY KEY DEFAULT 1,
+            pot         INTEGER DEFAULT 1000,
+            next_draw   INTEGER DEFAULT 0,
+            last_winner INTEGER,
+            last_pot    INTEGER DEFAULT 0
+        )
+    """)
+
+    # Insert default lottery state if not exists
+    await bot.cxn.execute("""
+        INSERT OR IGNORE INTO economy_lottery (id, pot, next_draw, last_winner, last_pot)
+        VALUES (1, 1000, ?, NULL, 0)
+    """, int(time.time()) + 604800)  # 7 days from now
+
+    # Migrate economy data from JSON files to database
+    await _migrate_economy_data(bot)
+
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_economy_data(bot):
+    """Migrate economy data from JSON files to the database."""
+    import json
+    
+    economy_data_dir = "data/economy_data"
+    lottery_file = "data/economy_data/_lottery.json"
+    
+    # Check if economy data directory exists
+    if not os.path.exists(economy_data_dir):
+        return
+    
+    # Check if we've already migrated (create a marker file)
+    migration_marker = "data/economy_data/.migrated_to_db"
+    if os.path.exists(migration_marker):
+        return
+    
+    migrated_count = 0
+    
+    try:
+        # Migrate user data
+        for filename in os.listdir(economy_data_dir):
+            if not filename.endswith(".json") or filename.startswith("_"):
+                continue
+            
+            try:
+                file_path = os.path.join(economy_data_dir, filename)
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                
+                user_id = int(filename[:-5])
+                
+                # Check if user already exists in database
+                existing = await bot.cxn.fetchrow(
+                    "SELECT user_id FROM economy_users WHERE user_id = ?",
+                    user_id
+                )
+                
+                if existing:
+                    continue  # Skip if already migrated
+                
+                # Serialize complex fields
+                inventory_json = json.dumps(data.get("inventory", {}))
+                effects_json = json.dumps(data.get("effects", {}))
+                transactions_json = json.dumps(data.get("transactions", []))
+                achievements_json = json.dumps(data.get("achievements", []))
+                
+                await bot.cxn.execute("""
+                    INSERT INTO economy_users (
+                        user_id, balance, bank, net_worth, total_earned, total_spent,
+                        xp, level, job, times_worked, bank_tier, last_interest,
+                        last_interest_day, daily_streak, last_daily, last_work,
+                        last_crime, last_rob, last_heist, last_slots, last_blackjack,
+                        last_roulette, last_casino, last_gamble, last_bet, last_race,
+                        last_fight, last_duel, inventory, effects, lottery_tickets,
+                        transactions, achievements
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    user_id,
+                    data.get("balance", 100),
+                    data.get("bank", 0),
+                    data.get("net_worth", 100),
+                    data.get("total_earned", 100),
+                    data.get("total_spent", 0),
+                    data.get("xp", 0),
+                    data.get("level", 0),
+                    data.get("job", "barista"),
+                    data.get("times_worked", 0),
+                    data.get("bank_tier", 0),
+                    data.get("last_interest", 0),
+                    data.get("last_interest_day"),
+                    data.get("daily_streak", 0),
+                    data.get("last_daily", 0),
+                    data.get("last_work", 0),
+                    data.get("last_crime", 0),
+                    data.get("last_rob", 0),
+                    data.get("last_heist", 0),
+                    data.get("last_slots", 0),
+                    data.get("last_blackjack", 0),
+                    data.get("last_roulette", 0),
+                    data.get("last_casino", 0),
+                    data.get("last_gamble", 0),
+                    data.get("last_bet", 0),
+                    data.get("last_race", 0),
+                    data.get("last_fight", 0),
+                    data.get("last_duel", 0),
+                    inventory_json,
+                    effects_json,
+                    data.get("lottery_tickets", 0),
+                    transactions_json,
+                    achievements_json
+                )
+                
+                migrated_count += 1
+                
+            except Exception as e:
+                logging.warning("DB", f"Could not migrate {filename}: {e}")
+        
+        # Migrate lottery state
+        if os.path.exists(lottery_file):
+            try:
+                with open(lottery_file, "r") as f:
+                    lottery_data = json.load(f)
+                
+                await bot.cxn.execute("""
+                    UPDATE economy_lottery
+                    SET pot = ?, next_draw = ?, last_winner = ?, last_pot = ?
+                    WHERE id = 1
+                """,
+                    lottery_data.get("pot", 1000),
+                    lottery_data.get("next_draw", int(time.time()) + 604800),
+                    lottery_data.get("last_winner"),
+                    lottery_data.get("last_pot", 0)
+                )
+                
+                logging.info("DB", "Migrated lottery state from JSON to database")
+                
+            except Exception as e:
+                logging.warning("DB", f"Could not migrate lottery state: {e}")
+        
+        if migrated_count > 0:
+            logging.success("DB", f"Migrated {migrated_count} economy users from JSON to database")
+            
+            # Create marker file to prevent re-migration
+            try:
+                with open(migration_marker, "w") as f:
+                    f.write("Migration completed at " + str(int(time.time())))
+            except Exception:
+                pass
+    
+    except Exception as e:
+        logging.warning("DB", f"Economy migration failed: {e}")
 
 
 async def init_database(bot):

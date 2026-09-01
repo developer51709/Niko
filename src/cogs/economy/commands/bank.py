@@ -22,7 +22,7 @@ class BankMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         tier = int(data.get("bank_tier", 0))
         cap  = bank_cap(tier)
         rate = bank_rate(tier)
@@ -43,7 +43,7 @@ class BankMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         cap  = bank_cap(int(data.get("bank_tier", 0)))
         free = max(0, cap - int(data["bank"]))
 
@@ -86,7 +86,7 @@ class BankMixin:
         data["bank"]    += amt
         _log_tx(data, "deposit", amt, "wallet → vault")
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🥐 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
         else:
@@ -98,7 +98,7 @@ class BankMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         if amount.lower() == "all":
             amt = int(data["bank"])
         else:
@@ -125,7 +125,7 @@ class BankMixin:
         data["bank"]    -= amt
         data["balance"] += amt
         _log_tx(data, "withdraw", amt, "vault → wallet")
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view("🥐 Withdrawn", f"Took **{amt:,}** 🥐 from your vault.\n-# Wallet: **{data['balance']:,}** 🥐"))
         else:
@@ -137,7 +137,7 @@ class BankMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         cur  = int(data.get("bank_tier", 0))
         if cur >= max_bank_tier():
             if ctx.interaction:
@@ -165,7 +165,7 @@ class BankMixin:
         data["bank"]    -= from_bank
         data["bank_tier"] = next_tier
         _log_tx(data, "upgrade", -cost, f"vault → {bank_name(next_tier)}")
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "🏦 Vault upgraded",

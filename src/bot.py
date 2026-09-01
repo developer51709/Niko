@@ -41,7 +41,7 @@ bot = commands.AutoShardedBot(
     shard_count=_shard_count,
 )
 bot.remove_command("help")
-bot.cxn: database.SQLitePool | None = None
+bot.cxn: database.SQLitePool | database.MongoPool | None = None
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
