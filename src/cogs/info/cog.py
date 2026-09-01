@@ -565,6 +565,59 @@ async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
     return badges
 
 
+class AvatarButtons(discord.ui.ActionRow):
+    def __init__(self, user, member, author_id, banner_url):
+        super().__init__()
+        self.user = user
+        self.member = member
+        self.author_id = author_id
+        self.banner_url = banner_url
+
+    @discord.ui.button(label='Server Avatar', style=discord.ButtonStyle.success, custom_id='server_avatar_button')
+    async def server_avatar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.member.guild_avatar:
+            await interaction.response.send_message(
+                "This user doesn't have a different server avatar.",
+                ephemeral=True
+            )
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### Server Avatar"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=self.member.guild_avatar.url
+                    )
+                )
+            )
+            view.add_item(container)
+            await interaction.response.send(view=view, ephemeral=True)
+
+    @discord.ui.button(label='User Banner', style=discord.ButtonStyle.success, custom_id='banner_button')
+    async def banner(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.banner_url:
+            await interaction.response.send_message(
+                "This user doesn't have a banner.",
+                ephemeral=True
+            )
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### User Banner"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=self.banner_url
+                    )
+                )
+            )
+            view.add_item(container)
+            await interaction.response.send(view=view, ephemeral=True)
+
+
 class InfoCog(commands.Cog):
     """Cozy bilingual info commands with personality support."""
 
@@ -722,9 +775,21 @@ class InfoCog(commands.Cog):
     )
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
-        avatar_url = target.avatar.url if target.avatar else None
-        text = f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
-        await ctx.send(view=cv2_image(text, image_url=avatar_url))
+        avatar_url = target.avatar.url if target.avatar else "https://cdn.discordapp.com/embed/avatars/0.png"
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=avatar_url
+                )
+            ),
+            AvatarButtons(ctx.author, target, ctx.author.id, target.banner.url if target.banner else None)
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # -------------------------------
     # BANNER
@@ -785,12 +850,12 @@ class InfoCog(commands.Cog):
                     emoji=get_emoji("github"),
                     url=links.GITHUB
                 ),
-                # discord.ui.Button(
-                #     label="Website",
-                #     style=discord.ButtonStyle.link,
-                #     emoji=get_emoji("website"),
-                #     url=links.WEBSITE
-                # ),
+                discord.ui.Button(
+                    label="Website",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("website"),
+                    url=links.WEBSITE
+                ),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
