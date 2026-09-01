@@ -125,6 +125,10 @@ class MongoPool:
         # Handle INSERT ... SELECT
         if "INSERT" in query.upper() and "SELECT" in query.upper():
             return await self._handle_insert_select(query, args)
+
+        # Handle INSERT OR IGNORE
+        if query.upper().startswith("INSERT OR IGNORE"):
+            return await self._handle_insert_ignore(query, args)
         
         # Handle regular INSERT
         if query.upper().startswith("INSERT"):
@@ -266,6 +270,16 @@ class MongoPool:
         match = re.match(r'(\w+)\s*=\s*(\d+)', normalized_clause.strip())
         if match:
             return {match.group(1): int(match.group(2))}
+
+        # Handle IS NOT NULL
+        match = re.match(r'(\w+)\s+IS\s+NOT\s+NULL', normalized_clause.strip(), re.IGNORECASE)
+        if match:
+            return {match.group(1): {"$ne": None}}
+
+        # Handle IS NULL
+        match = re.match(r'(\w+)\s+IS\s+NULL', normalized_clause.strip(), re.IGNORECASE)
+        if match:
+            return {match.group(1): None}
         
         # Handle complex conditions with AND
         if ' AND ' in normalized_clause.upper():
@@ -541,6 +555,38 @@ class MongoPool:
             inserted += 1
 
         return inserted
+
+    async def _handle_insert_ignore(self, query: str, args: tuple):
+        """Handle INSERT OR IGNORE INTO ... VALUES (...)"""
+
+        # Strip OR IGNORE so your existing parser works
+        cleaned = query.replace("OR IGNORE", "")
+
+        table, columns, query_args = self._parse_insert_query(cleaned, args)
+
+        doc = {}
+        for i, col in enumerate(columns):
+            if i < len(query_args):
+                doc[col] = query_args[i]
+
+        collection = self._db[table]
+
+        # Apply your existing primary-key rules
+        if table == 'participants':
+            doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
+        elif table == 'giveaways':
+            doc['_id'] = doc.get('message_id')
+        elif 'user_id' in doc:
+            doc['_id'] = doc['user_id']
+        elif 'id' in doc:
+            doc['_id'] = doc['id']
+
+        # OR IGNORE behavior: skip if exists
+        if await collection.find_one({'_id': doc.get('_id')}):
+            return None
+
+        await collection.insert_one(doc)
+        return None
 
     async def _handle_insert(self, query: str, args: tuple):
         """Handle regular INSERT query."""
