@@ -50,7 +50,8 @@ LEVELS_JSON  = os.path.join(DATA_DIR, "levels.json.migrated")
 LEVELCFG_JSON = os.path.join(DATA_DIR, "level_config.json.migrated")
 DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
 
-MANAGE_GUILD_PERM = 0x20  # Discord permission bit
+MANAGE_GUILD_PERM = 0x20
+ADMINISTRATOR_PERM = 0x8
 
 # ── App setup ────────────────────────────────────────────────────────────────
 
@@ -109,11 +110,10 @@ def bot_guild_ids() -> set:
     return {str(g) for g in stats.get("guild_ids", [])}
 
 
-def pg_connect():
-    """Return a psycopg2 connection, or None if unavailable."""
+def sqlite_connect():
+    """Open a short-lived read/write connection to the bot's SQLite database."""
     try:
-        import psycopg2
-        return psycopg2.connect(os.environ["DATABASE_URL"])
+        return sqlite3.connect(DATABASE_PATH, timeout=5)
     except Exception:
         return None
 
@@ -166,6 +166,16 @@ def ensure_access_token() -> bool:
         return False
 
 
+def require_csrf(f):
+    """Require the token issued with auth status for browser mutations."""
+    @wraps(f)
+    def _inner(*args, **kwargs):
+        if not session.get("csrf_token") or request.headers.get("X-CSRF-Token") != session["csrf_token"]:
+            return jsonify({"error": "Invalid request token. Refresh the dashboard and try again."}), 403
+        return f(*args, **kwargs)
+    return _inner
+
+
 def managed_guild_ids() -> set[str]:
     """Return manageable mutual guilds, cached briefly in the signed session."""
     cached_at = session.get("managed_guilds_at", 0)
@@ -187,7 +197,10 @@ def managed_guild_ids() -> set[str]:
     manageable = []
     for guild in all_guilds:
         permissions = int(guild.get("permissions", 0))
-        if (bool(permissions & MANAGE_GUILD_PERM) or bool(guild.get("owner"))) and str(guild["id"]) in present:
+        if (
+            bool(permissions & (MANAGE_GUILD_PERM | ADMINISTRATOR_PERM))
+            or bool(guild.get("owner"))
+        ) and str(guild["id"]) in present:
             manageable.append(str(guild["id"]))
     session["managed_guild_ids"] = manageable
     session["managed_guilds_at"] = time.time()
@@ -335,6 +348,18 @@ def api_health():
     return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
 
 
+@app.route("/api/config")
+def api_public_config():
+    return jsonify({
+        "application_id": DISCORD_CLIENT_ID,
+        "invite_url": (
+            f"https://discord.com/oauth2/authorize?"
+            f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"
+        ),
+        "oauth_available": oauth_enabled(),
+    })
+
+
 @app.route("/api/botstats")
 def api_botstats():
     stats = load_json(BOT_STATS, {})
@@ -371,7 +396,7 @@ def api_guilds():
     result  = []
     for g in all_guilds:
         perms = int(g.get("permissions", 0))
-        is_admin = bool(perms & MANAGE_GUILD_PERM) or bool(g.get("owner"))
+        is_admin = bool(perms & (MANAGE_GUILD_PERM | ADMINISTRATOR_PERM)) or bool(g.get("owner"))
         if str(g["id"]) in present and is_admin:
             icon_hash = g.get("icon")
             icon_url  = (
@@ -382,6 +407,8 @@ def api_guilds():
                 "id":       g["id"],
                 "name":     g["name"],
                 "icon_url": icon_url,
+                "owner":    bool(g.get("owner")),
+                "permissions": perms,
             })
     session["managed_guild_ids"] = [guild["id"] for guild in result]
     session["managed_guilds_at"] = time.time()
@@ -418,7 +445,7 @@ def api_guild_overview(guild_id):
     warn_count = sum(len(v) for v in guild_warns.values())
 
     # ── Automod quick status ──────────────────────────────────
-    modcfg   = load_json(MODCFG, {}).get(guild_id, {})
+    modcfg   = get_runtime_moderation_config(guild_id)
     automod  = modcfg.get("automod", {})
     automod_on = any(automod.values()) if isinstance(automod, dict) else False
 
@@ -468,18 +495,20 @@ def api_guild_economy(guild_id):
 
 
 def _get_levels(guild_id: str) -> list:
-    """Fetch level data for a guild — PostgreSQL first, JSON fallback."""
-    conn = pg_connect()
+    """Fetch level data from the same SQLite database the bot uses."""
+    conn = sqlite_connect()
     if conn:
         try:
             cur = conn.cursor()
             cur.execute(
                 "SELECT user_id, xp, level FROM levels "
-                "WHERE guild_id = %s ORDER BY xp DESC LIMIT 25",
+                "WHERE guild_id = ? ORDER BY level DESC, xp DESC LIMIT 25",
                 (int(guild_id),),
             )
-            rows = [{"user_id": str(r[0]), "xp": r[1], "level": r[2]}
-                    for r in cur.fetchall()]
+            rows = [
+                {"user_id": str(row[0]), "xp": row[1], "level": row[2]}
+                for row in cur.fetchall()
+            ]
             conn.close()
             return rows
         except Exception:
@@ -505,29 +534,30 @@ def api_guild_levels(guild_id):
 @require_auth
 @require_guild_access
 def api_guild_config(guild_id):
-    modcfg  = load_json(MODCFG, {}).get(guild_id, {})
+    modcfg  = get_runtime_moderation_config(guild_id)
     aicfg   = load_json(AICFG,  {}).get(guild_id, {})
 
-    # Level config — PostgreSQL first, JSON fallback
+    # Level config — read the same SQLite table used by the leveling cog.
     level_cfg = {}
-    conn = pg_connect()
+    conn = sqlite_connect()
     if conn:
         try:
             cur = conn.cursor()
             cur.execute(
                 "SELECT xp_enabled, xp_multiplier, xp_cooldown, "
-                "       level_up_channel, level_up_message "
-                "FROM level_config WHERE guild_id = %s",
+                "       level_up_channel, level_up_message, level_roles "
+                "FROM level_config WHERE guild_id = ?",
                 (int(guild_id),),
             )
             row = cur.fetchone()
             if row:
                 level_cfg = {
                     "xp_enabled":       bool(row[0]),
-                    "xp_multiplier":    row[1],
-                    "xp_cooldown":      row[2],
+                    "xp_multiplier":     row[1],
+                    "xp_cooldown":       row[2],
                     "level_up_channel": str(row[3]) if row[3] else None,
-                    "level_up_message": row[4],
+                    "level_up_message":  row[4],
+                    "level_roles":       json.loads(row[5] or "{}"),
                 }
             conn.close()
         except Exception:
@@ -543,39 +573,121 @@ def api_guild_config(guild_id):
     })
 
 
+def get_runtime_moderation_config(guild_id: str) -> dict:
+    """Read the live ModerationUtils config so the dashboard and cog agree."""
+    if _discord_bot is not None:
+        moderation = _discord_bot.get_cog("ModerationUtils")
+        if moderation is not None:
+            return moderation.get_guild_config(int(guild_id))
+    return load_json(MODCFG, {}).get(guild_id, {})
+
+
+@app.route("/api/guild/<guild_id>/resources")
+@require_auth
+@require_guild_access
+def api_guild_resources(guild_id):
+    guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
+    if guild is None:
+        return jsonify({"channels": [], "roles": []})
+    return jsonify({
+        "channels": [
+            {"id": str(channel.id), "name": channel.name}
+            for channel in guild.text_channels
+        ],
+        "roles": [
+            {"id": str(role.id), "name": role.name}
+            for role in guild.roles
+            if not role.is_default()
+        ],
+    })
+
+
 @app.route("/api/guild/<guild_id>/config/automod", methods=["POST"])
 @require_auth
 @require_guild_access
+@require_csrf
 def api_save_automod(guild_id):
     body = request.get_json(silent=True) or {}
     data = load_json(MODCFG, {})
     if guild_id not in data:
         data[guild_id] = {}
 
-    allowed_flags = {"antispam", "antilink", "badwords", "massmention", "antiraid_ext"}
+    allowed_flags = {
+        "antispam", "antilink", "badwords", "massmention",
+        "antinuke", "antiraid", "antiraid_ext",
+    }
     existing = data[guild_id].get("automod", {})
-    for k in allowed_flags:
-        if k in body:
-            existing[k] = bool(body[k])
+    for key in allowed_flags:
+        if key in body.get("automod", {}):
+            existing[key] = bool(body["automod"][key])
     data[guild_id]["automod"] = existing
 
-    if "modlog_channel" in body:
-        data[guild_id]["modlog_channel"] = body["modlog_channel"]
-    try:
-        if "spam_threshold" in body:
-            data[guild_id]["spam_threshold"] = max(1, int(body["spam_threshold"]))
-        if "max_mentions" in body:
-            data[guild_id]["max_mentions"] = max(1, int(body["max_mentions"]))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Threshold values must be positive whole numbers."}), 400
+    integer_fields = {
+        "spam_threshold": (1, 100),
+        "spam_interval": (1, 3600),
+        "max_mentions": (1, 100),
+    }
+    for key, (minimum, maximum) in integer_fields.items():
+        if key in body:
+            try:
+                value = int(body[key])
+            except (TypeError, ValueError):
+                return jsonify({"error": f"{key} must be a whole number."}), 400
+            if not minimum <= value <= maximum:
+                return jsonify({"error": f"{key} must be between {minimum} and {maximum}."}), 400
+            data[guild_id][key] = value
+
+    nested_fields = {
+        "antinuke": {
+            "ban_threshold": (1, 100), "kick_threshold": (1, 100),
+            "channel_delete_threshold": (1, 100), "role_delete_threshold": (1, 100),
+            "interval": (1, 3600),
+        },
+        "antiraid": {"join_threshold": (1, 1000), "join_interval": (1, 3600)},
+        "antiraid_ext": {
+            "interaction_threshold": (1, 1000), "interaction_window": (1, 3600),
+            "join_age_limit": (1, 86400), "ext_app_threshold": (1, 1000),
+            "ext_app_window": (1, 3600),
+        },
+    }
+    for section, fields in nested_fields.items():
+        incoming = body.get(section)
+        if not isinstance(incoming, dict):
+            continue
+        target = data[guild_id].setdefault(section, {})
+        for key, (minimum, maximum) in fields.items():
+            if key in incoming:
+                try:
+                    value = int(incoming[key])
+                except (TypeError, ValueError):
+                    return jsonify({"error": f"{section}.{key} must be a whole number."}), 400
+                if not minimum <= value <= maximum:
+                    return jsonify({"error": f"{section}.{key} must be between {minimum} and {maximum}."}), 400
+                target[key] = value
+        for key, choices in {
+            "action": {"strip", "kick", "ban"},
+            "raider_action": {"kick", "ban", "softban", "slowmode", "lockdown"},
+            "operator_action": {"notify", "kick", "ban"},
+            "ext_app_action": {"kick", "ban", "warn"},
+        }.items():
+            if key in incoming and incoming[key] in choices:
+                target[key] = incoming[key]
+        if section == "antiraid_ext" and "ext_app_detection" in incoming:
+            target["ext_app_detection"] = bool(incoming["ext_app_detection"])
 
     save_json(MODCFG, data)
+    if _discord_bot is not None:
+        moderation = _discord_bot.get_cog("ModerationUtils")
+        if moderation is not None:
+            moderation.config[guild_id] = data[guild_id]
+            moderation.save_config()
     return jsonify({"ok": True})
 
 
 @app.route("/api/guild/<guild_id>/config/ai", methods=["POST"])
 @require_auth
 @require_guild_access
+@require_csrf
 def api_save_ai(guild_id):
     body = request.get_json(silent=True) or {}
     data = load_json(AICFG, {})
@@ -586,8 +698,60 @@ def api_save_ai(guild_id):
         data[guild_id]["personality"] = body["personality"]
     if "enabled" in body:
         data[guild_id]["enabled"] = "True" if body["enabled"] else "False"
+    for experiment in ("ai_actions_experiment", "better_context_experiment"):
+        if experiment in body:
+            data[guild_id][experiment] = "True" if body[experiment] else "False"
 
     save_json(AICFG, data)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/guild/<guild_id>/config/leveling", methods=["POST"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_save_leveling(guild_id):
+    body = request.get_json(silent=True) or {}
+    allowed_actions = {"xp_enabled", "xp_multiplier", "xp_cooldown", "level_up_channel", "level_up_message"}
+    unknown = set(body) - allowed_actions
+    if unknown:
+        return jsonify({"error": f"Unsupported leveling fields: {', '.join(sorted(unknown))}"}), 400
+    try:
+        multiplier = float(body.get("xp_multiplier", 1.0))
+        cooldown = int(body.get("xp_cooldown", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "XP multiplier and cooldown must be valid numbers."}), 400
+    if not 0.1 <= multiplier <= 10:
+        return jsonify({"error": "XP multiplier must be between 0.1 and 10."}), 400
+    if not 0 <= cooldown <= 86400:
+        return jsonify({"error": "XP cooldown must be between 0 and 86400 seconds."}), 400
+    channel = body.get("level_up_channel") or None
+    if channel is not None and not str(channel).isdigit():
+        return jsonify({"error": "Level-up channel must be a valid channel ID."}), 400
+    message = body.get("level_up_message")
+    if message is not None and len(str(message)) > 1000:
+        return jsonify({"error": "Level-up message must be 1000 characters or fewer."}), 400
+
+    conn = sqlite_connect()
+    if conn is None:
+        return jsonify({"error": "The bot database is unavailable."}), 503
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO level_config "
+            "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, level_up_channel, level_up_message, level_roles) "
+            "VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT level_roles FROM level_config WHERE guild_id = ?), '{}'))",
+            (
+                int(guild_id), int(bool(body.get("xp_enabled", True))),
+                multiplier, cooldown, int(channel) if channel else None, message,
+                int(guild_id),
+            ),
+        )
+        conn.commit()
+    except sqlite3.Error:
+        conn.rollback()
+        return jsonify({"error": "The leveling settings could not be saved."}), 500
+    finally:
+        conn.close()
     return jsonify({"ok": True})
 
 

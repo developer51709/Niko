@@ -7,6 +7,12 @@ export type BotStats = {
   economy_users: number;
 };
 
+export type PublicConfig = {
+  application_id: string;
+  invite_url: string;
+  oauth_available: boolean;
+};
+
 export type Command = {
   name: string;
   description: string;
@@ -17,6 +23,8 @@ export type Guild = {
   id: string;
   name: string;
   icon_url: string | null;
+  owner?: boolean;
+  permissions?: number;
 };
 
 export type User = {
@@ -51,8 +59,13 @@ export type GuildOverview = {
 };
 
 export type GuildConfig = {
-  moderation: Record<string, unknown>;
-  ai: { personality?: string; enabled?: string | boolean };
+  moderation: Record<string, any>;
+  ai: {
+    personality?: string;
+    enabled?: string | boolean;
+    ai_actions_experiment?: string | boolean;
+    better_context_experiment?: string | boolean;
+  };
   leveling: {
     xp_enabled?: boolean;
     xp_multiplier?: number;
@@ -62,8 +75,14 @@ export type GuildConfig = {
   };
 };
 
+export type GuildResources = {
+  channels: { id: string; name: string }[];
+  roles: { id: string; name: string }[];
+};
+
 export type AuthStatus = {
   authenticated: boolean;
   oauth_available: boolean;
   user?: User;
+  csrf_token?: string;
 };

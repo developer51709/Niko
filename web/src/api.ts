@@ -5,8 +5,10 @@ import type {
   EconomyRow,
   Guild,
   GuildConfig,
+  GuildResources,
   GuildOverview,
   LevelRow,
+  PublicConfig,
 } from "./types";
 
 export class ApiError extends Error {
@@ -31,6 +33,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const getAuth = () => api<AuthStatus>("/auth/status");
+export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getStats = () => api<BotStats>("/api/botstats");
 export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
@@ -38,10 +41,17 @@ export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/
 export const getEconomy = (id: string) => api<EconomyRow[]>(`/api/guild/${id}/economy`);
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
+export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
 
-export function saveConfig(id: string, section: "automod" | "ai", body: Record<string, unknown>) {
+export function saveConfig(
+  id: string,
+  section: "automod" | "ai" | "leveling",
+  body: Record<string, unknown>,
+  csrfToken?: string,
+) {
   return api<{ ok: boolean }>(`/api/guild/${id}/config/${section}`, {
     method: "POST",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     body: JSON.stringify(body),
   });
 }
