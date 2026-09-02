@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
-import { DocsPage } from "./pages/DocsPage";
+import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { HomePage } from "./pages/HomePage";
 import { LegalPage } from "./pages/LegalPage";
 import { pageFromPath, type Page } from "./router";
@@ -14,6 +14,11 @@ export function App() {
     return () => window.removeEventListener("popstate", handle);
   }, []);
   if (page === "commands") return <CommandsPage />;
+  if (page === "docs-detail") {
+    const pathParts = window.location.pathname.split("/");
+    const slug = pathParts[pathParts.length - 1];
+    return <DocsSlugPage slug={slug} />;
+  }
   if (page === "docs") return <DocsPage />;
   if (page === "dashboard") return <DashboardPage />;
   if (page === "privacy") return <LegalPage type="privacy" />;

@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "dashboard" | "privacy" | "terms";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "privacy" | "terms";
 export type DashSection = "overview" | "economy" | "leveling" | "moderation" | "ai";
 export type DashboardView = "overview" | "servers" | "guild";
 
@@ -10,6 +10,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   const path = normalizedPath(pathname);
   if (path === "/commands") return "commands";
   if (path === "/docs") return "docs";
+  if (path.startsWith("/docs/")) return "docs-detail";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/privacy") return "privacy";
   if (path === "/terms") return "terms";

@@ -111,3 +111,49 @@ export type AuthStatus = {
   user?: User;
   csrf_token?: string;
 };
+
+// ── Documentation types ──────────────────────────────────────────────────────
+
+export type DocCategory =
+  | "getting-started"
+  | "setup"
+  | "economy"
+  | "leveling"
+  | "moderation"
+  | "automod"
+  | "social"
+  | "utility"
+  | "voice"
+  | "ai"
+  | "dashboard"
+  | "tips";
+
+export type DocPage = {
+  slug: string;
+  title: string;
+  category: DocCategory;
+  excerpt: string;
+  content: string;
+  tags: string[];
+  order: number;
+};
+
+export type DocSection = {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  count: number;
+};
+
+export type SearchFilters = {
+  category: DocCategory | "";
+  tags: string[];
+  query: string;
+};
+
+export type SearchResult = {
+  page: DocPage;
+  score: number;
+  highlights: string[];
+};
