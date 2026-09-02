@@ -2,16 +2,17 @@ import type { ReactNode } from "react";
 import { Brand } from "../Brand";
 import { Icon } from "../Icon";
 import { dashboardPath, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../../router";
-import { displayName, formatNumber, initials } from "../../utils/format";
+import { displayName, formatNumber } from "../../utils/format";
 import type { BotStats, Guild, User } from "../../types";
 import { GuildIcon } from "./GuildIcon";
+import { UserAvatar } from "./UserAvatar";
 
-const sections: [DashSection, string, string][] = [
-  ["overview", "Server overview", "grid"],
-  ["economy", "Economy", "chart"],
-  ["leveling", "Leveling", "spark"],
-  ["moderation", "Moderation", "shield"],
-  ["ai", "AI controls", "settings"],
+const sections: [DashSection, string, string, string][] = [
+  ["overview", "Overview", "grid", "At a glance"],
+  ["economy", "Economy", "chart", "Member momentum"],
+  ["leveling", "Leveling", "spark", "Reward participation"],
+  ["moderation", "Moderation", "shield", "Keep things steady"],
+  ["ai", "AI controls", "settings", "Shape Niko’s voice"],
 ];
 
 type Props = {
@@ -75,18 +76,21 @@ export function DashboardShell({
     <div className="dashboard-layout">
       <aside className="dash-sidebar">
         <Brand onNavigate={onHome} />
-        <div className="side-label">Workspace</div>
+        <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
         {primaryNav()}
         {view === "guild" && selectedGuild && (
           <>
-            <div className="side-label side-label-settings">Server settings</div>
+            <div className="side-label side-label-settings">Current server</div>
             <div className="side-guild">
               <GuildIcon guild={selectedGuild} />
-              <span><strong>{selectedGuild.name}</strong><small>Configuration</small></span>
+              <span><strong>{selectedGuild.name}</strong><small>Live configuration</small></span>
+              <span className="guild-presence" title="Niko is connected"><span className="status-dot" /></span>
             </div>
+            <div className="side-settings-caption"><span>Settings map</span><small>Pick a room to tune</small></div>
             {sectionNav()}
           </>
         )}
+        {view !== "guild" && <div className="side-rail-note"><span className="panel-kicker">Niko workspace</span><strong>Make the useful<br />things easier to find.</strong><small>Your servers and their live signals, in one quiet place.</small></div>}
         <div className="sidebar-bottom">
           <span className="online-label"><span className="status-dot" /> Niko is online</span>
           <small>{formatNumber(stats?.guild_count)} connected servers · v{stats?.version || "1.0"}</small>
@@ -100,7 +104,7 @@ export function DashboardShell({
             <span className="mobile-status"><span className="status-dot" /> Online</span>
           </div>
           <div className="dash-title">
-            <span className="dash-overline">{pageOverline}</span>
+            <span className="dash-overline">{pageOverline} <span className="dash-title-divider">/</span> {view === "guild" ? sections.find(([id]) => id === section)?.[1] : "Workspace"}</span>
             <h1>{pageTitle}</h1>
           </div>
           <div className="dash-top-actions">
@@ -118,7 +122,8 @@ export function DashboardShell({
             ) : (
               <button className="button button-muted button-small top-action" onClick={onServers}><Icon name="users" /> Browse servers</button>
             )}
-            <div className="user-pill"><span className="avatar">{initials(displayName(user))}</span><span>{displayName(user)}</span></div>
+            {view === "guild" && <span className="connection-chip"><span className="status-dot" /> Connected</span>}
+            <div className="user-pill"><UserAvatar user={user} /><span>{displayName(user)}</span></div>
             <a className="logout-link" href="/auth/logout">Log out</a>
           </div>
         </header>

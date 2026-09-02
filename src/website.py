@@ -40,6 +40,7 @@ import requests as req
 
 DISCORD_CLIENT_ID     = "1520558530472448170"
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
+DISCORD_BOT_TOKEN     = os.environ.get("DISCORD_BOT_TOKEN", "")
 DISCORD_API           = "https://discord.com/api/v10"
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,6 +66,7 @@ app.config["SESSION_COOKIE_SECURE"]   = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 _discord_bot = None
+_member_metadata_cache: dict[str, tuple[float, dict[str, dict]]] = {}
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +206,109 @@ def _normalize_economy_row(row) -> dict:
     }
 
 
+def _member_metadata_from_guild(guild, user_ids: set[str]) -> dict[str, dict]:
+    """Build identity metadata without crossing the Discord event loop."""
+    if guild is None or not user_ids:
+        return {}
+    metadata = {}
+    for member in getattr(guild, "members", []):
+        member_id = str(member.id)
+        if member_id not in user_ids:
+            continue
+        avatar = getattr(member, "display_avatar", None)
+        metadata[member_id] = {
+            "display_name": getattr(member, "display_name", None) or getattr(member, "name", None),
+            "username": getattr(member, "name", None),
+            "avatar_url": str(avatar.url) if avatar is not None else None,
+        }
+    return metadata
+
+
+def get_runtime_member_metadata(guild_id: str, user_ids: set[str]) -> dict[str, dict]:
+    """Return display names and avatars for cached members in a guild."""
+    if not user_ids or _discord_bot is None:
+        return {}
+
+    async def read_members():
+        return _member_metadata_from_guild(
+            _discord_bot.get_guild(int(guild_id)),
+            user_ids,
+        )
+
+    try:
+        return run_on_bot_loop(read_members())
+    except Exception:
+        return {}
+
+
+def get_discord_member_metadata(guild_id: str, user_ids: set[str]) -> dict[str, dict]:
+    """Fetch guild member identity data when Flask runs without the bot object."""
+    if not user_ids or not DISCORD_BOT_TOKEN:
+        return {}
+
+    cached = _member_metadata_cache.get(str(guild_id))
+    if cached and time.time() - cached[0] < 60:
+        return {user_id: cached[1][user_id] for user_id in user_ids if user_id in cached[1]}
+
+    members = {}
+    after = None
+    for _ in range(100):
+        params = {"limit": 1000}
+        if after:
+            params["after"] = after
+        try:
+            response = req.get(
+                f"{DISCORD_API}/guilds/{guild_id}/members",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                params=params,
+                timeout=8,
+            )
+            response.raise_for_status()
+            batch = response.json()
+        except Exception:
+            break
+        if not isinstance(batch, list):
+            break
+
+        for member in batch:
+            discord_user = member.get("user", {})
+            member_id = str(discord_user.get("id", ""))
+            if not member_id:
+                continue
+            guild_avatar = member.get("avatar")
+            user_avatar = discord_user.get("avatar")
+            if guild_avatar:
+                avatar_url = f"https://cdn.discordapp.com/guilds/{guild_id}/users/{member_id}/avatars/{guild_avatar}.png?size=64"
+            elif user_avatar:
+                extension = "gif" if str(user_avatar).startswith("a_") else "png"
+                avatar_url = f"https://cdn.discordapp.com/avatars/{member_id}/{user_avatar}.{extension}?size=64"
+            else:
+                avatar_url = None
+            members[member_id] = {
+                "display_name": member.get("nick") or discord_user.get("global_name") or discord_user.get("username"),
+                "username": discord_user.get("username"),
+                "avatar_url": avatar_url,
+            }
+
+        if len(batch) < 1000:
+            break
+        after = str(batch[-1].get("user", {}).get("id", ""))
+        if not after:
+            break
+
+    _member_metadata_cache[str(guild_id)] = (time.time(), members)
+    return {user_id: members[user_id] for user_id in user_ids if user_id in members}
+
+
+def get_member_metadata(guild_id: str, user_ids: set[str]) -> dict[str, dict]:
+    """Use the live bot cache first, then the bot-token API fallback."""
+    if _discord_bot is not None:
+        metadata = get_runtime_member_metadata(guild_id, user_ids)
+        if metadata:
+            return metadata
+    return get_discord_member_metadata(guild_id, user_ids)
+
+
 def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
     """Read economy data from the live bot database.
 
@@ -224,7 +329,12 @@ def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
             if guild is None:
                 return []
             member_ids = {str(member.id) for member in getattr(guild, "members", [])}
-            return [row for row in normalized if row["user_id"] in member_ids]
+            scoped = [row for row in normalized if row["user_id"] in member_ids]
+            metadata = _member_metadata_from_guild(
+                guild,
+                {row["user_id"] for row in scoped},
+            )
+            return [{**row, **metadata.get(row["user_id"], {})} for row in scoped]
 
         try:
             return run_on_bot_loop(read_from_bot())
@@ -240,8 +350,12 @@ def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
         columns = [description[0] for description in cursor.description]
         rows = [_normalize_economy_row(dict(zip(columns, raw))) for raw in cursor.fetchall()]
         if guild_id is not None:
-            # A web-only process has no safe member list to intersect with.
-            return []
+            metadata = get_member_metadata(guild_id, {row["user_id"] for row in rows})
+            return [
+                {**row, **metadata[row["user_id"]]}
+                for row in rows
+                if row["user_id"] in metadata
+            ]
         return rows
     except sqlite3.Error:
         return None
@@ -672,6 +786,8 @@ def _get_levels(guild_id: str) -> list:
                 for row in cur.fetchall()
             ]
             conn.close()
+            metadata = get_member_metadata(guild_id, {row["user_id"] for row in rows})
+            rows = [{**row, **metadata.get(row["user_id"], {})} for row in rows]
             return rows
         except Exception:
             conn.close()
@@ -682,6 +798,8 @@ def _get_levels(guild_id: str) -> list:
     rows  = [{"user_id": uid, "xp": v.get("xp", 0), "level": v.get("level", 0)}
              for uid, v in guild.items()]
     rows.sort(key=lambda x: x["xp"], reverse=True)
+    metadata = get_member_metadata(guild_id, {row["user_id"] for row in rows})
+    rows = [{**row, **metadata.get(row["user_id"], {})} for row in rows]
     return rows[:25]
 
 

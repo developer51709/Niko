@@ -55,6 +55,9 @@ export type UserOverview = {
 
 export type EconomyRow = {
   user_id: string;
+  display_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
   balance?: number;
   bank?: number;
   net_worth: number;
@@ -67,6 +70,9 @@ export type EconomyRow = {
 
 export type LevelRow = {
   user_id: string;
+  display_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
   xp: number;
   level: number;
 };

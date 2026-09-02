@@ -40,7 +40,11 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
   }, [guild.id, section]);
 
-  if (loading) return <div className="section-loading" role="status"><div className="loading-ring" /><span>Loading {section}…</span></div>;
+  if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${section}`}>
+    <div className="skeleton-title" /><div className="skeleton-copy" />
+    <div className="skeleton-grid"><i /><i /><i /></div>
+    <span>Loading {section}...</span>
+  </div>;
   if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
   if (section === "overview" && overview) return <OverviewView overview={overview} />;
   if (section === "economy") return <EconomyView rows={economy} />;
@@ -50,7 +54,10 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
 }
 
 function DashboardLoading() {
-  return <div className="section-loading dashboard-loading" role="status"><div className="loading-ring" /><span>Preparing your dashboard…</span></div>;
+  return <div className="section-loading section-skeleton dashboard-loading" role="status">
+    <div className="skeleton-title" /><div className="skeleton-copy" /><div className="skeleton-grid"><i /><i /><i /></div>
+    <span>Preparing your dashboard...</span>
+  </div>;
 }
 
 export function DashboardPage() {

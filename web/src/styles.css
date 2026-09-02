@@ -25,6 +25,7 @@
   --toggle-off: #bdbab2;
   --dot: #b7b1a7;
   --shadow: 0 16px 40px rgba(37, 39, 38, .07);
+  --shadow-soft: 0 8px 24px rgba(37, 39, 38, .05);
 }
 
 * { box-sizing: border-box; }
@@ -145,6 +146,7 @@ em { color: var(--accent); font-style: normal; }
     --toggle-off: #555a5f;
     --dot: #5c6064;
     --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .16);
   }
   .site-header { background: color-mix(in srgb, var(--canvas) 94%, transparent); }
   .preview-dots i { background: var(--dot); }

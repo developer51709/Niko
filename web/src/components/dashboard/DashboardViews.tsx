@@ -1,12 +1,17 @@
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
-import { displayName, initials } from "../../utils/format";
+import { displayName } from "../../utils/format";
 import { GuildIcon } from "./GuildIcon";
+import { MemberAvatar, UserAvatar } from "./UserAvatar";
 import type { EconomyRow, Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
 import { LevelingSettings } from "./SettingsViews";
 
 export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
-  return <div className="dash-heading"><div className="eyebrow">{eyebrow}</div><h2>{title}</h2><p>{text}</p></div>;
+  return <div className="dash-heading">
+    <div className="heading-meta"><div className="eyebrow">{eyebrow}</div><span className="heading-context">NIKO / CONTROL ROOM</span></div>
+    <h2>{title}</h2>
+    <p>{text}</p>
+  </div>;
 }
 
 export function StatCard({ label, value, note, accent = "" }: { label: string; value: string; note: string; accent?: string }) {
@@ -19,7 +24,7 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage }
     <DashHeading eyebrow="Personal overview" title="Your Niko snapshot." text="Keep an eye on your progress, then jump into a server when you’re ready to tune the room." />
     <div className="overview-intro">
       <div className="profile-card">
-        <span className="profile-avatar">{initials(displayName(user))}</span>
+         <UserAvatar user={user} className="profile-avatar" />
         <div><span className="panel-kicker">Signed in as</span><h3>{displayName(user)}</h3><p>Personal economy profile</p></div>
       </div>
       <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
@@ -87,7 +92,7 @@ export function RankList({ rows, type }: { rows: (EconomyRow | LevelRow)[]; type
   return <div className="rank-list">
     {rows.slice(0, 5).map((row, index) => <div className="rank-row" key={`${row.user_id}-${index}`}>
       <span className={`rank rank-${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
-      <span className="rank-user">Member {row.user_id.slice(-4)}</span>
+      <span className="rank-user"><MemberAvatar name={row.display_name || row.username || "Unknown member"} avatarUrl={row.avatar_url} /><span><strong>{row.display_name || row.username || "Unknown member"}</strong>{row.username && row.display_name && <small>@{row.username}</small>}</span></span>
       <strong>{formatNumber(type === "coins" ? (row as EconomyRow).net_worth : (row as LevelRow).xp)}<small>{type === "coins" ? " coins" : " xp"}</small></strong>
     </div>)}
     {!rows.length && <div className="empty-state compact">No data recorded yet.</div>}
@@ -96,6 +101,10 @@ export function RankList({ rows, type }: { rows: (EconomyRow | LevelRow)[]; type
 
 export function OverviewView({ overview }: { overview: GuildOverview }) {
   return <>
+    <div className="guild-welcome">
+      <div><span className="welcome-mark"><Icon name="grid" /></span><div><span className="panel-kicker">Server pulse</span><strong>Here’s what needs your attention.</strong></div></div>
+      <span className="welcome-time">LIVE SIGNALS <span className="status-dot" /></span>
+    </div>
     <DashHeading eyebrow="Overview" title="A quick read on your room." text="The important signals, without making you hunt for them." />
     <div className="dash-stats guild-overview-stats">
       <StatCard label="Economy in circulation" value={formatNumber(overview.economy.total_coins)} note={`${formatNumber(overview.economy.user_count)} active profiles`} accent="accent-orange" />
@@ -115,7 +124,7 @@ export function EconomyView({ rows }: { rows: EconomyRow[] }) {
     <DashHeading eyebrow="Economy" title="Give members something to build." text="A snapshot of the café economy and its most active players." />
     <div className="dash-stats"><StatCard label="Tracked net worth" value={formatNumber(total)} note="Top 25 profiles" accent="accent-orange" /><StatCard label="Profiles" value={formatNumber(rows.length)} note="With economy data" accent="accent-violet" /></div>
     <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Leaderboard</span><h3>Net worth</h3></div><span className="panel-icon"><Icon name="chart" /></span></div>
-      <div className="wide-table" role="table" aria-label="Economy leaderboard"><div className="table-head" role="row"><span>Rank</span><span>Member</span><span>Job</span><span>Level</span><span>Net worth</span></div>{rows.map((row, index) => <div className="table-row" role="row" key={row.user_id}><span className="rank">{String(index + 1).padStart(2, "0")}</span><span>Member {row.user_id.slice(-4)}</span><span className="muted">{row.job}</span><span>{row.level}</span><strong>{formatNumber(row.net_worth)}</strong></div>)}</div>
+      <div className="wide-table" role="table" aria-label="Economy leaderboard"><div className="table-head" role="row"><span>Rank</span><span>Member</span><span>Job</span><span>Level</span><span>Net worth</span></div>{rows.map((row, index) => { const name = row.display_name || row.username || "Unknown member"; return <div className="table-row" role="row" key={row.user_id}><span className="rank">{String(index + 1).padStart(2, "0")}</span><span className="table-member"><MemberAvatar name={name} avatarUrl={row.avatar_url} /><span><strong>{name}</strong>{row.username && row.display_name && <small>@{row.username}</small>}</span></span><span className="muted">{row.job}</span><span>{row.level}</span><strong>{formatNumber(row.net_worth)}</strong></div>; })}</div>
     </section>
   </>;
 }
@@ -123,7 +132,7 @@ export function EconomyView({ rows }: { rows: EconomyRow[] }) {
 export function LevelingView({ rows, config, resources, csrfToken, guildId }: { rows: LevelRow[]; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string; guildId: string }) {
   return <>
     <DashHeading eyebrow="Leveling" title="Momentum people can see." text="Track the members turning up, and tune the pace to fit your server." />
-    <div className="dash-stats"><StatCard label="Top level" value={String(rows[0]?.level || 0)} note={`Member ${rows[0]?.user_id.slice(-4) || "—"}`} accent="accent-violet" /><StatCard label="XP multiplier" value={`${config?.leveling.xp_multiplier || 1}×`} note={config?.leveling.xp_enabled === false ? "XP disabled" : "Currently active"} accent="accent-blue" /><StatCard label="Cooldown" value={`${config?.leveling.xp_cooldown || 0}s`} note="Between XP awards" accent="accent-green" /></div>
+    <div className="dash-stats"><StatCard label="Top level" value={String(rows[0]?.level || 0)} note={rows[0]?.display_name || rows[0]?.username || "No members yet"} accent="accent-violet" /><StatCard label="XP multiplier" value={`${config?.leveling.xp_multiplier || 1}×`} note={config?.leveling.xp_enabled === false ? "XP disabled" : "Currently active"} accent="accent-blue" /><StatCard label="Cooldown" value={`${config?.leveling.xp_cooldown || 0}s`} note="Between XP awards" accent="accent-green" /></div>
     <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Leaderboard</span><h3>XP leaders</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={rows} type="xp" /></section>
     <LevelingSettings guildId={guildId} config={config} resources={resources} csrfToken={csrfToken} />
   </>;
