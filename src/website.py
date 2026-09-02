@@ -181,6 +181,74 @@ def sqlite_connect():
         return None
 
 
+def _normalize_economy_row(row) -> dict:
+    """Convert an economy database row into the dashboard response shape."""
+    balance = int(row.get("balance", 0) or 0)
+    bank = int(row.get("bank", 0) or 0)
+    achievements = row.get("achievements", [])
+    if isinstance(achievements, str):
+        try:
+            achievements = json.loads(achievements or "[]")
+        except (TypeError, ValueError):
+            achievements = []
+    return {
+        "user_id": str(row.get("user_id")),
+        "balance": balance,
+        "bank": bank,
+        "net_worth": balance + bank,
+        "level": int(row.get("level", 0) or 0),
+        "job": row.get("job") or "barista",
+        "daily_streak": int(row.get("daily_streak", 0) or 0),
+        "achievements": len(achievements) if isinstance(achievements, (list, tuple, set, dict)) else 0,
+        "total_earned": int(row.get("total_earned", 0) or 0),
+    }
+
+
+def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
+    """Read economy data from the live bot database.
+
+    Economy profiles are global by user ID, so guild pages intersect them with
+    the selected guild's cached Discord members before calculating totals.
+    """
+    query = (
+        "SELECT user_id, balance, bank, level, job, daily_streak, "
+        "achievements, total_earned FROM economy_users"
+    )
+    if _discord_bot is not None and hasattr(_discord_bot, "cxn"):
+        async def read_from_bot():
+            rows = await _discord_bot.cxn.fetch(query)
+            normalized = [_normalize_economy_row(row) for row in rows]
+            if guild_id is None:
+                return normalized
+            guild = _discord_bot.get_guild(int(guild_id))
+            if guild is None:
+                return []
+            member_ids = {str(member.id) for member in getattr(guild, "members", [])}
+            return [row for row in normalized if row["user_id"] in member_ids]
+
+        try:
+            return run_on_bot_loop(read_from_bot())
+        except Exception:
+            pass
+
+    conn = sqlite_connect()
+    if conn is None:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        columns = [description[0] for description in cursor.description]
+        rows = [_normalize_economy_row(dict(zip(columns, raw))) for raw in cursor.fetchall()]
+        if guild_id is not None:
+            # A web-only process has no safe member list to intersect with.
+            return []
+        return rows
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
 def require_auth(f):
     """Decorator: return 401 JSON if the session has no Discord user."""
     @wraps(f)
@@ -464,33 +532,34 @@ def api_me():
 def api_me_overview():
     """Return the signed-in user's personal Niko profile and economy snapshot."""
     user_id = str(session["user"].get("id", ""))
-    profile = load_json(os.path.join(ECONOMY_DIR, f"{user_id}.json"), {})
-    if not isinstance(profile, dict):
-        profile = {}
+    profiles = get_runtime_economy_rows()
+    if profiles is None:
+        # Compatibility for older web-only installs while the DB is unavailable.
+        profiles = []
+        for filepath in glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json")):
+            data = load_json(filepath, {})
+            if isinstance(data, dict):
+                profiles.append(_normalize_economy_row({
+                    "user_id": os.path.basename(filepath).replace(".json", ""),
+                    **data,
+                }))
 
-    profiles = []
-    for filepath in glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json")):
-        data = load_json(filepath, {})
-        if isinstance(data, dict):
-            profiles.append({
-                "user_id": os.path.basename(filepath).replace(".json", ""),
-                "net_worth": int(data.get("net_worth", 0) or 0),
-            })
     profiles.sort(key=lambda row: row["net_worth"], reverse=True)
     rank = next(
         (index + 1 for index, row in enumerate(profiles) if row["user_id"] == user_id),
         None,
     )
+    profile = next((row for row in profiles if row["user_id"] == user_id), {})
 
     return jsonify({
-        "balance": int(profile.get("balance", 0) or 0),
-        "bank": int(profile.get("bank", 0) or 0),
-        "net_worth": int(profile.get("net_worth", 0) or 0),
-        "level": int(profile.get("level", 0) or 0),
+        "balance": profile.get("balance", 0),
+        "bank": profile.get("bank", 0),
+        "net_worth": profile.get("net_worth", 0),
+        "level": profile.get("level", 0),
         "job": profile.get("job", "barista"),
-        "daily_streak": int(profile.get("daily_streak", 0) or 0),
-        "achievements": len(profile.get("achievements", [])),
-        "total_earned": int(profile.get("total_earned", 0) or 0),
+        "daily_streak": profile.get("daily_streak", 0),
+        "achievements": profile.get("achievements", 0),
+        "total_earned": profile.get("total_earned", 0),
         "economy_rank": rank,
         "economy_profiles": len(profiles),
     })
@@ -544,23 +613,9 @@ def api_guilds():
 @require_guild_access
 def api_guild_overview(guild_id):
     # ── Economy snapshot ──────────────────────────────────────
-    eco_files  = glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))
-    total_coins = 0
-    top_eco    = []
-    for fp in eco_files:
-        d = load_json(fp)
-        if not d:
-            continue
-        uid   = os.path.basename(fp).replace(".json", "")
-        nw    = d.get("net_worth", 0)
-        total_coins += nw
-        top_eco.append({
-            "user_id":     uid,
-            "net_worth":   nw,
-            "level":       d.get("level", 0),
-            "job":         d.get("job", "barista"),
-            "daily_streak": d.get("daily_streak", 0),
-        })
+    economy_rows = get_runtime_economy_rows(guild_id) or []
+    total_coins = sum(row["net_worth"] for row in economy_rows)
+    top_eco = economy_rows[:]
     top_eco.sort(key=lambda x: x["net_worth"], reverse=True)
 
     # ── Warnings ──────────────────────────────────────────────
@@ -579,7 +634,7 @@ def api_guild_overview(guild_id):
     return jsonify({
         "economy": {
             "total_coins": total_coins,
-            "user_count":  len(eco_files),
+            "user_count":  len(economy_rows),
             "top":         top_eco[:5],
         },
         "moderation": {
@@ -596,24 +651,7 @@ def api_guild_overview(guild_id):
 @require_auth
 @require_guild_access
 def api_guild_economy(guild_id):
-    eco_files = glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))
-    rows = []
-    for fp in eco_files:
-        d = load_json(fp)
-        if not d:
-            continue
-        uid = os.path.basename(fp).replace(".json", "")
-        rows.append({
-            "user_id":      uid,
-            "balance":      d.get("balance", 0),
-            "bank":         d.get("bank", 0),
-            "net_worth":    d.get("net_worth", 0),
-            "level":        d.get("level", 0),
-            "job":          d.get("job", "barista"),
-            "daily_streak": d.get("daily_streak", 0),
-            "achievements": len(d.get("achievements", [])),
-            "total_earned": d.get("total_earned", 0),
-        })
+    rows = get_runtime_economy_rows(guild_id) or []
     rows.sort(key=lambda x: x["net_worth"], reverse=True)
     return jsonify(rows[:25])
 

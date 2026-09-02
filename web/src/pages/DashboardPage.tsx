@@ -42,7 +42,7 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
 
   if (loading) return <div className="section-loading" role="status"><div className="loading-ring" /><span>Loading {section}…</span></div>;
   if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
-  if (section === "overview" && overview) return <OverviewView overview={overview} stats={stats} />;
+  if (section === "overview" && overview) return <OverviewView overview={overview} />;
   if (section === "economy") return <EconomyView rows={economy} />;
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;

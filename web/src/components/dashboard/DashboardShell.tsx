@@ -4,6 +4,7 @@ import { Icon } from "../Icon";
 import { dashboardPath, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../../router";
 import { displayName, formatNumber, initials } from "../../utils/format";
 import type { BotStats, Guild, User } from "../../types";
+import { GuildIcon } from "./GuildIcon";
 
 const sections: [DashSection, string, string][] = [
   ["overview", "Server overview", "grid"],
@@ -80,7 +81,7 @@ export function DashboardShell({
           <>
             <div className="side-label side-label-settings">Server settings</div>
             <div className="side-guild">
-              <span className="guild-avatar">{selectedGuild.name.slice(0, 1).toUpperCase()}</span>
+              <GuildIcon guild={selectedGuild} />
               <span><strong>{selectedGuild.name}</strong><small>Configuration</small></span>
             </div>
             {sectionNav()}
