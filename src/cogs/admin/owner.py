@@ -542,18 +542,14 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="## **@everyone — Major Niko AI Update 🚀**"
+                content="## **@everyone — Ticket Transcript Upgrade 📝**"
             ),
             discord.ui.TextDisplay(
-                content="Two new AI image tools have been added to Niko:\n\n**`.generate`** — Create AI‑generated images from any prompt\n**`.edit`** — Edit, enhance, or transform attached or replied images\n\nThese features require **Premium Access**, unlocked by **boosting the support server**, due to the compute cost of image processing."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="## **Introducing the New NikoAPI**\n\nNiko has officially migrated to the **new NikoAPI**, replacing the old chat API.\nThis upgrade brings:\n\n- **Faster, more reliable AI responses**\n- **Built‑in image generation and image editing**\n- **A full API dashboard** for users who want to **self‑host Niko** and still access every AI feature without restrictions\n\nSelf‑hosters can now manage keys, usage, and AI settings directly through the dashboard—no more missing features or limited functionality."
+                content="Tickets now have **web transcripts** instead of basic text files!\n\nWhen you run `/ticket transcript`, you'll get:\n\n- **A viewable web page** — browse your ticket history in a clean, searchable format\n- **Multiple download formats** — TXT, HTML, CSV, and JSON\n- **Persistent storage** — transcripts are saved to the database and accessible via link\n\nNo more downloading plain `.txt` files — now you can view, search, and export tickets from anywhere!"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# **__Note:__**\n-# The new NikoAPI is free for all users, but **Premium Access** is required for AI image tools.\n-# If you encounter any issues, please open a ticket in the support server."
+                content="-# **How to use:**\n-# Run `/ticket transcript` inside any ticket channel to generate a web transcript link.\n-# Click the link to view it online, or use the download buttons for different formats."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(

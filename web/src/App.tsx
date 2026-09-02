@@ -5,6 +5,7 @@ import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
 import { LegalPage } from "./pages/LegalPage";
+import { TranscriptPage } from "./pages/TranscriptPage";
 import { pageFromPath, type Page } from "./router";
 
 export function App() {
@@ -25,5 +26,10 @@ export function App() {
   if (page === "privacy") return <LegalPage type="privacy" />;
   if (page === "terms") return <LegalPage type="terms" />;
   if (page === "donate") return <DonatePage />;
+  if (page === "transcript") {
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const transcriptId = pathParts[1] || "";
+    return <TranscriptPage transcriptId={transcriptId} />;
+  }
   return <HomePage />;
 }

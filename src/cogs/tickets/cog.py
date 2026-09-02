@@ -1,3 +1,5 @@
+import os
+import time
 from .views import *
 
 class Tickets(commands.Cog):
@@ -247,8 +249,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="transcript",
-        description="Generate a transcript of this ticket.",
-        help="{ 'en': 'Generate a text transcript of this ticket (in-ticket).', 'de': 'Ein Textprotokoll dieses Tickets erstellen (im Ticket).', 'es': 'Genera una transcripción de texto de este ticket (dentro del ticket).' }",
+        description="Generate a web transcript of this ticket.",
+        help="{ 'en': 'Generate a web transcript of this ticket with download options (in-ticket).', 'de': 'Ein Web-Protokoll dieses Tickets erstellen (im Ticket).', 'es': 'Genera una transcripción web de este ticket (dentro del ticket).' }",
     )
     @commands.guild_only()
     async def ticket_transcript(self, ctx: commands.Context):
@@ -259,17 +261,99 @@ class Tickets(commands.Cog):
             return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        lines = []
+
+        # Collect messages
+        messages = []
         async for m in ctx.channel.history(limit=2000, oldest_first=True):
-            ts = m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-            content = m.content or ""
-            if m.attachments:
-                content += " [attachments: " + ", ".join(a.url for a in m.attachments) + "]"
-            lines.append(f"[{ts}] {m.author} ({m.author.id}): {content}")
-        body = "\n".join(lines).encode("utf-8")
-        file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
-        view = _cv2(_local_msg(ctx, "transcript_built"))
-        await ctx.send(view=view, file=file)
+            attachments = [a.url for a in m.attachments] if m.attachments else []
+            messages.append({
+                "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "author": str(m.author),
+                "author_id": m.author.id,
+                "content": m.content or "",
+                "attachments": attachments,
+            })
+
+        # Find ticket info for metadata
+        ticket_info = is_ticket_channel(ctx)
+        opener_id = ticket_info.get("opener_id", 0) if ticket_info else 0
+        category = ticket_info.get("category", "General") if ticket_info else "General"
+        claimed_by = ticket_info.get("claimed_by") if ticket_info else None
+
+        # Generate transcript ID and save to database
+        from utils.tickets.transcripts import (
+            generate_transcript_id, save_transcript, export_txt,
+        )
+        from config import links as _links
+
+        transcript_id = generate_transcript_id(ctx.guild.id, ctx.channel.id, time.time())
+        try:
+            await save_transcript(
+                self.bot.cxn,
+                transcript_id=transcript_id,
+                guild_id=ctx.guild.id,
+                channel_id=ctx.channel.id,
+                channel_name=ctx.channel.name,
+                opener_id=opener_id,
+                category=category,
+                messages=messages,
+                claimed_by=claimed_by,
+            )
+        except Exception:
+            # Fallback to .txt file if DB save fails
+            body = export_txt(messages).encode("utf-8")
+            file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
+            view = _cv2(_local_msg(ctx, "transcript_built"))
+            await ctx.send(view=view, file=file)
+            return
+
+        # Build the web transcript URL
+        from utils.tickets.transcripts import export_txt
+        base_url = os.environ.get("DONATION_SITE_URL") or os.environ.get("PUBLIC_URL") or ""
+        if not base_url:
+            try:
+                from website import public_base_url as _pbu
+                base_url = _pbu()
+            except Exception:
+                base_url = ""
+
+        web_url = f"{base_url}/transcript/{transcript_id}" if base_url else None
+
+        # Build response with web link and download options
+        download_formats = ["txt", "html", "csv", "json"]
+        format_links = "\n".join(
+            f"• [{fmt.upper()}]({base_url}/api/transcript/{transcript_id}/download?format={fmt})"
+            for fmt in download_formats
+        ) if base_url else ""
+
+        content = f"📝 **Transcript generated!**\n\n"
+        content += f"**Messages:** {len(messages)}\n"
+        content += f"**Category:** {category}\n"
+        if web_url:
+            content += f"\n🔗 **View online:** {web_url}\n\n"
+            content += f"**Download:**\n{format_links}"
+        else:
+            # Fallback to .txt file if no base URL
+            body = export_txt(messages).encode("utf-8")
+            file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
+            await ctx.send(content=content, file=file)
+            return
+
+        # Add view button
+        view_obj = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=content),
+        )
+        if web_url:
+            container.add_item(discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="View Transcript",
+                    style=discord.ButtonStyle.link,
+                    url=web_url,
+                ),
+            ))
+        view_obj.add_item(container)
+        await ctx.send(view=view_obj)
 
     # ───── in-ticket: close (lock) ────────────────
 

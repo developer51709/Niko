@@ -138,6 +138,7 @@ PRIMARY_KEYS: dict = {
     "modlog": "guild_id",
     "guild_profiles": "guild_id",
     "donation_invoices": "order_id",
+    "transcripts": "transcript_id",
 }
 
 
