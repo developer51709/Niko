@@ -15,12 +15,24 @@ export type PublicConfig = {
 
 export type CommandType = "slash" | "prefix" | "hybrid" | "context";
 
+export type CommandParameter = {
+  name: string;
+  description?: string;
+  required?: boolean;
+  type?: string;
+};
+
 export type Command = {
   name: string;
   description: string;
   category: string;
   type?: CommandType;
   context_type?: "user" | "message";
+  aliases?: string[];
+  parameters?: CommandParameter[];
+  permissions?: string[];
+  usage?: string;
+  subcommands?: string[];
 };
 
 export type Guild = {

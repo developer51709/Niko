@@ -21,10 +21,10 @@ export class ApiError extends Error {
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    cache: "no-store",
     ...options,
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", ...options?.headers },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {

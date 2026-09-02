@@ -592,6 +592,20 @@ def api_commands():
             "description": str(command.get("description") or ""),
             "category": str(command.get("category") or "utility"),
             "type": command.get("type") if command.get("type") in valid_types else "slash",
+            "aliases": [str(item) for item in command.get("aliases", []) if item],
+            "parameters": [
+                {
+                    "name": str(item.get("name") or ""),
+                    "description": str(item.get("description") or ""),
+                    "required": bool(item.get("required", False)),
+                    "type": str(item.get("type") or "string"),
+                }
+                for item in command.get("parameters", [])
+                if isinstance(item, dict) and item.get("name")
+            ],
+            "permissions": [str(item) for item in command.get("permissions", []) if item],
+            "usage": str(command.get("usage") or ""),
+            "subcommands": [str(item) for item in command.get("subcommands", []) if item],
         }
         if command.get("context_type") in {"user", "message"}:
             normalized["context_type"] = command["context_type"]
