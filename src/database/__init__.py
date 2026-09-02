@@ -136,6 +136,8 @@ PRIMARY_KEYS: dict = {
     "logging_config": "guild_id",
     "moderation_config": "guild_id",
     "modlog": "guild_id",
+    "guild_profiles": "guild_id",
+    "donation_invoices": "order_id",
 }
 
 

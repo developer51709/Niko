@@ -56,3 +56,15 @@ export function saveConfig(
     body: JSON.stringify(body),
   });
 }
+
+export function saveProfile(
+  id: string,
+  body: Record<string, unknown>,
+  csrfToken?: string,
+) {
+  return api<{ ok: boolean; profile?: Record<string, any> }>(`/api/guild/${id}/config/profile`, {
+    method: "POST",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    body: JSON.stringify(body),
+  });
+}

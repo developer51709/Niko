@@ -111,11 +111,19 @@ export type TicketConfig = {
   support_roles?: string[];
 };
 
+export type GuildProfile = {
+  display_name?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  banner_url?: string | null;
+};
+
 export type ServerConfig = {
   prefixes: string[];
   onboarding: OnboardingConfig;
   logging: LoggingConfig;
   tickets: TicketConfig;
+  profile: GuildProfile;
 };
 
 export type GuildConfig = {

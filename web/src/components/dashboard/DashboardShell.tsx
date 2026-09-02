@@ -13,6 +13,7 @@ const sections: [DashSection, string, string, string][] = [
   ["moderation", "Moderation", "shield", "Keep things steady"],
   ["server", "Server", "settings", "Manage server features"],
   ["ai", "AI controls", "settings", "Shape Niko’s voice"],
+  ["customization", "Customization", "paint", "Niko’s server identity"],
 ];
 
 type Props = {

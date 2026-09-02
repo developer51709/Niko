@@ -154,6 +154,33 @@ async def _create_tables(bot):
     """)
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS donation_invoices (
+            order_id       TEXT PRIMARY KEY,
+            track_id       TEXT UNIQUE,
+            user_id        INTEGER NOT NULL,
+            amount         REAL NOT NULL,
+            currency       TEXT NOT NULL DEFAULT 'USD',
+            pay_currency   TEXT,
+            pay_link       TEXT,
+            status         TEXT NOT NULL DEFAULT 'Waiting',
+            channel_id     INTEGER,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            paid_at        TEXT
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_profiles (
+            guild_id       INTEGER PRIMARY KEY,
+            display_name   TEXT,
+            bio            TEXT,
+            avatar_url     TEXT,
+            banner_url     TEXT,
+            updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS triggers (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id   INTEGER NOT NULL,

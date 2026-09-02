@@ -3,6 +3,7 @@ import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { HomePage } from "./pages/HomePage";
+import { DonatePage } from "./pages/DonatePage";
 import { LegalPage } from "./pages/LegalPage";
 import { pageFromPath, type Page } from "./router";
 
@@ -23,5 +24,6 @@ export function App() {
   if (page === "dashboard") return <DashboardPage />;
   if (page === "privacy") return <LegalPage type="privacy" />;
   if (page === "terms") return <LegalPage type="terms" />;
+  if (page === "donate") return <DonatePage />;
   return <HomePage />;
 }

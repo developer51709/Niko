@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
-import { AiView, ModerationView } from "../components/dashboard/SettingsViews";
+import { AiView, CustomizationSettings, ModerationView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { PublicHeader } from "../components/PublicHeader";
@@ -48,6 +48,7 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
   if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
+  if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 

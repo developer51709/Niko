@@ -29,13 +29,31 @@ import secrets
 import traceback
 import sqlite3
 import asyncio
-from urllib.parse import urlencode
+import base64
+import hashlib
+import hmac
+import uuid
+from urllib.parse import urlencode, quote, urlparse
+from flask import Response
 from functools import wraps
 from flask import (
     Flask, send_from_directory, session,
     redirect, request, jsonify, url_for
 )
 import requests as req
+
+from utils.donations import (
+    add_donor,
+    confirm_invoice,
+    create_donation_token,
+    get_invoice,
+    donation_link,
+    get_pending_invoices,
+    save_invoice,
+    update_invoice_status,
+    verify_donation_token,
+)
+from cogs.donations.oxapay import OxaPayClient
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,6 +70,7 @@ AICFG        = os.path.join(DATA_DIR, "ai_config.json")
 LEVELS_JSON  = os.path.join(DATA_DIR, "levels.json.migrated")
 LEVELCFG_JSON = os.path.join(DATA_DIR, "level_config.json.migrated")
 DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
+OXAPAY_KEY = os.environ.get("OXAPAY_API_KEY", "")
 
 MANAGE_GUILD_PERM = 0x20
 ADMINISTRATOR_PERM = 0x8
@@ -139,6 +158,20 @@ def prevent_dynamic_cache(response):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
+
+
+def public_base_url() -> str:
+    """Return the externally reachable origin used by provider callbacks."""
+    explicit = os.environ.get("PUBLIC_URL") or os.environ.get("DONATION_SITE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    domain = os.environ.get("REPLIT_DEV_DOMAIN")
+    if domain:
+        return f"https://{domain}".rstrip("/")
+    forwarded_host = request.headers.get("X-Forwarded-Host")
+    host = forwarded_host or request.host
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+    return f"{forwarded_proto}://{host}".rstrip("/")
 
 
 def redirect_uri() -> str:
@@ -990,6 +1023,103 @@ def _serialize_ticket_config(cfg) -> dict:
     }
 
 
+def _profile_row_to_dict(row) -> dict:
+    if not row:
+        return {"display_name": None, "bio": None, "avatar_url": None, "banner_url": None}
+    return {
+        "display_name": row.get("display_name"),
+        "bio": row.get("bio"),
+        "avatar_url": row.get("avatar_url"),
+        "banner_url": row.get("banner_url"),
+    }
+
+
+def _get_runtime_guild_profile(guild_id: str) -> dict:
+    """Read the persisted per-guild bot profile from the shared database."""
+    async def read_from_bot():
+        if _discord_bot is None or not getattr(_discord_bot, "cxn", None):
+            return None
+        return await _discord_bot.cxn.fetchrow(
+            "SELECT display_name, bio, avatar_url, banner_url "
+            "FROM guild_profiles WHERE guild_id = $1",
+            int(guild_id),
+        )
+
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        try:
+            row = run_on_bot_loop(read_from_bot())
+            if row:
+                return _profile_row_to_dict(row)
+        except Exception:
+            pass
+
+    conn = sqlite_connect()
+    if conn is not None:
+        try:
+            row = conn.execute(
+                "SELECT display_name, bio, avatar_url, banner_url "
+                "FROM guild_profiles WHERE guild_id = ?",
+                (int(guild_id),),
+            ).fetchone()
+            if row:
+                return _profile_row_to_dict(dict(zip(
+                    ("display_name", "bio", "avatar_url", "banner_url"), row
+                )))
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+
+    guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
+    member = getattr(guild, "me", None) if guild is not None else None
+    avatar = getattr(getattr(member, "display_avatar", None), "url", None)
+    return {
+        "display_name": getattr(member, "display_name", None) if member else None,
+        "bio": None,
+        "avatar_url": str(avatar) if avatar else None,
+        "banner_url": None,
+    }
+
+
+def _save_runtime_guild_profile(guild_id: int, profile: dict) -> None:
+    """Write a complete profile row through whichever database is active."""
+    async def save_to_bot():
+        await _discord_bot.cxn.execute(
+            "INSERT OR REPLACE INTO guild_profiles "
+            "(guild_id, display_name, bio, avatar_url, banner_url, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, datetime('now'))",
+            guild_id,
+            profile.get("display_name"),
+            profile.get("bio"),
+            profile.get("avatar_url"),
+            profile.get("banner_url"),
+        )
+
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        run_on_bot_loop(save_to_bot())
+        return
+
+    conn = sqlite_connect()
+    if conn is None:
+        raise RuntimeError("The bot database is unavailable.")
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO guild_profiles "
+            "(guild_id, display_name, bio, avatar_url, banner_url, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            (
+                guild_id,
+                profile.get("display_name"),
+                profile.get("bio"),
+                profile.get("avatar_url"),
+                profile.get("banner_url"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _get_runtime_server_config(guild_id: str) -> dict:
     """Read all server-management settings from their existing owners."""
     from utils.prefix_manager import get_prefixes
@@ -1004,6 +1134,7 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "onboarding": _serialize_onboarding_config(onboarding),
         "logging": _guild_config(logging_data, int(guild_id)),
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
+        "profile": _get_runtime_guild_profile(guild_id),
     }
 
 
@@ -1422,6 +1553,85 @@ def api_save_server(guild_id):
     return jsonify({"ok": True, "config": config})
 
 
+@app.route("/api/guild/<guild_id>/config/profile", methods=["POST"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_save_profile(guild_id):
+    """Apply and persist the bot's per-server Discord profile."""
+    body = request.get_json(silent=True) or {}
+    allowed = {"display_name", "bio", "avatar_url", "banner_url"}
+    unknown = set(body) - allowed
+    if unknown:
+        return jsonify({"error": f"Unsupported profile fields: {', '.join(sorted(unknown))}"}), 400
+    try:
+        numeric_guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid guild ID."}), 400
+
+    current = _get_runtime_guild_profile(guild_id)
+    profile = {**current}
+    for key in allowed:
+        if key in body:
+            value = body[key]
+            if value is not None and not isinstance(value, str):
+                return jsonify({"error": f"{key} must be text or empty."}), 400
+            profile[key] = value.strip() if isinstance(value, str) else None
+
+    if profile["display_name"] and len(profile["display_name"]) > 32:
+        return jsonify({"error": "Display name must be 32 characters or fewer."}), 400
+    if profile["bio"] and len(profile["bio"]) > 190:
+        return jsonify({"error": "Bio must be 190 characters or fewer."}), 400
+
+    image_payload = {}
+    for key in ("avatar_url", "banner_url"):
+        value = profile[key]
+        if not value:
+            image_payload[key.removesuffix("_url")] = None
+            continue
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            return jsonify({"error": f"{key} must be an HTTPS image URL."}), 400
+        try:
+            image_response = req.get(value, timeout=10, allow_redirects=False)
+            image_response.raise_for_status()
+            content_type = image_response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+            if not content_type.startswith("image/"):
+                return jsonify({"error": f"{key} must point to an image."}), 400
+            image_bytes = image_response.content
+            if len(image_bytes) > 8 * 1024 * 1024:
+                return jsonify({"error": f"{key} must be 8 MB or smaller."}), 400
+            image_payload[key.removesuffix("_url")] = (
+                f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+            )
+        except Exception as error:
+            return jsonify({"error": f"Could not fetch {key}: {error}"}), 400
+
+    token = DISCORD_BOT_TOKEN
+    if not token:
+        return jsonify({"error": "The Discord bot token is not configured."}), 503
+    patch_body = {
+        "nick": profile["display_name"] or None,
+        "bio": profile["bio"] or None,
+        "avatar": image_payload["avatar"],
+        "banner": image_payload["banner"],
+    }
+    response = req.patch(
+        f"{DISCORD_API}/guilds/{numeric_guild_id}/members/@me",
+        headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
+        json=patch_body,
+        timeout=10,
+    )
+    if response.status_code not in (200, 204):
+        return jsonify({"error": "Discord rejected the profile update.", "details": response.text[:300]}), 502
+
+    try:
+        _save_runtime_guild_profile(numeric_guild_id, profile)
+    except Exception as error:
+        return jsonify({"error": f"Profile applied, but could not persist it: {error}"}), 503
+    return jsonify({"ok": True, "profile": profile})
+
+
 @app.route("/api/guild/<guild_id>/config/ai", methods=["POST"])
 @require_auth
 @require_guild_access
@@ -1510,6 +1720,120 @@ def api_save_leveling(guild_id):
     return jsonify({"ok": True, "config": get_runtime_level_config(guild_id)})
 
 
+def _donation_bot():
+    if _discord_bot is None or not getattr(_discord_bot, "cxn", None):
+        raise RuntimeError("The bot database is unavailable.")
+    return _discord_bot
+
+
+async def _confirm_donation_from_webhook(track_id: str, payload: dict):
+    bot = _donation_bot()
+    invoice, newly_confirmed = await confirm_invoice(bot, track_id, payload)
+    if invoice is not None and newly_confirmed:
+        donation_cog = bot.get_cog("DonationCog")
+        if donation_cog is not None:
+            await donation_cog._on_payment_confirmed(track_id, dict(invoice))
+    return invoice, newly_confirmed
+
+
+@app.route("/api/donations/invoice", methods=["POST"])
+def api_create_donation_invoice():
+    """Create a hosted OxaPay invoice for a signed Discord donation link."""
+    body = request.get_json(silent=True) or {}
+    claims = verify_donation_token(body.get("token", ""))
+    if claims is None:
+        return jsonify({"error": "This donation link is invalid or expired."}), 400
+    try:
+        amount = float(body.get("amount", 5))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Donation amount must be a number."}), 400
+    currency = str(body.get("currency", "USDT")).upper()
+    if not 1 <= amount <= 10000:
+        return jsonify({"error": "Donation amount must be between $1 and $10,000."}), 400
+    if currency not in {"USDT", "ETH", "BTC", "BNB", "LTC", "DOGE", "TRX", "XMR"}:
+        return jsonify({"error": "That cryptocurrency is not available."}), 400
+    if not OXAPAY_KEY:
+        return jsonify({"error": "Donations are not configured yet."}), 503
+
+    order_id = f"donation_{claims['user_id']}_{uuid.uuid4().hex}"
+    callback_url = f"{public_base_url()}/api/donations/webhook"
+    try:
+        client = OxaPayClient(OXAPAY_KEY)
+        result = run_on_bot_loop(client.create_invoice(
+            amount=amount,
+            currency="USD",
+            pay_currency=currency,
+            lifetime=60,
+            description=f"Niko Bot Donation - ${amount:.2f} USD",
+            callback_url=callback_url,
+            order_id=order_id,
+        ))
+    except Exception as error:
+        return jsonify({"error": f"Could not create the invoice: {error}"}), 503
+    if not result.get("success"):
+        return jsonify({"error": result.get("message", "OxaPay could not create the invoice.")}), 502
+
+    try:
+        save_invoice_result = save_invoice
+        run_on_bot_loop(save_invoice_result(
+            _discord_bot,
+            order_id=order_id,
+            track_id=result["trackId"],
+            user_id=int(claims["user_id"]),
+            amount=amount,
+            currency="USD",
+            pay_currency=currency,
+            pay_link=result["payLink"],
+        ))
+    except Exception as error:
+        return jsonify({"error": f"Invoice created but could not be recorded: {error}"}), 503
+    return jsonify({
+        "ok": True,
+        "order_id": order_id,
+        "track_id": result["trackId"],
+        "pay_link": result["payLink"],
+        "status_url": f"/api/donations/{quote(order_id, safe='')}",
+    })
+
+
+@app.route("/api/donations/<order_id>")
+def api_donation_status(order_id):
+    try:
+        invoice = run_on_bot_loop(get_invoice(_donation_bot(), order_id=order_id))
+    except Exception as error:
+        return jsonify({"error": str(error)}), 503
+    if invoice is None:
+        return jsonify({"error": "Donation invoice not found."}), 404
+    return jsonify({"status": invoice.get("status", "Unknown"), "paid": str(invoice.get("status", "")).lower() == "paid"})
+
+
+@app.route("/api/donations/webhook", methods=["POST"])
+def api_donation_webhook():
+    raw_body = request.get_data()
+    signature = request.headers.get("HMAC") or request.headers.get("Hmac") or request.headers.get("X-HMAC")
+    if not OXAPAY_KEY or not signature:
+        return Response("invalid", status=401, mimetype="text/plain")
+    expected = hmac.new(OXAPAY_KEY.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()
+    if not hmac.compare_digest(signature.strip(), expected):
+        return Response("invalid", status=401, mimetype="text/plain")
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return Response("invalid", status=400, mimetype="text/plain")
+    status = str(payload.get("status", "")).lower()
+    track_id = str(payload.get("trackId") or payload.get("track_id") or "")
+    if not track_id:
+        return Response("ok", status=200, mimetype="text/plain")
+    try:
+        if status == "paid":
+            run_on_bot_loop(_confirm_donation_from_webhook(track_id, payload))
+        elif status in {"waiting", "paying", "confirming", "expired", "failed"}:
+            run_on_bot_loop(update_invoice_status(_donation_bot(), track_id, str(payload.get("status"))))
+    except Exception:
+        return Response("retry", status=503, mimetype="text/plain")
+    return Response("ok", status=200, mimetype="text/plain")
+
+
 # ── Static file serving ──────────────────────────────────────────────────────
 
 @app.route("/")
@@ -1531,6 +1855,7 @@ def serve_spa_shell():
 @app.route("/docs")
 @app.route("/privacy")
 @app.route("/terms")
+@app.route("/donate")
 def public_spa_route():
     return serve_spa_shell()
 
@@ -1539,6 +1864,7 @@ def public_spa_route():
 @app.route("/docs/<path:path>")
 @app.route("/privacy/<path:path>")
 @app.route("/terms/<path:path>")
+@app.route("/donate/<path:path>")
 @app.route("/dashboard/<path:path>")
 def nested_spa_route(path):
     return serve_spa_shell()

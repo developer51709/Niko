@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { saveConfig } from "../../api";
+import { saveConfig, saveProfile } from "../../api";
 import { Icon } from "../Icon";
-import type { GuildConfig, GuildResources } from "../../types";
+import type { GuildConfig, GuildResources, GuildProfile } from "../../types";
 import { DashHeading } from "./DashboardViews";
 
 type SaveState = { saving: boolean; message: string; error: string };
@@ -106,7 +106,66 @@ export function LevelingSettings({ guildId, config, resources, csrfToken }: { gu
   const [values, setValues] = useState({ xp_enabled: true, xp_multiplier: 1, xp_cooldown: 0, level_up_channel: "", level_up_message: "" });
   const [state, setState] = useState(initialSave);
   useEffect(() => setValues({ xp_enabled: level.xp_enabled !== false, xp_multiplier: level.xp_multiplier ?? 1, xp_cooldown: level.xp_cooldown ?? 0, level_up_channel: level.level_up_channel ? String(level.level_up_channel) : "", level_up_message: level.level_up_message || "" }), [config]);
-   const submit = (event: FormEvent) => { event.preventDefault(); setState({ saving: true, message: "", error: "" }); saveConfig(guildId, "leveling", values, csrfToken).then((result) => { const level = result.config || {}; setValues({ xp_enabled: level.xp_enabled !== false, xp_multiplier: level.xp_multiplier ?? 1, xp_cooldown: level.xp_cooldown ?? 0, level_up_channel: level.level_up_channel ? String(level.level_up_channel) : "", level_up_message: level.level_up_message || "" }); setState({ saving: false, message: "Leveling settings saved to Niko.", error: "" }); }).catch((error) => setState({ saving: false, message: "", error: error instanceof Error ? error.message : "Could not save settings." })); };
-   const levelUpChannels = channelsWithSelected(resources, values.level_up_channel);
-   return <><SettingsIntro icon="spark" label="Participation desk" title={values.xp_enabled ? "XP is flowing" : "XP is paused"} text="Set a pace that rewards regulars without turning every message into a transaction." /><form onSubmit={submit} className="settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Leveling settings" title="Shape the pace" detail="These controls apply to every member in this server." icon="spark" /><label className="setting-row"><span><strong>Enable XP</strong><small>Track activity and award levels</small></span><input type="checkbox" checked={values.xp_enabled} onChange={(e) => setValues({ ...values, xp_enabled: e.target.checked })} /><i aria-hidden="true" /></label><div className="form-grid"><Field label="XP multiplier" hint="From 0.1× to 10×"><input type="number" min="0.1" max="10" step="0.1" value={values.xp_multiplier} onChange={(e) => setValues({ ...values, xp_multiplier: e.target.value as unknown as number })} /></Field><Field label="Cooldown (seconds)" hint="0 disables the cooldown"><input type="number" min="0" max="86400" value={values.xp_cooldown} onChange={(e) => setValues({ ...values, xp_cooldown: e.target.value as unknown as number })} /></Field><Field label="Level-up channel"><select value={values.level_up_channel} onChange={(e) => setValues({ ...values, level_up_channel: e.target.value })}><option value="">Same channel</option>{levelUpChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Level-up message" hint="Use {mention}, {level}, {name}, or {guild}"><textarea rows={3} maxLength={1000} value={values.level_up_message} onChange={(e) => setValues({ ...values, level_up_message: e.target.value })} placeholder="Leave blank for Niko's default message" /></Field></div><SaveFooter state={state} /></section></form></>;
+   const submit = (event: FormEvent) => { event.preventDefault(); setState({ saving: true, message: "", error: "" }); saveConfig(guildId, "leveling", values, csrfToken).then((result) => { const level = result.config || {}; setValues({ xp_enabled: level.xp_enabled !== false, xp_multiplier: level.xp_multiplier ?? 1, xp_cooldown: level.xp_cooldown ?? 0, level_up_channel: level.level_up_channel ? String(level.level_up_channel) : "", level_up_message: level.level_up_message || "" }); setState({ saving: false, message: "Leveling settings saved to Niko.", error: "" }); }).catch((error) => setState({ saving: false, message: "", error: error instanceof Error ? error.message : "Could not save settings." })); };   const levelUpChannels = channelsWithSelected(resources, values.level_up_channel);
+  return <><SettingsIntro icon="spark" label="Participation desk" title={values.xp_enabled ? "XP is flowing" : "XP is paused"} text="Set a pace that rewards regulars without turning every message into a transaction." /><form onSubmit={submit} className="settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Leveling settings" title="Shape the pace" detail="These controls apply to every member in this server." icon="spark" /><label className="setting-row"><span><strong>Enable XP</strong><small>Track activity and award levels</small></span><input type="checkbox" checked={values.xp_enabled} onChange={(e) => setValues({ ...values, xp_enabled: e.target.checked })} /><i aria-hidden="true" /></label><div className="form-grid"><Field label="XP multiplier" hint="From 0.1× to 10×"><input type="number" min="0.1" max="10" step="0.1" value={values.xp_multiplier} onChange={(e) => setValues({ ...values, xp_multiplier: e.target.value as unknown as number })} /></Field><Field label="Cooldown (seconds)" hint="0 disables the cooldown"><input type="number" min="0" max="86400" value={values.xp_cooldown} onChange={(e) => setValues({ ...values, xp_cooldown: e.target.value as unknown as number })} /></Field><Field label="Level-up channel"><select value={values.level_up_channel} onChange={(e) => setValues({ ...values, level_up_channel: e.target.value })}><option value="">Same channel</option>{levelUpChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Level-up message" hint="Use {mention}, {level}, {name}, or {guild}"><textarea rows={3} maxLength={1000} value={values.level_up_message} onChange={(e) => setValues({ ...values, level_up_message: e.target.value })} placeholder="Leave blank for Niko's default message" /></Field></div><SaveFooter state={state} /></section></form></>;
+}
+
+export function CustomizationSettings({ guildId, config, csrfToken }: { guildId: string; config: GuildConfig | null; csrfToken?: string }) {
+  const profile = config?.server?.profile || {};
+  const [values, setValues] = useState({
+    display_name: profile.display_name || "",
+    bio: profile.bio || "",
+    avatar_url: profile.avatar_url || "",
+    banner_url: profile.banner_url || "",
+  });
+  const [state, setState] = useState(initialSave);
+  useEffect(() => {
+    const p = config?.server?.profile || {};
+    setValues({
+      display_name: p.display_name || "",
+      bio: p.bio || "",
+      avatar_url: p.avatar_url || "",
+      banner_url: p.banner_url || "",
+    });
+  }, [config]);
+  const submit = (event: FormEvent) => {
+    event.preventDefault(); setState({ saving: true, message: "", error: "" });
+    saveProfile(guildId, {
+      display_name: values.display_name || null,
+      bio: values.bio || null,
+      avatar_url: values.avatar_url || null,
+      banner_url: values.banner_url || null,
+    }, csrfToken).then((result) => {
+      const p = result.profile || {};
+      setValues({
+        display_name: p.display_name || "",
+        bio: p.bio || "",
+        avatar_url: p.avatar_url || "",
+        banner_url: p.banner_url || "",
+      });
+      setState({ saving: false, message: "Bot profile updated.", error: "" });
+    }).catch((error) => setState({ saving: false, message: "", error: error instanceof Error ? error.message : "Could not save profile." }));
+  };
+  return <>
+    <DashHeading eyebrow="Customization" title="Niko's server presence." text="Change how Niko appears in this server. Display name, avatar, banner, and bio are all per-server." />
+    <SettingsIntro icon="paint" label="Identity desk" title="Server-specific identity" text="Each server can have its own Niko persona. Changes apply only to this server." />
+    <form onSubmit={submit} className="settings-stack">
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Display name" title="How Niko appears" detail="Set the name members see for Niko in this server. Leave blank to use the default." icon="settings" />
+        <div className="form-grid">
+          <Field label="Display name" hint="32 characters or fewer"><input value={values.display_name} maxLength={32} onChange={(e) => setValues({ ...values, display_name: e.target.value })} placeholder="Niko" /></Field>
+          <Field label="Bio" hint="190 characters or fewer"><input value={values.bio} maxLength={190} onChange={(e) => setValues({ ...values, bio: e.target.value })} placeholder="A warm Discord companion" /></Field>
+        </div>
+      </section>
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Server avatar & banner" title="Visual identity" detail="Provide HTTPS image URLs. Images are uploaded to Discord when saved." icon="paint" />
+        <div className="form-grid">
+          <Field label="Avatar URL" hint="Square image, 512×512 recommended"><input type="url" value={values.avatar_url} onChange={(e) => setValues({ ...values, avatar_url: e.target.value })} placeholder="https://cdn.example.com/avatar.png" /></Field>
+          <Field label="Banner URL" hint="Wide image, 960×540 recommended"><input type="url" value={values.banner_url} onChange={(e) => setValues({ ...values, banner_url: e.target.value })} placeholder="https://cdn.example.com/banner.png" /></Field>
+        </div>
+        <p className="form-hint">Images are fetched, validated, and uploaded to Discord. Maximum 8 MB each. Supported formats: PNG, JPG, GIF.</p>
+      </section>
+      <SaveFooter state={state} />
+    </form>
+  </>;
 }

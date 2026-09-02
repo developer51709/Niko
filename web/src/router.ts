@@ -1,5 +1,5 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "privacy" | "terms";
-export type DashSection = "overview" | "leveling" | "moderation" | "server" | "ai";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "privacy" | "terms" | "donate";
+export type DashSection = "overview" | "leveling" | "moderation" | "server" | "ai" | "customization";
 export type DashboardView = "overview" | "servers" | "guild";
 
 function normalizedPath(pathname: string) {
@@ -14,6 +14,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/privacy") return "privacy";
   if (path === "/terms") return "terms";
+  if (path === "/donate" || path.startsWith("/donate")) return "donate";
   return "home";
 }
 
@@ -27,7 +28,7 @@ export function dashboardServersPath() {
 
 export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
-  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "ai"];
+  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "ai", "customization"];
   if (parts[1] === "servers") {
     return { view: "servers", guildId: null, section: "overview" };
   }
