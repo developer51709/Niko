@@ -100,6 +100,11 @@
 .personality.active { color: var(--accent-dark); background: var(--filter-active); border-color: var(--filter-border); box-shadow: inset 0 0 0 1px var(--filter-border); }
 .personality-mark { color: var(--surface); background: var(--accent); border-radius: 7px; }
 .form-grid { gap: 19px 16px; }
+.server-settings-stack { max-width: 900px; }
+.server-logging-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.server-logging-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, .65fr); align-items: end; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--line-soft); }
+.compact-setting-row { min-height: 42px; padding: 0 0 1px; border-bottom: 0; }
+.compact-setting-row:hover { padding-right: 3px; padding-left: 3px; }
 .form-field input, .form-field select, .form-field textarea { background: var(--surface-raised); border-color: var(--line); border-radius: 8px; }
 .form-field input:hover, .form-field select:hover, .form-field textarea:hover { border-color: var(--line); }
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 101, 69, .12); }
@@ -129,6 +134,8 @@
   .guild-welcome .welcome-time { align-self: flex-end; margin-top: -6px; }
   .settings-intro { align-items: flex-start; flex-wrap: wrap; padding: 14px; }
   .settings-intro-state { width: 100%; margin-left: 56px; }
+  .server-logging-row { grid-template-columns: 1fr; gap: 9px; align-items: stretch; }
+  .compact-setting-row { min-height: 52px; padding: 0; }
   .dash-panel { padding: 18px; }
   .setting-row:hover { padding-right: 3px; padding-left: 3px; }
   .skeleton-grid { grid-template-columns: 1fr; }

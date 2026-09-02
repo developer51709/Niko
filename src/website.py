@@ -13,11 +13,12 @@ Routes:
   GET  /api/me                  → current user (auth required)
   GET  /api/guilds              → mutual guilds (auth required)
   GET  /api/guild/<id>/overview → guild overview stats (auth required)
-  GET  /api/guild/<id>/economy  → economy leaderboard (auth required)
   GET  /api/guild/<id>/levels   → level leaderboard (auth required)
   GET  /api/guild/<id>/config   → full guild config (auth required)
   POST /api/guild/<id>/config/automod → save automod settings (auth required)
   POST /api/guild/<id>/config/ai      → save AI settings (auth required)
+  POST /api/guild/<id>/config/leveling → save leveling settings (auth required)
+  POST /api/guild/<id>/config/server → save server settings (auth required)
 """
 
 import os
@@ -725,12 +726,6 @@ def api_guilds():
 @require_auth
 @require_guild_access
 def api_guild_overview(guild_id):
-    # ── Economy snapshot ──────────────────────────────────────
-    economy_rows = get_runtime_economy_rows(guild_id) or []
-    total_coins = sum(row["net_worth"] for row in economy_rows)
-    top_eco = economy_rows[:]
-    top_eco.sort(key=lambda x: x["net_worth"], reverse=True)
-
     # ── Warnings ──────────────────────────────────────────────
     warns      = load_json("data/warns.json", {})
     guild_warns = warns.get(guild_id, {})
@@ -745,11 +740,6 @@ def api_guild_overview(guild_id):
     top_levels = _get_levels(guild_id)[:5]
 
     return jsonify({
-        "economy": {
-            "total_coins": total_coins,
-            "user_count":  len(economy_rows),
-            "top":         top_eco[:5],
-        },
         "moderation": {
             "warn_count":     warn_count,
             "automod_active": automod_on,
@@ -759,14 +749,6 @@ def api_guild_overview(guild_id):
         },
     })
 
-
-@app.route("/api/guild/<guild_id>/economy")
-@require_auth
-@require_guild_access
-def api_guild_economy(guild_id):
-    rows = get_runtime_economy_rows(guild_id) or []
-    rows.sort(key=lambda x: x["net_worth"], reverse=True)
-    return jsonify(rows[:25])
 
 
 def _get_levels(guild_id: str) -> list:
@@ -809,6 +791,75 @@ def api_guild_levels(guild_id):
     return jsonify(_get_levels(guild_id))
 
 
+def _serialize_onboarding_config(cfg) -> dict:
+    """Return only JSON-safe onboarding values for the dashboard."""
+    from dataclasses import asdict
+    return asdict(cfg)
+
+
+def _serialize_ticket_config(cfg) -> dict:
+    """Return the editable ticket settings without internal open-ticket state."""
+    return {
+        "panel_title": cfg.panel_title,
+        "panel_description": cfg.panel_description,
+        "panel_color": cfg.panel_color,
+        "panel_image": cfg.panel_image,
+        "panel_categories": list(cfg.panel_categories or []),
+        "panel_channel_id": str(cfg.panel_channel_id) if cfg.panel_channel_id else None,
+        "panel_message_id": str(cfg.panel_message_id) if cfg.panel_message_id else None,
+        "support_roles": [str(role_id) for role_id in (cfg.support_roles or [])],
+    }
+
+
+def _get_runtime_server_config(guild_id: str) -> dict:
+    """Read all server-management settings from their existing owners."""
+    from utils.prefix_manager import get_prefixes
+    from utils.onboarding.config import load_config
+    from cogs.logging.formatters import _load_log_config, _guild_config
+    from utils.tickets.utils import get_ticket_config
+
+    onboarding = run_on_bot_loop(load_config(int(guild_id)))
+    logging_data = run_on_bot_loop(_load_log_config())
+    return {
+        "prefixes": list(get_prefixes(int(guild_id))),
+        "onboarding": _serialize_onboarding_config(onboarding),
+        "logging": _guild_config(logging_data, int(guild_id)),
+        "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
+    }
+
+
+def _guild_resource_ids(guild_id: int) -> tuple[set[str] | None, set[str] | None]:
+    """Return valid channel and role IDs from the live Discord guild."""
+    if _discord_bot is None:
+        return None, None
+    guild = _discord_bot.get_guild(guild_id)
+    if guild is None:
+        return set(), set()
+    return (
+        {str(channel.id) for channel in guild.text_channels},
+        {str(role.id) for role in guild.roles if not role.is_default()},
+    )
+
+
+async def _refresh_ticket_panel(guild_id: int) -> None:
+    """Refresh a configured ticket panel after dashboard edits."""
+    from utils.tickets.utils import get_ticket_config
+    from cogs.tickets.views import TicketPanelView
+
+    guild = _discord_bot.get_guild(guild_id) if _discord_bot is not None else None
+    cfg = get_ticket_config(guild_id)
+    if guild is None or not cfg.panel_channel_id or not cfg.panel_message_id:
+        return
+    channel = guild.get_channel(cfg.panel_channel_id)
+    if channel is None:
+        return
+    try:
+        message = await channel.fetch_message(cfg.panel_message_id)
+        await message.edit(view=TicketPanelView(guild_id, cfg))
+    except Exception:
+        pass
+
+
 @app.route("/api/guild/<guild_id>/config")
 @require_auth
 @require_guild_access
@@ -817,10 +868,16 @@ def api_guild_config(guild_id):
     aicfg   = load_json(AICFG,  {}).get(str(guild_id), {})
     level_cfg = get_runtime_level_config(guild_id)
 
+    try:
+        server_cfg = _get_runtime_server_config(guild_id)
+    except Exception as error:
+        return jsonify({"error": f"Server settings are unavailable: {error}"}), 503
+
     return jsonify({
         "moderation": modcfg,
         "ai":         aicfg,
         "leveling":   level_cfg,
+        "server":     server_cfg,
     })
 
 
@@ -980,6 +1037,187 @@ def api_save_automod(guild_id):
         finally:
             conn.close()
     return jsonify({"ok": True, "config": guild_config})
+
+
+@app.route("/api/guild/<guild_id>/config/server", methods=["POST"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_save_server(guild_id):
+    """Persist prefixes, onboarding, logging, and ticket settings."""
+    body = request.get_json(silent=True) or {}
+    from utils.prefix_manager import add_prefix, reset_prefixes
+    from utils.onboarding.config import load_config, save_config
+    from cogs.logging.formatters import _load_log_config, _guild_config, _save_guild_log_config, CATEGORIES
+    from utils.tickets.utils import get_ticket_config, update_ticket_config
+
+    try:
+        numeric_guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid guild ID."}), 400
+
+    prefixes = body.get("prefixes")
+    if prefixes is not None:
+        if not isinstance(prefixes, list):
+            return jsonify({"error": "Prefixes must be a list."}), 400
+        cleaned = []
+        for prefix in prefixes:
+            if not isinstance(prefix, str) or not prefix.strip() or len(prefix) > 10:
+                return jsonify({"error": "Each prefix must be 1 to 10 characters."}), 400
+            value = prefix.strip()
+            if value not in cleaned:
+                cleaned.append(value)
+        if not cleaned:
+            return jsonify({"error": "At least one prefix is required."}), 400
+        reset_prefixes(numeric_guild_id)
+        for prefix in cleaned:
+            if prefix != ".":
+                add_prefix(numeric_guild_id, prefix)
+
+    channel_ids, role_ids = _guild_resource_ids(numeric_guild_id)
+    if channel_ids == set() and role_ids == set():
+        return jsonify({"error": "The selected server is not available to the bot."}), 503
+
+    onboarding_data = body.get("onboarding")
+    if onboarding_data is not None:
+        if not isinstance(onboarding_data, dict):
+            return jsonify({"error": "Onboarding settings must be an object."}), 400
+        onboarding = run_on_bot_loop(load_config(numeric_guild_id))
+        allowed = {
+            "welcome_channel", "welcome_title", "welcome_description",
+            "welcome_color", "welcome_image", "rules_channel", "rules_text",
+            "rules_role_id", "autorole_ids", "captcha_enabled",
+            "captcha_channel_id", "captcha_add_role_ids", "captcha_remove_role_ids",
+            "captcha_kick_on_fail",
+        }
+        for key in set(onboarding_data) - allowed:
+            return jsonify({"error": f"Unsupported onboarding field: {key}"}), 400
+        id_fields = {
+            "welcome_channel", "rules_channel", "rules_role_id",
+            "captcha_channel_id",
+        }
+        for key, value in onboarding_data.items():
+            if key in id_fields:
+                if value in (None, ""):
+                    setattr(onboarding, key, None)
+                elif str(value).isdigit():
+                    resource_ids = role_ids if key == "rules_role_id" else channel_ids
+                    if resource_ids is not None and str(value) not in resource_ids:
+                        return jsonify({"error": f"{key} does not belong to this server."}), 400
+                    setattr(onboarding, key, int(value))
+                else:
+                    return jsonify({"error": f"{key} must be a valid Discord ID."}), 400
+            elif key == "welcome_color":
+                try:
+                    color = int(str(value).replace("#", ""), 16) if value not in (None, "") else None
+                except ValueError:
+                    return jsonify({"error": "Welcome color must be a hexadecimal value."}), 400
+                if color is not None and not 0 <= color <= 0xFFFFFF:
+                    return jsonify({"error": "Welcome color must be a valid hexadecimal color."}), 400
+                onboarding.welcome_color = color
+            elif key in {"autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"}:
+                if not isinstance(value, list) or any(not str(item).isdigit() for item in value):
+                    return jsonify({"error": f"{key} must contain valid Discord IDs."}), 400
+                if role_ids is not None and any(str(item) not in role_ids for item in value):
+                    return jsonify({"error": f"{key} contains a role from another server."}), 400
+                setattr(onboarding, key, [int(item) for item in value])
+            elif key in {"captcha_enabled", "captcha_kick_on_fail"}:
+                setattr(onboarding, key, bool(value))
+            else:
+                if value is not None and len(str(value)) > (2000 if key in {"welcome_description", "rules_text"} else 200):
+                    return jsonify({"error": f"{key} is too long."}), 400
+                setattr(onboarding, key, value or None)
+        run_on_bot_loop(save_config(numeric_guild_id, onboarding))
+
+    logging_data = body.get("logging")
+    if logging_data is not None:
+        if not isinstance(logging_data, dict):
+            return jsonify({"error": "Logging settings must be an object."}), 400
+        current = run_on_bot_loop(_load_log_config())
+        logging_cfg = _guild_config(current, numeric_guild_id)
+        for category, value in logging_data.items():
+            if category == "disabled":
+                if not isinstance(value, list) or any(item not in CATEGORIES for item in value):
+                    return jsonify({"error": "Logging disabled categories are invalid."}), 400
+                logging_cfg[category] = list(dict.fromkeys(value))
+            elif category in CATEGORIES:
+                if value in (None, ""):
+                    logging_cfg[category] = None
+                elif str(value).isdigit():
+                    if channel_ids is not None and str(value) not in channel_ids:
+                        return jsonify({"error": f"{category} does not belong to this server."}), 400
+                    logging_cfg[category] = int(value)
+                else:
+                    return jsonify({"error": f"{category} must be a valid channel ID."}), 400
+            else:
+                return jsonify({"error": f"Unsupported logging category: {category}"}), 400
+        run_on_bot_loop(_save_guild_log_config(numeric_guild_id, logging_cfg))
+
+    tickets_data = body.get("tickets")
+    if tickets_data is not None:
+        if not isinstance(tickets_data, dict):
+            return jsonify({"error": "Ticket settings must be an object."}), 400
+        tickets = get_ticket_config(numeric_guild_id)
+        allowed = {
+            "panel_title", "panel_description", "panel_color", "panel_image",
+            "panel_categories", "panel_channel_id", "support_roles",
+        }
+        unknown = set(tickets_data) - allowed
+        if unknown:
+            return jsonify({"error": f"Unsupported ticket fields: {', '.join(sorted(unknown))}"}), 400
+        if "panel_title" in tickets_data:
+            value = tickets_data["panel_title"]
+            if value is not None and len(str(value)) > 200:
+                return jsonify({"error": "Ticket panel title is too long."}), 400
+            tickets.panel_title = str(value).strip() if value else None
+        if "panel_description" in tickets_data:
+            value = tickets_data["panel_description"]
+            if value is not None and len(str(value)) > 2000:
+                return jsonify({"error": "Ticket panel description is too long."}), 400
+            tickets.panel_description = str(value).strip() if value else None
+        if "panel_color" in tickets_data:
+            value = tickets_data["panel_color"]
+            try:
+                tickets.panel_color = int(str(value).replace("#", ""), 16) if value not in (None, "") else None
+            except ValueError:
+                return jsonify({"error": "Ticket panel color must be hexadecimal."}), 400
+        if "panel_image" in tickets_data:
+            value = tickets_data["panel_image"]
+            tickets.panel_image = str(value).strip() if value else None
+        if "panel_categories" in tickets_data:
+            categories = tickets_data["panel_categories"]
+            if not isinstance(categories, list) or any(not isinstance(item, str) or not item.strip() for item in categories):
+                return jsonify({"error": "Ticket categories must be a list of names."}), 400
+            tickets.panel_categories = list(dict.fromkeys(item.strip()[:80] for item in categories))[:25]
+        if "panel_channel_id" in tickets_data:
+            value = tickets_data["panel_channel_id"]
+            if value in (None, ""):
+                tickets.panel_channel_id = None
+            elif str(value).isdigit():
+                if channel_ids is not None and str(value) not in channel_ids:
+                    return jsonify({"error": "Ticket panel channel does not belong to this server."}), 400
+                tickets.panel_channel_id = int(value)
+            else:
+                return jsonify({"error": "Ticket panel channel must be a valid channel ID."}), 400
+        if "support_roles" in tickets_data:
+            roles = tickets_data["support_roles"]
+            if not isinstance(roles, list) or any(not str(item).isdigit() for item in roles):
+                return jsonify({"error": "Support roles must contain valid Discord IDs."}), 400
+            if role_ids is not None and any(str(item) not in role_ids for item in roles):
+                return jsonify({"error": "Support roles contains a role from another server."}), 400
+            tickets.support_roles = list(dict.fromkeys(int(item) for item in roles))
+        update_ticket_config(numeric_guild_id, tickets)
+        if _discord_bot is not None:
+            try:
+                run_on_bot_loop(_refresh_ticket_panel(numeric_guild_id))
+            except Exception:
+                pass
+
+    try:
+        config = _get_runtime_server_config(guild_id)
+    except Exception as error:
+        return jsonify({"error": f"Settings saved, but could not reload them: {error}"}), 503
+    return jsonify({"ok": True, "config": config})
 
 
 @app.route("/api/guild/<guild_id>/config/ai", methods=["POST"])

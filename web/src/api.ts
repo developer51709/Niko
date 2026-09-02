@@ -2,7 +2,6 @@ import type {
   AuthStatus,
   BotStats,
   Command,
-  EconomyRow,
   Guild,
   GuildConfig,
   GuildResources,
@@ -41,14 +40,13 @@ export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
 export const getUserOverview = () => api<UserOverview>("/api/me/overview");
 export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/overview`);
-export const getEconomy = (id: string) => api<EconomyRow[]>(`/api/guild/${id}/economy`);
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
 export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
 
 export function saveConfig(
   id: string,
-  section: "automod" | "ai" | "leveling",
+  section: "automod" | "ai" | "leveling" | "server",
   body: Record<string, unknown>,
   csrfToken?: string,
 ) {

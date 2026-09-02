@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { getAuth, getConfig, getEconomy, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview } from "../api";
+import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, ModerationView } from "../components/dashboard/SettingsViews";
-import { EconomyView, LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
+import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
+import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { dashboardPath, dashboardRoute, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../router";
-import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, EconomyRow, LevelRow, UserOverview } from "../types";
+import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
@@ -21,7 +22,6 @@ function AuthCard({ auth }: { auth: AuthStatus }) {
 
 function DashboardSection({ section, guild, stats, csrfToken }: { section: DashSection; guild: Guild; stats: BotStats | null; csrfToken?: string }) {
   const [overview, setOverview] = useState<GuildOverview | null>(null);
-  const [economy, setEconomy] = useState<EconomyRow[]>([]);
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [config, setConfig] = useState<GuildConfig | null>(null);
   const [resources, setResources] = useState<GuildResources | null>(null);
@@ -30,11 +30,9 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
 
   useEffect(() => {
     setLoading(true); setError("");
-    const request = section === "overview"
+      const request = section === "overview"
       ? getOverview(guild.id).then(setOverview)
-      : section === "economy"
-        ? getEconomy(guild.id).then(setEconomy)
-        : section === "leveling"
+      : section === "leveling"
           ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
           : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
@@ -47,9 +45,9 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
   </div>;
   if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
   if (section === "overview" && overview) return <OverviewView overview={overview} />;
-  if (section === "economy") return <EconomyView rows={economy} />;
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
+  if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 

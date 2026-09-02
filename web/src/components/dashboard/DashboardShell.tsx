@@ -9,9 +9,9 @@ import { UserAvatar } from "./UserAvatar";
 
 const sections: [DashSection, string, string, string][] = [
   ["overview", "Overview", "grid", "At a glance"],
-  ["economy", "Economy", "chart", "Member momentum"],
   ["leveling", "Leveling", "spark", "Reward participation"],
   ["moderation", "Moderation", "shield", "Keep things steady"],
+  ["server", "Server", "settings", "Manage server features"],
   ["ai", "AI controls", "settings", "Shape Niko’s voice"],
 ];
 

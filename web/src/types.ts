@@ -53,21 +53,6 @@ export type UserOverview = {
   economy_profiles: number;
 };
 
-export type EconomyRow = {
-  user_id: string;
-  display_name?: string | null;
-  username?: string | null;
-  avatar_url?: string | null;
-  balance?: number;
-  bank?: number;
-  net_worth: number;
-  level: number;
-  job: string;
-  daily_streak: number;
-  achievements?: number;
-  total_earned?: number;
-};
-
 export type LevelRow = {
   user_id: string;
   display_name?: string | null;
@@ -78,13 +63,52 @@ export type LevelRow = {
 };
 
 export type GuildOverview = {
-  economy: { total_coins: number; user_count: number; top: EconomyRow[] };
   moderation: { warn_count: number; automod_active: boolean };
   leveling: { top: LevelRow[] };
 };
 
+export type OnboardingConfig = {
+  welcome_channel?: number | null;
+  welcome_title?: string | null;
+  welcome_description?: string | null;
+  welcome_color?: number | null;
+  welcome_image?: string | null;
+  rules_channel?: number | null;
+  rules_text?: string | null;
+  rules_role_id?: number | null;
+  autorole_ids?: number[];
+  captcha_enabled?: boolean;
+  captcha_channel_id?: number | null;
+  captcha_add_role_ids?: number[];
+  captcha_remove_role_ids?: number[];
+  captcha_kick_on_fail?: boolean;
+};
+
+export type LoggingConfig = Record<string, string | number | null> & {
+  disabled?: string[];
+};
+
+export type TicketConfig = {
+  panel_title?: string | null;
+  panel_description?: string | null;
+  panel_color?: number | null;
+  panel_image?: string | null;
+  panel_categories?: string[];
+  panel_channel_id?: string | null;
+  panel_message_id?: string | null;
+  support_roles?: string[];
+};
+
+export type ServerConfig = {
+  prefixes: string[];
+  onboarding: OnboardingConfig;
+  logging: LoggingConfig;
+  tickets: TicketConfig;
+};
+
 export type GuildConfig = {
   moderation: Record<string, any>;
+  server: ServerConfig;
   ai: {
     personality?: string;
     enabled?: string | boolean;

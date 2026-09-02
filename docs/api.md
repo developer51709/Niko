@@ -46,12 +46,14 @@ performed server-side; the frontend must not be treated as the security boundary
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/guilds` | Mutual manageable guilds |
-| GET | `/api/guild/<id>/overview` | Economy, moderation, and leveling summary |
-| GET | `/api/guild/<id>/economy` | Economy leaderboard |
+| GET | `/api/guild/<id>/overview` | Moderation and leveling summary |
 | GET | `/api/guild/<id>/levels` | XP leaderboard |
-| GET | `/api/guild/<id>/config` | Moderation, AI, and leveling config |
+| GET | `/api/guild/<id>/config` | Moderation, AI, leveling, and server config |
+| GET | `/api/guild/<id>/resources` | Available text channels and roles for dashboard selectors |
 | POST | `/api/guild/<id>/config/automod` | Update allowed AutoMod flags |
 | POST | `/api/guild/<id>/config/ai` | Update AI enabled state and personality |
+| POST | `/api/guild/<id>/config/leveling` | Update leveling controls |
+| POST | `/api/guild/<id>/config/server` | Update prefixes, onboarding, logging, and ticket settings |
 
 POST requests use JSON and return `{ "ok": true }` on success. The API only
 accepts the documented configuration keys and converts booleans/numbers before
