@@ -251,6 +251,31 @@ class MongoPool:
         # Normalize parameter placeholders to a single format
         normalized_clause = re.sub(r'\$\d+', '?', where_clause)
         
+        # Handle compound equality filters before the single-condition case.
+        # Without this ordering, "guild_id = ? AND user_id = ?" matched only
+        # guild_id, causing level lookups to return another member's record.
+        if ' AND ' in normalized_clause.upper():
+            conditions = re.split(r'\s+AND\s+', normalized_clause, flags=re.IGNORECASE)
+            filter_dict = {}
+            arg_index = 0
+            for cond in conditions:
+                cond = cond.strip()
+                match = re.match(r'(\w+)\s*=\s*\?', cond)
+                if match:
+                    if arg_index >= len(args):
+                        raise ValueError(f"Missing argument for WHERE clause: {where_clause}")
+                    filter_dict[match.group(1)] = args[arg_index]
+                    arg_index += 1
+                    continue
+
+                match = re.match(r'(\w+)\s*=\s*(\d+)', cond)
+                if match:
+                    filter_dict[match.group(1)] = int(match.group(2))
+                    continue
+
+                raise ValueError(f"Cannot parse WHERE clause: {where_clause}")
+            return filter_dict
+
         # Handle simple equality: user_id = ? or user_id = $1
         match = re.match(r'(\w+)\s*=\s*\?', normalized_clause.strip())
         if match:
@@ -281,24 +306,34 @@ class MongoPool:
         if match:
             return {match.group(1): None}
         
-        # Handle complex conditions with AND
-        if ' AND ' in normalized_clause.upper():
-            conditions = normalized_clause.split(' AND ')
-            filter_dict = {}
-            arg_index = 0
-            for cond in conditions:
-                cond = cond.strip()
-                match = re.match(r'(\w+)\s*=\s*\?', cond)
-                if match:
-                    filter_dict[match.group(1)] = args[arg_index]
-                    arg_index += 1
-                else:
-                    match = re.match(r'(\w+)\s*=\s*(\d+)', cond)
-                    if match:
-                        filter_dict[match.group(1)] = int(match.group(2))
-            return filter_dict
-        
         raise ValueError(f"Cannot parse WHERE clause: {where_clause}")
+
+    @staticmethod
+    def _document_id(table: str, doc: dict):
+        """Return the MongoDB key corresponding to the SQL table's primary key."""
+        if table == 'participants':
+            return f"{doc.get('message_id')}_{doc.get('user_id')}"
+        if table == 'giveaways':
+            return doc.get('message_id')
+        if table == 'levels':
+            # SQLite levels are keyed by (guild_id, user_id), not user_id alone.
+            return f"{doc.get('guild_id')}_{doc.get('user_id')}"
+        if 'user_id' in doc:
+            return doc['user_id']
+        if 'id' in doc:
+            return doc['id']
+        return None
+
+    async def _remove_legacy_level_document(self, collection, doc: dict):
+        """Remove a pre-composite-key level document after it is replaced."""
+        if 'guild_id' not in doc or 'user_id' not in doc:
+            return
+        composite_id = self._document_id('levels', doc)
+        await collection.delete_many({
+            'guild_id': doc['guild_id'],
+            'user_id': doc['user_id'],
+            '_id': {'$ne': composite_id},
+        })
 
     def _build_mongo_update(self, set_clause: str, args: tuple) -> dict:
         """Build MongoDB update document from SQL SET clause."""
@@ -353,7 +388,7 @@ class MongoPool:
         
         if doc:
             # Convert _id to user_id if present (for user tables)
-            if '_id' in doc and table != 'economy_lottery' and table != 'participants' and table != 'giveaways':
+            if '_id' in doc and table not in {'economy_lottery', 'participants', 'giveaways', 'levels'}:
                 doc['user_id'] = doc['_id']
             # Convert _id to id for lottery table
             elif '_id' in doc and table == 'economy_lottery':
@@ -411,7 +446,7 @@ class MongoPool:
         rows = []
         for doc in docs:
             # Convert _id to user_id if present (for user tables)
-            if '_id' in doc and table != 'economy_lottery' and table != 'participants' and table != 'giveaways':
+            if '_id' in doc and table not in {'economy_lottery', 'participants', 'giveaways', 'levels'}:
                 doc['user_id'] = doc['_id']
             # Convert _id to id for lottery table
             elif '_id' in doc and table == 'economy_lottery':
@@ -470,20 +505,10 @@ class MongoPool:
         
         collection = self._db[table]
         
-        # Handle different primary key strategies based on table
-        if table == 'participants':
-            # Composite key: message_id + user_id
-            doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
-        elif table == 'giveaways':
-            # Use message_id as _id
-            doc['_id'] = doc.get('message_id')
-        elif 'user_id' in doc:
-            # Use user_id as _id for user tables
-            doc['_id'] = doc['user_id']
-        elif 'id' in doc:
-            # Use id as _id for tables like lottery
-            doc['_id'] = doc['id']
+        doc['_id'] = self._document_id(table, doc)
         
+        if table == 'levels':
+            await self._remove_legacy_level_document(collection, doc)
         await collection.replace_one({'_id': doc.get('_id')}, doc, upsert=True)
 
     async def _handle_insert_select(self, query: str, args: tuple):
@@ -537,15 +562,7 @@ class MongoPool:
             for target_col, select_col in zip(target_columns, select_cols):
                 doc[target_col] = row.get(select_col)
 
-            # Apply your existing primary-key rules
-            if table == 'participants':
-                doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
-            elif table == 'giveaways':
-                doc['_id'] = doc.get('message_id')
-            elif 'user_id' in doc:
-                doc['_id'] = doc['user_id']
-            elif 'id' in doc:
-                doc['_id'] = doc['id']
+            doc['_id'] = self._document_id(table, doc)
 
             # OR IGNORE behavior: skip if exists
             if await collection.find_one({'_id': doc.get('_id')}):
@@ -571,15 +588,7 @@ class MongoPool:
 
         collection = self._db[table]
 
-        # Apply your existing primary-key rules
-        if table == 'participants':
-            doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
-        elif table == 'giveaways':
-            doc['_id'] = doc.get('message_id')
-        elif 'user_id' in doc:
-            doc['_id'] = doc['user_id']
-        elif 'id' in doc:
-            doc['_id'] = doc['id']
+        doc['_id'] = self._document_id(table, doc)
 
         # OR IGNORE behavior: skip if exists
         if await collection.find_one({'_id': doc.get('_id')}):
@@ -599,19 +608,7 @@ class MongoPool:
         
         collection = self._db[table]
         
-        # Handle different primary key strategies based on table
-        if table == 'participants':
-            # Composite key: message_id + user_id
-            doc['_id'] = f"{doc.get('message_id')}_{doc.get('user_id')}"
-        elif table == 'giveaways':
-            # Use message_id as _id
-            doc['_id'] = doc.get('message_id')
-        elif 'user_id' in doc:
-            # Use user_id as _id for user tables
-            doc['_id'] = doc['user_id']
-        elif 'id' in doc:
-            # Use id as _id for tables like lottery
-            doc['_id'] = doc['id']
+        doc['_id'] = self._document_id(table, doc)
         
         await collection.insert_one(doc)
 
