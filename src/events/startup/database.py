@@ -70,22 +70,38 @@ async def _create_tables(bot):
         SELECT channel_id, last_video FROM youtube WHERE last_video IS NOT NULL
     """)
 
-    try:
-        cols = await bot.cxn.fetch("PRAGMA table_info(levels)")
-        col_names = {row["name"] for row in cols}
-        if cols and "guild_id" not in col_names:
-            await bot.cxn.execute("ALTER TABLE levels RENAME TO levels_old")
-            await bot.cxn.execute("""
-                CREATE TABLE levels (
-                    guild_id INTEGER,
-                    user_id  INTEGER,
-                    xp       INTEGER DEFAULT 0,
-                    level    INTEGER DEFAULT 0,
-                    PRIMARY KEY (guild_id, user_id)
-                )
-            """)
-            await bot.cxn.execute("DROP TABLE levels_old")
-        else:
+    # Check if levels table needs migration (SQLite) or create it (MongoDB)
+    if bot.cxn.db_type == "sqlite":
+        try:
+            cols = await bot.cxn.fetch("PRAGMA table_info(levels)")
+            col_names = {row["name"] for row in cols}
+            if cols and "guild_id" not in col_names:
+                await bot.cxn.execute("ALTER TABLE levels RENAME TO levels_old")
+                await bot.cxn.execute("""
+                    CREATE TABLE levels (
+                        guild_id INTEGER,
+                        user_id  INTEGER,
+                        xp       INTEGER DEFAULT 0,
+                        level    INTEGER DEFAULT 0,
+                        PRIMARY KEY (guild_id, user_id)
+                    )
+                """)
+                await bot.cxn.execute("DROP TABLE levels_old")
+            else:
+                await bot.cxn.execute("""
+                    CREATE TABLE IF NOT EXISTS levels (
+                        guild_id INTEGER,
+                        user_id  INTEGER,
+                        xp       INTEGER DEFAULT 0,
+                        level    INTEGER DEFAULT 0,
+                        PRIMARY KEY (guild_id, user_id)
+                    )
+                """)
+        except Exception as e:
+            logging.warning("DB", f"levels table migration warning: {e}")
+    else:
+        # MongoDB: just ensure the collection exists
+        try:
             await bot.cxn.execute("""
                 CREATE TABLE IF NOT EXISTS levels (
                     guild_id INTEGER,
@@ -95,8 +111,8 @@ async def _create_tables(bot):
                     PRIMARY KEY (guild_id, user_id)
                 )
             """)
-    except Exception as e:
-        logging.warning("DB", f"levels table migration warning: {e}")
+        except Exception as e:
+            logging.warning("DB", f"levels table creation warning: {e}")
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS level_config (

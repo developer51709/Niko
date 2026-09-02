@@ -264,11 +264,17 @@ async def _get_user_from_db(bot, user_id: int) -> dict | None:
         )
         if row:
             data = dict(row)
-            # Deserialize JSON fields
-            data["inventory"] = json.loads(data.get("inventory", "{}"))
-            data["effects"] = json.loads(data.get("effects", "{}"))
-            data["transactions"] = json.loads(data.get("transactions", "[]"))
-            data["achievements"] = json.loads(data.get("achievements", "[]"))
+            # Deserialize JSON fields (handle both string and already-deserialized forms)
+            for key in ("inventory", "effects", "transactions", "achievements"):
+                val = data.get(key)
+                if isinstance(val, str):
+                    try:
+                        data[key] = json.loads(val)
+                    except Exception:
+                        data[key] = {} if key in ("inventory", "effects") else []
+                elif val is None:
+                    data[key] = {} if key in ("inventory", "effects") else []
+                # else: already a dict/list (MongoDB mode), keep as-is
             return _migrate_user(data)
     except Exception as e:
         log.error("Economy", f"Error fetching user {user_id} from database: {e}")
@@ -345,6 +351,7 @@ async def _get_lottery_from_db(bot) -> dict:
             "SELECT * FROM economy_lottery WHERE id = 1"
         )
         if row:
+            # In MongoDB mode, row values are already their native types
             return {
                 "pot": row.get("pot", LOTTERY_BASE_POT),
                 "next_draw": row.get("next_draw", int(time.time()) + LOTTERY_DRAW_INTERVAL),

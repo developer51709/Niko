@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 DATA_DIR = "data"
 WARN_FILE = os.path.join(DATA_DIR, "warns.json")
 MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
+CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 
 # Moderation/automod config is stored in the main database (moderation_config),
 # migrated at startup from the legacy modconfig.json by events.startup.database.
