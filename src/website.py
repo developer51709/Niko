@@ -578,14 +578,97 @@ def auth_status():
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+_INTERNAL_COMMAND_COGS = {"owner", "ownercog", "development"}
+
+# Older command registries predate the ``cog`` and ``module`` fields. Keep the
+# current private command names here so those records cannot leak while the
+# bot has not yet rewritten data/commands.json.
+_LEGACY_INTERNAL_COMMAND_NAMES = {
+    "ownerhelp", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
+    "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "servers",
+    "serverinvite", "announce", "dev01", "shardinfo", "shardstats", "shardhealth",
+    "blacklist", "blacklist info", "blacklist reason", "blacklist add", "blacklist remove",
+    "premium", "premium add", "premium remove", "premium list",
+    "devhelp", "devload", "devunload", "devreload", "devping", "devlatency",
+    "devuptime", "devmem", "devtasks", "devguild", "devchannels", "devroles",
+    "devmembers", "deveval", "devexec", "devsay", "devshutdown", "syncemojis",
+    "appemojis", "emojistatus",
+}
+
+
+def _is_internal_command(*values) -> bool:
+    """Identify commands owned by private owner/development cogs."""
+    for value in values:
+        if not value:
+            continue
+        parts = str(value).lower()
+        for separator in (".", "/", "\\", ":", "-"):
+            parts = parts.replace(separator, " ")
+        if any(part.strip() in _INTERNAL_COMMAND_COGS for part in parts.split()):
+            return True
+    return False
+
+
+def _live_internal_command_names() -> set[str]:
+    """Collect private command names for filtering older registry files."""
+    if _discord_bot is None:
+        return set()
+
+    names: set[str] = set()
+
+    def add_if_internal(command, qualified_name: str | None = None) -> None:
+        binding = getattr(command, "binding", None) or getattr(command, "cog", None)
+        callback = getattr(command, "callback", None)
+        cog_name = getattr(command, "cog_name", None)
+        if _is_internal_command(
+            cog_name,
+            type(binding).__name__ if binding is not None else None,
+            getattr(callback, "__module__", None),
+        ):
+            command_name = qualified_name or getattr(command, "qualified_name", None) or getattr(command, "name", None)
+            if command_name:
+                names.add(str(command_name))
+                names.add(str(getattr(command, "name", command_name)))
+
+    try:
+        for command in _discord_bot.walk_commands():
+            add_if_internal(command)
+    except Exception:
+        pass
+
+    def visit_application_command(command, parent_name: str | None = None) -> None:
+        command_name = getattr(command, "name", None)
+        if not command_name:
+            return
+        qualified_name = f"{parent_name} {command_name}" if parent_name else str(command_name)
+        add_if_internal(command, qualified_name)
+        for child in getattr(command, "commands", []) or []:
+            visit_application_command(child, qualified_name)
+
+    try:
+        tree = getattr(_discord_bot, "tree", None)
+        for command in tree.get_commands() if tree is not None else []:
+            visit_application_command(command)
+    except Exception:
+        pass
+
+    return names
+
+
 @app.route("/api/commands")
 def api_commands():
-    """Public endpoint — returns all bot commands from the JSON written by the bot on startup."""
+    """Public endpoint — returns public bot commands from the startup registry."""
     raw_commands = load_json("data/commands.json", [])
     valid_types = {"slash", "prefix", "hybrid", "context"}
+    internal_names = _live_internal_command_names()
     cmds = []
     for command in raw_commands if isinstance(raw_commands, list) else []:
         if not isinstance(command, dict) or not command.get("name"):
+            continue
+        if _is_internal_command(command.get("cog"), command.get("module")):
+            continue
+        command_name = str(command["name"])
+        if command_name in internal_names or command_name.lower() in _LEGACY_INTERNAL_COMMAND_NAMES:
             continue
         normalized = {
             "name": str(command["name"]),
@@ -766,7 +849,89 @@ def api_guild_overview(guild_id):
 
 
 def _get_levels(guild_id: str) -> list:
-    """Fetch level data from the same SQLite database the bot uses."""
+    """Fetch level data from the bot's live database, regardless of backend."""
+    if _discord_bot is not None and hasattr(_discord_bot, "cxn"):
+        async def read_from_bot():
+            pool = _discord_bot.cxn
+            numeric_guild_id = int(guild_id)
+
+            if getattr(pool, "db_type", None) == "mongodb" and hasattr(pool, "collection"):
+                # Older Mongo records may have received the guild ID as text.
+                # Read both representations, then sort after coercion so mixed
+                # BSON numeric/string values cannot hide real level data.
+                documents = await pool.collection("levels").find({
+                    "$or": [
+                        {"guild_id": numeric_guild_id},
+                        {"guild_id": str(numeric_guild_id)},
+                        {"_id": {"$regex": rf"^{numeric_guild_id}_"}},
+                    ]
+                }).to_list(length=None)
+                rows = []
+                for document in documents:
+                    row = dict(document)
+                    stored_guild_id = row.get("guild_id")
+                    document_id = row.get("_id")
+                    if isinstance(document_id, str) and "_" in document_id:
+                        composite_guild_id, composite_user_id = document_id.split("_", 1)
+                        if stored_guild_id is None:
+                            stored_guild_id = composite_guild_id
+                        if row.get("user_id") is None:
+                            row["user_id"] = composite_user_id
+                    if str(stored_guild_id) != str(numeric_guild_id):
+                        continue
+                    rows.append(row)
+
+                def as_int(value) -> int:
+                    try:
+                        return int(value or 0)
+                    except (TypeError, ValueError):
+                        try:
+                            return int(float(value))
+                        except (TypeError, ValueError):
+                            return 0
+
+                rows.sort(
+                    key=lambda row: (as_int(row.get("level")), as_int(row.get("xp"))),
+                    reverse=True,
+                )
+                rows = rows[:25]
+            else:
+                rows = await pool.fetch(
+                    "SELECT user_id, xp, level FROM levels "
+                    "WHERE guild_id = $1 ORDER BY level DESC, xp DESC LIMIT 25",
+                    numeric_guild_id,
+                )
+
+            def as_int(value) -> int:
+                try:
+                    return int(value or 0)
+                except (TypeError, ValueError):
+                    try:
+                        return int(float(value))
+                    except (TypeError, ValueError):
+                        return 0
+
+            normalized = [
+                {
+                    "user_id": str(row.get("user_id")),
+                    "xp": as_int(row.get("xp")),
+                    "level": as_int(row.get("level")),
+                }
+                for row in rows
+                if row.get("user_id") is not None
+            ]
+            guild = _discord_bot.get_guild(numeric_guild_id)
+            metadata = _member_metadata_from_guild(
+                guild,
+                {row["user_id"] for row in normalized},
+            )
+            return [{**row, **metadata.get(row["user_id"], {})} for row in normalized]
+
+        try:
+            return run_on_bot_loop(read_from_bot())
+        except Exception:
+            pass
+
     conn = sqlite_connect()
     if conn:
         try:
@@ -1116,7 +1281,12 @@ def api_save_server(guild_id):
                     setattr(onboarding, key, None)
                 elif str(value).isdigit():
                     resource_ids = role_ids if key == "rules_role_id" else channel_ids
-                    if resource_ids is not None and str(value) not in resource_ids:
+                    current_value = getattr(onboarding, key, None)
+                    if (
+                        resource_ids is not None
+                        and str(value) not in resource_ids
+                        and str(value) != str(current_value)
+                    ):
                         return jsonify({"error": f"{key} does not belong to this server."}), 400
                     setattr(onboarding, key, int(value))
                 else:
@@ -1132,7 +1302,11 @@ def api_save_server(guild_id):
             elif key in {"autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"}:
                 if not isinstance(value, list) or any(not str(item).isdigit() for item in value):
                     return jsonify({"error": f"{key} must contain valid Discord IDs."}), 400
-                if role_ids is not None and any(str(item) not in role_ids for item in value):
+                existing_role_ids = {str(item) for item in (getattr(onboarding, key, None) or [])}
+                if role_ids is not None and any(
+                    str(item) not in role_ids and str(item) not in existing_role_ids
+                    for item in value
+                ):
                     return jsonify({"error": f"{key} contains a role from another server."}), 400
                 setattr(onboarding, key, [int(item) for item in value])
             elif key in {"captcha_enabled", "captcha_kick_on_fail"}:
@@ -1158,7 +1332,12 @@ def api_save_server(guild_id):
                 if value in (None, ""):
                     logging_cfg[category] = None
                 elif str(value).isdigit():
-                    if channel_ids is not None and str(value) not in channel_ids:
+                    current_value = logging_cfg.get(category)
+                    if (
+                        channel_ids is not None
+                        and str(value) not in channel_ids
+                        and str(value) != str(current_value)
+                    ):
                         return jsonify({"error": f"{category} does not belong to this server."}), 400
                     logging_cfg[category] = int(value)
                 else:
@@ -1208,7 +1387,12 @@ def api_save_server(guild_id):
             if value in (None, ""):
                 tickets.panel_channel_id = None
             elif str(value).isdigit():
-                if channel_ids is not None and str(value) not in channel_ids:
+                current_value = tickets.panel_channel_id
+                if (
+                    channel_ids is not None
+                    and str(value) not in channel_ids
+                    and str(value) != str(current_value)
+                ):
                     return jsonify({"error": "Ticket panel channel does not belong to this server."}), 400
                 tickets.panel_channel_id = int(value)
             else:
@@ -1217,7 +1401,11 @@ def api_save_server(guild_id):
             roles = tickets_data["support_roles"]
             if not isinstance(roles, list) or any(not str(item).isdigit() for item in roles):
                 return jsonify({"error": "Support roles must contain valid Discord IDs."}), 400
-            if role_ids is not None and any(str(item) not in role_ids for item in roles):
+            existing_role_ids = {str(item) for item in (tickets.support_roles or [])}
+            if role_ids is not None and any(
+                str(item) not in role_ids and str(item) not in existing_role_ids
+                for item in roles
+            ):
                 return jsonify({"error": "Support roles contains a role from another server."}), 400
             tickets.support_roles = list(dict.fromkeys(int(item) for item in roles))
         update_ticket_config(numeric_guild_id, tickets)

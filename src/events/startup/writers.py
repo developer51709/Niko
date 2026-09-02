@@ -65,6 +65,19 @@ def write_commands(bot):
         from discord.ext import commands
         commands_data = []
         hybrid_names = set()
+        internal_cog_names = {"owner", "ownercog", "development"}
+
+        def is_internal_cog(*values):
+            """Keep owner/development-only commands out of public command data."""
+            for value in values:
+                if not value:
+                    continue
+                parts = str(value).lower()
+                for separator in (".", "/", "\\\\", ":", "-"):
+                    parts = parts.replace(separator, " ")
+                if any(part.strip() in internal_cog_names for part in parts.split()):
+                    return True
+            return False
 
         def command_description(cmd):
             description = (
@@ -129,11 +142,14 @@ def write_commands(bot):
 
         def add_command(cmd, command_type, name, cog_name=None, context_type=None, subcommands=None):
             parameters = command_parameters(cmd)
+            callback = getattr(cmd, "callback", None)
             commands_data.append({
                 "name": name,
                 "description": command_description(cmd),
                 "category": CATEGORY_MAP.get(cog_name or "Utility", "utility"),
                 "type": command_type,
+                "cog": text_value(cog_name),
+                "module": text_value(getattr(callback, "__module__", None)),
                 "aliases": command_aliases(cmd),
                 "parameters": parameters,
                 "permissions": command_permissions(cmd),
@@ -149,6 +165,8 @@ def write_commands(bot):
             cog = getattr(cmd, "binding", None)
             cog_name = getattr(cmd, "cog_name", None) or (type(cog).__name__ if cog else "Utility")
             name = getattr(cmd, "qualified_name", cmd.name)
+            if is_internal_cog(cog_name, getattr(getattr(cmd, "callback", None), "__module__", None)):
+                continue
             if isinstance(cmd, (commands.HybridCommand, commands.HybridGroup)):
                 hybrid_names.add(name)
                 add_command(cmd, "hybrid", name, cog_name)
@@ -157,12 +175,16 @@ def write_commands(bot):
 
         def process_app_command(cmd, parent_name=None):
             name = f"{parent_name} {cmd.name}" if parent_name else cmd.name
+            binding = getattr(cmd, "binding", None)
+            cog_name = type(binding).__name__ if binding else "Utility"
+            callback = getattr(cmd, "callback", None)
+            if is_internal_cog(cog_name, getattr(callback, "__module__", None)):
+                return
             if isinstance(cmd, app_commands.ContextMenu):
                 context_type = getattr(getattr(cmd, "type", None), "name", "message")
-                add_command(cmd, "context", name, type(getattr(cmd, "binding", None)).__name__ if getattr(cmd, "binding", None) else "Utility", context_type)
+                add_command(cmd, "context", name, cog_name, context_type)
             elif name not in hybrid_names:
-                binding = getattr(cmd, "binding", None)
-                add_command(cmd, "slash", name, type(binding).__name__ if binding else "Utility")
+                add_command(cmd, "slash", name, cog_name)
 
             if isinstance(cmd, app_commands.Group):
                 child_names = [getattr(sub, "name", "") for sub in cmd.commands if getattr(sub, "name", "")]
