@@ -8,7 +8,74 @@ from datetime import datetime, timedelta, timezone
 DATA_DIR = "data"
 WARN_FILE = os.path.join(DATA_DIR, "warns.json")
 MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
-CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
+
+# Moderation/automod config is stored in the main database (moderation_config),
+# migrated at startup from the legacy modconfig.json by events.startup.database.
+_MOD_COLLECTION = "moderation_config"
+
+
+def _pool():
+    import database as database_module
+    return getattr(database_module, "_shared_pool", None)
+
+
+async def _load_all_moderation_configs() -> dict:
+    """Load every guild's moderation config from the database."""
+    pool = _pool()
+    configs: dict = {}
+    if pool is None:
+        return configs
+    try:
+        if pool.db_type == "mongodb":
+            async for doc in pool.collection(_MOD_COLLECTION).find({}):
+                gid = doc.get("guild_id")
+                if gid is None:
+                    try:
+                        gid = int(str(doc.get("_id")))
+                    except (TypeError, ValueError):
+                        continue
+                raw = {k: v for k, v in doc.items() if k not in ("_id", "guild_id")}
+                if isinstance(raw, str):
+                    try:
+                        raw = json.loads(raw)
+                    except Exception:
+                        raw = {}
+                if isinstance(raw, dict) and raw:
+                    configs[str(gid)] = raw
+        else:
+            rows = await pool.fetch("SELECT guild_id, data FROM moderation_config")
+            for row in rows:
+                try:
+                    raw = row["data"]
+                    if isinstance(raw, str):
+                        raw = json.loads(raw)
+                    if isinstance(raw, dict) and raw:
+                        configs[str(row["guild_id"])] = raw
+                except Exception:
+                    continue
+    except Exception as e:
+        from utils import logging
+        logging.warning("Moderation", f"Failed to load moderation configs: {e}")
+    return configs
+
+
+async def _save_guild_moderation_config(guild_id: int, cfg: dict):
+    """Persist one guild's moderation config to the database."""
+    pool = _pool()
+    if pool is None:
+        raise RuntimeError("Database pool is not available.")
+    payload = json.dumps(cfg)
+    if pool.db_type == "mongodb":
+        await pool.collection(_MOD_COLLECTION).replace_one(
+            {"_id": str(guild_id)},
+            {"_id": str(guild_id), "guild_id": int(guild_id), **json.loads(payload)},
+            upsert=True,
+        )
+    else:
+        await pool.execute(
+            "INSERT OR REPLACE INTO moderation_config (guild_id, data) VALUES ($1, $2)",
+            int(guild_id), payload,
+        )
 
 DEFAULT_GUILD_CONFIG = {
     "automod": {
@@ -111,8 +178,13 @@ class ModerationUtils(commands.Cog):
         ensure_files()
         self.warns = load_json(WARN_FILE, {})
         self.mutes = load_json(MUTE_FILE, {})
-        self.config = load_json(CONFIG_FILE, {})
+        self.config: dict = {}
+        self.bot.loop.create_task(self._load_config_task())
         self.bot.loop.create_task(self.mute_watcher())
+
+    async def _load_config_task(self):
+        """Populate the moderation config from the database once ready."""
+        self.config = await _load_all_moderation_configs()
 
     # ---------- CONFIG HELPERS ----------
 
@@ -132,8 +204,42 @@ class ModerationUtils(commands.Cog):
     def save_mod_config(self):
         self.save_config()
 
-    def save_config(self):
-        save_json(CONFIG_FILE, self.config)
+    def save_config(self, guild_id: int | None = None):
+        """Write the config cache through to the database (fire-and-forget).
+
+        Pass guild_id to persist one guild, or omit to persist every cached
+        guild. Safe to call from the bot loop or from Flask worker threads.
+        """
+        targets = [guild_id] if guild_id is not None else [
+            int(gid) for gid in self.config if str(gid).isdigit()
+        ]
+        if not targets:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        for gid in targets:
+            coro = self._persist_config(gid)
+            if loop is not None and not loop.is_closed():
+                loop.create_task(coro)
+            else:
+                bot_loop = self.bot.loop
+                if bot_loop is not None and not bot_loop.is_closed():
+                    asyncio.run_coroutine_threadsafe(coro, bot_loop)
+                else:
+                    coro.close()
+
+    async def _persist_config(self, guild_id: int):
+        cfg = self.config.get(str(guild_id))
+        if cfg is None:
+            return
+        try:
+            await _save_guild_moderation_config(guild_id, cfg)
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to persist moderation config: {e}")
 
     # ---------- MODLOG ----------
 

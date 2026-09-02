@@ -11,6 +11,7 @@ from utils.onboarding.utils import (
 from utils.onboarding.config import (
     OnboardingConfig,
     load_all_configs,
+    migrate_json_files,
     new_menu_id,
     MENU_TYPE_LABELS,
     DEFAULT_MENU_TYPE,
@@ -132,31 +133,31 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
 # -------------------- MODALS --------------------
 
 class WelcomeMessageModal(Modal, title="Set Welcome Message"):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig):
         super().__init__()
         self.guild_id = guild_id
 
         self.title_input = TextInput(
             label="Title", 
             required=False,
-            default=get_config(guild_id).welcome_title or None
+            default=cfg.welcome_title or None
         )
         self.desc_input = TextInput(
             label="Description",
             style=discord.TextStyle.long,
             placeholder="Use {user} for mention, {name} for username.",
             required=False,
-            default=get_config(guild_id).welcome_description or None
+            default=cfg.welcome_description or None
         )
         self.image_input = TextInput(
             label="Image URL", 
             required=False,
-            default=get_config(guild_id).welcome_image or None
+            default=cfg.welcome_image or None
         )
         self.color_input = TextInput(
             label="Color (hex)", 
             required=False,
-            default=get_config(guild_id).welcome_color or None
+            default=cfg.welcome_color or None
         )
 
         self.add_item(self.title_input)
@@ -165,7 +166,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         self.add_item(self.color_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
 
         if self.title_input.value:
             cfg.welcome_title = self.title_input.value
@@ -180,7 +181,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
             except ValueError:
                 pass
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -193,21 +194,21 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
 
 
 class RulesModal(Modal, title="Set Rules Text"):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig):
         super().__init__()
         self.guild_id = guild_id
 
         self.rules_input = TextInput(
             label="Rules", 
             style=discord.TextStyle.long,
-            default=get_config(guild_id).rules_text or ""
+            default=cfg.rules_text or ""
         )
         self.add_item(self.rules_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         cfg.rules_text = self.rules_input.value
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         # update the existing rules message if it exists
         if cfg.rules_channel and cfg.rules_message_id:
             try:
@@ -243,11 +244,13 @@ class RoleMenuOptionModal(Modal):
         message: discord.Message,
         role: discord.Role | None = None,
         *,
+        cfg: OnboardingConfig | None = None,
         edit_index: int | None = None,
         wizard: bool = False,
     ):
-        cfg = get_config(guild_id)
-        menu = (cfg.role_menus or {}).get(menu_id)
+        self._preload_cfg = cfg
+        cfg = cfg  # callers fetch the config (async) and pass it in
+        menu = (cfg.role_menus if cfg else {}).get(menu_id) if cfg else None
         existing = None
         if edit_index is not None and menu:
             options = menu.get("options") or []
@@ -288,7 +291,7 @@ class RoleMenuOptionModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None or self.role_id is None:
             return await interaction.followup.send(
@@ -330,12 +333,12 @@ class RoleMenuOptionModal(Modal):
             options.append(entry)
             verb = "added"
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         await interaction.followup.send(view=feedback_view(f"Role option {verb}."), ephemeral=True)
         next_view = (
-            RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id)
+            RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id))
             if self.wizard
-            else RoleMenuEditView(self.guild_id, self.author, self.menu_id)
+            else RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id))
         )
         await self.message.edit(view=next_view, allowed_mentions=discord.AllowedMentions.none())
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
@@ -359,7 +362,7 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if cfg.role_menus is None:
             cfg.role_menus = {}
 
@@ -391,26 +394,25 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
             "message_id": None,
             "options": [],
         }
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
 
         await interaction.response.send_message(
             view=feedback_view(f"Role menu `{name}` created — let's set it up!"), ephemeral=True
         )
         await self.message.edit(
-            view=RoleMenuWizardTypeView(self.guild_id, self.author, menu_id),
+            view=RoleMenuWizardTypeView(self.guild_id, self.author, menu_id, cfg),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
 
 class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
         super().__init__()
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
         self.message = message
 
-        cfg = get_config(guild_id)
         menu = cfg.role_menus[menu_id]
 
         self.name_input = TextInput(label="Internal Name", default=menu["name"], max_length=50)
@@ -428,7 +430,7 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.response.send_message(
@@ -454,10 +456,10 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
             except ValueError:
                 pass
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         await interaction.response.send_message(view=feedback_view("Role menu info updated."), ephemeral=True)
         await self.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
+            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, cfg),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
@@ -483,7 +485,7 @@ class SetWelcomeMsgBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.response.send_modal(WelcomeMessageModal(self.guild_id))
+        await interaction.response.send_modal(WelcomeMessageModal(self.guild_id, await get_config(self.guild_id)))
 
 
 class SetWelcomeChannelBtn(discord.ui.Button):
@@ -504,9 +506,9 @@ class SetWelcomeChannelBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         cfg.welcome_channel = interaction.channel.id
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -536,7 +538,7 @@ class SetRulesTextBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.response.send_modal(RulesModal(self.guild_id))
+        await interaction.response.send_modal(RulesModal(self.guild_id, await get_config(self.guild_id)))
 
 
 class PostRulesBtn(discord.ui.Button):
@@ -557,14 +559,14 @@ class PostRulesBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         cfg.rules_channel = interaction.channel.id
 
         view = RulesAcknowledgeView(self.guild_id, cfg=cfg)
         msg = await interaction.channel.send(view=view)
 
         cfg.rules_message_id = msg.id
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -646,9 +648,9 @@ class SetRulesRoleBtn(discord.ui.Button):
             view.add_item(container)
             return await interaction.followup.send(view=view, ephemeral=True)
 
-        cfg = get_config(interaction.guild.id)
+        cfg = await get_config(interaction.guild.id)
         cfg.rules_role_id = role.id
-        update_config(interaction.guild.id, cfg)
+        await update_config(interaction.guild.id, cfg)
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
@@ -675,7 +677,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if cfg.autorole_ids is None:
             cfg.autorole_ids = []
 
@@ -685,7 +687,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 cfg.autorole_ids.append(role.id)
                 added.append(role.mention)
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         if added:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -700,7 +702,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
             # update the setup panel
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild), allowed_mentions=discord.AllowedMentions.none())
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)), allowed_mentions=discord.AllowedMentions.none())
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -723,10 +725,9 @@ class AddAutoroleView(discord.ui.ActionRow):
 
 class RemoveAutoroleSelect(discord.ui.Select):
     """Ephemeral select of current autoroles — removes chosen ones."""
-    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message):
+    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message, cfg: OnboardingConfig):
         self.guild_id = guild_id
         self.message = message
-        cfg = get_config(guild_id)
         options = []
         for rid in (cfg.autorole_ids or []):
             role = guild.get_role(rid)
@@ -744,7 +745,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if cfg.autorole_ids is None:
             cfg.autorole_ids = []
 
@@ -757,7 +758,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
                 cfg.autorole_ids.remove(rid)
                 removed.append(f"<@&{rid}>")
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         if removed:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -770,7 +771,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
             await interaction.response.edit_message(
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild), allowed_mentions=discord.AllowedMentions.none())
+            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)), allowed_mentions=discord.AllowedMentions.none())
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -786,7 +787,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
 class RemoveAutoroleView(discord.ui.ActionRow):
     def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message):
         super().__init__()
-        self.add_item(RemoveAutoroleSelect(guild_id, guild, message))
+        self.add_item(RemoveAutoroleSelect(guild_id, guild, message, cfg))
 
 
 class AddAutoroleBtn(discord.ui.Button):
@@ -838,7 +839,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if not cfg.autorole_ids:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -856,7 +857,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             discord.ui.TextDisplay(
                 content=f"{get_emoji('icon_settings')} Select autoroles to remove:"
             ),
-            RemoveAutoroleView(self.guild_id, self.guild, message)
+            RemoveAutoroleView(self.guild_id, self.guild, message, await get_config(self.guild_id))
         )
         view.add_item(container)
         await interaction.response.send_message(
@@ -881,9 +882,9 @@ class ClearAutorolesBtn(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         cfg.autorole_ids = []
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -893,15 +894,14 @@ class ClearAutorolesBtn(discord.ui.Button):
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild))
+        await interaction.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
 
 
 class AutoroleSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
-        cfg = get_config(guild_id)
         role_ids = cfg.autorole_ids or []
 
         if role_ids:
@@ -954,7 +954,7 @@ class ConfigureAutorolesBtn(discord.ui.Button):
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
-            view=AutoroleSetupView(self.guild_id, self.author, interaction.guild),
+            view=AutoroleSetupView(self.guild_id, self.author, interaction.guild, await get_config(self.guild_id)),
             ephemeral=False,
             allowed_mentions=discord.AllowedMentions.none()
         )
@@ -976,7 +976,7 @@ class ConfigureAutorolesBtn(discord.ui.Button):
 
 async def refresh_posted_menu(bot, guild_id: int, menu_id: str):
     """Re-render a menu's live posted message after its config changes."""
-    cfg = get_config(guild_id)
+    cfg = await get_config(guild_id)
     menu = (cfg.role_menus or {}).get(menu_id)
     if not menu or not menu.get("channel_id") or not menu.get("message_id"):
         return
@@ -996,10 +996,9 @@ async def refresh_posted_menu(bot, guild_id: int, menu_id: str):
 class RoleMenuManagerSelect(discord.ui.Select):
     """Pick an existing role menu to manage."""
 
-    def __init__(self, guild_id: int, author: discord.Member):
+    def __init__(self, guild_id: int, author: discord.Member, cfg: OnboardingConfig):
         self.guild_id = guild_id
         self.author = author
-        cfg = get_config(guild_id)
         menus = cfg.role_menus or {}
 
         options = [
@@ -1027,7 +1026,7 @@ class RoleMenuManagerSelect(discord.ui.Select):
                 view=feedback_view("Create a role menu first.", ok=False), ephemeral=True
             )
         await interaction.response.edit_message(
-            view=RoleMenuEditView(self.guild_id, self.author, self.values[0]),
+            view=RoleMenuEditView(self.guild_id, self.author, self.values[0], await get_config(self.guild_id)),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -1056,7 +1055,7 @@ class BackToManagerBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.edit_message(
-            view=RoleMenuManagerView(self.guild_id, self.author),
+            view=RoleMenuManagerView(self.guild_id, self.author, await get_config(self.guild_id)),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -1072,18 +1071,17 @@ class EditMenuInfoBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.send_modal(
-            EditMenuInfoModal(self.guild_id, self.author, self.menu_id, interaction.message)
+            EditMenuInfoModal(self.guild_id, self.author, self.menu_id, interaction.message, await get_config(self.guild_id))
         )
 
 
 class ChangeMenuTypeSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
         self.message = message
 
-        cfg = get_config(guild_id)
         current = cfg.role_menus[menu_id]["menu_type"]
         options = [
             discord.SelectOption(label=label, value=key, default=(key == current))
@@ -1092,19 +1090,19 @@ class ChangeMenuTypeSelect(discord.ui.Select):
         super().__init__(placeholder="Choose a menu type...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
 
         menu["menu_type"] = self.values[0]
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
 
         await interaction.response.edit_message(
             view=feedback_view(f"Menu type set to **{MENU_TYPE_LABELS[self.values[0]]}**.")
         )
         await self.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
+            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
@@ -1124,7 +1122,7 @@ class ChangeMenuTypeBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose the new menu type:"),
-            discord.ui.ActionRow(ChangeMenuTypeSelect(self.guild_id, self.author, self.menu_id, message)),
+            discord.ui.ActionRow(ChangeMenuTypeSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
@@ -1143,7 +1141,7 @@ class RoleMenuAddRoleSelect(discord.ui.RoleSelect):
 
     async def callback(self, interaction: discord.Interaction):
         role = self.values[0]
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
@@ -1154,7 +1152,7 @@ class RoleMenuAddRoleSelect(discord.ui.RoleSelect):
 
         try:
             await interaction.response.send_modal(
-                RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, wizard=self.wizard)
+                RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, cfg=await get_config(self.guild_id), wizard=self.wizard)
             )
         except Exception as e:
             print(f"Error adding role menu option: {e}")
@@ -1171,7 +1169,7 @@ class AddMenuOptionBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
             return
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu and len(menu.get("options") or []) >= 25:
             return await interaction.response.send_message(
@@ -1186,13 +1184,12 @@ class AddMenuOptionBtn(discord.ui.Button):
 
 
 class EditMenuOptionSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
         self.message = message
 
-        cfg = get_config(guild_id)
         menu = (cfg.role_menus or {}).get(menu_id)
         options_list = (menu.get("options") if menu else []) or []
         options = [
@@ -1208,7 +1205,7 @@ class EditMenuOptionSelect(discord.ui.Select):
         if self.values[0] == "none":
             return await interaction.response.edit_message(view=feedback_view("Nothing to edit yet.", ok=False))
 
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         idx = int(self.values[0])
         options_list = (menu.get("options") if menu else []) or []
@@ -1216,7 +1213,7 @@ class EditMenuOptionSelect(discord.ui.Select):
         role = interaction.guild.get_role(existing["role_id"]) if (existing and interaction.guild) else None
 
         await interaction.response.send_modal(
-            RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, edit_index=idx)
+            RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, cfg=await get_config(self.guild_id), edit_index=idx)
         )
 
 
@@ -1234,19 +1231,18 @@ class EditMenuOptionBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose a role option to edit:"),
-            discord.ui.ActionRow(EditMenuOptionSelect(self.guild_id, self.author, self.menu_id, message)),
+            discord.ui.ActionRow(EditMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class RemoveMenuOptionSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
         self.message = message
 
-        cfg = get_config(guild_id)
         menu = (cfg.role_menus or {}).get(menu_id)
         options_list = (menu.get("options") if menu else []) or []
         options = [
@@ -1264,7 +1260,7 @@ class RemoveMenuOptionSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None or self.values[0] == "none":
             return await interaction.response.edit_message(view=feedback_view("Nothing to remove.", ok=False))
@@ -1276,7 +1272,7 @@ class RemoveMenuOptionSelect(discord.ui.Select):
             if 0 <= i < len(options):
                 removed.append(options.pop(i)["label"])
 
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         await interaction.response.edit_message(
             view=feedback_view(f"Removed: {', '.join(removed)}" if removed else "Nothing was removed.", ok=bool(removed))
         )
@@ -1297,7 +1293,7 @@ class RemoveMenuOptionBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
             return
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu or not menu.get("options"):
             return await interaction.response.send_message(
@@ -1307,7 +1303,7 @@ class RemoveMenuOptionBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose role option(s) to remove:"),
-            discord.ui.ActionRow(RemoveMenuOptionSelect(self.guild_id, self.author, self.menu_id, message)),
+            discord.ui.ActionRow(RemoveMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
@@ -1324,7 +1320,7 @@ class PostMenuBtn(discord.ui.Button):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.followup.send(
@@ -1350,7 +1346,7 @@ class PostMenuBtn(discord.ui.Button):
         msg = await interaction.channel.send(view=posted_view)
         menu["channel_id"] = interaction.channel.id
         menu["message_id"] = msg.id
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
 
         await interaction.followup.send(view=feedback_view("Role menu posted."), ephemeral=True)
         await interaction.message.edit(
@@ -1368,9 +1364,9 @@ class ConfirmDeleteMenuBtn(discord.ui.Button):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).pop(self.menu_id, None)
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
 
         if menu and menu.get("channel_id") and menu.get("message_id") and interaction.guild:
             channel = interaction.guild.get_channel(menu["channel_id"])
@@ -1384,7 +1380,7 @@ class ConfirmDeleteMenuBtn(discord.ui.Button):
         name = menu["name"] if menu else "menu"
         await interaction.response.edit_message(view=feedback_view(f"Role menu `{name}` deleted."))
         await self.message.edit(
-            view=RoleMenuManagerView(self.guild_id, self.author),
+            view=RoleMenuManagerView(self.guild_id, self.author, await get_config(self.guild_id)),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -1428,7 +1424,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         guild_id = self.guild_id
 
         # check if captcha is enabled
-        cfg = get_config(guild_id)
+        cfg = await get_config(guild_id)
         if not cfg.captcha_enabled:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -1538,7 +1534,7 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if cfg.captcha_add_role_ids is None:
             cfg.captcha_add_role_ids = []
         added = []
@@ -1546,7 +1542,7 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
             if role.id not in cfg.captcha_add_role_ids:
                 cfg.captcha_add_role_ids.append(role.id)
                 added.append(role.mention)
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         if added:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -1557,7 +1553,7 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
             )
             view.add_item(container)
             await interaction.response.edit_message(view=view)
-            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild))
+            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -1587,7 +1583,7 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         if cfg.captcha_remove_role_ids is None:
             cfg.captcha_remove_role_ids = []
         added = []
@@ -1595,7 +1591,7 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
             if role.id not in cfg.captcha_remove_role_ids:
                 cfg.captcha_remove_role_ids.append(role.id)
                 added.append(role.mention)
-        update_config(self.guild_id, cfg)
+        await update_config(self.guild_id, cfg)
         if added:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -1606,7 +1602,7 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
             )
             view.add_item(container)
             await interaction.response.edit_message(view=view)
-            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild))
+            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -1626,13 +1622,11 @@ class CaptchaRemoveRolesView(discord.ui.ActionRow):
 
 
 class CaptchaSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.author = author
         self.guild = guild
-
-        cfg = get_config(guild_id)
 
         status = f"{get_emoji('icon_tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('icon_cross')} Disabled"
         channel_text = (
@@ -1678,9 +1672,9 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
-                c = get_config(self_inner.guild_id)
+                c = await get_config(self_inner.guild_id)
                 c.captcha_enabled = not c.captcha_enabled
-                update_config(self_inner.guild_id, c)
+                await update_config(self_inner.guild_id, c)
                 # state = "enabled" if c.captcha_enabled else "disabled"
                 # emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
                 # color = discord.Color.green() if state == "enabled" else discord.Color.red()
@@ -1694,7 +1688,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 # view.add_item(container)
                 # await interaction.response.send_message(view=view, ephemeral=True)
                 await interaction.response.defer()
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
         class PostPanelBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1713,12 +1707,12 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
-                c = get_config(self_inner.guild_id)
+                c = await get_config(self_inner.guild_id)
                 c.captcha_channel_id = interaction.channel.id
                 panel_view = CaptchaPanelView(self_inner.guild_id)
                 msg = await interaction.channel.send(view=panel_view)
                 c.captcha_panel_message_id = msg.id
-                update_config(self_inner.guild_id, c)
+                await update_config(self_inner.guild_id, c)
                 interaction.client.add_view(panel_view, message_id=msg.id)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -1729,7 +1723,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
         class SetAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1804,9 +1798,9 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
-                c = get_config(self_inner.guild_id)
+                c = await get_config(self_inner.guild_id)
                 c.captcha_kick_on_fail = not c.captcha_kick_on_fail
-                update_config(self_inner.guild_id, c)
+                await update_config(self_inner.guild_id, c)
                 state = "enabled" if c.captcha_kick_on_fail else "disabled"
                 emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
                 color = discord.Color.green() if state == "enabled" else discord.Color.red()
@@ -1819,7 +1813,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
         class ClearAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1838,9 +1832,9 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
-                c = get_config(self_inner.guild_id)
+                c = await get_config(self_inner.guild_id)
                 c.captcha_add_role_ids = []
-                update_config(self_inner.guild_id, c)
+                await update_config(self_inner.guild_id, c)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -1850,7 +1844,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
         class ClearRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
@@ -1869,9 +1863,9 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
-                c = get_config(self_inner.guild_id)
+                c = await get_config(self_inner.guild_id)
                 c.captcha_remove_role_ids = []
-                update_config(self_inner.guild_id, c)
+                await update_config(self_inner.guild_id, c)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -1881,7 +1875,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild))
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Captcha Verification Setup"),
@@ -1918,7 +1912,7 @@ class ConfigureCaptchaBtn(discord.ui.Button):
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
-            view=CaptchaSetupView(self.guild_id, self.author, interaction.guild),
+            view=CaptchaSetupView(self.guild_id, self.author, interaction.guild, await get_config(self.guild_id)),
             ephemeral=False,
         )
 
@@ -1936,7 +1930,7 @@ class AgreeButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
 
         if not cfg.rules_role_id:
             view = discord.ui.LayoutView()
@@ -1991,7 +1985,7 @@ async def _apply_role_selection(interaction: discord.Interaction, guild_id: int,
     """Add/remove roles for the member so their roles among this menu's options match keep_role_ids."""
     await interaction.response.defer(ephemeral=True, thinking=True)
 
-    cfg = get_config(guild_id)
+    cfg = await get_config(guild_id)
     menu = (cfg.role_menus or {}).get(menu_id)
     if not menu:
         return await interaction.followup.send(
@@ -2078,7 +2072,7 @@ class RoleMenuToggleButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu:
             return await interaction.followup.send(
@@ -2121,7 +2115,7 @@ class RoleMenuRadioButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu:
             return await interaction.followup.send(
@@ -2161,9 +2155,6 @@ class RulesAcknowledgeView(discord.ui.LayoutView):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
-        if cfg is None:
-            cfg = get_config(guild_id)
-
         rules_text = cfg.rules_text or "No rules have been set yet."
 
         container = discord.ui.Container(
@@ -2186,9 +2177,6 @@ class RoleMenuView(discord.ui.LayoutView):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.menu_id = menu_id
-
-        if cfg is None:
-            cfg = get_config(guild_id)
         menu = (cfg.role_menus or {}).get(menu_id) or {}
 
         title = menu.get("title") or "Role Selection"
@@ -2271,11 +2259,10 @@ class OnboardingSetupView(discord.ui.LayoutView):
 class RoleMenuManagerView(discord.ui.LayoutView):
     """Top-level `.onboarding role-menu` panel: lists all menus for the guild."""
 
-    def __init__(self, guild_id: int, author: discord.Member):
+    def __init__(self, guild_id: int, author: discord.Member, cfg):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
-        cfg = get_config(guild_id)
         menus = cfg.role_menus or {}
 
         if menus:
@@ -2303,7 +2290,7 @@ class RoleMenuManagerView(discord.ui.LayoutView):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
         if menus:
-            container.add_item(discord.ui.ActionRow(RoleMenuManagerSelect(guild_id, author)))
+            container.add_item(discord.ui.ActionRow(RoleMenuManagerSelect(guild_id, author, cfg)))
         container.add_item(discord.ui.ActionRow(CreateRoleMenuBtn(guild_id, author)))
         container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         container.add_item(discord.ui.TextDisplay(
@@ -2324,12 +2311,11 @@ WIZARD_TYPE_HINTS = {
 class RoleMenuWizardTypeSelect(discord.ui.Select):
     """Step 2 of the guided setup: pick a menu type, described in plain language."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
 
-        cfg = get_config(guild_id)
         current = cfg.role_menus[menu_id]["menu_type"]
         options = [
             discord.SelectOption(label=label, value=key, description=WIZARD_TYPE_HINTS.get(key))
@@ -2340,22 +2326,21 @@ class RoleMenuWizardTypeSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
             return
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
 
         menu["menu_type"] = self.values[0]
-        update_config(self.guild_id, cfg)
-        await interaction.response.edit_message(view=RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id))
+        await update_config(self.guild_id, cfg)
+        await interaction.response.edit_message(view=RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)))
 
 
 class RoleMenuWizardTypeView(discord.ui.LayoutView):
     """Step 2 of 3 in the guided setup: choose the menu type."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
         super().__init__(timeout=None)
-        cfg = get_config(guild_id)
         menu = cfg.role_menus[menu_id]
 
         container = discord.ui.Container(
@@ -2363,7 +2348,7 @@ class RoleMenuWizardTypeView(discord.ui.LayoutView):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content="Nice! Now pick how members will choose their roles from this menu."),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(RoleMenuWizardTypeSelect(guild_id, author, menu_id)),
+            discord.ui.ActionRow(RoleMenuWizardTypeSelect(guild_id, author, menu_id, cfg)),
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )
         self.add_item(container)
@@ -2379,21 +2364,20 @@ class WizardFinishBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
             return
-        cfg = get_config(self.guild_id)
+        cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu or not menu.get("options"):
             return await interaction.response.send_message(
                 view=feedback_view("Add at least one role before finishing.", ok=False), ephemeral=True
             )
-        await interaction.response.edit_message(view=RoleMenuEditView(self.guild_id, self.author, self.menu_id))
+        await interaction.response.edit_message(view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)))
 
 
 class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
     """Step 3 of 3 in the guided setup: add roles via RoleSelect, no typing needed."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
         super().__init__(timeout=None)
-        cfg = get_config(guild_id)
         menu = cfg.role_menus[menu_id]
         options = menu.get("options") or []
 
@@ -2425,12 +2409,10 @@ class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
 class RoleMenuEditView(discord.ui.LayoutView):
     """Per-menu management panel: edit info/type, manage roles, post, delete."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.menu_id = menu_id
-
-        cfg = get_config(guild_id)
         menu = (cfg.role_menus or {}).get(menu_id)
 
         if menu is None:

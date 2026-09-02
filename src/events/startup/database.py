@@ -207,6 +207,37 @@ async def _create_tables(bot):
     # Migrate economy data from JSON files to database
     await _migrate_economy_data(bot)
 
+    # ── New tables: onboarding, logging config, moderation config ──────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS onboarding (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS logging_config (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS moderation_config (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+
+    # Migrate legacy modlog / moderation JSON stores into the database
+    await _migrate_logging_config(bot)
+    await _migrate_moderation_config(bot)
+
+    # Migrate legacy onboarding JSON files (data/onboarding/*.json)
+    from utils.onboarding.config import migrate_json_files
+    try:
+        await migrate_json_files(bot)
+    except Exception as e:
+        logging.warning("DB", f"Onboarding JSON migration failed: {e}")
+
     logging.success("DB", "Database tables verified")
 
 
@@ -341,6 +372,72 @@ async def _migrate_economy_data(bot):
     
     except Exception as e:
         logging.warning("DB", f"Economy migration failed: {e}")
+
+
+
+async def _migrate_logging_config(bot):
+    """Migrate data/logging_config.json (modlog channel config) → database."""
+    import json
+
+    path = "data/logging_config.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid, cfg in data.items():
+            try:
+                guild_id = int(gid)
+            except (TypeError, ValueError):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR REPLACE INTO logging_config (guild_id, data) VALUES ($1, $2)",
+                guild_id, json.dumps(cfg),
+            )
+            migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} logging configs (modlog) from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate logging_config.json: {e}")
+
+
+async def _migrate_moderation_config(bot):
+    """Migrate data/modconfig.json (moderation + automod config) → database."""
+    import json
+
+    for path in ("data/modconfig.json", "data/mod_config.json"):
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or not data:
+                os.rename(path, path + ".migrated")
+                continue
+
+            migrated = 0
+            for gid, cfg in data.items():
+                try:
+                    guild_id = int(gid)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR REPLACE INTO moderation_config (guild_id, data) VALUES ($1, $2)",
+                    guild_id, json.dumps(cfg),
+                )
+                migrated += 1
+
+            os.rename(path, path + ".migrated")
+            logging.success("DB", f"Migrated {migrated} moderation configs from JSON to database")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate {path}: {e}")
 
 
 async def init_database(bot):

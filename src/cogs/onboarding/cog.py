@@ -44,19 +44,19 @@ class Onboarding(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Create, edit, and manage role menus for the server."""
-        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="autoroles")
     @commands.has_permissions(administrator=True)
     async def onboarding_autoroles(self, ctx: commands.Context):
         """Configure which roles are automatically given to new members on join."""
-        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="captcha")
     @commands.has_permissions(administrator=True)
     async def onboarding_captcha(self, ctx: commands.Context):
         """Configure captcha verification for the server."""
-        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -77,7 +77,7 @@ class Onboarding(commands.Cog):
             _pending_verifications.pop(user_id, None)
             guild_id = pending["guild_id"]
             guild = self.bot.get_guild(guild_id)
-            cfg = get_config(guild_id)
+            cfg = await get_config(guild_id)
 
             if guild is None:
                 view = discord.ui.LayoutView()
@@ -165,7 +165,7 @@ class Onboarding(commands.Cog):
                 _pending_verifications.pop(user_id, None)
                 guild_id = pending["guild_id"]
                 guild = self.bot.get_guild(guild_id)
-                cfg = get_config(guild_id) if guild else None
+                cfg = await get_config(guild_id) if guild else None
 
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -230,7 +230,7 @@ class Onboarding(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        cfg = get_config(member.guild.id)
+        cfg = await get_config(member.guild.id)
 
         # ── Autoroles ─────────────────────────────
         if cfg.autorole_ids:
@@ -271,7 +271,10 @@ class Onboarding(commands.Cog):
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
 
-    for guild_id, cfg in load_all_configs():
+    # One-time migration of legacy data/onboarding/*.json into the database.
+    await migrate_json_files(bot)
+
+    for guild_id, cfg in await load_all_configs():
         if cfg.rules_channel and cfg.rules_message_id:
             bot.add_view(RulesAcknowledgeView(guild_id), message_id=cfg.rules_message_id)
 

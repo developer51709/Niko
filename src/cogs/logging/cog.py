@@ -5,7 +5,9 @@ class ServerLogger(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._config: dict = _load_log_config()
+        # Logging config lives in the database (logging_config); loaded on demand.
+        self._config: dict = {}
+        self._config_loaded = False
         # guild_id → {invite_code: uses_count}
         self._invite_cache: dict[int, dict[str, int]] = {}
 
@@ -30,8 +32,9 @@ class ServerLogger(commands.Cog):
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
 
-    def _reload(self):
-        self._config = _load_log_config()
+    async def _reload(self):
+        self._config = await _load_log_config()
+        self._config_loaded = True
 
     # ── Core logging method ───────────────────────
 
@@ -46,7 +49,7 @@ class ServerLogger(commands.Cog):
         channel_id: int | None = None,
     ):
         """Send a structured log entry to the configured channel for the given category."""
-        self._reload()
+        await self._reload()
         cfg = self._get_cfg(guild.id)
 
         if category in cfg.get("disabled", []):
@@ -332,7 +335,7 @@ class ServerLogger(commands.Cog):
 
         # Re-upload any cached attachment bytes to the log channel
         if message.attachments:
-            self._reload()
+            await self._reload()
             cfg = self._get_cfg(message.guild.id)
             if "messages" not in cfg.get("disabled", []):
                 log_channel_id = cfg.get("messages")
@@ -757,13 +760,13 @@ class ServerLogger(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def logging_cmd(self, ctx: commands.Context):
         """Open the server logging configuration panel."""
-        await ctx.send(view=LoggingSetupView(ctx.guild.id, ctx.author))
+        await ctx.send(view=LoggingSetupView(ctx.guild.id, ctx.author, await _load_log_config()))
 
     @logging_cmd.command(name="status")
     @commands.has_permissions(manage_guild=True)
     async def logging_status(self, ctx: commands.Context):
         """Show the current logging configuration."""
-        self._reload()
+        await self._reload()
         cfg = self._get_cfg(ctx.guild.id)
         icon = get_emoji("icon_settings")
 

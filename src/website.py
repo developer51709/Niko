@@ -47,7 +47,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 ECONOMY_DIR  = os.path.join(DATA_DIR, "economy_data")
 BOT_STATS    = os.path.join(DATA_DIR, "bot_stats.json")
-MODCFG       = os.path.join(DATA_DIR, "modconfig.json")
 AICFG        = os.path.join(DATA_DIR, "ai_config.json")
 LEVELS_JSON  = os.path.join(DATA_DIR, "levels.json.migrated")
 LEVELCFG_JSON = os.path.join(DATA_DIR, "level_config.json.migrated")
@@ -825,13 +824,43 @@ def api_guild_config(guild_id):
     })
 
 
+def _read_moderation_config_sync(guild_id: str) -> dict:
+    """Read moderation config from the bot's database file (SQLite only).
+
+    Used only when the live bot object is unavailable; MongoDB deployments
+    always resolve through the running bot instead.
+    """
+    conn = sqlite_connect()
+    if conn is None:
+        return {}
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT data FROM moderation_config WHERE guild_id = ?",
+            (int(guild_id),),
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                data = json.loads(row[0])
+                if isinstance(data, dict):
+                    return data
+            except (TypeError, ValueError):
+                pass
+        return {}
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+
+
 def get_runtime_moderation_config(guild_id: str) -> dict:
     """Read the live ModerationUtils config so the dashboard and cog agree."""
     if _discord_bot is not None:
         moderation = _discord_bot.get_cog("ModerationUtils")
         if moderation is not None:
             return moderation.get_guild_config(int(guild_id))
-    return load_json(MODCFG, {}).get(guild_id, {})
+    return _read_moderation_config_sync(guild_id)
 
 
 @app.route("/api/guild/<guild_id>/resources")
@@ -863,12 +892,10 @@ def api_save_automod(guild_id):
     moderation = _discord_bot.get_cog("ModerationUtils") if _discord_bot is not None else None
     if moderation is not None:
         guild_config = moderation.get_guild_config(int(guild_id))
-        data = None
     else:
-        data = load_json(MODCFG, {})
-        if guild_id not in data:
-            data[guild_id] = {}
-        guild_config = data[guild_id]
+        guild_config = _read_moderation_config_sync(guild_id)
+        if not guild_config:
+            guild_config = {}
 
     allowed_flags = {
         "antispam", "antilink", "badwords", "massmention",
@@ -935,10 +962,23 @@ def api_save_automod(guild_id):
 
     if moderation is not None:
         moderation.config[str(guild_id)] = guild_config
-        moderation.save_config()
+        moderation.save_config(int(guild_id))
     else:
-        data[guild_id] = guild_config
-        save_json(MODCFG, data)
+        # No live bot: persist through the SQLite dashboard connection.
+        conn = sqlite_connect()
+        if conn is None:
+            return jsonify({"error": "The bot database is unavailable."}), 503
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO moderation_config (guild_id, data) VALUES (?, ?)",
+                (int(guild_id), json.dumps(guild_config)),
+            )
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            return jsonify({"error": "The moderation settings could not be saved."}), 500
+        finally:
+            conn.close()
     return jsonify({"ok": True, "config": guild_config})
 
 

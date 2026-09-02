@@ -146,34 +146,97 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
 _AUTOMOD_DEFAULT_BUTTONS = ["kick", "ban"]
 
 
-# ── Config helpers ────────────────────────────────
+# ── Config helpers (database-backed; migrated from logging_config.json) ──
 
-def _load_log_config() -> dict:
-    if not os.path.exists(LOG_CONFIG_FILE):
-        return {}
-    try:
-        with open(LOG_CONFIG_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+LOG_COLLECTION = "logging_config"
 
 
-def _save_log_config(data: dict):
-    os.makedirs("data", exist_ok=True)
-    with open(LOG_CONFIG_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+def _default_guild_cfg() -> dict:
+    return {**{cat: None for cat in CATEGORIES}, "disabled": []}
+
+
+def _normalize_cfg(raw) -> dict:
+    """Coerce a stored config (JSON string or dict) into the full shape."""
+    import json as _json
+
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except Exception:
+            raw = {}
+    if not isinstance(raw, dict):
+        return _default_guild_cfg()
+    cfg = _default_guild_cfg()
+    for cat in CATEGORIES:
+        cfg[cat] = raw.get(cat)
+    disabled = raw.get("disabled") or []
+    cfg["disabled"] = [d for d in disabled if d in CATEGORIES]
+    return cfg
 
 
 def _guild_config(data: dict, guild_id: int) -> dict:
+    """In-memory shape used by the panel; creates a default entry on demand."""
     gid = str(guild_id)
     if gid not in data:
-        data[gid] = {cat: None for cat in CATEGORIES}
-        data[gid]["disabled"] = []
+        data[gid] = _default_guild_cfg()
     else:
         for cat in CATEGORIES:
             data[gid].setdefault(cat, None)
         data[gid].setdefault("disabled", [])
     return data[gid]
+
+
+def _pool():
+    import database as database_module
+    return getattr(database_module, "_shared_pool", None)
+
+
+async def _load_log_config() -> dict:
+    """Load every guild's logging config from the database."""
+    pool = _pool()
+    data: dict = {}
+    if pool is None:
+        return data
+    try:
+        if pool.db_type == "mongodb":
+            async for doc in pool.collection(LOG_COLLECTION).find({}):
+                gid = doc.get("guild_id")
+                if gid is None:
+                    try:
+                        gid = int(str(doc.get("_id")))
+                    except (TypeError, ValueError):
+                        continue
+                cfg = {k: v for k, v in doc.items() if k not in ("_id", "guild_id")}
+                data[str(gid)] = _normalize_cfg(cfg)
+        else:
+            rows = await pool.fetch("SELECT guild_id, data FROM logging_config")
+            for row in rows:
+                data[str(row["guild_id"])] = _normalize_cfg(row["data"])
+    except Exception as e:
+        from utils import logging
+        logging.warning("logging_cog", f"Failed to load logging configs: {e}")
+    return data
+
+
+async def _save_guild_log_config(guild_id: int, cfg: dict):
+    """Persist one guild's logging config to the database."""
+    import json as _json
+
+    pool = _pool()
+    if pool is None:
+        raise RuntimeError("Database pool is not available.")
+    payload = _json.dumps(_normalize_cfg(cfg))
+    if pool.db_type == "mongodb":
+        await pool.collection(LOG_COLLECTION).replace_one(
+            {"_id": str(guild_id)},
+            {"_id": str(guild_id), "guild_id": int(guild_id), **_normalize_cfg(cfg)},
+            upsert=True,
+        )
+    else:
+        await pool.execute(
+            "INSERT OR REPLACE INTO logging_config (guild_id, data) VALUES ($1, $2)",
+            int(guild_id), payload,
+        )
 
 
 # ── Quick-action buttons ──────────────────────────
@@ -440,10 +503,10 @@ class SelectChannelView(discord.ui.LayoutView):
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
 
-                d = _load_log_config()
+                d = await _load_log_config()
                 gc = _guild_config(d, guild_id)
                 gc[self.category] = self.selected_channel
-                _save_log_config(d)
+                await _save_guild_log_config(guild_id, gc)
 
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -457,7 +520,7 @@ class SelectChannelView(discord.ui.LayoutView):
 
                 # Return to main panel
                 await panel_message.edit(
-                    view=LoggingSetupView(guild_id, author, self.category)
+                    view=LoggingSetupView(guild_id, author, self.category, await _load_log_config())
                 )
 
         # --- BUILD CONTAINER ---
@@ -476,12 +539,15 @@ class SelectChannelView(discord.ui.LayoutView):
         
 
 class LoggingSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, category: str | None = None):
+    def __init__(self, guild_id: int, author: discord.Member, category: str | None = None, data: dict | None = None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.author = author
 
-        data = _load_log_config()
+        if data is None:
+            # Fallback to an in-memory default when no config was preloaded;
+            # async callers should always pass the freshly loaded config dict.
+            data = {}
         cfg = _guild_config(data, guild_id)
 
         # shared mutable state — the currently-selected category
@@ -616,10 +682,10 @@ class LoggingSetupView(discord.ui.LayoutView):
                         view=view,
                         ephemeral=True
                     )
-                d = _load_log_config()
+                d = await _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 gc[cat] = None
-                _save_log_config(d)
+                await _save_guild_log_config(s._guild_id, gc)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -632,7 +698,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view=view, ephemeral=True
                 )
                 # update the panel
-                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat, await _load_log_config()))
 
         class _ToggleBtn(discord.ui.Button):
             def __init__(s):
@@ -668,7 +734,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                         view=view,
                         ephemeral=True
                     )
-                d = _load_log_config()
+                d = await _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 dis = gc.setdefault("disabled", [])
                 if cat in dis:
@@ -677,7 +743,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 else:
                     dis.append(cat)
                     state, e = "disabled", get_emoji("icon_cross")
-                _save_log_config(d)
+                await _save_guild_log_config(s._guild_id, gc)
                 color = discord.Color.green() if state == "enabled" else discord.Color.red()
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -689,7 +755,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
-                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat, await _load_log_config()))
 
         class _SetAllBtn(discord.ui.Button):
             def __init__(s):
@@ -711,11 +777,11 @@ class LoggingSetupView(discord.ui.LayoutView):
                         view=view,
                         ephemeral=True
                     )
-                d = _load_log_config()
+                d = await _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 for cat in CATEGORIES:
                     gc[cat] = interaction.channel.id
-                _save_log_config(d)
+                await _save_guild_log_config(s._guild_id, gc)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -726,7 +792,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
-                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat, await _load_log_config()))
 
         class _ClearAllBtn(discord.ui.Button):
             def __init__(s):
@@ -748,11 +814,11 @@ class LoggingSetupView(discord.ui.LayoutView):
                         view=view,
                         ephemeral=True
                     )
-                d = _load_log_config()
+                d = await _load_log_config()
                 gc = _guild_config(d, s._guild_id)
                 for cat in CATEGORIES:
                     gc[cat] = None
-                _save_log_config(d)
+                await _save_guild_log_config(s._guild_id, gc)
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -763,7 +829,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
                 # update the panel
-                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat))
+                await interaction.message.edit(view=LoggingSetupView(s._guild_id, s._author, cat, await _load_log_config()))
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=f"### {icon} Server Logging"),

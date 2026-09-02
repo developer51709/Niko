@@ -2,12 +2,14 @@ import discord
 from utils.onboarding.config import load_config, save_config, OnboardingConfig
 
 
-def get_config(guild_id: int) -> OnboardingConfig:
-    return load_config(guild_id)
+async def get_config(guild_id: int) -> OnboardingConfig:
+    """Async replacement for the old synchronous JSON-backed get_config."""
+    return await load_config(guild_id)
 
 
-def update_config(guild_id: int, cfg: OnboardingConfig):
-    save_config(guild_id, cfg)
+async def update_config(guild_id: int, cfg: OnboardingConfig):
+    """Async replacement for the old synchronous save_config wrapper."""
+    await save_config(guild_id, cfg)
 
 
 def build_welcome_view(cfg: OnboardingConfig, member: discord.Member | None = None) -> discord.ui.LayoutView:
@@ -41,7 +43,7 @@ def build_welcome_view(cfg: OnboardingConfig, member: discord.Member | None = No
         )
     if color:
         container.accent_colour = color
-    
+
     view.add_item(container)
     return view
 
