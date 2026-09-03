@@ -724,6 +724,24 @@ class Notifier(commands.Cog):
             channel_id = row["channel_id"]
             last_post  = row["last_post_id"]
 
+            # Fix stale YouTube display names (e.g. "Home" or bare channel IDs)
+            if platform == "youtube":
+                from utils.social.youtube import _parse_stored, make_stored
+                dname, cid = _parse_stored(username)
+                if dname in ("Home", "") or "|" not in username:
+                    # Re-resolve the correct display name from the RSS feed
+                    ok, corrected = await _validate(platform, username)
+                    if ok and corrected != username:
+                        try:
+                            await self.bot.cxn.execute(
+                                "UPDATE follows SET username = $1 "
+                                "WHERE guild_id = $2 AND platform = $3 AND username = $4",
+                                corrected, guild_id, platform, username,
+                            )
+                            username = corrected
+                        except Exception:
+                            pass
+
             guild = self.bot.get_guild(guild_id)
             if not guild:
                 continue
