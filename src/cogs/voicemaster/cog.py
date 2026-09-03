@@ -340,15 +340,16 @@ class VoiceMaster(commands.Cog):
                 overwrites=overwrites
             )
 
-            await asyncio.gather(
-                member.move_to(channel),
-                self.bot.cxn.execute(
-                    "INSERT INTO voicemaster_channels (channel_id, owner_id, guild_id, created_at) "
-                    "VALUES ($1, $2, $3, datetime('now'))",
-                    channel.id, member.id, member.guild.id
-                ),
-                return_exceptions=True
+            # DB insert first so the channel is tracked even if move_to fails.
+            await self.bot.cxn.execute(
+                "INSERT INTO voicemaster_channels (channel_id, owner_id, guild_id, created_at) "
+                "VALUES ($1, $2, $3, datetime('now'))",
+                channel.id, member.id, member.guild.id
             )
+            try:
+                await member.move_to(channel)
+            except Exception:
+                logging.warning("VoiceMaster", f"Failed to move member {member.id} to channel {channel.id}")
             return channel
         except Exception as e:
             logging.error("VoiceMaster", f"Create temp channel error: {e}")
@@ -360,13 +361,14 @@ class VoiceMaster(commands.Cog):
                 "SELECT owner_id FROM voicemaster_channels WHERE channel_id = $1", channel.id
             )
             if owner_id:
-                await asyncio.gather(
-                    channel.delete(reason="VoiceMaster: Empty temporary channel"),
-                    self.bot.cxn.execute(
-                        "DELETE FROM voicemaster_channels WHERE channel_id = $1", channel.id
-                    ),
-                    return_exceptions=True
+                # Delete from DB first so stale records don't linger if channel.delete fails.
+                await self.bot.cxn.execute(
+                    "DELETE FROM voicemaster_channels WHERE channel_id = $1", channel.id
                 )
+                try:
+                    await channel.delete(reason="VoiceMaster: Empty temporary channel")
+                except Exception:
+                    logging.warning("VoiceMaster", f"Failed to delete empty channel {channel.id}")
         except Exception as e:
             logging.error("VoiceMaster", f"Cleanup channel {channel.id} error: {e}")
 

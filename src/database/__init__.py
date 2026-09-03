@@ -224,6 +224,15 @@ class _ConditionParser:
         self.pos += 1
         return value
 
+    @staticmethod
+    def _strip_quotes(name: str) -> str:
+        """Strip backticks or double-quotes from a column/identifier name."""
+        if name.startswith("`") and name.endswith("`"):
+            return name[1:-1]
+        if name.startswith('"') and name.endswith('"'):
+            return name[1:-1]
+        return name
+
     def _parse_simple(self, cond: str) -> dict:
         cond = cond.strip()
         if cond.startswith("(") and cond.endswith(")"):
@@ -232,7 +241,7 @@ class _ConditionParser:
         m = re.match(r"(\w+)\s*(=|!=|<>|>=|<=|>|<)\s*\?\s*$", cond)
         if m:
             column, op = m.groups()
-            return self._op_filter(column, op, self._next_arg())
+            return self._op_filter(self._strip_quotes(column), op, self._next_arg())
 
         m = re.match(
             r"(\w+)\s*(=|!=|<>|>=|<=|>|<)\s*"
@@ -241,27 +250,27 @@ class _ConditionParser:
         )
         if m:
             column, op, literal = m.groups()
-            return self._op_filter(column, op, self._coerce_literal(literal))
+            return self._op_filter(self._strip_quotes(column), op, self._coerce_literal(literal))
 
         m = re.match(r"(\w+)\s+IS\s+NOT\s+NULL\s*$", cond, re.IGNORECASE)
         if m:
-            return {m.group(1): {"$ne": None}}
+            return {self._strip_quotes(m.group(1)): {"$ne": None}}
 
         m = re.match(r"(\w+)\s+IS\s+NULL\s*$", cond, re.IGNORECASE)
         if m:
-            return {m.group(1): None}
+            return {self._strip_quotes(m.group(1)): None}
 
         m = re.match(
             r"(\w+)\s+NOT\s+LIKE\s+('(?:[^']|'')*')\s*$", cond, re.IGNORECASE
         )
         if m:
             pattern = self._like_to_regex(m.group(2)[1:-1])
-            return {m.group(1): {"$not": re.compile(pattern, re.IGNORECASE)}}
+            return {self._strip_quotes(m.group(1)): {"$not": re.compile(pattern, re.IGNORECASE)}}
 
         m = re.match(r"(\w+)\s+LIKE\s+('(?:[^']|'')*')\s*$", cond, re.IGNORECASE)
         if m:
             pattern = self._like_to_regex(m.group(2)[1:-1])
-            return {m.group(1): {"$regex": pattern, "$options": "i"}}
+            return {self._strip_quotes(m.group(1)): {"$regex": pattern, "$options": "i"}}
 
         raise ValueError(f"Cannot parse WHERE condition: {cond}")
 
@@ -752,7 +761,8 @@ class MongoPool:
         filter_dict = parser.parse(where_clause)
         filter_dict = self._apply_pk_filter(table, filter_dict)
 
-        update = self._build_update_ops(table, set_clause, args)
+        # Pass only the remaining args after the WHERE clause consumed its share.
+        update = self._build_update_ops(table, set_clause, args[parser.pos:])
         ops = []
         if update.get("$set"):
             ops.append({"$set": update["$set"]})
@@ -778,8 +788,8 @@ class MongoPool:
             m = re.match(r"(\w+)\s*=\s*(.+)$", assignment, re.DOTALL)
             if not m:
                 continue
-            column, expr = m.groups()
-            expr = expr.strip()
+            column = _ConditionParser._strip_quotes(m.group(1))
+            expr = m.group(2).strip()
 
             # col = ?                       → set arg
             if expr == "?":

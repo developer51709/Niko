@@ -58,10 +58,24 @@ def _config_to_doc(cfg: TicketConfig) -> dict:
     }
 
 
-# ── Database operations (native collection access) ──────────────────────────
+# ── Database operations (SQL translator — works across all backends) ────────
+
+# Unified SQL upsert used by both MongoDB and SQLite backends.
+# The MongoPool's SQL translator converts this to a native upsert.
+_UPSERT_SQL = (
+    "INSERT INTO ticket_config "
+    "(guild_id, panel_title, panel_description, panel_color, panel_image, "
+    "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets) "
+    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+    "ON CONFLICT (guild_id) DO UPDATE SET "
+    "panel_title = $2, panel_description = $3, panel_color = $4, panel_image = $5, "
+    "panel_categories = $6, panel_channel_id = $7, panel_message_id = $8, "
+    "support_roles = $9, open_tickets = $10"
+)
+
 
 async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
-    """Persist config to database using native collection access.
+    """Persist config to database via the SQL translator.
 
     Returns True on success, False on failure (with error logged).
     """
@@ -71,38 +85,20 @@ async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
     if pool is None:
         return False
 
-    doc = _config_to_doc(cfg)
-
     try:
-        if pool.db_type == "mongodb":
-            coll = pool.collection("ticket_config")
-            await coll.update_one(
-                {"_id": guild_id},
-                {"$set": doc},
-                upsert=True,
-            )
-        else:
-            # SQLite path — use the existing SQL upsert
-            await pool.execute(
-                "INSERT INTO ticket_config "
-                "(guild_id, panel_title, panel_description, panel_color, panel_image, "
-                "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
-                "ON CONFLICT (guild_id) DO UPDATE SET "
-                "panel_title = $2, panel_description = $3, panel_color = $4, panel_image = $5, "
-                "panel_categories = $6, panel_channel_id = $7, panel_message_id = $8, "
-                "support_roles = $9, open_tickets = $10",
-                guild_id,
-                cfg.panel_title,
-                cfg.panel_description,
-                cfg.panel_color,
-                cfg.panel_image,
-                json.dumps(cfg.panel_categories or []),
-                cfg.panel_channel_id,
-                cfg.panel_message_id,
-                json.dumps(cfg.support_roles or []),
-                json.dumps(cfg.open_tickets or []),
-            )
+        await pool.execute(
+            _UPSERT_SQL,
+            guild_id,
+            cfg.panel_title,
+            cfg.panel_description,
+            cfg.panel_color,
+            cfg.panel_image,
+            json.dumps(cfg.panel_categories or []),
+            cfg.panel_channel_id,
+            cfg.panel_message_id,
+            json.dumps(cfg.support_roles or []),
+            json.dumps(cfg.open_tickets or []),
+        )
         return True
     except Exception as e:
         import utils.logging as _log
@@ -111,7 +107,7 @@ async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
 
 
 async def _load_configs_from_db() -> Dict[int, TicketConfig]:
-    """Load all ticket configs from the database."""
+    """Load all ticket configs from the database via the SQL translator."""
     from database import _shared_pool
 
     pool = _shared_pool
@@ -120,23 +116,12 @@ async def _load_configs_from_db() -> Dict[int, TicketConfig]:
 
     configs: Dict[int, TicketConfig] = {}
     try:
-        if pool.db_type == "mongodb":
-            coll = pool.collection("ticket_config")
-            cursor = coll.find({})
-            async for doc in cursor:
-                # MongoDB stores _id as the guild_id
-                gid = doc.get("_id") or doc.get("guild_id")
-                if gid is None:
-                    continue
-                doc["guild_id"] = gid
-                configs[int(gid)] = _row_to_config(doc)
-        else:
-            rows = await pool.fetch("SELECT * FROM ticket_config")
-            for row in rows:
-                gid = row.get("guild_id")
-                if gid is None:
-                    continue
-                configs[int(gid)] = _row_to_config(row)
+        rows = await pool.fetch("SELECT * FROM ticket_config")
+        for row in rows:
+            gid = row.get("guild_id")
+            if gid is None:
+                continue
+            configs[int(gid)] = _row_to_config(row)
     except Exception as e:
         import utils.logging as _log
         _log.warning("Tickets", f"Failed to load ticket configs: {e}")
@@ -153,16 +138,11 @@ async def _config_exists_in_db(guild_id: int) -> bool:
         return False
 
     try:
-        if pool.db_type == "mongodb":
-            coll = pool.collection("ticket_config")
-            doc = await coll.find_one({"_id": guild_id}, {"_id": 1})
-            return doc is not None
-        else:
-            row = await pool.fetchval(
-                "SELECT guild_id FROM ticket_config WHERE guild_id = $1",
-                guild_id,
-            )
-            return row is not None
+        row = await pool.fetchval(
+            "SELECT guild_id FROM ticket_config WHERE guild_id = $1",
+            guild_id,
+        )
+        return row is not None
     except Exception:
         return False
 
