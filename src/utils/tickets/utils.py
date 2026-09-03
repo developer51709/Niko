@@ -1,96 +1,186 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
-from pathlib import Path
 import json
 
 from .config import TicketConfig
 
-DATA_PATH = Path("data")
-DATA_FILE = DATA_PATH / "tickets.json"
+# ── In-memory cache for sync callers (UI __init__ methods) ────────────────
+# The cache is populated on first access from the database and kept in sync
+# by the async update function.  This lets TicketPanelView.__init__ and
+# similar synchronous code paths work without blocking on I/O.
 
 _ticket_configs: Dict[int, TicketConfig] = {}
-_loaded = False
+_cache_loaded = False
 
 
-def _ensure_data_dir():
-    DATA_PATH.mkdir(parents=True, exist_ok=True)
-
-
-def _load_all() -> None:
-    global _ticket_configs, _loaded
-    _ensure_data_dir()
-
-    if not DATA_FILE.exists():
-        _ticket_configs = {}
-        _loaded = True
+def _populate_cache_from_db() -> None:
+    """Populate the sync cache from the database (blocking, safe at import time)."""
+    global _ticket_configs, _cache_loaded
+    if _cache_loaded:
         return
+    try:
+        import asyncio
+        from database import _shared_pool
 
-    with DATA_FILE.open("r", encoding="utf-8") as f:
-        raw = json.load(f)
+        pool = _shared_pool
+        if pool is None:
+            # Database not initialised yet — will be loaded later via async path
+            _cache_loaded = True
+            return
 
-    cfgs = {}
-    for gid_str, data in raw.items():
-        gid = int(gid_str)
-        cfg = TicketConfig(
-            guild_id=gid,
-            panel_title=data.get("panel_title"),
-            panel_description=data.get("panel_description"),
-            panel_color=data.get("panel_color"),
-            panel_image=data.get("panel_image"),
-            panel_categories=data.get("panel_categories") or [],
-            panel_channel_id=data.get("panel_channel_id"),
-            panel_message_id=data.get("panel_message_id"),
-            support_roles=data.get("support_roles") or [],
-            open_tickets=data.get("open_tickets") or [],
-        )
-        cfgs[gid] = cfg
+        # Use a new event loop for the blocking call if needed
+        try:
+            loop = asyncio.get_running_loop()
+            # We're inside an async context — can't block here. Skip.
+            # The async load_all_tickets() will populate the cache instead.
+            return
+        except RuntimeError:
+            pass
 
-    _ticket_configs = cfgs
-    _loaded = True
+        loop = asyncio.new_event_loop()
+        try:
+            rows = loop.run_until_complete(
+                pool.fetch("SELECT * FROM ticket_config")
+            )
+            for row in rows:
+                gid = row.get("guild_id")
+                if gid is None:
+                    continue
+                cfg = TicketConfig(
+                    guild_id=gid,
+                    panel_title=row.get("panel_title"),
+                    panel_description=row.get("panel_description"),
+                    panel_color=row.get("panel_color"),
+                    panel_image=row.get("panel_image"),
+                    panel_categories=row.get("panel_categories") or [],
+                    panel_channel_id=row.get("panel_channel_id"),
+                    panel_message_id=row.get("panel_message_id"),
+                    support_roles=row.get("support_roles") or [],
+                    open_tickets=row.get("open_tickets") or [],
+                )
+                _ticket_configs[gid] = cfg
+        finally:
+            loop.close()
+    except Exception:
+        pass
+    _cache_loaded = True
 
 
-def _save_all() -> None:
-    _ensure_data_dir()
-
-    raw = {}
-    for gid, cfg in _ticket_configs.items():
-        raw[str(gid)] = {
-            "guild_id": cfg.guild_id,
-            "panel_title": cfg.panel_title,
-            "panel_description": cfg.panel_description,
-            "panel_color": cfg.panel_color,
-            "panel_image": cfg.panel_image,
-            "panel_categories": cfg.panel_categories,
-            "panel_channel_id": cfg.panel_channel_id,
-            "panel_message_id": cfg.panel_message_id,
-            "support_roles": cfg.support_roles,
-            "open_tickets": cfg.open_tickets,
-        }
-
-    with DATA_FILE.open("w", encoding="utf-8") as f:
-        json.dump(raw, f, indent=2)
+def _row_to_config(row) -> TicketConfig:
+    """Convert a database row dict to a TicketConfig."""
+    return TicketConfig(
+        guild_id=row.get("guild_id", 0),
+        panel_title=row.get("panel_title"),
+        panel_description=row.get("panel_description"),
+        panel_color=row.get("panel_color"),
+        panel_image=row.get("panel_image"),
+        panel_categories=row.get("panel_categories") or [],
+        panel_channel_id=row.get("panel_channel_id"),
+        panel_message_id=row.get("panel_message_id"),
+        support_roles=row.get("support_roles") or [],
+        open_tickets=row.get("open_tickets") or [],
+    )
 
 
 def get_ticket_config(guild_id: int) -> TicketConfig:
-    if not _loaded:
-        _load_all()
-
+    """Get ticket config for a guild (sync — reads from cache)."""
+    _populate_cache_from_db()
     cfg = _ticket_configs.get(guild_id)
     if cfg is None:
         cfg = TicketConfig(guild_id=guild_id)
         _ticket_configs[guild_id] = cfg
-        _save_all()
     return cfg
 
 
 def update_ticket_config(guild_id: int, cfg: TicketConfig) -> None:
+    """Update ticket config in cache and persist to database (sync wrapper)."""
     _ticket_configs[guild_id] = cfg
-    _save_all()
+    _save_to_db_sync(guild_id, cfg)
+
+
+def _save_to_db_sync(guild_id: int, cfg: TicketConfig) -> None:
+    """Persist config to database synchronously."""
+    try:
+        import asyncio
+        from database import _shared_pool
+
+        pool = _shared_pool
+        if pool is None:
+            return
+
+        try:
+            loop = asyncio.get_running_loop()
+            # Inside async context — schedule instead of blocking
+            asyncio.ensure_future(_async_save_config(guild_id, cfg))
+            return
+        except RuntimeError:
+            pass
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_async_save_config(guild_id, cfg))
+        finally:
+            loop.close()
+    except Exception:
+        pass
+
+
+async def _async_save_config(guild_id: int, cfg: TicketConfig) -> None:
+    """Persist config to database asynchronously."""
+    from database import _shared_pool
+
+    pool = _shared_pool
+    if pool is None:
+        return
+
+    await pool.execute(
+        "INSERT INTO ticket_config "
+        "(guild_id, panel_title, panel_description, panel_color, panel_image, "
+        "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+        "ON CONFLICT (guild_id) DO UPDATE SET "
+        "panel_title = $2, panel_description = $3, panel_color = $4, panel_image = $5, "
+        "panel_categories = $6, panel_channel_id = $7, panel_message_id = $8, "
+        "support_roles = $9, open_tickets = $10",
+        guild_id,
+        cfg.panel_title,
+        cfg.panel_description,
+        cfg.panel_color,
+        cfg.panel_image,
+        cfg.panel_categories or [],
+        cfg.panel_channel_id,
+        cfg.panel_message_id,
+        cfg.support_roles or [],
+        cfg.open_tickets or [],
+    )
+
+
+async def load_all_tickets() -> Dict[int, TicketConfig]:
+    """Async loader — populates the sync cache from the database."""
+    global _ticket_configs, _cache_loaded
+    from database import _shared_pool
+
+    pool = _shared_pool
+    if pool is None:
+        _cache_loaded = True
+        return _ticket_configs
+
+    try:
+        rows = await pool.fetch("SELECT * FROM ticket_config")
+        for row in rows:
+            gid = row.get("guild_id")
+            if gid is None:
+                continue
+            _ticket_configs[gid] = _row_to_config(row)
+    except Exception:
+        pass
+    _cache_loaded = True
+    return _ticket_configs
 
 
 def get_all_ticket_configs() -> List[TicketConfig]:
-    if not _loaded:
-        _load_all()
+    """Return all cached ticket configs (sync)."""
+    _populate_cache_from_db()
     return list(_ticket_configs.values())
 
 

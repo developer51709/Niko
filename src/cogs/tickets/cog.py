@@ -513,6 +513,10 @@ class TicketSetupView(discord.ui.LayoutView):
 async def setup(bot):
     await bot.add_cog(Tickets(bot))
 
+    # Load all ticket configs from database into cache
+    from utils.tickets.utils import load_all_tickets
+    await load_all_tickets()
+
     # reattach persistent ticket panels
     for cfg in get_all_ticket_configs():
         if cfg.panel_message_id:

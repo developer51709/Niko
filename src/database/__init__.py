@@ -16,6 +16,7 @@ JSON_COLUMNS = {
     "economy_users": ("inventory", "effects", "transactions", "achievements"),
     "level_config": ("level_roles",),
     "giveaways": ("requirements",),
+    "ticket_config": ("panel_categories", "support_roles", "open_tickets"),
 }
 
 
@@ -139,6 +140,7 @@ PRIMARY_KEYS: dict = {
     "guild_profiles": "guild_id",
     "donation_invoices": "order_id",
     "transcripts": "transcript_id",
+    "ticket_config": "guild_id",
 }
 
 
