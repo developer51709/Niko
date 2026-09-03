@@ -3,7 +3,7 @@ from discord.ext import commands
 import aiohttp
 import random
 from utils.ai.config import get_personality
-from utils.i18n import make_msg
+from utils.i18n import get_lang, make_msg
 
 # -----------------------------
 # MESSAGE DICTIONARY
