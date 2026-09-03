@@ -24,10 +24,19 @@ _FINGERPRINT_KEY = "slash_command_fingerprint"
 _LEGACY_FINGERPRINT_FILE = "data/slash_command_fingerprint.json"
 
 
+def _command_to_dict(command, tree):
+    """Serialize a command, tolerating the discord.py version difference where
+    ContextMenu.to_dict() requires the tree while Command.to_dict() does not."""
+    try:
+        return command.to_dict(tree)
+    except TypeError:
+        return command.to_dict()
+
+
 def _command_fingerprint(bot) -> str:
     """Deterministic hash of the current global application-command tree."""
     payload = [
-        command.to_dict()
+        _command_to_dict(command, bot.tree)
         for command in sorted(bot.tree.get_commands(), key=lambda command: command.name)
     ]
     return hashlib.sha256(
