@@ -257,6 +257,11 @@ def _save_lottery(state: dict) -> None:
 # ── Database helpers ────────────────────────────────────────────────────────
 async def _get_user_from_db(bot, user_id: int) -> dict | None:
     """Get user economy data from database."""
+    # Guard against non-integer user IDs (prevents fake record lookups)
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return None
     try:
         row = await bot.cxn.fetchrow(
             "SELECT * FROM economy_users WHERE user_id = ?",
@@ -283,6 +288,12 @@ async def _get_user_from_db(bot, user_id: int) -> dict | None:
 
 async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
     """Save user economy data to database."""
+    # Guard against non-integer user IDs (prevents fake record creation)
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        log.error("Economy", f"Refusing to save economy data for non-integer user_id: {user_id!r}")
+        return
     try:
         _migrate_user(data)
         

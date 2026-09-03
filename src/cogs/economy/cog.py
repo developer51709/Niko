@@ -55,6 +55,12 @@ class EconomyCog(
 
     async def get_user_economy_data(self, user_id) -> dict:
         """Get user economy data from database with caching."""
+        # Guard against non-integer user IDs
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            log.warning("Economy", f"Rejected non-integer user_id: {user_id!r}")
+            return _migrate_user(_default_user())
         uid = str(user_id)
         
         # Check cache first
@@ -75,6 +81,10 @@ class EconomyCog(
 
     async def save_user_economy_data(self, user_id) -> None:
         """Save a single user's data to database."""
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return
         uid = str(user_id)
         if uid in self.economy_data:
             await _save_user_to_db(self.bot, user_id, self.economy_data[uid])
@@ -209,10 +219,31 @@ class EconomyCog(
         rows = await self.bot.cxn.fetch("SELECT user_id, bank, bank_tier, total_earned, last_interest_day FROM economy_users")
         
         for row in rows:
-            if row.get("last_interest_day") == today_utc:
+            user_id = row["user_id"]
+            
+            # ── Skip fake / malformed records (non-integer user IDs) ──────
+            try:
+                uid_int = int(user_id)
+            except (TypeError, ValueError):
+                log.warning("Economy", f"Skipping malformed economy record with non-integer user_id: {user_id!r}")
+                await self.bot.cxn.execute(
+                    "DELETE FROM economy_users WHERE user_id = ?",
+                    user_id
+                )
                 continue
             
-            user_id = row["user_id"]
+            # ── Compare last_interest_day safely ──────────────────────
+            # MongoDB stores dates as datetime objects; convert to string
+            # before comparing with the YYYY-MM-DD string.
+            last_day = row.get("last_interest_day")
+            if last_day is not None:
+                last_day_str = str(last_day)[:10]  # handles datetime → "2026-09-02 ..."
+            else:
+                last_day_str = None
+            
+            if last_day_str == today_utc:
+                continue
+            
             tier = int(row.get("bank_tier", 0))
             cap  = bank_cap(tier)
             rate = bank_rate(tier)
@@ -221,7 +252,7 @@ class EconomyCog(
             if bank <= 0:
                 await self.bot.cxn.execute(
                     "UPDATE economy_users SET last_interest_day = ? WHERE user_id = ?",
-                    today_utc, user_id
+                    today_utc, uid_int
                 )
                 continue
             
@@ -231,7 +262,7 @@ class EconomyCog(
             if interest <= 0:
                 await self.bot.cxn.execute(
                     "UPDATE economy_users SET last_interest_day = ? WHERE user_id = ?",
-                    today_utc, user_id
+                    today_utc, uid_int
                 )
                 continue
             
@@ -240,11 +271,11 @@ class EconomyCog(
             
             await self.bot.cxn.execute(
                 "UPDATE economy_users SET bank = ?, total_earned = ?, last_interest_day = ? WHERE user_id = ?",
-                new_bank, new_total_earned, today_utc, user_id
+                new_bank, new_total_earned, today_utc, uid_int
             )
             
             # Update cache if user is in memory
-            uid = str(user_id)
+            uid = str(uid_int)
             if uid in self.economy_data:
                 self.economy_data[uid]["bank"] = new_bank
                 self.economy_data[uid]["total_earned"] = new_total_earned
