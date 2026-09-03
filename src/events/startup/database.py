@@ -315,6 +315,20 @@ async def _create_tables(bot):
     # Migrate legacy ticket JSON files to database
     await _migrate_ticket_data(bot)
 
+    # ── Sticky messages table ──────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS sticky_messages (
+            channel_id  INTEGER PRIMARY KEY,
+            guild_id    INTEGER NOT NULL,
+            content     TEXT NOT NULL,
+            color       INTEGER DEFAULT 5865922,
+            message_id  INTEGER,
+            created_by  INTEGER,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_sticky_data(bot)
+
     logging.success("DB", "Database tables verified")
 
 
@@ -656,8 +670,63 @@ async def _migrate_ticket_data(bot):
             if migrated > 0:
                 os.rename(transcript_dir, transcript_dir + ".migrated")
                 logging.success("DB", f"Migrated {migrated} transcripts from JSON files to database")
-        except Exception as e:
-            logging.warning("DB", f"Could not migrate transcript directory: {e}")
+        except Exception as e:                logging.warning("DB", f"Could not migrate transcript directory: {e}")
+
+
+async def _migrate_sticky_data(bot):
+    """Migrate data/sticky.json into the sticky_messages table."""
+    import json as _json
+
+    path = "data/sticky.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, channels in data.items():
+            if not isinstance(channels, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for cid_str, entry in channels.items():
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    channel_id = int(cid_str)
+                except (TypeError, ValueError):
+                    continue
+                # Skip if already migrated
+                existing = await bot.cxn.fetchval(
+                    "SELECT channel_id FROM sticky_messages WHERE channel_id = $1",
+                    channel_id,
+                )
+                if existing:
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO sticky_messages "
+                    "(channel_id, guild_id, content, color, message_id, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    channel_id,
+                    guild_id,
+                    entry.get("content", ""),
+                    entry.get("color", 5865922),
+                    entry.get("message_id"),
+                    entry.get("created_by"),
+                )
+                migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} sticky messages from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate sticky.json: {e}")
 
 
 async def init_database(bot):

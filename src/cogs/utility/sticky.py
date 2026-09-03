@@ -15,8 +15,6 @@ trigger a delete+repost on every single message.
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 from typing import Optional
 
 import discord
@@ -24,27 +22,10 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 
-DATA_FILE = "data/sticky.json"
 MAX_CONTENT_LEN = 1000
 MAX_STICKIES_PER_GUILD = 50
 REPOST_DELAY = 3.0  # seconds — debounce window so bursts only trigger one repost
 DEFAULT_COLOR = 0x5865F2
-
-
-def _load() -> dict:
-    if not os.path.exists(DATA_FILE):
-        return {}
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save(data: dict):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
 
 
 def _sticky_view(content: str, color: int) -> discord.ui.LayoutView:
@@ -72,16 +53,26 @@ class StickyCog(commands.Cog, name="Sticky"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.data: dict = _load()
         self._pending: set[int] = set()  # channel_ids with a repost currently scheduled
 
-    # ── helpers ──────────────────────────────────────────────────────────
+    # ── database helpers ────────────────────────────────────────────────
 
-    def _guild_data(self, guild_id: int) -> dict:
-        return self.data.setdefault(str(guild_id), {})
+    async def _get(self, guild_id: int, channel_id: int) -> Optional[dict]:
+        """Fetch a sticky entry from the database."""
+        row = await self.bot.cxn.fetchrow(
+            "SELECT * FROM sticky_messages WHERE channel_id = $1",
+            channel_id,
+        )
+        if row is None:
+            return None
+        return dict(row)
 
-    def _get(self, guild_id: int, channel_id: int) -> Optional[dict]:
-        return self._guild_data(guild_id).get(str(channel_id))
+    async def _get_count(self, guild_id: int) -> int:
+        """Count sticky messages in a guild."""
+        return await self.bot.cxn.fetchval(
+            "SELECT COUNT(*) FROM sticky_messages WHERE guild_id = $1",
+            guild_id,
+        ) or 0
 
     # ── commands ─────────────────────────────────────────────────────────
 
@@ -124,13 +115,14 @@ class StickyCog(commands.Cog, name="Sticky"):
                 ephemeral=ephemeral,
             )
 
-        gdata = self._guild_data(ctx.guild.id)
-        existing = gdata.get(str(ctx.channel.id))
-        if existing is None and len(gdata) >= MAX_STICKIES_PER_GUILD:
-            return await ctx.send(
-                view=_feedback(f"This server already has the maximum of {MAX_STICKIES_PER_GUILD} sticky messages.", ok=False),
-                ephemeral=ephemeral,
-            )
+        existing = await self._get(ctx.guild.id, ctx.channel.id)
+        if existing is None:
+            count = await self._get_count(ctx.guild.id)
+            if count >= MAX_STICKIES_PER_GUILD:
+                return await ctx.send(
+                    view=_feedback(f"This server already has the maximum of {MAX_STICKIES_PER_GUILD} sticky messages.", ok=False),
+                    ephemeral=ephemeral,
+                )
 
         # Delete the previous sticky post (if any) before sending the new one.
         old_message_id = existing.get("message_id") if existing else None
@@ -151,13 +143,17 @@ class StickyCog(commands.Cog, name="Sticky"):
                 ephemeral=ephemeral,
             )
 
-        gdata[str(ctx.channel.id)] = {
-            "content": message,
-            "color": color,
-            "message_id": posted.id,
-            "created_by": ctx.author.id,
-        }
-        _save(self.data)
+        if existing:
+            await self.bot.cxn.execute(
+                "UPDATE sticky_messages SET content = $1, message_id = $2 WHERE channel_id = $3",
+                message, posted.id, ctx.channel.id,
+            )
+        else:
+            await self.bot.cxn.execute(
+                "INSERT INTO sticky_messages (channel_id, guild_id, content, color, message_id, created_by) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                ctx.channel.id, ctx.guild.id, message, color, posted.id, ctx.author.id,
+            )
 
         await ctx.send(
             view=_feedback("Sticky message set." if existing is None else "Sticky message updated."),
@@ -169,14 +165,17 @@ class StickyCog(commands.Cog, name="Sticky"):
     @commands.guild_only()
     async def sticky_remove(self, ctx: commands.Context):
         ephemeral = bool(ctx.interaction)
-        gdata = self._guild_data(ctx.guild.id)
-        entry = gdata.pop(str(ctx.channel.id), None)
+        entry = await self._get(ctx.guild.id, ctx.channel.id)
         if entry is None:
             return await ctx.send(
                 view=_feedback("This channel doesn't have a sticky message.", ok=False),
                 ephemeral=ephemeral,
             )
-        _save(self.data)
+
+        await self.bot.cxn.execute(
+            "DELETE FROM sticky_messages WHERE channel_id = $1",
+            ctx.channel.id,
+        )
 
         if entry.get("message_id"):
             try:
@@ -192,22 +191,25 @@ class StickyCog(commands.Cog, name="Sticky"):
     @commands.guild_only()
     async def sticky_list(self, ctx: commands.Context):
         ephemeral = bool(ctx.interaction)
-        gdata = self._guild_data(ctx.guild.id)
-        if not gdata:
+        rows = await self.bot.cxn.fetch(
+            "SELECT channel_id, content FROM sticky_messages WHERE guild_id = $1",
+            ctx.guild.id,
+        )
+        if not rows:
             return await ctx.send(
                 view=_feedback("This server has no sticky messages yet.", ok=False),
                 ephemeral=ephemeral,
             )
 
         lines = []
-        for cid_str, entry in gdata.items():
-            content = entry.get("content", "")
+        for row in rows:
+            content = row["content"]
             preview = content[:80] + ("…" if len(content) > 80 else "")
-            lines.append(f"• <#{cid_str}> — {preview}")
+            lines.append(f"• <#{row['channel_id']}> — {preview}")
 
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### 📌 Sticky Messages ({len(gdata)})"),
+            discord.ui.TextDisplay(content=f"### 📌 Sticky Messages ({len(rows)})"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content="\n".join(lines)),
         ))
@@ -220,7 +222,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         if not message.guild or message.author.id == self.bot.user.id:
             return
 
-        entry = self._get(message.guild.id, message.channel.id)
+        entry = await self._get(message.guild.id, message.channel.id)
         if entry is None:
             return
 
@@ -236,7 +238,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         try:
             await asyncio.sleep(REPOST_DELAY)
 
-            entry = self._get(guild_id, channel_id)
+            entry = await self._get(guild_id, channel_id)
             if entry is None:
                 return  # sticky was removed while we were waiting
 
@@ -257,8 +259,10 @@ class StickyCog(commands.Cog, name="Sticky"):
             except (discord.Forbidden, discord.HTTPException):
                 return
 
-            entry["message_id"] = posted.id
-            _save(self.data)
+            await self.bot.cxn.execute(
+                "UPDATE sticky_messages SET message_id = $1 WHERE channel_id = $2",
+                posted.id, channel_id,
+            )
         except Exception:
             # Never let a background repost task crash the event loop silently.
             pass

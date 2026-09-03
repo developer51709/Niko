@@ -141,6 +141,7 @@ PRIMARY_KEYS: dict = {
     "donation_invoices": "order_id",
     "transcripts": "transcript_id",
     "ticket_config": "guild_id",
+    "sticky_messages": "channel_id",
 }
 
 
