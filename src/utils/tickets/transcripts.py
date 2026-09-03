@@ -148,6 +148,8 @@ def export_html(messages: List[dict], metadata: dict) -> str:
             f'{att_html}</div>'
         )
 
+    msg_block = chr(10).join(msg_rows)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -176,7 +178,7 @@ def export_html(messages: List[dict], metadata: dict) -> str:
   <h1>#{title}</h1>
   <div class="meta">{guild} · {msg_count} messages · Created {created}</div>
 </div>
-{"chr(10).join(msg_rows)}
+{msg_block}
 </body>
 </html>"""
 
