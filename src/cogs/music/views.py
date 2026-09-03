@@ -13,7 +13,6 @@ Features:
   • Personality-aware text (normal / café modes, EN / DE)
 
 Known Issues:
-  • When using spotify track links in the play command it always fails (the plan is to switch to spotipy for the spotify api in a future version)
   • The now playing progress bar does not update unless someone presses the pause button
 """
 
@@ -39,9 +38,10 @@ from utils.i18n import make_msg
 #  CONSTANTS
 # ──────────────────────────────────────────────────
 
-IDLE_TIMEOUT   = 300       # seconds before auto-disconnect on empty queue
-HISTORY_LEN    = 10        # tracks kept in per-guild history deque
-MAX_QUEUE_SHOW = 10        # tracks shown in .queue list
+IDLE_TIMEOUT      = 300       # seconds before auto-disconnect on empty queue
+HISTORY_LEN       = 10        # tracks kept in per-guild history deque
+MAX_QUEUE_SHOW    = 10        # tracks shown in .queue list
+_MAX_CONNECT_NODES = 3        # Lavalink nodes to keep in the pool (load-balanced + failover)
 
 SOURCE_COLOURS = {
     "youtube":    discord.Colour(0xFF0000),
@@ -50,9 +50,25 @@ SOURCE_COLOURS = {
     "default":    discord.Colour(0x5865F2),
 }
 
-_SPOTIFY_TRACK_RE    = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?track/([A-Za-z0-9]+)")
-_SPOTIFY_ALBUM_RE    = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?album/([A-Za-z0-9]+)")
-_SPOTIFY_PLAYLIST_RE = re.compile(r"open\.spotify\.com/(?:[a-z]{2}(?:-[A-Z]{2})?/)?playlist/([A-Za-z0-9]+)")
+_SPOTIFY_LOCALE = r"(?:embed/)?(?:(?:[a-z]{2}(?:-[A-Z]{2})?|intl-[a-z]{2})/)?"
+_SPOTIFY_TRACK_RE    = re.compile(r"open\.spotify\.com/" + _SPOTIFY_LOCALE + r"track/([A-Za-z0-9]+)")
+_SPOTIFY_ALBUM_RE    = re.compile(r"open\.spotify\.com/" + _SPOTIFY_LOCALE + r"album/([A-Za-z0-9]+)")
+_SPOTIFY_PLAYLIST_RE = re.compile(r"open\.spotify\.com/" + _SPOTIFY_LOCALE + r"playlist/([A-Za-z0-9]+)")
+
+
+def _normalize_spotify_reference(raw: str) -> str | None:
+    """Convert a Spotify URI or short reference into a canonical
+    ``open.spotify.com/<type>/<id>`` URL. Returns None if it is not a
+    recognised Spotify reference."""
+    q = raw.strip()
+    m = re.match(r"^spotify:(?:track|album|playlist):([A-Za-z0-9]+)(?:.*)$", q)
+    if m:
+        kind = "track" if q.startswith("spotify:track:") else ("album" if q.startswith("spotify:album:") else "playlist")
+        return f"https://open.spotify.com/{kind}/{m.group(1)}"
+    for kind in ("track", "album", "playlist"):
+        if re.search(r"open\.spotify\.com/" + _SPOTIFY_LOCALE + kind + r"/([A-Za-z0-9]+)", q):
+            return q  # already a web URL the *_RE patterns can parse
+    return None
 
 # ──────────────────────────────────────────────────
 #  PERSONALITY MESSAGES
@@ -295,32 +311,65 @@ class _SpotifyClient:
         self._exp: float = 0.0
 
     async def _token_headers(self) -> dict:
+        """Fetch (and cache) a client-credentials token with one retry."""
         if not self._token or _time.monotonic() >= self._exp - 60:
             creds = base64.b64encode(f"{self._id}:{self._secret}".encode()).decode()
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    self._TOKEN_URL,
-                    headers={"Authorization": f"Basic {creds}"},
-                    data={"grant_type": "client_credentials"},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as r:
-                    data = await r.json()
-            self._token = data["access_token"]
-            self._exp   = _time.monotonic() + data.get("expires_in", 3600)
+            last_error: Exception | None = None
+            for attempt in range(2):
+                try:
+                    async with aiohttp.ClientSession() as s:
+                        async with s.post(
+                            self._TOKEN_URL,
+                            headers={"Authorization": f"Basic {creds}"},
+                            data={"grant_type": "client_credentials"},
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as r:
+                            if r.status == 200:
+                                data = await r.json(content_type=None)
+                                self._token = data["access_token"]
+                                self._exp   = _time.monotonic() + data.get("expires_in", 3600)
+                            elif r.status in (429, 500, 502, 503):
+                                last_error = RuntimeError(f"Spotify token endpoint HTTP {r.status}")
+                                await asyncio.sleep(1 + attempt)
+                            else:
+                                last_error = RuntimeError(
+                                    f"Spotify token endpoint HTTP {r.status} — check SPOTIFY_CLIENT_ID/SECRET"
+                                )
+                except Exception as exc:
+                    last_error = exc
+                    await asyncio.sleep(1)
+                if self._token:
+                    break
+            if not self._token:
+                raise RuntimeError(f"Could not obtain Spotify token: {last_error}")
         return {"Authorization": f"Bearer {self._token}"}
 
     async def _get(self, path: str) -> dict | None:
-        try:
-            headers = await self._token_headers()
-            async with aiohttp.ClientSession() as s:
-                async with s.get(
-                    f"{self._API_URL}/{path}",
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as r:
-                    return await r.json() if r.status == 200 else None
-        except Exception:
-            return None
+        """GET a Spotify API path with retries on transient failures and one
+        forced token refresh when the API rejects our credentials."""
+        for attempt in range(2):
+            try:
+                headers = await self._token_headers()
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        f"{self._API_URL}/{path}",
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as r:
+                        if r.status == 200:
+                            return await r.json(content_type=None)
+                        if r.status in (401, 403):
+                            # Credentials may have been invalidated — refresh once.
+                            self._token = None
+                            self._exp   = 0.0
+                            continue
+                        if r.status in (429, 500, 502, 503):
+                            await asyncio.sleep(1)
+                            continue
+                        return None
+            except Exception:
+                await asyncio.sleep(1)
+        return None
 
     async def resolve_track(self, track_id: str) -> str | None:
         """Returns 'Artist - Title' search string."""

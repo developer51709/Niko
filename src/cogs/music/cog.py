@@ -8,6 +8,8 @@ class MusicSystem(commands.Cog):
         self.bot        = bot
         self.connected  = False
         self._connecting = False
+        # Labels of Lavalink nodes currently in the pool (host:port).
+        self._node_labels: list[str] = []
 
         # { guild_id: { loop, autoplay, history, np_message, last_track } }
         self._guild_states: dict[int, dict] = {}
@@ -84,49 +86,97 @@ class MusicSystem(commands.Cog):
     # ─── LAVALINK CONNECTION ──────────────────────
 
     async def startup_connect(self, *, retry_delay: float = 0):
+        """Connect the bot to several responsive Lavalink nodes at once.
+
+        wavelink registers every node that accepts the handshake and then
+        load-balances players across them, so a single node going down no
+        longer kills music for every guild.
+        """
         if self._connecting:
             return
         self._connecting = True
-        if retry_delay:
-            await asyncio.sleep(retry_delay)
-        await self.bot.wait_until_ready()
+        try:
+            if retry_delay:
+                await asyncio.sleep(retry_delay)
+            await self.bot.wait_until_ready()
 
-        raw_nodes = await _fetch_node_list()
-        if not raw_nodes:
-            log.warning("Lavalink", "Could not fetch node list.")
-            self._connecting = False
-            return
-
-        responsive = await _find_responsive_nodes(raw_nodes)
-        if not responsive:
-            log.warning("Lavalink", "No responsive nodes found. Music unavailable.")
-            self._connecting = False
-            return
-
-        for node_info in responsive:
-            host     = node_info["host"]
-            port     = node_info["port"]
-            password = node_info["password"]
-            secure   = node_info.get("secure", False)
-            uri      = f"{'https' if secure else 'http'}://{host}:{port}"
-            try:
-                node = wavelink.Node(uri=uri, password=password)
-                await asyncio.wait_for(
-                    wavelink.Pool.connect(nodes=[node], client=self.bot),
-                    timeout=_CONNECT_TIMEOUT,
-                )
-                log.info("Lavalink", f"Connected to {host}:{port} (SSL={secure})")
-                self.connected   = True
-                self._connecting = False
+            raw_nodes = await _fetch_node_list()
+            if not raw_nodes:
+                log.warning("Lavalink", "Could not fetch node list.")
                 return
-            except Exception:
+
+            responsive = await _find_responsive_nodes(raw_nodes)
+            if not responsive:
+                log.warning("Lavalink", "No responsive nodes found. Music unavailable.")
+                return
+
+            # Eject dead nodes from a previous pool epoch so their identifiers
+            # can be registered again. Healthy nodes are left untouched.
+            await self._eject_stale_nodes()
+
+            # Connect several nodes in one Pool.connect call — wavelink keeps
+            # whichever succeed.
+            targets: list[wavelink.Node] = []
+            for node_info in responsive[: int(_MAX_CONNECT_NODES)]:
+                host     = node_info["host"]
+                port     = node_info["port"]
+                password = node_info["password"]
+                secure   = node_info.get("secure", False)
+                uri      = f"{'https' if secure else 'http'}://{host}:{port}"
+                targets.append(wavelink.Node(
+                    uri=uri,
+                    password=password,
+                    identifier=f"{host}:{port}",
+                    retries=3,
+                ))
+
+            try:
+                await asyncio.wait_for(
+                    wavelink.Pool.connect(nodes=targets, client=self.bot),
+                    timeout=_CONNECT_TIMEOUT + 10,
+                )
+            except Exception as exc:
+                log.warning(
+                    "Lavalink",
+                    f"Multi-node connect failed ({exc}); retrying the fastest node alone.",
+                )
+                await self._eject_stale_nodes()
                 try:
-                    await wavelink.Pool.close()
+                    await asyncio.wait_for(
+                        wavelink.Pool.connect(nodes=targets[:1], client=self.bot),
+                        timeout=_CONNECT_TIMEOUT,
+                    )
+                except Exception as exc2:
+                    log.warning("Lavalink", f"Single-node fallback failed too: {exc2}")
+
+            connected = [
+                node for node in wavelink.Pool.nodes.values()
+                if node.status is wavelink.NodeStatus.CONNECTED
+            ]
+            if connected:
+                self._node_labels = sorted(node.identifier for node in connected)
+                self.connected    = True
+                log.info(
+                    "Lavalink",
+                    f"Connected to {len(connected)} Lavalink node(s): "
+                    + ", ".join(self._node_labels),
+                )
+            else:
+                self._node_labels = []
+                self.connected    = False
+                log.warning("Lavalink", "No Lavalink node accepted the wavelink handshake.")
+        finally:
+            self._connecting = False
+
+    async def _eject_stale_nodes(self):
+        """Remove disconnected nodes from the wavelink pool so their
+        identifiers can be re-registered on the next connect attempt."""
+        for node in list(wavelink.Pool.nodes.values()):
+            if node.status is not wavelink.NodeStatus.CONNECTED:
+                try:
+                    await node.close(eject=True)
                 except Exception:
                     pass
-
-        log.warning("Lavalink", "All responsive nodes failed the wavelink handshake.")
-        self._connecting = False
 
     # ─── WAVELINK EVENTS ──────────────────────────
 
@@ -136,8 +186,34 @@ class MusicSystem(commands.Cog):
 
     @commands.Cog.listener()
     async def on_wavelink_node_closed(self, node: wavelink.Node, disconnected: list):
-        log.warning("Lavalink", f"Node '{node.identifier}' closed. Reconnecting in 10s…")
-        self.connected = False
+        """Handle node loss: keep playing while other nodes remain; only
+        re-run the full connect cycle when every node is gone."""
+        try:
+            remaining = [
+                n for n in wavelink.Pool.nodes.values()
+                if n is not node and n.status is wavelink.NodeStatus.CONNECTED
+            ]
+        except Exception:
+            remaining = []
+
+        if remaining:
+            self._node_labels = sorted(n.identifier for n in remaining)
+            self.connected    = True
+            log.warning(
+                "Lavalink",
+                f"Node '{node.identifier}' closed — {len(remaining)} node(s) still "
+                "connected, continuing playback.",
+            )
+            return
+
+        self._node_labels = []
+        self.connected    = False
+        if self._connecting:
+            return  # a reconnect cycle is already running
+        log.warning(
+            "Lavalink",
+            f"Node '{node.identifier}' closed — no nodes left. Reconnecting in 10s…",
+        )
         self.bot.loop.create_task(self.startup_connect(retry_delay=10))
 
     @commands.Cog.listener()
@@ -181,21 +257,45 @@ class MusicSystem(commands.Cog):
             await self._update_np_message(player.guild)
             return
 
-        # Queue exhausted — try autoplay via Last.fm
-        if state.get("autoplay") and self._lastfm_key and payload.track:
-            track      = payload.track
-            artist_raw = track.author or ""
-            title_raw  = track.title  or ""
-            similars   = await _lastfm_similar(self._lastfm_key, artist_raw, title_raw)
+        # Queue exhausted — try autoplay via Last.fm. Only continue when the
+        # previous track finished naturally or was skipped forward; never after
+        # /stop or a channel cleanup, which fire 'stopped'/'cleanup' reasons.
+        reason = str(getattr(payload, "reason", "") or "")
+        if (
+            state.get("autoplay")
+            and self._lastfm_key
+            and payload.track
+            and reason in ("finished", "replaced")
+        ):
+            try:
+                track      = payload.track
+                artist_raw = track.author or ""
+                title_raw  = track.title  or ""
+                similars   = await _lastfm_similar(self._lastfm_key, artist_raw, title_raw)
 
-            for similar_artist, similar_title in similars:
-                query   = f"ytsearch:{similar_artist} - {similar_title}"
-                results = await wavelink.Playable.search(query)
-                if results:
+                # Skip candidates we have just played — Last.fm "similar" lists
+                # frequently include the source track, which would otherwise
+                # loop two songs forever.
+                played = set()
+                for item in state["history"]:
+                    key = ((item.author or "").lower(), (item.title or "").lower())
+                    if key != ("", ""):
+                        played.add(key)
+                played.add((artist_raw.lower(), title_raw.lower()))
+
+                for similar_artist, similar_title in similars:
+                    if (similar_artist.lower(), similar_title.lower()) in played:
+                        continue
+                    query   = f"ytsearch:{similar_artist} - {similar_title}"
+                    results = await wavelink.Playable.search(query)
+                    if not results:
+                        continue
                     nxt = results[0] if isinstance(results, list) else results
                     await player.play(nxt)
                     await self._update_np_message(player.guild)
                     return
+            except Exception as exc:
+                log.error("Music", f"Autoplay failed: {exc}")
 
         # Nothing more to play — idle grace period then disconnect
         await asyncio.sleep(IDLE_TIMEOUT)
@@ -219,9 +319,13 @@ class MusicSystem(commands.Cog):
         q = query.strip()
 
         # ── Spotify ───────────────────────────────
-        if "open.spotify.com" in q:
+        if "open.spotify.com" in q or q.startswith("spotify:"):
             if not self._spotify:
                 return None
+            normalized = _normalize_spotify_reference(q)
+            if not normalized:
+                return None
+            q = normalized
 
             m_track = _SPOTIFY_TRACK_RE.search(q)
             if m_track:
@@ -330,7 +434,7 @@ class MusicSystem(commands.Cog):
             return
 
         # Handle Spotify URL feedback before long resolution
-        is_spotify = "open.spotify.com" in search
+        is_spotify = "open.spotify.com" in search or search.startswith("spotify:")
         if is_spotify and not self._spotify:
             return await ctx.send(msg(ctx, "spotify_disabled"))
 
@@ -542,6 +646,13 @@ class MusicSystem(commands.Cog):
             sp_line = "\n-# 🎧 Spotify URL support enabled"
         if self._lastfm_key:
             sp_line += "\n-# 📻 Last.fm autoplay available"
+        if self.connected and self._node_labels:
+            sp_line += (
+                "\n-# 🎛 "
+                + str(len(self._node_labels))
+                + " node(s): "
+                + ", ".join(self._node_labels)
+            )
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
