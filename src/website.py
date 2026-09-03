@@ -1843,7 +1843,7 @@ def api_get_transcript(transcript_id):
         return jsonify({"error": "Database unavailable."}), 503
     try:
         row = run_on_bot_loop(_discord_bot.cxn.fetchrow(
-            "SELECT * FROM transcripts WHERE transcript_id = ",
+            "SELECT * FROM transcripts WHERE transcript_id = $1",
             transcript_id,
         ))
     except Exception as e:
@@ -1871,7 +1871,7 @@ def api_download_transcript(transcript_id):
         return jsonify({"error": "Database unavailable."}), 503
     try:
         row = run_on_bot_loop(_discord_bot.cxn.fetchrow(
-            "SELECT * FROM transcripts WHERE transcript_id = ",
+            "SELECT * FROM transcripts WHERE transcript_id = $1",
             transcript_id,
         ))
     except Exception as e:
