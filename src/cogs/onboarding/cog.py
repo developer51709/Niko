@@ -276,7 +276,7 @@ async def setup(bot):
 
     for guild_id, cfg in await load_all_configs():
         if cfg.rules_channel and cfg.rules_message_id:
-            bot.add_view(RulesAcknowledgeView(guild_id), message_id=cfg.rules_message_id)
+            bot.add_view(RulesAcknowledgeView(guild_id, cfg=cfg), message_id=cfg.rules_message_id)
 
         for menu_id, menu in (cfg.role_menus or {}).items():
             if menu.get("channel_id") and menu.get("message_id"):

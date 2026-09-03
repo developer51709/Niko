@@ -2155,7 +2155,7 @@ class RulesAcknowledgeView(discord.ui.LayoutView):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
-        rules_text = cfg.rules_text or "No rules have been set yet."
+        rules_text = (cfg.rules_text if cfg else None) or "No rules have been set yet."
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Server Rules"),
