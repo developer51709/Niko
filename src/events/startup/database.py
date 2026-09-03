@@ -402,6 +402,27 @@ async def _create_tables(bot):
             added_by   INTEGER
         )
     """)
+
+    # ── Roleplay actions (persistent "do it back" buttons) ──────────────
+    # One row per roleplay message that carries a back-button. Row state is
+    # resolved by message_id when the button is pressed, so buttons on messages
+    # sent before a restart keep working (handled via the on_interaction
+    # listener in cogs.fun.roleplay).
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS roleplay_actions (
+            message_id INTEGER PRIMARY KEY,
+            guild_id   INTEGER,
+            channel_id INTEGER NOT NULL,
+            action     TEXT    NOT NULL,
+            actor_id   INTEGER NOT NULL,
+            target_id  INTEGER NOT NULL,
+            gif        TEXT    NOT NULL,
+            title      TEXT    NOT NULL,
+            desc       TEXT    NOT NULL,
+            footer     TEXT,
+            used       INTEGER NOT NULL DEFAULT 0
+        )
+    """)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_guilds (
             id         INTEGER PRIMARY KEY,
@@ -1068,5 +1089,15 @@ async def init_database(bot):
             await BlacklistManager().load()
         except Exception as e:
             logging.warning("DB", f"Could not preload blacklist cache: {e}")
+
+        # Dedicated music database (separate file / separate MongoDB database
+        # within the same cluster) — liked songs, playlists, etc. keep load
+        # off the main database.
+        try:
+            from utils.music.database import MusicDatabase
+
+            await MusicDatabase().init(bot)
+        except Exception as e:
+            logging.warning("DB", f"Could not init music database: {e}")
     except Exception as e:
         logging.error("DB", f"Failed to open database: {e}")
