@@ -32,6 +32,7 @@ from discord.ui import Modal, TextInput
 from utils.tickets.utils import (
     get_ticket_config,
     update_ticket_config,
+    async_update_ticket_config,
     get_all_ticket_configs,
     find_open_ticket,
 )
@@ -409,7 +410,7 @@ class TicketPanelModal(Modal, title="Configure Ticket Panel"):
             if parsed is not None:
                 cfg.panel_color = parsed
         cfg.panel_image = self.image_input.value or None
-        update_ticket_config(self.guild_id, cfg)
+        await async_update_ticket_config(self.guild_id, cfg)
 
         # update existing posted panel if present
         if cfg.panel_message_id and cfg.panel_channel_id:
@@ -554,7 +555,7 @@ async def create_ticket(interaction: discord.Interaction, category: str):
         "claimed_by": None,
         "status": "open",
     })
-    update_ticket_config(guild.id, cfg)
+    await async_update_ticket_config(guild.id, cfg)
 
     text = msg(interaction, "ticket_created", channel=channel.mention)
     if interaction.response.is_done():

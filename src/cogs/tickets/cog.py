@@ -47,7 +47,7 @@ class Tickets(commands.Cog):
         sent = await ctx.channel.send(view=view)
         cfg.panel_message_id = sent.id
         cfg.panel_channel_id = ctx.channel.id
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "panel_posted", channel=ctx.channel.mention), ephemeral=True if ctx.interaction else False)
 
     # ───── admin: category management ─────────────
@@ -73,7 +73,7 @@ class Tickets(commands.Cog):
         if name in cfg.panel_categories:
             return await ctx.send(view=_cv2_text(ctx, "category_exists", name=name))
         cfg.panel_categories.append(name)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
         await ctx.send(view=_cv2_text(ctx, "category_added", name=name))
 
@@ -87,7 +87,7 @@ class Tickets(commands.Cog):
         if name not in cfg.panel_categories:
             return await ctx.send(view=_cv2_text(ctx, "category_missing", name=name))
         cfg.panel_categories.remove(name)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
         await ctx.send(view=_cv2_text(ctx, "category_removed", name=name))
 
@@ -126,7 +126,7 @@ class Tickets(commands.Cog):
         if role.id in cfg.support_roles:
             return await ctx.send(view=_cv2_text(ctx, "support_exists", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.append(role.id)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "support_added", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
@@ -139,7 +139,7 @@ class Tickets(commands.Cog):
         if role.id not in cfg.support_roles:
             return await ctx.send(view=_cv2_text(ctx, "support_missing", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.remove(role.id)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "support_removed", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
@@ -242,7 +242,7 @@ class Tickets(commands.Cog):
             who = other.mention if other else f"<@{existing}>"
             return await ctx.send(view=_cv2_text(ctx, "already_claimed", user=who))
         ticket["claimed_by"] = ctx.author.id
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "claimed", user=ctx.author.mention))
 
     # ───── in-ticket: transcript ──────────────────
@@ -392,7 +392,7 @@ class Tickets(commands.Cog):
             pass
 
         ticket["status"] = "closed"
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
 
         await ctx.send(view=_cv2_text(ctx, "closed", user=ctx.author.mention))
 
@@ -418,7 +418,7 @@ class Tickets(commands.Cog):
 
         # remove from open tickets list
         cfg.open_tickets = [t for t in cfg.open_tickets if t.get("channel_id") != ctx.channel.id]
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
 
         try:
             await ctx.channel.delete(reason=f"Ticket deleted by {ctx.author}")
@@ -479,7 +479,7 @@ class _PostPanelBtn(discord.ui.Button):
         sent = await interaction.channel.send(view=view)
         cfg.panel_message_id = sent.id
         cfg.panel_channel_id = interaction.channel.id
-        update_ticket_config(self.guild_id, cfg)
+        await async_update_ticket_config(self.guild_id, cfg)
         await interaction.response.send_message(
             msg(interaction, "panel_posted", channel=interaction.channel.mention),
             ephemeral=True,
