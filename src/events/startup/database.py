@@ -281,6 +281,40 @@ async def _create_tables(bot):
     except Exception as e:
         logging.warning("DB", f"Onboarding JSON migration failed: {e}")
 
+    # ── Ticket tables ────────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS ticket_config (
+            guild_id          INTEGER PRIMARY KEY,
+            panel_title       TEXT,
+            panel_description TEXT,
+            panel_color       INTEGER,
+            panel_image       TEXT,
+            panel_categories  TEXT DEFAULT '[]',
+            panel_channel_id  INTEGER,
+            panel_message_id  INTEGER,
+            support_roles     TEXT DEFAULT '[]',
+            open_tickets      TEXT DEFAULT '[]'
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS transcripts (
+            transcript_id  TEXT PRIMARY KEY,
+            guild_id       INTEGER NOT NULL,
+            channel_id     INTEGER NOT NULL,
+            channel_name   TEXT NOT NULL,
+            opener_id      INTEGER NOT NULL,
+            category       TEXT NOT NULL DEFAULT 'General',
+            claimed_by     INTEGER,
+            message_count  INTEGER DEFAULT 0,
+            messages       TEXT DEFAULT '[]',
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # Migrate legacy ticket JSON files to database
+    await _migrate_ticket_data(bot)
+
     logging.success("DB", "Database tables verified")
 
 
@@ -481,6 +515,149 @@ async def _migrate_moderation_config(bot):
             logging.success("DB", f"Migrated {migrated} moderation configs from JSON to database")
         except Exception as e:
             logging.warning("DB", f"Could not migrate {path}: {e}")
+
+
+async def _migrate_ticket_data(bot):
+    """Migrate legacy ticket JSON files (data/ticket_config.json, data/tickets.json) into the database."""
+    import json
+
+    # Migrate ticket_config.json
+    config_path = "data/ticket_config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                migrated = 0
+                for gid, cfg in data.items():
+                    try:
+                        guild_id = int(gid)
+                    except (TypeError, ValueError):
+                        continue
+                    # Build a row compatible with the ticket_config table
+                    panel_categories = json.dumps(cfg.get("panel_categories", []))
+                    support_roles = json.dumps(cfg.get("support_roles", []))
+                    open_tickets = json.dumps(cfg.get("open_tickets", []))
+                    await bot.cxn.execute(
+                        "INSERT OR IGNORE INTO ticket_config "
+                        "(guild_id, panel_title, panel_description, panel_color, "
+                        "panel_image, panel_categories, panel_channel_id, "
+                        "panel_message_id, support_roles, open_tickets) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        guild_id,
+                        cfg.get("panel_title"),
+                        cfg.get("panel_description"),
+                        cfg.get("panel_color"),
+                        cfg.get("panel_image"),
+                        panel_categories,
+                        cfg.get("panel_channel_id"),
+                        cfg.get("panel_message_id"),
+                        support_roles,
+                        open_tickets,
+                    )
+                    migrated += 1
+                os.rename(config_path, config_path + ".migrated")
+                logging.success("DB", f"Migrated {migrated} ticket configs from JSON to database")
+            else:
+                os.rename(config_path, config_path + ".migrated")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate ticket_config.json: {e}")
+
+    # Migrate tickets.json (legacy open-ticket data)
+    tickets_path = "data/tickets.json"
+    if os.path.exists(tickets_path):
+        try:
+            with open(tickets_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                migrated = 0
+                for gid, tickets in data.items():
+                    try:
+                        guild_id = int(gid)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(tickets, list):
+                        continue
+                    # Merge into the existing ticket_config row's open_tickets
+                    existing = await bot.cxn.fetchrow(
+                        "SELECT open_tickets FROM ticket_config WHERE guild_id = $1",
+                        guild_id,
+                    )
+                    existing_tickets = []
+                    if existing and existing.get("open_tickets"):
+                        raw = existing["open_tickets"]
+                        if isinstance(raw, str):
+                            try:
+                                existing_tickets = json.loads(raw)
+                            except Exception:
+                                existing_tickets = []
+                        elif isinstance(raw, list):
+                            existing_tickets = raw
+                    # Merge: add tickets not already present (by channel_id)
+                    existing_ids = {t.get("channel_id") for t in existing_tickets}
+                    for t in tickets:
+                        if t.get("channel_id") not in existing_ids:
+                            existing_tickets.append(t)
+                    await bot.cxn.execute(
+                        "INSERT INTO ticket_config (guild_id, open_tickets) "
+                        "VALUES ($1, $2) "
+                        "ON CONFLICT (guild_id) DO UPDATE SET open_tickets = $2",
+                        guild_id,
+                        json.dumps(existing_tickets),
+                    )
+                    migrated += 1
+                os.rename(tickets_path, tickets_path + ".migrated")
+                logging.success("DB", f"Migrated {migrated} guild ticket lists from JSON to database")
+            else:
+                os.rename(tickets_path, tickets_path + ".migrated")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate tickets.json: {e}")
+
+    # Migrate transcript JSON files (data/transcripts/*.json)
+    transcript_dir = "data/transcripts"
+    if os.path.isdir(transcript_dir):
+        migrated = 0
+        try:
+            for fname in os.listdir(transcript_dir):
+                if not fname.endswith(".json"):
+                    continue
+                try:
+                    fpath = os.path.join(transcript_dir, fname)
+                    with open(fpath, "r") as f:
+                        tdata = json.load(f)
+                    tid = tdata.get("transcript_id") or fname[:-5]
+                    # Check if already in database
+                    existing = await bot.cxn.fetchrow(
+                        "SELECT transcript_id FROM transcripts WHERE transcript_id = $1",
+                        tid,
+                    )
+                    if existing:
+                        continue
+                    await bot.cxn.execute(
+                        "INSERT OR IGNORE INTO transcripts "
+                        "(transcript_id, guild_id, channel_id, channel_name, "
+                        "opener_id, category, claimed_by, message_count, "
+                        "messages, created_at) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        tid,
+                        tdata.get("guild_id", 0),
+                        tdata.get("channel_id", 0),
+                        tdata.get("channel_name", "unknown"),
+                        tdata.get("opener_id", 0),
+                        tdata.get("category", "General"),
+                        tdata.get("claimed_by"),
+                        tdata.get("message_count", 0),
+                        json.dumps(tdata.get("messages", [])),
+                        tdata.get("created_at", ""),
+                    )
+                    migrated += 1
+                except Exception as e:
+                    logging.warning("DB", f"Could not migrate transcript {fname}: {e}")
+            if migrated > 0:
+                os.rename(transcript_dir, transcript_dir + ".migrated")
+                logging.success("DB", f"Migrated {migrated} transcripts from JSON files to database")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate transcript directory: {e}")
 
 
 async def init_database(bot):
