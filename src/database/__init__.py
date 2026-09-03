@@ -142,6 +142,12 @@ PRIMARY_KEYS: dict = {
     "transcripts": "transcript_id",
     "ticket_config": "guild_id",
     "sticky_messages": "channel_id",
+    "birthday_users": "user_id",
+    "birthday_guilds": "guild_id",
+    "birthday_state": "key",
+    "afk_users": "user_id",
+    "warns": "id",
+    "mutes": "id",
 }
 
 

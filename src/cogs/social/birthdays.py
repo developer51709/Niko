@@ -14,11 +14,9 @@ Commands (single `birthday` group):
 
 from __future__ import annotations
 
-import json
-import os
 import re
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import discord
 from discord.ext import commands, tasks
@@ -27,7 +25,6 @@ from config.emojis import get_emoji
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
-DATA_FILE = "data/birthdays.json"
 DATE_RE = re.compile(r"^\s*(\d{1,2})[-/](\d{1,2})\s*$")
 
 
@@ -166,33 +163,12 @@ def cv2(text: str) -> discord.ui.LayoutView:
     return v
 
 
-def _load() -> dict:
-    if not os.path.exists(DATA_FILE):
-        return {"users": {}, "guilds": {}, "last_run": None}
-    try:
-        with open(DATA_FILE) as f:
-            d = json.load(f)
-            d.setdefault("users", {})
-            d.setdefault("guilds", {})
-            d.setdefault("last_run", None)
-            return d
-    except Exception:
-        return {"users": {}, "guilds": {}, "last_run": None}
-
-
-def _save(d: dict):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w") as f:
-        json.dump(d, f, indent=2)
-
-
 def _parse_date(text: str) -> Optional[str]:
     m = DATE_RE.fullmatch(text)
     if not m:
         return None
     mo, d = int(m.group(1)), int(m.group(2))
     try:
-        # use a leap year so feb 29 is allowed
         datetime(2024, mo, d)
     except ValueError:
         return None
@@ -212,11 +188,67 @@ class Birthdays(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.data = _load()
         self.daily_check.start()
 
     def cog_unload(self):
         self.daily_check.cancel()
+
+    # ───── database helpers ──────────────────────
+
+    async def _db_get_user_birthday(self, user_id: int) -> Optional[str]:
+        row = await self.bot.cxn.fetchrow(
+            "SELECT birth_date FROM birthday_users WHERE user_id = $1",
+            user_id,
+        )
+        return row["birth_date"] if row else None
+
+    async def _db_set_user_birthday(self, user_id: int, birth_date: str):
+        await self.bot.cxn.execute(
+            "INSERT INTO birthday_users (user_id, birth_date) VALUES ($1, $2) "
+            "ON CONFLICT (user_id) DO UPDATE SET birth_date = $2",
+            user_id, birth_date,
+        )
+
+    async def _db_remove_user_birthday(self, user_id: int):
+        await self.bot.cxn.execute(
+            "DELETE FROM birthday_users WHERE user_id = $1",
+            user_id,
+        )
+
+    async def _db_get_all_birthdays(self) -> list:
+        return await self.bot.cxn.fetch("SELECT user_id, birth_date FROM birthday_users")
+
+    async def _db_get_guild_config(self, guild_id: int) -> dict:
+        row = await self.bot.cxn.fetchrow(
+            "SELECT channel_id, role_id FROM birthday_guilds WHERE guild_id = $1",
+            guild_id,
+        )
+        if row:
+            return {"channel_id": row.get("channel_id"), "role_id": row.get("role_id")}
+        return {}
+
+    async def _db_set_guild_config(self, guild_id: int, **kwargs):
+        existing = await self._db_get_guild_config(guild_id)
+        channel_id = kwargs.get("channel_id", existing.get("channel_id"))
+        role_id = kwargs.get("role_id", existing.get("role_id"))
+        await self.bot.cxn.execute(
+            "INSERT INTO birthday_guilds (guild_id, channel_id, role_id) VALUES ($1, $2, $3) "
+            "ON CONFLICT (guild_id) DO UPDATE SET channel_id = $2, role_id = $3",
+            guild_id, channel_id, role_id,
+        )
+
+    async def _db_get_last_run(self) -> Optional[str]:
+        row = await self.bot.cxn.fetchrow(
+            "SELECT value FROM birthday_state WHERE key = 'last_run'",
+        )
+        return row["value"] if row else None
+
+    async def _db_set_last_run(self, value: str):
+        await self.bot.cxn.execute(
+            "INSERT INTO birthday_state (key, value) VALUES ('last_run', $1) "
+            "ON CONFLICT (key) DO UPDATE SET value = $1",
+            value,
+        )
 
     # ───── group ────────────────────────────────
 
@@ -238,8 +270,7 @@ class Birthdays(commands.Cog):
         d = _parse_date(date)
         if not d:
             return await ctx.send(view=cv2(msg(ctx, "invalid_date")))
-        self.data["users"][str(ctx.author.id)] = d
-        _save(self.data)
+        await self._db_set_user_birthday(ctx.author.id, d)
         await ctx.send(view=cv2(msg(ctx, "set_ok", date=_format_date(d))))
 
     @birthday.command(
@@ -248,8 +279,7 @@ class Birthdays(commands.Cog):
         help="{ 'en': 'Remove your birthday.', 'de': 'Deinen Geburtstag entfernen.', 'es': 'Elimina tu cumpleaños.' }",
     )
     async def birthday_remove(self, ctx: commands.Context):
-        self.data["users"].pop(str(ctx.author.id), None)
-        _save(self.data)
+        await self._db_remove_user_birthday(ctx.author.id)
         await ctx.send(view=cv2(msg(ctx, "removed")))
 
     @birthday.command(
@@ -259,7 +289,7 @@ class Birthdays(commands.Cog):
     )
     async def birthday_show(self, ctx: commands.Context, user: discord.Member = None):
         target = user or ctx.author
-        d = self.data["users"].get(str(target.id))
+        d = await self._db_get_user_birthday(target.id)
         if not d:
             return await ctx.send(view=cv2(msg(ctx, "show_none", user=target.mention)))
         formatted = _format_date(d)
@@ -275,9 +305,11 @@ class Birthdays(commands.Cog):
     )
     async def birthday_today(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).strftime("%m-%d")
+        all_birthdays = await self._db_get_all_birthdays()
+        birthday_map = {row["user_id"]: row["birth_date"] for row in all_birthdays}
         results = []
         for m in ctx.guild.members:
-            d = self.data["users"].get(str(m.id))
+            d = birthday_map.get(m.id)
             if d == today:
                 results.append(f"• {m.mention}")
         if not results:
@@ -292,14 +324,15 @@ class Birthdays(commands.Cog):
     )
     async def birthday_upcoming(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).date()
+        all_birthdays = await self._db_get_all_birthdays()
+        birthday_map = {row["user_id"]: row["birth_date"] for row in all_birthdays}
         entries: List[tuple] = []
         for m in ctx.guild.members:
-            d = self.data["users"].get(str(m.id))
+            d = birthday_map.get(m.id)
             if not d:
                 continue
             try:
                 mo, da = (int(x) for x in d.split("-"))
-                this_year = today.replace(month=mo, day=min(da, 28))  # safe
                 this_year = today.replace(month=mo, day=da) if (mo, da) != (2, 29) else today.replace(month=2, day=28)
             except Exception:
                 continue
@@ -329,9 +362,7 @@ class Birthdays(commands.Cog):
     )
     @commands.has_permissions(manage_guild=True)
     async def birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel):
-        gcfg = self.data["guilds"].setdefault(str(ctx.guild.id), {})
-        gcfg["channel_id"] = channel.id
-        _save(self.data)
+        await self._db_set_guild_config(ctx.guild.id, channel_id=channel.id)
         await ctx.send(view=cv2(msg(ctx, "channel_set", channel=channel.mention)))
 
     @birthday.command(
@@ -341,9 +372,7 @@ class Birthdays(commands.Cog):
     )
     @commands.has_permissions(manage_guild=True)
     async def birthday_role(self, ctx: commands.Context, role: discord.Role):
-        gcfg = self.data["guilds"].setdefault(str(ctx.guild.id), {})
-        gcfg["role_id"] = role.id
-        _save(self.data)
+        await self._db_set_guild_config(ctx.guild.id, role_id=role.id)
         await ctx.send(view=cv2(msg(ctx, "role_set", role=role.mention)))
 
     @birthday.command(
@@ -352,9 +381,9 @@ class Birthdays(commands.Cog):
         help="{ 'en': 'Show this server\\'s birthday config.', 'de': 'Geburtstags-Konfiguration dieses Servers anzeigen.', 'es': 'Muestra la configuración de cumpleaños de este servidor.' }",
     )
     async def birthday_config(self, ctx: commands.Context):
-        gcfg = self.data["guilds"].get(str(ctx.guild.id), {})
-        ch = ctx.guild.get_channel(gcfg.get("channel_id", 0))
-        rl = ctx.guild.get_role(gcfg.get("role_id", 0))
+        gcfg = await self._db_get_guild_config(ctx.guild.id)
+        ch = ctx.guild.get_channel(gcfg.get("channel_id", 0)) if gcfg.get("channel_id") else None
+        rl = ctx.guild.get_role(gcfg.get("role_id", 0)) if gcfg.get("role_id") else None
         title = msg(ctx, "config_title", icon=get_emoji("icon_settings"))
         body = msg(ctx, "config_body",
                    channel=ch.mention if ch else "—",
@@ -367,7 +396,7 @@ class Birthdays(commands.Cog):
     async def daily_check(self):
         now = datetime.now(timezone.utc)
         date_str = now.strftime("%Y-%m-%d")
-        last = self.data.get("last_run")
+        last = await self._db_get_last_run()
         # only run once per UTC day, after 09:00 UTC
         if last == date_str:
             # but still strip stale roles
@@ -377,12 +406,15 @@ class Birthdays(commands.Cog):
             return
 
         today = now.strftime("%m-%d")
+        all_birthdays = await self._db_get_all_birthdays()
+        birthday_map = {row["user_id"]: row["birth_date"] for row in all_birthdays}
+
         for guild in self.bot.guilds:
-            gcfg = self.data["guilds"].get(str(guild.id), {})
+            gcfg = await self._db_get_guild_config(guild.id)
             ch = guild.get_channel(gcfg.get("channel_id", 0)) if gcfg.get("channel_id") else None
             role = guild.get_role(gcfg.get("role_id", 0)) if gcfg.get("role_id") else None
             for member in guild.members:
-                d = self.data["users"].get(str(member.id))
+                d = birthday_map.get(member.id)
                 if d != today:
                     continue
                 if ch:
@@ -395,19 +427,20 @@ class Birthdays(commands.Cog):
                         await member.add_roles(role, reason="Birthday")
                     except Exception:
                         pass
-        self.data["last_run"] = date_str
-        _save(self.data)
+        await self._db_set_last_run(date_str)
         await self._strip_stale_birthday_roles(now)
 
     async def _strip_stale_birthday_roles(self, now: datetime):
         today = now.strftime("%m-%d")
+        all_birthdays = await self._db_get_all_birthdays()
+        birthday_map = {row["user_id"]: row["birth_date"] for row in all_birthdays}
         for guild in self.bot.guilds:
-            gcfg = self.data["guilds"].get(str(guild.id), {})
+            gcfg = await self._db_get_guild_config(guild.id)
             role = guild.get_role(gcfg.get("role_id", 0)) if gcfg.get("role_id") else None
             if not role:
                 continue
             for member in role.members:
-                d = self.data["users"].get(str(member.id))
+                d = birthday_map.get(member.id)
                 if d != today:
                     try:
                         await member.remove_roles(role, reason="Birthday over")

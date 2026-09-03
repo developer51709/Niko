@@ -364,6 +364,28 @@ async def _create_tables(bot):
     """)
     await _migrate_mutes_data(bot)
 
+    # ── Birthday tables ────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_users (
+            user_id     INTEGER PRIMARY KEY,
+            birth_date  TEXT NOT NULL
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_guilds (
+            guild_id    INTEGER PRIMARY KEY,
+            channel_id  INTEGER,
+            role_id     INTEGER
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT
+        )
+    """)
+    await _migrate_birthday_data(bot)
+
     logging.success("DB", "Database tables verified")
 
 
@@ -858,6 +880,93 @@ async def _migrate_sticky_data(bot):
         logging.success("DB", f"Migrated {migrated} sticky messages from JSON to database")
     except Exception as e:
         logging.warning("DB", f"Could not migrate sticky.json: {e}")
+
+
+async def _migrate_birthday_data(bot):
+    """Migrate data/birthdays.json into the birthday_users/birthday_guilds tables."""
+    import json as _json
+
+    path = "data/birthdays.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+
+        users = data.get("users", {})
+        guilds = data.get("guilds", {})
+        last_run = data.get("last_run")
+
+        migrated_users = 0
+        migrated_guilds = 0
+
+        # Migrate user birthdays
+        for uid_str, birth_date in users.items():
+            if not isinstance(birth_date, str):
+                continue
+            try:
+                user_id = int(uid_str)
+            except (TypeError, ValueError):
+                continue
+            # Skip if already exists
+            existing = await bot.cxn.fetchval(
+                "SELECT user_id FROM birthday_users WHERE user_id = $1",
+                user_id,
+            )
+            if existing:
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO birthday_users (user_id, birth_date) VALUES ($1, $2)",
+                user_id,
+                birth_date,
+            )
+            migrated_users += 1
+
+        # Migrate guild configs
+        for gid_str, gcfg in guilds.items():
+            if not isinstance(gcfg, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            channel_id = gcfg.get("channel_id")
+            role_id = gcfg.get("role_id")
+            existing = await bot.cxn.fetchval(
+                "SELECT guild_id FROM birthday_guilds WHERE guild_id = $1",
+                guild_id,
+            )
+            if existing:
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO birthday_guilds (guild_id, channel_id, role_id) VALUES ($1, $2, $3)",
+                guild_id,
+                channel_id,
+                role_id,
+            )
+            migrated_guilds += 1
+
+        # Migrate last_run state
+        if last_run:
+            existing = await bot.cxn.fetchval(
+                "SELECT key FROM birthday_state WHERE key = 'last_run'"
+            )
+            if not existing:
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO birthday_state (key, value) VALUES ('last_run', $1)",
+                    last_run,
+                )
+
+        os.rename(path, path + ".migrated")
+        logging.success(
+            "DB",
+            f"Migrated {migrated_users} birthdays and {migrated_guilds} guild configs from JSON to database",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate birthdays.json: {e}")
 
 
 async def init_database(bot):
