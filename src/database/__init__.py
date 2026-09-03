@@ -765,19 +765,24 @@ class MongoPool:
         if where_clause:
             where_clause = where_clause.strip()
 
-        parser = _ConditionParser(args)
+        # Process SET clause first to count how many args it consumes,
+        # then feed the remaining args to the WHERE parser.
+        # _build_update_ops uses its own arg_idx counter to track consumption.
+        set_update = self._build_update_ops(table, set_clause, args)
+        set_arg_count = set_update.pop("_arg_count", 0)
+        where_args = args[set_arg_count:]
+
+        parser = _ConditionParser(where_args)
         filter_dict = parser.parse(where_clause)
         filter_dict = self._apply_pk_filter(table, filter_dict)
 
-        # Pass only the remaining args after the WHERE clause consumed its share.
-        update = self._build_update_ops(table, set_clause, args[parser.pos:])
         ops = []
-        if update.get("$set"):
-            ops.append({"$set": update["$set"]})
-        if update.get("$inc"):
-            ops.append({"$inc": update["$inc"]})
-        if update.get("$unset"):
-            ops.append({"$unset": update["$unset"]})
+        if set_update.get("$set"):
+            ops.append({"$set": set_update["$set"]})
+        if set_update.get("$inc"):
+            ops.append({"$inc": set_update["$inc"]})
+        if set_update.get("$unset"):
+            ops.append({"$unset": set_update["$unset"]})
         if not ops:
             return
         await self._db[table].update_many(filter_dict, ops)
@@ -844,6 +849,7 @@ class MongoPool:
 
             # total = total + ?  handled above; anything else is a literal expr
             set_col(column, self._eval_value_expr(expr, None, args))
+        update["_arg_count"] = arg_idx
         return update
 
     def _eval_value_expr(self, expr: str, doc, args) -> object:
