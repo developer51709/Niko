@@ -87,11 +87,11 @@ async def add_donor(bot, user_id: int, amount: float, currency: str, track_id: s
         INSERT INTO donors (user_id, total_donated, last_donation, last_track_id)
         VALUES ($1, $2, datetime('now'), $3)
         ON CONFLICT(user_id) DO UPDATE SET
-            total_donated = total_donated + $2,
+            total_donated = total_donated + $4,
             last_donation  = datetime('now'),
-            last_track_id  = $3
+            last_track_id  = $5
         """,
-        user_id, amount, track_id,
+        user_id, amount, track_id, amount, track_id,
     )
 
 
@@ -116,10 +116,11 @@ async def save_invoice(
             (order_id, track_id, user_id, amount, currency, pay_currency, pay_link, status, channel_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, 'Waiting', $8)
         ON CONFLICT(order_id) DO UPDATE SET
-            track_id = $2, user_id = $3, amount = $4, currency = $5,
-            pay_currency = $6, pay_link = $7, channel_id = $8
+            track_id = $9, user_id = $10, amount = $11, currency = $12,
+            pay_currency = $13, pay_link = $14, channel_id = $15
         """,
         order_id, track_id, user_id, amount, currency, pay_currency, pay_link, channel_id,
+        track_id, user_id, amount, currency, pay_currency, pay_link, channel_id,
     )
 
 

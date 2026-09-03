@@ -68,9 +68,9 @@ _UPSERT_SQL = (
     "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets) "
     "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
     "ON CONFLICT (guild_id) DO UPDATE SET "
-    "panel_title = $2, panel_description = $3, panel_color = $4, panel_image = $5, "
-    "panel_categories = $6, panel_channel_id = $7, panel_message_id = $8, "
-    "support_roles = $9, open_tickets = $10"
+    "panel_title = $11, panel_description = $12, panel_color = $13, panel_image = $14, "
+    "panel_categories = $15, panel_channel_id = $16, panel_message_id = $17, "
+    "support_roles = $18, open_tickets = $19"
 )
 
 
@@ -89,6 +89,16 @@ async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
         await pool.execute(
             _UPSERT_SQL,
             guild_id,
+            cfg.panel_title,
+            cfg.panel_description,
+            cfg.panel_color,
+            cfg.panel_image,
+            json.dumps(cfg.panel_categories or []),
+            cfg.panel_channel_id,
+            cfg.panel_message_id,
+            json.dumps(cfg.support_roles or []),
+            json.dumps(cfg.open_tickets or []),
+            # second set of values for the ON CONFLICT DO UPDATE SET clause
             cfg.panel_title,
             cfg.panel_description,
             cfg.panel_color,

@@ -765,12 +765,14 @@ async def _migrate_ticket_data(bot):
                     for t in tickets:
                         if t.get("channel_id") not in existing_ids:
                             existing_tickets.append(t)
+                    tickets_json = json.dumps(existing_tickets)
                     await bot.cxn.execute(
                         "INSERT INTO ticket_config (guild_id, open_tickets) "
                         "VALUES ($1, $2) "
-                        "ON CONFLICT (guild_id) DO UPDATE SET open_tickets = $2",
+                        "ON CONFLICT (guild_id) DO UPDATE SET open_tickets = $3",
                         guild_id,
-                        json.dumps(existing_tickets),
+                        tickets_json,
+                        tickets_json,
                     )
                     migrated += 1
                 os.rename(tickets_path, tickets_path + ".migrated")

@@ -205,8 +205,8 @@ class Birthdays(commands.Cog):
     async def _db_set_user_birthday(self, user_id: int, birth_date: str):
         await self.bot.cxn.execute(
             "INSERT INTO birthday_users (user_id, birth_date) VALUES ($1, $2) "
-            "ON CONFLICT (user_id) DO UPDATE SET birth_date = $2",
-            user_id, birth_date,
+            "ON CONFLICT (user_id) DO UPDATE SET birth_date = $3",
+            user_id, birth_date, birth_date,
         )
 
     async def _db_remove_user_birthday(self, user_id: int):
@@ -233,8 +233,8 @@ class Birthdays(commands.Cog):
         role_id = kwargs.get("role_id", existing.get("role_id"))
         await self.bot.cxn.execute(
             "INSERT INTO birthday_guilds (guild_id, channel_id, role_id) VALUES ($1, $2, $3) "
-            "ON CONFLICT (guild_id) DO UPDATE SET channel_id = $2, role_id = $3",
-            guild_id, channel_id, role_id,
+            "ON CONFLICT (guild_id) DO UPDATE SET channel_id = $4, role_id = $5",
+            guild_id, channel_id, role_id, channel_id, role_id,
         )
 
     async def _db_get_last_run(self) -> Optional[str]:
@@ -246,8 +246,8 @@ class Birthdays(commands.Cog):
     async def _db_set_last_run(self, value: str):
         await self.bot.cxn.execute(
             "INSERT INTO birthday_state (key, value) VALUES ('last_run', $1) "
-            "ON CONFLICT (key) DO UPDATE SET value = $1",
-            value,
+            "ON CONFLICT (key) DO UPDATE SET value = $2",
+            value, value,
         )
 
     # ───── group ────────────────────────────────

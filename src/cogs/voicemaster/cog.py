@@ -505,10 +505,11 @@ class VoiceMaster(commands.Cog):
                 VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (guild_id)
                 DO UPDATE SET
-                    join_channel_id = excluded.join_channel_id,
-                    category_id     = excluded.category_id
+                    join_channel_id = $7,
+                    category_id     = $8
                 """,
-                ctx.guild.id, join_channel.id, category.id, "{user}'s Channel", 0, 64000
+                ctx.guild.id, join_channel.id, category.id, "{user}'s Channel", 0, 64000,
+                join_channel.id, category.id
             )
             self._bust_cache(ctx.guild.id)
 

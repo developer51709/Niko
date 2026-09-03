@@ -697,21 +697,29 @@ class MongoPool:
         collection = self._db[table]
         base = self._encode_doc(table, doc)
         if _id is not None:
-            set_doc = {k: v for k, v in base.items() if k != "_id"}
-            set_doc.update(update.get("$set", {}))
-            ops: list = [{"$set": set_doc}]
+            filter_dict = {"_id": _id}
+        else:
+            # No resolvable id: upsert by the insert values' natural key columns.
+            filter_dict = {k: v for k, v in base.items() if k != "_id"}
+        insert_values = {k: v for k, v in base.items() if k != "_id"}
+
+        # 1) Upsert the raw INSERT ... VALUES row ($setOnInsert only applies
+        #    when the document does not exist yet, matching SQL semantics).
+        result = await collection.update_one(
+            filter_dict, {"$setOnInsert": insert_values}, upsert=True
+        )
+
+        # 2) On conflict (row already existed), apply DO UPDATE SET ops.
+        if result.upserted_id is None:
+            ops = []
+            if update.get("$set"):
+                ops.append({"$set": update["$set"]})
             if update.get("$inc"):
                 ops.append({"$inc": update["$inc"]})
-            await collection.update_one({"_id": _id}, ops, upsert=True)
-            return
-        # No resolvable id: upsert by the insert values' natural key columns.
-        filter_dict = {k: v for k, v in base.items() if k != "_id"}
-        set_doc = dict(filter_dict)
-        set_doc.update(update.get("$set", {}))
-        ops = [{"$set": set_doc}]
-        if update.get("$inc"):
-            ops.append({"$inc": update["$inc"]})
-        await collection.update_one(filter_dict, ops, upsert=True)
+            if update.get("$unset"):
+                ops.append({"$unset": update["$unset"]})
+            if ops:
+                await collection.update_one(filter_dict, ops)
 
     async def _handle_insert_select(self, q: str, args: list):
         m = re.match(
