@@ -1,5 +1,39 @@
-from .views import *
+import asyncio
+import os
+import re
+import time as _time
+from collections import deque
+
+import discord
+import wavelink
+from discord import app_commands
+from discord.ext import commands
+
+from config.emojis import get_emoji
+from utils import logging as log
 from utils.discord_extras import set_voice_status
+from utils.music import (
+    GHOST_QUEUE_LEN,
+    HISTORY_LEN,
+    IDLE_TIMEOUT,
+    MAX_QUEUE_SHOW,
+    SOURCE_COLOURS,
+    _CONNECT_TIMEOUT,
+    _MAX_CONNECT_NODES,
+    _SPOTIFY_ALBUM_RE,
+    _SPOTIFY_PLAYLIST_RE,
+    _SPOTIFY_TRACK_RE,
+    _SpotifyClient,
+    _fetch_node_list,
+    _find_responsive_nodes,
+    _fmt_dur,
+    _lastfm_similar,
+    _normalize_spotify_reference,
+    _source_colour,
+    msg,
+)
+from utils.music.database import MusicDatabase
+from cogs.music.views import _build_np_view
 
 class MusicSystem(commands.Cog):
     """Music system — artwork cards, control panel, multi-source, autoplay."""
@@ -789,18 +823,17 @@ class MusicSystem(commands.Cog):
         await ctx.send(msg(ctx, key))
         await self._update_np_message(ctx.guild)
 
-    @commands.command(
-        name="queue", aliases=["q"],
-        help="{ 'en': 'show the current queue ☕📜', 'de': 'zeigt die warteschlange' }"
-    )
-    async def queue(self, ctx: commands.Context):
-        player = ctx.voice_client
-        state  = self._state(ctx.guild.id) if ctx.guild else None
-        ghost  = list(state["ghost_queue"]) if state else []
-        if not player or (player.queue.is_empty and not ghost):
-            return await ctx.send(msg(ctx, "queue_empty"))
-
-        lines = [msg(ctx, "queue_header")]
+    def _format_queue_lines(
+        self,
+        player: wavelink.Player,
+        guild_id: int,
+        header: str = "**Current Queue:**",
+    ) -> list[str]:
+        """Shared queue display — used by the /queue command and the Queue
+        button on the now-playing panel."""
+        state = self._state(guild_id)
+        ghost = list(state["ghost_queue"])
+        lines = [header]
         for i, track in enumerate(player.queue, start=1):
             dur = _fmt_dur(track.length) if track.length else "?"
             lines.append(f"{i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
@@ -818,13 +851,116 @@ class MusicSystem(commands.Cog):
             for i, track in enumerate(ghost[:3], start=1):
                 dur = _fmt_dur(track.length) if track.length else "?"
                 lines.append(f"   📻 {i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
+        return lines
 
+    @commands.command(
+        name="queue", aliases=["q"],
+        help="{ 'en': 'show the current queue ☕📜', 'de': 'zeigt die warteschlange' }"
+    )
+    async def queue(self, ctx: commands.Context):
+        player = ctx.voice_client
+        state  = self._state(ctx.guild.id) if ctx.guild else None
+        ghost  = list(state["ghost_queue"]) if state else []
+        if not player or (player.queue.is_empty and not ghost):
+            return await ctx.send(msg(ctx, "queue_empty"))
+
+        lines = self._format_queue_lines(player, ctx.guild.id, msg(ctx, "queue_header"))
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content="\n".join(lines)),
             accent_colour=discord.Colour(0x5865F2),
         ))
         await ctx.send(view=view)
+
+    # ─── LIKED SONGS (dedicated music database) ─────
+
+    @commands.command(
+        name="like",
+        help="{ 'en': 'like the current track ♥', 'de': 'liked den aktuellen track' }"
+    )
+    async def like(self, ctx: commands.Context):
+        """Like (or unlike) the currently playing track. Saved in the music
+        database, so likes survive restarts and work in every server."""
+        player = ctx.voice_client
+        if not player or not player.current:
+            return await ctx.send(msg(ctx, "like_nothing"))
+        track = player.current
+        try:
+            db = MusicDatabase()
+            await db.ensure(self.bot)
+            now_liked = await db.toggle_liked(ctx.author.id, track)
+        except Exception as exc:
+            log.error("Music", f"Like failed for {ctx.author.id}: {exc}")
+            return await ctx.send(msg(ctx, "play_not_found"))
+        key = "like_on" if now_liked else "like_off"
+        await ctx.send(msg(ctx, key, title=track.title or "Unknown"))
+
+    @commands.command(
+        name="liked", aliases=["likes"],
+        help="{ 'en': 'show your liked songs ☕♥', 'de': 'zeigt deine gelikten songs' }"
+    )
+    async def liked(self, ctx: commands.Context):
+        """List your liked songs (newest first). Use `.unlike <number>` to
+        remove one, or `.unlike all` to clear the whole library."""
+        try:
+            db = MusicDatabase()
+            await db.ensure(self.bot)
+            rows  = await db.get_liked(ctx.author.id, limit=10)
+            total = await db.count_liked(ctx.author.id)
+        except Exception as exc:
+            log.error("Music", f"Liked list failed for {ctx.author.id}: {exc}")
+            return await ctx.send(msg(ctx, "play_not_found"))
+
+        if not rows:
+            return await ctx.send(msg(ctx, "liked_empty"))
+
+        lines = [msg(ctx, "liked_header")]
+        for i, row in enumerate(rows, start=1):
+            dur  = _fmt_dur(row["length_ms"]) if row.get("length_ms") else "?"
+            link = (row.get("uri") or "")[:60]
+            lines.append(f"{i}. **{row['title']}** — {row.get('author') or 'Unknown'} `[{dur}]`")
+            if link:
+                lines.append(f"   -# {link}")
+        if total > len(rows):
+            lines.append(f"\n*…and {total - len(rows)} more — use `.unlike <number>` to remove*")
+
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accent_colour=discord.Colour(0xE91E63),
+        ))
+        await ctx.send(view=view)
+
+    @commands.command(
+        name="unlike",
+        help="{ 'en': 'remove a liked song (use number from .liked)', 'de': 'entfernt einen gelikten song' }"
+    )
+    async def unlike(self, ctx: commands.Context, index: str = None):
+        """Remove a liked song by its `.liked` number, or pass `all` to clear."""
+        db = MusicDatabase()
+        try:
+            await db.ensure(self.bot)
+            if index is not None and index.lower() in ("all", "*"):
+                count = await db.clear_liked(ctx.author.id)
+                return await ctx.send(msg(ctx, "likes_cleared", count=count))
+
+            try:
+                idx = int(index)
+            except (TypeError, ValueError):
+                return await ctx.send(msg(ctx, "unlike_invalid"))
+
+            rows = await db.get_liked(ctx.author.id, limit=100)
+            if not rows:
+                return await ctx.send(msg(ctx, "unlike_nothing"))
+            if idx < 1 or idx > len(rows):
+                return await ctx.send(msg(ctx, "unlike_invalid"))
+
+            target = rows[idx - 1]
+            await db.remove_liked(ctx.author.id, target["track_key"])
+            await ctx.send(msg(ctx, "unlike_ok", title=target["title"]))
+        except Exception as exc:
+            log.error("Music", f"Unlike failed for {ctx.author.id}: {exc}")
+            await ctx.send(msg(ctx, "play_not_found"))
 
     @commands.command(
         name="nowplaying", aliases=["np"],
