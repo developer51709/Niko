@@ -691,7 +691,8 @@ class MongoPool:
                 doc[col] = self._eval_value_expr(raw, None, [])
 
         _id = self._resolve_id(table, doc)
-        update = self._build_update_ops(table, set_clause, args[arg_idx:])
+        remaining_args = args[arg_idx:]
+        update = self._build_update_ops(table, set_clause, remaining_args)
 
         collection = self._db[table]
         base = self._encode_doc(table, doc)
