@@ -148,6 +148,8 @@ PRIMARY_KEYS: dict = {
     "afk_users": "user_id",
     "warns": "id",
     "mutes": "id",
+    "blacklist_users": "id",
+    "blacklist_guilds": "id",
 }
 
 

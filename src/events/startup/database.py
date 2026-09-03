@@ -386,6 +386,24 @@ async def _create_tables(bot):
     """)
     await _migrate_birthday_data(bot)
 
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_users (
+            id         INTEGER PRIMARY KEY,
+            reason     TEXT,
+            timestamp  REAL,
+            added_by   INTEGER
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_guilds (
+            id         INTEGER PRIMARY KEY,
+            reason     TEXT,
+            timestamp  REAL,
+            added_by   INTEGER
+        )
+    """)
+    await _migrate_blacklist_data(bot)
+
     logging.success("DB", "Database tables verified")
 
 
@@ -971,11 +989,76 @@ async def _migrate_birthday_data(bot):
         logging.warning("DB", f"Could not migrate birthdays.json: {e}")
 
 
+async def _migrate_blacklist_data(bot):
+    """Migrate data/blacklist.json into the blacklist_users/blacklist_guilds tables."""
+    import json as _json
+
+    path = "data/blacklist.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+
+        migrated_users = 0
+        migrated_guilds = 0
+
+        async def _entries(raw, table):
+            nonlocal migrated_users, migrated_guilds
+            count = 0
+            for item in raw:
+                if isinstance(item, int):
+                    entry = {"id": item, "reason": None, "timestamp": time.time(), "added_by": None}
+                elif isinstance(item, dict) and "id" in item:
+                    entry = {
+                        "id": int(item["id"]),
+                        "reason": item.get("reason"),
+                        "timestamp": float(item.get("timestamp", time.time())),
+                        "added_by": item.get("added_by"),
+                    }
+                else:
+                    continue
+                await bot.cxn.execute(
+                    f"INSERT OR IGNORE INTO {table} (id, reason, timestamp, added_by) VALUES ($1, $2, $3, $4)",
+                    entry["id"],
+                    entry["reason"],
+                    entry["timestamp"],
+                    entry["added_by"],
+                )
+                count += 1
+            if table == "blacklist_users":
+                migrated_users = count
+            else:
+                migrated_guilds = count
+
+        await _entries(data.get("users", []), "blacklist_users")
+        await _entries(data.get("guilds", []), "blacklist_guilds")
+
+        os.rename(path, path + ".migrated")
+        logging.success(
+            "DB",
+            f"Migrated {migrated_users} users and {migrated_guilds} guilds from blacklist.json to database",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate blacklist.json: {e}")
+
+
 async def init_database(bot):
     logging.info("DB", f"Opening database: {DATABASE_PATH}")
     try:
         bot.cxn = await database.create_pool(DATABASE_PATH)
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
+        # Eagerly load the blacklist cache from the database so hot-path
+        # sync reads (message/interaction checks) work immediately.
+        try:
+            from utils.blacklist_manager import BlacklistManager
+
+            await BlacklistManager().load()
+        except Exception as e:
+            logging.warning("DB", f"Could not preload blacklist cache: {e}")
     except Exception as e:
         logging.error("DB", f"Failed to open database: {e}")

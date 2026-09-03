@@ -876,7 +876,7 @@ class OwnerCog(commands.Cog):
         except ValueError:
             return await ctx.send(f"{get_emoji('icon_cross')} Invalid ID.")
 
-        ok = bm.update_user_reason(target_id, reason) if type == "user" else bm.update_guild_reason(target_id, reason)
+        ok = await (bm.update_user_reason(target_id, reason) if type == "user" else bm.update_guild_reason(target_id, reason))
         if ok:
             await ctx.send(f"{get_emoji('icon_tick')} Reason for `{target_id}` updated.")
         else:
@@ -912,7 +912,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if blacklist_manager.add_user(user_id, reason=reason, added_by=ctx.author.id):
+            if await blacklist_manager.add_user(user_id, reason=reason, added_by=ctx.author.id):
                 # Success message
                 reason_line = f"\n-# Reason: {reason}" if reason else ""
                 view = discord.ui.LayoutView()
@@ -986,7 +986,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if blacklist_manager.add_guild(guild_id, reason=reason, added_by=ctx.author.id):
+            if await blacklist_manager.add_guild(guild_id, reason=reason, added_by=ctx.author.id):
                 reason_line = f"\n-# Reason: {reason}" if reason else ""
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -1049,7 +1049,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if blacklist_manager.remove_user(user_id):
+            if await blacklist_manager.remove_user(user_id):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -1087,7 +1087,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if blacklist_manager.remove_guild(guild_id):
+            if await blacklist_manager.remove_guild(guild_id):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
