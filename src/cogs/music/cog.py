@@ -149,10 +149,13 @@ class MusicSystem(commands.Cog):
                 except Exception as exc2:
                     log.warning("Lavalink", f"Single-node fallback failed too: {exc2}")
 
-            connected = [
-                node for node in wavelink.Pool.nodes.values()
-                if node.status is wavelink.NodeStatus.CONNECTED
-            ]
+            # wavelink registers a node as soon as its websocket opens, but the
+            # Lavalink 'ready' handshake completes a beat later on the node's
+            # background task. Poll for the CONNECTED status instead of trusting
+            # an instant snapshot, otherwise a healthy connect can be reported
+            # as failed (ready events arriving just after the check).
+            target_ids = {node.identifier for node in targets}
+            connected  = await self._wait_for_connected_nodes(target_ids)
             if connected:
                 self._node_labels = sorted(node.identifier for node in connected)
                 self.connected    = True
@@ -164,7 +167,10 @@ class MusicSystem(commands.Cog):
             else:
                 self._node_labels = []
                 self.connected    = False
-                log.warning("Lavalink", "No Lavalink node accepted the wavelink handshake.")
+                log.warning(
+                    "Lavalink",
+                    "No Lavalink node completed the wavelink handshake.",
+                )
         finally:
             self._connecting = False
 
@@ -178,11 +184,43 @@ class MusicSystem(commands.Cog):
                 except Exception:
                     pass
 
+    async def _wait_for_connected_nodes(
+        self, identifiers: set[str], timeout: float = 8.0
+    ) -> list:
+        """Poll the pool until any of the given nodes report CONNECTED.
+
+        wavelink registers a node as soon as its websocket opens; the actual
+        Lavalink 'ready' opcode is handled by the node's background task a
+        moment later. Polling avoids declaring a failed connect from a status
+        snapshot taken before the handshake lands.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            connected = [
+                n for n in wavelink.Pool.nodes.values()
+                if n.identifier in identifiers
+                and n.status is wavelink.NodeStatus.CONNECTED
+            ]
+            if connected or loop.time() >= deadline:
+                return connected
+            await asyncio.sleep(0.2)
+
     # ─── WAVELINK EVENTS ──────────────────────────
 
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
-        log.info("Lavalink", f"Node '{payload.node.identifier}' ready (resumed={payload.resumed})")
+        node_id = payload.node.identifier
+        log.info("Lavalink", f"Node '{node_id}' ready (resumed={payload.resumed})")
+
+        # Ready events can land after startup_connect's decision window (the
+        # handshake completes on the node's background task), so keep the cog's
+        # state in sync with nodes that are genuinely up.
+        if node_id not in self._node_labels:
+            self._node_labels = sorted(set(self._node_labels) | {node_id})
+        if not self.connected:
+            self.connected = True
+            log.info("Lavalink", f"Node '{node_id}' ready — Lavalink back online.")
 
     @commands.Cog.listener()
     async def on_wavelink_node_closed(self, node: wavelink.Node, disconnected: list):

@@ -574,9 +574,27 @@ async def _find_responsive_nodes(nodes: list[dict]) -> list[dict]:
         )
     alive = [r for r in results if r and not isinstance(r, BaseException)]
     alive.sort(key=lambda x: x[1])
+
+    # The public list often carries the same host twice (an SSL and a non-SSL
+    # twin, e.g. host:443 + host:80) — that is one physical server, so keep
+    # only its fastest responding port. Two sessions to the same host would
+    # both die together and inflate the "connected" count.
+    seen_hosts: set[str] = set()
+    unique: list[tuple[dict, float]] = []
+    for node, latency in alive:
+        host = node["host"]
+        if host in seen_hosts:
+            continue
+        seen_hosts.add(host)
+        unique.append((node, latency))
+    alive = unique
+
     if alive:
         summary = ", ".join(f"{n['host']}:{n['port']} ({lat:.0f}ms)" for n, lat in alive[:4])
-        log.info("Lavalink", f"{len(alive)}/{len(nodes)} nodes responsive — {summary}")
+        log.info(
+            "Lavalink",
+            f"{len(alive)}/{len(nodes)} nodes responsive (per unique host) — {summary}",
+        )
     else:
         log.warning("Lavalink", f"No nodes responded out of {len(nodes)} tried.")
     return [n for n, _ in alive]
