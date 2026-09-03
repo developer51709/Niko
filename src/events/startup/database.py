@@ -386,6 +386,14 @@ async def _create_tables(bot):
     """)
     await _migrate_birthday_data(bot)
 
+    # ── Sync state table (slash-command sync fingerprint) ──────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT
+        )
+    """)
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_users (
             id         INTEGER PRIMARY KEY,

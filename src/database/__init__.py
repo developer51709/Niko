@@ -145,6 +145,7 @@ PRIMARY_KEYS: dict = {
     "birthday_users": "user_id",
     "birthday_guilds": "guild_id",
     "birthday_state": "key",
+    "sync_state": "key",
     "afk_users": "user_id",
     "warns": "id",
     "mutes": "id",
