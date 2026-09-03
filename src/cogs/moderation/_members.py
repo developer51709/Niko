@@ -183,7 +183,7 @@ class MembersMixin:
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="warn"))
-        utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
+        await utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
         await ctx.send(view=_cv2(msg(ctx, "warned", member=member, reason=reason)))
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
@@ -198,7 +198,7 @@ class MembersMixin:
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="view warnings for"))
-        warns = utils.get_warnings(ctx.guild.id, member.id)
+        warns = await utils.get_warnings(ctx.guild.id, member.id)
         if not warns:
             return await ctx.send(msg(ctx, "no_warnings", member=member))
         lines = msg(ctx, "warnings_title", member=member)
@@ -214,7 +214,7 @@ class MembersMixin:
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member_warns"))
-        utils.clear_warnings(ctx.guild.id, member.id)
+        await utils.clear_warnings(ctx.guild.id, member.id)
         await ctx.send(msg(ctx, "warnings_cleared", member=member))
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"

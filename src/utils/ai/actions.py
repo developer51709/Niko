@@ -446,7 +446,7 @@ async def _do_warn_member(bot, msg: discord.Message, args: dict) -> None:
     utils_cog = bot.get_cog("ModerationUtils")
     if utils_cog and hasattr(utils_cog, "add_warn"):
         try:
-            utils_cog.add_warn(msg.guild.id, member.id, msg.author.id, reason)
+            await utils_cog.add_warn(msg.guild.id, member.id, msg.author.id, reason)
         except Exception as e:
             await msg.channel.send(view=_error_view(f"Failed to record warning: {e}"))
             return

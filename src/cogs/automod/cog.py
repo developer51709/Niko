@@ -276,7 +276,7 @@ class AutoMod(commands.Cog):
                     elif action == "kick":
                         await member.kick(reason="AutoMod: user-installed app raid abuse")
                     elif action == "warn":
-                        utils.add_warn(
+                        await utils.add_warn(
                             message.guild.id, member.id, self.bot.user.id,
                             "AutoMod: user-installed app raid abuse"
                         )

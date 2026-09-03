@@ -338,7 +338,129 @@ async def _create_tables(bot):
         )
     """)
 
+    # ── Warns table ────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS warns (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason      TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_warns_data(bot)
+
+    # ── Mutes table ────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mutes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            reason      TEXT,
+            until       TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_mutes_data(bot)
+
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_warns_data(bot):
+    """Migrate data/warns.json into the warns table."""
+    import json
+
+    path = "data/warns.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, users in data.items():
+            if not isinstance(users, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for uid_str, warn_list in users.items():
+                if not isinstance(warn_list, list):
+                    continue
+                try:
+                    user_id = int(uid_str)
+                except (TypeError, ValueError):
+                    continue
+                for w in warn_list:
+                    if not isinstance(w, dict):
+                        continue
+                    await bot.cxn.execute(
+                        "INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) "
+                        "VALUES ($1, $2, $3, $4, $5)",
+                        guild_id,
+                        user_id,
+                        w.get("mod", 0),
+                        w.get("reason", ""),
+                        w.get("time", ""),
+                    )
+                    migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} warnings from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate warns.json: {e}")
+
+
+async def _migrate_mutes_data(bot):
+    """Migrate data/mutes.json into the mutes table."""
+    import json
+
+    path = "data/mutes.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, users in data.items():
+            if not isinstance(users, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for uid_str, mute_data in users.items():
+                if not isinstance(mute_data, dict):
+                    continue
+                try:
+                    user_id = int(uid_str)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT INTO mutes (guild_id, user_id, reason, until) "
+                    "VALUES ($1, $2, $3, $4)",
+                    guild_id,
+                    user_id,
+                    mute_data.get("reason"),
+                    mute_data.get("until"),
+                )
+                migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} mutes from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate mutes.json: {e}")
 
 
 async def _migrate_economy_data(bot):
