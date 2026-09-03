@@ -329,6 +329,15 @@ async def _create_tables(bot):
     """)
     await _migrate_sticky_data(bot)
 
+    # ── AFK users table ────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS afk_users (
+            user_id INTEGER PRIMARY KEY,
+            reason  TEXT NOT NULL DEFAULT 'No reason provided.',
+            since   TEXT NOT NULL
+        )
+    """)
+
     logging.success("DB", "Database tables verified")
 
 
