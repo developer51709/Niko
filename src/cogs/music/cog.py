@@ -41,13 +41,156 @@ class MusicSystem(commands.Cog):
     def _state(self, guild_id: int) -> dict:
         if guild_id not in self._guild_states:
             self._guild_states[guild_id] = {
-                "loop":       False,
-                "autoplay":   False,
-                "history":    deque(maxlen=HISTORY_LEN),
-                "np_message": None,
-                "last_track": None,
+                "loop":        False,
+                "autoplay":    False,
+                "history":     deque(maxlen=HISTORY_LEN),
+                "np_message":  None,
+                "last_track":  None,
+                # Autoplay "ghost queue": pre-resolved Last.fm suggestions
+                # that play only when the manual queue runs dry. It never
+                # feeds tracks into player.queue, so manual queue changes
+                # are never disturbed by autoplay.
+                "ghost_queue": deque(maxlen=GHOST_QUEUE_LEN),
+                "ghost_seed":  None,   # (artist, title) it was seeded from
+                "ghost_task":  None,   # pending background refill task
             }
         return self._guild_states[guild_id]
+
+    # ─── AUTOPLAY GHOST QUEUE ────────────────────
+
+    def _clear_ghost(self, guild_id: int):
+        """Drop all autoplay suggestions and cancel any pending refill.
+
+        Called on /stop, disconnect, and when autoplay is toggled off, so a
+        stale ghost queue can never leak into a fresh listening session.
+        """
+        state = self._guild_states.get(guild_id)
+        if not state:
+            return
+        task = state.get("ghost_task")
+        if task and not task.done():
+            task.cancel()
+        state["ghost_task"] = None
+        state["ghost_queue"].clear()
+        state["ghost_seed"] = None
+
+    def _ghost_seed_from_player(self, player, fallback=None):
+        """Pick the track the next ghost-queue refill should follow.
+
+        Priority: the last manually queued track (the queue tail, i.e. what
+        will be playing when the manual queue finally drains) → the currently
+        playing track → the caller-provided fallback.
+        """
+        if player is not None:
+            try:
+                if not player.queue.is_empty:
+                    return player.queue[-1]
+            except Exception:
+                pass
+            if getattr(player, "current", None):
+                return player.current
+        return fallback
+
+    def _schedule_ghost_refill(
+        self,
+        guild_id: int,
+        seed_track=None,
+        delay: float = 1.0,
+    ):
+        """Queue a background refill of the autoplay ghost queue.
+
+        Coalesced per guild: scheduling a new refill cancels any pending one,
+        so a burst of manual /play adds only triggers one Last.fm round trip.
+        """
+        state = self._state(guild_id)
+        if not (self._lastfm_key and state.get("autoplay")):
+            return
+        task = state.get("ghost_task")
+        if task and not task.done():
+            task.cancel()
+        state["ghost_task"] = asyncio.create_task(
+            self._ghost_refill_task(guild_id, seed_track, delay)
+        )
+
+    async def _ghost_refill_task(self, guild_id: int, seed_track, delay: float):
+        """Background refill: resolve similar tracks for the current seed and
+        replace the ghost queue with them (deduped against history)."""
+        try:
+            await asyncio.sleep(delay)
+            state = self._state(guild_id)
+            if not (self._lastfm_key and state.get("autoplay")):
+                return
+
+            guild  = self.bot.get_guild(guild_id)
+            player = guild.voice_client if guild else None
+            seed   = self._ghost_seed_from_player(player, seed_track)
+            if seed is None:
+                return
+            seed_key = ((seed.author or "").lower(), (seed.title or "").lower())
+            if seed_key == ("", ""):
+                return
+
+            # Nothing changed since the last fill — don't burn a Last.fm call.
+            if state.get("ghost_seed") == seed_key and state.get("ghost_queue"):
+                return
+
+            candidates = await self._fetch_ghost_candidates(guild_id, seed)
+            if not candidates:
+                return
+            state["ghost_queue"].clear()
+            state["ghost_queue"].extend(candidates)
+            state["ghost_seed"] = seed_key
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            log.error("Music", f"Ghost queue refill failed: {exc}")
+        finally:
+            state = self._guild_states.get(guild_id)
+            if state:
+                state["ghost_task"] = None
+
+    async def _fetch_ghost_candidates(self, guild_id: int, seed) -> list:
+        """Resolve up to GHOST_QUEUE_LEN Last.fm-similar tracks for the seed,
+        skipping anything already played or already suggested."""
+        artist_raw = (seed.author or "").strip()
+        title_raw  = (seed.title  or "").strip()
+        if not artist_raw and not title_raw:
+            return []
+
+        state = self._state(guild_id)
+        played: set[tuple[str, str]] = set()
+        for item in state["history"]:
+            key = ((item.author or "").lower(), (item.title or "").lower())
+            if key != ("", ""):
+                played.add(key)
+        if state.get("last_track"):
+            played.add((
+                (state["last_track"].author or "").lower(),
+                (state["last_track"].title  or "").lower(),
+            ))
+        for item in state.get("ghost_queue", ()):
+            played.add(((item.author or "").lower(), (item.title or "").lower()))
+        played.add((artist_raw.lower(), title_raw.lower()))
+
+        similars = await _lastfm_similar(self._lastfm_key, artist_raw, title_raw)
+        found: list = []
+        for similar_artist, similar_title in similars:
+            if (similar_artist.lower(), similar_title.lower()) in played:
+                continue
+            try:
+                results = await wavelink.Playable.search(
+                    f"ytsearch:{similar_artist} - {similar_title}"
+                )
+            except Exception:
+                continue
+            if not results:
+                continue
+            track = results[0] if isinstance(results, list) else results
+            found.append(track)
+            played.add((similar_artist.lower(), similar_title.lower()))
+            if len(found) >= GHOST_QUEUE_LEN:
+                break
+        return found
 
     # ─── NP MESSAGE UPDATE ────────────────────────
 
@@ -288,23 +431,45 @@ class MusicSystem(commands.Cog):
             await self._update_np_message(player.guild)
             return
 
-        # Queue has more tracks
+        reason  = str(getattr(payload, "reason", "") or "")
+        natural = reason in ("finished", "replaced")
+
+        # Queue has more tracks — manual queue always wins over autoplay.
         if not player.queue.is_empty:
             next_track = player.queue.get()
             await player.play(next_track)
             await self._update_np_message(player.guild)
+            # Near the end of a manual queue, keep the autoplay suggestions
+            # following the new queue tail (coalesced background refill).
+            try:
+                if len(player.queue) <= GHOST_QUEUE_LEN:
+                    self._schedule_ghost_refill(guild_id)
+            except Exception:
+                pass
             return
 
-        # Queue exhausted — try autoplay via Last.fm. Only continue when the
-        # previous track finished naturally or was skipped forward; never after
-        # /stop or a channel cleanup, which fire 'stopped'/'cleanup' reasons.
-        reason = str(getattr(payload, "reason", "") or "")
-        if (
-            state.get("autoplay")
-            and self._lastfm_key
-            and payload.track
-            and reason in ("finished", "replaced")
-        ):
+        # Queue exhausted — continue via the autoplay ghost queue (Last.fm
+        # suggestions pre-resolved in the background, never mixed into the
+        # manual queue). Only continue when the previous track ended naturally
+        # or was skipped forward; never after /stop or a channel cleanup,
+        # which fire 'stopped'/'cleanup' reasons.
+        if natural and state.get("autoplay") and self._lastfm_key and payload.track:
+            ghost = state.get("ghost_queue")
+            if ghost:
+                # Instant pop — no network in the hot path.
+                nxt = ghost.popleft()
+                # Force a re-seed so the top-up refill below actually runs.
+                state["ghost_seed"] = None
+                try:
+                    await player.play(nxt)
+                    await self._update_np_message(player.guild)
+                    self._schedule_ghost_refill(guild_id, seed_track=nxt, delay=0.5)
+                    return
+                except Exception as exc:
+                    log.error("Music", f"Autoplay ghost play failed: {exc}")
+
+            # No suggestions ready yet (e.g. autoplay was just switched on) —
+            # fall back to a direct fetch so playback never dead-airs.
             try:
                 track      = payload.track
                 artist_raw = track.author or ""
@@ -334,6 +499,10 @@ class MusicSystem(commands.Cog):
                     return
             except Exception as exc:
                 log.error("Music", f"Autoplay failed: {exc}")
+        else:
+            # Stopped/cleanup, or autoplay off — drop pending suggestions so
+            # they can't leak into the next listening session.
+            self._clear_ghost(guild_id)
 
         # Nothing more to play — idle grace period then disconnect
         await asyncio.sleep(IDLE_TIMEOUT)
@@ -517,6 +686,11 @@ class MusicSystem(commands.Cog):
         if first_track is None and queued_count == 0:
             return await ctx.send(msg(ctx, "play_not_found"))
 
+        # Manual tracks were added — re-seed the autoplay suggestions so they
+        # follow the newest additions (background, coalesced; never touches the
+        # manual queue itself).
+        self._schedule_ghost_refill(ctx.guild.id)
+
         if queued_count:
             if not first_track:
                 first_track = player.current
@@ -581,6 +755,7 @@ class MusicSystem(commands.Cog):
         if not player:
             return await ctx.send(msg(ctx, "stop_nothing"))
         self._state(ctx.guild.id)["loop"] = False
+        self._clear_ghost(ctx.guild.id)
         player.queue.clear()
         await player.stop()
         await ctx.send(msg(ctx, "stop_ok"))
@@ -606,6 +781,10 @@ class MusicSystem(commands.Cog):
             return await ctx.send(msg(ctx, "autoplay_unavailable"))
         state = self._state(ctx.guild.id)
         state["autoplay"] = not state["autoplay"]
+        if state["autoplay"]:
+            self._schedule_ghost_refill(ctx.guild.id)
+        else:
+            self._clear_ghost(ctx.guild.id)
         key = "autoplay_on" if state["autoplay"] else "autoplay_off"
         await ctx.send(msg(ctx, key))
         await self._update_np_message(ctx.guild)
@@ -616,7 +795,9 @@ class MusicSystem(commands.Cog):
     )
     async def queue(self, ctx: commands.Context):
         player = ctx.voice_client
-        if not player or player.queue.is_empty:
+        state  = self._state(ctx.guild.id) if ctx.guild else None
+        ghost  = list(state["ghost_queue"]) if state else []
+        if not player or (player.queue.is_empty and not ghost):
             return await ctx.send(msg(ctx, "queue_empty"))
 
         lines = [msg(ctx, "queue_header")]
@@ -628,6 +809,15 @@ class MusicSystem(commands.Cog):
                 if remaining > 0:
                     lines.append(f"\n*…and {remaining} more track{'s' if remaining > 1 else ''}*")
                 break
+
+        # Show the autoplay suggestions separately — they are NOT part of the
+        # manual queue and only play when it runs dry.
+        if ghost:
+            lines.append("")
+            lines.append("-# 📻 **Autoplay suggestions** (play when the queue runs dry):")
+            for i, track in enumerate(ghost[:3], start=1):
+                dur = _fmt_dur(track.length) if track.length else "?"
+                lines.append(f"   📻 {i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
 
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -669,6 +859,7 @@ class MusicSystem(commands.Cog):
             return await ctx.send(msg(ctx, "disconnect_nothing"))
         state = self._state(ctx.guild.id)
         state["np_message"] = None
+        self._clear_ghost(ctx.guild.id)
         if getattr(player, "channel", None):
             asyncio.create_task(set_voice_status(self.bot, player.channel.id, None))
         await player.disconnect()

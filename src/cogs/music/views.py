@@ -41,6 +41,7 @@ from utils.i18n import make_msg
 IDLE_TIMEOUT      = 300       # seconds before auto-disconnect on empty queue
 HISTORY_LEN       = 10        # tracks kept in per-guild history deque
 MAX_QUEUE_SHOW    = 10        # tracks shown in .queue list
+GHOST_QUEUE_LEN   = 5         # autoplay suggestions pre-resolved per guild (ghost queue)
 _MAX_CONNECT_NODES = 3        # Lavalink nodes to keep in the pool (load-balanced + failover)
 
 SOURCE_COLOURS = {
@@ -648,6 +649,7 @@ class _StopBtn(discord.ui.Button):
         if player:
             state = self.cog._state(self.guild_id)
             state["loop"] = False
+            self.cog._clear_ghost(self.guild_id)
             player.queue.clear()
             await player.stop()
         await self.cog._update_np_message(interaction.guild)
@@ -676,6 +678,7 @@ class _PrevBtn(discord.ui.Button):
         if player.current:
             player.queue.put_at(0, player.current)
         await player.play(prev_track)
+        self.cog._schedule_ghost_refill(self.guild_id)
         await self.cog._update_np_message(interaction.guild)
 
 
