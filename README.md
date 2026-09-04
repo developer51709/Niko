@@ -176,7 +176,7 @@ src/
 2. Add `DISCORD_CLIENT_SECRET` to enable Discord OAuth dashboard login
 3. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
 4. Run `npm run build` when changing the frontend; the **Run the bot** workflow serves it
-5. In your server, use `!levelpanel` and `!automod` to configure per-guild settings interactively
+5. In your server, use `.levelpanel` and `.automod` to configure per-guild settings interactively
 
 **Requirements:** Python 3.10+, Node.js 20+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
 
