@@ -237,12 +237,35 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, BadArgument):
+            # Build a helpful message: what went wrong + how to call it right.
+            cmd = ctx.command
+            if isinstance(error, MemberNotFound):
+                reason = f"I couldn't find a member matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+            elif isinstance(error, UserNotFound):
+                reason = f"I couldn't find a user matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+            elif isinstance(error, ChannelNotFound):
+                reason = f"I couldn't find a channel matching `{error.argument}`. Try mentioning it (e.g. `#channel`) or using its exact ID."
+            elif isinstance(error, RoleNotFound):
+                reason = f"I couldn't find a role matching `{error.argument}`. Try mentioning it (e.g. `@role`) or using its exact ID."
+            elif isinstance(error, BadBoolArgument):
+                reason = f"`{error.argument}` isn't a valid yes/no value. Try `true`, `false`, `yes`, `no`, `on`, or `off`."
+            elif isinstance(error, BadColourArgument):
+                reason = f"`{error.argument}` isn't a valid colour. Try a hex code like `#5865F2`."
+            elif isinstance(error, BadInviteArgument):
+                reason = f"`{error.argument}` isn't a valid invite link or code."
+            else:
+                reason = f"One of the arguments couldn't be understood: {error}"
+
+            usage = cmd.qualified_name if cmd else None
+            sig = cmd.signature if cmd else None
+            usage_line = f"**Usage:** `.{usage} {sig}`" if sig else f"**Usage:** `.{usage}`"
+
             view = self.error_embed(
                 "Invalid Argument",
-                "One or more arguments were invalid. Check your input and try again."
+                f"{reason}\n{usage_line}"
             )
             await ctx.reply(view=view)
-            logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}")
+            logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}: {error}")
             return
 
         # ── Channel restrictions ───────────────────────────────────────────

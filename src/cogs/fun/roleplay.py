@@ -519,15 +519,26 @@ def build_picker_view(*, target_id: int, hint: str) -> discord.ui.LayoutView:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_roleplay_command(action: str):
-    """Factory for prefix commands — one per action, bound at class creation."""
+    """Factory for prefix commands — one per action, assigned in the class body.
+
+    discord.py decides which signature parameters belong to the caller by
+    checking ``is_inside_class(callback)``: a class method's ``__qualname__``
+    makes it skip both ``self`` and ``ctx``. A function defined inside this
+    factory would normally have ``<locals>`` in its qualname, so discord.py
+    would treat ``ctx`` as the first user argument — the bug where every
+    roleplay command demanded a "ctx" member. Overriding ``__qualname__`` to
+    a class-like path fixes the signature parsing while keeping the factory.
+    At invocation discord.py passes ``(cog, ctx, *args)`` itself, so the
+    callback stays a plain unbound function taking ``(self, ctx, member)``.
+    """
     meta = ACTIONS[action]
 
-    async def _run(self: "RolePlayCog", ctx: commands.Context, member: discord.Member = None):
+    async def roleplay_action(self, ctx: commands.Context, member: discord.Member = None):
         await self._do_roleplay(ctx, action, member)
 
-    _run.__name__ = f"roleplay_{action}"
-    _run.__doc__ = meta["help"]
-    return commands.command(name=action, help=meta["help"])(_run)
+    roleplay_action.__name__ = f"roleplay_{action}"
+    roleplay_action.__qualname__ = f"RolePlayCog.roleplay_{action}"
+    return commands.command(name=action, help=meta["help"])(roleplay_action)
 
 
 class RolePlayCog(commands.Cog):
