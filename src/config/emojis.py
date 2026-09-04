@@ -20,6 +20,8 @@ def get_emoji(emoji_name: str):
         return "<:badge_partner:1525900310080655530>"
     if emoji_name == "badge_supporter":
         return "<:badge_supporter:1525900312735383694>"
+    if emoji_name == "bluesky":
+        return "<:bluesky:1545426285948436610>"
     if emoji_name == "bot_owner":
         return "<:bot_owner:1520827283336724510>"
     if emoji_name == "broom":
@@ -236,6 +238,8 @@ def get_emoji(emoji_name: str):
         return "<:python:1520827759578976266>"
     if emoji_name == "ram":
         return "<:ram:1520864684222316624>"
+    if emoji_name == "reddit":
+        return "<:reddit:1545426284992270486>"
     if emoji_name == "scroll":
         return "<:scroll:1520911599324631072>"
     if emoji_name == "soundcloud":
@@ -259,11 +263,13 @@ def get_emoji(emoji_name: str):
     if emoji_name == "thumbs_up":
         return "<:thumbs_up:1525890248406597874>"
     if emoji_name == "tiktok":
-        return "<:tiktok:1520827778344161390>"
+        return "<:tiktok:1545426286883901610>"
     if emoji_name == "trash":
         return "<:trash:1523510470894420009>"
+    if emoji_name == "twitch":
+        return "<:twitch:1545426287915696178>"
     if emoji_name == "twitterx":
-        return "<:twitterx:1520827785176678580>"
+        return "<:twitterx:1545426291749167155>"
     if emoji_name == "icon_voicemaster":
         return "<:icon_voicemaster:1520864687460454500>"
     if emoji_name == "verified_developer_badge":
@@ -297,7 +303,9 @@ def get_emoji(emoji_name: str):
     if emoji_name == "White7":
         return "<:White7:1520827857016983652>"
     if emoji_name == "youtube":
-        return "<:youtube:1520827866588123337>"
+        return "<:youtube:1545426288830054461>"
+    if emoji_name == "youtube_shorts":
+        return "<:youtube_shorts:1545426290020978738>"
     # these use two emojis instead of just returning one
     if emoji_name == "enabled":
         return "<:disable_no:1520827872925716580><:enable_yes:1520827877283856445>"

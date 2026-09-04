@@ -55,7 +55,7 @@ PLATFORMS: dict[str, dict] = {
         "field_placeholder": "charlidamelio",
     },
     "bluesky": {
-        "icon":    "🦋",
+        "icon":    get_emoji("bluesky"),
         "color":   discord.Colour(0x0085FF),
         "label":   "Bluesky Account",
         "btn_style": discord.ButtonStyle.primary,
@@ -63,7 +63,7 @@ PLATFORMS: dict[str, dict] = {
         "field_placeholder": "bsky.bsky.team",
     },
     "reddit": {
-        "icon":    "🟠",
+        "icon":    get_emoji("reddit"),
         "color":   discord.Colour(0xFF4500),
         "label":   "Reddit Subreddit",
         "btn_style": discord.ButtonStyle.secondary,
