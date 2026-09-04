@@ -193,10 +193,14 @@ def build_notification_view(
 
     if text:
         preview = text[:280] + ("…" if len(text) > 280 else "")
+        # Quote every line so multi-line posts stay inside the blockquote —
+        # prefixing only the first line makes the rest render as plain text.
+        # Empty lines become a bare `> ` to keep the quote contiguous.
+        quoted = "\n".join(f"> {line}" if line else "> " for line in preview.rstrip().splitlines())
         if body:
-            body += f"\n\n> {preview}"
+            body += f"\n\n{quoted}"
         else:
-            body = f"> {preview}"
+            body = quoted
 
     body += f"\n\n{get_emoji('icon_link')} [View{'  Video' if platform == 'youtube' else ' Post'}]({url})"
 
