@@ -15,7 +15,7 @@ from config import status as status_config
 
 
 def _build_activity(text: str, status_type: str, status_link: str) -> discord.BaseActivity:
-    status_type = status_type.lower()
+    status_type = status_type.strip().lower()
     normalized_link = status_link.strip()
     if normalized_link and not (
         normalized_link.startswith("http://") or normalized_link.startswith("https://")

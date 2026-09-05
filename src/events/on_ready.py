@@ -20,11 +20,15 @@ from events.startup import (
 
 async def handle_ready(bot):
     logging.info("Startup", f"Niko is online as {bot.user}")
-    await init_database(bot)
-    await load_cogs(bot)
-    await set_status(bot)
-    print_banner(bot, guild_count=len(bot.guilds))
-    write_bot_stats(bot)
-    write_commands(bot)
-    asyncio.create_task(run_emoji_sync(bot))
-    asyncio.create_task(run_slash_sync(bot))
+    try:
+        await init_database(bot)
+        await load_cogs(bot)
+        await set_status(bot)
+        print_banner(bot, guild_count=len(bot.guilds))
+        write_bot_stats(bot)
+        write_commands(bot)
+        asyncio.create_task(run_emoji_sync(bot))
+        asyncio.create_task(run_slash_sync(bot))
+    except Exception:
+        logging.error("Startup", "Unhandled exception in on_ready:", exc_info=True)
+        raise

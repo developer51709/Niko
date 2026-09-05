@@ -1,10 +1,7 @@
 # Bot presence / status configuration.
 
 # Single-message mode: the bot shows one activity at startup.
-STATUS_MESSAGES = {
-    ".help | “hey niko”",
-    "https://niko.sryze.cc"
-}
+STATUS_MESSAGE = ".help | \u201chey niko\u201d"
 
 # Activity type: playing, watching, listening, competing, or streaming.
 STATUS_TYPE = "playing"
@@ -21,11 +18,8 @@ STATUS_DEVICE = "vr"
 # each rotation step.
 STATUS_ROTATE = True
 STATUS_MESSAGES: list[str] = [
-    ".help | “hey niko”",
+    ".help | \u201chey niko\u201d",
     "https://niko.sryze.cc"
 ]
-STATUS_TYPES: list[str] = [
-    "playing",
-    "playing"
-]
+STATUS_TYPES: list[str] = []
 STATUS_INTERVAL = 30
