@@ -32,3 +32,23 @@ async def handle_ready(bot):
     except Exception:
         logging.error("Startup", "Unhandled exception in on_ready:", exc_info=True)
         raise
+    finally:
+        # Make sure no status rotation work is left dangling if anything above
+        # failed before rotation was scheduled.
+        if getattr(bot, "_status_rotation_task", None) is None:
+            _maybe_schedule_rotation_safely(bot)
+
+
+def _maybe_schedule_rotation_safely(bot) -> None:
+    """Best-effort fallback that schedules rotation only when nothing else did.
+
+    This keeps the legacy ``on_ready`` path from leaving an unconsumed coroutine
+    in the event loop if ``set_status`` was changed later.
+    """
+    if getattr(bot, "_status_rotation_task", None) is None:
+        try:
+            from events.startup.status import start_status_rotation as _start_rotation_sync
+            if callable(_start_rotation_sync):
+                _start_rotation_sync(bot)
+        except Exception:
+            logging.warning("Startup", "Failed to schedule fallback status rotation.")

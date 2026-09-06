@@ -45,6 +45,11 @@ def _build_activity(text: str, status_type: str, status_link: str) -> discord.Ba
 
 
 async def set_status(bot):
+    """Set the bot's initial presence and, if configured, start status rotation.
+
+    This is called from the ``on_ready`` path. Any failure here is logged but
+    does not take down the rest of startup.
+    """
     status_link = status_config.STATUS_LINK
     status_type = status_config.STATUS_TYPE
 
@@ -60,16 +65,31 @@ async def set_status(bot):
             exc,
         )
 
-    if status_config.STATUS_ROTATE:
-        _start_rotation(bot, status_link)
+    if not status_config.STATUS_ROTATE:
+        return
+
+    if not _should_run_rotation():
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logging.warning(
+            "status",
+            "STATUS_ROTATE is enabled but there is no running event loop. "
+            "Skipping status rotation.",
+        )
+        return
+
+    loop.create_task(_start_rotation(bot, status_link, start_idx=0))
 
 
 async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
-    """Start a background task that rotates the bot presence.
+    """Background task that rotates the bot presence.
 
-    The task is stored on the bot so it can be cancelled cleanly when status
-    rotation is toggled off. If rotation is already running it is replaced so
-    config changes take effect immediately.
+    It is scheduled from :func:`set_status` and the active task is tracked on
+    the bot so it can be cancelled cleanly when rotation is disabled or the bot
+    shuts down.
     """
     messages = status_config.STATUS_MESSAGES
     types = status_config.STATUS_TYPES
@@ -141,18 +161,39 @@ async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
         existing.cancel()
 
     task: asyncio.Task[None] = asyncio.ensure_future(_rotate())
+    _attach_rotation_bot(task, bot)
     task.add_done_callback(_rotation_task_cleared)
     task.add_done_callback(_rotation_task_done)
     bot._status_rotation_task = task
 
 
+def _should_run_rotation() -> bool:
+    """Return True when status rotation can meaningfully run.
+
+    This mirrors the runtime checks performed deeper in the rotation task so a
+    bad configuration does not result in a task that immediately exits or logs
+    itself into a wall.
+    """
+    if not status_config.STATUS_MESSAGES:
+        return False
+
+    usable_messages = [
+        m for m in status_config.STATUS_MESSAGES if isinstance(m, str) and m.strip()
+    ]
+    return bool(usable_messages)
+
+
 
 
 def _rotation_task_cleared(task: asyncio.Task[None]) -> None:
-    """Clean up the stored rotation task once the task wrapper has resolved."""
-    bot = getattr(task, "_rotation_bot", None)
-    if bot is not None:
-        setattr(bot, "_status_rotation_task", None)
+    """Clean up the stored rotation task once the task wrapper has resolved.
+
+    This is only a best-effort bookkeeping callback. The authoritative cleanup
+    happens in :func:`_rotation_task_done`, which also logs unexpected task
+    failure.
+    """
+    if getattr(task, "_status_rotation_bot", None) is not None:
+        setattr(task, "_status_rotation_bot", None)
 
 
 def _rotation_task_done(task: asyncio.Task[None]) -> None:
@@ -174,6 +215,46 @@ def _rotation_task_done(task: asyncio.Task[None]) -> None:
         logging.info("status", "Status rotation task exited.")
 
 
+def _attach_rotation_bot(task: asyncio.Task[None], bot) -> None:
+    """Attach a lightweight back-reference from the task to the bot.
+
+    This is used only by cleanup callbacks so they can null out any stored
+    references if needed. The attribute name is namespaced to reduce the chance
+    of colliding with other bot attributes.
+    """
+    task._status_rotation_bot = bot
+
+
+def status_rotation_running(bot) -> bool:
+    """Return True if a status rotation task is currently active.
+
+    Useful for UI/status checks or for deciding whether to start a fresh
+    rotation task.
+    """
+    task = getattr(bot, "_status_rotation_task", None)
+    return task is not None and not task.done()
+
+
+def get_status_rotation_task(bot) -> asyncio.Task[None] | None:
+    """Return the current status rotation task, if any.
+
+    Callers that need to inspect or cancel the rotation task can use this
+    instead of reaching into private bot attributes directly.
+    """
+    return getattr(bot, "_status_rotation_task", None)
+
+
+def refresh_status_rotation(bot) -> None:
+    """Restart rotation using the current configuration and reset the index.
+
+    This is the preferred public API when status config changes at runtime and
+    you want the sequence to start fresh without waiting for the next natural
+    step.
+    """
+    stop_status_rotation(bot)
+    start_status_rotation(bot)
+
+
 def stop_status_rotation(bot) -> None:
     """Cancel any running status rotation task.
 
@@ -188,15 +269,32 @@ def stop_status_rotation(bot) -> None:
     existing.cancel()
 
 
-def _start_rotation(bot, status_link: str) -> None:
-    """Legacy entrypoint kept for direct callers that do not pass start_idx.
+def start_status_rotation(bot) -> None:
+    """Public entrypoint for starting status rotation outside of initial startup.
 
-    Delegates to the full implementation in :func:`_start_rotation` so existing
-    callers still receive the improved error handling and task management.
+    Safe to call at any time after the bot has a running event loop.
     """
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
 
-    loop.create_task(_start_rotation(bot, status_link, start_idx=0))
+    loop.create_task(_start_rotation(bot, status_config.STATUS_LINK, start_idx=0))
+
+
+def _start_rotation(bot, status_link: str) -> None:
+    """Internal synchronous wrapper used by the legacy direct-call path.
+
+    Existing callers that still import this symbol continue to work, but they
+    now go through the same safe scheduling logic instead of any async/sync
+    mismatch.
+    """
+    start_status_rotation(bot)
+
+
+def cancel_status_rotation(bot) -> None:
+    """Public helper for stopping rotation and clearing stored bookkeeping.
+
+    Safe to call when rotation is not running.
+    """
+    stop_status_rotation(bot)
