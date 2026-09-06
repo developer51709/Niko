@@ -194,4 +194,9 @@ def _start_rotation(bot, status_link: str) -> None:
     Delegates to the full implementation in :func:`_start_rotation` so existing
     callers still receive the improved error handling and task management.
     """
-    _start_rotation(bot, status_link, start_idx=0)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    loop.create_task(_start_rotation(bot, status_link, start_idx=0))
