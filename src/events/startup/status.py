@@ -184,7 +184,6 @@ def _should_run_rotation() -> bool:
 
 
 
-
 def _rotation_task_cleared(task: asyncio.Task[None]) -> None:
     """Clean up the stored rotation task once the task wrapper has resolved.
 
