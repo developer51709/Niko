@@ -47,8 +47,14 @@ class ServerLogger(commands.Cog):
         target_id: int | None = None,
         action_key: str | None = None,
         channel_id: int | None = None,
+        media_urls: list[str] | None = None,
+        thumbnail_url: str | None = None,
     ):
-        """Send a structured log entry to the configured channel for the given category."""
+        """Send a structured log entry to the configured channel for the given category.
+
+        media_urls renders image URLs in a MediaGallery inside the log container;
+        thumbnail_url renders the body in a Section with a Thumbnail accessory.
+        """
         await self._reload()
         cfg = self._get_cfg(guild.id)
 
@@ -71,6 +77,8 @@ class ServerLogger(commands.Cog):
             target_id=target_id,
             action_key=action_key or title,
             channel_id=channel_id,
+            media_urls=media_urls,
+            thumbnail_url=thumbnail_url,
         )
         try:
             # Stay under Discord's per-channel send budget so a burst of
@@ -233,6 +241,32 @@ class ServerLogger(commands.Cog):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         guild = after.guild
+
+        # ── Avatar change (global or server avatar) ──
+        def _asset_url(asset) -> str | None:
+            return asset.url if asset else None
+
+        avatar_changed = (
+            _asset_url(before.avatar) != _asset_url(after.avatar)
+            or _asset_url(before.guild_avatar) != _asset_url(after.guild_avatar)
+        )
+        if avatar_changed:
+            old_avatar = (
+                _asset_url(before.guild_avatar)
+                or _asset_url(before.avatar)
+                or before.display_avatar.url
+            )
+            new_avatar = after.display_avatar.url
+            avatar_body = (
+                f"**Member:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
+                f"**Avatar Updated**\n"
+                f"[Old avatar]({old_avatar}) → [New avatar]({new_avatar})"
+            )
+            await self.log_event(
+                guild, "members", "Avatar Updated", avatar_body,
+                target_id=after.id, thumbnail_url=new_avatar,
+            )
+
         before_roles = set(before.roles)
         after_roles = set(after.roles)
 
@@ -321,9 +355,18 @@ class ServerLogger(commands.Cog):
             content = content[:900] + "…"
 
         attachment_note = ""
+        image_urls = []
         if message.attachments:
             names = ", ".join(f"`{a.filename}`" for a in message.attachments)
             attachment_note = f"\n**Attachments ({len(message.attachments)}):** {names}"
+            for att in message.attachments:
+                # Image attachments render inline in the log container's gallery.
+                if att.content_type and att.content_type.startswith("image/"):
+                    image_urls.append(att.proxy_url)
+                elif not att.content_type and (att.filename or "").lower().endswith(
+                    (".png", ".jpg", ".jpeg", ".gif", ".webp")
+                ):
+                    image_urls.append(att.proxy_url)
 
         body = (
             f"**Author:** {message.author.mention} (`{message.author}`)\n"
@@ -331,7 +374,10 @@ class ServerLogger(commands.Cog):
             f"**Content:**\n{content}"
             f"{attachment_note}"
         )
-        await self.log_event(message.guild, "messages", "Message Deleted", body, target_id=message.author.id)
+        await self.log_event(
+            message.guild, "messages", "Message Deleted", body,
+            target_id=message.author.id, media_urls=image_urls or None,
+        )
 
         # Re-upload any cached attachment bytes to the log channel
         if message.attachments:

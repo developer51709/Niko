@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
+from discord.ui.media_gallery import MediaGalleryItem
 
 from utils import logging
 from config import links
@@ -48,7 +49,7 @@ CATEGORIES: dict[str, dict] = {
     },
     "members": {
         "label": "Members",
-        "description": "Member joins, leaves and role changes",
+        "description": "Member joins, leaves, role changes and avatar updates",
         "emoji_key": "icon_welcome",
         "color": 0x9B59B6,
     },
@@ -389,6 +390,8 @@ def _build_log_view(
     target_id: int | None = None,
     action_key: str | None = None,
     channel_id: int | None = None,
+    media_urls: list[str] | None = None,
+    thumbnail_url: str | None = None,
 ) -> discord.ui.LayoutView:
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
     emoji = get_emoji(cat_info["emoji_key"])
@@ -404,17 +407,40 @@ def _build_log_view(
         emoji = get_emoji("icon_leave")
     if action_key == "Ban":
         emoji = get_emoji("icon_ban")
+    if title == "Avatar Updated":
+        emoji = get_emoji("icon_image")
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 
-    container = discord.ui.Container(
+    children: list[discord.ui.Item] = [
         discord.ui.TextDisplay(content=f"### {emoji} {title}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=body),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=timestamp),
-        accent_colour=color,
-    )
+    ]
+
+    if thumbnail_url:
+        # Member avatar changes render the body in a section with the new pfp
+        # as a thumbnail accessory.
+        children.append(
+            discord.ui.Section(
+                discord.ui.TextDisplay(content=body),
+                accessory=discord.ui.Thumbnail(thumbnail_url),
+            )
+        )
+    else:
+        children.append(discord.ui.TextDisplay(content=body))
+
+    children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+
+    if media_urls:
+        # Deleted-message image attachments render inline in a media gallery.
+        children.append(
+            discord.ui.MediaGallery(*[MediaGalleryItem(media=url) for url in media_urls])
+        )
+        children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+
+    children.append(discord.ui.TextDisplay(content=timestamp))
+
+    container = discord.ui.Container(*children, accent_colour=color)
 
     if buttons:
         container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
