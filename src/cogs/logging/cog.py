@@ -49,11 +49,14 @@ class ServerLogger(commands.Cog):
         channel_id: int | None = None,
         media_urls: list[str] | None = None,
         thumbnail_url: str | None = None,
+        files: list[discord.File] | None = None,
     ):
         """Send a structured log entry to the configured channel for the given category.
 
         media_urls renders image URLs in a MediaGallery inside the log container;
-        thumbnail_url renders the body in a Section with a Thumbnail accessory.
+        thumbnail_url renders the body in a Section with a Thumbnail accessory;
+        files renders discord.ui.File components inside the log container (the
+        bytes are uploaded alongside the message via send(files=...)).
         """
         await self._reload()
         cfg = self._get_cfg(guild.id)
@@ -79,12 +82,17 @@ class ServerLogger(commands.Cog):
             channel_id=channel_id,
             media_urls=media_urls,
             thumbnail_url=thumbnail_url,
+            files=files,
         )
         try:
             # Stay under Discord's per-channel send budget so a burst of
             # events (e.g. mass-ban) can't get the channel rate-limited.
             await log_channel_limiter.acquire((guild.id, channel.id))
-            await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+            await channel.send(
+                view=view,
+                files=files or [],
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
         except Exception as e:
             logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")
             pass
@@ -356,17 +364,34 @@ class ServerLogger(commands.Cog):
 
         attachment_note = ""
         image_urls = []
+        files = []
         if message.attachments:
             names = ", ".join(f"`{a.filename}`" for a in message.attachments)
             attachment_note = f"\n**Attachments ({len(message.attachments)}):** {names}"
-            for att in message.attachments:
-                # Image attachments render inline in the log container's gallery.
-                if att.content_type and att.content_type.startswith("image/"):
-                    image_urls.append(att.proxy_url)
-                elif not att.content_type and (att.filename or "").lower().endswith(
-                    (".png", ".jpg", ".jpeg", ".gif", ".webp")
-                ):
-                    image_urls.append(att.proxy_url)
+            import aiohttp
+            import io
+            async with aiohttp.ClientSession() as session:
+                for att in message.attachments:
+                    is_image = (
+                        att.content_type.startswith("image/")
+                        if att.content_type
+                        else (att.filename or "").lower().endswith(
+                            (".png", ".jpg", ".jpeg", ".gif", ".webp")
+                        )
+                    )
+                    if is_image:
+                        # Image attachments render inline in the log container's gallery.
+                        image_urls.append(att.proxy_url)
+                        continue
+                    # Non-image attachments render as discord.ui.File components
+                    # inside the log container, so no separate re-upload message.
+                    try:
+                        async with session.get(att.proxy_url) as resp:
+                            if resp.status == 200:
+                                data = await resp.read()
+                                files.append(discord.File(io.BytesIO(data), filename=att.filename))
+                    except Exception:
+                        pass
 
         body = (
             f"**Author:** {message.author.mention} (`{message.author}`)\n"
@@ -377,38 +402,8 @@ class ServerLogger(commands.Cog):
         await self.log_event(
             message.guild, "messages", "Message Deleted", body,
             target_id=message.author.id, media_urls=image_urls or None,
+            files=files or None,
         )
-
-        # Re-upload any cached attachment bytes to the log channel
-        if message.attachments:
-            await self._reload()
-            cfg = self._get_cfg(message.guild.id)
-            if "messages" not in cfg.get("disabled", []):
-                log_channel_id = cfg.get("messages")
-                log_channel = message.guild.get_channel(log_channel_id) if log_channel_id else None
-                if log_channel:
-                    import aiohttp
-                    import io
-                    files = []
-                    async with aiohttp.ClientSession() as session:
-                        for att in message.attachments:
-                            try:
-                                async with session.get(att.proxy_url) as resp:
-                                    if resp.status == 200:
-                                        data = await resp.read()
-                                        files.append(discord.File(io.BytesIO(data), filename=att.filename))
-                            except Exception:
-                                pass
-                    if files:
-                        try:
-                            await log_channel_limiter.acquire((message.guild.id, log_channel.id))
-                            await log_channel.send(
-                                content=f"-# Attachments from deleted message by {message.author.mention}:",
-                                files=files,
-                                allowed_mentions=discord.AllowedMentions.none(),
-                            )
-                        except Exception as e:
-                            logging.error("logging_cog", f"Failed to re-upload deleted attachments: {e}")
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):

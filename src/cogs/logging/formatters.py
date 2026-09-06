@@ -392,6 +392,7 @@ def _build_log_view(
     channel_id: int | None = None,
     media_urls: list[str] | None = None,
     thumbnail_url: str | None = None,
+    files: list[discord.File] | None = None,
 ) -> discord.ui.LayoutView:
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
     emoji = get_emoji(cat_info["emoji_key"])
@@ -436,6 +437,14 @@ def _build_log_view(
         children.append(
             discord.ui.MediaGallery(*[MediaGalleryItem(media=url) for url in media_urls])
         )
+        children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+
+    if files:
+        # Deleted-message file attachments render inline as file components.
+        # The bytes are uploaded via send(files=...) — the components reference
+        # them through their attachment:// URI.
+        for f in files:
+            children.append(discord.ui.File(media=f))
         children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     children.append(discord.ui.TextDisplay(content=timestamp))
