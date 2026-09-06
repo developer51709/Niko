@@ -36,11 +36,7 @@ def _build_activity(text: str, status_type: str, status_link: str) -> discord.Ba
     if status_type == "competing":
         return discord.Activity(type=discord.ActivityType.competing, name=text)
 
-    logging.warning(
-        "status",
-        "Invalid status type %r. Defaulting to 'playing'.",
-        status_type,
-    )
+    logging.warning("status", f"Invalid status type {status_type}. Defaulting to 'playing'.")
     return discord.Game(name=text)
 
 
@@ -59,11 +55,7 @@ async def set_status(bot):
             device_status=status_config.STATUS_DEVICE,
         )
     except Exception as exc:
-        logging.error(
-            "status",
-            "Failed to set initial bot status: %s",
-            exc,
-        )
+        logging.error("status", f"Failed to set initial bot status: {exc}")
 
     if not status_config.STATUS_ROTATE:
         return
@@ -74,11 +66,7 @@ async def set_status(bot):
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        logging.warning(
-            "status",
-            "STATUS_ROTATE is enabled but there is no running event loop. "
-            "Skipping status rotation.",
-        )
+        logging.warning("status", "STATUS_ROTATE is enabled but there is no running event loop. Skipping status rotation.")
         return
 
     loop.create_task(_start_rotation(bot, status_link, start_idx=0))
@@ -94,20 +82,12 @@ async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
     messages = status_config.STATUS_MESSAGES
     types = status_config.STATUS_TYPES
     if not messages:
-        logging.warning(
-            "status",
-            "STATUS_ROTATE is enabled but STATUS_MESSAGES is empty. "
-            "Disabling rotation until messages are configured.",
-        )
+        logging.warning("status", "STATUS_ROTATE is enabled but STATUS_MESSAGES is empty. Disabling rotation until messages are configured.")
         return
 
     messages = [m for m in messages if isinstance(m, str) and m.strip()]
     if not messages:
-        logging.warning(
-            "status",
-            "STATUS_ROTATE is enabled but STATUS_MESSAGES contained no usable entries. "
-            "Disabling rotation.",
-        )
+        logging.warning("status", "STATUS_ROTATE is enabled but STATUS_MESSAGES contained no usable entries. Disabling rotation.")
         return
 
     if types is not None:
@@ -143,12 +123,7 @@ async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
             except Exception as exc:
                 now = asyncio.get_event_loop().time()
                 if now - last_error_at >= 60:
-                    logging.warning(
-                        "status",
-                        "Status rotation step failed (backoff %ss): %s",
-                        round(backoff, 1),
-                        exc,
-                    )
+                    logging.warning("status", f"Status rotation step failed (backoff {round(backoff, 1)}s): {exc}")
                     last_error_at = now
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 300)
@@ -205,11 +180,7 @@ def _rotation_task_done(task: asyncio.Task[None]) -> None:
         return
 
     if task.exception() is not None:
-        logging.error(
-            "status",
-            "Status rotation task exited with an unhandled error: %s",
-            task.exception(),
-        )
+        logging.error("status", f"Status rotation task exited with an unhandled error: {task.exception()}")
     else:
         logging.info("status", "Status rotation task exited.")
 
