@@ -1316,43 +1316,46 @@ class PostMenuBtn(discord.ui.Button):
         self.menu_id = menu_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not await check_author(interaction, self.author):
-            return
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            if not await check_author(interaction, self.author):
+                return
+            await interaction.response.defer(ephemeral=True, thinking=True)
 
-        cfg = await get_config(self.guild_id)
-        menu = (cfg.role_menus or {}).get(self.menu_id)
-        if menu is None:
-            return await interaction.followup.send(
-                view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
-            )
-        if not menu.get("options"):
-            return await interaction.followup.send(
-                view=feedback_view("Add at least one role before posting.", ok=False), ephemeral=True
-            )
-
-        # If it's already posted in this exact channel, edit it in place instead of duplicating.
-        if menu.get("channel_id") == interaction.channel.id and menu.get("message_id"):
-            try:
-                msg = await interaction.channel.fetch_message(menu["message_id"])
-                await msg.edit(view=RoleMenuView(self.guild_id, self.menu_id, cfg=cfg))
+            cfg = await get_config(self.guild_id)
+            menu = (cfg.role_menus or {}).get(self.menu_id)
+            if menu is None:
                 return await interaction.followup.send(
-                    view=feedback_view("Role menu updated in place."), ephemeral=True
+                    view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
                 )
-            except discord.NotFound:
-                pass  # message was deleted — fall through and re-post
+            if not menu.get("options"):
+                return await interaction.followup.send(
+                    view=feedback_view("Add at least one role before posting.", ok=False), ephemeral=True
+                )
 
-        posted_view = RoleMenuView(self.guild_id, self.menu_id, cfg=cfg)
-        msg = await interaction.channel.send(view=posted_view)
-        menu["channel_id"] = interaction.channel.id
-        menu["message_id"] = msg.id
-        await update_config(self.guild_id, cfg)
+            # If it's already posted in this exact channel, edit it in place instead of duplicating.
+            if menu.get("channel_id") == interaction.channel.id and menu.get("message_id"):
+                try:
+                    msg = await interaction.channel.fetch_message(menu["message_id"])
+                    await msg.edit(view=RoleMenuView(self.guild_id, self.menu_id, cfg=cfg))
+                    return await interaction.followup.send(
+                        view=feedback_view("Role menu updated in place."), ephemeral=True
+                    )
+                except discord.NotFound:
+                    pass  # message was deleted — fall through and re-post
 
-        await interaction.followup.send(view=feedback_view("Role menu posted."), ephemeral=True)
-        await interaction.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
+            posted_view = RoleMenuView(self.guild_id, self.menu_id, cfg=cfg)
+            msg = await interaction.channel.send(view=posted_view)
+            menu["channel_id"] = interaction.channel.id
+            menu["message_id"] = msg.id
+            await update_config(self.guild_id, cfg)
+
+            await interaction.followup.send(view=feedback_view("Role menu posted."), ephemeral=True)
+            await interaction.message.edit(
+                view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except Exception as e:
+            logging.error("role_menu", f"Error posting role menu: {e}")
 
 
 class ConfirmDeleteMenuBtn(discord.ui.Button):
