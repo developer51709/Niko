@@ -152,6 +152,7 @@ PRIMARY_KEYS: dict = {
     "blacklist_users": "id",
     "blacklist_guilds": "id",
     "roleplay_actions": "message_id",
+    "roleplay_blocks": ("blocker_id", "blocked_id"),
     # Dedicated music database (utils.music.database) — same cluster on
     # MongoDB but a separate database, so these tables live in their own pool.
     "music_liked_songs": ("user_id", "track_key"),

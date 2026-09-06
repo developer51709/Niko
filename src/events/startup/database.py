@@ -423,6 +423,18 @@ async def _create_tables(bot):
             used       INTEGER NOT NULL DEFAULT 0
         )
     """)
+    # ── Roleplay blocks (per-user "don't let X roleplay on me" list) ──────
+    # One row per (blocker, blocked) pair. A roleplay action from ``blocked``
+    # aimed at ``blocker`` is refused while a row exists; ``rpunblock``
+    # removes it.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS roleplay_blocks (
+            blocker_id  INTEGER NOT NULL,
+            blocked_id  INTEGER NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (blocker_id, blocked_id)
+        )
+    """)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_guilds (
             id         INTEGER PRIMARY KEY,

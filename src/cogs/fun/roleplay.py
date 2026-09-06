@@ -26,6 +26,11 @@ The "do it back" button:
     (same title/desc/GIF) with the button set to ``disabled=True``, and
   * sends a **new** roleplay message without a button as the "back" action.
 
+``rpblock`` / ``rpunblock`` manage a per-user block list: blocking someone
+refuses every roleplay path that targets you — prefix commands, the context-
+menu action picker, and "do it back" buttons (the ``roleplay_blocks`` table,
+resolved by (blocker, blocked) pairs).
+
 The API is fully SFW and has no "kill" category, so the legacy hug/kill/kiss
 set was replaced by the expanded action list below (each maps 1:1 to a
 nekos.best category). Every request sends the required application
@@ -320,6 +325,90 @@ _BASE_STRINGS: dict = {
             "es": "¿qué le toca a {target}? ☕✨ elige una y la tarjeta aparece aquí mismo!",
         },
     },
+    "blocked": {
+        "normal": {
+            "en": "{target} has blocked you from using roleplay commands on them!",
+            "de": "{target} hat dich von Roleplay-Befehlen gesperrt!",
+            "es": "¡{target} te ha bloqueado para usar comandos de roleplay con ellos!",
+        },
+        "cafe": {
+            "en": "hmm, {target} put up a 'no roleplay' sign ☕ you're not on the guest list!",
+            "de": "hmm, {target} hat ein 'kein roleplay'-schild aufgehängt ☕ du stehst nicht auf der gästeliste!",
+            "es": "hmm, {target} puso un cartel de 'nada de roleplay' ☕ ¡no estás en la lista!",
+        },
+    },
+    "block_success": {
+        "normal": {
+            "en": "🚫 {target} can no longer use roleplay commands on you.",
+            "de": "🚫 {target} kann keine Roleplay-Befehle mehr auf dich anwenden.",
+            "es": "🚫 {target} ya no puede usar comandos de roleplay contigo.",
+        },
+        "cafe": {
+            "en": "🚫 done! {target} is off the roleplay guest list ☕",
+            "de": "🚫 erledigt! {target} steht nicht mehr auf der roleplay-gästeliste ☕",
+            "es": "🚫 ¡listo! {target} salió de la lista del roleplay ☕",
+        },
+    },
+    "already_blocked": {
+        "normal": {
+            "en": "{target} is already blocked from roleplaying with you.",
+            "de": "{target} ist bereits vom Roleplay mit dir gesperrt.",
+            "es": "{target} ya está bloqueado para el roleplay contigo.",
+        },
+        "cafe": {
+            "en": "{target} is already off the roleplay guest list ☕",
+            "de": "{target} steht schon nicht mehr auf der roleplay-gästeliste ☕",
+            "es": "{target} ya no está en la lista del roleplay ☕",
+        },
+    },
+    "unblock_success": {
+        "normal": {
+            "en": "✅ {target} can use roleplay commands on you again.",
+            "de": "✅ {target} kann wieder Roleplay-Befehle auf dich anwenden.",
+            "es": "✅ {target} ya puede usar comandos de roleplay contigo de nuevo.",
+        },
+        "cafe": {
+            "en": "✅ welcome back! {target} is on the roleplay guest list again ☕",
+            "de": "✅ willkommen zurück! {target} steht wieder auf der roleplay-gästeliste ☕",
+            "es": "✅ ¡bienvenido de nuevo! {target} vuelve a estar en la lista ☕",
+        },
+    },
+    "not_blocked": {
+        "normal": {
+            "en": "You haven't blocked {target}.",
+            "de": "Du hast {target} nicht gesperrt.",
+            "es": "No has bloqueado a {target}.",
+        },
+        "cafe": {
+            "en": "you never blocked {target} — they're still on the list ☕",
+            "de": "du hast {target} nie gesperrt — sie stehen noch auf der liste ☕",
+            "es": "nunca bloqueaste a {target} — siguen en la lista ☕",
+        },
+    },
+    "cannot_block_self": {
+        "normal": {
+            "en": "You can't block yourself — pick someone else!",
+            "de": "Du kannst dich nicht selbst sperren — wähle jemand anderen!",
+            "es": "¡No puedes bloquearte a ti mismo — elige a otra persona!",
+        },
+        "cafe": {
+            "en": "you can't block yourself, silly — roleplay needs a second player ☕ pick a friend!",
+            "de": "du kannst dich nicht selbst sperren — roleplay braucht zwei ☕ nimm einen freund!",
+            "es": "¡no puedes bloquearte, amix — el roleplay necesita a dos ☕ elige a alguien más!",
+        },
+    },
+    "db_fail": {
+        "normal": {
+            "en": "Something went wrong saving that — try again in a moment!",
+            "de": "Beim Speichern ist etwas schiefgelaufen — versuch es gleich nochmal!",
+            "es": "¡Algo salió mal al guardar eso — inténtalo en un momento!",
+        },
+        "cafe": {
+            "en": "the café ledger is a little messy, give it a sec and try again! ☕",
+            "de": "das café-buch ist gerade etwas durcheinander, gleich nochmal versuchen! ☕",
+            "es": "el libro del café está un poco desordenado, ¡inténtalo en un momentito! ☕",
+        },
+    },
 }
 
 
@@ -332,7 +421,22 @@ def _build_messages() -> dict:
     for personality in ("normal", "cafe"):
         for lang in ("en", "de", "es"):
             entry = messages[personality][lang]
-            for base_key in ("need_mention", "rp_footer", "fetch_fail", "only_target", "expired", "cannot_self", "pick_hint"):
+            for base_key in (
+                "need_mention",
+                "rp_footer",
+                "fetch_fail",
+                "only_target",
+                "expired",
+                "cannot_self",
+                "pick_hint",
+                "blocked",
+                "block_success",
+                "already_blocked",
+                "unblock_success",
+                "not_blocked",
+                "cannot_block_self",
+                "db_fail",
+            ):
                 entry[base_key] = _BASE_STRINGS[base_key][personality][lang]
 
     for action, meta in ACTIONS.items():
@@ -578,6 +682,47 @@ class RolePlayCog(commands.Cog):
     bonk = _make_roleplay_command("bonk")
     yeet = _make_roleplay_command("yeet")
 
+    # ── block / unblock (prefix) ────────────────────────────────────────────
+    @commands.command(
+        name="rpblock",
+        help="Block someone from using roleplay commands on you. 🚫",
+    )
+    async def rpblock(self, ctx: commands.Context, member: discord.Member = None):
+        """Stop a member from using roleplay commands on you."""
+        target = await self._resolve_block_target(ctx, member)
+        if target is None:
+            return
+        if await self._is_blocked(ctx.author.id, target.id):
+            return await ctx.send(content=msg(ctx, "already_blocked", target=target.mention))
+        if not await self._add_block(ctx.author.id, target.id):
+            return await ctx.send(content=msg(ctx, "db_fail"))
+        await ctx.send(content=msg(ctx, "block_success", target=target.mention))
+
+    @commands.command(
+        name="rpunblock",
+        help="Allow someone to use roleplay commands on you again. ✅",
+    )
+    async def rpunblock(self, ctx: commands.Context, member: discord.Member = None):
+        """Remove your roleplay block on a member."""
+        target = await self._resolve_block_target(ctx, member)
+        if target is None:
+            return
+        if not await self._is_blocked(ctx.author.id, target.id):
+            return await ctx.send(content=msg(ctx, "not_blocked", target=target.mention))
+        if not await self._remove_block(ctx.author.id, target.id):
+            return await ctx.send(content=msg(ctx, "db_fail"))
+        await ctx.send(content=msg(ctx, "unblock_success", target=target.mention))
+
+    async def _resolve_block_target(self, ctx, member: discord.Member | None):
+        """Resolve the member argument for rpblock/rpunblock, or None on error."""
+        if member is None:
+            await self._reply_error(ctx, "need_mention")
+            return None
+        if member.id == ctx.author.id:
+            await self._reply_error(ctx, "cannot_block_self")
+            return None
+        return member
+
     # ────────────────────────────────────────────────────────────────────────
     #  CONTEXT MENU → ACTION PICKER
     # ────────────────────────────────────────────────────────────────────────
@@ -589,6 +734,16 @@ class RolePlayCog(commands.Cog):
         if member.id == interaction.user.id:
             try:
                 await interaction.response.send_message(content=msg(interaction, "cannot_self"), ephemeral=True)
+            except discord.HTTPException:
+                pass
+            return
+
+        if await self._is_blocked(member.id, interaction.user.id):
+            try:
+                await interaction.response.send_message(
+                    content=msg(interaction, "blocked", target=member.mention),
+                    ephemeral=True,
+                )
             except discord.HTTPException:
                 pass
             return
@@ -641,6 +796,16 @@ class RolePlayCog(commands.Cog):
         if member.id == interaction.user.id:
             try:
                 await interaction.response.send_message(content=msg(interaction, "cannot_self"), ephemeral=True)
+            except discord.HTTPException:
+                pass
+            return
+
+        if await self._is_blocked(member.id, interaction.user.id):
+            try:
+                await interaction.response.send_message(
+                    content=msg(interaction, "blocked", target=member.mention),
+                    ephemeral=True,
+                )
             except discord.HTTPException:
                 pass
             return
@@ -701,6 +866,10 @@ class RolePlayCog(commands.Cog):
         if member is None or member.id == actor.id:
             return await self._reply_error(ctx_or_interaction, "need_mention")
 
+        # The target may have blocked the actor from roleplaying on them.
+        if await self._is_blocked(member.id, actor.id):
+            return await self._reply_error(ctx_or_interaction, "blocked", target=member.mention)
+
         # 1) Fetch the GIF
         gif = await fetch_nekos_gif(action)
         if not gif:
@@ -758,8 +927,62 @@ class RolePlayCog(commands.Cog):
         except Exception as exc:
             log.warning("RolePlay", f"Could not store roleplay action for {fields.get('message_id')}: {exc}")
 
-    async def _reply_error(self, ctx_or_interaction, key: str):
-        text = msg(ctx_or_interaction, key)
+    # ────────────────────────────────────────────────────────────────────────
+    #  ROLEPLAY BLOCKS ("don't let X use roleplay commands on me")
+    # ────────────────────────────────────────────────────────────────────────
+    async def _is_blocked(self, blocker_id: int, blocked_id: int) -> bool:
+        """True if ``blocker_id`` has blocked ``blocked_id`` from roleplaying on them."""
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is None:
+            return False
+        try:
+            row = await cxn.fetchrow(
+                "SELECT 1 FROM roleplay_blocks "
+                "WHERE blocker_id = $1 AND blocked_id = $2",
+                int(blocker_id),
+                int(blocked_id),
+            )
+            return row is not None
+        except Exception as exc:
+            log.warning("RolePlay", f"roleplay block lookup failed: {exc}")
+            return False
+
+    async def _add_block(self, blocker_id: int, blocked_id: int) -> bool:
+        """Persist a block; returns False when the database is unavailable."""
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is None:
+            return False
+        try:
+            await cxn.execute(
+                "INSERT OR IGNORE INTO roleplay_blocks (blocker_id, blocked_id) "
+                "VALUES ($1, $2)",
+                int(blocker_id),
+                int(blocked_id),
+            )
+            return True
+        except Exception as exc:
+            log.warning("RolePlay", f"Could not store roleplay block: {exc}")
+            return False
+
+    async def _remove_block(self, blocker_id: int, blocked_id: int) -> bool:
+        """Delete a block; returns False when the database is unavailable."""
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is None:
+            return False
+        try:
+            await cxn.execute(
+                "DELETE FROM roleplay_blocks "
+                "WHERE blocker_id = $1 AND blocked_id = $2",
+                int(blocker_id),
+                int(blocked_id),
+            )
+            return True
+        except Exception as exc:
+            log.warning("RolePlay", f"Could not remove roleplay block: {exc}")
+            return False
+
+    async def _reply_error(self, ctx_or_interaction, key: str, **kwargs):
+        text = msg(ctx_or_interaction, key, **kwargs)
         if isinstance(ctx_or_interaction, discord.Interaction):
             try:
                 await ctx_or_interaction.response.send_message(content=text, ephemeral=True)
@@ -831,6 +1054,18 @@ class RolePlayCog(commands.Cog):
             try:
                 await interaction.response.send_message(
                     content=msg(interaction, "only_target"), ephemeral=True
+                )
+            except discord.HTTPException:
+                pass
+            return
+
+        # The original actor may have blocked the target in the meantime — the
+        # "back" action is aimed at them, so it is refused too.
+        if await self._is_blocked(row["actor_id"], row["target_id"]):
+            try:
+                await interaction.response.send_message(
+                    content=msg(interaction, "blocked", target=_mention(row["actor_id"])),
+                    ephemeral=True,
                 )
             except discord.HTTPException:
                 pass
