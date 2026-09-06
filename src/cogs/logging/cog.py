@@ -806,7 +806,10 @@ class ServerLogger(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def logging_cmd(self, ctx: commands.Context):
         """Open the server logging configuration panel."""
-        await ctx.send(view=LoggingSetupView(ctx.guild.id, ctx.author, await _load_log_config()))
+        # Pass the loaded config as data=; the third positional arg is category.
+        await ctx.send(
+            view=LoggingSetupView(ctx.guild.id, ctx.author, data=await _load_log_config())
+        )
 
     @logging_cmd.command(name="status")
     @commands.has_permissions(manage_guild=True)
