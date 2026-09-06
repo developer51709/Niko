@@ -69,10 +69,10 @@ async def set_status(bot):
         logging.warning("status", "STATUS_ROTATE is enabled but there is no running event loop. Skipping status rotation.")
         return
 
-    loop.create_task(_start_rotation(bot, status_link, start_idx=0))
+    loop.create_task(_start_rotation_task(bot, status_link, start_idx=0))
 
 
-async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
+async def _start_rotation_task(bot, status_link: str, *, start_idx: int = 0) -> None:
     """Background task that rotates the bot presence.
 
     It is scheduled from :func:`set_status` and the active task is tracked on
@@ -249,7 +249,7 @@ def start_status_rotation(bot) -> None:
     except RuntimeError:
         return
 
-    loop.create_task(_start_rotation(bot, status_config.STATUS_LINK, start_idx=0))
+    loop.create_task(_start_rotation_task(bot, status_config.STATUS_LINK, start_idx=0))
 
 
 def cancel_status_rotation(bot) -> None:
@@ -268,11 +268,3 @@ def _start_rotation(bot, status_link: str) -> None:
     mismatch.
     """
     start_status_rotation(bot)
-
-
-def cancel_status_rotation(bot) -> None:
-    """Public helper for stopping rotation and clearing stored bookkeeping.
-
-    Safe to call when rotation is not running.
-    """
-    stop_status_rotation(bot)
