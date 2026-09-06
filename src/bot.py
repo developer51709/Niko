@@ -53,12 +53,18 @@ async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
 # ── Events ───────────────────────────────────────────────────────────────────
 @bot.event
 async def on_ready():
-    await handle_ready(bot)
+    try:
+        await handle_ready(bot)
+    except Exception as e:
+        logging.error("on_ready", f"An error occurred: {e}")
 
 
 @bot.event
 async def on_message(msg: discord.Message):
-    await handle_message(bot, msg)
+    try:
+        await handle_message(bot, msg)
+    except Exception as e:
+        logging.error("on_message", f"An error occurred: {e}")
 
 
 # ── Entry-point ──────────────────────────────────────────────────────────────

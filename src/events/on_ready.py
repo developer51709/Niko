@@ -29,6 +29,10 @@ async def handle_ready(bot):
 
     Each startup step is wrapped individually so one failure is logged with
     enough detail to diagnose it, while the remaining steps still run.
+
+    This function always returns cleanly to discord.py. If any step fails,
+    the failure is captured and recorded on the bot object so it can be
+    inspected later without raising back into the gateway.
     """
     logging.info("Startup", f"Niko is online as {bot.user}")
 
@@ -45,31 +49,75 @@ async def handle_ready(bot):
         ("run_slash_sync", "Scheduling slash command sync", run_slash_sync),
     ]
 
-    failed_steps: list[str] = []
-    last_error: BaseException | None = None
+    failed_step_names: list[str] = []
+    step_errors: list[tuple[str, BaseException]] = []
 
     for step_name, description, step in startup_steps:
         try:
             await _run_startup_step(bot, step_name, description, step)
-        except Exception as exc:
-            failed_steps.append(step_name)
-            last_error = exc
+        except BaseException as exc:
+            failed_step_names.append(step_name)
+            step_errors.append((step_name, exc))
             _log_step_failure(step_name, exc)
 
-    if failed_steps:
-        logging.warning(
-            "Startup",
-            "on_ready finished with %d failed step(s): %s",
-            len(failed_steps),
-            ", ".join(failed_steps),
-        )
+    if failed_step_names:
+        logging.warning("Startup", f"on_ready finished with {len(failed_step_names)} failed step(s): {', '.join(failed_step_names)}")
     else:
         logging.info("Startup", "on_ready startup tasks completed.")
 
     _maybe_schedule_rotation_safely(bot)
 
-    if last_error is not None:
-        _record_last_startup_error(bot, last_error)
+    if step_errors:
+        _record_all_startup_errors(bot, step_errors)
+        _emit_summary_traceback(step_errors)
+    else:
+        # On a fully successful startup, clear any leftover error state from a
+        # previous failed run so other code can trust the bot object.
+        try:
+            bot.startup_errors = []
+            bot.last_startup_error = None
+        except Exception:
+            pass
+
+
+def _emit_summary_traceback(step_errors: list[tuple[str, BaseException]]) -> None:
+    """Print a combined traceback block for all failed startup steps.
+
+    This is intentionally separate from the per-step logging above so the full
+    failure picture is written exactly once at the end of startup.
+    """
+    for step_name, exc in step_errors:
+        print(
+            f"\n{'=' * 72}\n"
+            f"on_ready startup step '{step_name}' failed:\n"
+            f"{'=' * 72}\n",
+            file=sys.stderr,
+        )
+        _emit_one_traceback(exc)
+
+
+def _emit_one_traceback(exc: BaseException) -> None:
+    """Write a single exception traceback to stderr."""
+    traceback.print_exception(
+        type(exc),
+        exc,
+        exc.__traceback__,
+        file=sys.stderr,
+    )
+
+
+def _record_all_startup_errors(bot, step_errors: list[tuple[str, BaseException]]) -> None:
+    """Record the first and the last startup error so both are inspectable.
+
+    Callers that only want the most recent failure can look at
+    ``bot.last_startup_error``. Callers that want the full list can look at
+    ``bot.startup_errors``.
+    """
+    if not step_errors:
+        return
+
+    bot.startup_errors = [error for _, error in step_errors]
+    bot.last_startup_error = step_errors[-1][1]
 
 
 async def _run_startup_step(bot, step_name: str, description: str, step: Any) -> None:
@@ -104,13 +152,7 @@ def _make_startup_task_callback(step_name: str):
         if error is None:
             return
 
-        logging.error(
-            "Startup",
-            "Background startup step %s failed: %s",
-            step_name,
-            error,
-            exc_info=True,
-        )
+        logging.error("Startup", f"Background startup step {step_name} failed: {error}")
 
     return callback
 
@@ -126,15 +168,14 @@ class StartupTaskSchedulingError(Exception):
         self.description = description
 
 
-def _log_step_failure(step_name: str, exc: Exception) -> None:
+def _log_step_failure(step_name: str, exc: BaseException) -> None:
     """Log a single failed startup step with a readable traceback."""
-    logging.error(
-        "Startup",
-        "Startup step %r failed: %s",
-        step_name,
-        exc,
-    )
-    _emit_traceback(exc)
+    if isinstance(exc, Exception):
+        logging.error("Startup", f"Startup step {step_name} failed: {exc}")
+        _emit_traceback(exc)
+    elif isinstance(exc, BaseException):
+        logging.error("Startup", f"Startup step {step_name} failed with a non-Exception BaseException: {exc.__class__.__name__}")
+        traceback.print_stack(file=sys.stderr)
 
 
 def _emit_traceback(exc: BaseException) -> None:
@@ -147,13 +188,14 @@ def _emit_traceback(exc: BaseException) -> None:
     )
 
 
-def _record_last_startup_error(bot, exc: BaseException) -> None:
-    """Attach the last startup error to the bot for later inspection.
-
-    Other parts of the bot can read ``bot.last_startup_error`` to decide
-    whether startup completed cleanly or not.
-    """
-    bot.last_startup_error = exc
+def _emit_one_traceback(exc: BaseException) -> None:
+    """Write a single exception traceback to stderr."""
+    traceback.print_exception(
+        type(exc),
+        exc,
+        exc.__traceback__,
+        file=sys.stderr,
+    )
 
 
 def _maybe_schedule_rotation_safely(bot) -> None:
@@ -168,8 +210,4 @@ def _maybe_schedule_rotation_safely(bot) -> None:
             if callable(_start_rotation_sync):
                 _start_rotation_sync(bot)
         except Exception as exc:
-            logging.debug(
-                "Startup",
-                "Fallback status rotation scheduling did not apply: %s",
-                exc,
-            )
+            logging.debug("Startup", f"Fallback status rotation scheduling did not apply: {exc}")
