@@ -61,7 +61,7 @@ async def set_status(bot):
         )
 
     if status_config.STATUS_ROTATE:
-        await _start_rotation(bot, status_link)
+        _start_rotation(bot, status_link)
 
 
 async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
@@ -140,20 +140,20 @@ async def _start_rotation(bot, status_link: str, *, start_idx: int = 0) -> None:
     if existing is not None and not existing.done():
         existing.cancel()
 
-    task = asyncio.ensure_future(_rotate())
+    task: asyncio.Task[None] = asyncio.ensure_future(_rotate())
     task.add_done_callback(_rotation_task_cleared)
     task.add_done_callback(_rotation_task_done)
     bot._status_rotation_task = task
 
 
-async def _rotation_task_cleared(task: asyncio.Task[None]) -> None:
+
+
+def _rotation_task_cleared(task: asyncio.Task[None]) -> None:
     """Clean up the stored rotation task once the task wrapper has resolved."""
     bot = getattr(task, "_rotation_bot", None)
     if bot is not None:
         setattr(bot, "_status_rotation_task", None)
 
-
-def _rotation_task_done
 
 def _rotation_task_done(task: asyncio.Task[None]) -> None:
     """Log when the rotation task ends and clean up the bot attribute.
@@ -195,12 +195,3 @@ def _start_rotation(bot, status_link: str) -> None:
     callers still receive the improved error handling and task management.
     """
     _start_rotation(bot, status_link, start_idx=0)
-
-
-def reset_status_rotation(bot) -> None:
-    """Reset the rotation index and restart rotation from the first message.
-
-    Useful when status configuration has changed and you want the sequence to
-    start fresh without waiting for the next natural rotation step.
-    """
-    await _start_rotation(bot, status_config.STATUS_LINK, start_idx=0)
