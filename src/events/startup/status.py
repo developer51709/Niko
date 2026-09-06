@@ -252,6 +252,14 @@ def start_status_rotation(bot) -> None:
     loop.create_task(_start_rotation(bot, status_config.STATUS_LINK, start_idx=0))
 
 
+def cancel_status_rotation(bot) -> None:
+    """Public helper for stopping rotation and clearing stored bookkeeping.
+
+    Safe to call when rotation is not running.
+    """
+    stop_status_rotation(bot)
+
+
 def _start_rotation(bot, status_link: str) -> None:
     """Internal synchronous wrapper used by the legacy direct-call path.
 

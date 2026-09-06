@@ -15,13 +15,18 @@ from utils import logging
 from events.startup import (
     init_database,
     load_cogs,
-    set_status,
     print_banner,
     run_slash_sync,
     run_emoji_sync,
     write_bot_stats,
     write_commands,
 )
+
+from events.startup.status import (
+    set_status,
+    start_status_rotation,
+)
+
 
 
 async def handle_ready(bot):
