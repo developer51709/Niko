@@ -50,10 +50,7 @@ async def set_status(bot):
     status_type = status_config.STATUS_TYPE
 
     try:
-        await bot.change_presence(
-            activity=_build_activity(status_config.STATUS_MESSAGE, status_type, status_link),
-            device_status=status_config.STATUS_DEVICE,
-        )
+        await bot.change_presence(activity=_build_activity(status_config.STATUS_MESSAGE, status_type, status_link))
     except Exception as exc:
         logging.error("status", f"Failed to set initial bot status: {exc}")
 
@@ -113,10 +110,7 @@ async def _start_rotation_task(bot, status_link: str, *, start_idx: int = 0) -> 
                 )
 
                 activity = _build_activity(text, kind, status_link)
-                await bot.change_presence(
-                    activity=activity,
-                    device_status=status_config.STATUS_DEVICE,
-                )
+                await bot.change_presence(activity=activity)
                 idx += 1
                 backoff = max(interval, backoff / 2)
                 last_error_at = 0.0
