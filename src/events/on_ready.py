@@ -20,6 +20,7 @@ from events.startup import (
     run_emoji_sync,
     write_bot_stats,
     write_commands,
+    preload_economy_cache,
 )
 
 from events.startup.status import (
@@ -46,6 +47,7 @@ async def handle_ready(bot):
     ] = [
         ("init_database", "Initializing the database", init_database),
         ("load_cogs", "Loading cogs", load_cogs),
+        ("preload_economy_cache", "Warming economy cache", preload_economy_cache),
         ("set_status", "Setting bot status / presence", set_status),
         ("print_banner", "Printing startup banner", print_banner),
         ("write_bot_stats", "Writing bot stats", write_bot_stats),

@@ -89,6 +89,38 @@ class EconomyCog(
         if uid in self.economy_data:
             await _save_user_to_db(self.bot, user_id, self.economy_data[uid])
 
+    async def prime_cache(self) -> None:
+        """Load every economy user from the database into the in-memory cache.
+
+        ``self.economy_data`` is normally populated lazily as members interact
+        with economy commands, so the leaderboard would only reflect users who
+        have been active since the last restart. Warming the cache at startup
+        means every member with saved data — including those who have not used
+        an economy command since the last restart — is ranked immediately.
+        """
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is None:
+            log.warning("Economy", "Database not ready; skipping economy cache warm-up.")
+            return
+        try:
+            rows = await cxn.fetch("SELECT user_id FROM economy_users")
+        except Exception as exc:
+            log.error("Economy", f"Could not query economy users for cache warm-up: {exc}")
+            return
+
+        loaded = 0
+        for row in rows:
+            uid = str(row["user_id"])
+            if uid in self.economy_data:
+                continue
+            data = await _get_user_from_db(self.bot, int(row["user_id"]))
+            if data:
+                self.economy_data[uid] = data
+                loaded += 1
+
+        if loaded:
+            log.info("Economy", f"Warmed up cache with {loaded} economy users.")
+
     # ── Internal helpers ─────────────────────────────────────────────────────
     def _credit(self, data: dict, amount: int, kind: str, note: str = ""):
         amount = int(amount)
