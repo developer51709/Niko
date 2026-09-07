@@ -10,6 +10,7 @@ type InvoiceResult = {
   track_id?: string;
   pay_link?: string;
   status_url?: string;
+  paid?: boolean;
   error?: string;
 };
 

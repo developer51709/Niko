@@ -1,4 +1,4 @@
-import type { DocPage, DocCategory } from "../types";
+import type { DocPage, DocCategory, DocSection } from "../types";
 
 // ── Documentation pages ──────────────────────────────────────────────────────
 
@@ -185,6 +185,14 @@ Configure XP and leveling:
 .levelconfig
 \`\`\`
 
+### Ticket Settings
+Set up a support ticket system with categories and support roles:
+\`\`\`
+.ticket setup
+\`\`\`
+
+See the [Ticket System Guide](/docs/tickets-guide) for the full setup walkthrough.
+
 ## Setting Up Categories
 
 For larger servers, consider setting up category-specific settings:
@@ -253,6 +261,150 @@ If a command fails:
 2. Verify Niko has the required channel permissions
 3. Check if the channel has overwrite permissions blocking Niko
 4. Ensure the user has the required permissions for the command
+    `,
+  },
+  {
+    slug: "tickets-guide",
+    title: "Ticket System Guide",
+    category: "setup",
+    excerpt: "Set up a support ticket system with categories, support roles, and private ticket channels.",
+    tags: ["tickets", "support", "setup", "admin"],
+    order: 3,
+    content: `
+# Ticket System Guide
+
+Niko's ticket system lets members open private support channels when they need help. Everything is controlled from a single \`.ticket\` command group.
+
+## How Tickets Work
+
+1. You post a **ticket panel** in a channel (usually #support)
+2. A member clicks **Create Ticket** on the panel and picks a category if you've configured any
+3. Niko creates a private \`ticket-<username>\` channel visible only to that member and your support roles
+4. You discuss the issue in the ticket, then close or delete it when done
+
+## Setting Up the Panel
+
+### Step 1: Open the Setup Panel
+
+\`\`\`
+.ticket setup
+\`\`\`
+
+Requires **Administrator** permission. This opens a panel with two buttons:
+
+- **Configure Panel** — customize the title, description, accent color, and image
+- **Post Panel Here** — post the public ticket panel in the current channel
+
+### Step 2: Post the Panel
+
+You can also post the panel manually at any time:
+
+\`\`\`
+.ticket panel
+\`\`\`
+
+This sends the ticket panel to the channel you run it in and remembers where it was posted.
+
+## Managing Categories
+
+Categories let members pick a reason for opening a ticket (e.g. "Billing", "Appeals", "Help").
+
+\`\`\`
+.ticket category add <name>
+.ticket category remove <name>
+.ticket category list
+\`\`\`
+
+If no categories are configured, tickets open under a default **General** category.
+
+## Managing Support Roles
+
+Support roles are the staff members who can see and manage tickets. Members with **Manage Channels** also count as support automatically.
+
+\`\`\`
+.ticket support add <role>
+.ticket support remove <role>
+.ticket support list
+\`\`\`
+
+## Working Inside a Ticket
+
+Support members (and the ticket opener) can manage an open ticket with these commands:
+
+| Command | Description |
+|---------|-------------|
+| \`.ticket add <user>\` | Grant another member access to this ticket |
+| \`.ticket remove <user>\` | Revoke a member's access to this ticket |
+| \`.ticket rename <name>\` | Rename the ticket channel |
+| \`.ticket claim\` | Mark the ticket as claimed by you |
+| \`.ticket transcript\` | Generate a web transcript of the ticket (see the [Web Transcripts](/docs/tickets-transcripts) guide) |
+| \`.ticket close\` | Soft-close the ticket: members become read-only and the channel is renamed \`closed-…\` |
+| \`.ticket delete [seconds]\` | Delete the ticket channel after a delay (1–30 seconds, default 5) |
+
+## Best Practices
+
+1. **Pick a support channel**: Keep the panel in a dedicated #support channel
+2. **Add categories early**: Members understand why they're opening a ticket
+3. **Assign support roles**: Make sure every staff member who should handle tickets has one
+4. **Close before deleting**: Soft-close keeps a record of the conversation; generate a [web transcript](/docs/tickets-transcripts) before deleting for a permanent record
+    `,
+  },
+  {
+    slug: "tickets-transcripts",
+    title: "Ticket Web Transcripts",
+    category: "setup",
+    excerpt: "Generate shareable web transcripts of your tickets and download them as TXT, HTML, CSV, or JSON.",
+    tags: ["tickets", "transcripts", "records", "support"],
+    order: 4,
+    content: `
+# Ticket Web Transcripts
+
+Every ticket conversation can be turned into a permanent, shareable **web transcript** — a readable record of the entire conversation that lives outside Discord.
+
+## Generating a Transcript
+
+Inside an open ticket, a support member runs:
+
+\`\`\`
+.ticket transcript
+\`\`\`
+
+Niko collects the conversation (up to 2,000 messages, including attachment links), saves it to the database, and posts a result card with a **View Transcript** button.
+
+## Viewing Online
+
+Each transcript gets a unique short ID and its own web page:
+
+\`\`\`
+/transcript/<transcript-id>
+\`\`\`
+
+Anyone with the link can view the transcript in a clean, dark, Discord-style page with:
+
+- Every message with its timestamp and author
+- Attachment links (clickable 📎 links)
+- The channel name, category, opener, and message count
+
+## Downloading
+
+The transcript page includes one-click download buttons in four formats:
+
+- **TXT** — plain text log, one line per message
+- **HTML** — a styled standalone page you can save or share
+- **CSV** — spreadsheet-friendly rows (timestamp, author, content, attachments)
+- **JSON** — structured data for archives or tools
+
+## Good to Know
+
+- Transcripts are stored in Niko's database, so they survive deleting the ticket channel
+- If the web base URL isn't configured, Niko falls back to attaching a plain **.txt** file instead
+- Transcripts include metadata about the ticket: opener, category, claim status, channel name, and creation time
+
+## When to Use It
+
+1. **Before deleting a ticket** — keep a permanent record of resolved issues
+2. **Escalations** — share a ticket with higher staff or the server owner
+3. **Audits and disputes** — a timestamped, uneditable record of exactly what was said
     `,
   },
 
@@ -1507,6 +1659,16 @@ Host giveaways for your community:
 
 \`.giveaway start\` opens an interactive setup panel for the prize, duration, winners, channel, and join requirements.
 
+### Roleplay
+Express yourself with animated roleplay actions:
+
+\`\`\`
+.hug @friend
+.pat @friend
+\`\`\`
+
+Available actions include hug, kiss, cuddle, pat, poke, tickle, highfive, slap, bonk, and yeet. They work with prefix commands and the right-click **Roleplay** menu. If you'd rather someone not use roleplay commands on you, block them with [\`.rpblock\`](/docs/social-roleplay-blocks).
+
 ## Configuration
 
 Most social features are configured through:
@@ -1693,6 +1855,64 @@ Members vote by clicking the buttons on the poll message — vote counts update 
 3. **Set reasonable durations**: Give enough time but not too much
 4. **Follow up**: Share results and act on feedback
 5. **Use for decisions**: Polls work great for community choices
+    `,
+  },
+  {
+    slug: "social-roleplay-blocks",
+    title: "Roleplay Blocking (rpblock & rpunblock)",
+    category: "social",
+    excerpt: "Stop specific members from using roleplay commands on you with .rpblock and .rpunblock.",
+    tags: ["roleplay", "privacy", "blocks", "social"],
+    order: 4,
+    content: `
+# Roleplay Blocking (rpblock & rpunblock)
+
+Niko's roleplay commands (hug, kiss, cuddle, pat, poke, tickle, highfive, slap, bonk, yeet) are a fun way to interact with other members — but sometimes you just don't want someone using them on you. That's what \`.rpblock\` is for.
+
+## Blocking a Member
+
+To stop someone from using roleplay commands on you:
+
+\`\`\`
+.rpblock @member
+\`\`\`
+
+Example:
+\`\`\`
+.rpblock @TrollMaster
+\`\`\`
+
+Once blocked, that member can no longer:
+- Use roleplay prefix commands on you (\`.hug @you\`, \`.slap @you\`, etc.)
+- Pick a roleplay action from the right-click **Roleplay** menu targeting you
+- Use the "do it back" buttons on roleplay messages aimed at you
+
+## Unblocking a Member
+
+Changed your mind? Lift the block at any time:
+
+\`\`\`
+.rpunblock @member
+\`\`\`
+
+## How Blocks Work
+
+- **Directional**: Blocking someone only stops *them* from using roleplay commands on *you*. You can still use roleplay commands on them (and on everyone else).
+- **Across servers**: Blocks are tied to your account, so they apply everywhere Niko is used.
+- **Private**: Blocks are never announced — the blocked member just sees that their roleplay action was refused.
+- **Self-service**: Anyone can manage their own block list; no permissions needed.
+
+## Error Messages
+
+- Forgetting to mention a member: Niko reminds you to pick someone to block.
+- Blocking yourself: Niko points out you can't block yourself.
+- Blocking someone who's already blocked (or unblocking someone who isn't): Niko lets you know the list is already in that state.
+
+## Tips
+
+1. **Block early**: If someone's roleplay spam bothers you, block them right away
+2. **Unblock when things cool off**: Blocks are easy to remove
+3. **Tell your friends**: If someone doesn't like a particular action, respect it — the block list is there for a reason
     `,
   },
 
@@ -1949,9 +2169,6 @@ See a tag's owner, creation date, and usage count:
 
 ### Who Can Use Tags
 Tags are public by default. Set permissions as needed.
-
-### Who Can Manage Tags
-Tag creators can edit/delete their own tags. Administrators can manage all tags.
 
 ### Who Can Manage Tags
 Tag creators can edit/delete their own tags. Administrators can manage all tags.
