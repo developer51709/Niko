@@ -5,6 +5,22 @@ import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { type Command, type CommandParameter, type CommandType } from "../types";
 
+const PREFERRED_LOCALE = typeof navigator !== "undefined" ? (navigator.language || "en").slice(0, 2) : "en";
+
+function describe(command: Command): string {
+  const description = command.description;
+  if (typeof description === "string") return description;
+  if (description && typeof description === "object") {
+    const map = description as Record<string, string>;
+    if (map[PREFERRED_LOCALE]) return map[PREFERRED_LOCALE];
+    if (map["en"]) return map["en"];
+    const first = Object.values(map).find((v) => typeof v === "string" && v.length > 0);
+    if (first) return first;
+  }
+  return "A Niko command for your server.";
+}
+
+
 const commandTypeOptions: { value: "all" | CommandType; label: string }[] = [
   { value: "all", label: "All commands" },
   { value: "slash", label: "Slash" },
@@ -65,7 +81,7 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close command details" title="Close command details"><Icon name="close" /></button>
         </header>
         <div className="command-dialog-body">
-          <p className="command-dialog-description">{command.description || "A Niko command for your server."}</p>
+          <p className="command-dialog-description">{describe(command)}</p>
           <div className="command-detail-grid">
             <section className="command-detail-section command-detail-wide">
               <h3>Usage</h3>
@@ -114,7 +130,7 @@ export function CommandsPage() {
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(commands.map((command) => command.category))).sort()], [commands]);
   const filtered = commands.filter((command) => {
-    const haystack = `${command.name} ${command.description} ${command.category} ${typeLabels[normalizeType(command)]} ${command.context_type || ""} ${(command.aliases || []).join(" ")}`.toLowerCase();
+    const haystack = `${command.name} ${describe(command)} ${command.category} ${typeLabels[normalizeType(command)]} ${command.context_type || ""} ${(command.aliases || []).join(" ")}`.toLowerCase();
     return (type === "all" || normalizeType(command) === type)
       && (category === "all" || command.category === category)
       && haystack.includes(query.trim().toLowerCase());
@@ -137,7 +153,7 @@ export function CommandsPage() {
         <div className="commands-grid">
           {filtered.map((command) => <button className="command-card" type="button" key={`${normalizeType(command)}-${command.context_type || ""}-${command.category}-${command.name}`} onClick={() => setSelectedCommand(command)} aria-label={`View details for ${command.name}`}>
             <span className="command-card-head"><span className="command-name">{renderInvocation(command)}</span><span className="command-type">{typeLabels[normalizeType(command)]}</span></span>
-            <span className="command-card-description">{command.description || "A Niko command for your server."}</span>
+            <span className="command-card-description">{describe(command)}</span>
             <span className="command-card-footer"><span className="category-tag">{command.category}</span><span className="command-expand"><span>Details</span><Icon name="arrow" size={14} /></span></span>
           </button>)}
           {!loading && !error && !filtered.length && <div className="empty-state">No commands match that search.</div>}

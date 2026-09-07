@@ -22,9 +22,11 @@ export type CommandParameter = {
   type?: string;
 };
 
+export type CommandLocalizedDescription = string | Record<string, string>;
+
 export type Command = {
   name: string;
-  description: string;
+  description: CommandLocalizedDescription;
   category: string;
   type?: CommandType;
   context_type?: "user" | "message";

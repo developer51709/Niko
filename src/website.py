@@ -688,6 +688,33 @@ def _live_internal_command_names() -> set[str]:
     return names
 
 
+def _description_value(value):
+    """Normalise a command help value into a locale map or plain text.
+
+    Command records can store help as a real dict, or as a serialised map
+    written in Python literal syntax, e.g.
+    "{ 'en': 'Reset XP.', 'de': 'XP zurücksetzen.' }". In both cases we
+    return a real ``{locale: text}`` object so the website can pick the
+    visitor's language. Anything else passes through untouched.
+    """
+    if isinstance(value, dict):
+        cleaned = {str(k): str(v) for k, v in value.items() if k and v}
+        return cleaned if cleaned else ""
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text.replace("'", '"'))
+            except Exception:
+                parsed = None
+            if isinstance(parsed, dict):
+                cleaned = {str(k): str(v) for k, v in parsed.items() if k and v}
+                if cleaned:
+                    return cleaned
+        return value
+    return str(value) if value else ""
+
+
 @app.route("/api/commands")
 def api_commands():
     """Public endpoint — returns public bot commands from the startup registry."""
@@ -705,7 +732,7 @@ def api_commands():
             continue
         normalized = {
             "name": str(command["name"]),
-            "description": str(command.get("description") or ""),
+            "description": _description_value(command.get("description")),
             "category": str(command.get("category") or "utility"),
             "type": command.get("type") if command.get("type") in valid_types else "slash",
             "aliases": [str(item) for item in command.get("aliases", []) if item],
