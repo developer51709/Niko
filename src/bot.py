@@ -13,6 +13,7 @@ from discord.ext import commands
 from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_interaction_blacklist
 from utils.gateway import patch_identify
+from utils.proxy_manager import WebshareProxyManager
 from utils import logging
 from events.on_ready import handle_ready
 from events.on_message import handle_message
@@ -43,6 +44,20 @@ bot = commands.AutoShardedBot(
 )
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | database.MongoPool | None = None
+
+# ── Webshare proxy failover ─────────────────────────────────────────────────
+# Armed only when WEBSHARE_API_KEY is set.  On a Discord global rate limit the
+# manager routes the bot through a Webshare proxy within milliseconds and
+# keeps probing the direct IP every 10 minutes until the limit clears.
+WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
+bot.proxy_manager: WebshareProxyManager | None = None
+if WEBSHARE_API_KEY:
+    _proxy_manager = WebshareProxyManager(WEBSHARE_API_KEY)
+    if _proxy_manager.attach(bot):
+        bot.proxy_manager = _proxy_manager
+        logging.info("ProxyManager", "Webshare proxy failover armed.")
+    else:
+        logging.warning("ProxyManager", "Webshare proxy failover could not be armed.")
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
@@ -75,6 +90,11 @@ if __name__ == "__main__":
 
     async def _shutdown(signal_name: str):
         logging.info("Shutdown", f"Received {signal_name}, closing bot...")
+        if bot.proxy_manager is not None:
+            try:
+                await bot.proxy_manager.close()
+            except Exception:
+                pass
         try:
             await bot.close()
         except Exception:
@@ -95,6 +115,9 @@ if __name__ == "__main__":
 
         device_choice = STATUS_DEVICE
         patch_identify(device_choice)
+
+        if bot.proxy_manager is not None:
+            await bot.proxy_manager.prefetch()
 
         loop = asyncio.get_running_loop()
 
