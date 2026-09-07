@@ -445,6 +445,21 @@ async def _create_tables(bot):
     """)
     await _migrate_blacklist_data(bot)
 
+    # ── Persistent status panels (owner-owned, auto-refreshing) ──────────────────
+    # One row per channel where the owner posted a realtime status panel. The
+    # async refresh loop edits these messages in place every STATUS_PANEL_INTERVAL.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS persistent_status_panels (
+            channel_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            message_id   INTEGER NOT NULL,
+            last_error   TEXT,
+            proxied_endpoint TEXT,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (channel_id, guild_id)
+        )
+    """)
+
     logging.success("DB", "Database tables verified")
 
 
