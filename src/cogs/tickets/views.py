@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -86,6 +87,34 @@ MESSAGES = {
             "deleting":             "🗑️ Deleting this ticket in {seconds}s…",
             "setup_title":          "### {icon} Ticket System Setup",
             "setup_desc":           "Configure your ticket system below. Add categories, set up support roles, then post the panel.",
+            "btn_add":              "Add User",
+            "btn_cancel":           "Cancel",
+            "btn_claim":            "Claim",
+            "btn_close":            "Close",
+            "btn_confirm_delete":   "Delete Ticket",
+            "btn_delete":           "Delete",
+            "btn_remove":           "Remove User",
+            "btn_staff":            "Staff Panel",
+            "btn_transfer":         "Transfer",
+            "deleting_panel":       "🗑️ Deleting this ticket…",
+            "header_details":       "### {icon} Ticket Details\n**Category:** {category}\n**Opener:** {opener}\n**Channel:** {channel}\n**Opened:** {opened}\n**Status:** {status}\n**Claimed by:** {claim}",
+            "no_users_added":       "⚠️ Everyone you picked already had access to this ticket.",
+            "no_users_removed":     "⚠️ Nobody you picked had access to this ticket.",
+            "not_support_target":   "⚠️ {user} isn't a support member — transfer cancelled.",
+            "panel_title":          "### {icon} Staff Panel — {channel}",
+            "prompt_add":           "Who should be able to view **{channel}**? You can pick several users.",
+            "prompt_delete":        "Are you sure you want to delete **{channel}**? This can't be undone.",
+            "prompt_remove":        "Who should lose access to **{channel}**?",
+            "prompt_transfer":      "Transfer the claim of **{channel}** to which support member?",
+            "sel_staff":            "Choose a support member…",
+            "sel_user":             "Choose user(s)…",
+            "staff_panel_only":     "❌ Only support staff can use this panel.",
+            "status_closed":        "Closed",
+            "status_open":          "Open",
+            "transferred":          "✅ Ticket transferred to {user}.",
+            "unclaimed":            "Unclaimed",
+            "users_added":          "✅ {users} can now view this ticket.",
+            "users_removed":        "✅ {users} lost access to this ticket.",
         },
         "de": {
             "panel_default_title":  "Ticket öffnen",
@@ -126,6 +155,34 @@ MESSAGES = {
             "deleting":             "🗑️ Ticket wird in {seconds}s gelöscht…",
             "setup_title":          "### {icon} Ticketsystem-Einrichtung",
             "setup_desc":           "Konfiguriere dein Ticketsystem unten. Füge Kategorien hinzu, richte Support-Rollen ein und poste dann das Panel.",
+            "btn_add":              "Benutzer hinzufügen",
+            "btn_cancel":           "Abbrechen",
+            "btn_claim":            "Übernehmen",
+            "btn_close":            "Schließen",
+            "btn_confirm_delete":   "Ticket löschen",
+            "btn_delete":           "Löschen",
+            "btn_remove":           "Benutzer entfernen",
+            "btn_staff":            "Staff-Panel",
+            "btn_transfer":         "Übertragen",
+            "deleting_panel":       "🗑️ Ticket wird gelöscht…",
+            "header_details":       "### {icon} Ticket-Details\n**Kategorie:** {category}\n**Ersteller:** {opener}\n**Kanal:** {channel}\n**Geöffnet:** {opened}\n**Status:** {status}\n**Übernommen von:** {claim}",
+            "no_users_added":       "⚠️ Alle ausgewählten Benutzer hatten bereits Zugriff auf dieses Ticket.",
+            "no_users_removed":     "⚠️ Keiner der ausgewählten Benutzer hatte Zugriff auf dieses Ticket.",
+            "not_support_target":   "⚠️ {user} ist kein Support-Mitglied – Übertragung abgebrochen.",
+            "panel_title":          "### {icon} Staff-Panel – {channel}",
+            "prompt_add":           "Wer soll **{channel}** sehen können? Du kannst mehrere Benutzer auswählen.",
+            "prompt_delete":        "Möchtest du **{channel}** wirklich löschen? Das kann nicht rückgängig gemacht werden.",
+            "prompt_remove":        "Wer soll den Zugriff auf **{channel}** verlieren?",
+            "prompt_transfer":      "Auf welches Support-Mitglied soll die Übernahme von **{channel}** übertragen werden?",
+            "sel_staff":            "Support-Mitglied wählen…",
+            "sel_user":             "Benutzer wählen…",
+            "staff_panel_only":     "❌ Nur Support-Mitarbeiter können dieses Panel nutzen.",
+            "status_closed":        "Geschlossen",
+            "status_open":          "Offen",
+            "transferred":          "✅ Ticket an {user} übertragen.",
+            "unclaimed":            "Nicht übernommen",
+            "users_added":          "✅ {users} kann dieses Ticket nun sehen.",
+            "users_removed":        "✅ {users} hat keinen Zugriff mehr auf dieses Ticket.",
         },
         "es": {
             "panel_default_title":  "Abrir un Ticket",
@@ -166,6 +223,34 @@ MESSAGES = {
             "deleting":             "🗑️ Eliminando este ticket en {seconds}s…",
             "setup_title":          "### {icon} Configuración del Sistema de Tickets",
             "setup_desc":           "Configura tu sistema de tickets a continuación. Añade categorías, configura roles de soporte y luego publica el panel.",
+            "btn_add":              "Añadir usuario",
+            "btn_cancel":           "Cancelar",
+            "btn_claim":            "Reclamar",
+            "btn_close":            "Cerrar",
+            "btn_confirm_delete":   "Eliminar ticket",
+            "btn_delete":           "Eliminar",
+            "btn_remove":           "Quitar usuario",
+            "btn_staff":            "Panel del staff",
+            "btn_transfer":         "Transferir",
+            "deleting_panel":       "🗑️ Eliminando este ticket…",
+            "header_details":       "### {icon} Detalles del ticket\n**Categoría:** {category}\n**Creador:** {opener}\n**Canal:** {channel}\n**Abierto:** {opened}\n**Estado:** {status}\n**Reclamado por:** {claim}",
+            "no_users_added":       "⚠️ Todos los seleccionados ya tenían acceso a este ticket.",
+            "no_users_removed":     "⚠️ Ninguno de los seleccionados tenía acceso a este ticket.",
+            "not_support_target":   "⚠️ {user} no es miembro del soporte; transferencia cancelada.",
+            "panel_title":          "### {icon} Panel del staff — {channel}",
+            "prompt_add":           "¿Quién debería ver **{channel}**? Puedes elegir varios usuarios.",
+            "prompt_delete":        "¿Seguro que quieres eliminar **{channel}**? Esto no se puede deshacer.",
+            "prompt_remove":        "¿Quién debería perder el acceso a **{channel}**?",
+            "prompt_transfer":      "¿A qué miembro del soporte quieres transferir el reclamo de **{channel}**?",
+            "sel_staff":            "Elige un miembro del soporte…",
+            "sel_user":             "Elige usuario(s)…",
+            "staff_panel_only":     "❌ Solo el staff de soporte puede usar este panel.",
+            "status_closed":        "Cerrado",
+            "status_open":          "Abierto",
+            "transferred":          "✅ Ticket transferido a {user}.",
+            "unclaimed":            "Sin reclamar",
+            "users_added":          "✅ {users} ya puede ver este ticket.",
+            "users_removed":        "✅ {users} perdió el acceso a este ticket.",
         },
     },
     "cafe": {
@@ -208,6 +293,34 @@ MESSAGES = {
             "deleting":             "🗑️ wiping the table in {seconds}s…",
             "setup_title":          "### {icon} ticket system setup ☕",
             "setup_desc":           "set up your ticket booth below — add menu items, invite staff, then post the cute panel ✨",
+            "btn_add":              "invite more friends ☕",
+            "btn_cancel":           "nevermind",
+            "btn_claim":            "grab it ☕",
+            "btn_close":            "close the booth",
+            "btn_confirm_delete":   "yes, wipe the table",
+            "btn_delete":           "delete",
+            "btn_remove":           "ask someone to leave",
+            "btn_staff":            "staff panel",
+            "btn_transfer":         "pass it on",
+            "deleting_panel":       "🗑️ wiping the table…",
+            "header_details":       "### {icon} booth details ☕\n**menu pick:** {category}\n**guest:** {opener}\n**booth:** {channel}\n**opened:** {opened}\n**status:** {status}\n**grabbed by:** {claim}",
+            "no_users_added":       "⚠️ everyone you picked already had a seat ☕",
+            "no_users_removed":     "⚠️ none of those folks were in the booth ☕",
+            "not_support_target":   "⚠️ {user} isn't on the team, sorry — transfer cancelled ☕",
+            "panel_title":          "### {icon} staff panel — {channel} ☕",
+            "prompt_add":           "who should get a seat in **{channel}**? you can pick a few ☕",
+            "prompt_delete":        "sure you want to wipe **{channel}**? there's no coming back from this one ☕",
+            "prompt_remove":        "who should step out of **{channel}**?",
+            "prompt_transfer":      "who should take over the booth **{channel}**?",
+            "sel_staff":            "pick a staffie…",
+            "sel_user":             "pick your guests…",
+            "staff_panel_only":     "❌ sorry, only the staff can peek at the panel ☕",
+            "status_closed":        "closed",
+            "status_open":          "open",
+            "transferred":          "✅ booth passed to {user} ☕",
+            "unclaimed":            "up for grabs",
+            "users_added":          "✅ pulled up a seat for {users} ☕",
+            "users_removed":        "✅ asked {users} to step out ☕",
         },
         "de": {
             "panel_default_title":  "ein gemütliches ticket öffnen ☕",
@@ -248,6 +361,34 @@ MESSAGES = {
             "deleting":             "🗑️ tisch wird in {seconds}s abgewischt…",
             "setup_title":          "### {icon} ticketsystem-setup ☕",
             "setup_desc":           "richte deine ticket-nische ein — kategorien hinzufügen, personal einladen, dann das süße panel posten ✨",
+            "btn_add":              "gäste reinholen ☕",
+            "btn_cancel":           "doch nicht",
+            "btn_claim":            "übernehmen ☕",
+            "btn_close":            "nische schließen",
+            "btn_confirm_delete":   "ja, tisch abwischen",
+            "btn_delete":           "löschen",
+            "btn_remove":           "gast rausbitten",
+            "btn_staff":            "personal-panel",
+            "btn_transfer":         "weiterreichen",
+            "deleting_panel":       "🗑️ tisch wird abgewischt…",
+            "header_details":       "### {icon} nischen-details ☕\n**auswahl:** {category}\n**gast:** {opener}\n**nische:** {channel}\n**geöffnet:** {opened}\n**status:** {status}\n**übernommen von:** {claim}",
+            "no_users_added":       "⚠️ alle ausgewählten hatten schon einen platz ☕",
+            "no_users_removed":     "⚠️ keiner davon war in der nische ☕",
+            "not_support_target":   "⚠️ {user} gehört nicht zum team, sorry — übertragung abgebrochen ☕",
+            "panel_title":          "### {icon} personal-panel — {channel} ☕",
+            "prompt_add":           "wer soll in **{channel}** einen platz bekommen? du kannst ein paar wählen ☕",
+            "prompt_delete":        "wirklich **{channel}** abwischen? das gibt's nicht zurück ☕",
+            "prompt_remove":        "wer soll aus **{channel}** raus?",
+            "prompt_transfer":      "wer soll die nische **{channel}** übernehmen?",
+            "sel_staff":            "team-mitglied wählen…",
+            "sel_user":             "gäste wählen…",
+            "staff_panel_only":     "❌ sorry, nur das personal darf ins panel ☕",
+            "status_closed":        "geschlossen",
+            "status_open":          "offen",
+            "transferred":          "✅ nische an {user} übergeben ☕",
+            "unclaimed":            "zu haben",
+            "users_added":          "✅ stuhl für {users} rangezogen ☕",
+            "users_removed":        "✅ {users} rausgebeten ☕",
         },
         "es": {
             "panel_default_title":  "abre un ticket acogedor ☕",
@@ -288,6 +429,34 @@ MESSAGES = {
             "deleting":             "🗑️ limpiando la mesa en {seconds}s…",
             "setup_title":          "### {icon} configuración del sistema de tickets ☕",
             "setup_desc":           "configura tu cubículo de tickets — añade categorías, invita staff y luego publica el panel adorable ✨",
+            "btn_add":              "traer más amigos ☕",
+            "btn_cancel":           "mejor no",
+            "btn_claim":            "tomarlo ☕",
+            "btn_close":            "cerrar el cubículo",
+            "btn_confirm_delete":   "sí, limpiar la mesa",
+            "btn_delete":           "eliminar",
+            "btn_remove":           "pedir que salga",
+            "btn_staff":            "panel del staff",
+            "btn_transfer":         "pasarlo",
+            "deleting_panel":       "🗑️ limpiando la mesa…",
+            "header_details":       "### {icon} detalles del cubículo ☕\n**selección:** {category}\n**invitado:** {opener}\n**cubículo:** {channel}\n**abierto:** {opened}\n**estado:** {status}\n**tomado por:** {claim}",
+            "no_users_added":       "⚠️ todos los elegidos ya tenían asiento ☕",
+            "no_users_removed":     "⚠️ ninguno de esos estaba en el cubículo ☕",
+            "not_support_target":   "⚠️ {user} no es del equipo, lo siento — transferencia cancelada ☕",
+            "panel_title":          "### {icon} panel del staff — {channel} ☕",
+            "prompt_add":           "¿quién merece un asiento en **{channel}**? puedes elegir a varios ☕",
+            "prompt_delete":        "¿seguro que quieres limpiar **{channel}**? no hay vuelta atrás ☕",
+            "prompt_remove":        "¿quién debería salir de **{channel}**?",
+            "prompt_transfer":      "¿quién se hace cargo del cubículo **{channel}**?",
+            "sel_staff":            "elige a alguien del equipo…",
+            "sel_user":             "elige invitados…",
+            "staff_panel_only":     "❌ lo siento, solo el staff puede ver el panel ☕",
+            "status_closed":        "cerrado",
+            "status_open":          "abierto",
+            "transferred":          "✅ cubículo pasado a {user} ☕",
+            "unclaimed":            "disponible",
+            "users_added":          "✅ trajimos silla para {users} ☕",
+            "users_removed":        "✅ {users} salió del cubículo ☕",
         },
     },
 }
@@ -503,17 +672,94 @@ class TicketPanelView(discord.ui.LayoutView):
         self.add_item(container)
 
 
-class TicketWelcomeView(discord.ui.LayoutView):
-    """The first message inside a freshly-created ticket. No buttons —
-    the user controls the ticket via `ticket close/delete/add/...` sub-commands."""
-    def __init__(self, category: str, user: discord.Member):
-        super().__init__(timeout=None)
-        body = MESSAGES["cafe"]["en"]["ticket_welcome"].format(
-            icon=get_emoji("icon_ticket"),
-            category=category,
-            mention=user.mention,
+def _ticket_status_text(ctx_or_int, status: str) -> str:
+    return msg(ctx_or_int, "status_closed" if status == "closed" else "status_open")
+
+
+def build_ticket_header_view(
+    ctx_or_int,
+    *,
+    category: str,
+    opener_id: int,
+    channel: discord.TextChannel,
+    claimed_by: Optional[int] = None,
+    status: str = "open",
+) -> discord.ui.LayoutView:
+    """The pinned card shown at the top of every ticket.
+
+    Displays the ticket details and carries the persistent Staff Panel
+    button that opens the ephemeral management panel.
+    """
+    icon = get_emoji("icon_ticket")
+    guild = channel.guild
+    opener = guild.get_member(opener_id)
+    opener_ref = opener.mention if opener else f"<@{opener_id}>"
+
+    if claimed_by:
+        claimer = guild.get_member(claimed_by)
+        claim_ref = claimer.mention if claimer else f"<@{claimed_by}>"
+    else:
+        claim_ref = msg(ctx_or_int, "unclaimed")
+
+    opened_ts = int(channel.created_at.timestamp()) if channel.created_at else int(time.time())
+    welcome = msg(
+        ctx_or_int, "ticket_welcome",
+        icon=icon, category=category, mention=opener_ref,
+    )
+    details = msg(
+        ctx_or_int, "header_details",
+        icon=icon,
+        category=category,
+        opener=opener_ref,
+        channel=channel.mention,
+        opened=f"<t:{opened_ts}:f>",
+        status=_ticket_status_text(ctx_or_int, status),
+        claim=claim_ref,
+    )
+
+    accent = discord.Color.red() if status == "closed" else discord.Color.green()
+    container = discord.ui.Container(
+        discord.ui.TextDisplay(content=welcome),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=details),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.ActionRow(StaffPanelButton(label=msg(ctx_or_int, "btn_staff"))),
+        accent_colour=accent,
+    )
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(container)
+    return view
+
+
+async def refresh_ticket_header(
+    ctx_or_int,
+    guild: discord.Guild,
+    channel: discord.TextChannel,
+    ticket: dict,
+    cfg: Optional[TicketConfig] = None,
+) -> None:
+    """Re-render the pinned header message of an existing ticket (best effort)."""
+    cfg = cfg or get_ticket_config(guild.id)
+    mid = ticket.get("message_id")
+    if not mid:
+        return
+    try:
+        header_msg = await channel.fetch_message(int(mid))
+    except Exception:
+        return
+    try:
+        await header_msg.edit(
+            view=build_ticket_header_view(
+                ctx_or_int,
+                category=ticket.get("category", "General"),
+                opener_id=ticket.get("opener_id", 0),
+                channel=channel,
+                claimed_by=ticket.get("claimed_by"),
+                status=ticket.get("status", "open"),
+            )
         )
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay(content=body)))
+    except Exception:
+        pass
 
 
 # ───────────────────────────────────────────────────
@@ -529,7 +775,13 @@ async def create_ticket(interaction: discord.Interaction, category: str):
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
-        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        guild.me: discord.PermissionOverwrite(
+            read_messages=True,
+            send_messages=True,
+            # needed so the bot can auto-pin the ticket header and quietly
+            # delete the pin system-notice afterwards
+            manage_messages=True,
+        ),
     }
     for rid in cfg.support_roles:
         role = guild.get_role(rid)
@@ -544,24 +796,570 @@ async def create_ticket(interaction: discord.Interaction, category: str):
         reason=f"Ticket opened by {user}",
     )
 
-    view = TicketWelcomeView(category, user)
-    msg_obj = await channel.send(view=view)
-
-    cfg.open_tickets.append({
+    entry = {
         "channel_id": channel.id,
-        "message_id": msg_obj.id,
+        "message_id": None,
         "category": category,
         "opener_id": user.id,
         "claimed_by": None,
         "status": "open",
-    })
+    }
+    header_view = build_ticket_header_view(
+        interaction,
+        category=category,
+        opener_id=user.id,
+        channel=channel,
+        claimed_by=None,
+        status="open",
+    )
+    msg_obj = await channel.send(view=header_view)
+    entry["message_id"] = msg_obj.id
+    cfg.open_tickets.append(entry)
     await async_update_ticket_config(guild.id, cfg)
+
+    # Pin the header so the ticket details + Staff Panel button stay on top,
+    # then quietly remove the automated "pinned a message" system notice.
+    try:
+        await msg_obj.pin(reason=f"Ticket header for {user}")
+        async for m in channel.history(limit=3):
+            if m.id != msg_obj.id and m.type == discord.MessageType.pins_add:
+                try:
+                    await m.delete()
+                except Exception:
+                    pass
+                break
+    except Exception:
+        pass
 
     text = msg(interaction, "ticket_created", channel=channel.mention)
     if interaction.response.is_done():
         await interaction.followup.send(text, ephemeral=True)
     else:
         await interaction.response.send_message(text, ephemeral=True)
+
+
+# ───────────────────────────────────────────────────
+#  TICKET STAFF PANEL (ephemeral per-ticket controls)
+#  The pinned header card carries one persistent "Staff Panel" button.
+#  Every custom id below is stable so views keep working across restarts
+#  (see register_ticket_persistent_views, called from the cog setup).
+# ───────────────────────────────────────────────────
+
+_TICKET_HEADER_ID       = "ticket:header:staff"
+_TICKET_CLAIM_ID        = "ticket:panel:claim"
+_TICKET_TRANSFER_ID     = "ticket:panel:transfer"
+_TICKET_CLOSE_ID        = "ticket:panel:close"
+_TICKET_DELETE_ID       = "ticket:panel:delete"
+_TICKET_DELETE_YES_ID   = "ticket:panel:delete_yes"
+_TICKET_CANCEL_ID       = "ticket:panel:cancel"
+_TICKET_ADD_ID          = "ticket:panel:add"
+_TICKET_REMOVE_ID       = "ticket:panel:remove"
+_TICKET_SEL_ADD_ID      = "ticket:panel:sel_add"
+_TICKET_SEL_REMOVE_ID   = "ticket:panel:sel_remove"
+_TICKET_SEL_TRANSFER_ID = "ticket:panel:sel_transfer"
+
+
+def build_staff_panel_view(
+    ctx_or_int,
+    channel: discord.TextChannel,
+    ticket: dict,
+    cfg: TicketConfig,
+    *,
+    confirm: Optional[str] = None,
+) -> discord.ui.LayoutView:
+    """The ephemeral staff panel shown after pressing the header button."""
+    view = discord.ui.LayoutView(timeout=None)
+    icon = get_emoji("icon_ticket")
+    title = msg(ctx_or_int, "panel_title", icon=icon, channel=channel.mention)
+
+    if ticket.get("claimed_by"):
+        claimer = channel.guild.get_member(ticket["claimed_by"])
+        claim_ref = claimer.mention if claimer else f"<@{ticket['claimed_by']}>"
+    else:
+        claim_ref = msg(ctx_or_int, "unclaimed")
+    status_line = f"**{_ticket_status_text(ctx_or_int, ticket.get('status', 'open'))}** — {claim_ref}"
+
+    children: list = []
+    if confirm:
+        children.append(discord.ui.TextDisplay(content=confirm))
+    children.extend([
+        discord.ui.TextDisplay(content=title),
+        discord.ui.TextDisplay(content=status_line),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+    ])
+
+    claim_button = (
+        _TicketTransferButton(label=msg(ctx_or_int, "btn_transfer"))
+        if ticket.get("claimed_by")
+        else _TicketClaimButton(label=msg(ctx_or_int, "btn_claim"))
+    )
+    children.append(discord.ui.ActionRow(
+        claim_button,
+        _TicketCloseButton(label=msg(ctx_or_int, "btn_close")),
+        _TicketDeleteButton(label=msg(ctx_or_int, "btn_delete")),
+    ))
+    children.append(discord.ui.ActionRow(
+        _TicketAddButton(label=msg(ctx_or_int, "btn_add")),
+        _TicketRemoveButton(label=msg(ctx_or_int, "btn_remove")),
+    ))
+    view.add_item(discord.ui.Container(*children))
+    return view
+
+
+def _panel_text_view(content: str) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=content)))
+    return view
+
+
+async def _panel_context(interaction: discord.Interaction):
+    """Resolve (ticket, cfg) for the interaction's channel.
+
+    Replies with an ephemeral denial and returns (None, None) when the
+    user isn't support staff or the channel isn't an open ticket.
+    """
+    if not interaction.guild or not isinstance(interaction.channel, discord.TextChannel):
+        return None, None
+    cfg = get_ticket_config(interaction.guild.id)
+    if not has_support_perms(interaction.user, cfg):
+        await interaction.response.send_message(msg(interaction, "staff_panel_only"), ephemeral=True)
+        return None, None
+    ticket = find_open_ticket(interaction.guild.id, interaction.channel.id)
+    if ticket is None:
+        await interaction.response.send_message(msg(interaction, "not_in_ticket"), ephemeral=True)
+        return None, None
+    return ticket, cfg
+
+
+async def _show_panel(
+    interaction: discord.Interaction,
+    ticket: dict,
+    cfg: TicketConfig,
+    *,
+    confirm: Optional[str] = None,
+) -> None:
+    view = build_staff_panel_view(interaction, interaction.channel, ticket, cfg, confirm=confirm)
+    await interaction.response.edit_message(view=view)
+
+
+async def _persist_and_refresh(
+    interaction: discord.Interaction,
+    cfg: TicketConfig,
+    ticket: dict,
+) -> None:
+    """Save config changes and re-render the pinned header card."""
+    await async_update_ticket_config(interaction.guild.id, cfg)
+    await refresh_ticket_header(
+        interaction, interaction.guild, interaction.channel, ticket, cfg
+    )
+
+
+async def _member_has_access(channel: discord.TextChannel, member: discord.Member) -> bool:
+    try:
+        return bool(channel.overwrites_for(member).read_messages)
+    except Exception:
+        return False
+
+
+def _ticket_member_options(channel: discord.TextChannel) -> list:
+    """Member options (max 25) for the 'remove user' picker."""
+    options: list = []
+    for target, perms in list(channel.overwrites.items()):
+        if isinstance(target, discord.Role) or target == channel.guild.me:
+            continue
+        if not (perms.read_messages or perms.view_channel):
+            continue
+        name = (getattr(target, "display_name", None) or str(target))[:90] or "Member"
+        options.append(discord.SelectOption(
+            label=name, value=str(target.id), description="Ticket member",
+        ))
+        if len(options) >= 25:
+            break
+    return options
+
+
+# ── buttons ────────────────────────────────────────
+
+class StaffPanelButton(discord.ui.Button):
+    """Persistent 'Staff Panel' button pinned at the top of every ticket."""
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Staff Panel",
+            style=discord.ButtonStyle.secondary,
+            custom_id=_TICKET_HEADER_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.channel, discord.TextChannel):
+            return
+        cfg = get_ticket_config(interaction.guild.id)
+        if not has_support_perms(interaction.user, cfg):
+            return await interaction.response.send_message(
+                msg(interaction, "staff_panel_only"), ephemeral=True
+            )
+        ticket = find_open_ticket(interaction.guild.id, interaction.channel.id)
+        if ticket is None:
+            return await interaction.response.send_message(
+                msg(interaction, "not_in_ticket"), ephemeral=True
+            )
+        view = build_staff_panel_view(interaction, interaction.channel, ticket, cfg)
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class _TicketClaimButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Claim",
+            style=discord.ButtonStyle.success,
+            custom_id=_TICKET_CLAIM_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        existing = ticket.get("claimed_by")
+        if existing:
+            other = interaction.guild.get_member(existing)
+            who = other.mention if other else f"<@{existing}>"
+            return await interaction.response.send_message(
+                msg(interaction, "already_claimed", user=who), ephemeral=True
+            )
+        ticket["claimed_by"] = interaction.user.id
+        await _persist_and_refresh(interaction, cfg, ticket)
+        await _show_panel(
+            interaction, ticket, cfg,
+            confirm=msg(interaction, "claimed", user=interaction.user.mention),
+        )
+
+
+class _TicketTransferButton(discord.ui.Button):
+    """Shown once the ticket has been claimed — hands the claim to another member."""
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Transfer",
+            style=discord.ButtonStyle.primary,
+            custom_id=_TICKET_TRANSFER_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        # No claim (anymore)? treat it like a claim instead.
+        if not ticket.get("claimed_by"):
+            ticket["claimed_by"] = interaction.user.id
+            await _persist_and_refresh(interaction, cfg, ticket)
+            return await _show_panel(
+                interaction, ticket, cfg,
+                confirm=msg(interaction, "claimed", user=interaction.user.mention),
+            )
+        prompt = msg(interaction, "prompt_transfer", channel=interaction.channel.mention)
+        view = discord.ui.LayoutView(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=prompt),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                _TicketTransferUserSelect(placeholder=msg(interaction, "sel_staff")),
+            ),
+            discord.ui.ActionRow(
+                _TicketCancelButton(label=msg(interaction, "btn_cancel")),
+            ),
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+
+
+class _TicketCloseButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Close",
+            style=discord.ButtonStyle.secondary,
+            custom_id=_TICKET_CLOSE_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+
+        channel = interaction.channel
+        ow = channel.overwrites
+        for target, perms in list(ow.items()):
+            if isinstance(target, (discord.Member, discord.User)) and target != channel.guild.me:
+                perms.send_messages = False
+                ow[target] = perms
+        try:
+            await channel.edit(
+                overwrites=ow,
+                name=f"closed-{channel.name}"[:95],
+                reason=f"Closed by {interaction.user}",
+            )
+        except Exception:
+            pass
+
+        ticket["status"] = "closed"
+        await _persist_and_refresh(interaction, cfg, ticket)
+        await _show_panel(
+            interaction, ticket, cfg,
+            confirm=msg(interaction, "closed", user=interaction.user.mention),
+        )
+
+
+class _TicketDeleteButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Delete",
+            style=discord.ButtonStyle.danger,
+            custom_id=_TICKET_DELETE_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        prompt = msg(interaction, "prompt_delete", channel=interaction.channel.mention)
+        view = discord.ui.LayoutView(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=prompt),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                _TicketDeleteYesButton(label=msg(interaction, "btn_confirm_delete")),
+                _TicketCancelButton(label=msg(interaction, "btn_cancel")),
+            ),
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+
+
+class _TicketDeleteYesButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Delete Ticket",
+            style=discord.ButtonStyle.danger,
+            custom_id=_TICKET_DELETE_YES_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+
+        cfg.open_tickets = [
+            t for t in cfg.open_tickets
+            if t.get("channel_id") != interaction.channel.id
+        ]
+        await async_update_ticket_config(interaction.guild.id, cfg)
+
+        deleting = _panel_text_view(msg(interaction, "deleting_panel"))
+        await interaction.response.edit_message(view=deleting)
+        await asyncio.sleep(3)
+        try:
+            await interaction.channel.delete(reason=f"Ticket deleted by {interaction.user}")
+        except Exception:
+            pass
+
+
+class _TicketAddButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Add User",
+            style=discord.ButtonStyle.primary,
+            custom_id=_TICKET_ADD_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        prompt = msg(interaction, "prompt_add", channel=interaction.channel.mention)
+        view = discord.ui.LayoutView(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=prompt),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                _TicketAddUserSelect(placeholder=msg(interaction, "sel_user")),
+            ),
+            discord.ui.ActionRow(
+                _TicketCancelButton(label=msg(interaction, "btn_cancel")),
+            ),
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+
+
+class _TicketRemoveButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Remove User",
+            style=discord.ButtonStyle.secondary,
+            custom_id=_TICKET_REMOVE_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        options = _ticket_member_options(interaction.channel)
+        if not options:
+            return await _show_panel(
+                interaction, ticket, cfg,
+                confirm=msg(interaction, "no_users_removed"),
+            )
+        prompt = msg(interaction, "prompt_remove", channel=interaction.channel.mention)
+        view = discord.ui.LayoutView(timeout=None)
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=prompt),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                _TicketRemoveUserSelect(options, placeholder=msg(interaction, "sel_user")),
+            ),
+            discord.ui.ActionRow(
+                _TicketCancelButton(label=msg(interaction, "btn_cancel")),
+            ),
+        )
+        view.add_item(container)
+        await interaction.response.edit_message(view=view)
+
+
+class _TicketCancelButton(discord.ui.Button):
+    def __init__(self, label: Optional[str] = None):
+        super().__init__(
+            label=label or "Cancel",
+            style=discord.ButtonStyle.secondary,
+            custom_id=_TICKET_CANCEL_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        await _show_panel(interaction, ticket, cfg)
+
+
+# ── pickers (ephemeral select menus) ──────────────
+
+class _TicketAddUserSelect(discord.ui.UserSelect):
+    def __init__(self, placeholder: Optional[str] = None):
+        super().__init__(
+            custom_id=_TICKET_SEL_ADD_ID,
+            placeholder=placeholder or "Choose user(s)…",
+            min_values=1, max_values=5,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        added: list = []
+        for member in self.values:
+            if await _member_has_access(interaction.channel, member):
+                continue
+            try:
+                await interaction.channel.set_permissions(
+                    member,
+                    read_messages=True, send_messages=True,
+                    attach_files=True, embed_links=True,
+                    reason=f"Added by {interaction.user}",
+                )
+                added.append(member)
+            except Exception:
+                continue
+        if not added:
+            confirm = msg(interaction, "no_users_added")
+        else:
+            confirm = msg(
+                interaction, "users_added",
+                users=", ".join(m.mention for m in added),
+            )
+        await _show_panel(interaction, ticket, cfg, confirm=confirm)
+
+
+class _TicketRemoveUserSelect(discord.ui.Select):
+    def __init__(self, options: list, placeholder: Optional[str] = None):
+        super().__init__(
+            custom_id=_TICKET_SEL_REMOVE_ID,
+            placeholder=placeholder or "Choose user(s)…",
+            options=options,
+            min_values=1, max_values=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        removed: list = []
+        for uid_str in self.values:
+            target = interaction.guild.get_member(int(uid_str)) or discord.Object(id=int(uid_str))
+            try:
+                await interaction.channel.set_permissions(
+                    target, overwrite=None,
+                    reason=f"Removed by {interaction.user}",
+                )
+                removed.append(f"<@{uid_str}>")
+            except Exception:
+                continue
+        if not removed:
+            confirm = msg(interaction, "no_users_removed")
+        else:
+            confirm = msg(interaction, "users_removed", users=", ".join(removed))
+        await _show_panel(interaction, ticket, cfg, confirm=confirm)
+
+
+class _TicketTransferUserSelect(discord.ui.UserSelect):
+    def __init__(self, placeholder: Optional[str] = None):
+        super().__init__(
+            custom_id=_TICKET_SEL_TRANSFER_ID,
+            placeholder=placeholder or "Choose a support member…",
+            min_values=1, max_values=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket, cfg = await _panel_context(interaction)
+        if ticket is None:
+            return
+        target = self.values[0]
+        if not has_support_perms(target, cfg):
+            return await _show_panel(
+                interaction, ticket, cfg,
+                confirm=msg(interaction, "not_support_target", user=target.mention),
+            )
+        ticket["claimed_by"] = target.id
+        await _persist_and_refresh(interaction, cfg, ticket)
+        await _show_panel(
+            interaction, ticket, cfg,
+            confirm=msg(interaction, "transferred", user=target.mention),
+        )
+
+
+# ── persistence helper (called from the cog setup) ─
+
+def register_ticket_persistent_views(bot) -> None:
+    """Register every persistent custom id used by ticket headers and staff
+    panels so the buttons keep working after a bot restart."""
+    registry = discord.ui.LayoutView(timeout=None)
+    registry.add_item(discord.ui.Container(
+        discord.ui.ActionRow(
+            StaffPanelButton(),
+            _TicketClaimButton(),
+            _TicketTransferButton(),
+            _TicketCloseButton(),
+            _TicketDeleteButton(),
+        ),
+        discord.ui.ActionRow(
+            _TicketAddButton(),
+            _TicketRemoveButton(),
+            _TicketDeleteYesButton(),
+            _TicketCancelButton(),
+        ),
+        # one select per row — v2 action rows are weight-limited
+        discord.ui.ActionRow(_TicketAddUserSelect()),
+        discord.ui.ActionRow(
+            _TicketRemoveUserSelect(options=[discord.SelectOption(label="\u200b", value="-")])
+        ),
+        discord.ui.ActionRow(_TicketTransferUserSelect()),
+    ))
+    bot.add_view(registry)
 
 
 # ───────────────────────────────────────────────────

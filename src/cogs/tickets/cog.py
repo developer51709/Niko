@@ -243,6 +243,7 @@ class Tickets(commands.Cog):
             return await ctx.send(view=_cv2_text(ctx, "already_claimed", user=who))
         ticket["claimed_by"] = ctx.author.id
         await async_update_ticket_config(ctx.guild.id, cfg)
+        await refresh_ticket_header(ctx, ctx.guild, ctx.channel, ticket, cfg)
         await ctx.send(view=_cv2_text(ctx, "claimed", user=ctx.author.mention))
 
     # ───── in-ticket: transcript ──────────────────
@@ -413,6 +414,7 @@ class Tickets(commands.Cog):
 
         ticket["status"] = "closed"
         await async_update_ticket_config(ctx.guild.id, cfg)
+        await refresh_ticket_header(ctx, ctx.guild, ctx.channel, ticket, cfg)
 
         await ctx.send(view=_cv2_text(ctx, "closed", user=ctx.author.mention))
 
@@ -544,3 +546,6 @@ async def setup(bot):
                 TicketPanelView(cfg.guild_id, cfg),
                 message_id=cfg.panel_message_id,
             )
+
+    # persistent staff-panel buttons on ticket headers stay live across restarts
+    register_ticket_persistent_views(bot)
