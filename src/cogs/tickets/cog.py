@@ -266,12 +266,32 @@ class Tickets(commands.Cog):
         messages = []
         async for m in ctx.channel.history(limit=2000, oldest_first=True):
             attachments = [a.url for a in m.attachments] if m.attachments else []
+
+            # Serialize embeds into JSON-safe payloads
+            embeds = []
+            for embed in m.embeds:
+                try:
+                    embeds.append(embed.to_dict())
+                except Exception:
+                    continue
+
+            # Serialize CV2 layout components (containers, text displays,
+            # media galleries, thumbnails, buttons, ...) into JSON-safe payloads
+            components = []
+            for comp in m.components:
+                try:
+                    components.append(comp.to_dict())
+                except Exception:
+                    continue
+
             messages.append({
                 "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "author": str(m.author),
                 "author_id": m.author.id,
                 "content": m.content or "",
                 "attachments": attachments,
+                "embeds": embeds,
+                "components": components,
             })
 
         # Find ticket info for metadata
