@@ -21,6 +21,7 @@ stays completely dormant and nothing is patched.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
 import time
@@ -33,6 +34,15 @@ from utils import logging
 WEBSHARE_API_KEY_ENV = "WEBSHARE_API_KEY"
 PROXY_LIST_URL = "https://proxy.webshare.io/api/v2/proxy/list/"
 GATEWAY_PROBE_URL = "https://discord.com/api/v10/gateway"
+
+# Webshare's list API requires a ``mode``: "direct" returns a usable
+# ``proxy_address``/``port``/credentials per proxy (what this failover needs),
+# while "backbone" plans (e.g. residential ``pool_filter``) route everything
+# through ``p.webshare.io`` on one of these ports (username/password auth).
+_BACKBONE_ADDRESS = "p.webshare.io"
+_BACKBONE_PORTS = {80, 1080, 3128}
+_BACKBONE_PORT_MIN, _BACKBONE_PORT_MAX = 9999, 19999
+_BACKBONE_PORT_FALLBACK = 80
 
 VERIFY_INTERVAL_SECONDS = 600      # probe the direct IP every 10 minutes
 PROXY_CACHE_TTL_SECONDS = 3600     # refetch the Webshare list after 1 hour
@@ -261,32 +271,88 @@ class WebshareProxyManager:
         return self._session
 
     async def _fetch_proxies(self) -> list[dict]:
-        """Query the Webshare proxy list and cache the valid proxies."""
+        """Query the Webshare proxy list and cache the valid proxies.
+
+        Webshare requires the ``mode`` parameter on this endpoint, so the
+        list is fetched in "direct" mode first (datacenter plans return a
+        usable ``proxy_address``/``port``/credentials per proxy).  If Webshare
+        rejects that — e.g. a residential plan that only supports backbone —
+        the request is retried in "backbone" mode, where all connections go
+        through ``p.webshare.io`` on a backbone port instead.
+        """
         session = self._ensure_session()
         headers = {
             "Authorization": f"Token {self.api_key}",
             "Accept": "application/json",
         }
-        async with session.get(
-            f"{PROXY_LIST_URL}?page=1&page_size={_PAGE_SIZE}",
-            headers=headers,
-        ) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"Webshare API returned HTTP {resp.status}")
-            data = await resp.json()
+        results: list[dict] = []
+        for mode in ("direct", "backbone"):
+            data = await self._request_proxy_list(session, headers, mode)
+            if data is None:
+                continue  # Webshare rejected this mode — try the other one
+            results = self._usable_proxies(data, mode)
+            if results:
+                break
 
-        results = [
-            p
-            for p in data.get("results", [])
-            if p.get("valid")
-            and p.get("proxy_address")
-            and p.get("username")
-            and p.get("password")
-        ]
         self._proxies = results
         self._proxies_fetched_at = time.monotonic()
         logging.info("ProxyManager", f"Fetched {len(results)} valid Webshare proxies.")
         return results
+
+    async def _request_proxy_list(self, session, headers, mode) -> dict | None:
+        """GET one page of the Webshare proxy list for a connection mode.
+
+        Returns the parsed JSON on success, or None when Webshare rejects the
+        ``mode`` with a 400 (e.g. the plan requires backbone instead of
+        direct).  Any other failure raises so the caller can log it.
+        """
+        url = f"{PROXY_LIST_URL}?mode={mode}&page=1&page_size={_PAGE_SIZE}"
+        async with session.get(url, headers=headers) as resp:
+            body = await resp.text()
+            detail = body.strip()[:300]
+            if resp.status == 400:
+                logging.warning(
+                    "ProxyManager",
+                    f"Webshare rejected mode={mode} (HTTP 400): {detail}",
+                )
+                return None
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"Webshare API returned HTTP {resp.status}: {detail}"
+                )
+        try:
+            return json.loads(body)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Webshare API returned invalid JSON: {detail}"
+            ) from exc
+
+    def _usable_proxies(self, data: dict, mode: str) -> list[dict]:
+        """The valid, connectable proxies from a Webshare list response."""
+        usable: list[dict] = []
+        for p in data.get("results", []):
+            if not (p.get("valid") and p.get("username") and p.get("password")):
+                continue
+            if mode == "backbone":
+                # Backbone entries carry no per-proxy address; everything
+                # connects through p.webshare.io on a backbone port.
+                p["proxy_address"] = _BACKBONE_ADDRESS
+                p["port"] = self._backbone_port(p.get("port"))
+                usable.append(p)
+            elif p.get("proxy_address"):
+                usable.append(p)
+        return usable
+
+    @staticmethod
+    def _backbone_port(port) -> int:
+        """A usable backbone-mode port for username/password auth."""
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            return _BACKBONE_PORT_FALLBACK
+        if port in _BACKBONE_PORTS or _BACKBONE_PORT_MIN <= port <= _BACKBONE_PORT_MAX:
+            return port
+        return _BACKBONE_PORT_FALLBACK
 
     # ── Verification loop ─────────────────────────────────────────────────────
     def _ensure_verify_task(self) -> None:
