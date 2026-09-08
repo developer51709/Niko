@@ -48,6 +48,8 @@ class GamblingMixin:
 
         if success:
             reward = random.randint(200, 500)
+            if effects.pop("gambling_boost", 0):
+                reward = int(reward * 1.5)
             self._credit(data, reward, "crime", "successful heist")
             title, subtitle, amount, accent = ("😈 Got away!", "You swiped from the tip jar.", reward, ACCENT_GOLD)
         else:
@@ -128,8 +130,11 @@ class GamblingMixin:
                 ))
 
         success = random.random() < 0.4
+        effects = data.setdefault("effects", {})
         if success:
             amount = random.randint(10, min(target["balance"], 500))
+            if effects.pop("gambling_boost", 0):
+                amount = int(amount * 1.5)
             self._credit(data, amount, "rob", f"from {member.display_name}")
             self._credit(target, -amount, "robbed", f"by {ctx.author.display_name}")
             title, subtitle, accent = ("💰 Score!", f"You robbed {member.display_name}.", ACCENT_GOLD)
@@ -147,3 +152,115 @@ class GamblingMixin:
         await self.save_user_economy_data(ctx.author.id)
         await self.save_user_economy_data(member.id)
         await self._send_reward_card(ctx, title=title, subtitle=subtitle, amount=shown_amount, accent=accent)
+
+
+    @commands.hybrid_command(
+        name="coinflip", aliases=["flip", "cf"],
+        description="Flip a coin — double or nothing",
+        help="{ 'en': 'flip a coin for double or nothing 🪙', 'de': 'wirf eine Münze', 'es': 'lanza una moneda 🪙' }"
+    )
+    async def coinflip(self, ctx: commands.Context, amount: int, call: str = "heads"):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
+        if amount <= 0:
+            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Bad amount", "Bet must be at least **1** 🥐.")
+
+        data = await self.get_user_economy_data(ctx.author.id)
+        if int(data.get("balance", 0)) < amount:
+            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🥐 but only have **{data['balance']:,}**.")
+
+        call = call.lower().strip()
+        if call not in ("heads", "h", "tails", "t"):
+            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Invalid call", "Pick **heads** or **tails**.")
+        call = "heads" if call in ("heads", "h") else "tails"
+
+        effects = data.setdefault("effects", {})
+        has_booster = effects.pop("coin_booster", 0)
+        # Booster gives 60/40 odds instead of 50/50
+        success = random.random() < (0.60 if has_booster else 0.50)
+        result = "heads" if random.random() < 0.5 else "tails"
+        won = success and result == call
+
+        if won:
+            profit = amount
+            self._credit(data, profit, "coinflip_win", f"won {call}")
+            title, subtitle, accent = (
+                "🪙 Heads!" if result == "heads" else "🪙 Tails!",
+                f"You called **{call}** and won!",
+                ACCENT_GOLD,
+            )
+            shown = profit
+        else:
+            self._credit(data, -amount, "coinflip_loss", f"lost — landed {result}")
+            title, subtitle, accent = (
+                "🪙 Heads!" if result == "heads" else "🪙 Tails!",
+                f"You called **{call}** but it landed **{result}**.",
+                ACCENT_RED,
+            )
+            shown = -amount
+
+        footer = ""
+        if has_booster:
+            footer = "-# 🍀 Coin Booster gave you 60/40 odds!"
+
+        _check_achievements(data)
+        await self.save_user_economy_data(ctx.author.id)
+        await self._send_reward_card(
+            ctx, title=title, subtitle=subtitle, amount=shown, accent=accent, footer=footer,
+        )
+
+    @commands.hybrid_command(
+        name="dice", aliases=["roll"],
+        description="Roll a die — pick a number and hope for the best",
+        help="{ 'en': 'roll a die and bet on the outcome 🎲', 'de': 'würfle und setze auf eine Zahl', 'es': 'lanza un dado 🎲' }"
+    )
+    async def dice(self, ctx: commands.Context, amount: int, target: int = 50):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
+        if amount <= 0:
+            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Bad amount", "Bet must be at least **1** 🥐.")
+
+        data = await self.get_user_economy_data(ctx.author.id)
+        if int(data.get("balance", 0)) < amount:
+            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🥐 but only have **{data['balance']:,}**.")
+
+        if not 1 <= target <= 99:
+            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Invalid target", "Target must be between **1** and **99**.")
+
+        roll = random.randint(1, 100)
+        won = roll >= target
+
+        # Payout scales inversely with target difficulty
+        multiplier = round(100 / max(target, 1), 2)
+        multiplier = max(1.01, min(multiplier, 50.0))  # cap payout at 50x
+
+        effects = data.setdefault("effects", {})
+        if won:
+            profit = int(amount * multiplier)
+            if effects.pop("gambling_boost", 0):
+                profit = int(profit * 1.5)
+            self._credit(data, profit, "dice_win", f"rolled {roll} (target {target}+)")
+            title = "🎲 Great roll!"
+            subtitle = f"Rolled **{roll}** — needed **{target}+** (×{multiplier:.1f})"
+            accent = ACCENT_GOLD
+            shown = profit
+        else:
+            self._credit(data, -amount, "dice_loss", f"rolled {roll} (target {target}+)")
+            title = "🎲 Bust!"
+            subtitle = f"Rolled **{roll}** — needed **{target}+**. Better luck next time!"
+            accent = ACCENT_RED
+            shown = -amount
+
+        _check_achievements(data)
+        await self.save_user_economy_data(ctx.author.id)
+        await self._send_reward_card(
+            ctx, title=title, subtitle=subtitle, amount=shown, accent=accent,
+        )
+
+    async def _send_err(self, ctx, title: str, body: str):
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=_info_view(title, body))
+        else:
+            await ctx.send(view=_info_view(title, body))

@@ -358,6 +358,18 @@ class ShopMixin:
                 f"**{bank_cap(data['bank_tier']):,}** and "
                 f"**{int(bank_rate(data['bank_tier'])*100*10)/10}%** daily interest. 🏦✨"
             )
+        elif effect == "coin_booster":
+            effects["coin_booster"] = 1
+            msg_text = "Your next coinflip gets 60/40 odds in your favor. 🪙✨"
+        elif effect == "streak_insurance":
+            effects["streak_insurance"] = 1
+            msg_text = "Your daily streak is now protected for one missed day. 🛡️🔥"
+        elif effect == "gambling_boost":
+            effects["gambling_boost"] = 1
+            msg_text = "Your next gambling win will pay 1.5x the normal amount! 🎰✨"
+        elif effect == "work_boost":
+            effects["work_boost"] = 1
+            msg_text = "Your next work shift will pay +10% extra. 🧲✨"
         else:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view("🤔 No effect", "This item doesn't seem to do anything right now."))

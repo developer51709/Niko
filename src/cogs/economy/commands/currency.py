@@ -97,27 +97,60 @@ class CurrencyMixin:
                 ))
 
         streak = int(data.get("daily_streak", 0))
+        effects = data.setdefault("effects", {})
         if elapsed > 2 * COOLDOWN_DAILY:
-            streak = 1
+            # Streak insurance: if user missed exactly one day, protect the streak
+            if streak >= 3 and effects.pop("streak_insurance", 0):
+                streak += 1  # streak preserved, just count as consecutive
+            else:
+                streak = 1
         else:
             streak += 1
         multiplier = 1 + min(streak, 7) * 0.2
         base = 1000
         reward = int(base * multiplier)
 
-        self._credit(data, reward, "daily", f"day {streak} • x{multiplier:.1f}")
+        # ── Streak milestone bonuses ──
+        STREAK_MILESTONES = {
+            7:  (500,   ["xp_potion"]),
+            14: (1500,  ["lucky_charm"]),
+            30: (5000,  ["espresso_shot", "lockpick"]),
+            60: (15000, ["rob_shield", "lucky_charm"]),
+            90: (50000, ["espresso_shot", "lockpick", "rob_shield", "lucky_charm", "xp_potion"]),
+        }
+        milestone_bonus = 0
+        milestone_items = []
+        if streak in STREAK_MILESTONES:
+            ms_bonus, ms_items = STREAK_MILESTONES[streak]
+            milestone_bonus = ms_bonus
+            milestone_items = ms_items
+            inv = data.setdefault("inventory", {})
+            for item_id in ms_items:
+                inv[item_id] = int(inv.get(item_id, 0)) + 1
+
+        total_reward = reward + milestone_bonus
+        self._credit(data, total_reward, "daily", f"day {streak} • x{multiplier:.1f}")
         data["daily_streak"] = streak
         data["last_daily"] = now
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
 
+        subtitle = f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}"
+        footer = msg(ctx, "daily_success", reward=total_reward)
+        if milestone_items:
+            from ..data import get_item
+            item_names = ", ".join(
+                get_item(iid)["name"] for iid in milestone_items if get_item(iid)
+            )
+            footer += f"  •  🎁 Streak milestone: **{item_names}** + **{milestone_bonus:,}** bonus!"
+
         await self._send_reward_card(
             ctx,
             title="🍬 Daily Treats",
-            subtitle=f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}",
-            amount=reward,
+            subtitle=subtitle,
+            amount=total_reward,
             accent=ACCENT_GOLD,
-            footer=msg(ctx, "daily_success", reward=reward),
+            footer=footer,
         )
 
     # ── work ─────────────────────────────────────────────────────────────────
@@ -157,6 +190,8 @@ class CurrencyMixin:
             effects.pop("work_cooldown_half", None)
 
         reward = random.randint(int(job["min_pay"]), int(job["max_pay"]))
+        if effects.pop("work_boost", 0):
+            reward = int(reward * 1.10)
         self._credit(data, reward, "work", f"{job['name']} shift")
         data["last_work"] = now
         data["times_worked"] = int(data.get("times_worked", 0)) + 1

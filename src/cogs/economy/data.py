@@ -199,7 +199,12 @@ ACHIEVEMENTS = {
     "millionaire":    {"name": "Millionaire",      "emoji": "💰", "test": lambda d: d["net_worth"] >= 1_000_000},
     "streak_7":       {"name": "Week-long Habit",  "emoji": "🔥", "test": lambda d: d["daily_streak"] >= 7},
     "streak_30":      {"name": "Café Devotee",     "emoji": "🌟", "test": lambda d: d["daily_streak"] >= 30},
+    "streak_60":      {"name": "Dedicated Regular", "emoji": "💎", "test": lambda d: d["daily_streak"] >= 60},
+    "streak_90":      {"name": "Economy Legend",    "emoji": "🏆", "test": lambda d: d["daily_streak"] >= 90},
     "owner":          {"name": "Café Owner",       "emoji": "👑", "test": lambda d: d.get("job") == "owner"},
+    "gambler":        {"name": "High Roller",      "emoji": "🎰", "test": lambda d: int(d.get("total_spent", 0)) >= 50_000},
+    "whale":          {"name": "Casino Whale",     "emoji": "🐋", "test": lambda d: int(d.get("total_spent", 0)) >= 500_000},
+    "earner":         {"name": "Big Earner",       "emoji": "📈", "test": lambda d: int(d.get("total_earned", 0)) >= 1_000_000},
 }
 
 
