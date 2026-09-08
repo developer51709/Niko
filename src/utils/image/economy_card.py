@@ -868,6 +868,107 @@ async def render_shop_card(*, items: list[dict], balance: int, category: str | N
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# INVENTORY CARD
+# ──────────────────────────────────────────────────────────────────────────
+
+INV_W = 900
+
+
+def _render_inventory_sync(
+    avatar_bytes: bytes | None,
+    name: str,
+    balance: int,
+    sections: list[dict],
+) -> BytesIO:
+    """Render an inventory card grouped by category.
+
+    ``sections`` is a list of dicts:
+        {"label": str, "items": [{"emoji": str, "name": str, "count": int, "desc": str}]}
+    """
+    row_h = 56
+    section_header_h = 40
+    # Compute total rows
+    total_rows = sum(len(s["items"]) for s in sections)
+    total_section_headers = len(sections)
+    height = 130 + total_section_headers * section_header_h + max(1, total_rows) * row_h + 42
+    canvas = _make_canvas(INV_W, height, radius=28)
+    d = ImageDraw.Draw(canvas)
+
+    # ── Header ──
+    d.text((38, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(17))
+    d.text((38, 54), f"{name}'s Inventory", fill=CREAM, font=_bold(34))
+    balance_text = f"Balance  {int(balance):,} \U0001F950"
+    balance_font = _bold(17)
+    balance_w = int(font_getlength(balance_font, balance_text))
+    render_text_with_emojis(
+        canvas, balance_text, balance_font,
+        INV_W - 38 - balance_w, 41,
+        emoji_size=17, fill=GOLD_BRIGHT, bold=True,
+    )
+
+    # ── Sections ──
+    y = 130
+    for section in sections:
+        items = section["items"]
+        if not items:
+            continue
+        # Section header
+        render_text_with_emojis(
+            canvas, section["label"], _bold(20),
+            48, y, emoji_size=20, fill=CREAM, bold=True,
+        )
+        y += section_header_h
+        for item in items:
+            _panel(canvas, 28, y, INV_W - 56, row_h - 8, radius=14)
+            emoji = item.get("emoji", "\u2022")
+            item_name = item.get("name", "Unknown")
+            count = item.get("count", 0)
+            desc = item.get("desc", "")
+            # Item name with emoji
+            render_text_with_emojis(
+                canvas, f"{emoji}  {item_name}", _bold(18),
+                48, y + 10, emoji_size=18, fill=CREAM, bold=True,
+            )
+            # Count badge (right side)
+            count_text = f"\u00d7 {count}" if count != 1 else "\u00d7 1"
+            cf = _bold(20)
+            cw = int(cf.getlength(count_text))
+            draw_text_with_fallback(
+                d, (INV_W - 28 - 24 - cw, y + 10), count_text,
+                size=20, bold=True, fill=GOLD_BRIGHT,
+            )
+            # Description
+            if desc:
+                draw_text_with_fallback(
+                    d, (48, y + 34), desc[:80],
+                    size=12, fill=CREAM_DIM,
+                )
+            y += row_h
+
+    # Footer
+    total_items = sum(item["count"] for s in sections for item in s["items"])
+    footer = f"{total_items} item{'s' if total_items != 1 else ''} total"
+    draw_text_with_fallback(d, (38, height - 36), footer, size=13, fill=CREAM_DIM)
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    out.seek(0)
+    return out
+
+
+async def render_inventory_card(
+    *,
+    avatar_bytes: bytes | None,
+    name: str,
+    balance: int,
+    sections: list[dict],
+) -> BytesIO:
+    return await asyncio.to_thread(
+        _render_inventory_sync, avatar_bytes, name, balance, sections
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Avatar fetch helper
 # ──────────────────────────────────────────────────────────────────────────
 

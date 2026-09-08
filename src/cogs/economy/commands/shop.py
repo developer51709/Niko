@@ -4,11 +4,11 @@ Economy — shop commands (shop, buy, sell, use, inventory).
 import discord
 from discord.ext import commands
 from ..data import (
-    _info_view, _check_achievements,
+    _info_view, _card_view, _check_achievements,
     SHOP_ITEMS, get_item, get_emoji,
     add_xp, bank_name, bank_cap, bank_rate, max_bank_tier,
 )
-from utils.image.economy_card import render_shop_card
+from utils.image.economy_card import render_shop_card, render_inventory_card, fetch_avatar_bytes
 
 
 class _ShopActionView(discord.ui.LayoutView):
@@ -384,7 +384,6 @@ class ShopMixin:
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        # Check if the users inventory is empty
         target = member or ctx.author
         data   = await self.get_user_economy_data(target.id)
         inv    = data.get("inventory", {})
@@ -394,20 +393,43 @@ class ShopMixin:
             else:
                 return await ctx.send(view=_info_view("🎒 Empty bag", "Nothing here yet — try the `shop`!"))
 
-        groups = {"consumable": [], "upgrade": [], "collectible": [], "other": []}
+        # Fetch avatar for the card
+        avatar_url = str(getattr(target.display_avatar, "url", "")) or None
+        avatar_bytes = await fetch_avatar_bytes(avatar_url)
+
+        # Build sections grouped by category
+        groups: dict[str, list[dict]] = {"consumable": [], "upgrade": [], "collectible": [], "other": []}
         for iid, count in sorted(inv.items()):
             item = get_item(iid)
             if not item:
-                groups["other"].append(f"• `{iid}` × **{count}**")
+                groups["other"].append({"emoji": "📦", "name": iid, "count": int(count), "desc": ""})
                 continue
-            groups[item["category"]].append(f"{item['emoji']} **{item['name']}** × **{count}**  -# *{item['description']}*")
-        labels = {"consumable": "🧪 Consumables", "upgrade": "🏦 Upgrades", "collectible": "🎖️ Collectibles", "other": "📦 Misc"}
-        body_parts = []
-        for cat, items in groups.items():
-            if items:
-                body_parts.append(f"**{labels[cat]}**\n" + "\n".join(items))
-        body = "\n\n".join(body_parts)
+            groups[item["category"]].append({
+                "emoji": str(item.get("emoji", "📦")),
+                "name": str(item["name"]),
+                "count": int(count),
+                "desc": str(item.get("description", "")),
+            })
+        labels = {
+            "consumable": "🧪 Consumables",
+            "upgrade": "🏦 Upgrades",
+            "collectible": "🎖️ Collectibles",
+            "other": "📦 Misc",
+        }
+        sections = [
+            {"label": labels[cat], "items": items}
+            for cat, items in groups.items()
+            if items
+        ]
+
+        card = await render_inventory_card(
+            avatar_bytes=avatar_bytes,
+            name=target.display_name,
+            balance=int(data.get("balance", 0)),
+            sections=sections,
+        )
+        view = _card_view(f"🎒 {target.display_name}'s Bag", "inventory.png", [])
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(f"🎒 {target.display_name}'s Bag", body))
+            await ctx.interaction.followup.send(view=view, file=discord.File(card, "inventory.png"))
         else:
-            await ctx.send(view=_info_view(f"🎒 {target.display_name}'s Bag", body))
+            await ctx.send(view=view, file=discord.File(card, "inventory.png"))
