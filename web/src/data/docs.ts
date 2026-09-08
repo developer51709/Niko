@@ -156,7 +156,7 @@ Proper server configuration ensures Niko works the way you want. This guide cove
 
 There are two ways to configure Niko:
 
-1. **Discord Commands**: Use commands like \`.automod\`, \`.logging\`, or \`.levelconfig\`
+1. **Discord Commands**: Use commands like \`.automod\`, \`.logging\`, or \`/leveling config\`
 2. **Web Dashboard**: Visit the dashboard at \`/dashboard\` for a visual interface
 
 ## Essential Settings to Configure
@@ -182,7 +182,7 @@ Customize moderation behavior:
 ### Leveling Settings
 Configure XP and leveling:
 \`\`\`
-.levelconfig
+/leveling config
 \`\`\`
 
 ### Ticket Settings
@@ -761,89 +761,123 @@ Lottery resets weekly with a base pot.
     content: `
 # Leveling System Overview
 
-Niko's leveling system rewards members for participating in your server with XP and level-ups.
+Niko's leveling system rewards members for participating in your server with XP, level-ups, and beautiful image cards.
 
 ## How Leveling Works
 
 ### Earning XP
-Members earn XP when they:
-- Send messages in enabled channels
-- Participate in activities
-- Reach certain milestones
+Members earn XP when they send messages in enabled channels. Each message earns a random amount of XP (15–25 base), multiplied by the server's XP multiplier.
 
 ### Level Progression
-Each level requires more XP than the last:
-- Level 1: 100 XP
-- Level 2: 200 XP
-- Level 3: 350 XP
-- (and increasing)
+Each level requires more XP than the last, following a quadratic curve:
+
+| Level | XP Required |
+|-------|-------------|
+| 1 | 155 |
+| 5 | 475 |
+| 10 | 1,100 |
+| 25 | 4,475 |
+| 50 | 15,100 |
 
 ### XP Formula
-The XP needed for each level increases progressively:
+The XP needed for each level uses a quadratic formula:
 \`\`\`
-XP for next level = current_level * 100 + 100
+XP for next level = 5 × level² + 50 × level + 100
 \`\`\`
+
+This means early levels are quick to earn, but higher levels take progressively more effort.
+
+## Commands
+
+### Check Your Level
+\`\`\`
+/leveling rank
+/leveling rank @user
+\`\`\`
+
+This renders a beautiful image card showing:
+- Your avatar and display name
+- Current level with a large level badge
+- XP progress bar
+- Server rank
+
+### View Leaderboard
+\`\`\`
+/leveling leaderboard
+\`\`\`
+
+Shows a paginated image leaderboard of the top leveled members with avatars, levels, and XP. Use the ◀ and ▶ buttons to navigate pages.
+
+### Open Management Panel
+\`\`\`
+/leveling panel
+\`\`\`
+
+Opens the interactive CV2 management panel for server admins. This panel has sections for:
+- **Overview** — all settings at a glance
+- **XP Settings** — toggle, multiplier, cooldown
+- **Announcements** — level-up channel and custom message
+- **Level Roles** — assign roles at specific levels
+- **Card Style** — customise the colours used in level cards
 
 ## Configuration
 
 ### Enable/Disable Leveling
 \`\`\`
-.levelconfig toggle
+/leveling config toggle
 \`\`\`
 
 ### Set XP Multiplier
 Adjust how fast members level:
 
 \`\`\`
-.levelconfig multiplier <value>
+/leveling config multiplier <value>
 \`\`\`
 
 ### Set Cooldown
 Prevent XP spam with cooldowns:
 
 \`\`\`
-.levelconfig cooldown <seconds>
+/leveling config cooldown <seconds>
 \`\`\`
 
 ### Level Up Channel
 Choose where level-up announcements appear:
 
 \`\`\`
-.levelconfig levelupchannel <channel>
+/leveling config levelupchannel <channel>
 \`\`\`
 
 ### Custom Level Up Messages
-Level-up announcements are posted in the configured channel.
+Level-up announcements use a customisable template:
 
-Use \`{user}\`, \`{level}\`, and \`{guild}\` in your message.
+\`\`\`
+/leveling config
+\`\`\`
+
+Use \`{mention}\`, \`{level}\`, \`{name}\`, and \`{guild}\` in your message.
 
 ## Level Rewards
-
-### Automatic Rewards
-Members can be rewarded automatically on level-up:
-- Role assignments
-- Custom messages
-- Channel announcements
 
 ### Level Roles
 Assign roles at specific levels:
 
 \`\`\`
-.levelconfig levelrole <level> <role>
+/leveling config levelrole <level> <role>
 \`\`\`
 
-## Leaderboards
+When a member reaches the configured level, the role is automatically assigned.
 
-View leveling leaderboards:
+## Card Customisation
 
-\`\`\`
-.level-leaderboard
-\`\`\`
+The \`/leveling rank\` and \`/leveling leaderboard\` commands render image cards with Pillow. Server admins can customise the colours through the management panel:
 
-Shows:
-- Top leveled members
-- XP totals
-- Level rankings
+- **Accent Colour** — controls borders, level numbers, and the progress bar
+- **Background Top** — gradient top colour
+- **Background Bottom** — gradient bottom colour
+- **Reset Colours** — restore café defaults
+
+Each guild's colours are stored independently, so different servers can have unique card themes.
 
 ## Leveling Tips
 
@@ -852,6 +886,7 @@ Shows:
 3. **Use cooldowns**: Prevent XP grinding abuse
 4. **Celebrate milestones**: Level-up announcements build engagement
 5. **Reward participation**: Leveling encourages activity
+6. **Customise card colours**: Match your server's branding
     `,
   },
   {
@@ -872,7 +907,7 @@ Fine-tune the leveling system to match your server's needs.
 Toggle the entire leveling system on or off:
 
 \`\`\`
-.levelconfig toggle
+/leveling config toggle
 \`\`\`
 
 When disabled, no XP is earned and level-up events don't fire.
@@ -881,7 +916,7 @@ When disabled, no XP is earned and level-up events don't fire.
 Adjust the rate at which members earn XP:
 
 \`\`\`
-.levelconfig multiplier <number>
+/leveling config multiplier <number>
 \`\`\`
 
 - \`1.0\` = Normal speed
@@ -892,10 +927,10 @@ Adjust the rate at which members earn XP:
 Set a cooldown between XP gains from messages:
 
 \`\`\`
-.levelconfig cooldown <seconds>
+/leveling config cooldown <seconds>
 \`\`\`
 
-Example: \`.levelconfig cooldown 60\` gives 60 seconds between XP from messages.
+Example: \`/leveling config cooldown 60\` gives 60 seconds between XP from messages.
 
 ## Announcements
 
@@ -903,13 +938,23 @@ Example: \`.levelconfig cooldown 60\` gives 60 seconds between XP from messages.
 Set where level-up notifications are sent:
 
 \`\`\`
-.levelconfig levelupchannel <channel>
+/leveling config levelupchannel <channel>
 \`\`\`
 
 Placeholders in announcements:
-- \`{user}\` - Username
+- \`{mention}\` - Mention the member
 - \`{level}\` - New level
+- \`{name}\` - Display name
 - \`{guild}\` - Server name
+
+### Custom Level-Up Messages
+Set a custom message template via the interactive panel:
+
+\`\`\`
+/leveling panel
+\`\`\`
+
+Navigate to **Announcements** and click **Edit Message**.
 
 ## Level Roles
 
@@ -917,30 +962,55 @@ Placeholders in announcements:
 Give roles when members reach certain levels:
 
 \`\`\`
-.levelconfig levelrole <level> <role mention or id>
+/leveling config levelrole <level> <role mention or id>
 \`\`\`
 
 Example:
 \`\`\`
-.levelconfig levelrole 10 @Member
-.levelconfig levelrole 50 @Regular
-.levelconfig levelrole 100 @Veteran
+/leveling config levelrole 10 @Member
+/leveling config levelrole 50 @Regular
+/leveling config levelrole 100 @Veteran
 \`\`\`
+
+You can also manage level roles from the interactive panel:
+
+\`\`\`
+/leveling panel
+\`\`\`
+
+Navigate to **Level Roles** to add or remove role assignments.
 
 ### Checking Progress
-Members can check their stats:
+Members can check their stats with an image card:
 
 \`\`\`
-.level
-.level @user
+/leveling rank
+/leveling rank @user
 \`\`\`
+
+## Card Customisation
+
+The \`/leveling rank\` and \`/leveling leaderboard\` commands render beautiful image cards. Server admins can customise the card colours through the management panel:
+
+\`\`\`
+/leveling panel
+\`\`\`
+
+Navigate to **Card Style** to edit:
+
+- **Accent Colour** — used for borders, level numbers, and the progress bar (hex like \`#d96545\` or \`ff5500\`)
+- **Background Top** — gradient top colour
+- **Background Bottom** — gradient bottom colour
+- **Reset Colours** — restore café defaults
+
+Each server's colours are stored independently, so different servers can have unique card themes.
 
 ## Resetting Leveling Data
 
 To reset a member's leveling progress:
 
 \`\`\`
-.levelconfig resetuser <member>
+/leveling config resetuser <member>
 \`\`\`
 
 > **Warning**: This permanently deletes that member's leveling progress!
@@ -2748,10 +2818,10 @@ Try a few commands to make sure everything works:
 ### Enable Features
 Turn on XP tracking:
 \`\`\`
-/levelconfig toggle
+/leveling config toggle
 \`\`\`
 
-More leveling options (multiplier, cooldown, level-up channel, role rewards) live in \`.levelconfig\` or the dashboard.
+More leveling options (multiplier, cooldown, level-up channel, role rewards) live in \`/leveling config\` or the dashboard.
 
 ### Configure Moderation
 Set up AutoMod to reduce your workload:
@@ -2782,7 +2852,7 @@ Let your community know Niko is available and show them useful commands.
 ### For Administrators
 - \`/logging\` - Configure logs
 - \`/onboarding\` - Welcome setup
-- \`/levelconfig\` - Level settings
+- \`/leveling config\` - Level settings
 - \`/ai-config\` - AI settings
 
 ## Troubleshooting Quick Fixes

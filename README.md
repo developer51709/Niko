@@ -59,7 +59,8 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 - Per-message XP with configurable multiplier and cooldown
 - Per-guild settings: XP toggle, announcement channel, custom level-up messages
 - Role rewards at configurable thresholds
-- `!levelpanel` interactive CV2 management panel
+- `/leveling` unified slash command group with subcommands (`rank`, `leaderboard`, `panel`, `config`)
+- Leaderboard with interactive pagination buttons
 
 ### 🎵 Music
 - **Lavalink / wavelink** — high-quality, gap-free audio playback
@@ -176,7 +177,7 @@ src/
 2. Add `DISCORD_CLIENT_SECRET` to enable Discord OAuth dashboard login
 3. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
 4. Run `npm run build` when changing the frontend; the **Run the bot** workflow serves it
-5. In your server, use `.levelpanel` and `.automod` to configure per-guild settings interactively
+5. In your server, use `/leveling panel` and `/automod` to configure per-guild settings interactively
 
 **Requirements:** Python 3.10+, Node.js 20+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
 
@@ -187,7 +188,7 @@ src/
 | Category | Key Commands |
 |----------|-------------|
 | **Economy** | `/balance` `/daily` `/work` `/job` `/shop` `/bank` `/lottery` `/pay` `/crime` `/rob` |
-| **Leveling** | `/level` `/level-leaderboard` `/levelpanel` `/levelconfig` |
+| **Leveling** | `/leveling rank` `/leveling leaderboard` `/leveling panel` `/leveling config` |
 | **Music** | `/play` `/nowplaying` `/queue` `/skip` `/stop` `/loop` `/shuffle` `/volume` |
 | **Casino** | `/blackjack` `/slots` `/roulette` `/connectfour` `/tictactoe` |
 | **Donations** | `/donate` |
