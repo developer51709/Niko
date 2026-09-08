@@ -6,7 +6,7 @@ import time
 import random
 from utils.discord_extras import burst_react
 from utils.image.level_card import render_level_card, render_level_leaderboard_card
-from utils.image.economy_card import fetch_avatar_bytes
+from utils.image.economy_card import fetch_avatar_bytes, _strip_discord_emoji
 
 
 class Leveling(commands.Cog):
