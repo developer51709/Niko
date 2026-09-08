@@ -230,7 +230,124 @@ def _strip_discord_emoji(text: str) -> str:
 
     PIL cannot render these and they would show as garbled characters.
     """
-    return _DISCORD_EMOJI_RE.sub("", text).strip()
+    return _DISCORD_EMOJI_RE.sub("", text).strip()# ── Unicode emoji detection ─────────────────────────────────────────────
+# Fast ord()-based checks: astral-plane codepoints (>= U+10000) that
+# fall in known emoji blocks are treated as emoji.  BMP emoji symbols
+# are checked against a compact sorted range table.
+
+_BMP_EMOJI_RANGES: list[tuple[int, int]] = [
+    (0x231A, 0x231B),  # watch, hourglass
+    (0x23E9, 0x23F3),  # fast-forward etc.
+    (0x23F8, 0x23FA),  # pause, record, eject
+    (0x25AA, 0x25AB),  # small squares
+    (0x25B6, 0x25C0),  # play buttons
+    (0x25FB, 0x25FE),  # medium squares
+    (0x2602, 0x2605),  # umbrella, snowman, star
+    (0x2614, 0x2615),  # umbrella + coffee
+    (0x2648, 0x2653),  # zodiac
+    (0x267F, 0x267F),  # wheelchair
+    (0x2692, 0x2697),  # hammer-and-pick etc.
+    (0x2699, 0x269C),  # gear, fleur
+    (0x26A0, 0x26A1),  # warning, high voltage
+    (0x26AA, 0x26AB),  # circles
+    (0x26BD, 0x26BE),  # soccer, baseball
+    (0x26C4, 0x26C5),  # snowman, sun behind cloud
+    (0x26CE, 0x26CE),  # ophiuchus
+    (0x26D4, 0x26D4),  # no entry
+    (0x26EA, 0x26EA),  # church
+    (0x26F2, 0x26F3),  # fountain, golf
+    (0x26F5, 0x26F5),  # sailboat
+    (0x26FA, 0x26FA),  # tent
+    (0x26FD, 0x26FD),  # fuel pump
+    (0x2702, 0x2705),  # scissors through check
+    (0x2708, 0x270D),  # airplane through pencil
+    (0x270F, 0x270F),  # pencil tip
+    (0x2712, 0x2714),  # nib, check
+    (0x2716, 0x2716),  # multiplication
+    (0x271D, 0x271D),  # latin cross
+    (0x2721, 0x2721),  # star of david
+    (0x2728, 0x2728),  # sparkles
+    (0x2733, 0x2734),  # asterisk
+    (0x2744, 0x2744),  # snowflake
+    (0x2747, 0x2747),  # sparkle
+    (0x274C, 0x274E),  # cross marks
+    (0x2753, 0x2755),  # question marks
+    (0x2757, 0x2757),  # exclamation
+    (0x2763, 0x2764),  # heart
+    (0x2795, 0x2797),  # plus/minus/divide
+    (0x27A1, 0x27A1),  # right arrow
+    (0x27B0, 0x27BF),  # curly loops
+    (0x2934, 0x2935),  # curving arrows
+    (0x2B05, 0x2B07),  # arrows
+    (0x2B1B, 0x2B1C),  # squares
+    (0x2B50, 0x2B55),  # star, circle
+    (0x3030, 0x3030),  # wavy dash
+    (0x303D, 0x303D),  # part alternation mark
+    (0x3297, 0x3299),  # circled ideographs
+]
+
+# Astral plane ranges (>= U+10000) that contain emoji.
+_ASTRAL_EMOJI_RANGES: list[tuple[int, int]] = [
+    (0x1F000, 0x1F02F),  # Mahjong tiles
+    (0x1F0A0, 0x1F0FF),  # Playing cards
+    (0x1F10D, 0x1F10F),  # circled letters
+    (0x1F12F, 0x1F169),  # circled letters / CJK compat
+    (0x1F170, 0x1F189),  # negative circled letters
+    (0x1F1E6, 0x1F1FF),  # regional indicators (flags)
+    (0x1F200, 0x1F251),  # enclosed ideographs
+    (0x1F300, 0x1F3FF),  # miscellaneous symbols & pictographs
+    (0x1F400, 0x1F4FF),  # emoticons → transport
+    (0x1F500, 0x1F5FF),  # symbols & arrows → misc
+    (0x1F600, 0x1F64F),  # emoticons → gestures
+    (0x1F680, 0x1F6FF),  # transport → mechanical
+    (0x1F900, 0x1F9FF),  # supplemental symbols
+    (0x1FA00, 0x1FA6F),  # chess symbols
+    (0x1FA70, 0x1FAFF),  # symbols extended-A
+]
+
+
+def _is_emoji_char(ch: str) -> bool:
+    """Return True if *ch* is a Unicode emoji character (BMP or astral)."""
+    cp = ord(ch)
+    # Fast path: astral plane — most emoji live here.
+    for lo, hi in _ASTRAL_EMOJI_RANGES:
+        if lo <= cp <= hi:
+            return True
+    # BMP check via sorted range table.
+    for lo, hi in _BMP_EMOJI_RANGES:
+        if lo <= cp <= hi:
+            return True
+    return False
+
+
+def _extract_emoji_seq(text: str, pos: int) -> str | None:
+    """Try to extract a full emoji sequence starting at *pos*.
+
+    Returns the emoji string (may be multi-codepoint: ZWJ sequences,
+    tag sequences, flag pairs, etc.) or ``None``.
+    """
+    ch = text[pos]
+    if not _is_emoji_char(ch):
+        return None
+
+    seq = ch
+    j = pos + 1
+    while j < len(text):
+        nxt = text[j]
+        # Variation selectors, ZWJ, tag characters, and skin-tone modifiers
+        # extend the current emoji sequence.
+        nxt_cp = ord(nxt)
+        if (
+            nxt_cp in (0xFE0E, 0xFE0F, 0x200D)           # VS15/VS16, ZWJ
+            or 0xE0020 <= nxt_cp <= 0xE007F               # tag characters
+            or 0x1F3FB <= nxt_cp <= 0x1F3FF               # Fitzpatrick modifiers
+            or _is_emoji_char(nxt)
+        ):
+            seq += nxt
+            j += 1
+        else:
+            break
+    return seq
 
 
 def render_text_with_emojis(
@@ -245,40 +362,47 @@ def render_text_with_emojis(
 ):
     """
     Render text with inline emojis onto a Pillow canvas.
-    Emojis are rendered exactly where they appear in the string.
+    Emojis are detected automatically and rendered as Twemoji images.
     """
-
-    EMOJI_SET = {
-        "🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅",
-        "💸", "💵", "💴", "💶", "💷", "✨", "🍯",
-        "☕", "👮", "😈", "🛡️", "💎", "🍬", "🔥",
-        "📋", "🪙", "🏦", "💼", "📜", "🎒", "🧪",
-        "🎟️", "🎰", "🍀", "🕒", "📊", "💸", "💳"
-    }
-
     draw = ImageDraw.Draw(canvas)
     if bold is None:
-        # The legacy callers pass the already-selected face; preserve its
-        # weight when switching between the matching fallback families.
         bold = "bold" in str(getattr(font, "path", "")).lower()
     x = start_x
 
     i = 0
     while i < len(text):
-        char = text[i]
-
-        # Check if this character is an emoji we support
-        if char in EMOJI_SET:
-            emoji_img = _render_emoji(char, emoji_size)
-            canvas.alpha_composite(emoji_img, (int(x), int(start_y)))
-            x += emoji_img.width + 2
-            i += 1
+        # Try to extract an emoji sequence at the current position.
+        emoji_seq = _extract_emoji_seq(text, i)
+        if emoji_seq is not None:
+            try:
+                # Use the codepoint-based Twemoji URL for the first character;
+                # for ZWJ sequences use the full sequence joined by hyphens.
+                code = "-".join(f"{ord(c):x}" for c in emoji_seq)
+                url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{code}.png"
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    emoji_img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                    emoji_img = emoji_img.resize((emoji_size, emoji_size), Image.LANCZOS)
+                    canvas.alpha_composite(emoji_img, (int(x), int(start_y)))
+                    x += emoji_img.width + 2
+                    i += len(emoji_seq)
+                    continue
+            except Exception:
+                pass
+            # Fallback: render emoji sequence as text (best-effort)
+            font_size = getattr(font, "size", emoji_size)
+            for ch in emoji_seq:
+                x += draw_text_with_fallback(
+                    draw, (int(x), int(start_y)), ch,
+                    size=font_size, bold=bold, fill=fill,
+                )
+            i += len(emoji_seq)
             continue
 
-        # Normal text: select a bundled/system fallback font per glyph.
+        # Regular text character — use font fallback.
         x += draw_text_with_fallback(
-            draw, (x, start_y), char, size=getattr(font, "size", emoji_size),
-            bold=bold, fill=fill,
+            draw, (int(x), int(start_y)), text[i],
+            size=getattr(font, "size", emoji_size), bold=bold, fill=fill,
         )
         i += 1
 
@@ -706,28 +830,30 @@ def _render_shop_sync(items: list[dict], balance: int, category: str | None = No
     d = ImageDraw.Draw(canvas)
     d.text((38, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(17))
     d.text((38, 54), "Niko's Boutique", fill=CREAM, font=_bold(34))
-    balance_text = f"Balance  {int(balance):,} 🥐"
+    balance_text = f"Balance  {int(balance):,} \U0001F950"
     balance_font = _bold(17)
     balance_w = int(font_getlength(balance_font, balance_text))
-    draw_text_with_fallback(d, (SHOP_W - 38 - balance_w, 41), balance_text, size=17, bold=True, fill=GOLD_BRIGHT)
+    render_text_with_emojis(canvas, balance_text, balance_font, SHOP_W - 38 - balance_w, 41, emoji_size=17, fill=GOLD_BRIGHT, bold=True)
     subtitle = f"{category.title()} collection" if category else "Treats, upgrades, and little luxuries"
     draw_text_with_fallback(d, (38, 94), subtitle, size=14, fill=CREAM_DIM)
 
     y = header_h
     for item in items:
         _panel(canvas, 28, y, SHOP_W - 56, row_h - 8, radius=14)
-        emoji = str(item.get("emoji", "•"))
+        emoji = str(item.get("emoji", "\u2022"))
         name = str(item.get("name", "Item"))
         description = str(item.get("description", ""))
         price = int(item.get("price", 0))
         sell = int(item.get("sell", price // 3))
-        draw_text_with_fallback(d, (48, y + 15), f"{emoji}  {name}", size=20, bold=True, fill=CREAM)
+        # Render item name with emoji via Twemoji
+        item_name_font = _bold(20)
+        render_text_with_emojis(canvas, f"{emoji}  {name}", item_name_font, 48, y + 15, emoji_size=20, fill=CREAM, bold=True)
         draw_text_with_fallback(d, (48, y + 43), description[:72], size=12, fill=CREAM_DIM)
-        price_text = f"{price:,} 🥐"
+        # Price line with emoji
+        price_text = f"{price:,} \U0001F950"
         sell_text = f"sell {sell:,}"
         pf = _bold(18)
-        sf = _reg(12)
-        draw_text_with_fallback(d, (SHOP_W - 190, y + 16), price_text, size=18, bold=True, fill=GOLD_BRIGHT)
+        render_text_with_emojis(canvas, price_text, pf, SHOP_W - 190, y + 16, emoji_size=18, fill=GOLD_BRIGHT, bold=True)
         draw_text_with_fallback(d, (SHOP_W - 190, y + 43), sell_text, size=12, fill=GREEN_OK)
         y += row_h
 
