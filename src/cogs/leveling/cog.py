@@ -292,8 +292,8 @@ class Leveling(commands.Cog):
     # ── LEADERBOARD (hybrid) ───────────────────────
 
     @commands.hybrid_command(
-        name="levels",
-        aliases=["level-leaderboard", "lvl-lb"],
+        name="level-leaderboard",
+        aliases=["levels-leaderboard", "lvl-lb"],
         description="View the server's leveling leaderboard",
         help="{ 'en': 'View the leaderboard 🏆', 'de': 'Zeigt die Bestenliste.' }"
     )
