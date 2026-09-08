@@ -155,7 +155,7 @@ class GamblingMixin:
 
 
     @commands.hybrid_command(
-        name="coinflip", aliases=["flip", "cf"],
+        name="coinflip", aliases=["cf"],
         description="Flip a coin — double or nothing",
         help="{ 'en': 'flip a coin for double or nothing 🪙', 'de': 'wirf eine Münze', 'es': 'lanza una moneda 🪙' }"
     )
