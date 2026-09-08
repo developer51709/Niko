@@ -491,7 +491,7 @@ class Leveling(commands.Cog):
 
     @leveling.group(
         name="config",
-        aliases=["cfg", "settings"],
+        aliases=["cfg"],
         invoke_without_command=True,
         description="View or configure the leveling system",
         help="{ 'en': 'View or configure the leveling system.', 'de': 'Level-Einstellungen anzeigen / bearbeiten.' }"
