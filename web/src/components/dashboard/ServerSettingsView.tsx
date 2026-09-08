@@ -33,14 +33,14 @@ const loggingCategories = [
 
 function channelLabel(resources: GuildResources | null, id: string | number | null | undefined) {
   if (!id) return "Not set";
-  return resources?.channels.find((channel) => channel.id === String(id))?.name || `Channel ${id}`;
+  return resources?.channels.find((channel) => channel.id === String(id))?.name || `Saved channel · ${id}`;
 }
 
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
   const selectedId = selected ? String(selected) : "";
   const channels = resources?.channels || [];
   if (!selectedId || channels.some((channel) => channel.id === selectedId)) return channels;
-  return [{ id: selectedId, name: `Unavailable channel (${selectedId})` }, ...channels];
+  return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
 }
 
 function rolesWithSelected(resources: GuildResources | null, selected: Array<string | number> = []) {

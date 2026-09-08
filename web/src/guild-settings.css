@@ -119,25 +119,36 @@
 @keyframes skeleton-pulse { 0%, 100% { opacity: .58; } 50% { opacity: 1; } }
 @keyframes dash-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
+
+.hero-identity { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; color: var(--ink); }
+.hero-avatar { width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; color: #fffaf5; background: var(--accent); border-radius: 50%; font-size: 18px; font-weight: 800; box-shadow: var(--shadow-soft); }
+.hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.hero-identity strong, .hero-identity small { display: block; }
+.hero-identity strong { font-size: 12px; }
+.hero-identity small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+
 @media (max-width: 900px) {
-  .dash-sidebar { padding: 15px 20px; }
-  .side-rail-heading { display: none; }
-  .dash-topbar { padding: 18px 25px; }
-  .dash-main { width: auto; padding: 35px 25px 60px; }
+  .site-header { gap: 16px; }
+  .dash-topbar { align-items: flex-start; flex-wrap: wrap; }
+  .dash-title { min-width: 0; flex: 1 1 230px; }
+  .dash-top-actions { min-width: 0; flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .guild-switcher { flex: 1 1 220px; min-width: 0; }
+  .guild-switcher select { width: 100%; max-width: none; }
+  .settings-panel { width: 100%; }
 }
+
 @media (max-width: 640px) {
-  .dash-topbar { padding: 16px; }
-  .dash-main { padding: 29px 16px 55px; }
-  .dash-heading h2 { font-size: 31px; }
-  .heading-context { display: none; }
-  .guild-welcome { align-items: flex-start; flex-direction: column; gap: 9px; padding: 14px; }
-  .guild-welcome .welcome-time { align-self: flex-end; margin-top: -6px; }
-  .settings-intro { align-items: flex-start; flex-wrap: wrap; padding: 14px; }
-  .settings-intro-state { width: 100%; margin-left: 56px; }
-  .server-logging-row { grid-template-columns: 1fr; gap: 9px; align-items: stretch; }
-  .compact-setting-row { min-height: 52px; padding: 0; }
-  .dash-panel { padding: 18px; }
-  .setting-row:hover { padding-right: 3px; padding-left: 3px; }
-  .skeleton-grid { grid-template-columns: 1fr; }
-  .skeleton-grid i { min-height: 78px; }
+  .hero-identity { margin-top: 20px; }
+  .hero-avatar { width: 38px; height: 38px; }
+  .dash-title { width: 100%; flex-basis: 100%; }
+  .dash-top-actions { align-items: stretch; gap: 8px; }
+  .dash-top-actions > * { min-width: 0; }
+  .dash-top-actions .connection-chip { order: 3; }
+  .dash-top-actions .user-pill { min-width: 0; }
+  .dash-top-actions .user-pill span { overflow: hidden; text-overflow: ellipsis; }
+  .settings-intro > div { min-width: 0; flex: 1; }
+  .settings-intro strong, .settings-intro p { overflow-wrap: anywhere; }
+  .form-field select[multiple] { min-height: 132px; }
+  .server-logging-row .form-field { min-width: 0; }
+  .server-logging-row .compact-setting-row { width: 100%; }
 }

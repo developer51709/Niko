@@ -9,6 +9,7 @@ export type BotStats = {
 
 export type PublicConfig = {
   application_id: string;
+  bot_avatar_url?: string | null;
   invite_url: string;
   oauth_available: boolean;
 };

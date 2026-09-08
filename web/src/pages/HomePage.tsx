@@ -26,7 +26,11 @@ export function HomePage() {
         <section className="hero shell">
           <div className="hero-copy">
             <div className="eyebrow"><span className="status-dot" /> Discord companion · online</div>
-             <h1>Useful tools for a <em>better server.</em></h1>
+            <div className="hero-identity">
+              <span className="hero-avatar">{config?.bot_avatar_url ? <img src={config.bot_avatar_url} alt="Niko" /> : "n"}</span>
+              <span><strong>Niko</strong><small>Your server’s calm, capable co-pilot</small></span>
+            </div>
+            <h1>Useful tools for a <em>better server.</em></h1>
              <p>Niko handles the everyday work of running a Discord community, so your moderators can focus on the people in it.</p>
             <div className="hero-buttons">
               <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">Invite Niko <Icon name="arrow" /></a>

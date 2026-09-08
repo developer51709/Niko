@@ -766,8 +766,15 @@ def api_health():
 
 @app.route("/api/config")
 def api_public_config():
+    bot_avatar_url = None
+    if _discord_bot is not None and getattr(_discord_bot, "user", None) is not None:
+        try:
+            bot_avatar_url = str(_discord_bot.user.display_avatar.url)
+        except Exception:
+            bot_avatar_url = None
     return jsonify({
         "application_id": DISCORD_CLIENT_ID,
+        "bot_avatar_url": bot_avatar_url,
         "invite_url": (
             f"https://discord.com/oauth2/authorize?"
             f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"
@@ -1262,19 +1269,43 @@ def get_runtime_moderation_config(guild_id: str) -> dict:
 @require_guild_access
 def api_guild_resources(guild_id):
     guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
-    if guild is None:
-        return jsonify({"channels": [], "roles": []})
-    return jsonify({
-        "channels": [
-            {"id": str(channel.id), "name": channel.name}
-            for channel in guild.text_channels
-        ],
-        "roles": [
-            {"id": str(role.id), "name": role.name}
-            for role in guild.roles
-            if not role.is_default()
-        ],
-    })
+    if guild is not None:
+        return jsonify({
+            "channels": [
+                {"id": str(channel.id), "name": channel.name}
+                for channel in guild.text_channels
+            ],
+            "roles": [
+                {"id": str(role.id), "name": role.name}
+                for role in guild.roles
+                if not role.is_default()
+            ],
+        })
+
+    # The web process can briefly start before the gateway cache is ready. Use
+    # Discord's bot endpoint in that case so saved channel IDs still resolve to
+    # their real names instead of leaving the selectors empty.
+    if DISCORD_BOT_TOKEN:
+        try:
+            response = req.get(
+                f"{DISCORD_API}/guilds/{guild_id}/channels",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                timeout=8,
+            )
+            response.raise_for_status()
+            channels = response.json()
+            if isinstance(channels, list):
+                return jsonify({
+                    "channels": [
+                        {"id": str(channel["id"]), "name": str(channel.get("name") or "")}
+                        for channel in channels
+                        if channel.get("id") and channel.get("type") in {0, 5, 10, 11, 12}
+                    ],
+                    "roles": [],
+                })
+        except Exception:
+            pass
+    return jsonify({"channels": [], "roles": []})
 
 
 @app.route("/api/guild/<guild_id>/config/automod", methods=["POST"])

@@ -15,7 +15,7 @@ function channelsWithSelected(resources: GuildResources | null, selected: string
   const selectedId = selected ? String(selected) : "";
   const channels = resources?.channels || [];
   if (!selectedId || channels.some((channel) => channel.id === selectedId)) return channels;
-  return [{ id: selectedId, name: `Unavailable channel (${selectedId})` }, ...channels];
+  return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
 }
 
 function SettingsIntro({ icon, label, title, text }: { icon: string; label: string; title: string; text: string }) {
