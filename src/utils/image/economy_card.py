@@ -23,7 +23,13 @@ from io import BytesIO
 from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
-from utils.image._font_resolver import get_bold, get_reg, font_getlength, draw_textlength
+from utils.image._font_resolver import (
+    get_bold,
+    get_reg,
+    font_getlength,
+    draw_textlength,
+    draw_text_with_fallback,
+)
 
 
 # ── Palette ─────────────────────────────────────────────────────────────────
@@ -182,11 +188,11 @@ def _format_amount(n: int) -> str:
     return f"{n:,}"
 
 
-def _truncate(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    """Truncate text to fit within max_w, adding ellipsis if needed."""
-    if font.getlength(text) <= max_w:
+def _truncate(text: str, font: ImageFont.ImageFont, max_w: int) -> str:
+    """Truncate text to fit within max_w, adding an ellipsis if needed."""
+    if font_getlength(font, text) <= max_w:
         return text
-    while text and font.getlength(text + "…") > max_w:
+    while text and font_getlength(font, text + "…") > max_w:
         text = text[:-1]
     return text + "…"
 
@@ -211,15 +217,8 @@ def _render_emoji(emoji: str, size: int) -> Image.Image:
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize text to remove font modifiers (bold, italic, script, fraktur, etc.)."""
-    # NFKD decomposes styled characters into base characters + modifiers
-    decomposed = unicodedata.normalize("NFKD", text)
-
-    # Keep only characters that are not combining marks
-    # (font modifiers become combining marks after NFKD)
-    cleaned = "".join(c for c in decomposed if not unicodedata.combining(c))
-
-    return cleaned
+    """Keep user text intact; glyph selection is handled by font fallback."""
+    return text
 
 
 import re as _re
@@ -241,7 +240,8 @@ def render_text_with_emojis(
     start_x: int,
     start_y: int,
     emoji_size: int = 28,
-    fill="white"
+    fill="white",
+    bold: bool | None = None,
 ):
     """
     Render text with inline emojis onto a Pillow canvas.
@@ -257,6 +257,10 @@ def render_text_with_emojis(
     }
 
     draw = ImageDraw.Draw(canvas)
+    if bold is None:
+        # The legacy callers pass the already-selected face; preserve its
+        # weight when switching between the matching fallback families.
+        bold = "bold" in str(getattr(font, "path", "")).lower()
     x = start_x
 
     i = 0
@@ -271,9 +275,11 @@ def render_text_with_emojis(
             i += 1
             continue
 
-        # Normal text rendering
-        draw.text((x, start_y), char, font=font, fill=fill)
-        x += draw.textlength(char, font=font)
+        # Normal text: select a bundled/system fallback font per glyph.
+        x += draw_text_with_fallback(
+            draw, (x, start_y), char, size=getattr(font, "size", emoji_size),
+            bold=bold, fill=fill,
+        )
         i += 1
 
 
@@ -399,20 +405,16 @@ def _render_balance_sync(
     name_x = avatar_x + avatar_size + 22
     name_font = _bold(28)
     sub_font = _reg(15)
-    d.text(
-        (name_x, avatar_y + 6),
-        _truncate(_strip_discord_emoji(name), name_font, CARD_W - name_x - 40),
-        fill=CREAM,
-        font=name_font,
+    draw_text_with_fallback(
+        d, (name_x, avatar_y + 6),
+        _strip_discord_emoji(name), size=28, bold=True, fill=CREAM,
     )
     job_line = f"{job_name}   •   Streak {daily_streak}"
     if job_emoji:
         job_line = f"{job_emoji}  " + job_line
-    d.text(
-        (name_x, avatar_y + 44),
-        _strip_discord_emoji(job_line),
-        fill=CREAM_DIM,
-        font=sub_font,
+    draw_text_with_fallback(
+        d, (name_x, avatar_y + 44), _strip_discord_emoji(job_line),
+        size=15, fill=CREAM_DIM,
     )
 
     # Big net worth (right side)
@@ -529,9 +531,10 @@ def _render_reward_sync(
     sub_font   = _reg(16)
     name       = _normalize_text(name)
     title      = f"{title} — {name}"
-    title      = render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, CREAM)
+    render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, CREAM, bold=True)
+
     subtitle = _normalize_text(subtitle)
-    render_text_with_emojis(canvas, subtitle, sub_font, text_x, av_y + 42, 16, CREAM_DIM)
+    render_text_with_emojis(canvas, subtitle, sub_font, text_x, av_y + 42, 16, CREAM_DIM, bold=False)
     # d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
 
     # Big amount block (right side panel)
@@ -557,7 +560,7 @@ def _render_reward_sync(
 
     # Footer
     if footer:
-        render_text_with_emojis(canvas, footer, _reg(14), 36, REWARD_H - 38, 14, CREAM_DIM)
+        render_text_with_emojis(canvas, footer, _reg(14), 36, REWARD_H - 38, 14, CREAM_DIM, bold=False)
         # d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
 
     out = BytesIO()
@@ -655,8 +658,6 @@ def _render_leaderboard_sync(
         nf = _bold(20)
         nx = 28 + 64 + (LB_ROW_H - 16) + 14
         max_name_w = LB_W - 56 - 220 - (nx - 28)
-        # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
-        name = _normalize_text(name)
         render_text_with_emojis(canvas, name, nf, nx, y + 14, 20, CREAM)
         # d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=CREAM, font=nf)
 
@@ -664,12 +665,12 @@ def _render_leaderboard_sync(
         amt = f"{int(total):,}"
         af = _bold(22)
         aw = int(af.getlength(amt))
-        d.text((LB_W - 28 - 24 - aw, y + 14), amt, fill=accent, font=af)
+        draw_text_with_fallback(d, (LB_W - 28 - 24 - aw, y + 14), amt, size=22, bold=True, fill=accent)
 
         y += LB_ROW_H + 10
 
     # Footer
-    d.text((36, height - 36), "use ‹ › below to navigate", fill=CREAM_DIM, font=_reg(13))
+    draw_text_with_fallback(d, (36, height - 36), "use ‹ › below to navigate", size=13, fill=CREAM_DIM)
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)

@@ -23,7 +23,14 @@ draw_textlength(d,t,f) -> float      (shim: draw.textlength with bbox fallback)
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
+
+try:
+    from fontTools.ttLib import TTFont
+except ImportError:  # pragma: no cover - optional fallback for minimal installs
+    TTFont = None  # type: ignore[assignment]
 
 # ── FreeType availability probe ───────────────────────────────────────────────
 # Detect once at import time whether the FreeType C extension is usable.
@@ -71,9 +78,12 @@ _REG_NAMES: list[str] = [
 ]
 
 
+_BUNDLED_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+
+
 def _search_dirs() -> list[str]:
-    """Return candidate font directories, Termux / Android first."""
-    dirs: list[str] = []
+    """Return candidate font directories, preferring fonts shipped with the bot."""
+    dirs: list[str] = [str(_BUNDLED_DIR)]
 
     # Termux: honour $PREFIX (set automatically by Termux)
     prefix = os.environ.get("PREFIX", "")
@@ -129,6 +139,41 @@ def _try_load(path: str) -> bool:
         return False
 
 
+def _all_font_paths() -> list[str]:
+    """Return usable font files in deterministic priority order."""
+    paths: list[str] = []
+    for directory in _search_dirs():
+        if not os.path.isdir(directory):
+            continue
+        try:
+            paths.extend(
+                os.path.join(directory, filename)
+                for filename in sorted(os.listdir(directory))
+                if filename.lower().endswith((".ttf", ".otf"))
+            )
+        except (PermissionError, OSError):
+            continue
+    return paths
+
+
+def _find_font_family(names: list[str]) -> list[str]:
+    """Resolve a primary font followed by every available fallback font."""
+    if not _FREETYPE_OK:
+        return []
+
+    paths = _all_font_paths()
+    preferred: list[str] = []
+    for name in names:
+        for path in paths:
+            if os.path.basename(path).lower() == name.lower() and _try_load(path):
+                preferred.append(path)
+                break
+    for path in paths:
+        if path not in preferred and _try_load(path):
+            preferred.append(path)
+    return preferred
+
+
 def _find_font(names: list[str]) -> str:
     """Return the first resolvable TrueType font path, or '' if none found."""
     if not _FREETYPE_OK:
@@ -181,13 +226,107 @@ def _bitmap_default(size: int) -> ImageFont.ImageFont:
             pass
     # FreeType unavailable (or size= call failed) — use the tiny bitmap font.
     # It is small and fixed-pitch but guaranteed to work on every platform.
-    return ImageFont.load_default()
-
-
-# ── Module-level resolved paths (lazy, cached) ───────────────────────────────
+    return ImageFont.load_default()# ── Module-level resolved paths (lazy, cached) ───────────────────────────────
 _bold_path: str | None = None   # None = not yet resolved; "" = no font found
-_reg_path:  str | None = None
-_cache: dict[tuple, ImageFont.ImageFont] = {}
+_reg_path: str | None = None
+_bold_family_paths: list[str] | None = None
+_reg_family_paths: list[str] | None = None
+_cache: dict[tuple[str, int], ImageFont.ImageFont] = {}
+_family_cache: dict[tuple[str, int], list[ImageFont.ImageFont]] = {}
+
+
+def _family_paths(bold: bool) -> list[str]:
+    global _bold_family_paths, _reg_family_paths
+    if bold:
+        if _bold_family_paths is None:
+            _bold_family_paths = _find_font_family(_BOLD_NAMES)
+        return _bold_family_paths
+    if _reg_family_paths is None:
+        _reg_family_paths = _find_font_family(_REG_NAMES)
+    return _reg_family_paths
+
+
+def get_font_family(bold: bool = False, size: int = 16) -> list[ImageFont.ImageFont]:
+    """Load a primary face plus fallback faces so each Unicode glyph survives."""
+    key = ("b" if bold else "r", size)
+    if key in _family_cache:
+        return _family_cache[key]
+    fonts: list[ImageFont.ImageFont] = []
+    for path in _family_paths(bold):
+        try:
+            fonts.append(ImageFont.truetype(path, size))
+        except BaseException:
+            continue
+    if not fonts:
+        fonts = [_bitmap_default(size)]
+    _family_cache[key] = fonts
+    return fonts
+
+
+@lru_cache(maxsize=256)
+def _font_codepoints(path: str) -> frozenset[int] | None:
+    """Read a font's cmap so fallback selection is based on real glyph coverage."""
+    if TTFont is None:
+        return None
+    try:
+        font = TTFont(path, lazy=True, ignoreDecompileErrors=True)
+        codepoints: set[int] = set()
+        for table in font["cmap"].tables:
+            if table.isUnicode():
+                codepoints.update(table.cmap)
+        font.close()
+        return frozenset(codepoints)
+    except Exception:
+        return None
+
+
+def _font_path(font: ImageFont.ImageFont) -> str | None:
+    path = getattr(font, "path", None)
+    return os.fspath(path) if path else None
+
+
+def _supports(font: ImageFont.ImageFont, char: str) -> bool:
+    """Return whether *font* has a glyph, rather than accepting Pillow's tofu glyph."""
+    if not char:
+        return True
+    path = _font_path(font)
+    if path:
+        codepoints = _font_codepoints(path)
+        if codepoints is not None:
+            return all(ord(part) in codepoints for part in char)
+    # Bitmap fonts and installations without fontTools cannot expose a cmap.
+    # They remain a last-resort fallback instead of blocking rendering.
+    return True
+
+
+def draw_text_with_fallback(draw: ImageDraw.ImageDraw, xy: tuple[float, float], text: str,
+                            *, bold: bool = False, size: int = 16, fill="white", **kwargs) -> float:
+    """Draw text in runs selected from the bundled/system Unicode font family."""
+    fonts = get_font_family(bold=bold, size=size)
+    cursor = float(xy[0])
+    run = ""
+    run_font = fonts[0]
+
+    def flush() -> None:
+        nonlocal cursor, run
+        if run:
+            draw.text((cursor, xy[1]), run, font=run_font, fill=fill, **kwargs)
+            cursor += draw_textlength(draw, run, font=run_font)
+            run = ""
+
+    for char in text:
+        selected = next((font for font in fonts if _supports(font, char)), fonts[0])
+        if selected is not run_font:
+            flush()
+            run_font = selected
+        run += char
+    flush()
+    return cursor - xy[0]
+
+
+def textlength_with_fallback(text: str, *, bold: bool = False, size: int = 16) -> float:
+    measure = ImageDraw.Draw(Image.new("L", (1, 1)))
+    return draw_text_with_fallback(measure, (0, 0), text, bold=bold, size=size, fill=0)
 
 
 def get_bold(size: int) -> ImageFont.ImageFont:
@@ -195,12 +334,9 @@ def get_bold(size: int) -> ImageFont.ImageFont:
     global _bold_path
     if _bold_path is None:
         _bold_path = _find_font(_BOLD_NAMES)
-
     key = ("b", size)
     if key in _cache:
         return _cache[key]
-
-    font: ImageFont.ImageFont
     if _bold_path and _FREETYPE_OK:
         try:
             font = ImageFont.truetype(_bold_path, size)
@@ -208,7 +344,6 @@ def get_bold(size: int) -> ImageFont.ImageFont:
             return font
         except BaseException:
             pass
-
     font = _bitmap_default(size)
     _cache[key] = font
     return font
@@ -223,12 +358,9 @@ def get_reg(size: int) -> ImageFont.ImageFont:
             if _bold_path is None:
                 _bold_path = _find_font(_BOLD_NAMES)
             _reg_path = _bold_path or ""
-
     key = ("r", size)
     if key in _cache:
         return _cache[key]
-
-    font: ImageFont.ImageFont
     if _reg_path and _FREETYPE_OK:
         try:
             font = ImageFont.truetype(_reg_path, size)
@@ -236,7 +368,6 @@ def get_reg(size: int) -> ImageFont.ImageFont:
             return font
         except BaseException:
             pass
-
     font = _bitmap_default(size)
     _cache[key] = font
     return font
