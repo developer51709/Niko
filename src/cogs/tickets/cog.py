@@ -304,10 +304,14 @@ class Tickets(commands.Cog):
         # Generate transcript ID and save to database
         from utils.tickets.transcripts import (
             generate_transcript_id, save_transcript, export_txt,
+            inline_transcript_images,
         )
         from config import links as _links
 
         transcript_id = generate_transcript_id(ctx.guild.id, ctx.channel.id, time.time())
+        # Inline image bytes before persistence so HTML downloads remain
+        # self-contained even if Discord later removes the source message.
+        await inline_transcript_images(messages)
         try:
             await save_transcript(
                 self.bot.cxn,

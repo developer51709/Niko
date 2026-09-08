@@ -6,6 +6,8 @@ through the Flask web API for browser-based viewing and multi-format downloads.
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import csv
 import html as _html
 import io
@@ -15,6 +17,8 @@ import hashlib
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 # CV2 component type ids (Components v2 layout messages)
 _TYPE_ACTION_ROW = 1
@@ -113,6 +117,106 @@ def generate_transcript_id(guild_id: int, channel_id: int, timestamp: float) -> 
     """Generate a short unique transcript ID."""
     raw = f"{guild_id}-{channel_id}-{timestamp}"
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
+
+
+def _image_data_url(payload: bytes, content_type: str) -> str:
+    """Encode downloaded image bytes for an offline HTML transcript."""
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if not media_type.startswith("image/"):
+        media_type = "image/png"
+    return f"data:{media_type};base64,{base64.b64encode(payload).decode('ascii')}"
+
+
+async def inline_transcript_images(messages: List[dict], *, max_bytes: int = 12 * 1024 * 1024) -> int:
+    """Replace Discord-hosted transcript images with base64 data URLs.
+
+    Discord CDN URLs can stop working after a message or channel is removed.
+    Downloading these images while the ticket still exists makes HTML exports
+    self-contained and usable without an internet connection.
+    """
+    urls: set[str] = set()
+
+    def add_media(media: Any) -> None:
+        if isinstance(media, dict):
+            url = media.get("url") or media.get("proxy_url")
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                urls.add(url)
+
+    for message in messages:
+        for url in message.get("attachments") or []:
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                urls.add(url)
+        for embed in message.get("embeds") or []:
+            if not isinstance(embed, dict):
+                continue
+            add_media(embed.get("image"))
+            add_media(embed.get("thumbnail"))
+            add_media(embed.get("author"))
+            add_media(embed.get("footer"))
+        def collect_components(components: Any) -> None:
+            for component in components or []:
+                if not isinstance(component, dict):
+                    continue
+                add_media(component.get("media"))
+                collect_components(component.get("components"))
+                if component.get("accessory"):
+                    collect_components([component["accessory"]])
+        collect_components(message.get("components"))
+
+    if not urls:
+        return 0
+
+    timeout = aiohttp.ClientTimeout(total=20)
+    semaphore = asyncio.Semaphore(6)
+    downloaded: dict[str, str] = {}
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async def fetch(url: str) -> None:
+            async with semaphore:
+                try:
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            return
+                        content_type = response.headers.get("Content-Type", "")
+                        if not content_type.lower().startswith("image/"):
+                            return
+                        payload = await response.read()
+                        if 0 < len(payload) <= max_bytes:
+                            downloaded[url] = _image_data_url(payload, content_type)
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    return
+
+        await asyncio.gather(*(fetch(url) for url in urls))
+
+    if not downloaded:
+        return 0
+
+    def replace_media(media: Any) -> None:
+        if not isinstance(media, dict):
+            return
+        original = media.get("url") or media.get("proxy_url")
+        if original in downloaded:
+            media["url"] = downloaded[original]
+            media.pop("proxy_url", None)
+
+    for message in messages:
+        attachments = message.get("attachments") or []
+        message["attachments"] = [downloaded.get(url, url) for url in attachments]
+        for embed in message.get("embeds") or []:
+            if not isinstance(embed, dict):
+                continue
+            for key in ("image", "thumbnail", "author", "footer"):
+                replace_media(embed.get(key))
+        def replace_components(components: Any) -> None:
+            for component in components or []:
+                if not isinstance(component, dict):
+                    continue
+                replace_media(component.get("media"))
+                replace_components(component.get("components"))
+                if component.get("accessory"):
+                    replace_components([component["accessory"]])
+        replace_components(message.get("components"))
+    return len(downloaded)
 
 
 # ── Shared render helpers ───────────────────────────────────────────────────
