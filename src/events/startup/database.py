@@ -122,9 +122,23 @@ async def _create_tables(bot):
             xp_cooldown      INTEGER DEFAULT 0,
             level_up_channel INTEGER,
             level_up_message TEXT,
-            level_roles      TEXT
+            level_roles      TEXT,
+            card_accent      TEXT,
+            card_bg_top      TEXT,
+            card_bg_bottom   TEXT
         )
     """)
+
+    # ── Add card customization columns to existing databases ──
+    for col_name, col_def in [
+        ("card_accent",    "TEXT"),
+        ("card_bg_top",    "TEXT"),
+        ("card_bg_bottom", "TEXT"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE level_config ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass  # column already exists
 
     old_follows = "data/follows.db"
     if os.path.exists(old_follows):

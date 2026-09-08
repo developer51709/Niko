@@ -49,6 +49,9 @@ uwulock.json
 src/data/
 data/
 
+# Allow the documentation data file
+!web/src/data
+
 # OS
 .DS_Store
 Thumbs.db
