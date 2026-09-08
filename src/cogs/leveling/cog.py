@@ -338,7 +338,7 @@ class Leveling(commands.Cog):
             return await ctx.send(msg(ctx, "leaderboard_empty"))
 
         if ctx.interaction:
-            await ctx.interaction.defer()
+            await ctx.interaction.response.defer()
 
         # Pre-build all pages of entries
         per_page = 10
