@@ -6,6 +6,8 @@ import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
 import { LegalPage } from "./pages/LegalPage";
 import { TranscriptPage } from "./pages/TranscriptPage";
+import { ChangelogPage } from "./pages/ChangelogPage";
+import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
 import { pageFromPath, type Page } from "./router";
 
 export function App() {
@@ -30,6 +32,12 @@ export function App() {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     const transcriptId = pathParts[1] || "";
     return <TranscriptPage transcriptId={transcriptId} />;
+  }
+  if (page === "changelog") return <ChangelogPage />;
+  if (page === "changelog-detail") {
+    const pathParts = window.location.pathname.split("/");
+    const slug = pathParts[pathParts.length - 1];
+    return <ChangelogSlugPage slug={slug} />;
   }
   return <HomePage />;
 }

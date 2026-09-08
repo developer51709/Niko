@@ -12,6 +12,7 @@ export function PublicHeader({ page }: { page: Page }) {
         <a className={page === "home" ? "active" : ""} aria-current={page === "home" ? "page" : undefined} href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Home</a>
         <a className={page === "commands" ? "active" : ""} aria-current={page === "commands" ? "page" : undefined} href="/commands" onClick={(e) => { e.preventDefault(); navigate("/commands"); }}>Commands</a>
         <a className={page === "docs" ? "active" : ""} aria-current={page === "docs" ? "page" : undefined} href="/docs" onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
+        <a href="/changelog" onClick={(e) => { e.preventDefault(); navigate("/changelog"); }}>Changelog</a>
       </nav>
       <div className="header-actions">
         <a className="button button-small button-muted dashboard-link" href="/dashboard" onClick={(e) => { e.preventDefault(); navigate("/dashboard"); }}>

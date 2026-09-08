@@ -1,0 +1,141 @@
+/* ── Changelog Page ─────────────────────────────────────────────────────────── */
+
+.changelog-hero { max-width: 640px; padding: 54px 0 38px; }
+.changelog-title { margin: 16px 0 18px; font-size: clamp(42px, 6vw, 64px); line-height: 1.03; letter-spacing: -.07em; }
+.changelog-subtitle { max-width: 520px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.8; }
+
+/* Tags */
+.changelog-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 18px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+.changelog-tag-btn { min-height: 34px; padding: 7px 14px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 4px; font-size: 11px; text-transform: capitalize; transition: all .18s; }
+.changelog-tag-btn:hover, .changelog-tag-btn.active { color: var(--accent-dark); background: var(--filter-active); border-color: var(--filter-border); }
+.changelog-tag { display: inline-block; padding: 3px 8px; color: var(--dim); background: var(--surface-muted); border-radius: 3px; font: 10px "Space Mono", monospace; text-transform: lowercase; }
+
+/* Timeline */
+.changelog-timeline { display: grid; gap: 0; }
+.changelog-entry { display: grid; grid-template-columns: 28px 1fr; gap: 0; }
+.changelog-entry-date-col { display: flex; flex-direction: column; align-items: center; }
+.changelog-date-dot { width: 10px; height: 10px; margin-top: 28px; background: var(--accent); border-radius: 50%; border: 2px solid var(--canvas); box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
+.changelog-date-line { flex: 1; width: 2px; background: var(--line); margin-top: 4px; }
+
+/* Entry Card */
+.changelog-entry-card { padding: 24px; margin: 0 0 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; transition: border-color .18s, box-shadow .18s; }
+.changelog-entry-card:hover { border-color: #bdb8af; box-shadow: var(--shadow-soft); }
+.changelog-entry-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.changelog-entry-date { color: var(--dim); font: 11px "Space Mono", monospace; }
+.changelog-version { padding: 3px 8px; color: var(--accent-dark); background: var(--filter-active); border: 1px solid var(--filter-border); border-radius: 3px; font: 10px "Space Mono", monospace; font-weight: 700; }
+.changelog-entry-title { margin: 0 0 10px; font-size: 22px; letter-spacing: -.05em; line-height: 1.2; }
+.changelog-entry-summary { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.75; }
+
+/* Highlights mini */
+.changelog-entry-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.changelog-highlight-mini { display: flex; gap: 10px; padding: 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 5px; }
+.highlight-mini-icon { flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center; color: var(--accent-dark); background: var(--surface-muted); border-radius: 4px; }
+.changelog-highlight-mini strong { display: block; margin-bottom: 4px; font-size: 11px; }
+.changelog-highlight-mini p { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.5; }
+
+.changelog-entry-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 16px; }
+.changelog-read-more { display: inline-flex; align-items: center; gap: 7px; padding: 0; color: var(--accent-dark); background: transparent; border: 0; font-size: 12px; font-weight: 700; }
+.changelog-read-more:hover { text-decoration: underline; }
+.changelog-read-more .icon { width: 13px; height: 13px; transition: transform .18s; }
+.changelog-read-more:hover .icon { transform: translateX(3px); }
+
+.changelog-empty { grid-column: 1 / -1; padding: 60px; color: var(--dim); text-align: center; }
+.changelog-empty p { margin: 12px 0 0; }
+
+/* ── Detail Page ───────────────────────────────────────────────────────────── */
+
+.changelog-detail { max-width: 820px; }
+.changelog-back { margin-bottom: 32px; }
+.back-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--muted); background: transparent; border: 0; font-size: 12px; font-weight: 600; }
+.back-button:hover { color: var(--accent-dark); }
+.back-button .icon { width: 14px; height: 14px; }
+
+.changelog-detail-header { margin-bottom: 42px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
+.changelog-detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--dim); font: 12px "Space Mono", monospace; }
+.changelog-detail-header h1 { margin: 0 0 14px; font-size: clamp(32px, 5vw, 48px); line-height: 1.08; letter-spacing: -.065em; }
+.changelog-detail-summary { margin: 0 0 18px; color: var(--muted); font-size: 15px; line-height: 1.8; max-width: 640px; }
+.changelog-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Section headings */
+.changelog-section-heading { margin: 0 0 20px; font-size: 18px; letter-spacing: -.04em; }
+
+/* Highlights grid */
+.changelog-highlights-section { margin-bottom: 40px; }
+.changelog-highlights-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.changelog-highlight-card { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; transition: border-color .18s; }
+.changelog-highlight-card:hover { border-color: #bdb8af; }
+.highlight-icon { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 14px; color: var(--accent-dark); background: var(--surface-muted); border-radius: 5px; }
+.changelog-highlight-card h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: -.03em; }
+.changelog-highlight-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+/* Charts */
+.changelog-chart-section { margin-bottom: 40px; }
+.changelog-chart-container { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+
+/* Bar chart */
+.chart-bar { display: grid; gap: 10px; }
+.chart-bar-row { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: center; }
+.chart-bar-label { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-bar-track { position: relative; height: 24px; background: var(--surface-muted); border-radius: 4px; overflow: hidden; }
+.chart-bar-fill { height: 100%; border-radius: 4px; transition: width .6s ease-out; }
+.chart-bar-value { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--ink); font: 700 10px "Space Mono", monospace; }
+
+/* Pie chart */
+.chart-pie-wrapper { display: flex; align-items: center; gap: 32px; }
+.chart-pie { width: 160px; height: 160px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 3px var(--surface); }
+.chart-pie-legend { display: flex; flex-direction: column; gap: 8px; }
+.chart-legend-item { display: flex; align-items: center; gap: 8px; }
+.chart-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.chart-legend-label { color: var(--muted); font-size: 12px; }
+
+/* Comparison chart */
+.chart-comparison { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; }
+.chart-comparison-col { display: grid; gap: 10px; }
+.comparison-label { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font: 700 10px "Space Mono", monospace; text-align: center; }
+.comparison-before { color: var(--dim); }
+.comparison-after { color: var(--sage); }
+.chart-comparison-divider { display: grid; place-items: center; padding-top: 30px; color: var(--dim); }
+
+/* Changes section */
+.changelog-changes-section { margin-bottom: 40px; }
+.changelog-changes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.changelog-change-group { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.change-group-title { margin: 0 0 12px; }
+.change-badge { display: inline-block; padding: 3px 10px; border-radius: 3px; font: 700 10px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.change-badge-added { color: #2d7a4f; background: #d4edda; }
+.change-badge-improved { color: #4a6fa5; background: #d4e4f7; }
+.change-badge-fixed { color: #b84a3b; background: #f7e4de; }
+.change-badge-migrated { color: #8b6914; background: #f5ecd4; }
+.changelog-change-group ul { margin: 0; padding: 0 0 0 18px; }
+.changelog-change-group li { margin-bottom: 8px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.changelog-change-group li:last-child { margin-bottom: 0; }
+
+/* Commits */
+.changelog-commits-section { margin-bottom: 40px; }
+.changelog-commits-list { display: grid; gap: 4px; }
+.changelog-commit { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.commit-hash { color: var(--accent-dark); font: 11px "Space Mono", monospace; flex-shrink: 0; }
+.commit-msg { color: var(--muted); font-size: 12px; }
+
+/* Detail nav */
+.changelog-detail-nav { padding-top: 24px; border-top: 1px solid var(--line); }
+.changelog-detail-nav button { display: inline-flex; align-items: center; gap: 7px; padding: 0; color: var(--accent-dark); background: transparent; border: 0; font-size: 12px; font-weight: 700; }
+.changelog-detail-nav button:hover { text-decoration: underline; }
+
+/* Not found */
+.changelog-not-found { padding: 80px 0; text-align: center; color: var(--dim); }
+.changelog-not-found h1 { margin: 16px 0 8px; font-size: 24px; color: var(--ink); }
+.changelog-not-found p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+.changelog-not-found button { padding: 10px 18px; color: var(--accent-dark); background: var(--filter-active); border: 1px solid var(--filter-border); border-radius: 5px; font-size: 12px; font-weight: 700; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .changelog-highlights-grid { grid-template-columns: 1fr; }
+  .changelog-changes-grid { grid-template-columns: 1fr; }
+  .changelog-entry-highlights { grid-template-columns: 1fr; }
+  .chart-pie-wrapper { flex-direction: column; align-items: flex-start; }
+  .chart-comparison { grid-template-columns: 1fr; }
+  .chart-comparison-divider { padding: 0; transform: rotate(90deg); }
+  .chart-bar-row { grid-template-columns: 100px 1fr; }
+  .changelog-entry { grid-template-columns: 20px 1fr; }
+}
