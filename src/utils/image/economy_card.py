@@ -691,6 +691,57 @@ async def render_leaderboard_card(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# SHOP CARD
+# ──────────────────────────────────────────────────────────────────────────
+
+SHOP_W = 900
+
+
+def _render_shop_sync(items: list[dict], balance: int, category: str | None = None) -> BytesIO:
+    """Render the catalog shown by the interactive shop command."""
+    row_h = 78
+    header_h = 126
+    height = header_h + max(1, len(items)) * row_h + 42
+    canvas = _make_canvas(SHOP_W, height, radius=28)
+    d = ImageDraw.Draw(canvas)
+    d.text((38, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(17))
+    d.text((38, 54), "Niko's Boutique", fill=CREAM, font=_bold(34))
+    balance_text = f"Balance  {int(balance):,} 🥐"
+    balance_font = _bold(17)
+    balance_w = int(font_getlength(balance_font, balance_text))
+    draw_text_with_fallback(d, (SHOP_W - 38 - balance_w, 41), balance_text, size=17, bold=True, fill=GOLD_BRIGHT)
+    subtitle = f"{category.title()} collection" if category else "Treats, upgrades, and little luxuries"
+    draw_text_with_fallback(d, (38, 94), subtitle, size=14, fill=CREAM_DIM)
+
+    y = header_h
+    for item in items:
+        _panel(canvas, 28, y, SHOP_W - 56, row_h - 8, radius=14)
+        emoji = str(item.get("emoji", "•"))
+        name = str(item.get("name", "Item"))
+        description = str(item.get("description", ""))
+        price = int(item.get("price", 0))
+        sell = int(item.get("sell", price // 3))
+        draw_text_with_fallback(d, (48, y + 15), f"{emoji}  {name}", size=20, bold=True, fill=CREAM)
+        draw_text_with_fallback(d, (48, y + 43), description[:72], size=12, fill=CREAM_DIM)
+        price_text = f"{price:,} 🥐"
+        sell_text = f"sell {sell:,}"
+        pf = _bold(18)
+        sf = _reg(12)
+        draw_text_with_fallback(d, (SHOP_W - 190, y + 16), price_text, size=18, bold=True, fill=GOLD_BRIGHT)
+        draw_text_with_fallback(d, (SHOP_W - 190, y + 43), sell_text, size=12, fill=GREEN_OK)
+        y += row_h
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    out.seek(0)
+    return out
+
+
+async def render_shop_card(*, items: list[dict], balance: int, category: str | None = None) -> BytesIO:
+    return await asyncio.to_thread(_render_shop_sync, items, balance, category)
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Avatar fetch helper
 # ──────────────────────────────────────────────────────────────────────────
 

@@ -4,73 +4,190 @@ Economy — shop commands (shop, buy, sell, use, inventory).
 import discord
 from discord.ext import commands
 from ..data import (
-    _info_view, _check_achievements, _resolve_prefix,
+    _info_view, _check_achievements,
     SHOP_ITEMS, get_item, get_emoji,
     add_xp, bank_name, bank_cap, bank_rate, max_bank_tier,
 )
+from utils.image.economy_card import render_shop_card
+
+
+class _ShopActionView(discord.ui.LayoutView):
+    """Shop card controls; the buttons open user-only transaction panels."""
+
+    def __init__(self, cog, *, timeout: float | None = 900, image_name: str = "shop.png"):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        container = discord.ui.Container(
+            discord.ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{image_name}")),
+            discord.ui.TextDisplay(content="-# Choose an action below to open a private checkout panel."),
+            discord.ui.ActionRow(
+                discord.ui.Button(label="Buy", style=discord.ButtonStyle.success, custom_id="economy:shop:buy"),
+                discord.ui.Button(label="Sell", style=discord.ButtonStyle.secondary, custom_id="economy:shop:sell"),
+            ),
+            accent_colour=discord.Colour(0xC8853F),
+        )
+        action_row = container.children[2]
+        action_row.children[0].callback = self._buy
+        action_row.children[1].callback = self._sell
+        self.add_item(container)
+
+    async def _buy(self, interaction: discord.Interaction):
+        await interaction.response.send_message(view=await _ShopTransactionView.create(self.cog, "buy", interaction.user.id), ephemeral=True)
+
+    async def _sell(self, interaction: discord.Interaction):
+        await interaction.response.send_message(view=await _ShopTransactionView.create(self.cog, "sell", interaction.user.id), ephemeral=True)
+
+
+class _ShopTransactionView(discord.ui.LayoutView):
+    """Two-step private checkout: item first, then quantity."""
+
+    def __init__(self, cog, mode: str, user_id: int, item_options: list[discord.SelectOption]):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.mode = mode
+        self.user_id = user_id
+        self.item_id: str | None = None
+        self.amount = 1
+        self.amount_select = discord.ui.Select(
+            placeholder="2. Choose an amount",
+            options=[discord.SelectOption(label="Choose an item first", value="1")],
+            disabled=True,
+        )
+        self.item_select = discord.ui.Select(
+            placeholder=f"1. Select an item to {mode}", options=item_options,
+        )
+        self.item_select.callback = self._item_changed
+        self.amount_select.callback = self._amount_changed
+        confirm = discord.ui.Button(
+            label="Confirm purchase" if mode == "buy" else "Confirm sale",
+            style=discord.ButtonStyle.success if mode == "buy" else discord.ButtonStyle.primary,
+        )
+        confirm.callback = self._confirm
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {'🛍️ Buy from' if mode == 'buy' else '💰 Sell from'} the boutique\n-# Select an item, then choose how many you want."),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(self.item_select),
+            discord.ui.ActionRow(self.amount_select),
+            discord.ui.ActionRow(confirm),
+            accent_colour=discord.Colour(0x57F287 if mode == "buy" else 0x5865F2),
+        )
+        self.add_item(container)
+
+    @classmethod
+    async def create(cls, cog, mode: str, user_id: int):
+        data = await cog.get_user_economy_data(user_id)
+        if mode == "buy":
+            source = SHOP_ITEMS.items()
+        else:
+            source = ((iid, get_item(iid)) for iid in data.get("inventory", {}) if get_item(iid))
+        options = []
+        for iid, item in source:
+            if not item:
+                continue
+            count = int(data.get("inventory", {}).get(iid, 0))
+            detail = f"{item['price']:,} coins" if mode == "buy" else f"{count} owned · {int(item.get('sell', item['price'] // 3)):,} each"
+            options.append(discord.SelectOption(
+                label=str(item["name"])[:100], value=str(iid), description=detail[:100], emoji=str(item.get("emoji", "📦")),
+            ))
+        if not options:
+            options = [discord.SelectOption(label="Your inventory is empty", value="__empty", description="Buy something first")]
+        return cls(cog, mode, user_id, options[:25])
+
+    async def _item_changed(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        self.item_id = self.item_select.values[0]
+        if self.item_id == "__empty":
+            self.amount_select.disabled = True
+            return await interaction.response.edit_message(view=self)
+        data = await self.cog.get_user_economy_data(self.user_id)
+        item = get_item(self.item_id)
+        maximum = int(data.get("inventory", {}).get(self.item_id, 0)) if self.mode == "sell" else max(1, min(25, int(data.get("balance", 0)) // int(item["price"])))
+        values = [1, 2, 5, 10, 25, maximum]
+        values = sorted({value for value in values if 1 <= value <= maximum}) or [1]
+        self.amount_select.options = [discord.SelectOption(label=f"{value} × {item['name']}", value=str(value)) for value in values]
+        self.amount_select.disabled = False
+        self.amount = values[0]
+        await interaction.response.edit_message(view=self)
+
+    async def _amount_changed(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        self.amount = int(self.amount_select.values[0])
+        await interaction.response.edit_message(view=self)
+
+    async def _confirm(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        if not self.item_id or self.item_id == "__empty":
+            return await interaction.response.send_message("Select an item first.", ephemeral=True)
+        await interaction.response.defer()
+        await self.cog._complete_shop_transaction(interaction, self.mode, self.item_id, self.amount)
 
 
 class ShopMixin:
     """shop, buy, sell, use, inventory commands."""
 
+    async def _complete_shop_transaction(self, interaction: discord.Interaction, mode: str, item_id: str, count: int):
+        """Validate and commit a transaction selected through the private panel."""
+        item = get_item(item_id)
+        if not item or count < 1:
+            return await interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Invalid selection", "That item or amount is no longer available."), ephemeral=True)
+        data = await self.get_user_economy_data(interaction.user.id)
+        iid = item_id.lower()
+        if int(data.get("level", 0)) < int(item.get("min_level", 0)):
+            return await interaction.followup.send(view=_info_view("🔒 Locked", f"**{item['name']}** requires career level **{item['min_level']}**."), ephemeral=True)
+        if mode == "buy":
+            total = int(item["price"]) * count
+            if int(data.get("balance", 0)) < total:
+                return await interaction.followup.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 but only have **{data['balance']:,}**."), ephemeral=True)
+            self._credit(data, -total, "buy", f"{count}x {item['name']}")
+            data.setdefault("inventory", {})[iid] = int(data["inventory"].get(iid, 0)) + count
+            title = "🛍️ Purchase complete"
+            message = f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🥐.\\n-# New balance: **{data['balance']:,}** 🥐"
+        else:
+            have = int(data.setdefault("inventory", {}).get(iid, 0))
+            if have < count:
+                return await interaction.followup.send(view=_info_view("📦 Not enough", f"You only have **{have}** of those."), ephemeral=True)
+            gain = int(item.get("sell", item["price"] // 3)) * count
+            self._credit(data, gain, "sell", f"{count}x {item['name']}")
+            data["inventory"][iid] = have - count
+            if data["inventory"][iid] <= 0:
+                del data["inventory"][iid]
+            title = "💰 Sold"
+            message = f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🥐.\\n-# New balance: **{data['balance']:,}** 🥐"
+        _check_achievements(data)
+        await self.save_user_economy_data(interaction.user.id)
+        await interaction.followup.send(view=_info_view(title, message), ephemeral=True)
+
     @commands.hybrid_command(
         name="shop",
         description="Browse the café boutique",
-        help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }"
+        help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }",
     )
     async def shop(self, ctx: commands.Context, category: str = None):
-        prefix = await _resolve_prefix(self.bot, ctx)
         cats = ("consumable", "upgrade", "collectible")
-
-        # Defer slash interactions to avoid interaction errors
         if ctx.interaction:
             await ctx.interaction.response.defer()
-
         if category and category.lower() not in cats:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    f"{get_emoji('icon_cross')} Unknown category",
-                    f"Try one of: {', '.join('`' + c + '`' for c in cats)}"
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    f"{get_emoji('icon_cross')} Unknown category",
-                    f"Try one of: {', '.join('`' + c + '`' for c in cats)}"
-                ))
-
+            view = _info_view("❌ Unknown category", f"Try one of: {', '.join('`' + c + '`' for c in cats)}")
+            return await (ctx.interaction.followup.send(view=view) if ctx.interaction else ctx.send(view=view))
         cat_filter = category.lower() if category else None
-        sections: dict[str, list[str]] = {c: [] for c in cats}
         data = await self.get_user_economy_data(ctx.author.id)
-        lvl  = int(data.get("level", 0))
-        for iid, item in SHOP_ITEMS.items():
-            if cat_filter and item["category"] != cat_filter:
-                continue
-            lock = "" if lvl >= item.get("min_level", 0) else f"  {get_emoji('vm_lock')} lvl {item['min_level']}"
-            sections[item["category"]].append(
-                f"{item['emoji']} **{item['name']}** `({iid})` — **{item['price']:,}** 🥐{lock}\n"
-                f"-# *{item['description']}*"
-            )
-        body_blocks = []
-        labels = {"consumable": "Consumables", "upgrade": "Upgrades", "collectible": "Collectibles"}
-        for c in cats:
-            if sections[c]:
-                body_blocks.append(f"### **{labels[c]}**\n" + "\n\n".join(sections[c]))
-        if not body_blocks:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("☕ Empty shelves", "Nothing in stock for that category."))
-            else:
-                return await ctx.send(view=_info_view("☕ Empty shelves", "Nothing in stock for that category."))
-        body = "\n\n".join(body_blocks) + f"\n\n-# Buy with `{prefix}buy <id> [count]`. Use with `{prefix}use <id>`."
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🛍️ Niko's Café Boutique", body))
+        items = [dict(item, item_id=iid) for iid, item in SHOP_ITEMS.items() if not cat_filter or item["category"] == cat_filter]
+        if not items:
+            view = _info_view("☕ Empty shelves", "Nothing in stock for that category.")
         else:
-            await ctx.send(view=_info_view("🛍️ Niko's Café Boutique", body))
+            card = await render_shop_card(items=items, balance=int(data.get("balance", 0)), category=cat_filter)
+            view = _ShopActionView(self, image_name="shop.png")
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=view, file=discord.File(card, "shop.png"))
+            return await ctx.send(view=view, file=discord.File(card, "shop.png"))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view)
+        else:
+            await ctx.send(view=view)
 
-    @commands.hybrid_command(
-        name="buy",
-        description="Buy an item from the shop",
-        help="{ 'en': 'buy a treat from the shop 🍰✨', 'de': 'kauf etwas im Shop', 'es': 'compra algo en la tienda 🍰✨' }"
-    )
     async def buy(self, ctx: commands.Context, item_id: str, count: int = 1):
 
         # Defer slash interactions to avoid interaction errors
@@ -126,11 +243,6 @@ class ShopMixin:
                 f"-# New balance: **{data['balance']:,}** 🥐",
             ))
 
-    @commands.hybrid_command(
-        name="sell",
-        description="Sell an item back from your inventory",
-        help="{ 'en': 'sell a treat back for some coins 💰', 'de': 'verkauf etwas aus deinem Bag', 'es': 'vende algo de tu inventario 💰' }"
-    )
     async def sell(self, ctx: commands.Context, item_id: str, count: int = 1):
 
         # Defer slash interactions to avoid interaction errors
