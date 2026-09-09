@@ -168,6 +168,7 @@ export type DocCategory =
   | "leveling"
   | "moderation"
   | "automod"
+  | "logging"
   | "social"
   | "utility"
   | "voice"

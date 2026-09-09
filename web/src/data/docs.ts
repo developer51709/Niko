@@ -146,7 +146,7 @@ Most features are available through both command types.
     category: "setup",
     excerpt: "Learn the essentials of configuring Niko for your server.",
     tags: ["configuration", "settings", "admin"],
-    order: 1,
+    order: 2,
     content: `
 # Server Configuration Basics
 
@@ -208,7 +208,7 @@ For larger servers, consider setting up category-specific settings:
     category: "setup",
     excerpt: "Understand how Niko interacts with Discord roles and permissions.",
     tags: ["roles", "permissions", "admin"],
-    order: 2,
+    order: 3,
     content: `
 # Roles and Permissions Guide
 
@@ -269,7 +269,7 @@ If a command fails:
     category: "setup",
     excerpt: "Set up a support ticket system with categories, support roles, and private ticket channels.",
     tags: ["tickets", "support", "setup", "admin"],
-    order: 3,
+    order: 4,
     content: `
 # Ticket System Guide
 
@@ -355,7 +355,7 @@ Support members (and the ticket opener) can manage an open ticket with these com
     category: "setup",
     excerpt: "Generate shareable web transcripts of your tickets and download them as TXT, HTML, CSV, or JSON.",
     tags: ["tickets", "transcripts", "records", "support"],
-    order: 4,
+    order: 5,
     content: `
 # Ticket Web Transcripts
 
@@ -2880,6 +2880,465 @@ Let your community know Niko is available and show them useful commands.
 - Join support server for assistance
     `,
   },
+
+  // ── Giveaway ──────────────────────────────────────────────────────
+  {
+    slug: "giveaway-overview",
+    title: "Giveaway System",
+    category: "social",
+    excerpt: "Run interactive giveaways with join requirements, timed entries, and automatic winner selection.",
+    tags: ["giveaway", "contest", "engagement", "winners", "prize"],
+    order: 5,
+    content: `
+# Giveaway System
+
+Niko's giveaway system lets you run interactive giveaways with join requirements, timed entries, and automatic winner selection — all managed through an interactive UI panel.
+
+## Starting a Giveaway
+
+\`\`\`
+.giveaway start
+\`\`\`
+
+This opens an interactive setup panel where you configure:
+
+- **Prize** — What the winners receive (text)
+- **Duration** — How long the giveaway runs (e.g. 1h, 2d, 30m)
+- **Number of Winners** — How many people win (default: 1)
+- **Channel** — Which channel to post in
+- **Join Requirements** — Account age, time in server, required roles, or booster-only
+
+All settings are configured through buttons on the panel — no need to remember command syntax.
+
+## Duration Format
+
+Use \`s\` (seconds), \`m\` (minutes), \`h\` (hours), or \`d\` (days):
+
+| Format | Meaning |
+|--------|---------|
+| \`30m\` | 30 minutes |
+| \`2h\` | 2 hours |
+| \`1d\` | 1 day |
+| \`12h\` | 12 hours |
+
+## Join Requirements
+
+You can restrict who can enter a giveaway:
+
+- **Minimum Account Age** — New accounts can't enter
+- **Minimum Time in Server** — Must have been in the server for a set duration
+- **Required Roles** — Must have one or more specific roles
+- **Booster Only** — Only server boosters can enter
+
+These are configured through the interactive panel when starting a giveaway.
+
+## Rerolling
+
+If you need to pick a new winner:
+
+\`\`\`
+.giveaway reroll <message_id>
+\`\`\`
+
+Replace \`<message_id>\` with the ID of the giveaway message (right-click → Copy Message ID).
+
+> **Note:** Only members with **Manage Server** permission can start and reroll giveaways.
+
+## How It Works
+
+1. Niko posts an interactive giveaway message with a "Join" button
+2. Members click the button to enter
+3. A background task checks every 15 seconds for ended giveaways
+4. When time runs out, winners are randomly selected from participants
+5. The giveaway message updates to show winners, and a winner announcement is sent
+6. Both messages get a burst-react celebration
+
+## Requirements
+
+- **Manage Server** permission to start and reroll giveaways
+- Bot needs **Send Messages** and **Add Reactions** permissions in the giveaway channel
+    `,
+  },
+
+  // ── Social Media Notifier ─────────────────────────────────────────
+  {
+    slug: "social-notifier",
+    title: "Social Media Notifier",
+    category: "social",
+    excerpt: "Get automatic notifications when creators post new content on YouTube, Twitter, TikTok, Bluesky, or Reddit.",
+    tags: ["notifier", "youtube", "twitter", "tiktok", "bluesky", "reddit", "notifications", "social media"],
+    order: 6,
+    content: `
+# Social Media Notifier
+
+The notifier system automatically tracks social media accounts and posts a notification to a Discord channel whenever new content is published. It supports YouTube, Twitter/X, TikTok, Bluesky, and Reddit.
+
+## Supported Platforms
+
+| Platform | What it tracks | Update interval |
+|----------|---------------|-----------------|
+| **YouTube** | New videos (via RSS feed) | Every 5 minutes |
+| **Twitter/X** | New tweets | Every 5 minutes |
+| **TikTok** | New posts | Every 5 minutes |
+| **Bluesky** | New posts | Every 5 minutes |
+| **Reddit** | New posts in a subreddit | Every 5 minutes |
+
+## Opening the Setup Panel
+
+\`\`\`
+.notifier
+\`\`\`
+
+This opens an interactive panel with buttons for each platform. Click a platform button to open a modal where you enter:
+
+- **Account/Channel Name** — The username, handle, or channel ID
+- **Notification Channel** — Where to post notifications (defaults to the current channel)
+
+> **Note:** You need **Manage Server** permission to use the notifier.
+
+## Quick Follow Command
+
+For faster setup, use the shortcut command:
+
+\`\`\`
+.follow <platform> <username> [#channel]
+\`\`\`
+
+**Platforms:** \`youtube\`, \`twitter\`, \`tiktok\`, \`bluesky\`, \`reddit\`
+
+**Examples:**
+\`\`\`
+.follow youtube @MrBeast
+.follow twitter elonmusk #social-feed
+.follow reddit programming
+\`\`\`
+
+## Viewing Followed Accounts
+
+\`\`\`
+.notifier list
+\`\`\`
+
+Shows all tracked accounts with their platform, channel, and notification target.
+
+## Unfollowing
+
+\`\`\`
+.unfollow <platform> <username>
+\`\`\`
+
+Stops tracking an account. You can also remove follows through the "View Follows" button in the setup panel.
+
+## Testing a Follow
+
+Before following an account, you can verify it works:
+
+\`\`\`
+.notifier test <platform> <query>
+\`\`\`
+
+This validates the account exists and shows the latest post.
+
+## Notification Format
+
+Notifications use Discord CV2 containers styled to match each platform's branding:
+
+- **YouTube** — Red accent, video thumbnail, channel name
+- **Twitter/X** — Blue accent, tweet text preview
+- **TikTok** — Pink accent, video link
+- **Bluesky** — Light blue accent, post text
+- **Reddit** — Orange accent, subreddit name and post title
+
+Each notification includes a link to view the original post.
+
+## How It Works
+
+1. A background task runs every 5 minutes
+2. For each followed account, it fetches the latest post
+3. If the post ID differs from the last-seen ID, a notification is sent
+4. The last-seen ID is updated to prevent duplicate notifications
+5. On first follow, the current latest post is recorded without sending a notification
+    `,
+  },
+
+  // ── Starboard ─────────────────────────────────────────────────────
+  {
+    slug: "social-starboard",
+    title: "Starboard",
+    category: "social",
+    excerpt: "Highlight popular messages in a dedicated starboard channel based on reaction counts.",
+    tags: ["starboard", "stars", "highlights", "popular", "reactions"],
+    order: 7,
+    content: `
+# Starboard
+
+The starboard system automatically reposts popular messages to a dedicated channel when they reach a configurable reaction threshold. It's a great way to highlight the best content in your server.
+
+## How It Works
+
+1. Members react to a message with the trigger emoji (default: ⭐)
+2. When the reaction count reaches the threshold, the message is posted to the starboard channel
+3. If the reaction count later drops below the threshold, the starboard post is removed
+4. If a message is already on the starboard and gets more reactions, the post updates in place
+
+## Setting Up the Starboard
+
+### Set the Starboard Channel
+
+\`\`\`
+.starboard channel <channel>
+\`\`\`
+
+\`\`\`
+.starboard channel #starboard
+\`\`\`
+
+### Set the Threshold
+
+\`\`\`
+.starboard threshold <number>
+\`\`\`
+
+\`\`\`
+.starboard threshold 5
+\`\`\`
+
+The threshold is the number of reactions needed before a message appears on the starboard (minimum: 1, maximum: 50, default: 3).
+
+### Set the Trigger Emoji
+
+\`\`\`
+.starboard emoji <emoji>
+\`\`\`
+
+\`\`\`
+.starboard emoji ⭐
+\`\`\`
+
+### Ignore Channels
+
+Prevent messages from certain channels from appearing on the starboard:
+
+\`\`\`
+.starboard ignore <channel>
+.starboard unignore <channel>
+\`\`\`
+
+### Disable the Starboard
+
+\`\`\`
+.starboard disable
+\`\`\`
+
+### View Configuration
+
+\`\`\`
+.starboard config
+\`\`\`
+
+## Starboard Post Format
+
+Starboard posts display:
+
+- Star count and source channel
+- Author name and relative timestamp
+- Message content (truncated at 1500 characters)
+- Image attachments embedded as a MediaGallery
+- A "Jump to message" link
+
+## Requirements
+
+- **Manage Server** permission to configure the starboard
+- The bot needs **Read Messages** and **Send Messages** permissions in both the source channels and the starboard channel
+- Bot does **not** post messages from other bots to the starboard
+    `,
+  },
+
+  // ── Suggestions ───────────────────────────────────────────────────
+  {
+    slug: "social-suggestions",
+    title: "Suggestions",
+    category: "social",
+    excerpt: "Let members submit suggestions with up/down voting and admin approval or denial.",
+    tags: ["suggestions", "voting", "feedback", "community", "approve", "deny"],
+    order: 8,
+    content: `
+# Suggestions
+
+The suggestions system lets server members submit ideas and feedback that can be voted on by the community. Administrators can approve or deny suggestions with optional reasons.
+
+## Setting Up Suggestions
+
+### Set the Suggestion Channel
+
+\`\`\`
+.suggest channel <channel>
+\`\`\`
+
+\`\`\`
+.suggest channel #suggestions
+\`\`\`
+
+> **Note:** You need **Manage Server** permission to configure suggestions.
+
+## Submitting a Suggestion
+
+\`\`\`
+.suggest submit <text>
+\`\`\`
+
+\`\`\`
+.suggest submit Add a meme channel for #memes-only content
+\`\`\`
+
+Suggestions are posted in the configured suggestion channel with:
+- The suggestion text
+- The submitter's name
+- Upvote and downvote buttons
+- A suggestion ID for admin reference
+
+## Voting
+
+Members vote on suggestions using the buttons below each suggestion:
+
+- 👍 **Upvote** — Supports the suggestion
+- 👎 **Downvote** — Opposes the suggestion
+
+Votes can be toggled — click the same button again to remove your vote.
+
+## Admin Actions
+
+### Approve a Suggestion
+
+\`\`\`
+.suggest approve <id> [reason]
+\`\`\`
+
+### Deny a Suggestion
+
+\`\`\`
+.suggest deny <id> [reason]
+\`\`\`
+
+When approved or denied, the suggestion message updates to show:
+- A status indicator (Approved ✅ or Denied ❌)
+- The admin who made the decision
+- The reason (if provided)
+
+Voting buttons are removed once a suggestion receives a verdict.
+
+## Viewing Configuration
+
+\`\`\`
+.suggest config
+\`\`\`
+
+Shows the current suggestion channel and settings.
+
+## Requirements
+
+- **Manage Server** permission to set the channel, approve, or deny suggestions
+- **Send Messages** permission to submit suggestions
+- The bot needs **Read Messages** and **Send Messages** permissions in the suggestion channel
+    `,
+  },
+
+  // ── Logging Overview ──────────────────────────────────────────────
+  {
+    slug: "logging-overview",
+    title: "Logging System",
+    category: "logging",
+    excerpt: "Comprehensive server event logging with per-category channels, rich embeds, and detailed audit trails.",
+    tags: ["logging", "audit", "moderation logs", "member logs", "message logs", "channel logs", "voice logs", "server logs"],
+    order: 1,
+    content: `
+# Logging System
+
+Niko's logging system provides comprehensive server event logging across multiple categories, each assignable to its own channel. Every log entry includes structured data, moderator attribution from the audit log, and rich formatting.
+
+## Logging Categories
+
+| Category | Events Logged |
+|----------|--------------|
+| **Members** | Join, leave, role changes, nickname changes, avatar updates, timeout events |
+| **Messages** | Message edits, message deletions (with image attachments in MediaGallery) |
+| **Moderation** | Warns, mutes, kicks, bans, unbans, nickname changes by moderators |
+| **Channels** | Channel create, delete, update (name, topic, slowmode, NSFW, bitrate, user limit) |
+| **Roles** | Role create, delete, update (name, color, hoist, mentionable, permissions) |
+| **Server** | Server settings changes (name, description, verification, icon, banner, AFK channel) |
+| **Invites** | Invite create, delete, and usage tracking on member joins |
+| **Voice** | Voice channel joins, leaves, and moves |
+| **Automod** | AutoMod actions (auto-delete, auto-mute, auto-ban, bad word detection) |
+
+## Configuration
+
+Open the interactive logging panel:
+
+\`\`\`
+.logging
+\`\`\`
+
+Click a category button to select which channel receives logs for that category. Each category can be assigned to a different channel.
+
+### View Current Status
+
+\`\`\`
+.logging status
+\`\`\`
+
+Shows all categories, their assigned channels, and whether each is enabled or disabled.
+
+## Log Format
+
+All log entries use Discord CV2 containers with consistent formatting:
+
+- **Title** — Event type (e.g. "Message Deleted", "Member Joined")
+- **Body** — Structured details including user mentions, channel references, and timestamps
+- **Target ID** — The affected user's ID for filtering
+- **MediaGallery** — Image attachments from deleted messages are embedded directly in the log
+- **Section + Thumbnail** — Avatar changes show the new avatar as a thumbnail
+- **Moderator attribution** — Actions are attributed to the responsible moderator via audit log
+
+## Member Logging
+
+Tracks all member-related events:
+
+- **Member Joined** — Account age, join method (invite code, vanity URL, or unknown), and invite usage
+- **Member Left** — Lists the member's roles at time of departure
+- **Avatar Updated** — Shows old and new avatar with Section + Thumbnail accessory
+- **Role Changes** — Roles added and removed
+- **Nickname Changes** — Old and new nickname, attributed to the moderator who changed it
+- **Timeout Events** — Timeout applied/removed with moderator and expiry time
+
+## Message Logging
+
+Tracks message content changes:
+
+- **Message Edited** — Shows before/after content with a jump link
+- **Message Deleted** — Shows author, channel, content, and attachments:
+  - Image attachments render in a **MediaGallery** component inside the log container
+  - Non-image attachments are re-uploaded as Discord files
+  - Messages with no text content show "*No text content*"
+
+## Invite Tracking
+
+Niko caches invite usage on startup and monitors for changes:
+
+- **Invite Used** — Tracks which invite was used, by whom, and total uses
+- **Vanity Invite Used** — Detects vanity URL joins
+- **Unknown Join** — Logs joins where no invite match was found
+- **Invite Created/Deleted** — Tracks invite lifecycle events
+
+## Disabling Categories
+
+You can disable specific logging categories through the interactive panel. Disabled categories won't send any log messages even if a channel is assigned.
+
+## Rate Limiting
+
+The logging system includes built-in rate limiting to prevent channel spam during mass events (e.g., mass-ban, raid scenarios). Log messages are queued and sent with controlled spacing.
+    `,
+  },
+
 ];
 
 // ── Helper functions ─────────────────────────────────────────────────────────
@@ -2905,6 +3364,7 @@ export const DOC_SECTIONS: DocSection[] = [
   { id: "leveling", label: "Leveling", description: "XP, levels, and rankings.", icon: "icon_leveling", count: DOCS.filter((d) => d.category === "leveling").length },
   { id: "moderation", label: "Moderation", description: "Moderation tools and commands.", icon: "icon_moderation", count: DOCS.filter((d) => d.category === "moderation").length },
   { id: "automod", label: "AutoMod", description: "Automated moderation features.", icon: "icon_automod", count: DOCS.filter((d) => d.category === "automod").length },
+  { id: "logging", label: "Logging", description: "Server event logging.", icon: "icon_settings", count: DOCS.filter((d) => d.category === "logging").length },
   { id: "social", label: "Social", description: "Community engagement features.", icon: "icon_heart", count: DOCS.filter((d) => d.category === "social").length },
   { id: "utility", label: "Utility", description: "Helpful tools and utilities.", icon: "icon_utility", count: DOCS.filter((d) => d.category === "utility").length },
   { id: "voice", label: "Voice", description: "Voice and music features.", icon: "icon_bot", count: DOCS.filter((d) => d.category === "voice").length },
