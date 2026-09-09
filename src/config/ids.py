@@ -1,16 +1,13 @@
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
     1052690741874401360,
-    1485732377958416565,
-    1492310425348608170,
-    1495618222488162439
+    1528084386652754010
 }
 
 # Developer user IDs
 DEVELOPER_IDS = {
     1052690741874401360, # sorenthedev
-    1485732377958416565,
-    1495618222488162439  # nyxenwastaken
+    1528084386652754010
 }
 
 # support server guild id
