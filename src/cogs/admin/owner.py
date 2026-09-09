@@ -548,21 +548,21 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="## **@everyone — Ticket Transcript Upgrade 📝**"
+                content="## **@everyone — New Community Policy 🛡️**"
             ),
             discord.ui.TextDisplay(
-                content="Tickets now have **web transcripts** instead of basic text files!\n\nWhen you run `/ticket transcript`, you'll get:\n\n- **A viewable web page** — browse your ticket history in a clean, searchable format\n- **Multiple download formats** — TXT, HTML, CSV, and JSON\n- **Persistent storage** — transcripts are saved to the database and accessible via link\n\nNo more downloading plain `.txt` files — now you can view, search, and export tickets from anywhere!"
+                content="We've published a **Community Policy** that every server using Niko must follow.\n\nIt covers things like:\n\n- **No identity-based discrimination or harassment**\n- **No illegal or malicious content** — including CSAM, malware, gore/shock content, and pirated media or software\n- **Cooperation with staff investigations** — servers found not to be breaking the policies won't receive any further action\n\n**Important:** banning the staff member(s) sent to investigate and/or hiding potential evidence will result in the server and any involved users being **permanently blacklisted** from using Niko."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# **How to use:**\n-# Run `/ticket transcript` inside any ticket channel to generate a web transcript link.\n-# Click the link to view it online, or use the download buttons for different formats."
+                content="-# Please review the full policy at your earliest convenience."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Bot Invite",
+                    label="Read the Community Policy",
                     style=discord.ButtonStyle.link,
-                    url=f"https://discord.com/oauth2/authorize?client_id={self.bot.user.id}&permissions=8&scope=bot%20applications.commands",
+                    url="https://niko.sryze.cc/community",
                     emoji=get_emoji("icon_link")
                 ),
                 discord.ui.Button(

@@ -25,9 +25,22 @@ const legalCopy = {
       ["Contact", "Questions or concerns can be sent through the Niko support server."],
     ],
   },
+  community: {
+    title: "Community policy",
+    intro: "These community expectations apply to every server that uses Niko. By adding the bot to a server, the server's owners and administrators agree to uphold these standards.",
+    sections: [
+      ["Purpose", "Niko is a community companion for Discord servers of all kinds. To keep the platform safe for everyone, all servers using Niko must follow the expectations below in addition to Discord's Terms of Service and Community Guidelines."],
+      ["Discrimination and harassment", "Servers must not permit or promote discrimination, harassment, or hate speech targeting people based on race, ethnicity, national origin, religion, disability, gender, gender identity or expression, sexual orientation, age, veteran status, or any other protected identity characteristic."],
+      ["Illegal and malicious content", "Servers must not create, host, share, or distribute illegal or malicious content. This includes, but is not limited to: child sexual abuse material (CSAM), malware and other malicious software, gore or shock content, pirated media and/or software, content that facilitates violence or terrorism, scams and phishing, and any other content that is illegal under applicable law."],
+      ["Other prohibited conduct", "Servers must not use Niko to facilitate doxxing, targeted harassment campaigns, sextortion, trafficking, or the sexualization of minors in any form."],
+      ["Enforcement and investigations", "When a server is reported or flagged for potentially violating this policy, Niko will send a warning notice to the server. The notice is followed by an investigation by Niko staff. Servers that cooperate in good faith and are found not to be breaking the policies will not receive any further action."],
+      ["Obstruction of investigations", "Banning, kicking, or otherwise removing the staff member(s) sent to investigate, or hiding, deleting, or tampering with potential evidence, is treated as an admission of guilt. Doing so will result in the server — and any users who are involved — being permanently blacklisted from further use of Niko, in addition to any other action the investigation warrants."],
+      ["Reporting", "If you believe a server using Niko is violating this policy, report it through the Niko support server. Reports are reviewed by staff and handled confidentially."],
+    ],
+  },
 } as const;
 
-export function LegalPage({ type }: { type: "privacy" | "terms" }) {
+export function LegalPage({ type }: { type: "privacy" | "terms" | "community" }) {
   const content = legalCopy[type];
   return (
     <>

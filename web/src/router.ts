@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "privacy" | "terms" | "donate" | "transcript" | "changelog" | "changelog-detail";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
 export type DashSection = "overview" | "leveling" | "moderation" | "server" | "ai" | "customization";
 export type DashboardView = "overview" | "servers" | "guild";
 
@@ -14,6 +14,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/privacy") return "privacy";
   if (path === "/terms") return "terms";
+  if (path === "/community") return "community";
   if (path === "/donate" || path.startsWith("/donate")) return "donate";
   if (path === "/transcript" || path.startsWith("/transcript/")) return "transcript";
   if (path === "/changelog") return "changelog";

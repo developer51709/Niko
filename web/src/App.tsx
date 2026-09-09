@@ -27,6 +27,7 @@ export function App() {
   if (page === "dashboard") return <DashboardPage />;
   if (page === "privacy") return <LegalPage type="privacy" />;
   if (page === "terms") return <LegalPage type="terms" />;
+  if (page === "community") return <LegalPage type="community" />;
   if (page === "donate") return <DonatePage />;
   if (page === "transcript") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
