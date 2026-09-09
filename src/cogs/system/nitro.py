@@ -24,7 +24,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.discord_extras import burst_react, forward_message, set_voice_status, stage_become_speaker
+from utils.discord_extras import forward_message, set_voice_status, stage_become_speaker
 
 
 def _cv(text: str, *, colour: discord.Colour | None = None) -> discord.ui.LayoutView:
@@ -362,38 +362,6 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             ][:25]
         except Exception:
             return []
-
-    # ── /burst ────────────────────────────────────────────────────────────
-
-    @app_commands.command(
-        name="burst",
-        description="Send a Nitro-style burst/super reaction on a message.",
-    )
-    @app_commands.describe(
-        message_id="ID of the message to burst-react on",
-        emoji="Emoji to burst-react with (e.g. ⭐ or 🎉)",
-    )
-    @app_commands.guild_only()
-    async def burst(
-        self,
-        interaction: discord.Interaction,
-        message_id: str,
-        emoji: str = "⭐",
-    ) -> None:
-        try:
-            mid = int(message_id)
-        except ValueError:
-            await interaction.response.send_message(
-                view=_cv(f"{get_emoji('icon_cross')} Invalid message ID."), ephemeral=True
-            )
-            return
-
-        await interaction.response.defer(ephemeral=True)
-        await burst_react(self.bot, int(str(interaction.channel_id)), mid, emoji)
-        await interaction.followup.send(
-            view=_cv(f"### {emoji} Burst reaction sent! ✨", colour=discord.Colour(0xfee75c)),
-            ephemeral=True,
-        )
 
     # ── /stage speak ──────────────────────────────────────────────────────
 

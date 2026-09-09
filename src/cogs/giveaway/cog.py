@@ -1,5 +1,4 @@
 from .views import *
-from utils.discord_extras import burst_react
 
 class Giveaway(commands.Cog):
     def __init__(self, bot):
@@ -200,13 +199,9 @@ class Giveaway(commands.Cog):
             except Exception:
                 pass
 
-        win_msg = await channel.send(
+        await channel.send(
             _guild_msg(guild, "winner_announce", mentions=winner_mentions, prize=prize, url=msg_url)
         )
-        # Burst-react on both the original giveaway message and the winner announcement
-        if giveaway_msg:
-            asyncio.create_task(burst_react(self.bot, channel_id, giveaway_msg.id, f"{get_emoji('icon_star')}"))
-        asyncio.create_task(burst_react(self.bot, channel_id, win_msg.id, f"{get_emoji('icon_giveaway')}"))
 
     @check_giveaways.before_loop
     async def before_check_giveaways(self):

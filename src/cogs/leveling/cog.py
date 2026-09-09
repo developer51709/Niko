@@ -4,7 +4,6 @@ import json
 import os
 import time
 import random
-from utils.discord_extras import burst_react
 from utils.image.level_card import render_level_card, render_level_leaderboard_card
 from utils.image.economy_card import fetch_avatar_bytes, _strip_discord_emoji
 
@@ -207,8 +206,7 @@ class Leveling(commands.Cog):
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
-                    lu_msg = await lu_channel.send(view=view)
-                    asyncio.create_task(burst_react(self.bot, lu_channel.id, lu_msg.id, "🎉"))
+                    await lu_channel.send(view=view)
                 log.debug("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass

@@ -2951,7 +2951,6 @@ Replace \`<message_id>\` with the ID of the giveaway message (right-click → Co
 3. A background task checks every 15 seconds for ended giveaways
 4. When time runs out, winners are randomly selected from participants
 5. The giveaway message updates to show winners, and a winner announcement is sent
-6. Both messages get a burst-react celebration
 
 ## Requirements
 

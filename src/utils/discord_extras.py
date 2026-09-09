@@ -7,7 +7,6 @@ All helpers are safe to call — they swallow HTTPException so callers can
 fire-and-forget without wrapping every call in try/except.
 
 Available:
-  burst_react(bot, channel_id, message_id, emoji)    — super/burst reaction
   set_voice_status(bot, channel_id, status)          — VC header status text
   forward_message(bot, target_ch, source_ch, msg_id) — native message forward
   stage_become_speaker(bot, guild_id, channel_id)    — bot speaks on Stage
@@ -15,35 +14,8 @@ Available:
 
 from __future__ import annotations
 
-import urllib.parse
-
 import discord
 from discord.http import Route
-
-
-async def burst_react(
-    bot: discord.Client,
-    channel_id: int,
-    message_id: int,
-    emoji: str,
-) -> None:
-    """Send a Nitro-style burst/super reaction.
-
-    Bot accounts can send burst reactions without owning Nitro.
-    emoji: plain unicode (e.g. "⭐") or custom "name:id" string.
-    """
-    encoded = urllib.parse.quote(emoji, safe="")
-    route = Route(
-        "PUT",
-        "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me",
-        channel_id=channel_id,
-        message_id=message_id,
-        emoji=encoded,
-    )
-    try:
-        await bot.http.request(route, params={"burst": "true"})
-    except discord.HTTPException:
-        pass
 
 
 async def set_voice_status(
