@@ -17,6 +17,7 @@ JSON_COLUMNS = {
     "level_config": ("level_roles",),
     "giveaways": ("requirements",),
     "ticket_config": ("panel_categories", "support_roles", "open_tickets"),
+    "polls": ("options",),
 }
 
 
@@ -127,6 +128,8 @@ PRIMARY_KEYS: dict = {
     "level_config": "guild_id",
     "giveaways": "message_id",
     "participants": ("message_id", "user_id"),
+    "polls": "message_id",
+    "poll_votes": ("message_id", "user_id"),
     "triggers": "id",
     "follows": ("guild_id", "platform", "username"),
     "youtube": "channel_id",
