@@ -2045,6 +2045,611 @@ def legacy_dashboard_redirect():
 
 
 @app.route("/<path:path>")
+
+# ── SVG Card Endpoints ──────────────────────────────────────────────────────
+# These return SVG markup that wsrv.nl converts to PNG for Discord rendering.
+# Query parameters supply card data; a timestamp param busts CDN caches.
+
+
+def _svg_wrap(body, width, height):
+    """Wrap SVG body in a proper document and return as image/svg+xml."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'width="' + str(width) + '" height="' + str(height) + '" '
+        'viewBox="0 0 ' + str(width) + ' ' + str(height) + '">'
+        '<style>'
+        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap");'
+        '</style>'
+        + body +
+        '</svg>'
+    )
+    return Response(svg, mimetype="image/svg+xml")
+
+
+def _hex_color(val, fallback):
+    """Validate and return a hex color string, stripping # if present."""
+    val = str(val).lstrip("#")
+    if len(val) == 6 and all(c in "0123456789ABCDEFabcdef" for c in val):
+        return val
+    return fallback
+
+
+def _int_param(val, default=0):
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_num(n):
+    n = int(n)
+    if abs(n) >= 1_000_000_000:
+        return "{:.2f}B".format(n / 1_000_000_000)
+    if abs(n) >= 1_000_000:
+        return "{:.2f}M".format(n / 1_000_000)
+    if abs(n) >= 10_000:
+        return "{:.1f}K".format(n / 1_000)
+    return "{:,}".format(n)
+
+
+def _safe(text):
+    """Escape XML special characters."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+@app.route("/api/cards/economy")
+def card_economy():
+    """Economy balance card (820x380)."""
+    name = _safe(request.args.get("name", "User"))
+    balance = _int_param(request.args.get("balance"))
+    bank = _int_param(request.args.get("bank"))
+    net_worth = _int_param(request.args.get("net_worth"))
+    job = _safe(request.args.get("job", "Unemployed"))
+    daily_streak = _int_param(request.args.get("daily_streak"))
+    level = _int_param(request.args.get("level"))
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W, H = 820, 380
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="96" cy="100" r="52"/></clipPath>'
+            '<image href="' + avatar_url + '" x="44" y="48" width="104" height="104" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="96" cy="100" r="52"/></clipPath>'
+            '<circle cx="96" cy="100" r="52" fill="#6E4E32"/>'
+            '<text x="96" y="106" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="32" font-weight="700">'
+            + letter + '</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        + av_elem +
+        '<circle cx="96" cy="100" r="55" fill="none" stroke="#' + accent + '" stroke-width="3"/>'
+        '<text x="168" y="70" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="28" font-weight="700">' + name + '</text>'
+        '<text x="168" y="94" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="14" font-weight="500">' + job + ' &middot; Level ' + str(level) + '</text>'
+        '<rect x="36" y="180" width="' + str(W - 72) + '" height="72" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="56" y="205" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">CASH</text>'
+        '<text x="56" y="236" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="24" font-weight="700">' + _format_num(balance) + '</text>'
+        '<text x="' + str(W // 3 + 26) + '" y="205" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BANK</text>'
+        '<text x="' + str(W // 3 + 26) + '" y="236" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="24" font-weight="700">' + _format_num(bank) + '</text>'
+        '<text x="' + str(2 * W // 3 + 16) + '" y="205" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">NET WORTH</text>'
+        '<text x="' + str(2 * W // 3 + 16) + '" y="236" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="24" font-weight="700">' + _format_num(net_worth) + '</text>'
+        '<rect x="36" y="272" width="' + str(W - 72) + '" height="52" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="56" y="297" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">DAILY STREAK</text>'
+        '<text x="56" y="316" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="20" font-weight="700">' + str(daily_streak) + ' days</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/daily")
+def card_daily():
+    """Daily reward card (820x280)."""
+    name = _safe(request.args.get("name", "User"))
+    reward = _int_param(request.args.get("reward"))
+    streak = _int_param(request.args.get("streak"))
+    balance = _int_param(request.args.get("balance"))
+    job = _safe(request.args.get("job", "Unemployed"))
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W, H = 820, 280
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<image href="' + avatar_url + '" x="36" y="44" width="72" height="72" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<circle cx="72" cy="80" r="36" fill="#6E4E32"/>'
+            '<text x="72" y="86" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="24" font-weight="700">'
+            + letter + '</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="40" fill="#' + accent + '" font-family="Space Mono, monospace" '
+        'font-size="12" font-weight="700">DAILY REWARD</text>'
+        + av_elem +
+        '<circle cx="72" cy="80" r="39" fill="none" stroke="#' + accent + '" stroke-width="2.5"/>'
+        '<text x="128" y="70" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">' + name + '</text>'
+        '<text x="128" y="92" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="13">' + job + ' &middot; Streak: ' + str(streak) + '</text>'
+        '<rect x="36" y="140" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="56" y="170" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">REWARD</text>'
+        '<text x="56" y="212" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(reward) + '</text>'
+        '<rect x="' + str(W // 2 + 16) + '" y="140" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="170" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="212" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/work")
+def card_work():
+    """Work reward card (820x300)."""
+    name = _safe(request.args.get("name", "User"))
+    reward = _int_param(request.args.get("reward"))
+    job = _safe(request.args.get("job", "Barista"))
+    balance = _int_param(request.args.get("balance"))
+    message = _safe(request.args.get("message", "")[:80])
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W, H = 820, 300
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<image href="' + avatar_url + '" x="36" y="44" width="72" height="72" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<circle cx="72" cy="80" r="36" fill="#6E4E32"/>'
+            '<text x="72" y="86" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="24" font-weight="700">'
+            + letter + '</text>'
+        )
+    msg_text = ''
+    if message:
+        msg_text = (
+            '<text x="36" y="220" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+            'font-size="14" font-style="italic">&quot;' + message + '&quot;</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="40" fill="#' + accent + '" font-family="Space Mono, monospace" '
+        'font-size="12" font-weight="700">WORK REWARD</text>'
+        + av_elem +
+        '<circle cx="72" cy="80" r="39" fill="none" stroke="#' + accent + '" stroke-width="2.5"/>'
+        '<text x="128" y="70" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">' + name + '</text>'
+        '<text x="128" y="92" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="13">' + job + '</text>'
+        '<rect x="36" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="56" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">EARNED</text>'
+        '<text x="56" y="202" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(reward) + '</text>'
+        '<rect x="' + str(W // 2 + 16) + '" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="202" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
+        + msg_text +
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/rank")
+def card_rank():
+    """Level rank card (820x340)."""
+    name = _safe(request.args.get("name", "User"))
+    level = _int_param(request.args.get("level"))
+    xp = _int_param(request.args.get("xp"))
+    xp_for_next = _int_param(request.args.get("xp_for_next"))
+    rank = _int_param(request.args.get("rank"))
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W, H = 820, 340
+    pct = 0.0 if xp_for_next <= 0 else min(1.0, xp / xp_for_next)
+    bar_w = W - 72
+    fill_w = max(18, int(bar_w * pct))
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="96" cy="156" r="52"/></clipPath>'
+            '<image href="' + avatar_url + '" x="44" y="104" width="104" height="104" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="96" cy="156" r="52"/></clipPath>'
+            '<circle cx="96" cy="156" r="52" fill="#6E4E32"/>'
+            '<text x="96" y="162" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="32" font-weight="700">'
+            + letter + '</text>'
+        )
+    lvl_label_x = 168 + max(len(str(level)) * 36, 40)
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient>'
+        '<linearGradient id="barfill" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + accent + '"/>'
+        '<stop offset="100%" stop-color="#6E4E32"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="28" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="28" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="40" fill="#' + accent + '" font-family="Space Mono, monospace" '
+        'font-size="12" font-weight="700">CAFE LEVELING</text>'
+        '<text x="36" y="66" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="26" font-weight="700">Level Stats \u2014 ' + name + '</text>'
+        '<rect x="' + str(W - 200) + '" y="28" width="168" height="28" rx="14" '
+        'fill="rgba(0,0,0,0.5)" stroke="#' + accent + '" stroke-width="1"/>'
+        '<text x="' + str(W - 116) + '" y="47" text-anchor="middle" fill="#' + accent + '" '
+        'font-family="Plus Jakarta Sans, sans-serif" font-size="13" font-weight="500">#' + str(rank) + ' in this server</text>'
+        + av_elem +
+        '<circle cx="96" cy="156" r="55" fill="none" stroke="#' + accent + '" stroke-width="3"/>'
+        '<text x="168" y="146" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="56" font-weight="800">' + str(level) + '</text>'
+        '<text x="' + str(lvl_label_x) + '" y="170" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="14">LEVEL</text>'
+        '<text x="' + str(lvl_label_x + 110) + '" y="128" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="13">XP</text>'
+        '<text x="' + str(lvl_label_x + 110) + '" y="156" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">' + _format_num(xp) + ' / ' + _format_num(xp_for_next) + '</text>'
+        '<text x="' + str(lvl_label_x + 330) + '" y="128" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="13">RANK</text>'
+        '<text x="' + str(lvl_label_x + 330) + '" y="156" fill="#C8A2FF" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">#' + str(rank) + '</text>'
+        '<rect x="36" y="228" width="' + str(bar_w) + '" height="18" rx="9" '
+        'fill="rgba(0,0,0,0.5)" stroke="rgba(110,78,50,0.6)" stroke-width="1"/>'
+        '<rect x="36" y="228" width="' + str(fill_w) + '" height="18" rx="9" fill="url(#barfill)"/>'
+        '<text x="' + str(W - 36) + '" y="242" text-anchor="end" fill="#C8BBA8" '
+        'font-family="Space Mono, monospace" font-size="12">' + str(int(pct * 100)) + '%</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">use arrows below to navigate</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/leaderboard")
+def card_leaderboard():
+    """Leaderboard card - variable height."""
+    import json as _json
+    title = _safe(request.args.get("title", "Leaderboard"))
+    page = _int_param(request.args.get("page"), 1)
+    pages = _int_param(request.args.get("pages"), 1)
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    card_type = request.args.get("type", "economy")
+    try:
+        entries = _json.loads(request.args.get("entries", "[]"))
+    except Exception:
+        entries = []
+    W = 820
+    ROW_H = 56
+    n = len(entries)
+    H = 110 + n * (ROW_H + 8) + 56
+    medals = {0: "1st", 1: "2nd", 2: "3rd"}
+    rows = []
+    for i, e in enumerate(entries):
+        rank_val = e.get("rank", i + 1)
+        en = _safe(e.get("name", "?"))
+        val = e.get("value", 0)
+        avu = e.get("avatar_url", "")
+        y = 110 + i * (ROW_H + 8)
+        rc = "#FFDC8C" if i == 0 else ("#F5E8D2" if i == 1 else ("#" + accent if i == 2 else "#C8BBA8"))
+        rt = medals.get(i, "#" + str(rank_val))
+        fs = "22" if i < 3 else "18"
+        row_av = ""
+        if avu:
+            row_av = (
+                '<clipPath id="av' + str(i) + '"><circle cx="' + str(28 + 60 + 20) + '" cy="'
+                + str(y + ROW_H // 2) + '" r="' + str((ROW_H - 16) // 2) + '"/></clipPath>'
+                '<image href="' + avu + '" x="' + str(28 + 60) + '" y="' + str(y + 8)
+                + '" width="' + str(ROW_H - 16) + '" height="' + str(ROW_H - 16)
+                + '" clip-path="url(#av' + str(i) + ')" preserveAspectRatio="xMidYMid slice"/>'
+            )
+        rows.append(
+            '<rect x="28" y="' + str(y) + '" width="' + str(W - 56) + '" height="' + str(ROW_H)
+            + '" rx="14" fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1"/>'
+            '<text x="' + str(28 + 56) + '" y="' + str(y + ROW_H // 2 + 6) + '" text-anchor="middle" fill="'
+            + rc + '" font-family="Plus Jakarta Sans, sans-serif" font-size="' + fs + '" font-weight="700">'
+            + rt + '</text>' + row_av +
+            '<text x="' + str(28 + 60 + ROW_H - 16 + 14 + 28) + '" y="' + str(y + ROW_H // 2 + 2)
+            + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" font-size="18" font-weight="700">'
+            + en + '</text>'
+            '<text x="' + str(W - 28 - 24) + '" y="' + str(y + ROW_H // 2 + 2)
+            + '" text-anchor="end" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
+            'font-size="20" font-weight="700">' + _format_num(val) + '</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="28" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="28" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="40" fill="#' + accent + '" font-family="Space Mono, monospace" '
+        'font-size="12" font-weight="700">CAFE ' + card_type.upper() + '</text>'
+        '<text x="36" y="66" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="26" font-weight="700">' + title + '</text>'
+        '<text x="' + str(W - 36) + '" y="60" text-anchor="end" fill="#C8BBA8" '
+        'font-family="Space Mono, monospace" font-size="13">Page ' + str(page) + '/' + str(pages) + '</text>'
+        + "".join(rows) +
+        '<text x="36" y="' + str(H - 20) + '" fill="#C8BBA8" font-family="Space Mono, monospace" '
+        'font-size="12">use arrows below to navigate</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/coinflip")
+def card_coinflip():
+    """Coinflip result card (820x300)."""
+    name = _safe(request.args.get("name", "User"))
+    call = _safe(request.args.get("call", "heads"))
+    result = _safe(request.args.get("result", "heads"))
+    won = request.args.get("won", "0") == "1"
+    amount = _int_param(request.args.get("amount"))
+    payout = _int_param(request.args.get("payout"))
+    balance = _int_param(request.args.get("balance"))
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W, H = 820, 300
+    rc = "76E29C" if won else "F46E7C"
+    rt = "WIN" if won else "LOSS"
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<image href="' + avatar_url + '" x="36" y="44" width="72" height="72" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="72" cy="80" r="36"/></clipPath>'
+            '<circle cx="72" cy="80" r="36" fill="#6E4E32"/>'
+            '<text x="72" y="86" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="24" font-weight="700">'
+            + letter + '</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="40" fill="#' + rc + '" font-family="Space Mono, monospace" '
+        'font-size="12" font-weight="700">COINFLIP \u2014 ' + rt + '</text>'
+        + av_elem +
+        '<circle cx="72" cy="80" r="39" fill="none" stroke="#' + rc + '" stroke-width="2.5"/>'
+        '<text x="128" y="70" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">' + name + '</text>'
+        '<text x="128" y="92" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="13">Called ' + call + ' \u00b7 Got ' + result + '</text>'
+        '<rect x="36" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="56" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">'
+        + ("PAYOUT" if won else "BET") + '</text>'
+        '<text x="56" y="202" fill="#' + rc + '" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(payout if won else amount) + '</text>'
+        '<rect x="' + str(W // 2 + 16) + '" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
+        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="202" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">CAFE CASINO</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/shop")
+def card_shop():
+    """Shop card (820xvariable)."""
+    import json as _json
+    items_raw = request.args.get("items", "[]")
+    try:
+        items = _json.loads(items_raw)
+    except Exception:
+        items = []
+    balance = _int_param(request.args.get("balance"))
+    category = request.args.get("category", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W = 820
+    row_h = 52
+    n = len(items)
+    H = 120 + n * row_h + 40
+    H = min(H, 1200)
+    cat_label = category.title() if category else "All Items"
+    rows_svg = ""
+    for i, item in enumerate(items):
+        y = 120 + i * row_h
+        name_s = _safe(str(item.get("name", "Unknown")))
+        price = _int_param(item.get("price"))
+        emoji = _safe(str(item.get("emoji", "📦")))
+        cat = _safe(str(item.get("category", "")))
+        desc = _safe(str(item.get("description", ""))[:60])
+        bg_fill = "rgba(50,36,30,0.9)" if i % 2 == 0 else "rgba(40,28,22,0.9)"
+        rows_svg += (
+            '<rect x="36" y="' + str(y) + '" width="' + str(W - 72) + '" height="' + str(row_h - 4) + '" rx="12" '
+            'fill="' + bg_fill + '" stroke="rgba(110,78,50,0.5)" stroke-width="1"/>'
+            '<text x="56" y="' + str(y + 24) + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+            'font-size="14" font-weight="600">' + emoji + ' ' + name_s + '</text>'
+            '<text x="56" y="' + str(y + 40) + '" fill="#8C918E" font-family="Plus Jakarta Sans, sans-serif" '
+            'font-size="11">' + cat + (' &mdash; ' + desc if desc else '') + '</text>'
+            '<text x="' + str(W - 56) + '" y="' + str(y + 28) + '" text-anchor="end" fill="#' + accent + '" '
+            'font-family="Space Mono, monospace" font-size="14" font-weight="700">' + _format_num(price) + '</text>'
+        )
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        '<text x="36" y="48" fill="#' + accent + '" font-family="Space Mono, monospace" '
+        'font-size="11" font-weight="700">SHOP &mdash; ' + cat_label + '</text>'
+        '<text x="36" y="78" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="28" font-weight="700">Caf&#233; Boutique</text>'
+        '<text x="' + str(W - 36) + '" y="48" text-anchor="end" fill="#C8BBA8" '
+        'font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
+        '<text x="' + str(W - 36) + '" y="72" text-anchor="end" fill="#' + accent + '" '
+        'font-family="Plus Jakarta Sans, sans-serif" font-size="22" font-weight="700">' + _format_num(balance) + '</text>'
+        '<line x1="36" y1="96" x2="' + str(W - 36) + '" y2="96" stroke="rgba(110,78,50,0.5)" stroke-width="1"/>'
+        + rows_svg +
+        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">' + str(n) + ' ITEMS</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
+@app.route("/api/cards/inventory")
+def card_inventory():
+    """Inventory card (820xvariable)."""
+    import json as _json
+    name = _safe(request.args.get("name", "User"))
+    balance = _int_param(request.args.get("balance"))
+    sections_raw = request.args.get("sections", "[]")
+    try:
+        sections = _json.loads(sections_raw)
+    except Exception:
+        sections = []
+    avatar_url = request.args.get("avatar_url", "")
+    accent = _hex_color(request.args.get("accent", ""), "FFC45C")
+    bg_top = _hex_color(request.args.get("bg_top", ""), "261A16")
+    bg_bot = _hex_color(request.args.get("bg_bot", ""), "120C0A")
+    W = 820
+    row_h = 44
+    total_items = sum(len(s.get("items", [])) for s in sections)
+    H = 120 + len(sections) * 56 + total_items * row_h + 40
+    H = min(H, 1200)
+    if avatar_url:
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="48" cy="52" r="28"/></clipPath>'
+            '<image href="' + avatar_url + '" x="20" y="24" width="56" height="56" '
+            'clip-path="url(#avclip)" preserveAspectRatio="xMidYMid slice"/>'
+        )
+    else:
+        letter = name[0].upper() if name else "U"
+        av_elem = (
+            '<clipPath id="avclip"><circle cx="48" cy="52" r="28"/></clipPath>'
+            '<circle cx="48" cy="52" r="28" fill="#6E4E32"/>'
+            '<text x="48" y="58" text-anchor="middle" fill="#F5E8D2" '
+            'font-family="Plus Jakarta Sans, sans-serif" font-size="18" font-weight="700">' + letter + '</text>'
+        )
+    sections_svg = ""
+    cur_y = 120
+    for sec in sections:
+        sec_label = _safe(str(sec.get("label", "Items")))
+        sec_items = sec.get("items", [])
+        sections_svg += (
+            '<text x="36" y="' + str(cur_y + 16) + '" fill="#C8BBA8" '
+            'font-family="Space Mono, monospace" font-size="12" font-weight="700">' + sec_label + '</text>'
+            '<line x1="36" y1="' + str(cur_y + 24) + '" x2="' + str(W - 36) + '" y2="' + str(cur_y + 24) + '" '
+            'stroke="rgba(110,78,50,0.4)" stroke-width="1"/>'
+        )
+        cur_y += 36
+        for j, item in enumerate(sec_items):
+            iy = cur_y + j * row_h
+            emoji = _safe(str(item.get("emoji", "📦")))
+            item_name = _safe(str(item.get("name", "Unknown")))
+            count = _int_param(item.get("count", 1))
+            desc = _safe(str(item.get("desc", ""))[:50])
+            bg_fill = "rgba(50,36,30,0.9)" if j % 2 == 0 else "rgba(40,28,22,0.9)"
+            sections_svg += (
+                '<rect x="36" y="' + str(iy) + '" width="' + str(W - 72) + '" height="' + str(row_h - 4) + '" rx="10" '
+                'fill="' + bg_fill + '"/>'
+                '<text x="56" y="' + str(iy + 20) + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+                'font-size="13" font-weight="600">' + emoji + ' ' + item_name + '</text>'
+                '<text x="56" y="' + str(iy + 36) + '" fill="#8C918E" font-family="Plus Jakarta Sans, sans-serif" '
+                'font-size="10">' + desc + '</text>'
+                '<text x="' + str(W - 56) + '" y="' + str(iy + 26) + '" text-anchor="end" fill="#C8BBA8" '
+                'font-family="Space Mono, monospace" font-size="14" font-weight="700">&#215;' + str(count) + '</text>'
+            )
+        cur_y += len(sec_items) * row_h + 12
+    body = (
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#' + bg_top + '"/>'
+        '<stop offset="100%" stop-color="#' + bg_bot + '"/>'
+        '</linearGradient></defs>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
+        '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
+        'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
+        + av_elem +
+        '<circle cx="48" cy="52" r="31" fill="none" stroke="#' + accent + '" stroke-width="2"/>'
+        '<text x="88" y="46" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="22" font-weight="700">' + name + '</text>'
+        '<text x="88" y="66" fill="#C8BBA8" font-family="Space Mono, monospace" '
+        'font-size="11">BALANCE: ' + _format_num(balance) + '</text>'
+        + sections_svg +
+        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#8C918E" '
+        'font-family="Space Mono, monospace" font-size="10">' + str(total_items) + ' ITEMS</text>'
+    )
+    return _svg_wrap(body, W, H)
+
+
 def static_proxy(path):
     requested = os.path.join(WEB_DIST_DIR, path)
     if os.path.isfile(requested):
