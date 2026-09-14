@@ -2058,7 +2058,7 @@ def _svg_wrap(body, width, height):
         'width="' + str(width) + '" height="' + str(height) + '" '
         'viewBox="0 0 ' + str(width) + ' ' + str(height) + '">'
         '<style>'
-        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap");'
+        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap");'
         '</style>'
         + body +
         '</svg>'
