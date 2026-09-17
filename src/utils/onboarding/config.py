@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import re
 import secrets
 from dataclasses import dataclass, fields
 
@@ -16,6 +17,24 @@ MENU_TYPE_LABELS = {
 }
 DEFAULT_MENU_TYPE = "select_multi"
 BUTTON_STYLE_NAMES = ("primary", "secondary", "success", "danger")
+_HEX_COLOR_RE = re.compile(r"^[0-9a-fA-F]{6}$")
+
+
+def normalize_hex_color(value: object) -> int | None:
+    """Parse a user-entered six-digit hex colour into Discord's integer form."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip().removeprefix("#")
+    if not _HEX_COLOR_RE.fullmatch(text):
+        return None
+    return int(text, 16)
+
+
+def format_hex_color(value: object) -> str | None:
+    """Format a stored Discord colour integer for a hex text input."""
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFF:
+        return None
+    return f"{value:06X}"
 
 
 def new_menu_id() -> str:
@@ -118,7 +137,13 @@ async def load_config(guild_id: int) -> OnboardingConfig:
 
 
 def _normalize(cfg: OnboardingConfig) -> OnboardingConfig:
-    """Migrate any legacy single role-menu shape into the role_menus map."""
+    """Migrate legacy values and single role-menu shape into current config form."""
+    if cfg.welcome_color is not None:
+        if isinstance(cfg.welcome_color, str):
+            cfg.welcome_color = normalize_hex_color(cfg.welcome_color)
+        elif isinstance(cfg.welcome_color, bool) or not isinstance(cfg.welcome_color, int) or not 0 <= cfg.welcome_color <= 0xFFFFFF:
+            cfg.welcome_color = OnboardingConfig().welcome_color
+
     if not cfg.role_menus and getattr(cfg, "_legacy_role_menu_options", None):
         cfg.role_menus = {
             new_menu_id(): {

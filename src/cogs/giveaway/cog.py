@@ -1,4 +1,6 @@
 from .views import *
+from utils import logging
+
 
 class Giveaway(commands.Cog):
     def __init__(self, bot):
@@ -37,15 +39,31 @@ class Giveaway(commands.Cog):
             "UPDATE giveaways SET ended = 1 WHERE ended = 0 AND end_time NOT LIKE '____-%'"
         )
 
-        # Re-register a unique persistent view for every active giveaway so that
-        # button interactions survive restarts and never bleed between messages.
+        await self.register_persistent_views()
+
+    async def register_persistent_views(self) -> int:
+        """Register the buttons for every active stored giveaway at startup."""
         active = await self.bot.cxn.fetch(
             "SELECT message_id FROM giveaways WHERE ended = 0"
         )
+        registered = 0
         for row in active:
-            mid  = row["message_id"]
-            view = _make_persistent_view(self.bot, mid)
-            self.bot.add_view(view, message_id=mid)
+            message_id = row["message_id"]
+            try:
+                view = _make_persistent_view(self.bot, message_id)
+                self.bot.add_view(view, message_id=message_id)
+                registered += 1
+            except Exception as exc:
+                logging.error(
+                    "Giveaway",
+                    f"Could not register persistent buttons for giveaway {message_id}: {exc}",
+                )
+
+        logging.info(
+            "Giveaway",
+            f"Registered persistent buttons for {registered}/{len(active)} active giveaway(s)",
+        )
+        return registered
 
     async def cog_unload(self):
         self.check_giveaways.cancel()

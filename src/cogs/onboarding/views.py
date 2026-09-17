@@ -16,6 +16,8 @@ from utils.onboarding.config import (
     MENU_TYPE_LABELS,
     DEFAULT_MENU_TYPE,
     BUTTON_STYLE_NAMES,
+    format_hex_color,
+    normalize_hex_color,
 )
 from utils.onboarding.captcha import generate_captcha
 from utils.ratelimit import role_assign_limiter, welcome_limiter
@@ -155,9 +157,10 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
             default=cfg.welcome_image or None
         )
         self.color_input = TextInput(
-            label="Color (hex)", 
+            label="Color (hex)",
             required=False,
-            default=cfg.welcome_color or None
+            placeholder="RRGGBB or #RRGGBB",
+            default=format_hex_color(cfg.welcome_color),
         )
 
         self.add_item(self.title_input)
@@ -175,11 +178,20 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
 
         cfg.welcome_image = self.image_input.value or None
 
-        if self.color_input.value:
-            try:
-                cfg.welcome_color = int(self.color_input.value.replace("#", ""), 16)
-            except ValueError:
-                pass
+        color_text = self.color_input.value.strip()
+        if color_text:
+            color = normalize_hex_color(color_text)
+            if color is None:
+                return await interaction.response.send_message(
+                    view=feedback_view(
+                        "Color must be a six-digit hex value such as `5865F2` or `#5865F2`.",
+                        ok=False,
+                    ),
+                    ephemeral=True,
+                )
+            cfg.welcome_color = color
+        else:
+            cfg.welcome_color = None
 
         await update_config(self.guild_id, cfg)
         view = discord.ui.LayoutView()
