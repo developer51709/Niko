@@ -70,9 +70,6 @@ export function DashboardShell({
     </nav>
   );
 
-  const pageTitle = view === "overview" ? `Welcome, ${displayName(user)}` : view === "servers" ? "Your servers" : selectedGuild?.name || "Server settings";
-  const pageOverline = view === "guild" ? "Managing server" : "Niko dashboard";
-
   return (
     <div className="dashboard-layout">
       <aside className="dash-sidebar">
@@ -103,10 +100,6 @@ export function DashboardShell({
           <div className="mobile-top-row">
             <span className="mobile-brand"><Brand /></span>
             <span className="mobile-status"><span className="status-dot" /> Online</span>
-          </div>
-          <div className="dash-title">
-            <span className="dash-overline">{pageOverline} <span className="dash-title-divider">/</span> {view === "guild" ? sections.find(([id]) => id === section)?.[1] : "Workspace"}</span>
-            <h1>{pageTitle}</h1>
           </div>
           <div className="dash-top-actions">
             {view === "guild" ? (
