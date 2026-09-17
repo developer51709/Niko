@@ -102,7 +102,7 @@ export function DashboardShell({
   return (
     <div className="dashboard-layout">
       <aside className="dash-sidebar">
-        <Brand onNavigate={onHome} />
+        <div className="dash-sidebar-brand"><Brand onNavigate={onHome} /></div>
         <div className="dash-mobile-controls">{topActions()}</div>
         <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
         {primaryNav()}
@@ -118,7 +118,6 @@ export function DashboardShell({
             {sectionNav()}
           </>
         )}
-        {view !== "guild" && <div className="side-rail-note"><span className="panel-kicker">Niko workspace</span><strong>Make the useful<br />things easier to find.</strong><small>Your servers and their live signals, in one quiet place.</small></div>}
         <div className="sidebar-bottom">
           <span className="online-label"><span className="status-dot" /> Niko is online</span>
           <small>{formatNumber(stats?.guild_count)} connected servers · v{stats?.version || "1.0"}</small>
@@ -126,7 +125,16 @@ export function DashboardShell({
         </div>
       </aside>
       <div className="dash-content">
-        <header className="dash-topbar">{topActions()}</header>
+        <header className="dash-topbar">
+          <Brand onNavigate={onHome} />
+          <nav className="site-nav dash-site-nav" aria-label="Main navigation">
+            <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Home</a>
+            <a href="/commands" onClick={(e) => { e.preventDefault(); navigate("/commands"); }}>Commands</a>
+            <a href="/docs" onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
+            <a href="/changelog" onClick={(e) => { e.preventDefault(); navigate("/changelog"); }}>Changelog</a>
+          </nav>
+          {topActions()}
+        </header>
         <div className="mobile-primary-bar">{primaryNav(true)}</div>
         {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
         <main className="dash-main">{children}</main>

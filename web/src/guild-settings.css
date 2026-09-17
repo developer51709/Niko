@@ -2,6 +2,7 @@
 
 .dashboard-layout { grid-template-columns: 268px minmax(0, 1fr); background: var(--canvas); }
 .dash-sidebar { padding: 29px 18px 20px; background: var(--sidebar); border-right: 1px solid var(--line); }
+.dash-sidebar-brand { display: none; }
 .dash-sidebar .brand { padding: 0 10px; }
 .dash-sidebar .brand-mark { border-radius: 9px; background: var(--accent); }
 .side-rail-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 63px; }
@@ -21,16 +22,14 @@
 .guild-presence .status-dot { width: 8px; height: 8px; }
 .side-settings-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 10px 8px; color: var(--accent-dark); font-size: 10px; font-weight: 700; }
 .side-settings-caption small { color: var(--dim); font-size: 9px; font-weight: 500; }
-.side-rail-note { display: grid; gap: 10px; padding: 17px 15px; margin: 34px 4px 0; background: transparent; border: 1px solid var(--line); border-radius: 12px; }
-.side-rail-note .panel-kicker { color: var(--accent); }
-.side-rail-note strong { font-size: 14px; line-height: 1.2; letter-spacing: -.04em; }
-.side-rail-note small { color: var(--muted); font-size: 10px; line-height: 1.6; }
 .sidebar-bottom { gap: 10px; padding: 20px 10px 0; }
 .sidebar-bottom a { color: var(--accent-dark); }
 .sidebar-bottom a:hover { color: var(--accent); }
 .dash-content { background: var(--canvas); }
 .dash-mobile-controls { display: none; }
-.dash-topbar { min-height: 108px; padding: 22px 54px; background: var(--surface); border-bottom-color: var(--line); }
+.dash-topbar { min-height: 108px; padding: 0 54px; background: var(--surface); border-bottom-color: var(--line); }
+.dash-site-nav { margin: 0 auto 0 0; }
+.dash-site-nav a { padding: 38px 0 35px; }
 .dash-overline { color: var(--accent); }
 .dash-title-divider { padding: 0 5px; color: var(--dim); }
 .dash-title h1 { font-size: 25px; letter-spacing: -.06em; }
@@ -139,6 +138,7 @@
   .site-header { gap: 16px; }
   .dash-topbar { display: none; }
   .dash-sidebar { padding: 13px 20px 12px; }
+  .dash-sidebar-brand { display: block; }
   .dash-sidebar .side-rail-heading { display: none; }
   .dash-mobile-controls { display: block; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
   .dash-mobile-controls .dash-top-actions { min-width: 0; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
@@ -149,6 +149,7 @@
 
 @media (max-width: 640px) {
   .dash-mobile-controls .dash-top-actions { align-items: stretch; width: 100%; }
+  .dash-site-nav { display: none; }
   .dash-mobile-controls .dash-top-actions select { flex: 1 1 100%; max-width: none; }
   .dash-mobile-controls .user-pill { flex: 1 1 120px; min-width: 0; }
   .dash-mobile-controls .top-action { flex: 1 1 130px; }
