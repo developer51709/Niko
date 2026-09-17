@@ -27,6 +27,8 @@ type Props = {
   onServers: () => void;
   onGuildChange: (guild: Guild) => void;
   onSectionChange: (section: DashSection) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
   children: ReactNode;
 };
 
@@ -41,6 +43,8 @@ export function DashboardShell({
   onServers,
   onGuildChange,
   onSectionChange,
+  onRefresh,
+  refreshing,
   children,
 }: Props) {
   const installedGuilds = guilds.filter((guild) => guild.installed !== false);
@@ -116,6 +120,9 @@ export function DashboardShell({
             ) : (
               <button className="button button-muted button-small top-action" onClick={onServers}><Icon name="users" /> Browse servers</button>
             )}
+            <button className="button button-muted button-small top-action refresh-action" onClick={onRefresh} disabled={refreshing} aria-label="Refresh dashboard data">
+              <Icon name="spark" /> {refreshing ? "Refreshing…" : "Refresh data"}
+            </button>
             {view === "guild" && <span className="connection-chip"><span className="status-dot" /> Connected</span>}
             <div className="user-pill"><UserAvatar user={user} /><span>{displayName(user)}</span></div>
             <a className="logout-link" href="/auth/logout">Log out</a>

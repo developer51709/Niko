@@ -20,7 +20,7 @@ function AuthCard({ auth }: { auth: AuthStatus }) {
   </div></main></>;
 }
 
-function DashboardSection({ section, guild, stats, csrfToken }: { section: DashSection; guild: Guild; stats: BotStats | null; csrfToken?: string }) {
+function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { section: DashSection; guild: Guild; stats: BotStats | null; csrfToken?: string; refreshToken: number }) {
   const [overview, setOverview] = useState<GuildOverview | null>(null);
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [config, setConfig] = useState<GuildConfig | null>(null);
@@ -36,7 +36,7 @@ function DashboardSection({ section, guild, stats, csrfToken }: { section: DashS
           ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
           : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
-  }, [guild.id, section]);
+  }, [guild.id, section, refreshToken]);
 
   if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${section}`}>
     <div className="skeleton-title" /><div className="skeleton-copy" />
@@ -69,6 +69,8 @@ export function DashboardPage() {
   const [selectedGuild, setSelectedGuild] = useState<Guild | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const handleRoute = () => setRoute(dashboardRoute());
@@ -126,19 +128,39 @@ export function DashboardPage() {
   };
   const goHome = () => navigate(dashboardPath());
   const goServers = () => navigate(dashboardServersPath());
+  const refreshDashboard = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const [authStatus, botStats] = await Promise.all([getAuth(), getStats()]);
+      setAuth(authStatus);
+      setStats(botStats);
+      if (authStatus.authenticated) {
+        const [profile, availableGuilds] = await Promise.all([getUserOverview(), getGuilds()]);
+        setUserOverview(profile);
+        setGuilds(availableGuilds);
+      }
+      setRefreshToken((value) => value + 1);
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Dashboard refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   let content;
   if (route.view === "servers") {
     content = <ServersView guilds={guilds} onManage={openGuild} />;
   } else if (route.view === "guild") {
     content = selectedGuild
-      ? <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} />
+      ? <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
     content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} />;
   }
 
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection}>
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onRefresh={refreshDashboard} refreshing={refreshing}>
     {content}
   </DashboardShell>;
 }

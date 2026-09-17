@@ -34,6 +34,8 @@
 .dash-title-divider { padding: 0 5px; color: var(--dim); }
 .dash-title h1 { font-size: 25px; letter-spacing: -.06em; }
 .dash-top-actions { gap: 12px; }
+.refresh-action { min-width: 36px; }
+.refresh-action .icon { width: 14px; height: 14px; }
 .dash-top-actions select { min-height: 42px; max-width: 240px; padding: 10px 35px 10px 13px; background: var(--surface-raised); border-color: var(--line); border-radius: 9px; }
 .guild-switcher { position: relative; }
 .guild-switcher::after { content: ""; position: absolute; top: 15px; right: 14px; width: 7px; height: 7px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); pointer-events: none; transform: rotate(45deg); }
@@ -126,6 +128,11 @@
 .hero-identity strong, .hero-identity small { display: block; }
 .hero-identity strong { font-size: 12px; }
 .hero-identity small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+
+@media (min-width: 901px) {
+  /* The page heading now lives in each view, so keep this utility bar compact. */
+  .dash-topbar { min-height: 74px; padding: 15px 54px; }
+}
 
 @media (max-width: 900px) {
   .site-header { gap: 16px; }

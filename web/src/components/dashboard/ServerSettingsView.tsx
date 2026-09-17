@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
@@ -81,6 +81,10 @@ function initialValues(server?: ServerConfig) {
 export function ServerSettingsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const [values, setValues] = useState(() => initialValues(config?.server));
   const [state, setState] = useState(initialSave);
+
+  useEffect(() => {
+    if (config?.server) setValues(initialValues(config.server));
+  }, [config]);
 
   const setValue = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
   const setLoggingChannel = (category: string, value: string) => setValues((current) => ({ ...current, logging: { ...current.logging, [category]: value } }));
