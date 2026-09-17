@@ -74,10 +74,36 @@ export function DashboardShell({
     </nav>
   );
 
+  const topActions = () => (
+    <div className="dash-top-actions">
+      {view === "guild" ? (
+        <label className="guild-switcher">
+          <span className="sr-only">Switch server</span>
+          <select value={selectedGuild?.id || ""} onChange={(e) => {
+            const guild = installedGuilds.find((item) => item.id === e.target.value);
+            if (guild) onGuildChange(guild);
+          }}>
+            <option value="" disabled>Switch server</option>
+            {installedGuilds.map((guild) => <option value={guild.id} key={guild.id}>{guild.name}</option>)}
+          </select>
+        </label>
+      ) : (
+        <button className="button button-muted button-small top-action" onClick={onServers}><Icon name="users" /> Browse servers</button>
+      )}
+      <button className="button button-muted button-small top-action refresh-action" onClick={onRefresh} disabled={refreshing} aria-label="Refresh dashboard data">
+        <Icon name="spark" /> {refreshing ? "Refreshing…" : "Refresh data"}
+      </button>
+      {view === "guild" && <span className="connection-chip"><span className="status-dot" /> Connected</span>}
+      <div className="user-pill"><UserAvatar user={user} /><span>{displayName(user)}</span></div>
+      <a className="logout-link" href="/auth/logout">Log out</a>
+    </div>
+  );
+
   return (
     <div className="dashboard-layout">
       <aside className="dash-sidebar">
         <Brand onNavigate={onHome} />
+        <div className="dash-mobile-controls">{topActions()}</div>
         <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
         {primaryNav()}
         {view === "guild" && selectedGuild && (
@@ -100,34 +126,7 @@ export function DashboardShell({
         </div>
       </aside>
       <div className="dash-content">
-        <header className="dash-topbar">
-          <div className="mobile-top-row">
-            <span className="mobile-brand"><Brand /></span>
-            <span className="mobile-status"><span className="status-dot" /> Online</span>
-          </div>
-          <div className="dash-top-actions">
-            {view === "guild" ? (
-              <label className="guild-switcher">
-                <span className="sr-only">Switch server</span>
-                <select value={selectedGuild?.id || ""} onChange={(e) => {
-                  const guild = installedGuilds.find((item) => item.id === e.target.value);
-                  if (guild) onGuildChange(guild);
-                }}>
-                  <option value="" disabled>Switch server</option>
-                  {installedGuilds.map((guild) => <option value={guild.id} key={guild.id}>{guild.name}</option>)}
-                </select>
-              </label>
-            ) : (
-              <button className="button button-muted button-small top-action" onClick={onServers}><Icon name="users" /> Browse servers</button>
-            )}
-            <button className="button button-muted button-small top-action refresh-action" onClick={onRefresh} disabled={refreshing} aria-label="Refresh dashboard data">
-              <Icon name="spark" /> {refreshing ? "Refreshing…" : "Refresh data"}
-            </button>
-            {view === "guild" && <span className="connection-chip"><span className="status-dot" /> Connected</span>}
-            <div className="user-pill"><UserAvatar user={user} /><span>{displayName(user)}</span></div>
-            <a className="logout-link" href="/auth/logout">Log out</a>
-          </div>
-        </header>
+        <header className="dash-topbar">{topActions()}</header>
         <div className="mobile-primary-bar">{primaryNav(true)}</div>
         {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
         <main className="dash-main">{children}</main>

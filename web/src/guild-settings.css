@@ -29,6 +29,7 @@
 .sidebar-bottom a { color: var(--accent-dark); }
 .sidebar-bottom a:hover { color: var(--accent); }
 .dash-content { background: var(--canvas); }
+.dash-mobile-controls { display: none; }
 .dash-topbar { min-height: 108px; padding: 22px 54px; background: var(--surface); border-bottom-color: var(--line); }
 .dash-overline { color: var(--accent); }
 .dash-title-divider { padding: 0 5px; color: var(--dim); }
@@ -136,15 +137,23 @@
 
 @media (max-width: 900px) {
   .site-header { gap: 16px; }
-  .dash-topbar { align-items: flex-start; flex-wrap: wrap; }
-  .dash-title { min-width: 0; flex: 1 1 230px; }
-  .dash-top-actions { min-width: 0; flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; }
-  .guild-switcher { flex: 1 1 220px; min-width: 0; }
-  .guild-switcher select { width: 100%; max-width: none; }
+  .dash-topbar { display: none; }
+  .dash-sidebar { padding: 13px 20px 12px; }
+  .dash-sidebar .side-rail-heading { display: none; }
+  .dash-mobile-controls { display: block; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .dash-mobile-controls .dash-top-actions { min-width: 0; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .dash-mobile-controls .guild-switcher { flex: 1 1 220px; min-width: 0; }
+  .dash-mobile-controls .guild-switcher select { width: 100%; max-width: none; }
   .settings-panel { width: 100%; }
 }
 
 @media (max-width: 640px) {
+  .dash-mobile-controls .dash-top-actions { align-items: stretch; width: 100%; }
+  .dash-mobile-controls .dash-top-actions select { flex: 1 1 100%; max-width: none; }
+  .dash-mobile-controls .user-pill { flex: 1 1 120px; min-width: 0; }
+  .dash-mobile-controls .top-action { flex: 1 1 130px; }
+  .dash-mobile-controls .logout-link { flex: 0 0 auto; padding: 8px 0; }
+  .dash-mobile-controls .connection-chip { flex: 0 0 auto; }
   .hero-identity { margin-top: 20px; }
   .hero-avatar { width: 38px; height: 38px; }
   .dash-title { width: 100%; flex-basis: 100%; }
