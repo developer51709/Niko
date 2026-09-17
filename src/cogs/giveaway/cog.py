@@ -2,6 +2,12 @@ from .views import *
 from utils import logging
 
 
+# SQLite accepts 0 and FALSE interchangeably, while MongoDB keeps booleans
+# distinct from numbers. Query both representations so old and new rows are
+# discovered regardless of which backend wrote them.
+_ACTIVE_GIVEAWAY_FILTER = "(ended = 0 OR ended = FALSE)"
+
+
 class Giveaway(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -36,7 +42,8 @@ class Giveaway(commands.Cog):
 
         # Sanitise rows with unparseable end_time
         await self.bot.cxn.execute(
-            "UPDATE giveaways SET ended = 1 WHERE ended = 0 AND end_time NOT LIKE '____-%'"
+            "UPDATE giveaways SET ended = 1 WHERE "
+            f"{_ACTIVE_GIVEAWAY_FILTER} AND end_time NOT LIKE '____-%'"
         )
 
         await self.register_persistent_views()
@@ -44,7 +51,8 @@ class Giveaway(commands.Cog):
     async def register_persistent_views(self) -> int:
         """Register the buttons for every active stored giveaway at startup."""
         active = await self.bot.cxn.fetch(
-            "SELECT message_id FROM giveaways WHERE ended = 0"
+            "SELECT message_id FROM giveaways WHERE "
+            f"{_ACTIVE_GIVEAWAY_FILTER}"
         )
         registered = 0
         for row in active:
@@ -145,7 +153,8 @@ class Giveaway(commands.Cog):
             now  = datetime.datetime.now(datetime.timezone.utc)
             rows = await self.bot.cxn.fetch(
                 "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id "
-                "FROM giveaways WHERE ended = 0"
+                "FROM giveaways WHERE "
+                f"{_ACTIVE_GIVEAWAY_FILTER}"
             )
             for row in rows:
                 message_id   = row["message_id"]

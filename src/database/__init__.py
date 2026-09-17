@@ -266,7 +266,7 @@ class _ConditionParser:
 
         m = re.match(
             r"(\w+)\s*(=|!=|<>|>=|<=|>|<)\s*"
-            r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|-?\d+(?:\.\d+)?)\s*$",
+            r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|-?\d+(?:\.\d+)?|TRUE|FALSE)\s*$",
             cond,
         )
         if m:
@@ -326,6 +326,10 @@ class _ConditionParser:
     def _coerce_literal(literal: str):
         if literal.startswith("'") or literal.startswith('"'):
             return literal[1:-1].replace("''", "'").replace('""', '"')
+        if literal.upper() == "TRUE":
+            return True
+        if literal.upper() == "FALSE":
+            return False
         if re.fullmatch(r"-?\d+", literal):
             return int(literal)
         try:
