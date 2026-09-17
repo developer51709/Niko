@@ -285,6 +285,22 @@ class Tickets(commands.Cog):
                 except Exception:
                     continue
 
+            stickers = []
+            for sticker in m.stickers:
+                try:
+                    payload = sticker.to_dict()
+                except Exception:
+                    payload = {
+                        "id": sticker.id,
+                        "name": sticker.name,
+                        "format_type": getattr(getattr(sticker, "format", None), "value", getattr(sticker, "format", None)),
+                    }
+                # discord.py may omit the CDN URL from to_dict(); keep it when
+                # available so stored transcripts can render stickers later.
+                if not payload.get("url") and getattr(sticker, "url", None):
+                    payload["url"] = str(sticker.url)
+                stickers.append(payload)
+
             messages.append({
                 "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "author": str(m.author),
@@ -293,6 +309,7 @@ class Tickets(commands.Cog):
                 "attachments": attachments,
                 "embeds": embeds,
                 "components": components,
+                "stickers": stickers,
             })
 
         # Find ticket info for metadata

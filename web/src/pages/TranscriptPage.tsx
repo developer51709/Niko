@@ -60,6 +60,14 @@ type TranscriptMessage = {
   attachments?: string[];
   embeds?: TranscriptEmbed[];
   components?: Cv2Component[];
+  stickers?: TranscriptSticker[];
+};
+
+type TranscriptSticker = {
+  id?: string | number;
+  name?: string;
+  format_type?: number;
+  url?: string;
 };
 
 type TranscriptData = {
@@ -97,6 +105,12 @@ const isImageUrl = (url: string): boolean =>
 const isVideoUrl = (url: string): boolean =>
   /\.(?:mp4|webm|mov|m4v|ogg)(?:[?#]|$)/i.test(url) || url.startsWith("data:video/");
 
+const stickerUrl = (sticker: TranscriptSticker): string => {
+  if (sticker.url) return sticker.url;
+  if (!sticker.id) return "";
+  return `https://cdn.discordapp.com/stickers/${sticker.id}.${sticker.format_type === 4 ? "gif" : "png"}`;
+};
+
 function isVideoMedia(media?: Cv2Media): boolean {
   const url = mediaUrl(media);
   if (!url) return false;
@@ -110,12 +124,14 @@ type MdNode =
   | { kind: "text"; text: string }
   | { kind: "code"; text: string }
   | { kind: "link"; text: string; url: string }
+  | { kind: "emoji"; name: string; id: string; animated: boolean }
   | { kind: "fmt"; fmt: string; children: MdNode[] };
 
 type MdToken =
   | { type: "text"; text: string }
   | { type: "code"; text: string }
   | { type: "link"; text: string; url: string }
+  | { type: "emoji"; name: string; id: string; animated: boolean }
   | { type: "marker"; fmt: string };
 
 const MD_TOKEN_RE =
@@ -134,14 +150,19 @@ function tokenizeMd(input: string): MdToken[] {
     if (!raw) return;
     // AUTOLINK_RE has one capture group, so split interleaves URLs at odd
     // indices: [text?, url, text, url, ...]
-    const parts = raw.split(AUTOLINK_RE);
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
+    const parts = raw.split(/(<a?:[A-Za-z0-9_~]+:\d+>)/g);
+    for (const part of parts) {
       if (!part) continue;
-      if (i % 2 === 1) {
-        tokens.push({ type: "link", text: part, url: part });
-      } else {
-        tokens.push({ type: "text", text: part });
+      const emoji = part.match(/^<(a?):([A-Za-z0-9_~]+):(\d+)>$/);
+      if (emoji) {
+        tokens.push({ type: "emoji", name: emoji[2], id: emoji[3], animated: emoji[1] === "a" });
+        continue;
+      }
+      const linked = part.split(AUTOLINK_RE);
+      for (let i = 0; i < linked.length; i++) {
+        if (!linked[i]) continue;
+        if (i % 2 === 1) tokens.push({ type: "link", text: linked[i], url: linked[i] });
+        else tokens.push({ type: "text", text: linked[i] });
       }
     }
   };
@@ -186,6 +207,8 @@ function markdownToNodes(text: string): MdNode[] {
       append({ kind: "code", text: token.text });
     } else if (token.type === "link") {
       append({ kind: "link", text: token.text, url: token.url });
+    } else if (token.type === "emoji") {
+      append({ kind: "emoji", name: token.name, id: token.id, animated: token.animated });
     } else if (token.type === "marker") {
       if (openSet.has(token.fmt)) {
         // Closing marker: wrap content since its opening into a fmt node
@@ -238,6 +261,19 @@ const renderMdNodes = (nodes: MdNode[], keyPrefix: string): ReactNode =>
           >
             {node.text}
           </code>
+        );
+      case "emoji":
+        return (
+          <img
+            key={key}
+            src={`https://cdn.discordapp.com/emojis/${node.id}.${node.animated ? "gif" : "png"}`}
+            alt={`:${node.name}:`}
+            title={`:${node.name}:`}
+            style={{ width: 22, height: 22, objectFit: "contain", verticalAlign: "-0.35em", display: "inline-block" }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).alt = `:${node.name}:`;
+            }}
+          />
         );
       case "link":
         return (
@@ -726,7 +762,8 @@ function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
   const hasRich = !!(
     (msg.attachments && msg.attachments.length > 0) ||
     (msg.embeds && msg.embeds.length > 0) ||
-    (msg.components && msg.components.length > 0)
+    (msg.components && msg.components.length > 0) ||
+    (msg.stickers && msg.stickers.length > 0)
   );
 
   return (
@@ -805,6 +842,24 @@ function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
             <EmbedView key={i} embed={embed} />
           ))}
         </>
+      )}
+
+      {msg.stickers && msg.stickers.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          {msg.stickers.map((sticker, i) => {
+            const url = stickerUrl(sticker);
+            return url ? (
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                <img
+                  src={url}
+                  alt={sticker.name || "Discord sticker"}
+                  title={sticker.name || "Discord sticker"}
+                  style={{ width: 160, maxWidth: "100%", maxHeight: 160, objectFit: "contain", display: "block" }}
+                />
+              </a>
+            ) : null;
+          })}
+        </div>
       )}
 
       {msg.components && msg.components.length > 0 && <Cv2Components components={msg.components} />}

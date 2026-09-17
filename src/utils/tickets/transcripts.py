@@ -143,6 +143,15 @@ async def inline_transcript_images(messages: List[dict], *, max_bytes: int = 12 
                 urls.add(url)
 
     for message in messages:
+        for sticker in message.get("stickers") or []:
+            if not isinstance(sticker, dict) or not sticker.get("id"):
+                continue
+            sticker_url = sticker.get("url") or (
+                f"https://cdn.discordapp.com/stickers/{sticker['id']}."
+                f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+            )
+            if isinstance(sticker_url, str) and sticker_url.startswith(("http://", "https://")):
+                urls.add(sticker_url)
         for url in message.get("attachments") or []:
             if isinstance(url, str) and url.startswith(("http://", "https://")):
                 urls.add(url)
@@ -202,6 +211,17 @@ async def inline_transcript_images(messages: List[dict], *, max_bytes: int = 12 
     for message in messages:
         attachments = message.get("attachments") or []
         message["attachments"] = [downloaded.get(url, url) for url in attachments]
+        for sticker in message.get("stickers") or []:
+            if not isinstance(sticker, dict):
+                continue
+            original = sticker.get("url")
+            if not original and sticker.get("id"):
+                original = (
+                    f"https://cdn.discordapp.com/stickers/{sticker['id']}."
+                    f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+                )
+            if original in downloaded:
+                sticker["url"] = downloaded[original]
         for embed in message.get("embeds") or []:
             if not isinstance(embed, dict):
                 continue
@@ -292,6 +312,18 @@ def _md_to_html(text: Any) -> str:
     value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", value)
     value = re.sub(r"__([^_\n]+)__", r"<u>\1</u>", value)
     value = re.sub(r"~~([^~\n]+)~~", r"<s>\1</s>", value)
+
+    # Discord custom emoji are stored in message content as <:name:id> or
+    # <a:name:id>. Render the CDN asset instead of exposing the raw token.
+    def _custom_emoji(match: "re.Match[str]") -> str:
+        animated = match.group(1) == "a"
+        name = match.group(2)
+        emoji_id = match.group(3)
+        extension = "gif" if animated else "png"
+        url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{extension}"
+        return f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:">'
+
+    value = re.sub(r"&lt;(a?):([A-Za-z0-9_~]+):(\d+)&gt;", _custom_emoji, value)
 
     lines = value.split("\n")
     html_lines = []
@@ -597,7 +629,26 @@ def export_html(messages: List[dict], metadata: dict) -> str:
 
         components_html = _components_to_html(msg.get("components") or [])
 
-        if not (content or attachments or embeds_html or components_html):
+        stickers_html = ""
+        for sticker in msg.get("stickers") or []:
+            if not isinstance(sticker, dict):
+                continue
+            sticker_id = sticker.get("id")
+            if not sticker_id:
+                continue
+            sticker_url = sticker.get("url") or (
+                f"https://cdn.discordapp.com/stickers/{sticker_id}."
+                f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+            )
+            stickers_html += (
+                f'<a class="sticker" href="{_esc(sticker_url)}" target="_blank" rel="noopener noreferrer">'
+                f'<img src="{_esc(sticker_url)}" alt="{_esc(sticker.get("name") or "Discord sticker")}" '
+                f'title="{_esc(sticker.get("name") or "Discord sticker")}"></a>'
+            )
+        if stickers_html:
+            stickers_html = f'<div class="stickers">{stickers_html}</div>'
+
+        if not (content or attachments or embeds_html or components_html or stickers_html):
             content_html = '<div class="content ts-muted"><em>Message content unavailable</em></div>'
 
         msg_rows.append(
@@ -605,7 +656,7 @@ def export_html(messages: List[dict], metadata: dict) -> str:
             f'<div class="message-head"><span class="timestamp">{_esc(ts)}</span> '
             f'<span class="author">{_esc(author)}</span> '
             f'<span class="author-id">({_esc(author_id)})</span></div>'
-            f'{content_html}{att_html}{embeds_html}{components_html}'
+            f'{content_html}{att_html}{embeds_html}{components_html}{stickers_html}'
             f'</div>'
         )
 
@@ -630,6 +681,9 @@ def export_html(messages: List[dict], metadata: dict) -> str:
   .author {{ color: #f2f3f5; font-weight: 600; }}
   .author-id {{ color: #949ba4; font-size: 11px; }}
   .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
+  .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
+  .stickers {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
+  .sticker img {{ width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; display: block; }}
   .ts-muted {{ color: #6d737a; }}
   .tsm {{ color: #949ba4; font-size: 12px; }}
   .th {{ font-size: 16px; font-weight: 700; color: #f2f3f5; }}
