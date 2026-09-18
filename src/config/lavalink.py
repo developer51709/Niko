@@ -16,4 +16,5 @@ LAVALINK_NODES: list[dict] = [
     {"host": "lavalink.triniumhost.com", "port": 2333, "password": "kirito", "secure": False, "version": "v4"},
     {"host": "lava.g3v.co.uk", "port": 9008, "password": "lavalinklol", "secure": False, "version": "v4"},
     {"host": "n3.nexcloud.in", "port": 2026, "password": "nexcloud", "secure": False, "version": "v4"},
+    {"host": "lava2.kasawa.pro", "port": 2334, "password": "youshallnotpass", "secure": False, "version": "v4"},
 ]
