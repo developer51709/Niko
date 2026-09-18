@@ -13,6 +13,7 @@ import time as _time
 
 import aiohttp
 
+from config.lavalink import LAVALINK_NODES
 from utils import logging as log
 from utils.music.constants import _MAX_PROBERS, _PROBE_TIMEOUT
 
@@ -25,19 +26,7 @@ from utils.music.constants import _MAX_PROBERS, _PROBE_TIMEOUT
 _DN_SSL_RAW    = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/SSL/Lavalink-SSL.md"
 _DN_NOSSL_RAW  = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/NoSSL/Lavalink-NonSSL.md"
 
-_FALLBACK_NODES: list[dict] = [
-    # Last-known-good public v4 nodes (April 2026)
-    {"host": "lavalinkv4.serenetia.com", "port": 443,   "password": "https://seretia.link/discord", "secure": True,  "version": "v4"},
-    {"host": "lavalink.jirayu.net",      "port": 443,   "password": "youshallnotpass",              "secure": True,  "version": "v4"},
-    {"host": "lava-v4.millohost.my.id",  "port": 443,   "password": "https://discord.gg/mjS5J2K3ep","secure": True,  "version": "v4"},
-    {"host": "lavalink-v4.triniumhost.com", "port": 443,"password": "free",                         "secure": True,  "version": "v4"},
-    {"host": "lavalinkv4.serenetia.com", "port": 80,    "password": "https://seretia.link/discord", "secure": False, "version": "v4"},
-    {"host": "lavalink.jirayu.net",      "port": 13592, "password": "youshallnotpass",              "secure": False, "version": "v4"},
-    {"host": "lavalink.triniumhost.com", "port": 4333,  "password": "free",                         "secure": False, "version": "v4"},
-    {"host": "lavalink.triniumhost.com", "port": 2333,  "password": "kirito",                       "secure": False, "version": "v4"},
-    {"host": "lava.g3v.co.uk",           "port": 9008,  "password": "lavalinklol",                  "secure": False, "version": "v4"},
-    {"host": "n3.nexcloud.in",           "port": 2026,  "password": "nexcloud",                     "secure": False, "version": "v4"},
-]
+_FALLBACK_NODES: list[dict] = list(LAVALINK_NODES)
 
 
 # Match a fenced ``bash``…`` block containing Host/Port/Password/Secure lines.
@@ -112,7 +101,7 @@ async def fetch_node_list() -> list[dict]:
     except Exception as e:
         log.warning("Lavalink", f"Node list fetch failed: {e}")
 
-    log.warning("Lavalink", "Falling back to embedded node list.")
+    log.warning("Lavalink", "Falling back to the hardcoded Lavalink node list.")
     return list(_FALLBACK_NODES)
 
 

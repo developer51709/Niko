@@ -491,7 +491,7 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model=(os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini") if image_urls else OPENAI_MODEL),
+            model=(os.environ.get("OPENAI_VISION_MODEL", "gpt-4.1-mini") if image_urls else OPENAI_MODEL),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},

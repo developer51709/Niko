@@ -1576,6 +1576,8 @@ async def _collect_status(bot) -> dict:
         "version": "1.0",
         "latency_ms": None,
         "gateway_ok": None,
+        "music_ok": None,
+        "music_nodes": 0,
         "database_backend": "unknown",
         "database_ok": None,
         "website_ok": None,
@@ -1630,6 +1632,17 @@ async def _collect_status(bot) -> dict:
     except Exception:
         pass
 
+    # Music health comes directly from the music cog's live node state. This
+    # avoids probing Lavalink again and keeps the panel aligned with playback.
+    try:
+        music_cog = bot.get_cog("MusicSystem")
+        if music_cog is not None:
+            node_labels = getattr(music_cog, "_node_labels", ()) or ()
+            status["music_nodes"] = len(node_labels)
+            status["music_ok"] = bool(getattr(music_cog, "connected", False)) and bool(node_labels)
+    except Exception:
+        pass
+
     # In-process checks: database pool + the Flask website/API on localhost.
     try:
         db_backend, db_ok = await _check_database(bot)
@@ -1653,6 +1666,7 @@ async def _collect_status(bot) -> dict:
         status.get("website_ok"),
         status.get("api_ok"),
         status.get("gateway_ok"),
+        status.get("music_ok"),
     ]
     if any(ok is False for ok in checks):
         status["overall_ok"] = False
@@ -1702,6 +1716,7 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
             status.get("website_ok"),
             status.get("api_ok"),
             status.get("gateway_ok"),
+            status.get("music_ok"),
         ]
         if any(ok is False for ok in checks):
             return 0xED4245  # red — something is down
@@ -1721,6 +1736,8 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     website_ok = status.get("website_ok")
     api_ok = status.get("api_ok")
     gateway_ok = status.get("gateway_ok")
+    music_ok = status.get("music_ok")
+    music_nodes = int(status.get("music_nodes") or 0)
     overall_ok = status.get("overall_ok")
 
     db_backend = str(status.get("database_backend") or "unknown")
@@ -1789,6 +1806,7 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
         line(f"{state_emoji(website_ok)} **Website** — {state_of(website_ok)}"),
         line(f"{state_emoji(api_ok)} **API** — {state_of(api_ok)}"),
         line(f"{state_emoji(gateway_ok)} **Gateway** — {state_of(gateway_ok)} · {latency_text}"),
+        line(f"{state_emoji(music_ok)} **Music** — {state_of(music_ok)} · {music_nodes} active node{'s' if music_nodes != 1 else ''}"),
         accent_colour=health_accent(),
     )
     view.add_item(health)

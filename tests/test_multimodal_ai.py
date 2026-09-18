@@ -23,9 +23,18 @@ def test_message_handler_only_collects_media_when_enabled():
     assert "transcribed_audio=transcribed_audio" in source
 
 
+def test_api_logging_filters_successful_polling_noise():
+    source = (ROOT / "src/api_server.py").read_text(encoding="utf-8")
+    assert "class _QuietSuccessfulRequests" in source
+    assert "return status >= 400" in source
+    assert "werkzeug_logger.addFilter" in source
+
+
 def test_openai_request_uses_vision_content_and_transcription_model():
     source = (ROOT / "src/utils/ai/openai_client.py").read_text(encoding="utf-8")
     assert "audio.transcriptions.create" in source
     assert 'OPENAI_TRANSCRIPTION_MODEL' in source
     assert 'OPENAI_VISION_MODEL' in source
+    assert '"gpt-4.1-mini"' in source
+    assert '"gpt-4o-mini"' not in source
     assert '"type": "image_url"' in source

@@ -12,6 +12,8 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils import logging as log
 from utils.discord_extras import set_voice_status
+from config.lavalink import LAVALINK_NODES
+from utils.music.nodes import _dedupe_nodes
 from utils.music import (
     GHOST_QUEUE_LEN,
     HISTORY_LEN,
@@ -44,6 +46,7 @@ class MusicSystem(commands.Cog):
         self._connecting = False
         # Labels of Lavalink nodes currently in the pool (host:port).
         self._node_labels: list[str] = []
+        self._rescan_task: asyncio.Task | None = None
 
         # { guild_id: { loop, autoplay, history, np_message, last_track } }
         self._guild_states: dict[int, dict] = {}
@@ -70,7 +73,33 @@ class MusicSystem(commands.Cog):
         except Exception as exc:
             log.warning("Music", f"Could not attach play autocomplete: {exc}")
 
-        bot.loop.create_task(self.startup_connect())
+    async def cog_load(self):
+        # Start after the cog is registered so shutdown can cancel the task
+        # cleanly instead of leaving an orphaned reconnect loop behind.
+        self._rescan_task = asyncio.create_task(self._node_rescan_loop())
+
+    async def cog_unload(self):
+        if self._rescan_task and not self._rescan_task.done():
+            self._rescan_task.cancel()
+            try:
+                await self._rescan_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _node_rescan_loop(self):
+        await self.bot.wait_until_ready()
+        first_run = True
+        while not self.bot.is_closed():
+            try:
+                await self.startup_connect()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning("Lavalink", f"Node rescan failed: {exc}")
+            # Rescans are deliberately long-running and bounded: they top up
+            # missing capacity without needlessly reconnecting healthy nodes.
+            await asyncio.sleep(0 if first_run else 3600)
+            first_run = False
 
     def _state(self, guild_id: int) -> dict:
         if guild_id not in self._guild_states:
@@ -263,12 +292,7 @@ class MusicSystem(commands.Cog):
     # ─── LAVALINK CONNECTION ──────────────────────
 
     async def startup_connect(self, *, retry_delay: float = 0):
-        """Connect the bot to several responsive Lavalink nodes at once.
-
-        wavelink registers every node that accepts the handshake and then
-        load-balances players across them, so a single node going down no
-        longer kills music for every guild.
-        """
+        """Rescan candidates and top up the pool without restarting healthy nodes."""
         if self._connecting:
             return
         self._connecting = True
@@ -277,77 +301,61 @@ class MusicSystem(commands.Cog):
                 await asyncio.sleep(retry_delay)
             await self.bot.wait_until_ready()
 
-            raw_nodes = await _fetch_node_list()
-            if not raw_nodes:
-                log.warning("Lavalink", "Could not fetch node list.")
-                return
-
-            responsive = await _find_responsive_nodes(raw_nodes)
-            if not responsive:
-                log.warning("Lavalink", "No responsive nodes found. Music unavailable.")
-                return
-
-            # Eject dead nodes from a previous pool epoch so their identifiers
-            # can be registered again. Healthy nodes are left untouched.
+            # Keep connected nodes first, then add responsive public or
+            # hardcoded candidates until the pool reaches its target size.
             await self._eject_stale_nodes()
+            connected = [
+                node for node in wavelink.Pool.nodes.values()
+                if node.status is wavelink.NodeStatus.CONNECTED
+            ]
+            existing_ids = {node.identifier for node in connected}
+            capacity = max(0, int(_MAX_CONNECT_NODES) - len(connected))
 
-            # Connect several nodes in one Pool.connect call — wavelink keeps
-            # whichever succeed.
-            targets: list[wavelink.Node] = []
-            for node_info in responsive[: int(_MAX_CONNECT_NODES)]:
-                host     = node_info["host"]
-                port     = node_info["port"]
-                password = node_info["password"]
-                secure   = node_info.get("secure", False)
-                uri      = f"{'https' if secure else 'http'}://{host}:{port}"
+            discovered = await _fetch_node_list()
+            candidates = _dedupe_nodes(list(LAVALINK_NODES) + list(discovered or []))
+            responsive = await _find_responsive_nodes(candidates) if candidates else []
+            responsive = [
+                node for node in responsive
+                if f"{node['host']}:{node['port']}" not in existing_ids
+            ]
+            targets = []
+            for node_info in responsive[:capacity]:
+                host = node_info["host"]
+                port = node_info["port"]
+                secure = node_info.get("secure", False)
                 targets.append(wavelink.Node(
-                    uri=uri,
-                    password=password,
+                    uri=f"{'https' if secure else 'http'}://{host}:{port}",
+                    password=node_info["password"],
                     identifier=f"{host}:{port}",
                     retries=3,
                 ))
 
-            try:
-                await asyncio.wait_for(
-                    wavelink.Pool.connect(nodes=targets, client=self.bot),
-                    timeout=_CONNECT_TIMEOUT + 10,
-                )
-            except Exception as exc:
-                log.warning(
-                    "Lavalink",
-                    f"Multi-node connect failed ({exc}); retrying the fastest node alone.",
-                )
-                await self._eject_stale_nodes()
+            if targets:
                 try:
                     await asyncio.wait_for(
-                        wavelink.Pool.connect(nodes=targets[:1], client=self.bot),
-                        timeout=_CONNECT_TIMEOUT,
+                        wavelink.Pool.connect(nodes=targets, client=self.bot),
+                        timeout=_CONNECT_TIMEOUT + 10,
                     )
-                except Exception as exc2:
-                    log.warning("Lavalink", f"Single-node fallback failed too: {exc2}")
+                    connected += await self._wait_for_connected_nodes(
+                        {node.identifier for node in targets}
+                    )
+                except Exception as exc:
+                    log.warning("Lavalink", f"Node top-up failed: {exc}")
 
-            # wavelink registers a node as soon as its websocket opens, but the
-            # Lavalink 'ready' handshake completes a beat later on the node's
-            # background task. Poll for the CONNECTED status instead of trusting
-            # an instant snapshot, otherwise a healthy connect can be reported
-            # as failed (ready events arriving just after the check).
-            target_ids = {node.identifier for node in targets}
-            connected  = await self._wait_for_connected_nodes(target_ids)
+            connected = [
+                node for node in wavelink.Pool.nodes.values()
+                if node.status is wavelink.NodeStatus.CONNECTED
+            ]
+            self._node_labels = sorted(node.identifier for node in connected)
+            self.connected = bool(connected)
             if connected:
-                self._node_labels = sorted(node.identifier for node in connected)
-                self.connected    = True
                 log.info(
                     "Lavalink",
-                    f"Connected to {len(connected)} Lavalink node(s): "
-                    + ", ".join(self._node_labels),
+                    f"Node rescan complete: {len(connected)} connected "
+                    f"({', '.join(self._node_labels)}).",
                 )
             else:
-                self._node_labels = []
-                self.connected    = False
-                log.warning(
-                    "Lavalink",
-                    "No Lavalink node completed the wavelink handshake.",
-                )
+                log.warning("Lavalink", "No Lavalink node completed the handshake.")
         finally:
             self._connecting = False
 
@@ -607,9 +615,21 @@ class MusicSystem(commands.Cog):
             await ctx.send(msg(ctx, "get_player_not_in_voice"))
             return None
         channel = ctx.author.voice.channel
-        player  = ctx.voice_client
+        player = ctx.voice_client
+        if player is not None:
+            # A stale voice client can survive a node outage; never attempt to
+            # use it when Discord has already disconnected it.
+            if getattr(player, "is_connected", lambda: True)() is False:
+                player = None
         if player is None:
-            player = await channel.connect(cls=wavelink.Player)
+            try:
+                player = await asyncio.wait_for(
+                    channel.connect(cls=wavelink.Player), timeout=15
+                )
+            except (asyncio.TimeoutError, discord.DiscordException) as exc:
+                log.warning("Music", f"Voice connection failed: {exc}")
+                await ctx.send(msg(ctx, "music_not_connected"))
+                return None
         return player
 
     # ─── COMMANDS ─────────────────────────────────
@@ -705,7 +725,16 @@ class MusicSystem(commands.Cog):
         first_track  = None
 
         for i, query in enumerate(searches):
-            results = await wavelink.Playable.search(query)
+            try:
+                results = await asyncio.wait_for(
+                    wavelink.Playable.search(query), timeout=15
+                )
+            except asyncio.TimeoutError:
+                log.warning("Music", "Lavalink search timed out.")
+                continue
+            except Exception as exc:
+                log.warning("Music", f"Lavalink search failed: {exc}")
+                continue
             if not results:
                 continue
 
