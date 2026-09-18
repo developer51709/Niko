@@ -125,6 +125,7 @@ type MdNode =
   | { kind: "code"; text: string }
   | { kind: "link"; text: string; url: string }
   | { kind: "emoji"; name: string; id: string; animated: boolean }
+  | { kind: "timestamp"; unix: number; style: string; raw: string }
   | { kind: "fmt"; fmt: string; children: MdNode[] };
 
 type MdToken =
@@ -132,6 +133,7 @@ type MdToken =
   | { type: "code"; text: string }
   | { type: "link"; text: string; url: string }
   | { type: "emoji"; name: string; id: string; animated: boolean }
+  | { type: "timestamp"; unix: number; style: string; raw: string }
   | { type: "marker"; fmt: string };
 
 const MD_TOKEN_RE =
@@ -140,6 +142,30 @@ const MD_TOKEN_RE =
 const AUTOLINK_RE = /(https?:\/\/[^\s<>)]+)/g;
 
 const MARKER_TEXT: Record<string, string> = { bold: "**", italic: "*", strike: "~~" };
+
+const TIMESTAMP_STYLES = new Set(["t", "T", "d", "D", "f", "F", "R"]);
+
+function formatDiscordTimestamp(unix: number, style: string): string | null {
+  if (!Number.isFinite(unix) || !TIMESTAMP_STYLES.has(style)) return null;
+  const date = new Date(unix * 1000);
+  if (Number.isNaN(date.getTime())) return null;
+  if (style === "R") {
+    const seconds = unix - Math.floor(Date.now() / 1000);
+    const absolute = Math.abs(seconds);
+    const unit = absolute < 60 ? "second" : absolute < 3600 ? "minute" : absolute < 86400 ? "hour" : absolute < 604800 ? "day" : absolute < 2592000 ? "week" : absolute < 31536000 ? "month" : "year";
+    const divisor = unit === "second" ? 1 : unit === "minute" ? 60 : unit === "hour" ? 3600 : unit === "day" ? 86400 : unit === "week" ? 604800 : unit === "month" ? 2592000 : 31536000;
+    return new Intl.RelativeTimeFormat(undefined, { numeric: "always" }).format(Math.round(seconds / divisor), unit);
+  }
+  const options: Intl.DateTimeFormatOptions = {
+    ...(style === "t" || style === "T" ? { hour: "numeric", minute: "2-digit" } : {}),
+    ...(style === "T" ? { second: "2-digit" } : {}),
+    ...(style === "d" ? { year: "numeric", month: "2-digit", day: "2-digit" } : {}),
+    ...(style === "D" ? { year: "numeric", month: "long", day: "numeric" } : {}),
+    ...(style === "f" ? { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : {}),
+    ...(style === "F" ? { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" } : {}),
+  };
+  return new Intl.DateTimeFormat(undefined, options).format(date);
+}
 
 function tokenizeMd(input: string): MdToken[] {
   const tokens: MdToken[] = [];
@@ -150,12 +176,17 @@ function tokenizeMd(input: string): MdToken[] {
     if (!raw) return;
     // AUTOLINK_RE has one capture group, so split interleaves URLs at odd
     // indices: [text?, url, text, url, ...]
-    const parts = raw.split(/(<a?:[A-Za-z0-9_~]+:\d+>)/g);
+    const parts = raw.split(/(<a?:[A-Za-z0-9_~]+:\d+>|<t:-?\d+:[tTdDfFR]>)/g);
     for (const part of parts) {
       if (!part) continue;
       const emoji = part.match(/^<(a?):([A-Za-z0-9_~]+):(\d+)>$/);
       if (emoji) {
         tokens.push({ type: "emoji", name: emoji[2], id: emoji[3], animated: emoji[1] === "a" });
+        continue;
+      }
+      const timestamp = part.match(/^<t:(-?\d+):([tTdDfFR])>$/);
+      if (timestamp) {
+        tokens.push({ type: "timestamp", unix: Number(timestamp[1]), style: timestamp[2], raw: part });
         continue;
       }
       const linked = part.split(AUTOLINK_RE);
@@ -209,6 +240,8 @@ function markdownToNodes(text: string): MdNode[] {
       append({ kind: "link", text: token.text, url: token.url });
     } else if (token.type === "emoji") {
       append({ kind: "emoji", name: token.name, id: token.id, animated: token.animated });
+    } else if (token.type === "timestamp") {
+      append({ kind: "timestamp", unix: token.unix, style: token.style, raw: token.raw });
     } else if (token.type === "marker") {
       if (openSet.has(token.fmt)) {
         // Closing marker: wrap content since its opening into a fmt node
@@ -275,6 +308,16 @@ const renderMdNodes = (nodes: MdNode[], keyPrefix: string): ReactNode =>
             }}
           />
         );
+      case "timestamp": {
+        const formatted = formatDiscordTimestamp(node.unix, node.style);
+        return formatted ? (
+          <time key={key} dateTime={new Date(node.unix * 1000).toISOString()} title={node.raw}>
+            {formatted}
+          </time>
+        ) : (
+          <span key={key}>{node.raw}</span>
+        );
+      }
       case "link":
         return (
           <a

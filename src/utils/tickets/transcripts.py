@@ -281,6 +281,46 @@ def _is_video_url(url: str) -> bool:
     return bool(re.search(r"\.(?:mp4|webm|mov|m4v|ogg)(?:[?#]|$)", url, re.I))
 
 
+def _discord_timestamp_text(unix: int, style: str) -> Optional[str]:
+    """Return a readable UTC fallback for a Discord dynamic timestamp."""
+    if style not in {"t", "T", "d", "D", "f", "F", "R"}:
+        return None
+    try:
+        value = datetime.fromtimestamp(unix, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+    if style == "R":
+        seconds = unix - int(time.time())
+        absolute = abs(seconds)
+        if absolute < 60:
+            amount, unit = seconds, "second"
+        elif absolute < 3600:
+            amount, unit = round(seconds / 60), "minute"
+        elif absolute < 86400:
+            amount, unit = round(seconds / 3600), "hour"
+        elif absolute < 604800:
+            amount, unit = round(seconds / 86400), "day"
+        elif absolute < 2592000:
+            amount, unit = round(seconds / 604800), "week"
+        elif absolute < 31536000:
+            amount, unit = round(seconds / 2592000), "month"
+        else:
+            amount, unit = round(seconds / 31536000), "year"
+        suffix = "s" if abs(amount) != 1 else ""
+        return f"in {abs(amount)} {unit}{suffix}" if amount >= 0 else f"{abs(amount)} {unit}{suffix} ago"
+    if style == "t":
+        return value.strftime("%-I:%M %p UTC")
+    if style == "T":
+        return value.strftime("%-I:%M:%S %p UTC")
+    if style == "d":
+        return value.strftime("%m/%d/%Y")
+    if style == "D":
+        return value.strftime("%B %-d, %Y")
+    if style == "F":
+        return value.strftime("%A, %B %-d, %Y %-I:%M %p UTC")
+    return value.strftime("%b %-d, %Y %-I:%M %p UTC")
+
+
 def _md_to_html(text: Any) -> str:
     """Convert a light markdown subset into safe HTML.
 
@@ -324,6 +364,21 @@ def _md_to_html(text: Any) -> str:
         return f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:">'
 
     value = re.sub(r"&lt;(a?):([A-Za-z0-9_~]+):(\d+)&gt;", _custom_emoji, value)
+
+    def _timestamp(match: "re.Match[str]") -> str:
+        unix = int(match.group(1))
+        style = match.group(2)
+        raw = f"&lt;t:{unix}:{style}&gt;"
+        formatted = _discord_timestamp_text(unix, style)
+        if formatted is None:
+            return raw
+        return (
+            f'<time class="discord-timestamp" datetime="{unix}" '
+            f'data-discord-ts="{unix}" data-discord-style="{style}" '
+            f'title="{raw}">{_esc(formatted)}</time>'
+        )
+
+    value = re.sub(r"&lt;t:(-?\d+):([tTdDfFR])&gt;", _timestamp, value)
 
     lines = value.split("\n")
     html_lines = []
@@ -682,6 +737,7 @@ def export_html(messages: List[dict], metadata: dict) -> str:
   .author-id {{ color: #949ba4; font-size: 11px; }}
   .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
   .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
+  .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
   .stickers {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
   .sticker img {{ width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; display: block; }}
   .ts-muted {{ color: #6d737a; }}
@@ -738,6 +794,32 @@ def export_html(messages: List[dict], metadata: dict) -> str:
   <div class="meta">{_esc(guild)} · {_esc(msg_count)} messages · Created {_esc(created)}</div>
 </div>
 {msg_block}
+<script>
+(() => {{
+  const styles = {{
+    t: {{ hour: "numeric", minute: "2-digit" }},
+    T: {{ hour: "numeric", minute: "2-digit", second: "2-digit" }},
+    d: {{ year: "numeric", month: "2-digit", day: "2-digit" }},
+    D: {{ year: "numeric", month: "long", day: "numeric" }},
+    f: {{ year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }},
+    F: {{ weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }}
+  }};
+  document.querySelectorAll("[data-discord-ts]").forEach((node) => {{
+    const unix = Number(node.dataset.discordTs);
+    const style = node.dataset.discordStyle;
+    if (!Number.isFinite(unix)) return;
+    if (style === "R") {{
+      const seconds = unix - Math.floor(Date.now() / 1000);
+      const abs = Math.abs(seconds);
+      const unit = abs < 60 ? "second" : abs < 3600 ? "minute" : abs < 86400 ? "hour" : abs < 604800 ? "day" : abs < 2592000 ? "week" : abs < 31536000 ? "month" : "year";
+      const divisor = {{ second: 1, minute: 60, hour: 3600, day: 86400, week: 604800, month: 2592000, year: 31536000 }}[unit];
+      node.textContent = new Intl.RelativeTimeFormat(undefined, {{ numeric: "always" }}).format(Math.round(seconds / divisor), unit);
+    }} else if (styles[style]) {{
+      node.textContent = new Intl.DateTimeFormat(undefined, styles[style]).format(new Date(unix * 1000));
+    }}
+  }});
+}})();
+</script>
 </body>
 </html>"""
 
