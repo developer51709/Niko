@@ -32,6 +32,13 @@ class ExperimentsView(discord.ui.LayoutView):
             ExperimentToggle(self.bot, "better_context", self.guild_id),
             ExperimentAboutButton(self.bot, "better_context")
         ))
+        self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        self.container.add_item(discord.ui.TextDisplay(content="**Multimodal Conversation**"))
+        self.container.add_item(discord.ui.TextDisplay(content="Lets Niko understand image attachments and transcribe Discord voice messages when responding. Media is only processed while this experiment is enabled."))
+        self.container.add_item(discord.ui.ActionRow(
+            ExperimentToggle(self.bot, "multimodal", self.guild_id),
+            ExperimentAboutButton(self.bot, "multimodal")
+        ))
         self.add_item(self.container)
 
 class ExperimentAboutButton(discord.ui.Button):
@@ -45,6 +52,8 @@ class ExperimentAboutButton(discord.ui.Button):
             view = AIActionsExperimentAbout(self.bot)
         elif self.experiment == "better_context":
             view = BetterContextExperimentAbout(self.bot)
+        elif self.experiment == "multimodal":
+            view = MultimodalExperimentAbout(self.bot)
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -155,6 +164,26 @@ class BetterContextExperimentAbout(discord.ui.LayoutView):
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
         self.add_item(self.container)
+
+
+class MultimodalExperimentAbout(discord.ui.LayoutView):
+    def __init__(self, bot: commands.Bot):
+        super().__init__()
+        self.bot = bot
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} Multimodal Conversation Experiment"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=(
+                "When enabled, Niko can inspect up to three image attachments and "
+                "use the transcription of a Discord voice message as conversation context.\n\n"
+                "Images use the configured vision model and voice messages use the "
+                "configured transcription model. If processing fails, Niko falls back "
+                "to the text that was sent. Media is not stored by the bot."
+            )),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="-# This is experimental and may incur provider usage costs when enabled."),
+        )
+        self.add_item(container)
 
 
 class ExperimentsButton(discord.ui.Button):

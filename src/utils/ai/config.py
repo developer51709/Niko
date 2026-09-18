@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "personality": "cafe",
     "enabled": "True",
     "ai_actions_experiment": "False",
+    "multimodal_experiment": "False",
 }
 
 

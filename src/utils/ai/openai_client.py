@@ -29,6 +29,19 @@ OPENAI_MODEL = "openai/gpt-oss-20b"
 _rl_cooldown: dict[int, float] = {}
 _RL_COOLDOWN_SECS = 30  # seconds to pause per user after a 429
 
+
+def transcribe_audio(audio_bytes: bytes, filename: str = "voice_message.ogg") -> str:
+    """Transcribe a Discord voice attachment using the configured AI client."""
+    import io
+
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename or "voice_message.ogg"
+    result = _get_client().audio.transcriptions.create(
+        model=os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1"),
+        file=audio_file,
+    )
+    return (getattr(result, "text", "") or "").strip()
+
 # ── Token budget constants ─────────────────────────────────────────────────────
 _CONV_HISTORY_TURNS   = 3    # recent turns kept for short-term context
 _USER_MEMORY_MAX      = 300  # chars kept from long-term memory string
@@ -402,6 +415,8 @@ def generate_reply_openai(
     context_messages: str = None,
     replied_content: str = None,
     ai_actions_enabled: bool = False,
+    image_urls: list[str] | None = None,
+    transcribed_audio: str | None = None,
 ):
     import json as _json
 
@@ -453,9 +468,17 @@ def generate_reply_openai(
     if conv_history:
         user_parts.append(f"History:\n{conv_history}")
 
+    if transcribed_audio:
+        user_parts.append(f"Voice message transcription: {transcribed_audio[:2000]}")
+
     user_parts.append(f"\n{username}: {message}")
 
     user_content = "\n".join(user_parts)
+    if image_urls:
+        user_content = [
+            {"type": "text", "text": user_content},
+            *({"type": "image_url", "image_url": {"url": url}} for url in image_urls[:3]),
+        ]
 
     global _fallback_idx
 
@@ -468,7 +491,7 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model=OPENAI_MODEL,
+            model=(os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini") if image_urls else OPENAI_MODEL),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},

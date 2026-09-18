@@ -42,7 +42,23 @@ async def handle_message(bot, msg: discord.Message):
                 return await bot.process_commands(msg)
             break
 
-    # ── 3. Detect name / ping triggers ────────────────────────────────────────
+    # ── 3. Detect name / ping/media triggers ──────────────────────────────────
+    multimodal_enabled = bool(
+        guild and get_ai_config(guild.id, "multimodal_experiment") == "True"
+    )
+    image_attachments = []
+    voice_attachments = []
+    if multimodal_enabled:
+        for attachment in msg.attachments:
+            content_type = (attachment.content_type or "").lower()
+            filename = (attachment.filename or "").lower()
+            if content_type.startswith("image/"):
+                image_attachments.append(attachment)
+            elif content_type.startswith("audio/") or filename.endswith((".ogg", ".opus", ".wav", ".mp3", ".m4a", ".webm")):
+                voice_attachments.append(attachment)
+        if getattr(getattr(msg, "flags", None), "voice", False) and msg.attachments:
+            voice_attachments = [msg.attachments[0]]
+
     called_by_name = "niko" in content
 
     if ANSWER_REPLYS:
@@ -51,7 +67,7 @@ async def handle_message(bot, msg: discord.Message):
         called_by_ping = bot.user in msg.mentions and not msg.reference
 
     # ── 4. Nothing triggered AI → stop ────────────────────────────────────────
-    if not (called_by_name or called_by_ping or is_ai_command):
+    if not (called_by_name or called_by_ping or is_ai_command or image_attachments or voice_attachments):
         return
 
     # ── 5. Extract user input ─────────────────────────────────────────────────
@@ -67,10 +83,12 @@ async def handle_message(bot, msg: discord.Message):
     if await check_message_blacklist(msg):
         return
 
-    # ── 7. Collect optional better-context payload ────────────────────────────
+    # ── 7. Collect optional context and multimodal payload ────────────────────
     replied_content    = None
     context_messages   = None
     ai_actions_enabled = False
+    image_urls         = [attachment.url for attachment in image_attachments[:3]]
+    transcribed_audio  = None
 
     if guild:
         if get_ai_config(guild.id, "better_context_experiment") == "True":
@@ -98,9 +116,26 @@ async def handle_message(bot, msg: discord.Message):
 
         ai_actions_enabled = get_ai_config(guild.id, "ai_actions_experiment") == "True"
 
-    # ── 8. Generate AI reply ──────────────────────────────────────────────────
     loop = asyncio.get_running_loop()
 
+    # Voice messages are downloaded only for the opt-in experiment. A failed
+    # transcription never blocks the normal text/image conversation path.
+    if voice_attachments:
+        try:
+            audio = await voice_attachments[0].read()
+            from utils.ai.openai_client import transcribe_audio
+            transcribed_audio = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    transcribe_audio,
+                    audio,
+                    voice_attachments[0].filename,
+                ),
+            )
+        except Exception as exc:
+            logging.warning("AI", f"Voice transcription failed: {exc}")
+
+    # ── 8. Generate AI reply ──────────────────────────────────────────────────
     async with msg.channel.typing():
         reply = await loop.run_in_executor(
             None,
@@ -114,6 +149,8 @@ async def handle_message(bot, msg: discord.Message):
                 context_messages=context_messages,
                 replied_content=replied_content,
                 ai_actions_enabled=ai_actions_enabled,
+                image_urls=image_urls,
+                transcribed_audio=transcribed_audio,
             ),
         )
 

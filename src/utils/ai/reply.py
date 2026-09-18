@@ -22,6 +22,8 @@ def generate_reply(
     context_messages=None,
     replied_content=None,
     ai_actions_enabled=False,
+    image_urls=None,
+    transcribed_audio=None,
 ):
     """
     Generate an AI reply string.  Runs synchronously (call via run_in_executor
@@ -45,6 +47,8 @@ def generate_reply(
                     context_messages=context_messages,
                     replied_content=replied_content,
                     ai_actions_enabled=ai_actions_enabled,
+                    image_urls=image_urls,
+                    transcribed_audio=transcribed_audio,
                 )
             return generate_reply_local(bot, user_id, server, message, username, system_prompt)
         except Exception:
