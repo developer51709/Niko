@@ -52,6 +52,14 @@ async def _create_tables(bot):
         )
     """)
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS notification_channels (
+            guild_id   INTEGER PRIMARY KEY,
+            channel_id INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS youtube (
             channel_id TEXT PRIMARY KEY,
             last_video TEXT

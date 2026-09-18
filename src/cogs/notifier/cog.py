@@ -513,6 +513,38 @@ class Notifier(commands.Cog):
     def cog_unload(self):
         self.check_posts.cancel()
 
+    # ── Official staff notification channel ───────────────────────────────
+
+    @commands.hybrid_command(name="notification-channel")
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    async def notification_channel(
+        self,
+        ctx: commands.Context,
+        channel: discord.TextChannel | None = None,
+    ):
+        """Choose where official Niko staff broadcasts are delivered."""
+        channel = channel or ctx.channel
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO notification_channels (guild_id, channel_id, updated_at) "
+            "VALUES ($1, $2, datetime('now'))",
+            ctx.guild.id,
+            channel.id,
+        )
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} Notifications configured"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    f"Official staff announcements will now be posted in {channel.mention}.\n"
+                    "You can run this command again to move them."
+                )
+            ),
+            accent_colour=discord.Colour(0x57F287),
+        ))
+        await ctx.send(view=view)
+
     # ── Command group ─────────────────────
 
     @commands.group(name="notifier", aliases=["notify"], invoke_without_command=True)

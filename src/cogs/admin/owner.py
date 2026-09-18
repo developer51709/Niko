@@ -1,5 +1,6 @@
 import discord.permissions
 import discord
+from discord import MediaGalleryItem, UnfurledMediaItem
 from discord.ext import commands
 import aiohttp
 import os
@@ -65,11 +66,183 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     return "."
 
 
+class BroadcastEditModal(discord.ui.Modal, title="Edit staff broadcast"):
+    def __init__(self, builder):
+        super().__init__()
+        self.builder = builder
+        self.title_input = discord.ui.TextInput(
+            label="Title",
+            default=builder.title,
+            max_length=240,
+        )
+        self.body_input = discord.ui.TextInput(
+            label="Message",
+            default=builder.body,
+            style=discord.TextStyle.paragraph,
+            max_length=4000,
+        )
+        self.add_item(self.title_input)
+        self.add_item(self.body_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.builder.title = self.title_input.value.strip() or "Official announcement"
+        self.builder.body = self.body_input.value.strip() or "(No message provided.)"
+        await interaction.response.edit_message(view=self.builder.preview())
+
+
+class BroadcastBuilder(discord.ui.LayoutView):
+    """Owner-scoped CV2 composer for staff announcements."""
+
+    def __init__(self, bot, owner_id: int, title: str, body: str, image_urls: list[str]):
+        super().__init__(timeout=900)
+        self.bot = bot
+        self.owner_id = owner_id
+        self.title = title or "Official announcement"
+        self.body = body or "(No message provided.)"
+        self.image_urls = image_urls[:10]
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This broadcast composer belongs to its owner.", ephemeral=True)
+            return False
+        return True
+
+    def preview(self) -> discord.ui.LayoutView:
+        view = discord.ui.LayoutView(timeout=900)
+        items: list = [
+            discord.ui.TextDisplay(content=f"# {self.title}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=self.body),
+        ]
+        if self.image_urls:
+            items.extend([
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.MediaGallery(*[
+                    MediaGalleryItem(media=UnfurledMediaItem(url=url))
+                    for url in self.image_urls
+                ]),
+            ])
+        items.extend([
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="-# Preview — use Edit to change the copy, then Publish to deliver it."),
+            discord.ui.ActionRow(
+                _BroadcastEditButton(self),
+                _BroadcastPublishButton(self),
+                _BroadcastCancelButton(self),
+            ),
+        ])
+        view.add_item(discord.ui.Container(*items, accent_colour=discord.Colour(0xC8A882)))
+        return view
+
+    async def publish(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        rows = await self.bot.cxn.fetch("SELECT guild_id, channel_id FROM notification_channels")
+        sent = 0
+        failed = 0
+        for row in rows:
+            channel = self.bot.get_channel(int(row["channel_id"]))
+            if channel is None:
+                failed += 1
+                continue
+            try:
+                await channel.send(view=self._delivery_view())
+                sent += 1
+            except (discord.Forbidden, discord.HTTPException):
+                failed += 1
+        await interaction.followup.send(
+            f"Broadcast delivered to **{sent}** configured server{'s' if sent != 1 else ''}."
+            + (f" {failed} could not be reached." if failed else ""),
+            ephemeral=True,
+        )
+        try:
+            await interaction.message.edit(view=_broadcast_closed_view("Broadcast published."))
+        except discord.HTTPException:
+            pass
+
+    def _delivery_view(self) -> discord.ui.LayoutView:
+        view = discord.ui.LayoutView()
+        items: list = [
+            discord.ui.TextDisplay(content=f"# {self.title}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=self.body),
+        ]
+        if self.image_urls:
+            items.extend([
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.MediaGallery(*[
+                    MediaGalleryItem(media=UnfurledMediaItem(url=url))
+                    for url in self.image_urls
+                ]),
+            ])
+        items.append(discord.ui.TextDisplay(content="-# Official Niko staff announcement"))
+        view.add_item(discord.ui.Container(*items, accent_colour=discord.Colour(0xC8A882)))
+        return view
+
+
+class _BroadcastEditButton(discord.ui.Button):
+    def __init__(self, builder):
+        super().__init__(label="Edit", style=discord.ButtonStyle.secondary)
+        self.builder = builder
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(BroadcastEditModal(self.builder))
+
+
+class _BroadcastPublishButton(discord.ui.Button):
+    def __init__(self, builder):
+        super().__init__(label="Publish", style=discord.ButtonStyle.success)
+        self.builder = builder
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.builder.publish(interaction)
+
+
+class _BroadcastCancelButton(discord.ui.Button):
+    def __init__(self, builder):
+        super().__init__(label="Cancel", style=discord.ButtonStyle.danger)
+        self.builder = builder
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(view=_broadcast_closed_view("Broadcast cancelled."))
+        self.builder.stop()
+
+
+def _broadcast_closed_view(message: str) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {message}"),
+        accent_colour=discord.Colour(0x2E3440),
+    ))
+    return view
+
+
 class OwnerCog(commands.Cog):
     """Owner-only management commands."""
 
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(name="broadcast")
+    @is_owner()
+    async def broadcast(self, ctx: commands.Context, *, message: str = ""):
+        """Open the owner-only interactive builder for an official broadcast.
+
+        Attach image files to the command message to include them in a CV2
+        MediaGallery. The builder lets the owner edit the copy before delivery.
+        """
+        image_urls = [
+            str(attachment.url)
+            for attachment in ctx.message.attachments
+            if (attachment.content_type or "").startswith("image/")
+        ]
+        builder = BroadcastBuilder(
+            self.bot,
+            ctx.author.id,
+            "Official announcement",
+            message.strip() or "Write your announcement with the Edit button.",
+            image_urls,
+        )
+        await ctx.send(view=builder.preview())
 
     # -------------------------------
     # Helper: Download image bytes
