@@ -18,6 +18,7 @@ JSON_COLUMNS = {
     "giveaways": ("requirements",),
     "ticket_config": ("panel_categories", "support_roles", "open_tickets"),
     "polls": ("options",),
+    "suggestions": ("voters", "verdict"),
 }
 
 
@@ -157,6 +158,8 @@ PRIMARY_KEYS: dict = {
     "roleplay_actions": "message_id",
     "roleplay_blocks": ("blocker_id", "blocked_id"),
     "persistent_status_panels": ("channel_id", "guild_id"),
+    "suggestion_config": "guild_id",
+    "suggestions": "message_id",
     # Dedicated music database (utils.music.database) — same cluster on
     # MongoDB but a separate database, so these tables live in their own pool.
     "music_liked_songs": ("user_id", "track_key"),

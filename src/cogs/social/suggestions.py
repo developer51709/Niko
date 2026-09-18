@@ -12,7 +12,6 @@ Commands (single `suggest` group):
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -22,9 +21,6 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
-
-DATA_FILE = "data/suggestions.json"
-
 
 MESSAGES = {
     "normal": {
@@ -151,24 +147,6 @@ def _personality(ctx) -> str:
 msg = make_msg(MESSAGES)
 
 
-def _load() -> dict:
-    if not os.path.exists(DATA_FILE):
-        return {"guilds": {}}
-    try:
-        with open(DATA_FILE) as f:
-            d = json.load(f)
-            d.setdefault("guilds", {})
-            return d
-    except Exception:
-        return {"guilds": {}}
-
-
-def _save(d: dict):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w") as f:
-        json.dump(d, f, indent=2)
-
-
 # ───────────────────────────────────────────────────
 #  VOTE BUTTONS
 # ───────────────────────────────────────────────────
@@ -229,8 +207,55 @@ class Suggestions(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.data = _load()
-        self._reattach()
+        # The cache is only a hot-path representation. The main database is
+        # authoritative and is loaded before persistent views are registered.
+        self.data = {"guilds": {}}
+
+    async def cog_load(self):
+        await self._load_database()
+        await self._register_persistent_views()
+
+    @staticmethod
+    def _decode_json(value, default):
+        if isinstance(value, (dict, list)):
+            return value
+        try:
+            return json.loads(value) if value else default
+        except (TypeError, ValueError):
+            return default
+
+    async def _load_database(self):
+        rows = await self.bot.cxn.fetch("SELECT guild_id, channel_id, next_id FROM suggestion_config")
+        for row in rows:
+            self.data["guilds"][str(row["guild_id"])] = {
+                "channel_id": row.get("channel_id"),
+                "next_id": row.get("next_id", 1),
+                "items": {},
+            }
+        rows = await self.bot.cxn.fetch("SELECT * FROM suggestions")
+        for row in rows:
+            guild = self.data["guilds"].setdefault(str(row["guild_id"]), {
+                "channel_id": None, "next_id": row.get("suggestion_id", 1) + 1, "items": {},
+            })
+            suggestion = dict(row)
+            suggestion["id"] = suggestion.pop("suggestion_id")
+            suggestion["voters"] = self._decode_json(suggestion.get("voters"), {})
+            suggestion["verdict"] = self._decode_json(suggestion.get("verdict"), None)
+            guild["items"][str(suggestion["id"])] = suggestion
+
+    async def _register_persistent_views(self):
+        registered = 0
+        for guild in self.data["guilds"].values():
+            for suggestion in guild["items"].values():
+                if suggestion.get("status") != "open" or not suggestion.get("message_id"):
+                    continue
+                try:
+                    self.bot.add_view(_build_view(suggestion, None), message_id=suggestion["message_id"])
+                    registered += 1
+                except Exception as exc:
+                    print(f"[Suggestions] Could not register view for {suggestion['message_id']}: {exc}")
+        if registered:
+            print(f"[Suggestions] Registered {registered} persistent suggestion view(s)")
 
     def _g(self, gid: int) -> dict:
         return self.data["guilds"].setdefault(str(gid), {
@@ -239,15 +264,22 @@ class Suggestions(commands.Cog):
             "items": {},
         })
 
-    def _reattach(self):
-        for gid_str, g in self.data["guilds"].items():
-            for sid_str, s in g["items"].items():
-                if s.get("status") == "open":
-                    try:
-                        view = _build_view(s, None)
-                        self.bot.add_view(view, message_id=s["message_id"])
-                    except Exception:
-                        pass
+    async def _persist_config(self, gid: int, g: dict):
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO suggestion_config (guild_id, channel_id, next_id) VALUES ($1, $2, $3)",
+            gid, g.get("channel_id"), g.get("next_id", 1),
+        )
+
+    async def _persist_suggestion(self, gid: int, suggestion: dict):
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO suggestions "
+            "(message_id, guild_id, suggestion_id, text, author_id, status, up, down, voters, channel_id, verdict, created_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            suggestion["message_id"], gid, suggestion["id"], suggestion["text"],
+            suggestion["author_id"], suggestion.get("status", "open"), suggestion.get("up", 0),
+            suggestion.get("down", 0), suggestion.get("voters", {}), suggestion["channel_id"],
+            suggestion.get("verdict"), suggestion.get("created_at", 0),
+        )
 
     @commands.hybrid_group(
         name="suggest",
@@ -295,7 +327,8 @@ class Suggestions(commands.Cog):
         sent = await ch.send(view=view)
         s["message_id"] = sent.id
         g["items"][str(sid)] = s
-        _save(self.data)
+        await self._persist_config(ctx.guild.id, g)
+        await self._persist_suggestion(ctx.guild.id, s)
         try:
             self.bot.add_view(_build_view(s, ctx), message_id=sent.id)
         except Exception:
@@ -315,7 +348,7 @@ class Suggestions(commands.Cog):
     async def suggest_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         g = self._g(ctx.guild.id)
         g["channel_id"] = channel.id
-        _save(self.data)
+        await self._persist_config(ctx.guild.id, g)
         await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'channel_set', channel=channel.mention)}")
 
     @suggest.command(
@@ -358,7 +391,7 @@ class Suggestions(commands.Cog):
             return await ctx.send(f"{get_emoji('warning')} {msg(ctx, 'missing', id=sid)}")
         s["status"] = status
         s["verdict"] = {"by": ctx.author.mention, "reason": reason[:500]}
-        _save(self.data)
+        await self._persist_suggestion(ctx.guild.id, s)
         ch = ctx.guild.get_channel(s["channel_id"])
         if ch:
             try:
@@ -398,7 +431,7 @@ class Suggestions(commands.Cog):
                 s["up"] = s.get("up", 0) + 1
             else:
                 s["down"] = s.get("down", 0) + 1
-        _save(self.data)
+        await self._persist_suggestion(gid, s)
 
         try:
             await interaction.response.edit_message(view=_build_view(s, interaction))

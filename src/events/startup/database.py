@@ -58,6 +58,29 @@ async def _create_tables(bot):
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS suggestion_config (
+            guild_id  INTEGER PRIMARY KEY,
+            channel_id INTEGER,
+            next_id   INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS suggestions (
+            message_id INTEGER PRIMARY KEY,
+            guild_id   INTEGER NOT NULL,
+            suggestion_id INTEGER NOT NULL,
+            text       TEXT NOT NULL,
+            author_id  INTEGER NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'open',
+            up         INTEGER NOT NULL DEFAULT 0,
+            down       INTEGER NOT NULL DEFAULT 0,
+            voters     TEXT NOT NULL DEFAULT '{}',
+            channel_id INTEGER NOT NULL,
+            verdict    TEXT,
+            created_at INTEGER NOT NULL
+        )
+    """)
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS youtube (
@@ -296,6 +319,8 @@ async def _create_tables(bot):
     await _migrate_logging_config(bot)
     await _migrate_moderation_config(bot)
 
+    await _migrate_suggestions_data(bot)
+
     # Migrate legacy onboarding JSON files (data/onboarding/*.json)
     from utils.onboarding.config import migrate_json_files
     try:
@@ -483,6 +508,45 @@ async def _create_tables(bot):
     """)
 
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_suggestions_data(bot):
+    """Migrate the legacy suggestions JSON store into the main database."""
+    import json
+
+    path = "data/suggestions.json"
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for gid_text, guild_data in (data.get("guilds", {}) if isinstance(data, dict) else {}).items():
+            try:
+                guild_id = int(gid_text)
+            except (TypeError, ValueError):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO suggestion_config (guild_id, channel_id, next_id) VALUES ($1, $2, $3)",
+                guild_id, guild_data.get("channel_id"), guild_data.get("next_id", 1),
+            )
+            for suggestion in (guild_data.get("items", {}) or {}).values():
+                if not suggestion.get("message_id"):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO suggestions "
+                    "(message_id, guild_id, suggestion_id, text, author_id, status, up, down, voters, channel_id, verdict, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                    suggestion["message_id"], guild_id, suggestion.get("id", 1),
+                    suggestion.get("text", ""), suggestion.get("author_id", 0),
+                    suggestion.get("status", "open"), suggestion.get("up", 0),
+                    suggestion.get("down", 0), suggestion.get("voters", {}),
+                    suggestion.get("channel_id", guild_data.get("channel_id") or 0),
+                    suggestion.get("verdict"), suggestion.get("created_at", 0),
+                )
+        os.rename(path, path + ".migrated")
+        logging.success("DB", "Migrated suggestions.json into the main database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate suggestions.json: {e}")
 
 
 async def _migrate_warns_data(bot):
