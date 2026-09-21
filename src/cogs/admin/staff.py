@@ -136,6 +136,7 @@ class StaffHelpSelect(discord.ui.Select):
         self.ctx = ctx
         options = [
             discord.SelectOption(label="All staff commands", value="all", description="Show commands available to every staff role."),
+            discord.SelectOption(label="Owner commands", value="owner", description="Show bot-owner-only commands."),
             *[
                 discord.SelectOption(label=STAFF_ROLES[key], value=key, description=f"Show {STAFF_ROLES[key]} commands.")
                 for key in ROLE_ORDER
@@ -147,6 +148,10 @@ class StaffHelpSelect(discord.ui.Select):
         if not await _is_staff_interaction(interaction):
             return await interaction.response.send_message("This help menu is for official Niko staff only.", ephemeral=True)
         value = self.values[0]
+        if value == "owner" and interaction.user.id not in OWNER_IDS:
+            return await interaction.response.send_message(
+                "Only the bot owner can view owner commands.", ephemeral=True
+            )
         await interaction.response.edit_message(view=build_staff_help(self.bot, interaction, value))
 
 

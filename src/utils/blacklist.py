@@ -13,6 +13,7 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
     guild is blacklisted.  Call this before processing any command.
     """
     bm = BlacklistManager()
+    await bm._ensure_loaded()
 
     user_entry = bm.get_user_entry(msg.author.id)
     if user_entry:
@@ -56,6 +57,9 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
     blacklisted.  Attach to bot.tree.interaction_check.
     """
     bm = BlacklistManager()
+    # Slash interactions can arrive before any command has touched the
+    # manager. Load the shared database cache before checking either scope.
+    await bm._ensure_loaded()
 
     user_entry = bm.get_user_entry(interaction.user.id)
     if user_entry:

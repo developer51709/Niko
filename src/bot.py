@@ -61,9 +61,14 @@ if WEBSHARE_API_KEY:
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
-@bot.tree.interaction_check
 async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
     return await check_interaction_blacklist(interaction)
+
+
+# CommandTree.interaction_check is an override hook, not a decorator. Assign
+# the bound-instance callback explicitly so every application command passes
+# through the blacklist gate.
+bot.tree.interaction_check = _slash_blacklist_check
 
 
 # ── Events ───────────────────────────────────────────────────────────────────
