@@ -17,16 +17,24 @@ from config.lavalink import LAVALINK_NODES
 from utils import logging as log
 from utils.music.constants import _MAX_PROBERS, _PROBE_TIMEOUT
 
-# The original ajieblogs API (https://lavalink-list.ajieblogs.eu.org/All)
-# stopped responding in early 2026 (returns 502 Bad Gateway / Cloudflare 403).
-# The community now relies on DarrenOfficial/lavalink-list, whose markdown
-# files we parse directly from raw.githubusercontent.com. We keep a small
-# embedded fallback list of well-known public nodes so the music cog still
-# works even if both upstreams are unreachable at startup.
+# The bot defaults to the comprehensive hardcoded list in src/config/lavalink.py
+# and only merges extra nodes from DarrenOfficial/lavalink-list when the
+# upstream is reachable. The hardcoded list is updated periodically and is
+# the authoritative source at startup.
 _DN_SSL_RAW    = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/SSL/Lavalink-SSL.md"
 _DN_NOSSL_RAW  = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/NoSSL/Lavalink-NonSSL.md"
 
 _FALLBACK_NODES: list[dict] = list(LAVALINK_NODES)
+
+
+# Nodes that use the Nodelink protocol are not compatible with Wavelink.
+# We strip them out before merging any upstream results.
+_NODELINK_HOSTS: set[str] = {
+    "nodelink.triniumhost.com",
+    "nodelink-02.triniumhost.com",
+    "sg1-nodelink.nyxbot.app",
+    "sg2-nodelink.nyxbot.app",
+}
 
 
 # Match a fenced ``bash``…`` block containing Host/Port/Password/Secure lines.
@@ -87,6 +95,14 @@ def _dedupe_nodes(nodes: list[dict]) -> list[dict]:
 
 
 async def fetch_node_list() -> list[dict]:
+    """Return the hardcoded node list, optionally merged with upstream nodes.
+
+    The hardcoded list is always the baseline.  When the public list is
+    reachable, any nodes not already in the baseline are appended so the
+    pool is as large as possible.  Nodelink entries are filtered out.
+    """
+    baseline: list[dict] = list(_FALLBACK_NODES)
+
     try:
         async with aiohttp.ClientSession() as s:
             ssl_nodes, nossl_nodes = await asyncio.gather(
@@ -94,15 +110,27 @@ async def fetch_node_list() -> list[dict]:
                 _fetch_dn_source(s, _DN_NOSSL_RAW, default_secure=False),
                 return_exceptions=False,
             )
-        nodes = _dedupe_nodes(list(ssl_nodes) + list(nossl_nodes))
-        if nodes:
-            log.info("Lavalink", f"Fetched {len(nodes)} v4 nodes from DarrenOfficial/lavalink-list.")
-            return nodes
+        upstream = _dedupe_nodes(list(ssl_nodes) + list(nossl_nodes))
+        # Remove Nodelink nodes that are not compatible with Wavelink.
+        upstream = [n for n in upstream if n["host"] not in _NODELINK_HOSTS]
+        if upstream:
+            # Merge: keep baseline first, then append any new upstream nodes.
+            merged = _dedupe_nodes(baseline + upstream)
+            new_count = len(merged) - len(baseline)
+            if new_count > 0:
+                log.info(
+                    "Lavalink",
+                    f"Merged {new_count} extra nodes from DarrenOfficial/lavalink-list "
+                    f"({len(merged)} total).",
+                )
+            else:
+                log.info("Lavalink", f"Hardcoded list covers all upstream nodes ({len(merged)} total).")
+            return merged
     except Exception as e:
-        log.warning("Lavalink", f"Node list fetch failed: {e}")
+        log.warning("Lavalink", f"Upstream fetch failed (using hardcoded list): {e}")
 
-    log.warning("Lavalink", "Falling back to the hardcoded Lavalink node list.")
-    return list(_FALLBACK_NODES)
+    log.info("Lavalink", f"Using hardcoded Lavalink node list ({len(baseline)} nodes).")
+    return baseline
 
 
 async def _probe_node(
