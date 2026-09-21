@@ -269,9 +269,9 @@ class StaffCog(commands.Cog):
                 # the source cog instance or commands such as broadcast lose
                 # their original ``ctx`` argument.
                 source_callback = command.callback
+                original_params = command.params.copy()
 
                 async def _forward_callback(
-                    _staff_self,
                     ctx,
                     *args,
                     _source=source,
@@ -281,6 +281,9 @@ class StaffCog(commands.Cog):
                     return await _callback(_source, ctx, *args, **kwargs)
 
                 command.callback = _forward_callback
+                # Replacing the callback must not expose the forwarding
+                # implementation's internal parameters to the command parser.
+                command.params = original_params
                 # Head Admins may use the blacklist workflow; other owner
                 # commands retain their existing owner check.
                 if name in HEAD_ADMIN_COMMANDS:
