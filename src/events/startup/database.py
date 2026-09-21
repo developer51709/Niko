@@ -66,6 +66,14 @@ async def _create_tables(bot):
         )
     """)
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_members (
+            user_id     INTEGER PRIMARY KEY,
+            role        TEXT NOT NULL,
+            assigned_by INTEGER NOT NULL,
+            assigned_at REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS suggestions (
             message_id INTEGER PRIMARY KEY,
             guild_id   INTEGER NOT NULL,

@@ -65,7 +65,7 @@ def write_commands(bot):
         from discord.ext import commands
         commands_data = []
         hybrid_names = set()
-        internal_cog_names = {"owner", "ownercog", "development"}
+        internal_cog_names = {"owner", "ownercog", "development", "staff", "staffcog"}
 
         def is_internal_cog(*values):
             """Keep owner/development-only commands out of public command data."""

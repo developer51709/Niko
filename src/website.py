@@ -615,7 +615,7 @@ def auth_status():
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
-_INTERNAL_COMMAND_COGS = {"owner", "ownercog", "development"}
+_INTERNAL_COMMAND_COGS = {"owner", "ownercog", "development", "staff", "staffcog"}
 
 # Older command registries predate the ``cog`` and ``module`` fields. Keep the
 # current private command names here so those records cannot leak while the
@@ -629,7 +629,7 @@ _LEGACY_INTERNAL_COMMAND_NAMES = {
     "devhelp", "devload", "devunload", "devreload", "devping", "devlatency",
     "devuptime", "devmem", "devtasks", "devguild", "devchannels", "devroles",
     "devmembers", "deveval", "devexec", "devsay", "devshutdown", "syncemojis",
-    "appemojis", "emojistatus",
+    "appemojis", "emojistatus", "staff", "staff help", "staff manage",
 }
 
 

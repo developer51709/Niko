@@ -160,6 +160,7 @@ PRIMARY_KEYS: dict = {
     "persistent_status_panels": ("channel_id", "guild_id"),
     "suggestion_config": "guild_id",
     "suggestions": "message_id",
+    "staff_members": "user_id",
     # Dedicated music database (utils.music.database) — same cluster on
     # MongoDB but a separate database, so these tables live in their own pool.
     "music_liked_songs": ("user_id", "track_key"),

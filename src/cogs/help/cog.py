@@ -16,6 +16,8 @@ class HelpCog(commands.Cog):
 
         if command_name:
             cmd = self.bot.get_command(command_name)
+            if cmd and (getattr(cmd, "hidden", False) or str(getattr(cmd, "qualified_name", "")).lower().startswith("staff")):
+                cmd = None
             if not cmd:
                 content = (
                     f"### {get_emoji('icon_cross')} {_ui(lang, 'cmd_not_found_title')}\n"
