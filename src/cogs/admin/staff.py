@@ -274,22 +274,27 @@ class StaffCog(commands.Cog):
                 # StaffCog as ``self``; explicitly forward the callback to
                 # the source cog instance or commands such as broadcast lose
                 # their original ``ctx`` argument.
-                source_callback = command.callback
-                original_params = command.params.copy()
+                def _forward_command_tree(subcommand):
+                    source_callback = subcommand.callback
+                    original_params = subcommand.params.copy()
 
-                async def _forward_callback(
-                    ctx,
-                    *args,
-                    _source=source,
-                    _callback=source_callback,
-                    **kwargs,
-                ):
-                    return await _callback(_source, ctx, *args, **kwargs)
+                    async def _forward_callback(
+                        ctx,
+                        *args,
+                        _source=source,
+                        _callback=source_callback,
+                        **kwargs,
+                    ):
+                        return await _callback(_source, ctx, *args, **kwargs)
 
-                command.callback = _forward_callback
-                # Replacing the callback must not expose the forwarding
-                # implementation's internal parameters to the command parser.
-                command.params = original_params
+                    subcommand.callback = _forward_callback
+                    # Replacing the callback must not expose the forwarding
+                    # implementation's internal parameters to the parser.
+                    subcommand.params = original_params
+                    for child in getattr(subcommand, "commands", ()):
+                        _forward_command_tree(child)
+
+                _forward_command_tree(command)
                 # Head Admins may use the blacklist workflow; other owner
                 # commands retain their existing owner check.
                 if name in HEAD_ADMIN_COMMANDS:
