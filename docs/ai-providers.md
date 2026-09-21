@@ -1,37 +1,35 @@
 # AI Provider Compatibility Guide
 
-Niko uses the OpenAI-compatible chat-completions API
-(`/v1/chat/completions`). Any provider that implements this standard can be
-plugged in by setting two environment variables:
+Niko uses Groq's OpenAI-compatible chat-completions API
+(`/openai/v1/chat/completions`) through the existing `openai` Python client.
+Configure the provider with:
 
 ```
-OPENAI_API_KEY=<your key>
-AI_INTEGRATIONS_OPENAI_BASE_URL=<provider base URL>   # omit for native OpenAI
+GROQ_API_KEY=<your Groq API key>
 ```
 
-If only `OPENAI_API_KEY` is set (no base URL), the official OpenAI endpoint is
-used. The Replit built-in integration sets both automatically.
+The bot uses Groq by default for chat, image understanding, and transcription.
+The endpoint and model names remain configurable with `GROQ_BASE_URL`,
+`GROQ_MODEL`, `GROQ_VISION_MODEL`, and `GROQ_TRANSCRIPTION_MODEL`.
 
 ---
 
-## Paid Providers
+## Active Provider
 
-| Provider | Model used | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
-|---|---|---|---|---|
-| **OpenAI** | `gpt-4o-mini` | $0.15 | $0.60 | Default; best reliability |
-| **OpenAI** | `gpt-4o` | $2.50 | $10.00 | Higher quality, higher cost |
-| **Anthropic** | `claude-3-5-haiku` | $0.80 | $4.00 | Via compatible wrapper only |
-| **Google** | `gemini-1.5-flash` | $0.075 | $0.30 | Via compatible wrapper |
-| **Mistral** | `mistral-small` | $0.20 | $0.60 | Direct OpenAI-compat endpoint |
-| **Cohere** | `command-r` | $0.15 | $0.60 | Via compatible wrapper |
+| Provider | Chat model | Vision model | Transcription model |
+|---|---|---|---|
+| **Groq** | `openai/gpt-oss-20b` | `meta-llama/llama-4-scout-17b-16e-instruct` | `whisper-large-v3-turbo` |
+
+These defaults can be overridden through the `GROQ_*` environment variables
+listed above. Use models available to the Groq account when overriding them.
 
 ---
 
-## Free Providers (Ranked)
+## Other OpenAI-Compatible Providers
 
-These providers offer free tiers with OpenAI-compatible endpoints. Set
-`OPENAI_API_KEY` to their key and `AI_INTEGRATIONS_OPENAI_BASE_URL` to their
-base URL.
+The active bot configuration is Groq. The providers below are reference
+options for future provider work; they are not used unless the client code is
+changed accordingly.
 
 ### Rank 1 — **OpenRouter** (Recommended)
 - **Base URL:** `https://openrouter.ai/api/v1`
@@ -87,25 +85,19 @@ base URL.
 
 ---
 
-## How to Switch Providers
+## Groq Setup
 
-1. Open your Replit Secrets (or `.env`).
-2. Set `OPENAI_API_KEY` to the new provider's API key.
-3. Set `AI_INTEGRATIONS_OPENAI_BASE_URL` to the provider's base URL (see
-   table above).
-4. Update the `model` name in `src/utils/ai/openai_client.py` → `generate_reply_openai`
-   (look for `model="gpt-4o-mini"`) to a model the new provider supports.
-5. Restart the bot.
-
-> **Tip:** The Replit built-in OpenAI integration sets both variables
-> automatically when you connect it, so you don't need to touch secrets for
-> the default setup.
+1. Create a Groq API key in the Groq console.
+2. Add `GROQ_API_KEY` in the project environment/Keys panel.
+3. Optionally set `GROQ_MODEL`, `GROQ_VISION_MODEL`, or
+   `GROQ_TRANSCRIPTION_MODEL` to models enabled for the account.
+4. Restart the bot so the client picks up the new settings.
 
 ---
 
 ## Token Usage at Niko's Settings
 
-With the current optimised prompt pipeline (gpt-4o-mini defaults):
+With the current optimised prompt pipeline (Groq chat-model defaults):
 
 | Scenario | Approx. input tokens | Approx. output tokens |
 |---|---|---|
@@ -114,6 +106,5 @@ With the current optimised prompt pipeline (gpt-4o-mini defaults):
 | AI Actions enabled | ~900 | ~80 |
 | Both experiments enabled | ~1 050 | ~80 |
 
-At OpenAI `gpt-4o-mini` pricing ($0.15 / $0.60 per 1M tokens), **1,000
-messages cost roughly $0.11** with no experiments and **~$0.17** with both
-experiments enabled.
+Provider pricing and quotas vary by Groq model and account tier; consult the
+Groq console for current limits before enabling high-volume multimodal use.

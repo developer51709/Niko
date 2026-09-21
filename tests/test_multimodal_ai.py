@@ -30,11 +30,13 @@ def test_api_logging_filters_successful_polling_noise():
     assert "werkzeug_logger.addFilter" in source
 
 
-def test_openai_request_uses_vision_content_and_transcription_model():
+def test_groq_request_uses_vision_content_and_transcription_model():
     source = (ROOT / "src/utils/ai/openai_client.py").read_text(encoding="utf-8")
     assert "audio.transcriptions.create" in source
-    assert 'OPENAI_TRANSCRIPTION_MODEL' in source
-    assert 'OPENAI_VISION_MODEL' in source
-    assert '"gpt-4.1-mini"' in source
-    assert '"gpt-4o-mini"' not in source
+    assert 'GROQ_API_KEY' in source
+    assert 'GROQ_BASE_URL' in source
+    assert 'GROQ_TRANSCRIPTION_MODEL' in source
+    assert 'GROQ_VISION_MODEL' in source
+    assert 'meta-llama/llama-4-scout-17b-16e-instruct' in source
+    assert 'whisper-large-v3-turbo' in source
     assert '"type": "image_url"' in source

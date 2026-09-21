@@ -20,7 +20,17 @@ _FALLBACK_REPLIES = [
 ]
 _fallback_idx = 0
 
-OPENAI_MODEL = "openai/gpt-oss-20b"
+# Groq exposes an OpenAI-compatible API, so the existing client and tool-call
+# pipeline can stay unchanged while requests are routed through Groq.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo"
+
+
+def _model_setting(name: str, default: str) -> str:
+    return os.environ.get(name, default).strip() or default
+
 
 # ── Rate-limit guard ───────────────────────────────────────────────────────────
 # Maps user_id → unix timestamp when the cooldown expires.
@@ -37,7 +47,7 @@ def transcribe_audio(audio_bytes: bytes, filename: str = "voice_message.ogg") ->
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename or "voice_message.ogg"
     result = _get_client().audio.transcriptions.create(
-        model=os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1"),
+        model=_model_setting("GROQ_TRANSCRIPTION_MODEL", GROQ_TRANSCRIPTION_MODEL),
         file=audio_file,
     )
     return (getattr(result, "text", "") or "").strip()
@@ -53,18 +63,15 @@ _REPLIED_CONTENT_MAX  = 200  # chars for replied-message snippet
 def _get_client():
     global client
     if client is None:
-        direct_key      = os.environ.get("OPENAI_API_KEY")
-        integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-        integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+        groq_key = os.environ.get("GROQ_API_KEY")
 
         # max_retries=0 — we handle retries ourselves so the SDK never
         # silently resends a request that already hit a rate limit.
-        if direct_key:
-            client = OpenAI(api_key=direct_key, max_retries=0)
-        elif integration_key and integration_url:
-            client = OpenAI(api_key=integration_key, base_url=integration_url, max_retries=0)
-        else:
-            client = OpenAI(api_key=integration_key, max_retries=0)
+        client = OpenAI(
+            api_key=groq_key,
+            base_url=os.environ.get("GROQ_BASE_URL", GROQ_BASE_URL),
+            max_retries=0,
+        )
     return client
 
 
@@ -491,7 +498,11 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model=(os.environ.get("OPENAI_VISION_MODEL", "gpt-4.1-mini") if image_urls else OPENAI_MODEL),
+            model=(
+                _model_setting("GROQ_VISION_MODEL", GROQ_VISION_MODEL)
+                if image_urls
+                else _model_setting("GROQ_MODEL", GROQ_MODEL)
+            ),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},

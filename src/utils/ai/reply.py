@@ -8,7 +8,7 @@ from utils.ai.config import get_ai_config
 from utils.ai.prompts import SYSTEM_PROMPT_CAFE, SYSTEM_PROMPT_NORMAL
 
 AI_ENABLED = True
-AI_MODE = "OPENAI"
+AI_MODE = "GROQ"
 ANSWER_REPLYS = True
 
 
@@ -41,7 +41,7 @@ def generate_reply(
         try:
             if AI_MODE == "NIKOAPI":
                 return generate_reply_nikoapi(bot, user_id, server, message, username, system_prompt)
-            if AI_MODE == "OPENAI":
+            if AI_MODE in {"GROQ", "OPENAI"}:
                 return generate_reply_openai(
                     bot, user_id, server, message, username, system_prompt,
                     context_messages=context_messages,
