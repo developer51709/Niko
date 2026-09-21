@@ -94,3 +94,9 @@ role_assign_limiter = RateLimiter(rate=5, per=5.0)
 # we stay just below that to prevent rate-limit warning floods in the console
 # when moderators purge large numbers of messages.
 purge_limiter = RateLimiter(rate=1, per=1.1)
+
+# One bucket per guild for mass role updates. A single Member.add_roles /
+# remove_roles call can update several selected roles, so keeping this to two
+# member updates per second leaves headroom for Discord's role endpoint while
+# still completing normal moderation jobs in a reasonable amount of time.
+mass_role_limiter = RateLimiter(rate=2, per=1.0)

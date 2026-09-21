@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 from config.emojis import get_emoji
 from ._messages import msg, _cv2
+from utils.ratelimit import mass_role_limiter
 
 
 class _ModConfirmView(discord.ui.LayoutView):
@@ -77,6 +78,250 @@ class _ModConfirmView(discord.ui.LayoutView):
     async def wait_for_response(self) -> bool:
         await self._event.wait()
         return bool(self.confirmed)
+
+
+MASSROLE_ACTIONS = {"add": "Add", "remove": "Remove"}
+MASSROLE_TARGETS = {"humans": "Humans", "bots": "Bots", "all": "All"}
+
+
+def _massrole_member_matches(member, target_type: str) -> bool:
+    """Return whether a member belongs to the panel's selected target group."""
+    if target_type == "humans":
+        return not member.bot
+    if target_type == "bots":
+        return member.bot
+    return True
+
+
+def _massrole_estimate_seconds(member_count: int) -> int:
+    """Estimate work time from the shared guild-scoped role limiter."""
+    if member_count <= 0:
+        return 0
+    return max(1, int((member_count * mass_role_limiter.per) / mass_role_limiter.rate) + 1)
+
+
+def _massrole_status_view(content: str, accent: discord.Colour) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=content),
+        accent_colour=accent,
+    ))
+    return view
+
+
+class _MassRoleActionSelect(discord.ui.Select):
+    def __init__(self, panel: "MassRolePanel"):
+        self.panel = panel
+        super().__init__(
+            placeholder="Choose an action…",
+            options=[
+                discord.SelectOption(
+                    label=label,
+                    value=value,
+                    description=f"{label} the selected roles.",
+                    default=panel.action == value,
+                )
+                for value, label in MASSROLE_ACTIONS.items()
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.panel.action = self.values[0]
+        await self.panel.refresh(interaction)
+
+
+class _MassRoleTargetSelect(discord.ui.Select):
+    def __init__(self, panel: "MassRolePanel"):
+        self.panel = panel
+        super().__init__(
+            placeholder="Choose who to target…",
+            options=[
+                discord.SelectOption(
+                    label=label,
+                    value=value,
+                    description=f"Apply this change to {label.lower()}.",
+                    default=panel.target_type == value,
+                )
+                for value, label in MASSROLE_TARGETS.items()
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.panel.target_type = self.values[0]
+        await self.panel.refresh(interaction)
+
+
+class _MassRoleSelect(discord.ui.RoleSelect):
+    def __init__(self, panel: "MassRolePanel"):
+        self.panel = panel
+        super().__init__(
+            placeholder="Choose roles (multiple allowed)…",
+            min_values=0,
+            max_values=25,
+            default_values=list(panel.selected_roles),
+            required=False,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.panel.selected_roles = tuple(self.values)
+        await self.panel.refresh(interaction)
+
+
+class _MassRoleApplyButton(discord.ui.Button):
+    def __init__(self, panel: "MassRolePanel"):
+        self.panel = panel
+        super().__init__(
+            label="Apply",
+            style=discord.ButtonStyle.success,
+            emoji=get_emoji("icon_tick") or "✅",
+            disabled=not panel.selected_roles,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.panel.apply(interaction)
+
+
+class MassRolePanel(discord.ui.LayoutView):
+    """Invoker-bound Components v2 panel for a rate-limited mass role change."""
+
+    def __init__(self, guild: discord.Guild, invoker_id: int, bot_member: discord.Member):
+        super().__init__(timeout=600)
+        self.guild = guild
+        self.invoker_id = invoker_id
+        self.bot_member = bot_member
+        self.action = "add"
+        self.target_type = "humans"
+        self.selected_roles: tuple[discord.Role, ...] = ()
+        self._running = False
+        self._build()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Guard every select and button, including after permissions change."""
+        if interaction.user.id != self.invoker_id:
+            await interaction.response.send_message(
+                "Only the person who opened this panel can use it.", ephemeral=True
+            )
+            return False
+        if interaction.guild is None or interaction.guild.id != self.guild.id:
+            await interaction.response.send_message(
+                "This panel can only be used in its original server.", ephemeral=True
+            )
+            return False
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message(
+                "You no longer have the **Manage Roles** permission.", ephemeral=True
+            )
+            return False
+        if not self.bot_member.guild_permissions.manage_roles:
+            await interaction.response.send_message(
+                "I need the **Manage Roles** permission before I can change roles.", ephemeral=True
+            )
+            return False
+        if self._running:
+            await interaction.response.send_message(
+                "This mass role update is already in progress.", ephemeral=True
+            )
+            return False
+        return True
+
+    def _build(self) -> None:
+        self.clear_items()
+        role_text = ", ".join(role.mention for role in self.selected_roles) or "*No roles selected yet.*"
+        summary = (
+            "### Mass role manager\n"
+            "Choose an action, target group, and one or more roles, then apply the change.\n\n"
+            f"**Action:** {MASSROLE_ACTIONS[self.action]}\n"
+            f"**Targets:** {MASSROLE_TARGETS[self.target_type]}\n"
+            f"**Roles:** {role_text}"
+        )
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=summary),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(_MassRoleActionSelect(self)),
+            discord.ui.ActionRow(_MassRoleTargetSelect(self)),
+            discord.ui.ActionRow(_MassRoleSelect(self)),
+            discord.ui.ActionRow(_MassRoleApplyButton(self)),
+            accent_colour=discord.Colour(0x5865F2),
+        ))
+
+    async def refresh(self, interaction: discord.Interaction) -> None:
+        self._build()
+        await interaction.response.edit_message(view=self)
+
+    def _plan(self) -> tuple[list[tuple[discord.Member, tuple[discord.Role, ...]]], int, str | None]:
+        if not self.selected_roles:
+            return [], 0, "Select at least one role before applying the change."
+
+        invalid_roles = [
+            role for role in self.selected_roles
+            if role.is_default() or role.managed or role >= self.bot_member.top_role
+        ]
+        if invalid_roles:
+            names = ", ".join(f"`{role.name}`" for role in invalid_roles[:5])
+            suffix = "…" if len(invalid_roles) > 5 else ""
+            return [], 0, f"I cannot manage these roles: {names}{suffix}"
+
+        operations: list[tuple[discord.Member, tuple[discord.Role, ...]]] = []
+        skipped = 0
+        for member in self.guild.members:
+            if member.id == self.bot_member.id or not _massrole_member_matches(member, self.target_type):
+                continue
+            if member.top_role >= self.bot_member.top_role:
+                skipped += 1
+                continue
+            if self.action == "add":
+                roles = tuple(role for role in self.selected_roles if role.id not in {r.id for r in member.roles})
+            else:
+                roles = tuple(role for role in self.selected_roles if role.id in {r.id for r in member.roles})
+            if roles:
+                operations.append((member, roles))
+        return operations, skipped, None
+
+    async def apply(self, interaction: discord.Interaction) -> None:
+        operations, skipped, error = self._plan()
+        if error:
+            return await interaction.response.edit_message(
+                view=_massrole_status_view(f"{get_emoji('icon_cross')} {error}", discord.Colour.red())
+            )
+
+        self._running = True
+        count = len(operations)
+        estimate = _massrole_estimate_seconds(count)
+        action_label = MASSROLE_ACTIONS[self.action]
+        target_label = MASSROLE_TARGETS[self.target_type]
+        await interaction.response.edit_message(view=_massrole_status_view(
+            f"### {get_emoji('icon_loading')} Applying mass role update\n"
+            f"**Action:** {action_label} · **Targets:** {target_label}\n"
+            f"Updating **{count:,}** member{'s' if count != 1 else ''}. "
+            f"Estimated completion: **about {estimate} second{'s' if estimate != 1 else ''}**.\n"
+            "Please keep this panel open while Discord processes the changes.",
+            discord.Colour.orange(),
+        ))
+        updated = 0
+        failed = 0
+        roles = ", ".join(role.name for role in self.selected_roles[:3])
+        try:
+            for member, member_roles in operations:
+                await mass_role_limiter.acquire(self.guild.id)
+                try:
+                    if self.action == "add":
+                        await member.add_roles(*member_roles, reason=f"Mass role update by {interaction.user} ({roles})")
+                    else:
+                        await member.remove_roles(*member_roles, reason=f"Mass role update by {interaction.user} ({roles})")
+                    updated += 1
+                except (discord.Forbidden, discord.HTTPException):
+                    failed += 1
+        finally:
+            self.stop()
+
+        skipped_text = f"\nSkipped **{skipped:,}** member{'s' if skipped != 1 else ''} above my role." if skipped else ""
+        failed_text = f"\nFailed for **{failed:,}** member{'s' if failed != 1 else ''}." if failed else ""
+        await interaction.message.edit(view=_massrole_status_view(
+            f"### {get_emoji('icon_tick') if not failed else get_emoji('warning')} Mass role update complete\n"
+            f"Successfully updated **{updated:,}** member{'s' if updated != 1 else ''}."
+            f"{failed_text}{skipped_text}",
+            discord.Colour.green() if not failed else discord.Colour.orange(),
+        ))
 
 
 class MembersMixin:
@@ -305,3 +550,19 @@ class MembersMixin:
             f"**New Nickname:** `{nickname}`\n**Changed By:** {ctx.author.mention}"
         )
         await self.logger().log_event(ctx.guild, "moderation", "Nickname Changed", body, target_id=member.id)
+
+    # ── MASSROLE ─────────────────────────────────────────────────────────────
+    @commands.hybrid_command(
+        name="massrole",
+        description="Open an interactive panel to add or remove roles in bulk",
+        help="{ 'en': 'Open an interactive panel to add or remove roles in bulk.', 'de': 'Öffne ein interaktives Panel, um Rollen gesammelt hinzuzufügen oder zu entfernen.', 'es': 'Abre un panel interactivo para añadir o quitar roles en masa.' }",
+    )
+    @commands.has_permissions(manage_roles=True)
+    async def massrole(self, ctx):
+        """Open the no-argument mass role management panel."""
+        if ctx.guild is None:
+            return await ctx.send("This command can only be used in a server.")
+        bot_member = ctx.guild.me or ctx.guild.get_member(self.bot.user.id)
+        if bot_member is None or not bot_member.guild_permissions.manage_roles:
+            return await ctx.send("I need the **Manage Roles** permission before I can change roles.")
+        await ctx.send(view=MassRolePanel(ctx.guild, ctx.author.id, bot_member))
