@@ -13,7 +13,7 @@ import discord
 from discord.ext import commands
 
 from config.ids import OWNER_IDS
-from cogs.admin.owner import OwnerCog
+from cogs.admin.owner import OwnerCog, _StatusPanelCog
 from cogs.admin.development import Development
 
 
@@ -263,6 +263,24 @@ class StaffCog(commands.Cog):
                 command.name = name
                 command.aliases = []
                 command.hidden = True
+                # Command callbacks retrieved from a Cog are unbound
+                # functions. Once moved under StaffCog, discord.py supplies
+                # StaffCog as ``self``; explicitly forward the callback to
+                # the source cog instance or commands such as broadcast lose
+                # their original ``ctx`` argument.
+                source_callback = command.callback
+
+                async def _forward_callback(
+                    _staff_self,
+                    ctx,
+                    *args,
+                    _source=source,
+                    _callback=source_callback,
+                    **kwargs,
+                ):
+                    return await _callback(_source, ctx, *args, **kwargs)
+
+                command.callback = _forward_callback
                 # Head Admins may use the blacklist workflow; other owner
                 # commands retain their existing owner check.
                 if name in HEAD_ADMIN_COMMANDS:
@@ -274,4 +292,8 @@ class StaffCog(commands.Cog):
 
 
 async def setup(bot):
+    # OwnerCog used to be loaded directly and also owned the status refresh
+    # loop. The command surface now lives under StaffCog, so register the
+    # internal panel cog explicitly without re-registering owner commands.
     await bot.add_cog(StaffCog(bot))
+    await bot.add_cog(_StatusPanelCog(bot))
