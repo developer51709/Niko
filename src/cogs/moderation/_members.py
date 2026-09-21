@@ -246,7 +246,7 @@ class MassRolePanel(discord.ui.LayoutView):
 
     async def refresh(self, interaction: discord.Interaction) -> None:
         self._build()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=self, allowed_mentions=discord.AllowedMentions.none())
 
     def _plan(self) -> tuple[list[tuple[discord.Member, tuple[discord.Role, ...]]], int, str | None]:
         if not self.selected_roles:
@@ -296,7 +296,7 @@ class MassRolePanel(discord.ui.LayoutView):
             f"Estimated completion: **about {estimate} second{'s' if estimate != 1 else ''}**.\n"
             "Please keep this panel open while Discord processes the changes.",
             discord.Colour.orange(),
-        ))
+        ), allowed_mentions=discord.AllowedMentions.none())
         updated = 0
         failed = 0
         roles = ", ".join(role.name for role in self.selected_roles[:3])
@@ -321,7 +321,7 @@ class MassRolePanel(discord.ui.LayoutView):
             f"Successfully updated **{updated:,}** member{'s' if updated != 1 else ''}."
             f"{failed_text}{skipped_text}",
             discord.Colour.green() if not failed else discord.Colour.orange(),
-        ))
+        ), allowed_mentions=discord.AllowedMentions.none())
 
 
 class MembersMixin:
@@ -565,4 +565,4 @@ class MembersMixin:
         bot_member = ctx.guild.me or ctx.guild.get_member(self.bot.user.id)
         if bot_member is None or not bot_member.guild_permissions.manage_roles:
             return await ctx.send("I need the **Manage Roles** permission before I can change roles.")
-        await ctx.send(view=MassRolePanel(ctx.guild, ctx.author.id, bot_member))
+        await ctx.send(view=MassRolePanel(ctx.guild, ctx.author.id, bot_member), allowed_mentions=discord.AllowedMentions.none())
