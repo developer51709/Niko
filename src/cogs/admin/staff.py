@@ -232,8 +232,14 @@ class StaffCog(commands.Cog):
         if not await is_staff_member(ctx):
             return False
         command = ctx.command
-        root_command = getattr(command, "root_parent", None) or command
-        command_name = root_command.name if root_command else ""
+        # ``root_parent`` is the ``staff`` group itself. Resolve the first
+        # command below that group so direct commands (``servers``) and nested
+        # commands (``blacklist info``) are checked against the right role.
+        command_name = getattr(command, "name", "")
+        parent = getattr(command, "parent", None)
+        while parent is not None and getattr(parent, "name", None) != "staff":
+            command_name = parent.name
+            parent = getattr(parent, "parent", None)
         role = await _role_for(ctx)
         if role == "owner":
             return True
