@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17181a"/><stop offset="1" stop-color="#33251f"/></linearGradient><pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M42 0H0V42" fill="none" stroke="#f4f0e9" stroke-opacity=".06"/></pattern></defs>
+  <rect width="1200" height="630" fill="url(#bg)"/><rect width="1200" height="630" fill="url(#grid)"/><circle cx="1040" cy="-30" r="260" fill="#d96545" fill-opacity=".18"/><circle cx="1080" cy="20" r="150" fill="#d96545" fill-opacity=".14"/>
+  <rect x="72" y="72" width="58" height="58" rx="14" fill="#d96545"/><text x="101" y="112" text-anchor="middle" fill="#fffaf5" font-family="Arial,sans-serif" font-size="32" font-weight="700">N</text>
+  <text x="72" y="190" fill="#d9957f" font-family="Arial,sans-serif" font-size="20" font-weight="700" letter-spacing="4">DOCUMENTATION</text>
+  <text x="72" y="285" fill="#f4f0e9" font-family="Arial,sans-serif" font-size="58" font-weight="700">Leveling System Overview</text>
+  <foreignObject x="72" y="330" width="800" height="100"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#c8c1b8;font:24px Arial,sans-serif;line-height:1.4">Learn about Niko&#39;s XP and leveling system and how to configure it.</div></foreignObject>
+  <text x="72" y="555" fill="#8c918e" font-family="monospace" font-size="18">NIKO.SRYZE.CC</text><text x="1128" y="555" text-anchor="end" fill="#d96545" font-family="monospace" font-size="18">NIKO</text>
+</svg>
