@@ -263,4 +263,24 @@ MESSAGES["cafe"]["es"].update({
 })
 
 
+# Playback was accepted by the node but never actually started streaming.
+MESSAGES["normal"]["en"].update({
+    "music_start_failed": "I couldn't start playback on the music server — please try `.play` again.",
+})
+MESSAGES["normal"]["de"].update({
+    "music_start_failed": "Die Wiedergabe konnte nicht gestartet werden — bitte versuche es mit `.play` noch einmal.",
+})
+MESSAGES["normal"]["es"].update({
+    "music_start_failed": "No se pudo iniciar la reproducción en el servidor de música — inténtalo de nuevo con `.play`.",
+})
+MESSAGES["cafe"]["en"].update({
+    "music_start_failed": "the music server went quiet on me 😭 try `.play` again and i'll pour it fresh ☕",
+})
+MESSAGES["cafe"]["de"].update({
+    "music_start_failed": "der musikserver ist still geworden 😭 probier `.play` nochmal, ich schenk frisch ein ☕",
+})
+MESSAGES["cafe"]["es"].update({
+    "music_start_failed": "el servidor de música se quedó callado 😭 prueba `.play` otra vez y lo sirvo de nuevo ☕",
+})
+
 msg = make_msg(MESSAGES)

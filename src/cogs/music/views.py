@@ -13,6 +13,7 @@ Lavalink node discovery, the dedicated music database) live in
 """
 
 import asyncio
+import re
 from collections import deque
 
 import discord
@@ -48,7 +49,7 @@ class _PauseResumeBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if player:
             await player.pause(not player.paused)
         await self.cog._update_np_message(interaction.guild)
@@ -62,7 +63,7 @@ class _SkipBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if player and player.playing:
             await player.skip(force=True)
         await self.cog._update_np_message(interaction.guild)
@@ -76,10 +77,11 @@ class _StopBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if player:
             state = self.cog._state(self.guild_id)
             state["loop"] = False
+            state["current_track"] = None
             self.cog._clear_ghost(self.guild_id)
             player.queue.clear()
             await player.stop()
@@ -99,7 +101,7 @@ class _PrevBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         state = self.cog._state(self.guild_id)
         history: deque = state["history"]
         if not player or not history:
@@ -109,6 +111,7 @@ class _PrevBtn(discord.ui.Button):
         if player.current:
             player.queue.put_at(0, player.current)
         await player.play(prev_track)
+        state["current_track"] = prev_track
         self.cog._schedule_ghost_refill(self.guild_id)
         await self.cog._update_np_message(interaction.guild)
 
@@ -176,7 +179,7 @@ class _LikeBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if not player or not player.current:
             await interaction.followup.send("Nothing is playing to like.", ephemeral=True)
             return
@@ -209,7 +212,7 @@ class _QueueBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         state = self.cog._state(self.guild_id)
         ghost = list(state["ghost_queue"])
         if not player or (player.queue.is_empty and not ghost):
@@ -232,7 +235,7 @@ class _VolDownBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if player:
             new_vol = max(0, player.volume - 10)
             await player.set_volume(new_vol)
@@ -247,7 +250,7 @@ class _VolUpBtn(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        player: wavelink.Player = interaction.guild.voice_client
+        player = self.cog._player_for_guild(interaction.guild)
         if player:
             new_vol = min(100, player.volume + 10)
             await player.set_volume(new_vol)
@@ -258,6 +261,35 @@ class _VolUpBtn(discord.ui.Button):
 #  NOW-PLAYING CARD BUILDER
 # ──────────────────────────────────────────────────
 
+_YT_ID_RE = re.compile(r"(?:[?&]v=|youtu\.be/|/shorts/|/embed/)([\w-]{6,})")
+
+
+def _track_artwork(track) -> str | None:
+    """Best-effort artwork URL for the now-playing card.
+
+    Not every public Lavalink node populates ``artworkUrl`` on its track
+    info, which left the panel without a thumbnail.  Fall back to the stock
+    YouTube thumbnail whenever the track points at a YouTube video.
+    """
+    artwork = (
+        getattr(track, "artwork", None)
+        or getattr(track, "artwork_url", None)
+        or (getattr(track, "raw_data", {}) or {}).get("info", {}).get("artworkUrl")
+    )
+    if artwork:
+        return artwork
+
+    uri = getattr(track, "uri", None) or ""
+    source = (getattr(track, "source", None) or "").lower()
+    identifier = getattr(track, "identifier", None) or ""
+    if "youtu" in uri or source in {"youtube", "youtube music", "youtube_music"}:
+        match = _YT_ID_RE.search(uri) or re.fullmatch(r"[\w-]{6,}", identifier)
+        if match:
+            video_id = match.group(1) if hasattr(match, "group") and match.lastindex else match.group(0)
+            return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    return None
+
+
 def _build_np_view(
     player:   wavelink.Player,
     guild:    discord.Guild,
@@ -265,7 +297,10 @@ def _build_np_view(
     is_playing: bool = True,
 ) -> discord.ui.LayoutView:
     state    = cog._state(guild.id)
-    track    = player.current if player else None
+    track    = (
+        (player.current if player else None)
+        or state.get("current_track")
+    )
     loop     = state.get("loop", False)
     autoplay = state.get("autoplay", False)
     history: deque = state.get("history", deque())
@@ -316,9 +351,10 @@ def _build_np_view(
     ]
 
     # Artwork thumbnail (if available)
-    if track.artwork:
+    artwork = _track_artwork(track)
+    if artwork:
         items.insert(0, discord.ui.MediaGallery(
-            MediaGalleryItem(media=UnfurledMediaItem(url=track.artwork))
+            MediaGalleryItem(media=UnfurledMediaItem(url=artwork))
         ))
         items.insert(1, discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
