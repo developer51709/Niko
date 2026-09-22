@@ -172,10 +172,7 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("Ticket",         f"{get_emoji('icon_ticket')}"),
     ("Image Tools",    f"{get_emoji('icon_image')}"),
     ("Giveaway",       f"{get_emoji('icon_giveaway')}"),
-    ("Reminders",      f"{get_emoji('icon_reminder')}"),
-    ("Tags",           f"{get_emoji('icon_message')}"),
     ("Birthdays",      f"{get_emoji('icon_heart')}"),
-    ("Highlights",     f"{get_emoji('notepad')}"),
     ("Polls",          f"{get_emoji('icon_question')}"),
     ("Suggestions",    f"{get_emoji('icon_lightbulb')}"),
     ("Starboard",      f"{get_emoji('star')}"),
@@ -203,10 +200,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket commands",
         "Image Tools":   "Image manipulation commands",
         "Giveaway":      "Giveaway commands",
-        "Reminders":     "Personal reminder system",
-        "Tags":          "Custom server tags",
         "Birthdays":     "Server birthdays",
-        "Highlights":    "Keyword DM notifications",
         "Polls":         "Multi-option polls",
         "Suggestions":   "Server suggestions",
         "Starboard":     "Highlight wall for popular messages",
@@ -232,10 +226,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket-Befehle",
         "Image Tools":   "Bildbearbeitungsbefehle",
         "Giveaway":      "Gewinnspiel-Befehle",
-        "Reminders":     "Persönliche Erinnerungen",
-        "Tags":          "Benutzerdefinierte Server-Tags",
         "Birthdays":     "Server-Geburtstage",
-        "Highlights":    "Schlüsselwort-DM-Benachrichtigungen",
         "Polls":         "Mehrfach-Umfragen",
         "Suggestions":   "Server-Vorschläge",
         "Starboard":     "Highlight-Wand für beliebte Nachrichten",
@@ -261,10 +252,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Comandos de tickets",
         "Image Tools":   "Manipulación de imágenes",
         "Giveaway":      "Comandos de sorteos",
-        "Reminders":     "Sistema de recordatorios personales",
-        "Tags":          "Tags personalizados del servidor",
         "Birthdays":     "Cumpleaños del servidor",
-        "Highlights":    "Notificaciones DM por palabras clave",
         "Polls":         "Encuestas multi-opción",
         "Suggestions":   "Sugerencias del servidor",
         "Starboard":     "Muro de mensajes populares",
@@ -349,21 +337,9 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n"
             "> Host and manage giveaways in your server!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Reminder Commands**\n"
-            "> Schedule personal reminders, list and manage them."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Tag Commands**\n"
-            "> Create custom server tags — quick text snippets keyed by name."
-        ),
         "Birthdays": (
             f"{get_emoji('icon_heart')} **Birthday Commands**\n"
             "> Set and announce server member birthdays."
-        ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Highlight Commands**\n"
-            "> Get DMed when keywords you care about are mentioned."
         ),
         "Polls": (
             f"{get_emoji('icon_question')} **Poll Commands**\n"
@@ -456,21 +432,9 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_giveaway')} **Gewinnspiel-Befehle**\n"
             "> Gewinnspiele auf deinem Server veranstalten und verwalten!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Erinnerungs-Befehle**\n"
-            "> Persönliche Erinnerungen planen, anzeigen und verwalten."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Tag-Befehle**\n"
-            "> Benutzerdefinierte Server-Tags — schnelle Textbausteine per Name."
-        ),
         "Birthdays": (
             f"{get_emoji('icon_heart')} **Geburtstags-Befehle**\n"
             "> Geburtstage von Mitgliedern setzen und ankündigen."
-        ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Highlight-Befehle**\n"
-            "> Lass dir per DM Bescheid geben, wenn deine Schlüsselwörter genannt werden."
         ),
         "Polls": (
             f"{get_emoji('icon_question')} **Umfrage-Befehle**\n"
@@ -563,21 +527,9 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             f"{get_emoji('icon_giveaway')} **Comandos de Sorteos**\n"
             "> ¡Organiza y gestiona sorteos en tu servidor!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Comandos de Recordatorios**\n"
-            "> Programa recordatorios personales, lístalos y gestiónalos."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Comandos de Tags**\n"
-            "> Crea tags personalizados — fragmentos de texto rápidos por nombre."
-        ),
         "Birthdays": (
             f"{get_emoji('icon_heart')} **Comandos de Cumpleaños**\n"
             "> Establece y anuncia cumpleaños de los miembros del servidor."
-        ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Comandos de Highlights**\n"
-            "> Recibe DMs cuando se mencionan tus palabras clave."
         ),
         "Polls": (
             f"{get_emoji('icon_question')} **Comandos de Encuestas**\n"
@@ -606,7 +558,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Economy":       ["EconomyCog"],
     "Roleplay":      ["RolePlayCog"],
     "Info":          ["InfoCog", "LegalCog"],
-    "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog"],
+    "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog", "Tags", "Highlights", "Reminders"],
     "AI":            ["AICog", "AIConfig"],
     "Moderation":    ["Moderation"],
     "AutoMod":       ["AutoMod"],
@@ -619,10 +571,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Ticket":        ["Tickets"],
     "Image Tools":   ["ImageTools", "AiImageTools"],
     "Giveaway":      ["Giveaway"],
-    "Reminders":     ["Reminders"],
-    "Tags":          ["Tags"],
     "Birthdays":     ["Birthdays"],
-    "Highlights":    ["Highlights"],
     "Polls":         ["Polls"],
     "Suggestions":   ["Suggestions"],
     "Starboard":     ["Starboard"],
