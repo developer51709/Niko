@@ -845,6 +845,12 @@ def api_save_staff_profile():
     user_id = int(session["user"]["id"])
     if values and _discord_bot is not None and getattr(_discord_bot, "cxn", None):
         async def save_to_bot():
+            # Owners can be exposed through OWNER_IDS without having a row in
+            # staff_members. Seed that row before applying the profile update.
+            await _discord_bot.cxn.execute(
+                "INSERT OR IGNORE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
+                user_id, role, user_id, int(time.time()),
+            )
             assignments = ", ".join(f"{key} = ${index + 1}" for index, key in enumerate(values))
             params = [*values.values(), user_id]
             await _discord_bot.cxn.execute(
@@ -861,6 +867,10 @@ def api_save_staff_profile():
     try:
         assignments = ", ".join(f"{key} = ?" for key in values)
         if assignments and conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES (?, ?, ?, ?)",
+                (user_id, role, user_id, int(time.time())),
+            )
             conn.execute(f"UPDATE staff_members SET {assignments} WHERE user_id = ?", (*values.values(), user_id))
             conn.commit()
     finally:
