@@ -624,78 +624,109 @@ STAFF_PRIORITY = {"owner": 100, "head_admin": 90, "graphic_designer": 80, "head_
 
 
 def _staff_identity(user_id: str) -> dict:
-    """Resolve a staff member's live Discord identity and presence."""
-    member = None
+    """Resolve a staff member's global identity and the richest live presence.
+
+    Discord presence is cached on each ``Member`` and can differ by guild. The
+    first guild in ``bot.guilds`` is not guaranteed to be the guild where a
+    staff member's activity was received, which previously made some roles
+    (notably Head Admins) appear without Spotify/custom status data.
+    """
+    members = []
     if _discord_bot is not None:
         for guild in _discord_bot.guilds:
-            member = guild.get_member(int(user_id))
-            if member:
-                break
+            candidate = guild.get_member(int(user_id))
+            if candidate is not None:
+                members.append(candidate)
+
+    def presence_score(candidate) -> tuple[int, int, int]:
+        raw_status = getattr(candidate, "status", "offline")
+        status = getattr(raw_status, "name", None) or str(raw_status)
+        status = status.rsplit(".", 1)[-1].lower()
+        activities = getattr(candidate, "activities", ()) or ()
+        has_custom = any(type(item).__name__.lower() == "customactivity" for item in activities)
+        # Prefer activity/custom-status data, then an active presence, and only
+        # use the member order as a stable tie-breaker.
+        return (int(bool(activities)), int(has_custom), int(status != "offline"))
+
+    ordered_members = sorted(
+        enumerate(members),
+        key=lambda item: (presence_score(item[1]), -item[0]),
+        reverse=True,
+    )
+    member = ordered_members[0][1] if ordered_members else None
     user = member or (_discord_bot.get_user(int(user_id)) if _discord_bot is not None else None)
     activities = []
     custom_status = None
-    for activity in getattr(member, "activities", ()) or ():
-        activity_type = getattr(getattr(activity, "type", None), "name", None) or str(getattr(activity, "type", "")).rsplit(".", 1)[-1].lower()
-        class_name = type(activity).__name__.lower()
+    seen_activities = set()
+    def serialize_emoji(emoji):
+        if emoji is None:
+            return None
+        emoji_id = getattr(emoji, "id", None)
+        emoji_name = getattr(emoji, "name", None) or str(emoji)
+        return {
+            "kind": "custom" if emoji_id else "unicode",
+            "value": str(emoji_id) if emoji_id else emoji_name,
+            "name": emoji_name,
+            "animated": bool(getattr(emoji, "animated", False)),
+        }
 
-        def serialize_emoji(emoji):
-            if emoji is None:
-                return None
-            emoji_id = getattr(emoji, "id", None)
-            emoji_name = getattr(emoji, "name", None) or str(emoji)
-            return {
-                "kind": "custom" if emoji_id else "unicode",
-                "value": str(emoji_id) if emoji_id else emoji_name,
-                "name": emoji_name,
-                "animated": bool(getattr(emoji, "animated", False)),
-            }
+    for _, presence_member in ordered_members:
+        for activity in getattr(presence_member, "activities", ()) or ():
+            activity_type = getattr(getattr(activity, "type", None), "name", None) or str(getattr(activity, "type", "")).rsplit(".", 1)[-1].lower()
+            class_name = type(activity).__name__.lower()
 
-        if class_name == "customactivity" or activity_type in {"custom", "customstatus", "custom_activity"}:
-            custom_status = {
-                "text": getattr(activity, "state", None),
-                "emoji": serialize_emoji(getattr(activity, "emoji", None)),
-            }
-            continue
+            if class_name == "customactivity" or activity_type in {"custom", "customstatus", "custom_activity"}:
+                if custom_status is None:
+                    custom_status = {
+                        "text": getattr(activity, "state", None),
+                        "emoji": serialize_emoji(getattr(activity, "emoji", None)),
+                    }
+                continue
 
-        # discord.py exposes Spotify and Streaming as dedicated activity
-        # classes with attributes that differ from the generic Activity class.
-        if class_name == "spotify":
-            activities.append({
-                "kind": "spotify",
-                "type": "listening",
-                "name": "Spotify",
-                "details": getattr(activity, "title", None),
-                "state": getattr(activity, "artist", None),
-                "url": getattr(activity, "track_url", None),
-                "platform": "Spotify",
-                "image_url": getattr(activity, "album_cover_url", None),
-            })
-            continue
-        if class_name == "streaming":
-            activities.append({
-                "kind": "streaming",
-                "type": "streaming",
-                "name": getattr(activity, "game", None) or getattr(activity, "name", None) or "Live stream",
-                "details": getattr(activity, "platform", None),
-                "state": None,
-                "url": getattr(activity, "url", None),
-                "platform": getattr(activity, "platform", None),
-                "image_url": None,
-            })
-            continue
+            # discord.py exposes Spotify and Streaming as dedicated activity
+            # classes with attributes that differ from the generic Activity class.
+            activity_key = (class_name, getattr(activity, "name", None), getattr(activity, "title", None), getattr(activity, "state", None), getattr(activity, "url", None))
+            if activity_key in seen_activities:
+                continue
+            seen_activities.add(activity_key)
 
-        name = getattr(activity, "name", None)
-        if name:
-            activities.append({
-                "kind": "activity",
-                "type": activity_type,
-                "name": name,
-                "details": getattr(activity, "details", None),
-                "state": getattr(activity, "state", None),
-                "url": getattr(activity, "url", None),
-                "platform": None,
-                "image_url": None,
-            })
+            if class_name == "spotify":
+                activities.append({
+                    "kind": "spotify",
+                    "type": "listening",
+                    "name": "Spotify",
+                    "details": getattr(activity, "title", None),
+                    "state": getattr(activity, "artist", None),
+                    "url": getattr(activity, "track_url", None),
+                    "platform": "Spotify",
+                    "image_url": getattr(activity, "album_cover_url", None),
+                })
+                continue
+            if class_name == "streaming":
+                activities.append({
+                    "kind": "streaming",
+                    "type": "streaming",
+                    "name": getattr(activity, "game", None) or getattr(activity, "name", None) or "Live stream",
+                    "details": getattr(activity, "platform", None),
+                    "state": None,
+                    "url": getattr(activity, "url", None),
+                    "platform": getattr(activity, "platform", None),
+                    "image_url": None,
+                })
+                continue
+
+            name = getattr(activity, "name", None)
+            if name:
+                activities.append({
+                    "kind": "activity",
+                    "type": activity_type,
+                    "name": name,
+                    "details": getattr(activity, "details", None),
+                    "state": getattr(activity, "state", None),
+                    "url": getattr(activity, "url", None),
+                    "platform": None,
+                    "image_url": None,
+                })
     raw_status = getattr(member, "status", "offline") if member is not None else "offline"
     # discord.py may expose this as a Status enum (``Status.online``) or a
     # string depending on the cached object/version. Keep the API stable for
