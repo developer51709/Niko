@@ -59,7 +59,8 @@ async def handle_message(bot, msg: discord.Message):
         if getattr(getattr(msg, "flags", None), "voice", False) and msg.attachments:
             voice_attachments = [msg.attachments[0]]
 
-    called_by_name = "niko" in content
+    ai_name = str(get_ai_config(guild.id, "ai_name") or "Niko").strip() if guild else "Niko"
+    called_by_name = ai_name.lower() in content
 
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions

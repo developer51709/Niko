@@ -57,6 +57,7 @@ from utils.donations import (
 from cogs.donations.oxapay import OxaPayClient
 from config.ids import OWNER_IDS, DEVELOPER_IDS
 from cogs.admin.staff import STAFF_ROLES
+from utils.ai.config import get_ai_config, set_ai_config
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 ECONOMY_DIR  = os.path.join(DATA_DIR, "economy_data")
 BOT_STATS    = os.path.join(DATA_DIR, "bot_stats.json")
-AICFG        = os.path.join(DATA_DIR, "ai_config.json")
+AI_CONFIG_DATABASE_SENTINEL_LEGACY        = os.path.join(DATA_DIR, "ai_config.json")
+AI_CONFIG_DATABASE_SENTINEL = AI_CONFIG_DATABASE_SENTINEL_LEGACY  # compatibility alias; AI reads/writes are database-backed
 LEVELS_JSON  = os.path.join(DATA_DIR, "levels.json.migrated")
 LEVELCFG_JSON = os.path.join(DATA_DIR, "level_config.json.migrated")
 DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
@@ -1514,7 +1516,7 @@ async def _refresh_ticket_panel(guild_id: int) -> None:
 @require_guild_access
 def api_guild_config(guild_id):
     modcfg  = get_runtime_moderation_config(guild_id)
-    aicfg   = load_json(AICFG,  {}).get(str(guild_id), {})
+    aicfg   = get_ai_config(int(guild_id))
     level_cfg = get_runtime_level_config(guild_id)
 
     try:
@@ -2000,22 +2002,26 @@ def api_save_profile(guild_id):
 @require_guild_access
 @require_csrf
 def api_save_ai(guild_id):
+    """Persist all AI settings through the database-backed config helper."""
     body = request.get_json(silent=True) or {}
-    data = load_json(AICFG, {})
-    guild_id = str(guild_id)
-    if guild_id not in data:
-        data[guild_id] = {"personality": "cafe", "enabled": "True"}
+    allowed = {
+        "personality", "enabled", "ai_name",
+        "ai_actions_experiment", "better_context_experiment",
+        "multimodal_experiment",
+    }
+    unknown = set(body) - allowed
+    if unknown:
+        return jsonify({"error": f"Unsupported AI fields: {', '.join(sorted(unknown))}"}), 400
+    if "personality" in body and body["personality"] not in {"cafe", "normal"}:
+        return jsonify({"error": "Personality must be cafe or normal."}), 400
+    if "ai_name" in body and len(str(body["ai_name"]).strip()) > 32:
+        return jsonify({"error": "AI name must be 32 characters or fewer."}), 400
 
-    if body.get("personality") in ("cafe", "normal"):
-        data[guild_id]["personality"] = body["personality"]
-    if "enabled" in body:
-        data[guild_id]["enabled"] = "True" if body["enabled"] else "False"
-    for experiment in ("ai_actions_experiment", "better_context_experiment"):
-        if experiment in body:
-            data[guild_id][experiment] = "True" if body[experiment] else "False"
-
-    save_json(AICFG, data)
-    return jsonify({"ok": True, "config": data[guild_id]})
+    guild_int = int(guild_id)
+    for key in allowed:
+        if key in body:
+            set_ai_config(guild_int, key, body[key])
+    return jsonify({"ok": True, "config": get_ai_config(guild_int)})
 
 
 @app.route("/api/guild/<guild_id>/config/leveling", methods=["POST"])

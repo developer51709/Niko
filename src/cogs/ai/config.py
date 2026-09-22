@@ -289,6 +289,36 @@ class BotPersonalityButton(discord.ui.Button):
 
 
 
+class AINameModal(discord.ui.Modal, title="Rename the AI"):
+    name = discord.ui.TextInput(
+        label="AI name",
+        placeholder="Niko",
+        min_length=1,
+        max_length=32,
+        required=True,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        value = str(self.name).strip()
+        set_ai_config(interaction.guild.id, "ai_name", value)
+        await interaction.response.send_message(
+            f"The AI will now respond to **{value}** in this server.", ephemeral=True
+        )
+
+
+class AINameButton(discord.ui.Button):
+    def __init__(self, bot: commands.Bot):
+        super().__init__(label="AI Name", style=discord.ButtonStyle.secondary)
+        self.bot = bot
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "You need the `manage_guild` permission to use this button.", ephemeral=True
+            )
+        await interaction.response.send_modal(AINameModal())
+
+
 class ToggleAIButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot):
         super().__init__(
@@ -328,6 +358,7 @@ class MainPanelButtons(discord.ui.ActionRow):
         super().__init__()
         self.bot = bot
         self.add_item(ToggleAIButton(self.bot))
+        self.add_item(AINameButton(self.bot))
         self.add_item(BotPersonalityButton(self.bot))
         self.add_item(ExperimentsButton(self.bot))
 

@@ -137,6 +137,8 @@ export type GuildConfig = {
     enabled?: string | boolean;
     ai_actions_experiment?: string | boolean;
     better_context_experiment?: string | boolean;
+    multimodal_experiment?: string | boolean;
+    ai_name?: string;
   };
   leveling: {
     xp_enabled?: boolean;

@@ -204,6 +204,24 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .side-settings-caption small { color: var(--dim); font-size: 9px; }
 .dashboard-layout .sidebar-bottom { padding: 18px 9px 0; border-top-color: var(--line); }
 .dashboard-layout .dash-content { background: var(--canvas); }
+.dashboard-layout .staff-page { max-width: 1080px; }
+.dashboard-layout .staff-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 32px; }
+.dashboard-layout .staff-heading h1 { margin: 12px 0 10px; font-size: clamp(30px, 4vw, 46px); letter-spacing: -.075em; }
+.dashboard-layout .staff-heading p { max-width: 650px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.dashboard-layout .staff-role-card { display: flex; align-items: center; gap: 11px; min-width: 170px; padding: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); }
+.dashboard-layout .staff-role-mark { width: 35px; height: 35px; display: grid; place-items: center; color: #fffaf5; background: var(--accent); border-radius: 10px; font-weight: 800; }
+.dashboard-layout .staff-role-card small, .dashboard-layout .staff-role-card strong { display: block; }.dashboard-layout .staff-role-card small { color: var(--dim); font-size: 9px; }.dashboard-layout .staff-role-card strong { margin-top: 3px; font-size: 11px; }
+.dashboard-layout .staff-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.dashboard-layout .staff-page { padding-bottom: 24px; }
+.dashboard-layout .staff-panel-main { min-width: 0; }
+.dashboard-layout .staff-panel input, .dashboard-layout .staff-panel textarea { width: 100%; }
+.dashboard-layout .staff-panel-footer > span { max-width: 420px; line-height: 1.55; }
+.dashboard-layout .staff-sidebar-card { position: sticky; top: 102px; }
+.dashboard-layout .staff-panel, .dashboard-layout .staff-sidebar-card { padding: 25px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); }
+.dashboard-layout .staff-panel-heading { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 25px; }.dashboard-layout .staff-panel-heading h2 { margin: 8px 0 7px; font-size: 20px; letter-spacing: -.05em; }.dashboard-layout .staff-panel-heading p { max-width: 570px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }.dashboard-layout .staff-step { color: var(--accent-dark); font: 11px "Space Mono", monospace; }
+.dashboard-layout .staff-fields { display: grid; gap: 18px; }.dashboard-layout .staff-fields-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }.dashboard-layout .staff-bio-field textarea { min-height: 150px; }.dashboard-layout .staff-visibility { margin-top: 22px; padding: 15px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }.dashboard-layout .staff-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 20px; color: var(--dim); font-size: 10px; }.dashboard-layout .staff-sidebar-card h3 { margin: 10px 0 9px; font-size: 17px; letter-spacing: -.04em; }.dashboard-layout .staff-sidebar-card p { margin: 0 0 22px; color: var(--muted); font-size: 11px; line-height: 1.7; }.dashboard-layout .staff-rule { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line-soft); font-size: 10px; }.dashboard-layout .staff-rule span { color: var(--dim); }.dashboard-layout .staff-rule strong { color: var(--ink); font-size: 10px; text-align: right; }.dashboard-layout .staff-global-panel { margin-top: 16px; }.dashboard-layout .staff-page > .notice { margin-top: 16px; }
+@media (max-width: 760px) { .dashboard-layout .staff-heading, .dashboard-layout .staff-layout { display: block; }.dashboard-layout .staff-role-card { margin-top: 18px; }.dashboard-layout .staff-sidebar-card { margin-top: 16px; }.dashboard-layout .staff-panel-footer { align-items: stretch; flex-direction: column; }.dashboard-layout .staff-panel-footer .button { width: 100%; } }
+@media (max-width: 640px) { .dashboard-layout .staff-panel, .dashboard-layout .staff-sidebar-card { padding: 19px; }.dashboard-layout .staff-fields-two { grid-template-columns: 1fr; }.dashboard-layout .staff-heading h1 { font-size: 34px; } }
 .dashboard-layout .dash-topbar { min-height: 78px; padding: 16px 42px; background: rgba(255,255,255,.86); border-bottom-color: var(--line); position: sticky; top: 0; z-index: 5; backdrop-filter: blur(16px); }
 .dashboard-layout .dash-topbar > .brand { display: none; }
 .dashboard-layout .dash-site-nav { margin-left: 0; margin-right: auto; }
@@ -240,6 +258,17 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .server-card:hover { border-color: #dfaa98; box-shadow: var(--shadow); transform: translateY(-2px); transition: transform .18s, box-shadow .18s, border-color .18s; }
 .dashboard-layout .settings-stack { gap: 16px; }
 .dashboard-layout .settings-panel { max-width: 920px; }
+.dashboard-layout .settings-panel .setting-row { gap: 18px; align-items: center; padding: 17px 0; }
+.dashboard-layout .settings-panel .setting-row > span { min-width: 0; flex: 1; }
+.dashboard-layout .settings-panel .setting-row > span strong { display: block; margin-bottom: 4px; }
+.dashboard-layout .settings-panel .setting-row > span small { display: block; max-width: 560px; line-height: 1.55; }
+.dashboard-layout .settings-panel .setting-row > div { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 0 0 auto; }
+.dashboard-layout .settings-panel .setting-row .button-secondary { min-height: 34px; padding: 7px 11px; font-size: 10px; white-space: nowrap; }
+@media (max-width: 600px) {
+  .dashboard-layout .settings-panel .setting-row { align-items: flex-start; flex-wrap: wrap; }
+  .dashboard-layout .settings-panel .setting-row > div { width: 100%; justify-content: flex-start; padding-top: 5px; }
+}
+
 .dashboard-layout .form-field input, .dashboard-layout .form-field select, .dashboard-layout .form-field textarea { background: var(--surface); border-color: var(--line); border-radius: 10px; }
 .dashboard-layout .form-field input:focus, .dashboard-layout .form-field select:focus, .dashboard-layout .form-field textarea:focus { border-color: #e4a38e; box-shadow: 0 0 0 4px rgba(217,101,69,.12); }
 .dashboard-layout .setting-row { border-bottom-color: var(--line-soft); }

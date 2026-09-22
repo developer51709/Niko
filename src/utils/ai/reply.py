@@ -31,6 +31,7 @@ def generate_reply(
     """
     guild_id = server.id if server else 0
     ai_status = get_ai_config(guild_id, "enabled")
+    ai_name = str(get_ai_config(guild_id, "ai_name") or "Niko").strip() or "Niko"
 
     if ai_status == "True":
         if not AI_ENABLED:
@@ -38,6 +39,7 @@ def generate_reply(
 
         personality = get_ai_config(guild_id, "personality")
         system_prompt = SYSTEM_PROMPT_NORMAL if personality == "normal" else SYSTEM_PROMPT_CAFE
+        system_prompt += f"\n\nYour configured name in this server is {ai_name}. Respond as {ai_name} and recognize that name when addressed."
         try:
             if AI_MODE == "NIKOAPI":
                 return generate_reply_nikoapi(bot, user_id, server, message, username, system_prompt)

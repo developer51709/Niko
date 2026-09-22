@@ -49,6 +49,76 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "team-page-ai-name-config",
+    title: "Team Profiles & Custom AI Names",
+    date: "2026-09-22",
+    version: "2.10.0",
+    tags: ["team", "staff", "dashboard", "ai", "website"],
+    summary:
+      "Niko's public website now introduces the people behind the bot, while server owners can give their AI a custom name and manage its experimental capabilities from the dashboard.",
+    highlights: [
+      {
+        title: "Meet the Niko Team",
+        description:
+          "The new Team page showcases owners, developers, moderators, support staff, and other persisted staff roles with Discord-synced identities, presence, activities, bios, and profile pages.",
+        icon: "users",
+      },
+      {
+        title: "Choose Your AI's Name",
+        description:
+          "Server administrators can configure the AI's display name from the dashboard or the AI configuration command. The chosen name is used for mention detection and reply identity in that server.",
+        icon: "spark",
+      },
+      {
+        title: "Staff Public Listings",
+        description:
+          "Staff members can customize their public bio, banner, and visibility while their name and avatar remain synchronized with Discord.",
+        icon: "settings",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "Public Team page with persisted staff roles and linked staff profiles",
+          "Discord-synced staff presence, current activities, Spotify, streaming, and custom status display",
+          "Staff self-service controls for public bio, banner, and Team page visibility",
+          "Configurable per-server AI name in the dashboard and AI configuration command",
+          "Dashboard controls for AI Actions, Better Context, and Multimodal Conversation experiments",
+          "Learn-more dialogs explaining each AI experiment",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "Dashboard staff workspace navigation and responsive layout",
+          "Team profile cards and profile-page activity presentation",
+          "AI configuration persistence through the shared database",
+          "Public page metadata and favicon handling during the website build",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "Team presence labels showing online staff as away",
+          "Spotify and streaming activities being hidden behind custom statuses",
+          "Staff profile updates being rejected for authorized owners",
+          "Staff profile avatars being clipped by profile banners",
+        ],
+      },
+    ],
+    chart: {
+      type: "metrics",
+      title: "Release At a Glance",
+      data: [
+        { label: "Team", value: "1", detail: "new public experience", color: "#66866f" },
+        { label: "AI", value: "4", detail: "new configuration controls", color: "#d96545" },
+        { label: "Profiles", value: "3", detail: "public staff controls", color: "#4a7fb5" },
+      ],
+    },
+    commits: [],
+  },
+  {
     slug: "september-platform-updates",
     title: "September Platform Updates",
     date: "2026-09-21",

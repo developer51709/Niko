@@ -66,6 +66,29 @@ async def _create_tables(bot):
         )
     """)
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_config (
+            guild_id INTEGER PRIMARY KEY,
+            personality TEXT NOT NULL DEFAULT 'cafe',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            ai_name TEXT NOT NULL DEFAULT 'Niko',
+            ai_actions_experiment INTEGER NOT NULL DEFAULT 0,
+            better_context_experiment INTEGER NOT NULL DEFAULT 0,
+            multimodal_experiment INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    for col_name, col_def in [
+        ("ai_name", "TEXT NOT NULL DEFAULT 'Niko'"),
+        ("ai_actions_experiment", "INTEGER NOT NULL DEFAULT 0"),
+        ("better_context_experiment", "INTEGER NOT NULL DEFAULT 0"),
+        ("multimodal_experiment", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE ai_config ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS staff_members (
             user_id     INTEGER PRIMARY KEY,
             role        TEXT NOT NULL,
