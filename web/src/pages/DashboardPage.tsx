@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview } from "../api";
+import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
@@ -71,6 +71,7 @@ export function DashboardPage() {
   const [error, setError] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [staffRole, setStaffRole] = useState<string | null>(null);
 
   useEffect(() => {
     const handleRoute = () => setRoute(dashboardRoute());
@@ -85,9 +86,10 @@ export function DashboardPage() {
         setAuth(authStatus);
         setStats(botStats);
         if (!authStatus.authenticated) return null;
-        return Promise.all([getUserOverview(), getGuilds()]).then(([profile, availableGuilds]) => {
+        return Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]).then(([profile, availableGuilds, staffStatus]) => {
           setUserOverview(profile);
           setGuilds(availableGuilds);
+          setStaffRole(staffStatus?.role || null);
         });
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard unavailable"))
@@ -136,9 +138,10 @@ export function DashboardPage() {
       setAuth(authStatus);
       setStats(botStats);
       if (authStatus.authenticated) {
-        const [profile, availableGuilds] = await Promise.all([getUserOverview(), getGuilds()]);
+        const [profile, availableGuilds, staffStatus] = await Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]);
         setUserOverview(profile);
         setGuilds(availableGuilds);
+        setStaffRole(staffStatus?.role || null);
       }
       setRefreshToken((value) => value + 1);
       setError("");
@@ -160,7 +163,7 @@ export function DashboardPage() {
     content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} />;
   }
 
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onRefresh={refreshDashboard} refreshing={refreshing}>
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>
     {content}
   </DashboardShell>;
 }

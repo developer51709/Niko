@@ -70,7 +70,33 @@ async def _create_tables(bot):
             user_id     INTEGER PRIMARY KEY,
             role        TEXT NOT NULL,
             assigned_by INTEGER NOT NULL,
-            assigned_at REAL NOT NULL
+            assigned_at REAL NOT NULL,
+            public_name TEXT,
+            public_bio  TEXT,
+            public_avatar_url TEXT,
+            public_banner_url TEXT,
+            public_visible INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    # Keep existing installations compatible with the richer public staff profile.
+    for col_name, col_def in [
+        ("public_name", "TEXT"),
+        ("public_bio", "TEXT"),
+        ("public_avatar_url", "TEXT"),
+        ("public_banner_url", "TEXT"),
+        ("public_visible", "INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE staff_members ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS global_profile (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            avatar_url TEXT,
+            banner_url TEXT,
+            updated_by INTEGER,
+            updated_at REAL
         )
     """)
     await bot.cxn.execute("""

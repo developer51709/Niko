@@ -11,7 +11,7 @@ import colorama
 from utils.paginator import PaginatedView, paginate
 from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
 from config.emojis import get_emoji
-from config.ids import DEVELOPER_IDS
+from config.ids import DEVELOPER_IDS, OWNER_IDS
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     """
@@ -65,7 +65,9 @@ class Development(commands.Cog):
     # Developer-only check
     # -------------------------------
     async def cog_check(self, ctx: commands.Context):
-        return ctx.author.id in DEVELOPER_IDS
+        # Owners retain developer access without being duplicated in the
+        # developer allow-list, keeping the role definitions independent.
+        return ctx.author.id in DEVELOPER_IDS or ctx.author.id in OWNER_IDS
 
     # -------------------------------
     # Developer Help

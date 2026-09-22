@@ -54,6 +54,8 @@ from utils.donations import (
     verify_donation_token,
 )
 from cogs.donations.oxapay import OxaPayClient
+from config.ids import OWNER_IDS, DEVELOPER_IDS
+from cogs.admin.staff import STAFF_ROLES
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -611,6 +613,292 @@ def auth_status():
         "user":            session["user"],
         "csrf_token":      session["csrf_token"],
     })
+
+
+# ── Staff and public team API ────────────────────────────────────────────────
+
+STAFF_PRIORITY = {"owner": 100, "head_admin": 90, "graphic_designer": 80, "head_support": 70, "moderator": 60, "support": 50}
+
+
+def _staff_identity(user_id: str) -> dict:
+    """Resolve a staff member's live Discord identity and presence."""
+    member = None
+    if _discord_bot is not None:
+        for guild in _discord_bot.guilds:
+            member = guild.get_member(int(user_id))
+            if member:
+                break
+    user = member or (_discord_bot.get_user(int(user_id)) if _discord_bot is not None else None)
+    activities = []
+    custom_status = None
+    for activity in getattr(member, "activities", ()) or ():
+        activity_type = getattr(getattr(activity, "type", None), "name", None) or str(getattr(activity, "type", "")).rsplit(".", 1)[-1].lower()
+        class_name = type(activity).__name__.lower()
+
+        def serialize_emoji(emoji):
+            if emoji is None:
+                return None
+            emoji_id = getattr(emoji, "id", None)
+            emoji_name = getattr(emoji, "name", None) or str(emoji)
+            return {
+                "kind": "custom" if emoji_id else "unicode",
+                "value": str(emoji_id) if emoji_id else emoji_name,
+                "name": emoji_name,
+                "animated": bool(getattr(emoji, "animated", False)),
+            }
+
+        if class_name == "customactivity" or activity_type in {"custom", "customstatus", "custom_activity"}:
+            custom_status = {
+                "text": getattr(activity, "state", None),
+                "emoji": serialize_emoji(getattr(activity, "emoji", None)),
+            }
+            continue
+
+        # discord.py exposes Spotify and Streaming as dedicated activity
+        # classes with attributes that differ from the generic Activity class.
+        if class_name == "spotify":
+            activities.append({
+                "kind": "spotify",
+                "type": "listening",
+                "name": "Spotify",
+                "details": getattr(activity, "title", None),
+                "state": getattr(activity, "artist", None),
+                "url": getattr(activity, "track_url", None),
+                "platform": "Spotify",
+                "image_url": getattr(activity, "album_cover_url", None),
+            })
+            continue
+        if class_name == "streaming":
+            activities.append({
+                "kind": "streaming",
+                "type": "streaming",
+                "name": getattr(activity, "game", None) or getattr(activity, "name", None) or "Live stream",
+                "details": getattr(activity, "platform", None),
+                "state": None,
+                "url": getattr(activity, "url", None),
+                "platform": getattr(activity, "platform", None),
+                "image_url": None,
+            })
+            continue
+
+        name = getattr(activity, "name", None)
+        if name:
+            activities.append({
+                "kind": "activity",
+                "type": activity_type,
+                "name": name,
+                "details": getattr(activity, "details", None),
+                "state": getattr(activity, "state", None),
+                "url": getattr(activity, "url", None),
+                "platform": None,
+                "image_url": None,
+            })
+    raw_status = getattr(member, "status", "offline") if member is not None else "offline"
+    # discord.py may expose this as a Status enum (``Status.online``) or a
+    # string depending on the cached object/version. Keep the API stable for
+    # the frontend by returning the normalized enum value.
+    status = getattr(raw_status, "name", None) or str(raw_status)
+    status = status.rsplit(".", 1)[-1].lower()
+    return {
+        "id": str(user_id),
+        "name": getattr(member, "display_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or f"Staff member {user_id}",
+        "username": getattr(user, "name", None),
+        "avatar_url": str(getattr(getattr(user, "display_avatar", None), "url", "")) or None,
+        "status": status,
+        "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
+        "activities": activities,
+        "custom_status": custom_status,
+        # Keep the first activity for older clients while the richer fields
+        # above are consumed by the current Team page.
+        "activity": activities[0]["name"] if activities else None,
+    }
+
+
+def _staff_role_label(role: str) -> str:
+    """Turn the persisted role key into the public label without frontend role logic."""
+    return STAFF_ROLES.get(role, role.replace("_", " ").strip().title() or "Staff")
+
+
+def _staff_row(row) -> dict:
+    role = str(row.get("role"))
+    identity = _staff_identity(str(row.get("user_id")))
+    return {
+        **identity,
+        "role": role,
+        "role_label": "Owner" if role == "owner" else _staff_role_label(role),
+        "bio": row.get("public_bio"),
+        # Names and avatars always come from Discord; only the banner and bio
+        # are staff-customizable on the website.
+        "public_banner_url": row.get("public_banner_url"),
+        "visible": bool(row.get("public_visible", 1)),
+    }
+
+
+def _load_staff_rows() -> list[dict]:
+    rows = []
+    columns = ("user_id", "role", "public_name", "public_bio", "public_avatar_url", "public_banner_url", "public_visible")
+
+    # Read through the live bot pool first so MongoDB deployments and the
+    # dashboard always expose every persisted staff role, not just SQLite data.
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        async def read_staff():
+            return await _discord_bot.cxn.fetch(
+                "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
+                "public_banner_url, public_visible FROM staff_members"
+            )
+        try:
+            rows = [_staff_row(dict(row)) for row in run_on_bot_loop(read_staff())]
+        except Exception:
+            rows = []
+
+    if not rows:
+        conn = sqlite_connect()
+        try:
+            if conn:
+                raw = conn.execute("SELECT user_id, role, public_name, public_bio, public_avatar_url, public_banner_url, public_visible FROM staff_members").fetchall()
+                rows = [_staff_row(dict(zip(columns, item))) for item in raw]
+        except sqlite3.Error:
+            pass
+        finally:
+            if conn:
+                conn.close()
+    known = {item["id"] for item in rows}
+    for user_id, role in [(str(value), "owner") for value in OWNER_IDS] + [(str(value), "developer") for value in DEVELOPER_IDS]:
+        if user_id not in known:
+            rows.append(_staff_row({"user_id": user_id, "role": role, "public_visible": 1}))
+    return sorted((row for row in rows if row["visible"]), key=lambda item: -STAFF_PRIORITY.get(item["role"], 40))
+
+
+def _current_staff_role() -> str | None:
+    user_id = str(session.get("user", {}).get("id", ""))
+    if not user_id:
+        return None
+    try:
+        if int(user_id) in OWNER_IDS:
+            return "owner"
+    except (TypeError, ValueError):
+        return None
+
+    # Staff authorization must use the same live database as the bot. The
+    # previous SQLite-only lookup denied valid staff on Mongo/live-pool setups.
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        async def read_role():
+            return await _discord_bot.cxn.fetchrow(
+                "SELECT role FROM staff_members WHERE user_id = $1", int(user_id)
+            )
+        try:
+            row = run_on_bot_loop(read_role())
+            if row and row.get("role"):
+                return str(row["role"])
+        except Exception:
+            pass
+
+    conn = sqlite_connect()
+    try:
+        row = conn.execute("SELECT role FROM staff_members WHERE user_id = ?", (int(user_id),)).fetchone() if conn else None
+        return str(row[0]) if row and row[0] else None
+    except (TypeError, ValueError, sqlite3.Error):
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/team")
+def api_team():
+    return jsonify(_load_staff_rows())
+
+
+@app.route("/api/team/<user_id>")
+def api_team_member(user_id):
+    member = next((item for item in _load_staff_rows() if item["id"] == str(user_id)), None)
+    if not member:
+        return jsonify({"error": "Team member not found."}), 404
+    return jsonify(member)
+
+
+@app.route("/api/staff/me")
+@require_auth
+def api_staff_me():
+    role = _current_staff_role()
+    if not role:
+        return jsonify({"error": "This area is restricted to Niko staff."}), 403
+    member = next((item for item in _load_staff_rows() if item["id"] == str(session["user"]["id"])), None)
+    return jsonify({"role": role, "role_label": "Owner" if role == "owner" else _staff_role_label(role), "profile": member or _staff_row({"user_id": session["user"]["id"], "role": role})})
+
+
+@app.route("/api/staff/profile", methods=["POST"])
+@require_auth
+@require_csrf
+def api_save_staff_profile():
+    role = _current_staff_role()
+    if not role:
+        return jsonify({"error": "This area is restricted to Niko staff."}), 403
+    body = request.get_json(silent=True) or {}
+    allowed = {"public_bio", "public_banner_url", "public_visible"}
+    values = {key: body[key] for key in allowed if key in body}
+    if "public_bio" in values and len(str(values["public_bio"] or "")) > 1200:
+        return jsonify({"error": "Your public bio must be 1200 characters or fewer."}), 400
+    user_id = int(session["user"]["id"])
+    if values and _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        async def save_to_bot():
+            assignments = ", ".join(f"{key} = ${index + 1}" for index, key in enumerate(values))
+            params = [*values.values(), user_id]
+            await _discord_bot.cxn.execute(
+                f"UPDATE staff_members SET {assignments} WHERE user_id = ${len(params)}",
+                *params,
+            )
+        try:
+            run_on_bot_loop(save_to_bot())
+            return jsonify({"ok": True})
+        except Exception:
+            pass
+
+    conn = sqlite_connect()
+    try:
+        assignments = ", ".join(f"{key} = ?" for key in values)
+        if assignments and conn:
+            conn.execute(f"UPDATE staff_members SET {assignments} WHERE user_id = ?", (*values.values(), user_id))
+            conn.commit()
+    finally:
+        if conn:
+            conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/staff/global-profile", methods=["POST"])
+@require_auth
+@require_csrf
+def api_save_global_profile():
+    role = _current_staff_role()
+    if STAFF_PRIORITY.get(role or "", 0) < STAFF_PRIORITY["graphic_designer"]:
+        return jsonify({"error": "Only the Graphic Designer, Head Admin, or owner can change Niko's global profile."}), 403
+    body = request.get_json(silent=True) or {}
+    avatar_url, banner_url = body.get("avatar_url"), body.get("banner_url")
+    if not avatar_url and not banner_url:
+        return jsonify({"error": "Provide an avatar or banner URL."}), 400
+    conn = sqlite_connect()
+    try:
+        if conn:
+            conn.execute("INSERT OR REPLACE INTO global_profile (id, avatar_url, banner_url, updated_by, updated_at) VALUES (1, COALESCE(?, (SELECT avatar_url FROM global_profile WHERE id = 1)), COALESCE(?, (SELECT banner_url FROM global_profile WHERE id = 1)), ?, ?)", (avatar_url, banner_url, int(session["user"]["id"]), time.time()))
+            conn.commit()
+    finally:
+        if conn:
+            conn.close()
+    # Apply remote media to Discord when the live bot is available.
+    if _discord_bot is not None and getattr(_discord_bot, "user", None) is not None:
+        try:
+            media = {}
+            for field, url in (("avatar", avatar_url), ("banner", banner_url)):
+                if url:
+                    response = req.get(str(url), timeout=12)
+                    response.raise_for_status()
+                    media[field] = response.content
+            awaitable = _discord_bot.user.edit(**media)
+            run_on_bot_loop(awaitable)
+        except Exception as error:
+            return jsonify({"error": f"Profile saved, but Discord rejected the media: {error}"}), 502
+    return jsonify({"ok": True})
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

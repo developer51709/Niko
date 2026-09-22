@@ -29,6 +29,7 @@ type Props = {
   onSectionChange: (section: DashSection) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  staffRole?: string | null;
   children: ReactNode;
 };
 
@@ -45,6 +46,7 @@ export function DashboardShell({
   onSectionChange,
   onRefresh,
   refreshing,
+  staffRole,
   children,
 }: Props) {
   const installedGuilds = guilds.filter((guild) => guild.installed !== false);
@@ -71,6 +73,7 @@ export function DashboardShell({
       <button className={view === "servers" ? "active" : ""} aria-current={view === "servers" ? "page" : undefined} onClick={onServers}>
         <Icon name="users" /><span>My servers</span>
       </button>
+      {staffRole && <button onClick={() => navigate("/dashboard/staff")}><Icon name="shield" /><span>Staff workspace</span></button>}
     </nav>
   );
 

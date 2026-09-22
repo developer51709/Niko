@@ -1,14 +1,11 @@
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
-    1052690741874401360,
-    1528084386652754010
+    1052690741874401360
 }
 
-# Developer user IDs
-DEVELOPER_IDS = {
-    1052690741874401360, # sorenthedev
-    1528084386652754010
-}
+# Developer user IDs (owners are intentionally kept in OWNER_IDS only;
+# owner permissions are handled separately by the command checks).
+DEVELOPER_IDS = set()
 
 # support server guild id
 SUPPORT_GUILD  = 1497250915034337330

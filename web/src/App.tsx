@@ -8,6 +8,8 @@ import { LegalPage } from "./pages/LegalPage";
 import { TranscriptPage } from "./pages/TranscriptPage";
 import { ChangelogPage } from "./pages/ChangelogPage";
 import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
+import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
+import { StaffDashboardPage } from "./pages/StaffDashboardPage";
 import { pageFromPath, type Page } from "./router";
 
 export function App() {
@@ -24,7 +26,10 @@ export function App() {
     return <DocsSlugPage slug={slug} />;
   }
   if (page === "docs") return <DocsPage />;
+  if (page === "staff") return <StaffDashboardPage />;
   if (page === "dashboard") return <DashboardPage />;
+  if (page === "team") return <TeamPage />;
+  if (page === "team-member") return <TeamMemberPage id={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;
   if (page === "privacy") return <LegalPage type="privacy" />;
   if (page === "terms") return <LegalPage type="terms" />;
   if (page === "community") return <LegalPage type="community" />;

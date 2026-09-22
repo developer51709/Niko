@@ -21,9 +21,10 @@ STAFF_ROLES = {
     "head_admin": "Head Admin",
     "moderator": "Moderator",
     "head_support": "Head of Support",
+    "graphic_designer": "Graphic Designer",
     "support": "Support Team",
 }
-ROLE_ORDER = ("head_admin", "moderator", "head_support", "support")
+ROLE_ORDER = ("head_admin", "moderator", "graphic_designer", "head_support", "support")
 
 # Commands which are deliberately reserved for the bot owner, even when a
 # staff member has another role. Blacklist is relaxed below for Head Admins.
@@ -38,7 +39,8 @@ HEAD_ADMIN_COMMANDS = {
     "blacklist", "premium", "servers", "serverinvite", "announce",
 }
 SUPPORT_COMMANDS = {"ping", "latency", "uptime"}
-HEAD_SUPPORT_COMMANDS = SUPPORT_COMMANDS | {"mem", "tasks", "guild", "channels", "roles", "members"}
+GRAPHIC_DESIGNER_COMMANDS = SUPPORT_COMMANDS | {"mem", "tasks", "guild", "channels", "roles", "members"}
+HEAD_SUPPORT_COMMANDS = GRAPHIC_DESIGNER_COMMANDS
 MODERATOR_COMMANDS = {"ping", "latency", "uptime"}
 
 
@@ -166,6 +168,8 @@ def _command_names_for_role(role: str) -> set[str]:
         return {"*"}
     if role == "head_admin":
         return HEAD_ADMIN_COMMANDS | HEAD_SUPPORT_COMMANDS | MODERATOR_COMMANDS
+    if role == "graphic_designer":
+        return GRAPHIC_DESIGNER_COMMANDS
     if role == "head_support":
         return HEAD_SUPPORT_COMMANDS
     if role == "moderator":

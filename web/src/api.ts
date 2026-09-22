@@ -9,6 +9,7 @@ import type {
   LevelRow,
   PublicConfig,
   UserOverview,
+  StaffMember,
 } from "./types";
 
 export class ApiError extends Error {
@@ -36,6 +37,11 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 export const getAuth = () => api<AuthStatus>("/auth/status");
 export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getStats = () => api<BotStats>("/api/botstats");
+export const getTeam = () => api<StaffMember[]>("/api/team");
+export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
+export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
+export const saveStaffProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const saveGlobalProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/global-profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
 export const getUserOverview = () => api<UserOverview>("/api/me/overview");

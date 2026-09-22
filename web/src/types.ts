@@ -152,6 +152,49 @@ export type GuildResources = {
   roles: { id: string; name: string }[];
 };
 
+export type StaffMember = {
+  id: string;
+  name: string;
+  username?: string | null;
+  role: string;
+  role_label: string;
+  bio?: string | null;
+  public_name?: string | null;
+  public_avatar_url?: string | null;
+  public_banner_url?: string | null;
+  avatar_url?: string | null;
+  status?: string;
+  status_label?: string;
+  activities?: StaffActivity[];
+  custom_status?: StaffCustomStatus | null;
+  activity?: string | null;
+  visible?: boolean;
+};
+
+export type StaffEmoji = {
+  kind: "unicode" | "custom";
+  value: string;
+  name?: string | null;
+  animated?: boolean;
+};
+
+export type StaffActivity = {
+  kind: "spotify" | "streaming" | "activity";
+  type: string;
+  name: string;
+  details?: string | null;
+  state?: string | null;
+  url?: string | null;
+  application_id?: string | null;
+  platform?: string | null;
+  image_url?: string | null;
+};
+
+export type StaffCustomStatus = {
+  text?: string | null;
+  emoji?: StaffEmoji | null;
+};
+
 export type AuthStatus = {
   authenticated: boolean;
   oauth_available: boolean;

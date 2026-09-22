@@ -8,6 +8,7 @@ const publicLinks = [
   { label: "Home", path: "/", page: "home" as Page },
   { label: "Commands", path: "/commands", page: "commands" as Page },
   { label: "Docs", path: "/docs", page: "docs" as Page },
+  { label: "Team", path: "/team", page: "team" as Page },
   { label: "Changelog", path: "/changelog", page: "changelog" as Page },
 ];
 
