@@ -93,7 +93,7 @@ export function RankList({ rows }: { rows: LevelRow[] }) {
     {rows.slice(0, 5).map((row, index) => <div className="rank-row" key={`${row.user_id}-${index}`}>
       <span className={`rank rank-${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
       <span className="rank-user"><MemberAvatar name={row.display_name || row.username || "Unknown member"} avatarUrl={row.avatar_url} /><span><strong>{row.display_name || row.username || "Unknown member"}</strong>{row.username && row.display_name && <small>@{row.username}</small>}</span></span>
-      <strong>{formatNumber(row.xp)}<small> xp</small></strong>
+      <strong>Level {formatNumber(row.level)}<small>{formatNumber(row.xp)} xp</small></strong>
     </div>)}
     {!rows.length && <div className="empty-state compact">No data recorded yet.</div>}
   </div>;
@@ -113,7 +113,7 @@ export function OverviewView({ overview }: { overview: GuildOverview }) {
     </div>
     <div className="dash-columns">
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Community energy</span><h3>Top XP</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={overview.leveling.top} /></section>
-      <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p></div></section>
+      <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span></div><div className="server-controls-body"><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p><span className="text-link">Open server settings <Icon name="arrow" /></span></div></section>
     </div>
   </>;
 }

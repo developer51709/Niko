@@ -1,5 +1,60 @@
 /* Guild settings layout refinements. Theme tokens stay in styles.css. */
 
+.dashboard-header .header-actions { margin-left: auto; }
+.dashboard-menu { position: relative; }
+.dashboard-menu-trigger { gap: 8px; }
+.dashboard-menu-trigger .icon { width: 15px; height: 15px; }
+.dashboard-menu-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 190px;
+  gap: 3px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(42, 35, 31, .14);
+  animation: dash-menu-in .16s ease both;
+}
+.dashboard-menu-popover a {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--muted);
+  border-radius: 7px;
+  font-size: 11px;
+  text-decoration: none;
+  transition: color .16s ease, background .16s ease;
+}
+.dashboard-menu-popover a:hover,
+.dashboard-menu-popover a:focus-visible {
+  color: var(--ink);
+  background: var(--surface-muted);
+  outline: none;
+}
+.dashboard-menu-popover .dashboard-menu-current {
+  margin-top: 4px;
+  color: var(--accent-dark);
+  background: var(--callout);
+  font-weight: 700;
+}
+.dashboard-menu-label {
+  padding: 5px 10px 7px;
+  color: var(--dim);
+  font: 9px "Space Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+@keyframes dash-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+
 .dashboard-layout { grid-template-columns: 268px minmax(0, 1fr); background: var(--canvas); }
 .dash-sidebar { padding: 29px 18px 20px; background: var(--sidebar); border-right: 1px solid var(--line); }
 .dash-sidebar-brand { display: none; }
@@ -41,6 +96,9 @@
 .guild-switcher::after { content: ""; position: absolute; top: 15px; right: 14px; width: 7px; height: 7px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); pointer-events: none; transform: rotate(45deg); }
 .connection-chip { min-height: 30px; padding: 7px 9px; background: var(--callout); border: 1px solid var(--line); border-radius: 99px; }
 .connection-chip .status-dot { width: 6px; height: 6px; }
+.logout-button { width: 36px; height: 36px; display: grid; place-items: center; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 50%; transition: background .18s, border-color .18s, color .18s, transform .18s; }
+.logout-button:hover { color: var(--accent-dark); background: var(--callout); border-color: var(--filter-border); transform: translateY(-1px); }
+.logout-button .icon { width: 16px; height: 16px; }
 .avatar { background: var(--accent); border-radius: 9px; }
 .avatar, .profile-avatar, .member-avatar { overflow: hidden; }
 .avatar img, .profile-avatar img, .member-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -75,8 +133,12 @@
 .panel-heading { margin-bottom: 23px; }
 .panel-heading h3 { font-size: 16px; }
 .panel-icon { color: var(--accent); background: var(--surface-muted); border-radius: 8px; }
+.server-controls-body { display: grid; align-content: start; gap: 14px; min-height: 92px; }
+.server-controls-body p { max-width: 34ch; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
 .rank-row, .table-row { border-color: var(--line-soft); }
 .rank-row { padding: 12px 0; }
+.rank-row > strong { display: grid; gap: 2px; text-align: right; }
+.rank-row > strong small { color: var(--dim); font-size: 9px; font-weight: 500; }
 .rank-1 { color: var(--accent-dark); }
 .empty-state { padding: 54px; background: var(--surface); border-color: var(--line); }
 .settings-stack { gap: 15px; }
@@ -153,7 +215,7 @@
   .dash-mobile-controls .dash-top-actions select { flex: 1 1 100%; max-width: none; }
   .dash-mobile-controls .user-pill { flex: 1 1 120px; min-width: 0; }
   .dash-mobile-controls .top-action { flex: 1 1 130px; }
-  .dash-mobile-controls .logout-link { flex: 0 0 auto; padding: 8px 0; }
+  .dash-mobile-controls .logout-button { flex: 0 0 36px; }
   .dash-mobile-controls .connection-chip { flex: 0 0 auto; }
   .hero-identity { margin-top: 20px; }
   .hero-avatar { width: 38px; height: 38px; }
