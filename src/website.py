@@ -33,6 +33,7 @@ import base64
 import hashlib
 import hmac
 import uuid
+from html import escape
 from urllib.parse import urlencode, quote, urlparse
 from flask import Response
 from functools import wraps
@@ -256,7 +257,7 @@ def _member_metadata_from_guild(guild, user_ids: set[str]) -> dict[str, dict]:
             continue
         avatar = getattr(member, "display_avatar", None)
         metadata[member_id] = {
-            "display_name": getattr(member, "display_name", None) or getattr(member, "name", None),
+            "display_name": getattr(member, "global_name", None) or getattr(getattr(member, "_user", None), "global_name", None) or getattr(member, "name", None),
             "username": getattr(member, "name", None),
             "avatar_url": str(avatar.url) if avatar is not None else None,
         }
@@ -324,7 +325,7 @@ def get_discord_member_metadata(guild_id: str, user_ids: set[str]) -> dict[str, 
             else:
                 avatar_url = None
             members[member_id] = {
-                "display_name": member.get("nick") or discord_user.get("global_name") or discord_user.get("username"),
+                "display_name": discord_user.get("global_name") or discord_user.get("username"),
                 "username": discord_user.get("username"),
                 "avatar_url": avatar_url,
             }
@@ -701,7 +702,9 @@ def _staff_identity(user_id: str) -> dict:
     status = status.rsplit(".", 1)[-1].lower()
     return {
         "id": str(user_id),
-        "name": getattr(member, "display_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or f"Staff member {user_id}",
+        # Use the global Discord display name, never a guild nickname from
+        # whichever guild was checked first.
+        "name": getattr(member, "global_name", None) or getattr(getattr(member, "_user", None), "global_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or f"Staff member {user_id}",
         "username": getattr(user, "name", None),
         "avatar_url": str(getattr(getattr(user, "display_avatar", None), "url", "")) or None,
         "status": status,
