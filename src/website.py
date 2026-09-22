@@ -57,7 +57,7 @@ from cogs.donations.oxapay import OxaPayClient
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DISCORD_CLIENT_ID     = "1520558530472448170"
+DISCORD_CLIENT_ID     = os.environ.get("DISCORD_CLIENT_ID", "1520558530472448170")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_BOT_TOKEN     = os.environ.get("DISCORD_BOT_TOKEN", "")
 DISCORD_API           = "https://discord.com/api/v10"
