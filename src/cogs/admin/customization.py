@@ -1,4 +1,3 @@
-import asyncio
 import discord
 from discord.ext import commands
 import aiohttp
@@ -8,11 +7,19 @@ import base64
 from utils import logging
 from config.emojis import get_emoji
 from cogs.system.error_handler import is_owner
+from utils.fileinput_patch.fileinput import ensure_universal_fileinput
+
+# FileInput is provided natively by newer discord.py versions and by the
+# project's compatibility patch on older versions.
+ensure_universal_fileinput()
 
 # ---------- Helpers ----------
 
-def encode_image(file_bytes: bytes) -> str:
-    return "data:image/png;base64," + base64.b64encode(file_bytes).decode()
+def encode_image(file_bytes: bytes, content_type: str = "image/png") -> str:
+    """Encode an uploaded image as a Discord-compatible data URI."""
+    if content_type not in {"image/png", "image/jpeg", "image/gif"}:
+        content_type = "image/png"
+    return f"data:{content_type};base64," + base64.b64encode(file_bytes).decode()
 
 def _mask_token(t: str) -> str:
     if not t:
@@ -110,33 +117,70 @@ class BioModal(discord.ui.Modal, title="Set Bio"):
         await interaction.response.send_message("Bio updated.", ephemeral=True)
 
 
-async def collect_image_attachment(interaction: discord.Interaction, profile_view, target: str):
-    """Wait for the user to send a message with an image attachment in the channel."""
-    await interaction.response.send_message(
-        "📎 Please send your image as a message in this channel within **60 seconds**.",
-        ephemeral=True,
-    )
+class ProfileModal(discord.ui.Modal, title="Customize Server Profile"):
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
 
-    def check(m):
-        return (
-            m.author.id == interaction.user.id
-            and m.channel.id == interaction.channel_id
-            and len(m.attachments) > 0
+        # FileUpload is native in discord.py 2.7+. FileInput is retained as a
+        # compatibility fallback for the project's older-library patch.
+        upload_cls = getattr(discord.ui, "FileUpload", discord.ui.FileInput)
+        self.pfp = upload_cls(custom_id="profile_pfp", required=False, max_values=1)
+        self.banner = upload_cls(custom_id="profile_banner", required=False, max_values=1)
+        self.bio = discord.ui.TextInput(
+            label="Bio",
+            style=discord.TextStyle.paragraph,
+            max_length=190,
+            required=False,
         )
+        self.add_item(discord.ui.Label(
+            text="Profile Picture",
+            description="Optional image upload for the bot's server avatar.",
+            component=self.pfp,
+        ))
+        self.add_item(discord.ui.Label(
+            text="Banner",
+            description="Optional image upload for the bot's server banner.",
+            component=self.banner,
+        ))
+        self.add_item(self.bio)
 
-    try:
-        msg = await interaction.client.wait_for("message", check=check, timeout=60.0)
-        attachment = msg.attachments[0]
-        if not attachment.content_type or not attachment.content_type.startswith("image/"):
-            return await interaction.followup.send(f"{get_emoji('icon_cross')} That file doesn't look like an image. Please try again.", ephemeral=True)
-        file_bytes = await attachment.read()
-        if target == "pfp":
-            profile_view.pfp_bytes = file_bytes
-        else:
-            profile_view.banner_bytes = file_bytes
-        await interaction.followup.send(f"{get_emoji('icon_tick')} Image received! Click **Apply** when you're ready.", ephemeral=True)
-    except asyncio.TimeoutError:
-        await interaction.followup.send(f"{get_emoji('icon_cross')} Timed out — no image received.", ephemeral=True)
+    @staticmethod
+    def _first_attachment(field):
+        values = getattr(field, "values", None)
+        if values:
+            return values[0]
+        return getattr(field, "value", None)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        for field, target in ((self.pfp, "pfp_bytes"), (self.banner, "banner_bytes")):
+            attachment = self._first_attachment(field)
+            if attachment is None:
+                continue
+            if not (attachment.content_type or "").startswith("image/"):
+                name = "profile picture" if target == "pfp_bytes" else "banner"
+                await interaction.response.send_message(
+                    f"{get_emoji('icon_cross')} The {name} must be an image.",
+                    ephemeral=True,
+                )
+                return
+            setattr(self.view, target, await attachment.read())
+            setattr(
+                self.view,
+                "pfp_content_type" if target == "pfp_bytes" else "banner_content_type",
+                attachment.content_type or "image/png",
+            )
+            self.view.updated_fields.add("pfp" if target == "pfp_bytes" else "banner")
+
+        bio = str(self.bio).strip()
+        if bio:
+            self.view.bio = bio
+            self.view.updated_fields.add("bio")
+
+        await interaction.response.send_message(
+            f"{get_emoji('icon_tick')} Profile details saved. Click **Apply** to update the bot.",
+            ephemeral=True,
+        )
 
 
 class FontSelect(discord.ui.Select):
@@ -158,15 +202,38 @@ class FontSelect(discord.ui.Select):
         await interaction.response.defer()
 
 
+class EffectSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Solid", value="1", description="Flat single-color fill"),
+            discord.SelectOption(label="Gradient", value="2", description="Blend two colors from left to right"),
+            discord.SelectOption(label="Neon", value="3", description="Glowing outline around the letters"),
+            discord.SelectOption(label="Toon", value="4", description="Gradient fill with a visible outline"),
+            discord.SelectOption(label="Pop", value="5", description="Colored drop shadow behind the letters"),
+            discord.SelectOption(label="Glow", value="6", description="Soft outer glow with an optional accent"),
+        ]
+        super().__init__(placeholder="Select Color Style", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.effect_id = int(self.values[0])
+        await interaction.response.defer()
+
+
 class ColorSelect(discord.ui.Select):
     def __init__(self, label, target):
         self.target = target
         options = [
-            discord.SelectOption(label="Red", value="16711680"),
-            discord.SelectOption(label="Green", value="65280"),
-            discord.SelectOption(label="Blue", value="255"),
-            discord.SelectOption(label="Pink", value="14631474"),
-            discord.SelectOption(label="Orange", value="12423167"),
+            discord.SelectOption(label="White", value="16777215"),
+            discord.SelectOption(label="Black", value="0"),
+            discord.SelectOption(label="Blurple", value="5793266"),
+            discord.SelectOption(label="Green", value="5763719"),
+            discord.SelectOption(label="Red", value="15548997"),
+            discord.SelectOption(label="Yellow", value="16705372"),
+            discord.SelectOption(label="Pink", value="16711935"),
+            discord.SelectOption(label="Purple", value="8388736"),
+            discord.SelectOption(label="Blue", value="5865"),
+            discord.SelectOption(label="Gold", value="16766720"),
+            discord.SelectOption(label="Cyan", value="65535"),
         ]
         super().__init__(placeholder=label, options=options)
 
@@ -231,6 +298,7 @@ class SetNameView(discord.ui.LayoutView):
 
         self.display_name = None
         self.font_id = None
+        self.effect_id = 2  # Preserve the existing gradient default.
         self.color1 = None
         self.color2 = None
 
@@ -245,6 +313,7 @@ class SetNameView(discord.ui.LayoutView):
             discord.ui.Separator(),
             discord.ui.ActionRow(set_name_btn),
             discord.ui.ActionRow(FontSelect()),
+            discord.ui.ActionRow(EffectSelect()),
             discord.ui.ActionRow(ColorSelect("Select Color 1", "color1")),
             discord.ui.ActionRow(ColorSelect("Select Color 2", "color2")),
             discord.ui.ActionRow(apply_btn),
@@ -276,15 +345,35 @@ class SetNameView(discord.ui.LayoutView):
         body = {}
         if self.display_name:
             body["nick"] = self.display_name
+        colors = [color for color in (self.color1, self.color2) if color is not None]
+        if colors:
+            required_colors = {
+                1: (1, 1),  # Solid
+                2: (2, 2),  # Gradient
+                3: (1, 1),  # Neon
+                4: (1, 1),  # Toon
+                5: (1, 1),  # Pop
+                6: (1, 2),  # Glow, optional accent
+            }
+            minimum, maximum = required_colors[self.effect_id]
+            if not minimum <= len(colors) <= maximum:
+                if self.effect_id == 2:
+                    message = "Gradient style requires both color selectors."
+                elif self.effect_id == 6:
+                    message = "Glow style requires at least one color."
+                else:
+                    message = "This style requires exactly one color."
+                return await interaction.followup.send(message, ephemeral=True)
+            body["display_name_effect_id"] = self.effect_id
+            body["display_name_colors"] = colors
+        elif self.font_id:
+            return await interaction.followup.send(
+                "Select at least one color before applying a name style.",
+                ephemeral=True,
+            )
+
         if self.font_id:
             body["display_name_font_id"] = self.font_id
-            body["display_name_effect_id"] = 2
-        if self.color1 and self.color2:
-            body["display_name_colors"] = [self.color1, self.color2]
-        elif self.color1:
-            body["display_name_colors"] = [self.color1]
-        elif self.color2:
-            body["display_name_colors"] = [self.color2]
 
         if not body:
             return await interaction.followup.send("Nothing to update.", ephemeral=True)
@@ -350,17 +439,14 @@ class SetProfileView(discord.ui.LayoutView):
         self.guild_id = guild_id
 
         self.pfp_bytes = None
+        self.pfp_content_type = "image/png"
         self.banner_bytes = None
+        self.banner_content_type = "image/png"
         self.bio = None
+        self.updated_fields = set()
 
-        pfp_btn = discord.ui.Button(label="Upload PFP", style=discord.ButtonStyle.primary, custom_id="pfp_btn")
-        pfp_btn.callback = self.pfp_callback
-
-        banner_btn = discord.ui.Button(label="Upload Banner", style=discord.ButtonStyle.primary, custom_id="banner_btn")
-        banner_btn.callback = self.banner_callback
-
-        bio_btn = discord.ui.Button(label="Set Bio", style=discord.ButtonStyle.primary, custom_id="bio_btn")
-        bio_btn.callback = self.bio_callback
+        edit_btn = discord.ui.Button(label="Edit Profile", style=discord.ButtonStyle.primary, custom_id="edit_profile_btn")
+        edit_btn.callback = self.edit_profile_callback
 
         apply_btn = discord.ui.Button(label="Apply", style=discord.ButtonStyle.green, custom_id="apply_btn")
         apply_btn.callback = self.apply_callback
@@ -368,9 +454,7 @@ class SetProfileView(discord.ui.LayoutView):
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Customize Server Profile"),
             discord.ui.Separator(),
-            discord.ui.ActionRow(pfp_btn),
-            discord.ui.ActionRow(banner_btn),
-            discord.ui.ActionRow(bio_btn),
+            discord.ui.ActionRow(edit_btn),
             discord.ui.ActionRow(apply_btn),
             accent_colour=discord.Colour(0x5865F2),
         )
@@ -380,14 +464,19 @@ class SetProfileView(discord.ui.LayoutView):
     async def interaction_check(self, interaction: discord.Interaction):
         return interaction.user.guild_permissions.administrator or await interaction.client.is_owner(interaction.user)
 
-    async def pfp_callback(self, interaction: discord.Interaction):
-        await collect_image_attachment(interaction, self, "pfp")
+    async def edit_profile_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ProfileModal(self))
 
-    async def banner_callback(self, interaction: discord.Interaction):
-        await collect_image_attachment(interaction, self, "banner")
-
-    async def bio_callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(BioModal(self))
+    def build_profile_payload(self):
+        """Build only the profile fields changed in this setup flow."""
+        body = {}
+        if "pfp" in self.updated_fields and self.pfp_bytes:
+            body["avatar"] = encode_image(self.pfp_bytes, self.pfp_content_type)
+        if "banner" in self.updated_fields and self.banner_bytes:
+            body["banner"] = encode_image(self.banner_bytes, self.banner_content_type)
+        if "bio" in self.updated_fields and self.bio:
+            body["bio"] = self.bio
+        return body
 
     async def apply_callback(self, interaction: discord.Interaction):
         token = os.getenv("DISCORD_BOT_TOKEN")
@@ -405,13 +494,7 @@ class SetProfileView(discord.ui.LayoutView):
             f"https://discord.com/api/v10/guilds/{self.guild_id}/members/{bot_id}",
         ]
 
-        body = {}
-        if self.pfp_bytes:
-            body["avatar"] = encode_image(self.pfp_bytes)
-        if self.banner_bytes:
-            body["banner"] = encode_image(self.banner_bytes)
-        if self.bio:
-            body["bio"] = self.bio
+        body = self.build_profile_payload()
 
         if not body:
             return await interaction.followup.send("Nothing to update.", ephemeral=True)
