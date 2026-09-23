@@ -771,11 +771,37 @@ def _staff_row(row) -> dict:
 
 
 def _load_staff_rows() -> list[dict]:
-    rows = []
-    columns = ("user_id", "role", "public_name", "public_bio", "public_avatar_url", "public_banner_url", "public_visible")
+    """Load every persisted staff role and enrich it with live Discord data.
 
-    # Read through the live bot pool first so MongoDB deployments and the
-    # dashboard always expose every persisted staff role, not just SQLite data.
+    Staff roles live in the bot's active database pool. Do not fall back to
+    SQLite only when the pool returns an empty list: a web process can have a
+    local SQLite file with only the owner/developer seed rows while the active
+    deployment stores the other roles elsewhere. We also isolate malformed
+    rows so one legacy record cannot hide the rest of the roster.
+    """
+    columns = (
+        "user_id", "role", "public_name", "public_bio", "public_avatar_url",
+        "public_banner_url", "public_visible",
+    )
+    by_id: dict[str, dict] = {}
+
+    def add_raw(raw) -> None:
+        try:
+            row = dict(raw)
+            user_id = str(row.get("user_id", "")).strip()
+            role = str(row.get("role", "")).strip()
+            if not user_id or not role:
+                return
+            # Only configured staff roles should be public. Keep owner and
+            # developer seeds in the same roster as database-backed roles.
+            if role not in STAFF_ROLES and role not in {"owner", "developer"}:
+                return
+            item = _staff_row({**row, "user_id": user_id, "role": role})
+            by_id[user_id] = item
+        except (TypeError, ValueError, KeyError):
+            # A single old/incomplete record must not suppress other roles.
+            return
+
     if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
         async def read_staff():
             return await _discord_bot.cxn.fetch(
@@ -783,26 +809,42 @@ def _load_staff_rows() -> list[dict]:
                 "public_banner_url, public_visible FROM staff_members"
             )
         try:
-            rows = [_staff_row(dict(row)) for row in run_on_bot_loop(read_staff())]
+            for row in run_on_bot_loop(read_staff()):
+                add_raw(row)
         except Exception:
-            rows = []
-
-    if not rows:
-        conn = sqlite_connect()
-        try:
-            if conn:
-                raw = conn.execute("SELECT user_id, role, public_name, public_bio, public_avatar_url, public_banner_url, public_visible FROM staff_members").fetchall()
-                rows = [_staff_row(dict(zip(columns, item))) for item in raw]
-        except sqlite3.Error:
+            # The local fallback below still allows public roster pages to work
+            # while the bot pool is reconnecting.
             pass
-        finally:
-            if conn:
-                conn.close()
-    known = {item["id"] for item in rows}
-    for user_id, role in [(str(value), "owner") for value in OWNER_IDS] + [(str(value), "developer") for value in DEVELOPER_IDS]:
-        if user_id not in known:
-            rows.append(_staff_row({"user_id": user_id, "role": role, "public_visible": 1}))
-    return sorted((row for row in rows if row["visible"]), key=lambda item: -STAFF_PRIORITY.get(item["role"], 40))
+
+    # Also read the local store and merge it instead of using it as an
+    # all-or-nothing fallback. This covers web-only processes and prevents the
+    # owner/developer seed rows from masking other staff roles.
+    conn = sqlite_connect()
+    try:
+        if conn:
+            raw_rows = conn.execute(
+                "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
+                "public_banner_url, public_visible FROM staff_members"
+            ).fetchall()
+            for raw in raw_rows:
+                add_raw(dict(zip(columns, raw)))
+    except sqlite3.Error:
+        pass
+    finally:
+        if conn:
+            conn.close()
+
+    for user_id, role in (
+        [(str(value), "owner") for value in OWNER_IDS]
+        + [(str(value), "developer") for value in DEVELOPER_IDS]
+    ):
+        if user_id not in by_id:
+            add_raw({"user_id": user_id, "role": role, "public_visible": 1})
+
+    return sorted(
+        (row for row in by_id.values() if row["visible"]),
+        key=lambda item: -STAFF_PRIORITY.get(item["role"], 40),
+    )
 
 
 def _current_staff_role() -> str | None:
