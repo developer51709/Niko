@@ -680,6 +680,27 @@ def _staff_role_label(role: str) -> str:
     return STAFF_ROLES.get(role, role.replace("_", " ").strip().title() or "Staff")
 
 
+def _normalize_public_links(raw) -> list[dict]:
+    """Return safe public profile links from the stored JSON value."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(raw, list):
+        return []
+    links = []
+    for link in raw[:10]:
+        if not isinstance(link, dict):
+            continue
+        link_type = str(link.get("type", "")).strip()
+        url = str(link.get("url", "")).strip()
+        parsed = urlparse(url)
+        if link_type and parsed.scheme in {"http", "https"} and parsed.netloc:
+            links.append({"type": link_type, "label": str(link.get("label") or link_type.title()), "url": url})
+    return links
+
+
 def _staff_row(row) -> dict:
     role = str(row.get("role"))
     identity = _staff_identity(str(row.get("user_id")))
@@ -688,9 +709,10 @@ def _staff_row(row) -> dict:
         "role": role,
         "role_label": "Owner" if role == "owner" else _staff_role_label(role),
         "bio": row.get("public_bio"),
-        # Names and avatars always come from Discord; only the banner and bio
-        # are staff-customizable on the website.
+        # Names and avatars always come from Discord; profile presentation is
+        # staff-customizable on the website.
         "public_banner_url": row.get("public_banner_url"),
+        "public_links": _normalize_public_links(row.get("public_links")),
         "visible": bool(row.get("public_visible", 1)),
     }
 
@@ -706,7 +728,7 @@ def _load_staff_rows() -> list[dict]:
     """
     columns = (
         "user_id", "role", "public_name", "public_bio", "public_avatar_url",
-        "public_banner_url", "public_visible",
+        "public_banner_url", "public_links", "public_visible",
     )
     by_id: dict[str, dict] = {}
 
@@ -731,7 +753,7 @@ def _load_staff_rows() -> list[dict]:
         async def read_staff():
             return await _discord_bot.cxn.fetch(
                 "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
-                "public_banner_url, public_visible FROM staff_members"
+                "public_banner_url, public_links, public_visible FROM staff_members"
             )
         try:
             for row in run_on_bot_loop(read_staff()):
@@ -749,7 +771,7 @@ def _load_staff_rows() -> list[dict]:
         if conn:
             raw_rows = conn.execute(
                 "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
-                "public_banner_url, public_visible FROM staff_members"
+                "public_banner_url, public_links, public_visible FROM staff_members"
             ).fetchall()
             for raw in raw_rows:
                 add_raw(dict(zip(columns, raw)))

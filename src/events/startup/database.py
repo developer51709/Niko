@@ -98,6 +98,7 @@ async def _create_tables(bot):
             public_bio  TEXT,
             public_avatar_url TEXT,
             public_banner_url TEXT,
+            public_links TEXT,
             public_visible INTEGER NOT NULL DEFAULT 1
         )
     """)
@@ -107,6 +108,7 @@ async def _create_tables(bot):
         ("public_bio", "TEXT"),
         ("public_avatar_url", "TEXT"),
         ("public_banner_url", "TEXT"),
+        ("public_links", "TEXT"),
         ("public_visible", "INTEGER NOT NULL DEFAULT 1"),
     ]:
         try:

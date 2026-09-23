@@ -168,6 +168,12 @@ export type GuildResources = {
   roles: { id: string; name: string }[];
 };
 
+export type PublicProfileLink = {
+  type: string;
+  url: string;
+  label?: string;
+};
+
 export type StaffMember = {
   id: string;
   name: string;
@@ -178,6 +184,7 @@ export type StaffMember = {
   public_name?: string | null;
   public_avatar_url?: string | null;
   public_banner_url?: string | null;
+  public_links?: PublicProfileLink[];
   avatar_url?: string | null;
   status?: string;
   status_label?: string;

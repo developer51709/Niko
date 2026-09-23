@@ -36,10 +36,34 @@ def api_save_staff_profile():
     if not role:
         return jsonify({"error": "This area is restricted to Niko staff."}), 403
     body = request.get_json(silent=True) or {}
-    allowed = {"public_bio", "public_banner_url", "public_visible"}
+    allowed = {"public_bio", "public_banner_url", "public_links", "public_visible"}
     values = {key: body[key] for key in allowed if key in body}
     if "public_bio" in values and len(str(values["public_bio"] or "")) > 1200:
         return jsonify({"error": "Your public bio must be 1200 characters or fewer."}), 400
+    if "public_links" in values:
+        raw_links = values["public_links"]
+        if not isinstance(raw_links, list) or len(raw_links) > 10:
+            return jsonify({"error": "Add no more than 10 profile links."}), 400
+        allowed_link_types = {
+            "website": "Website", "github": "GitHub", "instagram": "Instagram",
+            "x": "X", "tiktok": "TikTok", "youtube": "YouTube",
+            "twitch": "Twitch", "bluesky": "Bluesky", "linkedin": "LinkedIn",
+            "reddit": "Reddit", "mastodon": "Mastodon", "facebook": "Facebook",
+            "discord": "Discord", "other": "Other",
+        }
+        links = []
+        for link in raw_links:
+            if not isinstance(link, dict):
+                return jsonify({"error": "Each profile link needs a type and URL."}), 400
+            link_type = str(link.get("type", "")).strip()
+            url = str(link.get("url", "")).strip()
+            if link_type not in allowed_link_types:
+                return jsonify({"error": "Choose a valid type for each profile link."}), 400
+            parsed_url = urlparse(url)
+            if not url or len(url) > 2048 or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                return jsonify({"error": f"Enter a valid http:// or https:// URL for your {allowed_link_types[link_type]} link."}), 400
+            links.append({"type": link_type, "label": allowed_link_types[link_type], "url": url})
+        values["public_links"] = json.dumps(links)
     user_id = int(session["user"]["id"])
     if values and _discord_bot is not None and getattr(_discord_bot, "cxn", None):
         async def save_to_bot():
