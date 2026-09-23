@@ -117,13 +117,22 @@ def run_on_bot_loop(awaitable, timeout: float = 8):
     return future.result(timeout=timeout)
 
 
+def _serialize_level_config(config) -> dict:
+    """Keep Discord snowflake IDs exact when sending leveling data to JS."""
+    serialized = dict(config or {})
+    channel_id = serialized.get("level_up_channel")
+    if channel_id is not None:
+        serialized["level_up_channel"] = str(channel_id)
+    return serialized
+
+
 def get_runtime_level_config(guild_id: str) -> dict:
     """Read leveling settings through the live leveling cog when available."""
     if _discord_bot is not None:
         leveling = _discord_bot.get_cog("Leveling")
         if leveling is not None and hasattr(leveling, "_guild_cfg"):
             try:
-                return run_on_bot_loop(leveling._guild_cfg(int(guild_id)))
+                return _serialize_level_config(run_on_bot_loop(leveling._guild_cfg(int(guild_id))))
             except Exception:
                 pass
 
@@ -157,7 +166,7 @@ def get_runtime_level_config(guild_id: str) -> dict:
         except Exception:
             conn.close()
 
-    return level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {})
+    return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
 @app.after_request
@@ -1418,9 +1427,19 @@ def api_guild_levels(guild_id):
 
 
 def _serialize_onboarding_config(cfg) -> dict:
-    """Return only JSON-safe onboarding values for the dashboard."""
+    """Return onboarding values with exact Discord IDs for the dashboard."""
     from dataclasses import asdict
-    return asdict(cfg)
+    serialized = asdict(cfg)
+    for field in (
+        "welcome_channel", "rules_channel", "rules_role_id", "rules_message_id",
+        "captcha_channel_id", "captcha_panel_message_id",
+    ):
+        if serialized.get(field) is not None:
+            serialized[field] = str(serialized[field])
+    for field in ("autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"):
+        if serialized.get(field) is not None:
+            serialized[field] = [str(value) for value in serialized[field]]
+    return serialized
 
 
 def _serialize_ticket_config(cfg) -> dict:
@@ -1543,10 +1562,14 @@ def _get_runtime_server_config(guild_id: str) -> dict:
 
     onboarding = run_on_bot_loop(load_config(int(guild_id)))
     logging_data = run_on_bot_loop(_load_log_config())
+    logging_config = _guild_config(logging_data, int(guild_id))
+    for category, channel_id in logging_config.items():
+        if category != "disabled" and channel_id is not None:
+            logging_config[category] = str(channel_id)
     return {
         "prefixes": list(get_prefixes(int(guild_id))),
         "onboarding": _serialize_onboarding_config(onboarding),
-        "logging": _guild_config(logging_data, int(guild_id)),
+        "logging": logging_config,
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
         "profile": _get_runtime_guild_profile(guild_id),
     }
@@ -1650,17 +1673,30 @@ def get_runtime_moderation_config(guild_id: str) -> dict:
 def api_guild_resources(guild_id):
     guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
     if guild is not None:
-        return jsonify({
-            "channels": [
-                {"id": str(channel.id), "name": channel.name}
-                for channel in guild.text_channels
-            ],
-            "roles": [
-                {"id": str(role.id), "name": role.name}
-                for role in guild.roles
-                if not role.is_default()
-            ],
-        })
+        cached_channels = list(guild.text_channels)
+        channels = cached_channels
+        if _discord_bot.loop.is_running():
+            try:
+                fetched_channels = run_on_bot_loop(guild.fetch_channels())
+                channels = [
+                    channel for channel in fetched_channels
+                    if getattr(getattr(channel, "type", None), "name", "") in {"text", "news"}
+                ]
+            except Exception:
+                pass
+        channels = [
+            {"id": str(channel.id), "name": str(channel.name)}
+            for channel in channels
+        ]
+        roles = [
+            {"id": str(role.id), "name": role.name}
+            for role in guild.roles
+            if not role.is_default()
+        ]
+        # A cached guild can exist briefly before its channels are populated.
+        # Let the Discord API fallback below resolve names during that window.
+        if channels:
+            return jsonify({"channels": channels, "roles": roles})
 
     # The web process can briefly start before the gateway cache is ready. Use
     # Discord's bot endpoint in that case so saved channel IDs still resolve to

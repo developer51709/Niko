@@ -36,6 +36,11 @@ export function StaffDashboardPage() {
   if (!auth || (!staff && !error)) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking staff access…</p></div>;
   if (error || !staff || !auth.authenticated) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff workspace</div><h1>Private team area.</h1><p>{!auth?.authenticated ? "Sign in with Discord to continue." : error || "This area is only available to official Niko staff."}</p>{!auth?.authenticated && <a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff">Continue with Discord</a>}<button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
 
+  const signedInUser = auth.user!;
+  const discordDefaultAvatar = `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(signedInUser.id) % 5n)}.png`;
+  const signedInAvatar = signedInUser.avatar
+    ? `https://cdn.discordapp.com/avatars/${signedInUser.id}/${signedInUser.avatar}.png?size=128`
+    : discordDefaultAvatar;
   const canManageGlobal = ["owner", "head_admin", "graphic_designer"].includes(staff.role);
   const update = (key: string, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
   const save = async () => {
@@ -56,7 +61,7 @@ export function StaffDashboardPage() {
   const content = <div className="staff-page">
     <header className="staff-heading">
       <div><div className="eyebrow">Staff workspace</div><h1>Shape your presence.</h1><p>Manage the public details granted to your <strong>{staff.role_label}</strong> role. Your name and avatar always come directly from Discord.</p></div>
-      <div className="staff-role-card"><span className="staff-role-mark">{staff.role_label.slice(0, 1)}</span><span><small>Signed in as</small><strong>{staff.role_label}</strong></span></div>
+      <div className="staff-role-card"><span className="staff-role-mark"><img src={signedInAvatar} alt="Your Discord profile" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = discordDefaultAvatar; }} /></span><span><small>Signed in as</small><strong>{staff.role_label}</strong></span></div>
     </header>
 
     <div className="staff-layout">

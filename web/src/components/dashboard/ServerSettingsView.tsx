@@ -33,19 +33,24 @@ const loggingCategories = [
 
 function channelLabel(resources: GuildResources | null, id: string | number | null | undefined) {
   if (!id) return "Not set";
-  return resources?.channels.find((channel) => channel.id === String(id))?.name || `Saved channel · ${id}`;
+  return resources?.channels.find((channel) => String(channel.id) === String(id))?.name || `Saved channel · ${id}`;
+}
+
+function previewColor(value: string) {
+  const hex = value.replace(/^#/, "");
+  return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex}` : "#5865F2";
 }
 
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
   const selectedId = selected ? String(selected) : "";
   const channels = resources?.channels || [];
-  if (!selectedId || channels.some((channel) => channel.id === selectedId)) return channels;
+  if (!selectedId || channels.some((channel) => String(channel.id) === selectedId)) return channels;
   return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
 }
 
 function rolesWithSelected(resources: GuildResources | null, selected: Array<string | number> = []) {
   const roles = resources?.roles || [];
-  const known = new Set(roles.map((role) => role.id));
+  const known = new Set(roles.map((role) => String(role.id)));
   const unavailable = selected
     .map(String)
     .filter((roleId, index, ids) => roleId && !known.has(roleId) && ids.indexOf(roleId) === index)
@@ -81,12 +86,14 @@ function initialValues(server?: ServerConfig) {
 export function ServerSettingsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const [values, setValues] = useState(() => initialValues(config?.server));
   const [state, setState] = useState(initialSave);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   useEffect(() => {
     if (config?.server) setValues(initialValues(config.server));
   }, [config]);
 
   const setValue = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
+  const setWelcomeColor = (value: string) => setValue("welcome_color", value.replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0, 6));
   const setLoggingChannel = (category: string, value: string) => setValues((current) => ({ ...current, logging: { ...current.logging, [category]: value } }));
   const toggleLogging = (category: string) => setValues((current) => ({
     ...current,
@@ -146,7 +153,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         <Field label="Welcome channel"><select value={welcomeChannel} onChange={(event) => setValue("welcome_channel", event.target.value)}><option value="">Disabled</option>{welcomeChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Welcome title"><input value={values.welcome_title} maxLength={200} onChange={(event) => setValue("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field>
         <Field label="Welcome message" hint="Supports {user} and {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => setValue("welcome_description", event.target.value)} placeholder="Welcome {user}!" /></Field>
-        <Field label="Accent color" hint="Hex color, for example 5865F2"><input value={values.welcome_color} maxLength={7} onChange={(event) => setValue("welcome_color", event.target.value)} placeholder="5865F2" /></Field>
+        <Field label="Accent color" hint="Hex color, for example 5865F2"><div className="color-picker"><div className="color-field-control"><button type="button" className="color-preview" style={{ backgroundColor: previewColor(values.welcome_color) }} onClick={() => setColorPickerOpen((open) => !open)} aria-label="Choose welcome accent color" aria-expanded={colorPickerOpen} /><input value={values.welcome_color} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div>{colorPickerOpen && <div className="color-picker-popover" role="dialog" aria-label="Choose accent color"><div className="color-picker-header"><strong>Choose color</strong><button type="button" className="color-picker-close" onClick={() => setColorPickerOpen(false)} aria-label="Close color picker">×</button></div><input className="color-picker-native" type="color" value={previewColor(values.welcome_color)} onChange={(event) => setWelcomeColor(event.target.value)} /><div className="color-picker-value"><span>#</span><input value={values.welcome_color.replace(/^#/, "")} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div></div>}</div></Field>
         <Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => setValue("welcome_image", event.target.value)} placeholder="https://..." /></Field>
         <Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => setValue("rules_channel", event.target.value)}><option value="">Not configured</option>{rulesChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Rules text"><textarea rows={4} maxLength={2000} value={values.rules_text} onChange={(event) => setValue("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." /></Field>
