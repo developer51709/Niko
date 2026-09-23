@@ -24,7 +24,7 @@ _fallback_idx = 0
 # pipeline can stay unchanged while requests are routed through Groq.
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL = "openai/gpt-oss-20b"
-GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_VISION_MODEL = "qwen/qwen3.8-27b"
 GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo"
 
 
