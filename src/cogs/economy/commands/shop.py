@@ -125,6 +125,107 @@ class _ShopTransactionView(discord.ui.LayoutView):
         await self.cog._complete_shop_transaction(interaction, self.mode, self.item_id, self.amount)
 
 
+def _usable_options(data: dict) -> list[discord.SelectOption]:
+    """Select-menu options for every usable item currently in the bag."""
+    options: list[discord.SelectOption] = []
+    for iid, count in data.get("inventory", {}).items():
+        item = get_item(iid)
+        if not item or int(count) < 1:
+            continue
+        if item.get("category") == "collectible" or not item.get("effect"):
+            continue
+        options.append(discord.SelectOption(
+            label=str(item["name"])[:100],
+            value=str(iid),
+            description=f"x{int(count)} · {item.get('description', '')}"[:100],
+            emoji=str(item.get("emoji", "📦")),
+        ))
+    return options[:25]
+
+
+def _consume_one(data: dict, iid: str) -> None:
+    """Remove one unit of an item from the bag (dropping it at zero)."""
+    inv = data.setdefault("inventory", {})
+    inv[iid] = int(inv.get(iid, 0)) - 1
+    if inv[iid] <= 0:
+        del inv[iid]
+
+
+class _UseItemView(discord.ui.LayoutView):
+    """Private panel that lists the user's usable items and lets them pick one."""
+
+    def __init__(self, cog, user_id: int, options: list[discord.SelectOption]):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.user_id = user_id
+        self.select = discord.ui.Select(placeholder="Select an item to use", options=options)
+        self.select.callback = self._on_select
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="### 🧪 Use an item\n-# Pick something from your bag — it takes effect immediately."),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(self.select),
+            accent_colour=discord.Colour(0xC8853F),
+        ))
+
+    @classmethod
+    async def create(cls, cog, user_id: int) -> "_UseItemView | None":
+        data = await cog.get_user_economy_data(user_id)
+        options = _usable_options(data)
+        return cls(cog, user_id, options) if options else None
+
+    async def _on_select(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        iid  = self.select.values[0]
+        data = await self.cog.get_user_economy_data(self.user_id)
+        applied, title, body = self.cog._use_item_effect(data, iid, get_item(iid))
+        if applied:
+            _consume_one(data, iid)
+            await self.cog.save_user_economy_data(self.user_id)
+        if _usable_options(data):
+            await interaction.response.edit_message(view=_UseResultView(self.cog, self.user_id, title, body))
+        else:
+            await interaction.response.edit_message(view=_info_view(title, body))
+
+
+class _UseResultView(discord.ui.LayoutView):
+    """Outcome of using an item, with a shortcut back to the picker."""
+
+    def __init__(self, cog, user_id: int, title: str, body: str):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.user_id = user_id
+        self.title = title
+        self.body = body
+        again = discord.ui.Button(label="Use another item", emoji="🔁", style=discord.ButtonStyle.primary)
+        close = discord.ui.Button(label="Close", style=discord.ButtonStyle.secondary)
+        again.callback = self._again
+        close.callback = self._close
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {title}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=body),
+            discord.ui.ActionRow(again, close),
+            accent_colour=discord.Colour(0xC8853F),
+        ))
+
+    async def _again(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        panel = await _UseItemView.create(self.cog, self.user_id)
+        if panel is None:
+            return await interaction.response.send_message(
+                view=_info_view("🎒 Nothing to use", "You don't have any usable items left — visit the `shop`!"),
+                ephemeral=True,
+            )
+        await interaction.response.edit_message(view=panel)
+
+    async def _close(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This private panel belongs to someone else.", ephemeral=True)
+        await interaction.response.edit_message(view=_info_view(self.title, self.body))
+
+
 class ShopMixin:
     """shop, buy, sell, use, inventory commands."""
 
@@ -293,37 +394,19 @@ class ShopMixin:
                 f"-# New balance: **{data['balance']:,}** 🥐",
             ))
 
-    @commands.hybrid_command(
-        name="use",
-        description="Use a consumable or upgrade item",
-        help="{ 'en': 'use a consumable from your bag 🧪', 'de': 'benutze ein Item aus deinem Bag', 'es': 'usa un objeto de tu inventario 🧪' }"
-    )
-    async def use(self, ctx: commands.Context, item_id: str):
+    def _use_item_effect(self, data: dict, iid: str, item: dict | None) -> tuple[bool, str, str]:
+        """Apply an item's effect to `data`.
 
-        # Defer slash interactions to avoid interaction errors
-        if ctx.interaction:
-            await ctx.interaction.response.defer()
-
-        iid  = item_id.lower()
-        item = get_item(iid)
+        Returns ``(applied, title, body)``. When ``applied`` is True the caller
+        should consume one unit of the item and save; otherwise the item is left
+        untouched and the title/body explain why it could not be used.
+        """
         if not item:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
-
-        data = await self.get_user_economy_data(ctx.author.id)
-        if int(data["inventory"].get(iid, 0)) < 1:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("📦 None in bag", f"You don't have any **{item['name']}**."))
-            else:
-                return await ctx.send(view=_info_view("📦 None in bag", f"You don't have any **{item['name']}**."))
-
+            return False, f"{get_emoji('icon_cross')} Unknown item", f"No item called `{iid}`."
+        if int(data.get("inventory", {}).get(iid, 0)) < 1:
+            return False, "📦 None in bag", f"You don't have any **{item['name']}**."
         if item["category"] == "collectible":
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🎖️ Collectible", "Collectibles can't be used — they're for showing off on your profile."))
-            else:
-                return await ctx.send(view=_info_view("🎖️ Collectible", "Collectibles can't be used — they're for showing off on your profile."))
+            return False, "🎖️ Collectible", "Collectibles can't be used — they're for showing off on your profile."
 
         effect   = item.get("effect")
         msg_text = ""
@@ -347,10 +430,7 @@ class ShopMixin:
         elif effect == "bank_tier_up":
             cur = int(data.get("bank_tier", 0))
             if cur >= max_bank_tier():
-                if ctx.interaction:
-                    return await ctx.interaction.followup.send(view=_info_view("🏦 Already top tier", "Your vault is already a Diamond Vault — the best of the best."))
-                else:
-                    return await ctx.send(view=_info_view("🏦 Already top tier", "Your vault is already a Diamond Vault — the best of the best."))
+                return False, "🏦 Already top tier", "Your vault is already a Diamond Vault — the best of the best."
 
             data["bank_tier"] = cur + 1
             msg_text = (
@@ -371,19 +451,46 @@ class ShopMixin:
             effects["work_boost"] = 1
             msg_text = "Your next work shift will pay +10% extra. 🧲✨"
         else:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🤔 No effect", "This item doesn't seem to do anything right now."))
-            else:
-                return await ctx.send(view=_info_view("🤔 No effect", "This item doesn't seem to do anything right now."))
+            return False, "🤔 No effect", "This item doesn't seem to do anything right now."
 
-        data["inventory"][iid] = int(data["inventory"][iid]) - 1
-        if data["inventory"][iid] <= 0:
-            del data["inventory"][iid]
-        await self.save_user_economy_data(ctx.author.id)
+        return True, f"{item['emoji']} {item['name']} used", msg_text
+
+    @commands.hybrid_command(
+        name="use",
+        description="Use a consumable or upgrade item",
+        help="{ 'en': 'use a consumable from your bag 🧪 — pick from a menu or pass an item id', 'de': 'benutze ein Item aus deinem Bag', 'es': 'usa un objeto de tu inventario 🧪' }"
+    )
+    async def use(self, ctx: commands.Context, item_id: str = None):
+
+        # Defer slash interactions to avoid interaction errors
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(f"{item['emoji']} {item['name']} used", msg_text))
-        else:
-            await ctx.send(view=_info_view(f"{item['emoji']} {item['name']} used", msg_text))
+            await ctx.interaction.response.defer()
+
+        # With an item id, resolve it directly; without one, open the picker panel
+        if item_id:
+            iid  = item_id.lower()
+            data = await self.get_user_economy_data(ctx.author.id)
+            applied, title, body = self._use_item_effect(data, iid, get_item(iid))
+            if applied:
+                _consume_one(data, iid)
+                await self.save_user_economy_data(ctx.author.id)
+            view = _info_view(title, body)
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=view)
+            return await ctx.send(view=view)
+
+        panel = await _UseItemView.create(self, ctx.author.id)
+        if panel is None:
+            view = _info_view(
+                "🎒 Nothing to use",
+                "You don't have any usable items yet — visit the `shop` to pick some up!",
+            )
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=view)
+            return await ctx.send(view=view)
+        if ctx.interaction:
+            return await ctx.interaction.followup.send(view=panel, ephemeral=True)
+        return await ctx.send(view=panel)
 
     @commands.hybrid_command(
         name="inventory", aliases=["inv", "bag"],

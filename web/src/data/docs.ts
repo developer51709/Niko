@@ -661,7 +661,12 @@ Permanent or long-term improvements:
 \`\`\`
 
 ### Use Items
-Some items are automatic, others need to be activated:
+Some items are automatic, others need to be activated. Run \`.use\` on its own to open a menu of everything usable in your bag:
+\`\`\`
+.use
+\`\`\`
+
+Or pass an item id directly:
 \`\`\`
 .use <item id>
 \`\`\`
