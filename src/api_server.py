@@ -26,7 +26,7 @@ class _QuietSuccessfulRequests(logging.Filter):
 
 def start_api_server(bot=None) -> threading.Thread:
     """Start Flask in a daemon thread and return the thread for diagnostics."""
-    from website import app, configure_bot
+    from webapp import app, configure_bot
 
     configure_bot(bot)
 

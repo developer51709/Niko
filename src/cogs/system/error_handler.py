@@ -88,7 +88,7 @@ def is_premium():
     """Check whether the invoking user has been granted premium by an owner."""
     async def predicate(ctx):
         from utils.premium_manager import PremiumManager
-        if PremiumManager.is_premium(ctx.author.id):
+        if await PremiumManager.is_premium(ctx.bot.cxn, ctx.author.id):
             return True
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(

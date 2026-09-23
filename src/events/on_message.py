@@ -26,7 +26,7 @@ async def handle_message(bot, msg: discord.Message):
     guild   = msg.guild
 
     # ── 1. Load prefixes for this guild ──────────────────────────────────────
-    prefixes       = dynamic_prefix(bot, msg)
+    prefixes       = await dynamic_prefix(bot, msg)
     is_ai_command  = False
     used_prefix    = None
 

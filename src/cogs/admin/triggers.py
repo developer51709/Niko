@@ -613,7 +613,7 @@ class TriggersCog(commands.Cog, name="Triggers"):
             return
 
         # Don't fire on bot prefix commands
-        prefixes = dynamic_prefix(self.bot, message)
+        prefixes = await dynamic_prefix(self.bot, message)
         if any(message.content.startswith(p) for p in prefixes):
             return
 

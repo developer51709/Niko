@@ -19,6 +19,7 @@ JSON_COLUMNS = {
     "ticket_config": ("panel_categories", "support_roles", "open_tickets"),
     "polls": ("options",),
     "suggestions": ("voters", "verdict"),
+    "prefix_config": ("prefixes",),
 }
 
 
@@ -125,6 +126,8 @@ PRIMARY_KEYS: dict = {
     "economy_users": "user_id",
     "economy_lottery": "id",
     "donors": "user_id",
+    "premium_users": "user_id",
+    "prefix_config": "guild_id",
     "levels": ("guild_id", "user_id"),
     "level_config": "guild_id",
     "giveaways": "message_id",

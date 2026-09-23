@@ -121,9 +121,9 @@ DEFAULT_GUILD_CONFIG = {
 
 def ensure_files():
     os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump({}, f, indent=4)
+    # if not os.path.exists(CONFIG_FILE):
+    #     with open(CONFIG_FILE, "w") as f:
+    #         json.dump({}, f, indent=4)
 
 
 def load_json(path, default):

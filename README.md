@@ -112,7 +112,10 @@ Blackjack, Slots, Roulette — all with PIL image cards and full economy integra
 src/
 ├── bot.py            # Entry point — loads cogs, syncs slash commands, event loop
 ├── api_server.py     # Starts the dashboard API beside the bot
-├── website.py        # Flask API routes and React build server
+├── webapp/           # Flask app entrypoint, helpers, and focused route modules
+│   ├── __init__.py    # Exposes the Flask app
+│   ├── server.py      # Shared app setup and web helpers
+│   └── *_routes.py    # Auth, dashboard, public, team, donation, card, and site routes
 ├── cogs/
 │   ├── admin/            # Admin tools, prefix management, custom triggers
 │   ├── ai/               # AI chat, memory, favorability, image generation
@@ -146,7 +149,7 @@ src/
 │   ├── ratelimit.py      # Async rolling-window rate limiters
 │   └── blacklist_manager.py
 ├── config/              # Bot configuration (emojis, AI config, etc.)
-├── website/             # Generated React build served by website.py
+├── website/             # Generated React build served by webapp/
 │   └── dist/
 ├── web/                 # React + Vite dashboard source
 │   ├── src/App.tsx      # Public pages and dashboard views

@@ -131,8 +131,8 @@ class AiImageTools(commands.Cog):
 
     # ── Premium check ─────────────────────────────
 
-    def check_premium(self, member: discord.Member) -> bool:
-        return PremiumManager.is_premium(member.id)
+    async def check_premium(self, member: discord.Member) -> bool:
+        return await PremiumManager.is_premium(self.bot.cxn, member.id)
 
     def _premium_required_view(self, detail: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()
@@ -152,7 +152,7 @@ class AiImageTools(commands.Cog):
         aliases=["imagen", "imagine"],
     )
     async def generate(self, ctx: commands.Context, *, prompt: str):
-        if not self.check_premium(ctx.author):
+        if not await self.check_premium(ctx.author):
             return await ctx.send(view=self._premium_required_view(
                 "Due to the cost of AI image generation, this command is only available to premium users.\n\n"
                 "You can get premium by joining the support server and boosting."
@@ -186,7 +186,7 @@ class AiImageTools(commands.Cog):
         aliases=["aiedit", "editimage"],
     )
     async def edit(self, ctx: commands.Context, *, prompt: str):
-        if not self.check_premium(ctx.author):
+        if not await self.check_premium(ctx.author):
             return await ctx.send(view=self._premium_required_view(
                 "AI image editing is a premium-only feature.\n\n"
                 "Join the support server and boost to unlock it."

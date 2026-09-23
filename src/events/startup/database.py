@@ -247,6 +247,21 @@ async def _create_tables(bot):
             logging.warning("DB", f"Could not migrate follows.db: {e}")
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS premium_users (
+            user_id INTEGER PRIMARY KEY
+        )
+    """)
+    await _migrate_premium_users(bot)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS prefix_config (
+            guild_id INTEGER PRIMARY KEY,
+            prefixes TEXT NOT NULL
+        )
+    """)
+    await _migrate_prefix_config(bot)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS donors (
             user_id        INTEGER PRIMARY KEY,
             total_donated  REAL    DEFAULT 0,
@@ -576,6 +591,78 @@ async def _create_tables(bot):
     """)
 
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_prefix_config(bot):
+    """Import custom guild prefixes and keep a backup of the old JSON file."""
+    import json
+
+    path = "data/prefixes.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("prefixes.json must contain a guild-to-prefixes object")
+
+        migrated = 0
+        for raw_guild_id, raw_prefixes in data.items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(raw_prefixes, list) or not all(
+                isinstance(prefix, str) for prefix in raw_prefixes
+            ):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO prefix_config (guild_id, prefixes) VALUES ($1, $2)",
+                guild_id,
+                raw_prefixes,
+            )
+            migrated += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success("DB", f"Migrated {migrated} guild prefix configs from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate prefixes.json: {e}")
+
+
+async def _migrate_premium_users(bot):
+    """Import legacy premium grants into the primary database."""
+    import json
+
+    path = "data/premium_users.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not isinstance(data.get("users", []), list):
+            raise ValueError("premium_users.json has an invalid schema")
+
+        user_ids = set()
+        for raw_id in data.get("users", []):
+            try:
+                user_ids.add(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+
+        for user_id in user_ids:
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO premium_users (user_id) VALUES ($1)",
+                user_id,
+            )
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {len(user_ids)} premium grants from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate premium_users.json: {e}")
 
 
 async def _migrate_suggestions_data(bot):

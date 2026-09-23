@@ -61,8 +61,10 @@ persisting them.
 
 ## Adding an endpoint
 
-Keep API work in `src/website.py` until it needs a separate domain module. Add
-the route before the static catch-all, use `@require_auth` and
-`@require_guild_access` for private guild data, validate request JSON, and return
-explicit error responses. Update `web/src/api.ts`, `web/src/types.ts`, and this
-file together.
+The Flask app entrypoint is `src/webapp/__init__.py`; shared setup and helpers
+live in `src/webapp/server.py`, and routes are grouped in focused modules such
+as `dashboard_routes.py`, `auth_routes.py`, and `card_routes.py`. Add new routes
+to the relevant module, keep static fallback routing last, use `@require_auth`
+and `@require_guild_access` for private guild data, validate request JSON, and
+return explicit error responses. Update `web/src/api.ts`, `web/src/types.ts`,
+and this file together.

@@ -1328,7 +1328,7 @@ class OwnerCog(commands.Cog):
     @premium.command(name="add", help="Grant premium to a user.")
     @is_owner()
     async def premium_add(self, ctx, user: discord.User):
-        added = PremiumManager.add(user.id)
+        added = await PremiumManager.add(self.bot.cxn, user.id)
         if added:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
@@ -1350,7 +1350,7 @@ class OwnerCog(commands.Cog):
     @premium.command(name="remove", help="Revoke premium from a user.")
     @is_owner()
     async def premium_remove(self, ctx, user: discord.User):
-        removed = PremiumManager.remove(user.id)
+        removed = await PremiumManager.remove(self.bot.cxn, user.id)
         if removed:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
@@ -1372,7 +1372,7 @@ class OwnerCog(commands.Cog):
     @premium.command(name="list", help="List all premium users.")
     @is_owner()
     async def premium_list(self, ctx):
-        user_ids = PremiumManager.list_users()
+        user_ids = await PremiumManager.list_users(self.bot.cxn)
         if not user_ids:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
