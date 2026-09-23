@@ -16,6 +16,14 @@ def root():
 def dashboard_redirect():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
+@app.route("/support")
+def support_metadata_page():
+    return send_from_directory(WEB_DIST_DIR, "support/index.html")
+
+@app.route("/discord")
+def discord_metadata_page():
+    return send_from_directory(WEB_DIST_DIR, "discord/index.html")
+
 @app.route("/commands")
 @app.route("/docs")
 @app.route("/privacy")

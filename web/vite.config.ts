@@ -86,7 +86,7 @@ function createRasterTextPaths(metadata: PageMetadata, fontRoot: string) {
   };
   const title = metadata.title.replace(/ — Niko( docs| changelog)?$/, "");
   const section = metadata.section.toUpperCase();
-  const words = metadata.description.slice(0, 160).split(/\\s+/);
+  const words = metadata.description.slice(0, 160).split(" ").filter(Boolean);
   const lines: string[] = [];
   let line = "";
   for (const word of words) {
@@ -126,7 +126,11 @@ function staticMetadataPlugin(): Plugin {
         fs.writeFileSync(htmlPath, generated);
         fs.writeFileSync(svgPath, svg);
         const fontRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../node_modules/@fontsource/inter/files");
-        const rasterSvg = svg.replace("</svg>", `${createRasterTextPaths(metadata, fontRoot)}</svg>`);
+        // Remove native SVG text before adding outlined glyph paths so the PNG
+        // contains each label only once. The SVG card retains its native text.
+        const rasterSvg = svg
+          .replace(/<text[^>]*>.*?<\/text>/gs, "")
+          .replace("</svg>", `${createRasterTextPaths(metadata, fontRoot)}</svg>`);
         const raster = new Resvg(rasterSvg, {
           fitTo: { mode: "width", value: 1200 },
         }).render();
