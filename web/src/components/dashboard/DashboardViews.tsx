@@ -5,6 +5,7 @@ import { GuildIcon } from "./GuildIcon";
 import { MemberAvatar, UserAvatar } from "./UserAvatar";
 import type { Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
 import { LevelingSettings } from "./SettingsViews";
+import { ServerStatsCard } from "./ServerStatsCard";
 
 export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
   return <div className="dash-heading">
@@ -111,7 +112,8 @@ export function OverviewView({ overview }: { overview: GuildOverview }) {
       <StatCard label="Automod" value={overview.moderation.automod_active ? "Active" : "Quiet"} note="Protection status" accent="accent-green" />
       <StatCard label="Level leaders" value={formatNumber(overview.leveling.top.length)} note="Members with recorded XP" accent="accent-violet" />
     </div>
-    <div className="dash-columns">
+    <ServerStatsCard stats={overview.server} />
+    <div className="dash-columns overview-columns">
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Community energy</span><h3>Top XP</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={overview.leveling.top} /></section>
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span></div><div className="server-controls-body"><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p><span className="text-link">Open server settings <Icon name="arrow" /></span></div></section>
     </div>

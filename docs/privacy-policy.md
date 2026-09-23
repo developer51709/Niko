@@ -6,7 +6,7 @@
 Niko stores only what is strictly necessary to provide its features:
 • **User IDs** — to link economy balances, XP, reminders, birthdays, highlights, AI memory, and warnings to you.
 • **Server IDs** — to keep per-server configuration (moderation, leveling, tickets, automod, etc.).
-• **Message content** — read in real time for AI replies, automod, snipe, highlights, and leveling XP; not stored permanently except for AI conversation history (last 3 exchanges, per-user) and snipe cache (last deleted/edited message per channel, cleared on restart).
+• **Message content** — read in real time for AI replies, automod, snipe, highlights, and leveling XP; not stored permanently except for AI conversation history (last 3 exchanges, per-user) and snipe cache (last deleted/edited message per channel, cleared on restart). The server dashboard also stores daily aggregate message totals, plus join/leave counts; these aggregates contain no message text or member IDs.
 • **User presence & status** — read to support member-list and bot-status features; not stored.
 • **Voice state** — used only during active music or VoiceMaster sessions; not stored.
 

@@ -1292,7 +1292,67 @@ def api_guild_overview(guild_id):
     # ── Level leaderboard (quick top-5) ──────────────────────
     top_levels = _get_levels(guild_id)[:5]
 
+    # ── Server activity (persisted daily by the bot's ServerStats cog) ──
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=13)
+    activity_by_date = {}
+    guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        async def read_server_activity():
+            pool = _discord_bot.cxn
+            if getattr(pool, "db_type", None) == "mongodb" and hasattr(pool, "collection"):
+                documents = await pool.collection("server_activity").find({
+                    "$or": [
+                        {"guild_id": int(guild_id)},
+                        {"guild_id": str(guild_id)},
+                        {"_id": {"$regex": rf"^{guild_id}_"}},
+                    ],
+                    "activity_date": {"$gte": start_date.isoformat()},
+                }).to_list(length=None)
+                rows = []
+                for document in documents:
+                    if str(document.get("guild_id", guild_id)) != str(guild_id):
+                        continue
+                    rows.append(document)
+                return rows
+            return await pool.fetch(
+                "SELECT activity_date, messages, joins, leaves FROM server_activity "
+                "WHERE guild_id = $1 AND activity_date >= $2 ORDER BY activity_date ASC",
+                int(guild_id), start_date.isoformat(),
+            )
+
+        try:
+            activity_rows = run_on_bot_loop(read_server_activity())
+            activity_by_date = {str(row.get("activity_date")): row for row in activity_rows}
+        except Exception:
+            activity_by_date = {}
+
+    activity = []
+    for offset in range(14):
+        activity_date = start_date + timedelta(days=offset)
+        row = activity_by_date.get(activity_date.isoformat(), {})
+        def safe_count(key):
+            try:
+                return max(0, int(row.get(key, 0) or 0))
+            except (TypeError, ValueError):
+                return 0
+        activity.append({
+            "date": activity_date.isoformat(),
+            "messages": safe_count("messages"),
+            "joins": safe_count("joins"),
+            "leaves": safe_count("leaves"),
+        })
+
     return jsonify({
+        "server": {
+            "member_count": int(getattr(guild, "member_count", 0) or 0),
+            "channel_count": len(getattr(guild, "channels", []) or []) if guild else 0,
+            "role_count": len(getattr(guild, "roles", []) or []) if guild else 0,
+            "created_at": guild.created_at.isoformat() if guild else None,
+            "activity": activity,
+        },
         "moderation": {
             "warn_count":     warn_count,
             "automod_active": automod_on,

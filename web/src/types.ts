@@ -77,9 +77,23 @@ export type LevelRow = {
   level: number;
 };
 
+export type ServerStats = {
+  member_count: number;
+  channel_count: number;
+  role_count: number;
+  created_at: string | null;
+  activity: Array<{
+    date: string;
+    messages: number;
+    joins: number;
+    leaves: number;
+  }>;
+};
+
 export type GuildOverview = {
   moderation: { warn_count: number; automod_active: boolean };
   leveling: { top: LevelRow[] };
+  server: ServerStats;
 };
 
 export type OnboardingConfig = {

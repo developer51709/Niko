@@ -563,6 +563,17 @@ async def _create_tables(bot):
             PRIMARY KEY (channel_id, guild_id)
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS server_activity (
+            activity_id TEXT PRIMARY KEY,
+            guild_id INTEGER NOT NULL,
+            activity_date TEXT NOT NULL,
+            messages INTEGER NOT NULL DEFAULT 0,
+            joins INTEGER NOT NULL DEFAULT 0,
+            leaves INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (guild_id, activity_date)
+        )
+    """)
 
     logging.success("DB", "Database tables verified")
 

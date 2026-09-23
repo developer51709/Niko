@@ -41,12 +41,12 @@ but admin login intentionally remains unavailable.
 
 All `/api/guild/<guild_id>/*` endpoints require a Discord session, Manage Server
 permission for that guild, and the bot being present in the guild. This check is
-performed server-side; the frontend must not be treated as the security boundary.
+performed server-side; the frontend must not be treated as the security boundary. The overview activity series contains daily aggregate message, join, and leave totals; it does not include message content or member identifiers.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/guilds` | Mutual manageable guilds |
-| GET | `/api/guild/<id>/overview` | Moderation and leveling summary |
+| GET | `/api/guild/<id>/overview` | Moderation, leveling, server totals, and 14-day activity summary |
 | GET | `/api/guild/<id>/levels` | XP leaderboard |
 | GET | `/api/guild/<id>/config` | Moderation, AI, leveling, and server config |
 | GET | `/api/guild/<id>/resources` | Available text channels and roles for dashboard selectors |
