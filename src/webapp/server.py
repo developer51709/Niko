@@ -1352,7 +1352,11 @@ async def _confirm_donation_from_webhook(track_id: str, payload: dict):
 
 
 def serve_spa_shell():
-    """Serve the React shell for a client-side route on hard refresh."""
+    """Serve generated route metadata HTML, falling back to the React shell."""
+    route = request.path.strip("/")
+    route_html = os.path.join(WEB_DIST_DIR, route, "index.html") if route else ""
+    if route_html and os.path.isfile(route_html):
+        return send_from_directory(WEB_DIST_DIR, f"{route}/index.html")
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
 

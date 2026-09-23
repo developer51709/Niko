@@ -16,16 +16,13 @@ def root():
 def dashboard_redirect():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
-@app.route("/support")
-def support_metadata_page():
-    return send_from_directory(WEB_DIST_DIR, "support/index.html")
-
-@app.route("/discord")
-def discord_metadata_page():
-    return send_from_directory(WEB_DIST_DIR, "discord/index.html")
-
 @app.route("/commands")
 @app.route("/docs")
+@app.route("/team")
+@app.route("/support")
+@app.route("/discord")
+@app.route("/changelog")
+@app.route("/community")
 @app.route("/privacy")
 @app.route("/terms")
 @app.route("/donate")
@@ -36,8 +33,11 @@ def public_spa_route(path=None):
 
 @app.route("/commands/<path:path>")
 @app.route("/docs/<path:path>")
+@app.route("/team/<path:path>")
+@app.route("/changelog/<path:path>")
 @app.route("/privacy/<path:path>")
 @app.route("/terms/<path:path>")
+@app.route("/community/<path:path>")
 @app.route("/donate/<path:path>")
 @app.route("/dashboard/<path:path>")
 def nested_spa_route(path):
