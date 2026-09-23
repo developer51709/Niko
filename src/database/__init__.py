@@ -737,15 +737,16 @@ class MongoPool:
 
         # 2) On conflict (row already existed), apply DO UPDATE SET ops.
         if result.upserted_id is None:
-            ops = []
-            if update.get("$set"):
-                ops.append({"$set": update["$set"]})
-            if update.get("$inc"):
-                ops.append({"$inc": update["$inc"]})
-            if update.get("$unset"):
-                ops.append({"$unset": update["$unset"]})
-            if ops:
-                await collection.update_one(filter_dict, ops)
+            # MongoDB accepts update operators in one update document. Passing
+            # a list makes PyMongo interpret it as an aggregation pipeline,
+            # where `$inc` is not a valid pipeline stage.
+            update_document = {
+                operator: values
+                for operator, values in update.items()
+                if operator in {"$set", "$inc", "$unset"} and values
+            }
+            if update_document:
+                await collection.update_one(filter_dict, update_document)
 
     async def _handle_insert_select(self, q: str, args: list):
         m = re.match(
@@ -810,16 +811,14 @@ class MongoPool:
         filter_dict = parser.parse(where_clause)
         filter_dict = self._apply_pk_filter(table, filter_dict)
 
-        ops = []
-        if set_update.get("$set"):
-            ops.append({"$set": set_update["$set"]})
-        if set_update.get("$inc"):
-            ops.append({"$inc": set_update["$inc"]})
-        if set_update.get("$unset"):
-            ops.append({"$unset": set_update["$unset"]})
-        if not ops:
+        update_document = {
+            operator: values
+            for operator, values in set_update.items()
+            if operator in {"$set", "$inc", "$unset"} and values
+        }
+        if not update_document:
             return
-        await self._db[table].update_many(filter_dict, ops)
+        await self._db[table].update_many(filter_dict, update_document)
 
     def _build_update_ops(self, table: str, set_clause: str, args: list) -> dict:
         update: dict = {}
