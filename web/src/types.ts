@@ -11,6 +11,7 @@ export type PublicConfig = {
   application_id: string;
   bot_avatar_url?: string | null;
   invite_url: string;
+  support_server_url?: string | null;
   oauth_available: boolean;
 };
 

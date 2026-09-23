@@ -1,5 +1,6 @@
 """Flask routes for public."""
 
+from config import links as bot_links
 from . import server as _server
 
 globals().update({
@@ -71,6 +72,11 @@ def api_public_config():
             f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"
         ),
         "oauth_available": oauth_enabled(),
+        "support_server_url": (
+            getattr(bot_links, "SUPPORT_SERVER", "").strip() or None
+            if isinstance(getattr(bot_links, "SUPPORT_SERVER", ""), str)
+            else None
+        ),
     })
 
 @app.route("/api/botstats")
