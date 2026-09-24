@@ -49,6 +49,122 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "uwulock-starboard-overhaul",
+    title: "UwU Lock Rebuilt & Starboard Persistence",
+    date: "2026-09-25",
+    version: "2.11.0",
+    tags: ["uwulock", "starboard", "database", "fun", "social"],
+    summary:
+      "The UwU Lock command has been completely rebuilt around the main database with immediate webhook reposts, reliable message transforms, and full Starboard integration — with proper author attribution that persists cleanly across restarts.",
+    highlights: [
+      {
+        title: "Instant Webhook Transforms",
+        description:
+          "Locked users' messages are now deleted and immediately reposted via a shared per-channel webhook with their display name and avatar, including attachments, embeds, and stickers, with thread support and a guard against double-processing.",
+        icon: "spark",
+      },
+      {
+        title: "Real Author on the Starboard",
+        description:
+          "When a uwu-ified webhook message is starred, the Starboard resolves the original author from persistent attribution and renders their name, avatar, and original timestamp — not the webhook — in a clean Section with Thumbnail layout.",
+        icon: "users",
+      },
+      {
+        title: "Survives Restarts",
+        description:
+          "Both UwU Lock rules and Starboard configuration now live in the main database, loaded on startup via cog_load with automatic migration from the legacy JSON files and stale-webhook healing.",
+        icon: "settings",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "Main-database tables uwulock_config and uwulock_messages for lock rules and author attribution",
+          "Main-database tables starboard_config and starboard_messages for channel, threshold, emoji and post mappings",
+          "Automatic migration of legacy data/uwulock.json and data/starboard.json into the primary database with .migrated backups",
+          "Per-channel webhook reuse with stale-webhook detection via fetch and shared-webhook protection on removal",
+          "Thread-aware webhook sending with AllowedMentions.none and wait:true repost handling",
+          "UwU attribution storage (author name, avatar, original timestamp) for every transformed message",
+          "Starboard Section + Thumbnail rendering for uwu-locked messages with correct original author credit",
+          "Explicit UwU lock hook in events.on_message before AI triggers with a 2,000-entry dedup guard and fallback listener",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "UwU Lock now deletes the original message immediately instead of queuing for a background task",
+          "Attachment, embed, and sticker handling with text truncation and text-only fallback on send failure",
+          "Permission checks for Manage Messages and Manage Webhooks with localized failure messaging",
+          "Starboard reaction handling now distinguishes webhook reposts via database attribution",
+          "Starboard message edits and sends now use AllowedMentions.none for cleaner output",
+          "Webhook Channel resolution for threads via parent channel with robust create_webhook flow",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "UwU Lock not creating the webhook or showing any sign it saw the message",
+          "Webhook created but original message not deleted and no new message sent",
+          "UwU transforms silently failing due to queue delay and background-task errors",
+          "Starboard not displaying correct author for uwu-locked webhook messages",
+          "Starboard and UwU Lock losing all state after a restart despite being stored",
+          "Stale or deleted webhooks leaving lock rules in a broken state",
+        ],
+      },
+      {
+        category: "migrated",
+        items: [
+          "UwU Lock from data/uwulock.json file storage to the primary database",
+          "Starboard configuration and starred post IDs from data/starboard.json to the primary database",
+        ],
+      },
+    ],
+    chart: {
+      type: "metrics",
+      title: "Release At a Glance",
+      data: [
+        { label: "Added", value: "8", detail: "new persistence features", color: "#66866f" },
+        { label: "Improved", value: "6", detail: "reliability upgrades", color: "#4a7fb5" },
+        { label: "Fixed", value: "6", detail: "workflow bugs", color: "#d96545" },
+      ],
+    },
+    commits: [],
+  },
+  {
+    slug: "guild-server-pulse-stats",
+    title: "Guild Server Pulse Stats",
+    date: "2026-09-24",
+    tags: ["dashboard", "guild", "analytics", "stats"],
+    summary:
+      "Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.",
+    highlights: [
+      {
+        title: "Server Activity at a Glance",
+        description:
+          "The card summarizes member count, messages, and new members over the last 14 days, with interactive views for message trends, member joins and departures, and the server's members, channels, and roles.",
+        icon: "chart",
+      },
+      {
+        title: "Community Analytics",
+        description:
+          "Daily activity charts make it easier to spot changes in conversation and membership, with activity tracking noted from the time it is enabled.",
+        icon: "users",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "Server pulse analytics card in guild settings",
+          "14-day daily message activity and member join/leave charts",
+          "Server layout view for member, channel, and role counts",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
     slug: "team-page-ai-name-config",
     title: "Team Profiles & Custom AI Names",
     date: "2026-09-22",

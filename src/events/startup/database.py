@@ -591,8 +591,180 @@ async def _create_tables(bot):
             UNIQUE (guild_id, activity_date)
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_config (
+            guild_id         INTEGER PRIMARY KEY,
+            channel_id       INTEGER,
+            threshold        INTEGER NOT NULL DEFAULT 3,
+            emoji            TEXT NOT NULL DEFAULT '⭐',
+            ignored_channels TEXT NOT NULL DEFAULT '[]'
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_messages (
+            guild_id             INTEGER NOT NULL,
+            message_id           INTEGER NOT NULL,
+            starboard_message_id INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, message_id)
+        )
+    """)
+    await _migrate_starboard_data(bot)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS uwulock_config (
+            guild_id   INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            user_id    INTEGER NOT NULL,
+            webhook_url TEXT NOT NULL,
+            PRIMARY KEY (guild_id, channel_id, user_id)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS uwulock_messages (
+            message_id           INTEGER PRIMARY KEY,
+            guild_id             INTEGER NOT NULL,
+            channel_id           INTEGER NOT NULL,
+            original_message_id  INTEGER NOT NULL,
+            author_id            INTEGER NOT NULL,
+            author_name          TEXT NOT NULL,
+            author_avatar_url    TEXT,
+            original_created_at  REAL NOT NULL
+        )
+    """)
+    await _migrate_uwulock_data(bot)
 
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_starboard_data(bot):
+    """Move legacy starboard settings and post IDs into the primary database."""
+    import json
+
+    path = "data/starboard.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("starboard.json must contain an object")
+
+        migrated_configs = 0
+        for raw_guild_id, config in (data.get("guilds", {}) or {}).items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(config, dict):
+                continue
+            ignored = []
+            for channel_id in config.get("ignored_channels", []):
+                try:
+                    ignored.append(int(channel_id))
+                except (TypeError, ValueError):
+                    continue
+            try:
+                threshold = max(1, min(50, int(config.get("threshold", 3))))
+            except (TypeError, ValueError):
+                threshold = 3
+            try:
+                channel_id = int(config["channel_id"]) if config.get("channel_id") else None
+            except (TypeError, ValueError):
+                channel_id = None
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO starboard_config "
+                "(guild_id, channel_id, threshold, emoji, ignored_channels) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                guild_id,
+                channel_id,
+                threshold,
+                str(config.get("emoji") or "⭐"),
+                json.dumps(ignored),
+            )
+            migrated_configs += 1
+
+        migrated_posts = 0
+        for raw_guild_id, posts in (data.get("starred", {}) or {}).items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(posts, dict):
+                continue
+            for raw_message_id, raw_starboard_id in posts.items():
+                try:
+                    message_id = int(raw_message_id)
+                    starboard_message_id = int(raw_starboard_id)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO starboard_messages "
+                    "(guild_id, message_id, starboard_message_id) VALUES ($1, $2, $3)",
+                    guild_id, message_id, starboard_message_id,
+                )
+                migrated_posts += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success(
+            "DB",
+            f"Migrated {migrated_configs} starboard configs and {migrated_posts} post mappings",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate starboard.json: {e}")
+
+
+async def _migrate_uwulock_data(bot):
+    """Import legacy UwU lock webhook settings into the primary database."""
+    import json
+
+    path = "data/uwulock.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        migrated = 0
+        if isinstance(data, dict):
+            for guild_id, channels in data.items():
+                try:
+                    guild_id = int(guild_id)
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(channels, dict):
+                    continue
+                for channel_id, users in channels.items():
+                    try:
+                        channel_id = int(channel_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(users, dict):
+                        continue
+                    for user_id, entry in users.items():
+                        try:
+                            user_id = int(user_id)
+                        except (TypeError, ValueError):
+                            continue
+                        webhook_url = entry.get("webhook") if isinstance(entry, dict) else None
+                        if not webhook_url:
+                            continue
+                        await bot.cxn.execute(
+                            "INSERT OR IGNORE INTO uwulock_config "
+                            "(guild_id, channel_id, user_id, webhook_url) "
+                            "VALUES ($1, $2, $3, $4)",
+                            guild_id, channel_id, user_id, webhook_url,
+                        )
+                        migrated += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success("DB", f"Migrated {migrated} UwU lock settings into the main database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate uwulock.json: {e}")
 
 
 async def _migrate_prefix_config(bot):

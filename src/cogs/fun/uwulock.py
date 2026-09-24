@@ -1,16 +1,14 @@
 import discord
-from discord.ext import commands, tasks
-import aiohttp
-import asyncio
+from discord.ext import commands
 import json
-import os
 import re
 import random
-from typing import Dict, List, Any
-from utils.ai.config import get_personality
+from typing import Dict
+from utils import logging
 from utils.i18n import make_msg
 
-DATA_FILE = "data/uwulock.json"
+
+_MAX_RECENT_MESSAGES = 2000
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -72,25 +70,20 @@ class UwULock(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.uwu_queue: Dict[int, List[dict]] = {}
-        self.data = self.load_data()
-        self.process_uwu_queue.start()
+        self.data: Dict[int, Dict[int, Dict[int, dict]]] = {}
+        # Guards against double processing when both the explicit hook from
+        # events.on_message and the fallback listener see the same message.
+        self._recent: list[int] = []
 
-    # -----------------------------
-    # JSON helpers
-    # -----------------------------
-    def load_data(self) -> dict:
-        if not os.path.exists(DATA_FILE):
-            return {}
-        try:
-            with open(DATA_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-
-    def save_data(self):
-        with open(DATA_FILE, "w") as f:
-            json.dump(self.data, f, indent=4)
+    async def cog_load(self):
+        """Load active lock rules from the primary database."""
+        rows = await self.bot.cxn.fetch(
+            "SELECT guild_id, channel_id, user_id, webhook_url FROM uwulock_config"
+        )
+        for row in rows:
+            self.data.setdefault(int(row["guild_id"]), {}).setdefault(
+                int(row["channel_id"]), {}
+            )[int(row["user_id"])] = {"webhook": row["webhook_url"]}
 
     # -----------------------------
     # uwulock command
@@ -99,136 +92,239 @@ class UwULock(commands.Cog):
         name="uwulock",
         help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified ☕', 'de': 'uwu‑lockt einen nutzer' }"
     )
-    @commands.bot_has_permissions(administrator=True)
+    @commands.guild_only()
+    @commands.bot_has_permissions(manage_webhooks=True, manage_messages=True)
     @commands.has_permissions(administrator=True)
     async def uwulock(self, ctx: commands.Context, *, user: discord.Member):
-        guild_id = str(ctx.guild.id)
-        channel_id = str(ctx.channel.id)
-        user_id = str(user.id)
+        guild_id = ctx.guild.id
+        channel_id = ctx.channel.id
+        user_id = user.id
+        existing = self.data.get(guild_id, {}).get(channel_id, {}).get(user_id)
 
-        if guild_id not in self.data:
-            self.data[guild_id] = {}
-
-        existing = self.data[guild_id].get(channel_id, {}).get(user_id)
-
-        # -----------------------------
-        # UN‑UWULOCK
-        # -----------------------------
         if existing:
-            webhook_url = existing["webhook"]
-
-            async with aiohttp.ClientSession() as session:
-                webhook = discord.Webhook.from_url(webhook_url, session=session)
+            shared_webhook = any(
+                member_id != user_id and entry["webhook"] == existing["webhook"]
+                for member_id, entry in self.data[guild_id][channel_id].items()
+            )
+            if not shared_webhook:
                 try:
-                    await webhook.delete(reason=f"unuwulocked by {ctx.author.name}")
-                except Exception:
+                    webhook = discord.Webhook.from_url(existing["webhook"], client=self.bot)
+                    await webhook.delete(reason=f"UwU lock removed by {ctx.author}")
+                except discord.NotFound:
                     pass
+                except discord.HTTPException as exc:
+                    logging.warning("UwULock", f"Could not delete webhook for {channel_id}: {exc}")
+                    return await ctx.send(msg(ctx, "fetch_fail"))
 
+            await self.bot.cxn.execute(
+                "DELETE FROM uwulock_config WHERE guild_id = $1 AND channel_id = $2 AND user_id = $3",
+                guild_id, channel_id, user_id,
+            )
             del self.data[guild_id][channel_id][user_id]
-            self.save_data()
+            if not self.data[guild_id][channel_id]:
+                del self.data[guild_id][channel_id]
+            if not self.data[guild_id]:
+                del self.data[guild_id]
             return await ctx.send(msg(ctx, "uwu_unlocked", mention=user.mention))
 
-        # -----------------------------
-        # UWULOCK
-        # -----------------------------
-        self.data[guild_id][user_id] = {}
+        webhook_channel = (
+            ctx.channel.parent
+            if isinstance(ctx.channel, discord.Thread)
+            else ctx.channel
+        )
+        if webhook_channel is None or not hasattr(webhook_channel, "create_webhook"):
+            return await ctx.send(msg(ctx, "fetch_fail"))
+
+        channel_rules = self.data.get(guild_id, {}).get(channel_id, {})
+        webhook_url = next(
+            (entry["webhook"] for entry in channel_rules.values()), None
+        )
+        stale_webhook_url = None
+        webhook = None
+        if webhook_url:
+            try:
+                webhook = discord.Webhook.from_url(webhook_url, client=self.bot)
+                await webhook.fetch()
+            except discord.NotFound:
+                stale_webhook_url = webhook_url
+                webhook = None
+            except discord.HTTPException as exc:
+                logging.warning("UwULock", f"Could not verify webhook in {channel_id}: {exc}")
+                return await ctx.send(msg(ctx, "fetch_fail"))
+
+        if webhook is None:
+            try:
+                webhook = await webhook_channel.create_webhook(
+                    name="UwU Lock",
+                    reason=f"UwU lock enabled by {ctx.author}",
+                )
+            except discord.HTTPException as exc:
+                logging.warning("UwULock", f"Could not create webhook in {channel_id}: {exc}")
+                return await ctx.send(msg(ctx, "fetch_fail"))
+
+        if stale_webhook_url:
+            await self.bot.cxn.execute(
+                "UPDATE uwulock_config SET webhook_url = $1 "
+                "WHERE guild_id = $2 AND channel_id = $3 AND webhook_url = $4",
+                webhook.url, guild_id, channel_id, stale_webhook_url,
+            )
+            for entry in channel_rules.values():
+                if entry["webhook"] == stale_webhook_url:
+                    entry["webhook"] = webhook.url
 
         try:
-            webhook = await ctx.channel.create_webhook(
-                name=user.display_name,
-                avatar=await user.display_avatar.read(),
-                reason=f"uwulocked by {ctx.author}",
+            await self.bot.cxn.execute(
+                "INSERT INTO uwulock_config (guild_id, channel_id, user_id, webhook_url) "
+                "VALUES ($1, $2, $3, $4)",
+                guild_id, channel_id, user_id, webhook.url,
             )
         except Exception:
-            for wh in await ctx.channel.webhooks():
-                await wh.delete(reason="clearing unused webhooks")
+            try:
+                await webhook.delete(reason="UwU lock setup could not be saved")
+            except discord.HTTPException:
+                pass
+            raise
 
-            webhook = await ctx.channel.create_webhook(
-                name=user.display_name,
-                avatar=await user.display_avatar.read(),
-                reason=f"uwulocked by {ctx.author}",
-            )
-
-        self.data[guild_id].setdefault(channel_id, {})[user_id] = {
+        self.data.setdefault(guild_id, {}).setdefault(channel_id, {})[user_id] = {
             "webhook": webhook.url,
         }
-        self.save_data()
-
         return await ctx.send(msg(ctx, "uwu_locked", mention=user.mention))
 
     # -----------------------------
-    # Background task
+    # Message transformation
     # -----------------------------
-    @tasks.loop(seconds=3)
-    async def process_uwu_queue(self):
-        try:
-            for guild_id, messages in list(self.uwu_queue.items()):
-                if not messages:
-                    continue
+    async def process_message(self, message: discord.Message) -> bool:
+        """Transform a locked message; return whether it was handled.
 
-                message_data = messages[0]
-
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        webhook = discord.Webhook.from_url(
-                            message_data["webhook_url"], session=session
-                        )
-                        await webhook.send(
-                            content=message_data["content"],
-                            username=message_data["username"],
-                            avatar_url=message_data["avatar_url"],
-                        )
-
-                    self.uwu_queue[guild_id].pop(0)
-
-                except Exception:
-                    self.uwu_queue[guild_id].pop(0)
-
-                await asyncio.sleep(0.5)
-
-        except Exception:
-            pass
-
-    @process_uwu_queue.before_loop
-    async def before_uwu_processor(self):
-        await self.bot.wait_until_ready()
-
-    # -----------------------------
-    # Listener
-    # -----------------------------
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+        Called explicitly from ``events.on_message`` so locked messages are
+        handled before AI triggers, and also from the listener below as a
+        fallback.  The ``_recent`` guard keeps the two paths from double
+        processing the same message.
+        """
         if message.author.bot or not message.guild:
-            return
+            return False
 
-        guild_id = str(message.guild.id)
-        channel_id = str(message.channel.id)
-        user_id = str(message.author.id)
-
-        if guild_id not in self.data:
-            return
-
-        entry = self.data[guild_id].get(channel_id, {}).get(user_id)
-
+        entry = self.data.get(message.guild.id, {}).get(message.channel.id, {}).get(message.author.id)
         if not entry:
-            return
+            return False
+
+        if message.id in self._recent:
+            return True
+        self._recent.append(message.id)
+        if len(self._recent) > _MAX_RECENT_MESSAGES:
+            del self._recent[: len(self._recent) - _MAX_RECENT_MESSAGES]
+
+        logging.info(
+            "UwULock",
+            f"Detected locked message {message.id} from {message.author.id} in {message.channel.id}",
+        )
+
+        bot_member = message.guild.me
+        if bot_member is None:
+            logging.warning("UwULock", "Bot member is unavailable; cannot check permissions.")
+            return True
+        permissions = message.channel.permissions_for(bot_member)
+        if not permissions.manage_messages:
+            logging.warning(
+                "UwULock",
+                f"Missing Manage Messages in channel {message.channel.id}; skipping transform.",
+            )
+            return True
+
+        files = []
+        repost = None
+        try:
+            for attachment in message.attachments[:10]:
+                files.append(await attachment.to_file())
+
+            text = self.uwuify(message.content)
+            if message.stickers:
+                sticker_names = ", ".join(sticker.name for sticker in message.stickers)
+                text = f"{text}\n[Sticker: {sticker_names}]" if text else f"[Sticker: {sticker_names}]"
+            if len(text) > 2000:
+                text = text[:1999] + "…"
+            if not text and not files and not message.embeds:
+                text = "‎"
+
+            webhook = discord.Webhook.from_url(entry["webhook"], client=self.bot)
+            send_options = {}
+            if isinstance(message.channel, discord.Thread):
+                send_options["thread"] = message.channel
+            send_kwargs = {
+                "content": text or None,
+                "username": message.author.display_name[:80],
+                "avatar_url": message.author.display_avatar.url,
+                "allowed_mentions": discord.AllowedMentions.none(),
+                "wait": True,
+                **send_options,
+            }
+            try:
+                repost = await webhook.send(
+                    files=files or None,
+                    embeds=message.embeds or None,
+                    **send_kwargs,
+                )
+            except Exception as exc:
+                # Attachments/embeds can be rejected by Discord (size limits,
+                # unsupported embed types). Fall back to the transformed text
+                # so the message is still visibly uwu-ified.
+                logging.warning(
+                    "UwULock",
+                    f"Full repost failed for message {message.id} ({exc}); retrying text only",
+                )
+                repost = await webhook.send(**send_kwargs)
+
+            try:
+                await self.bot.cxn.execute(
+                    "INSERT INTO uwulock_messages "
+                    "(message_id, guild_id, channel_id, original_message_id, author_id, "
+                    "author_name, author_avatar_url, original_created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    repost.id,
+                    message.guild.id,
+                    message.channel.id,
+                    message.id,
+                    message.author.id,
+                    message.author.display_name,
+                    message.author.display_avatar.url,
+                    message.created_at.timestamp(),
+                )
+            except Exception as exc:
+                # Starboard attribution is a bonus; never let a DB hiccup hide
+                # the reposted message from the channel.
+                logging.warning(
+                    "UwULock",
+                    f"Could not store attribution for message {message.id}: {exc}",
+                )
+        except Exception as exc:
+            if repost is not None:
+                try:
+                    await repost.delete()
+                except discord.HTTPException:
+                    pass
+            logging.warning("UwULock", f"Could not repost message {message.id}: {exc}")
+            return True
+        finally:
+            for file in files:
+                file.close()
 
         try:
             await message.delete()
-        except discord.Forbidden:
-            return
+            logging.info("UwULock", f"Reposted and removed original message {message.id}")
+        except discord.HTTPException as exc:
+            # Keep the repost visible even if the original could not be deleted;
+            # a visible duplicate is better than silently doing nothing.
+            logging.warning(
+                "UwULock",
+                f"Could not delete original message {message.id}: {exc}",
+            )
 
-        if message.guild.id not in self.uwu_queue:
-            self.uwu_queue[message.guild.id] = []
+        return True
 
-        self.uwu_queue[message.guild.id].append(
-            {
-                "webhook_url": entry["webhook"],
-                "content": self.uwuify(message.content),
-                "username": message.author.display_name,
-                "avatar_url": message.author.display_avatar.url,
-            }
-        )
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Fallback listener alongside the explicit hook in events.on_message."""
+        await self.process_message(message)
 
     # -----------------------------
     # uwuify helper
@@ -305,10 +401,6 @@ class UwULock(commands.Cog):
                 uwu_words.append(random.choice(emojis))
 
         return " ".join(uwu_words)
-
-    async def cog_unload(self):
-        self.process_uwu_queue.cancel()
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(UwULock(bot))

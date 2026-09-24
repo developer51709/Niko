@@ -14,8 +14,6 @@ Commands (single `starboard` group, manage_guild required):
 from __future__ import annotations
 
 import json
-import os
-from typing import Dict
 
 import discord
 from discord.ext import commands
@@ -24,7 +22,6 @@ from config.emojis import get_emoji
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
-DATA_FILE = "data/starboard.json"
 DEFAULT_THRESHOLD = 3
 DEFAULT_EMOJI = "⭐"
 
@@ -130,31 +127,64 @@ def cv2(text: str) -> discord.ui.LayoutView:
     return v
 
 
-def _load() -> dict:
-    if not os.path.exists(DATA_FILE):
-        return {"guilds": {}, "starred": {}}
-    try:
-        with open(DATA_FILE) as f:
-            d = json.load(f)
-            d.setdefault("guilds", {})
-            d.setdefault("starred", {})
-            return d
-    except Exception:
-        return {"guilds": {}, "starred": {}}
-
-
-def _save(d: dict):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w") as f:
-        json.dump(d, f, indent=2)
-
-
 class Starboard(commands.Cog):
     """Star-based highlight wall for popular messages."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.data = _load()
+        self.data = {"guilds": {}, "starred": {}}
+
+    async def cog_load(self):
+        """Load settings and active post IDs from the primary database."""
+        configs = await self.bot.cxn.fetch(
+            "SELECT guild_id, channel_id, threshold, emoji, ignored_channels "
+            "FROM starboard_config"
+        )
+        for row in configs:
+            try:
+                ignored = json.loads(row["ignored_channels"] or "[]")
+            except (TypeError, ValueError):
+                ignored = []
+            self.data["guilds"][str(row["guild_id"])] = {
+                "channel_id": row["channel_id"],
+                "threshold": row["threshold"],
+                "emoji": row["emoji"],
+                "ignored_channels": ignored if isinstance(ignored, list) else [],
+            }
+
+        posts = await self.bot.cxn.fetch(
+            "SELECT guild_id, message_id, starboard_message_id FROM starboard_messages"
+        )
+        for row in posts:
+            self.data["starred"].setdefault(str(row["guild_id"]), {})[
+                str(row["message_id"])
+            ] = row["starboard_message_id"]
+
+    async def _save_config(self, guild_id: int):
+        config = self._g(guild_id)
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO starboard_config "
+            "(guild_id, channel_id, threshold, emoji, ignored_channels) "
+            "VALUES ($1, $2, $3, $4, $5)",
+            guild_id,
+            config["channel_id"],
+            config["threshold"],
+            config["emoji"],
+            json.dumps(config["ignored_channels"]),
+        )
+
+    async def _save_starred(self, guild_id: int, message_id: int, starboard_message_id: int):
+        await self.bot.cxn.execute(
+            "INSERT OR REPLACE INTO starboard_messages "
+            "(guild_id, message_id, starboard_message_id) VALUES ($1, $2, $3)",
+            guild_id, message_id, starboard_message_id,
+        )
+
+    async def _delete_starred(self, guild_id: int, message_id: int):
+        await self.bot.cxn.execute(
+            "DELETE FROM starboard_messages WHERE guild_id = $1 AND message_id = $2",
+            guild_id, message_id,
+        )
 
     def _g(self, gid: int) -> dict:
         return self.data["guilds"].setdefault(str(gid), {
@@ -183,7 +213,7 @@ class Starboard(commands.Cog):
     async def starboard_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         g = self._g(ctx.guild.id)
         g["channel_id"] = channel.id
-        _save(self.data)
+        await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "channel_set", channel=channel.mention)))
 
     @starboard.command(
@@ -195,7 +225,7 @@ class Starboard(commands.Cog):
         count = max(1, min(50, count))
         g = self._g(ctx.guild.id)
         g["threshold"] = count
-        _save(self.data)
+        await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "threshold_set", n=count)))
 
     @starboard.command(
@@ -206,7 +236,7 @@ class Starboard(commands.Cog):
     async def starboard_emoji(self, ctx: commands.Context, emoji: str):
         g = self._g(ctx.guild.id)
         g["emoji"] = emoji
-        _save(self.data)
+        await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "emoji_set", emoji=emoji)))
 
     @starboard.command(
@@ -218,7 +248,7 @@ class Starboard(commands.Cog):
         g = self._g(ctx.guild.id)
         if channel.id not in g["ignored_channels"]:
             g["ignored_channels"].append(channel.id)
-            _save(self.data)
+            await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "ignored", channel=channel.mention)))
 
     @starboard.command(
@@ -230,7 +260,7 @@ class Starboard(commands.Cog):
         g = self._g(ctx.guild.id)
         if channel.id in g["ignored_channels"]:
             g["ignored_channels"].remove(channel.id)
-            _save(self.data)
+            await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "unignored", channel=channel.mention)))
 
     @starboard.command(
@@ -241,7 +271,7 @@ class Starboard(commands.Cog):
     async def starboard_disable(self, ctx: commands.Context):
         g = self._g(ctx.guild.id)
         g["channel_id"] = None
-        _save(self.data)
+        await self._save_config(ctx.guild.id)
         await ctx.send(view=cv2(msg(ctx, "disabled")))
 
     @starboard.command(
@@ -296,7 +326,16 @@ class Starboard(commands.Cog):
             message = await channel.fetch_message(payload.message_id)
         except Exception:
             return
-        if message.author.bot:
+        # Webhook reposts need source-author attribution before the normal bot
+        # message filter is applied; regular member messages need no DB lookup.
+        uwu_attribution = None
+        if message.author.bot or message.webhook_id:
+            uwu_attribution = await self.bot.cxn.fetchrow(
+                "SELECT author_id, author_name, author_avatar_url, original_created_at "
+                "FROM uwulock_messages WHERE message_id = $1",
+                message.id,
+            )
+        if message.author.bot and not uwu_attribution:
             return
 
         # count the trigger reaction
@@ -314,18 +353,24 @@ class Starboard(commands.Cog):
         existing_id = starred.get(str(message.id))
 
         if count >= g["threshold"]:
-            view = self._build_starred_view(message, count, g)
+            view = self._build_starred_view(message, count, g, uwu_attribution)
             if existing_id:
                 try:
                     m = await starboard_ch.fetch_message(int(existing_id))
-                    await m.edit(view=view)
+                    await m.edit(
+                        view=view,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
                     return
                 except Exception:
                     pass
             try:
-                sent = await starboard_ch.send(view=view)
+                sent = await starboard_ch.send(
+                    view=view,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
                 starred[str(message.id)] = sent.id
-                _save(self.data)
+                await self._save_starred(payload.guild_id, message.id, sent.id)
             except Exception:
                 pass
         else:
@@ -337,9 +382,15 @@ class Starboard(commands.Cog):
                 except Exception:
                     pass
                 starred.pop(str(message.id), None)
-                _save(self.data)
+                await self._delete_starred(payload.guild_id, message.id)
 
-    def _build_starred_view(self, message: discord.Message, count: int, g: dict) -> discord.ui.LayoutView:
+    def _build_starred_view(
+        self,
+        message: discord.Message,
+        count: int,
+        g: dict,
+        uwu_attribution=None,
+    ) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView(timeout=None)
 
         header = msg(message.guild, "starred",
@@ -347,21 +398,54 @@ class Starboard(commands.Cog):
                      count=count,
                      channel=message.channel.mention)
 
-        body_parts = [
-            f"### {header}",
-            f"**{message.author.display_name}** · <t:{int(message.created_at.timestamp())}:R>",
-        ]
+        if uwu_attribution:
+            author_name = uwu_attribution["author_name"]
+            author_id = int(uwu_attribution["author_id"])
+            created_at = int(uwu_attribution["original_created_at"])
+            # The source message is replaced by this webhook post; link to
+            # the live transformed copy rather than the deleted original.
+            jump_url = message.jump_url
+            author_line = (
+                f"**{discord.utils.escape_markdown(author_name)}** (<@{author_id}>) · "
+                f"<t:{created_at}:R> · UwU-locked message"
+            )
+            author_avatar_url = uwu_attribution.get("author_avatar_url")
+            author_display = (
+                discord.ui.Section(
+                    discord.ui.TextDisplay(content=author_line),
+                    accessory=discord.ui.Thumbnail(author_avatar_url),
+                )
+                if author_avatar_url
+                else discord.ui.TextDisplay(content=author_line)
+            )
+        else:
+            author_line = (
+                f"**{message.author.display_name}** · "
+                f"<t:{int(message.created_at.timestamp())}:R>"
+            )
+            jump_url = message.jump_url
+
+        body_parts = [f"### {header}"]
         if message.content:
             txt = message.content
             if len(txt) > 1500:
                 txt = txt[:1500] + "…"
             body_parts.append(txt)
 
-        body_parts.append(f"[Jump to message]({message.jump_url})")
+        body_parts.append(f"[Jump to message]({jump_url})")
 
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(content="\n\n".join(body_parts)),
-        )
+        if uwu_attribution:
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(content=body_parts[0]),
+                author_display,
+                *[discord.ui.TextDisplay(content=part) for part in body_parts[1:]],
+            )
+        else:
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="\n\n".join([*body_parts[:1], author_line, *body_parts[1:]])
+                ),
+            )
 
         # Embed first attachment as media if it's an image
         att_image = None

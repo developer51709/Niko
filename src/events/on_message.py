@@ -42,7 +42,15 @@ async def handle_message(bot, msg: discord.Message):
                 return await bot.process_commands(msg)
             break
 
-    # ── 3. Detect name / ping/media triggers ──────────────────────────────────
+    # ── 3. UwU lock transformation ───────────────────────────────────────────
+    # Run locked-message handling before AI triggers so a locked user's
+    # message is reposted/deleted rather than also generating an AI reply.
+    if not is_ai_command:
+        uwulock = bot.get_cog("UwULock")
+        if uwulock is not None and await uwulock.process_message(msg):
+            return
+
+    # ── 4. Detect name / ping/media triggers ──────────────────────────────────
     multimodal_enabled = bool(
         guild and get_ai_config(guild.id, "multimodal_experiment") == "True"
     )
@@ -67,7 +75,7 @@ async def handle_message(bot, msg: discord.Message):
     else:
         called_by_ping = bot.user in msg.mentions and not msg.reference
 
-    # ── 4. Nothing triggered AI → stop ────────────────────────────────────────
+    # ── 5. Nothing triggered AI → stop ────────────────────────────────────────
     if not (called_by_name or called_by_ping or is_ai_command or image_attachments or voice_attachments):
         return
 
