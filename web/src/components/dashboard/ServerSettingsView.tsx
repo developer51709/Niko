@@ -11,6 +11,26 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
+function StringOptionList({ label, hint, options, placeholder, onChange }: {
+  label: string;
+  hint: string;
+  options: string[];
+  placeholder: string;
+  onChange: (options: string[]) => void;
+}) {
+  return <div className="form-field">
+    <span className="form-label">{label}</span>
+    <div className="settings-option-list">
+      {options.map((option, index) => <div className="settings-option-row" key={`${label}-${index}`}>
+        <input aria-label={`${label} ${index + 1}`} value={option} maxLength={100} onChange={(event) => onChange(options.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`${placeholder} ${index + 1}`} />
+        <button type="button" className="settings-option-remove" onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}>Remove</button>
+      </div>)}
+    </div>
+    <button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...options, ""])}>＋ Add option</button>
+    <small>{hint}</small>
+  </div>;
+}
+
 function SectionTitle({ label, title, detail, icon }: { label: string; title: string; detail: string; icon: string }) {
   return <div className="panel-heading settings-section-title">
     <div><span className="panel-kicker">{label}</span><h3>{title}</h3><p>{detail}</p></div>
@@ -62,7 +82,7 @@ function initialValues(server?: ServerConfig) {
   const onboarding = server?.onboarding || {};
   const tickets = server?.tickets || {};
   return {
-    prefixes: (server?.prefixes?.length ? server.prefixes : ["."]).join("\n"),
+    prefixes: server?.prefixes?.length ? [...server.prefixes] : ["."],
     welcome_channel: onboarding.welcome_channel ? String(onboarding.welcome_channel) : "",
     welcome_title: onboarding.welcome_title || "",
     welcome_description: onboarding.welcome_description || "",
@@ -77,7 +97,7 @@ function initialValues(server?: ServerConfig) {
     disabled_logging: [...(server?.logging?.disabled || [])].map(String),
     panel_title: tickets.panel_title || "",
     panel_description: tickets.panel_description || "",
-    panel_categories: (tickets.panel_categories || []).join("\n"),
+    panel_categories: [...(tickets.panel_categories || [])],
     panel_channel_id: tickets.panel_channel_id ? String(tickets.panel_channel_id) : "",
     support_roles: [...(tickets.support_roles || [])].map(String),
   };
@@ -105,8 +125,8 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setState({ saving: true, message: "", error: "" });
-    const prefixes = values.prefixes.split(/\r?\n|,/).map((prefix) => prefix.trim()).filter(Boolean);
-    const categories = values.panel_categories.split(/\r?\n|,/).map((category) => category.trim()).filter(Boolean);
+    const prefixes = values.prefixes.map((prefix) => prefix.trim()).filter(Boolean);
+    const categories = values.panel_categories.map((category) => category.trim()).filter(Boolean);
     saveConfig(guildId, "server", {
       prefixes,
       onboarding: {
@@ -145,9 +165,9 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
 
   return <>
     <DashHeading eyebrow="Server settings" title="Make Niko fit your room." text="Manage the settings that shape how Niko behaves in this server. Economy balances remain global to each user and are not configured here." />
-    <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.split(/\r?\n|,/).filter(Boolean).length || 0} command prefixes configured</strong><p>Welcome flows, log destinations, and ticket panels all live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
+    <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.filter((prefix) => prefix.trim()).length} command prefixes configured</strong><p>Welcome flows, log destinations, and ticket panels all live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
     <form onSubmit={submit} className="settings-stack server-settings-stack">
-      <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Use one prefix per line. Niko will respond to all of them." icon="terminal" /><Field label="Command prefixes" hint="The default prefix is ."><textarea rows={3} maxLength={200} value={values.prefixes} onChange={(event) => setValue("prefixes", event.target.value)} placeholder=".\n!" /></Field></section>
+      <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" /><StringOptionList label="Command prefixes" hint="The default prefix is ." options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} /></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Welcome flow" title="Welcome and rules" detail="Choose where new members see your welcome message and rules." icon="users" /><div className="form-grid">
         <Field label="Welcome channel"><select value={welcomeChannel} onChange={(event) => setValue("welcome_channel", event.target.value)}><option value="">Disabled</option>{welcomeChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
@@ -168,7 +188,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         <Field label="Panel title"><input value={values.panel_title} maxLength={200} onChange={(event) => setValue("panel_title", event.target.value)} placeholder="Open a Ticket" /></Field>
         <Field label="Panel channel"><select value={ticketChannel} onChange={(event) => setValue("panel_channel_id", event.target.value)}><option value="">Keep current panel channel</option>{ticketChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValue("panel_description", event.target.value)} placeholder="Tell members what the ticket panel is for." /></Field>
-        <Field label="Ticket categories" hint="One category per line"><textarea rows={4} value={values.panel_categories} onChange={(event) => setValue("panel_categories", event.target.value)} placeholder="General\nSupport\nReports" /></Field>
+        <div className="form-grid-wide"><StringOptionList label="Ticket categories" hint="Add a separate category for each ticket option." options={values.panel_categories} placeholder="Category" onChange={(categories) => setValue("panel_categories", categories)} /></div>
         <Field label="Support roles" hint="Hold Ctrl/Cmd to select more than one"><select multiple value={values.support_roles} onChange={(event) => setValue("support_roles", Array.from(event.target.selectedOptions, (option) => option.value))}>{supportRoles.map((role) => <option value={role.id} key={role.id}>@{role.name}</option>)}</select></Field>
       </div><p className="form-hint">Saving panel settings updates the existing posted panel when Niko can find its saved message.</p></section>
       <SaveFooter state={state} />

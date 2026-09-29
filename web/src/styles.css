@@ -334,12 +334,19 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .server-card:hover { border-color: #dfaa98; box-shadow: var(--shadow); transform: translateY(-2px); transition: transform .18s, box-shadow .18s, border-color .18s; }
 .dashboard-layout .settings-stack { gap: 16px; }
 .dashboard-layout .settings-panel { max-width: 920px; }
+.dashboard-layout .server-settings-stack .form-grid-wide { grid-column: 1 / -1; }
 .dashboard-layout .settings-panel .setting-row { gap: 18px; align-items: center; padding: 17px 0; }
 .dashboard-layout .settings-panel .setting-row > span { min-width: 0; flex: 1; }
 .dashboard-layout .settings-panel .setting-row > span strong { display: block; margin-bottom: 4px; }
 .dashboard-layout .settings-panel .setting-row > span small { display: block; max-width: 560px; line-height: 1.55; }
 .dashboard-layout .settings-panel .setting-row > div { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 0 0 auto; }
 .dashboard-layout .settings-panel .setting-row .button-secondary { min-height: 34px; padding: 7px 11px; font-size: 10px; white-space: nowrap; }
+.dashboard-layout .settings-option-list { display: grid; gap: 8px; }
+.dashboard-layout .settings-option-row { display: flex; align-items: center; gap: 8px; }
+.dashboard-layout .settings-option-row input { min-width: 0; flex: 1; }
+.dashboard-layout .settings-option-remove { min-height: 40px; padding: 7px 12px; color: var(--accent-dark); background: transparent; border: 1px solid var(--line); border-radius: 9px; font-size: 10px; font-weight: 700; }
+.dashboard-layout .settings-option-remove:hover { background: var(--callout); border-color: #dfaa98; }
+.dashboard-layout .settings-option-add { justify-self: start; margin-top: 9px; }
 @media (max-width: 600px) {
   .dashboard-layout .settings-panel .setting-row { align-items: flex-start; flex-wrap: wrap; }
   .dashboard-layout .settings-panel .setting-row > div { width: 100%; justify-content: flex-start; padding-top: 5px; }
