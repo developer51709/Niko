@@ -1,4 +1,10 @@
+import asyncio
+
+import database
 from .formatters import *
+
+
+LOG_WEBHOOK_NAME = "Niko | Server Logs"
 
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
@@ -10,6 +16,9 @@ class ServerLogger(commands.Cog):
         self._config_loaded = False
         # guild_id → {invite_code: uses_count}
         self._invite_cache: dict[int, dict[str, int]] = {}
+        self._webhook_cache: dict[tuple[int, int], discord.Webhook] = {}
+        self._webhook_locks: dict[tuple[int, int], asyncio.Lock] = {}
+        self._deleted_webhooks: set[int] = set()
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -85,17 +94,111 @@ class ServerLogger(commands.Cog):
             files=files,
         )
         try:
-            # Stay under Discord's per-channel send budget so a burst of
-            # events (e.g. mass-ban) can't get the channel rate-limited.
+            # Webhooks use a separate Discord rate-limit bucket from bot messages.
+            webhook = await self._get_log_webhook(channel)
+            if webhook is None:
+                return
             await log_channel_limiter.acquire((guild.id, channel.id))
-            await channel.send(
-                view=view,
-                files=files or [],
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+            try:
+                await webhook.send(
+                    view=view,
+                    files=files or [],
+                    username=LOG_WEBHOOK_NAME,
+                    avatar_url=self.bot.user.display_avatar.url,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                    wait=True,
+                )
+            except discord.NotFound:
+                # Remove only this stale webhook under the channel lock. A
+                # concurrent event may already have replaced it.
+                key = (guild.id, channel.id)
+                lock = self._webhook_locks.setdefault(key, asyncio.Lock())
+                async with lock:
+                    self._deleted_webhooks.add(webhook.id)
+                    self._webhook_cache.pop(key, None)
+                    pool = getattr(database, "_shared_pool", None)
+                    if pool is not None:
+                        await pool.execute(
+                            "DELETE FROM logging_webhooks WHERE guild_id = $1 AND channel_id = $2",
+                            guild.id,
+                            channel.id,
+                        )
+                webhook = await self._get_log_webhook(channel)
+                if webhook is None:
+                    return
+                for file in files or []:
+                    file.reset(seek=True)
+                await webhook.send(
+                    view=view,
+                    files=files or [],
+                    username=LOG_WEBHOOK_NAME,
+                    avatar_url=self.bot.user.display_avatar.url,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                    wait=True,
+                )
         except Exception as e:
             logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")
-            pass
+
+    async def _get_log_webhook(self, channel: discord.TextChannel) -> discord.Webhook | None:
+        """Return the persisted log webhook for a channel, replacing it if deleted."""
+        key = (channel.guild.id, channel.id)
+        lock = self._webhook_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            webhook = self._webhook_cache.get(key)
+            if webhook and webhook.id not in self._deleted_webhooks:
+                return webhook
+            self._webhook_cache.pop(key, None)
+
+            pool = getattr(database, "_shared_pool", None)
+            if pool is None:
+                return None
+            row = await pool.fetchrow(
+                "SELECT webhook_id, token FROM logging_webhooks WHERE guild_id = $1 AND channel_id = $2",
+                channel.guild.id,
+                channel.id,
+            )
+            if row:
+                try:
+                    webhook = discord.Webhook.partial(
+                        int(row["webhook_id"]), row["token"], client=self.bot
+                    )
+                    await webhook.fetch()
+                    if webhook.id not in self._deleted_webhooks:
+                        self._webhook_cache[key] = webhook
+                        return webhook
+                except (discord.NotFound, discord.Forbidden):
+                    pass
+                except discord.HTTPException as exc:
+                    if exc.status != 401:
+                        raise
+
+            try:
+                avatar = await self.bot.user.display_avatar.read()
+                webhook = await channel.create_webhook(
+                    name=LOG_WEBHOOK_NAME,
+                    avatar=avatar,
+                    reason="Automatically created for server event logs",
+                )
+            except discord.Forbidden:
+                logging.warning(
+                    "logging_cog",
+                    f"Cannot create log webhook in {channel} for {channel.guild}: missing Manage Webhooks permission",
+                )
+                return None
+
+            if not webhook.token:
+                logging.error("logging_cog", f"Created log webhook in {channel} without a token; cannot persist it")
+                return None
+            await pool.execute(
+                "INSERT OR REPLACE INTO logging_webhooks (guild_id, channel_id, webhook_id, token) VALUES ($1, $2, $3, $4)",
+                channel.guild.id,
+                channel.id,
+                webhook.id,
+                webhook.token,
+            )
+            self._deleted_webhooks.discard(webhook.id)
+            self._webhook_cache[key] = webhook
+            return webhook
 
     #Backward-compat wrapper used by moderation_utils
 

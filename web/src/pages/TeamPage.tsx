@@ -31,12 +31,13 @@ function ActivitySummary({ activity }: { activity: NonNullable<StaffMember["acti
   const isSpotify = activity.kind === "spotify";
   const title = isSpotify ? "Listening on Spotify" : activityLabel(activity.type);
   const primary = isSpotify ? (activity.details || "Spotify") : activity.name;
-  const secondary = isSpotify ? activity.state : activity.details;
+  const secondaryLines = (isSpotify ? [activity.state] : [activity.details, activity.state])
+    .filter((line): line is string => Boolean(line && line !== primary));
   const card = <span className={`activity-card activity-${activity.kind}`}>
     {activity.image_url && <img className="activity-art" src={activity.image_url} alt="" />}
-    <span className="activity-copy"><strong>{title}</strong><span>{primary}</span>{secondary && <small>{secondary}</small>}</span>
+    <span className="activity-copy"><strong>{title}</strong><span>{primary}</span>{secondaryLines.map((line, index) => <small key={`${line}-${index}`}>{line}</small>)}</span>
   </span>;
-  return activity.url ? <a className="presence-activity" href={activity.url} target="_blank" rel="noreferrer">{card}</a> : <span className="presence-activity">{card}</span>;
+    return activity.url ? <a className="presence-activity" href={activity.url} target="_blank" rel="noreferrer">{card}</a> : <span className="presence-activity">{card}</span>;
 }
 
 function statusLabel(member: StaffMember) {

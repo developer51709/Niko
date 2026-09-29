@@ -49,6 +49,38 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "server-logging-onboarding-updates",
+    title: "Logging Reliability & Onboarding Rules",
+    date: "2026-09-29",
+    tags: ["logging", "onboarding", "dashboard"],
+    summary:
+      "Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.",
+    highlights: [
+      {
+        title: "More Reliable Server Logs",
+        description:
+          "Server event logs are less likely to be delayed during busy periods, helping moderation and activity updates stay easier to follow.",
+        icon: "utility",
+      },
+      {
+        title: "Longer Onboarding Rules",
+        description:
+          "Server rules in onboarding can now be up to 4,000 characters, making it easier to share complete guidelines with new members.",
+        icon: "doc",
+      },
+    ],
+    changes: [
+      {
+        category: "improved",
+        items: [
+          "Server event log delivery reliability during busy periods",
+          "Onboarding rules support for up to 4,000 characters",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
     slug: "uwulock-starboard-overhaul",
     title: "UwU Lock Rebuilt & Starboard Persistence",
     date: "2026-09-25",

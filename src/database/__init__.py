@@ -142,6 +142,7 @@ PRIMARY_KEYS: dict = {
     "voicemaster_channels": "channel_id",
     "onboarding": "guild_id",
     "logging_config": "guild_id",
+    "logging_webhooks": ("guild_id", "channel_id"),
     "moderation_config": "guild_id",
     "modlog": "guild_id",
     "guild_profiles": "guild_id",

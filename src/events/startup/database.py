@@ -383,6 +383,15 @@ async def _create_tables(bot):
         )
     """)
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS logging_webhooks (
+            guild_id   INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            webhook_id INTEGER NOT NULL,
+            token      TEXT NOT NULL,
+            PRIMARY KEY (guild_id, channel_id)
+        )
+    """)
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS moderation_config (
             guild_id INTEGER PRIMARY KEY,
             data     TEXT
