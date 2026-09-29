@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
+import sharp from "sharp";
 import * as fontkit from "fontkit";
 import { CHANGELOG, type ChangelogEntry } from "./src/data/changelog";
 import { DOCS } from "./src/data/docs";
@@ -109,12 +110,14 @@ function staticMetadataPlugin(): Plugin {
     name: "niko-static-social-metadata",
     async closeBundle() {
       const dist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/website/dist");
-      const iconSvg = fs.readFileSync(path.resolve(fileURLToPath(new URL(".", import.meta.url)), "public/niko-app-icon.svg"), "utf8");
+      const faviconSvg = fs.readFileSync(path.join(dist, "favicon.svg"));
       const iconDirectory = path.join(dist, "icons");
       fs.mkdirSync(iconDirectory, { recursive: true });
       for (const size of [192, 512]) {
-        const icon = new Resvg(iconSvg, { fitTo: { mode: "width", value: size } }).render();
-        fs.writeFileSync(path.join(iconDirectory, `niko-${size}.png`), icon.asPng());
+        await sharp(faviconSvg)
+          .resize(size, size, { fit: "contain" })
+          .png()
+          .toFile(path.join(iconDirectory, `niko-${size}.png`));
       }
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       for (const metadata of PAGE_METADATA) {

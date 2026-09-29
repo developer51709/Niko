@@ -1,7 +1,8 @@
-const CACHE_NAME = "niko-static-v1";
+const CACHE_NAME = "niko-static-v2";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
+  "/favicon.svg",
   "/icons/niko-192.png",
   "/icons/niko-512.png",
 ];
