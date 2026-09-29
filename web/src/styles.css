@@ -452,7 +452,17 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .application-question-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 23px 0 11px; padding-top: 18px; border-top: 1px solid var(--line-soft); }
 .dashboard-layout .application-question-heading small { display: block; margin-top: 4px; color: var(--dim); font-size: 10px; }
 .dashboard-layout .application-question-list { display: grid; gap: 9px; }
-.dashboard-layout .application-question { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 10px; padding: 11px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; }
+.dashboard-layout .application-question { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto auto; align-items: end; gap: 10px; padding: 11px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; }
+.dashboard-layout .application-options-field { grid-column: 1 / -1; min-width: 0; }
+.dashboard-layout .application-options-field .form-label small { color: var(--dim); font-size: 9px; font-weight: 400; }
+.dashboard-layout .application-option-list { display: grid; gap: 7px; margin-top: 7px; }
+.dashboard-layout .application-option-row { display: flex; align-items: center; gap: 7px; }
+.dashboard-layout .application-option-row input { min-width: 0; flex: 1; }
+.dashboard-layout .application-option-remove { min-height: 34px; padding: 6px 9px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 5px; font-size: 10px; }
+.dashboard-layout .application-option-remove:hover:not(:disabled) { color: var(--accent-dark); border-color: var(--accent-dark); }
+.dashboard-layout .application-option-remove:disabled { opacity: .45; cursor: not-allowed; }
+.dashboard-layout .application-option-add { margin-top: 8px; }
+.dashboard-layout .application-editor-actions { display: flex; align-items: center; gap: 8px; }
 .dashboard-layout .application-required { display: flex; align-items: center; gap: 6px; min-height: 42px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .dashboard-layout .application-required input { accent-color: var(--accent); }
 .dashboard-layout .application-remove-question { width: 34px; height: 34px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; font-size: 19px; }
@@ -488,16 +498,26 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .application-answers { display: grid; gap: 12px; padding: 14px 0 3px; }
 .dashboard-layout .application-answers strong { font-size: 10px; }
 .dashboard-layout .application-answers p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; white-space: pre-wrap; }
+.dashboard-layout .application-review-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .application-review-status { color: var(--dim); font: 9px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .04em; }
+.dashboard-layout .application-review-status.approved { color: #4c7957; }
+.dashboard-layout .application-review-status.denied { color: var(--accent-dark); }
+.dashboard-layout .application-review-actions { display: flex; gap: 7px; }
+.dashboard-layout .application-review-actions .button { min-width: 82px; }
+.dashboard-layout .application-review-approve { color: #4c7957; background: transparent; border-color: #b9d0bd; }
+.dashboard-layout .application-review-approve:hover, .dashboard-layout .application-review-approve.is-selected { color: #fff; background: #66866f; border-color: #66866f; }
+.dashboard-layout .application-review-deny { color: var(--accent-dark); background: transparent; border-color: #dfb9ad; }
+.dashboard-layout .application-review-deny:hover, .dashboard-layout .application-review-deny.is-selected { color: #fffaf5; background: var(--accent-dark); border-color: var(--accent-dark); }
 
 /* Public Discord-verified application form */
-.application-public-page { min-height: calc(100vh - 76px); padding: 35px 20px 50px; background: radial-gradient(ellipse at 50% 0, rgba(217,101,69,.09), transparent 42%), var(--canvas); }
-.application-public-shell { width: min(770px, 100%); margin: 0 auto; }
+.application-public-page { min-height: calc(100vh - 76px); padding: 35px 20px 50px; background: var(--canvas); }
+.application-public-shell { width: min(700px, 100%); margin: 0 auto; }
 .application-back-link { color: var(--muted); font-size: 11px; }
 .application-back-link:hover { color: var(--accent-dark); }
-.application-public-brand { display: flex; align-items: center; gap: 10px; margin: 29px 0 18px; color: var(--muted); font: 10px "Space Mono", monospace; letter-spacing: .08em; }
+.application-public-brand { display: flex; align-items: center; gap: 9px; margin: 25px 0 15px; color: var(--muted); font: 10px "Space Mono", monospace; letter-spacing: .04em; }
 .application-public-brand small { display: block; margin-top: 3px; color: var(--dim); font-size: 8px; }
-.application-public-mark { width: 31px; height: 31px; display: grid; place-items: center; color: #fffaf5; background: var(--accent); border-radius: 9px; font: 800 18px "Plus Jakarta Sans", sans-serif; }
-.application-public-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.application-public-mark { width: 28px; height: 28px; display: grid; place-items: center; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 6px; font: 700 16px "Plus Jakarta Sans", sans-serif; }
+.application-public-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: none; }
 .application-public-state { display: grid; justify-items: center; padding: 65px 42px; text-align: center; }
 .application-public-state .panel-kicker { margin-top: 17px; }
 .application-public-state h1 { margin: 12px 0; font-size: clamp(30px, 5vw, 42px); letter-spacing: -.07em; }
@@ -508,28 +528,39 @@ em { color: var(--accent); font-style: normal; }
 .application-public-state .application-public-symbol + .panel-kicker { margin-top: 21px; }
 .application-public-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 17px 27px; background: var(--surface-raised); border-bottom: 1px solid var(--line-soft); }
 .application-server-tag { color: var(--muted); font-size: 10px; }
-.application-public-heading { padding: 31px 34px 23px; }
-.application-public-heading h1 { margin: 10px 0 8px; font-size: clamp(29px, 5vw, 42px); letter-spacing: -.07em; }
-.application-public-heading p { max-width: 620px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
-.application-verified { display: flex; align-items: center; gap: 11px; margin: 0 34px 23px; padding: 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }
-.application-verified-icon { width: 31px; height: 31px; display: grid; place-items: center; color: var(--sage); background: var(--callout); border-radius: 9px; }
+.application-public-heading { padding: 28px 32px 22px; }
+.application-public-heading h1 { margin: 9px 0 7px; font-size: clamp(28px, 5vw, 38px); letter-spacing: -.055em; }
+.application-public-heading p { max-width: 620px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
+.application-verified { display: flex; align-items: center; gap: 10px; margin: 0 32px 20px; padding: 11px 0; background: transparent; border: 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); border-radius: 0; }
+.application-verified-icon { width: 27px; height: 27px; display: grid; place-items: center; color: var(--sage); background: transparent; }
 .application-verified > span:nth-child(2) { flex: 1; min-width: 0; }
 .application-verified strong, .application-verified small { display: block; }
 .application-verified strong { font-size: 10px; }
 .application-verified small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .application-verified > a { color: var(--dim); font-size: 9px; }
 .application-public-form { display: grid; gap: 0; padding: 0 34px 30px; }
-.application-answer-field { padding: 18px 0; border-top: 1px solid var(--line-soft); }
-.application-question-count { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .09em; }
-.application-answer-field .form-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; line-height: 1.55; }
+.application-answer-field { min-width: 0; margin: 0; padding: 17px 0; border: 0; border-top: 1px solid var(--line-soft); }
+.application-answer-field legend { display: flex; align-items: baseline; gap: 10px; width: 100%; margin-bottom: 10px; padding: 0; }
+.application-question-count { color: var(--dim); font: 10px "Space Mono", monospace; }
+.application-answer-field .form-label { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; line-height: 1.55; }
 .application-answer-field .form-label i { color: var(--accent-dark); font: normal 9px "Space Mono", monospace; white-space: nowrap; }
-.application-answer-field textarea { min-height: 105px; background: var(--surface-raised); border-radius: 9px; font-size: 11px; line-height: 1.7; }
-.application-answer-field > small { align-self: flex-end; color: var(--dim); font-size: 9px; }
+.application-answer-field input:not([type="radio"]):not([type="checkbox"]), .application-answer-field textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 5px; font: inherit; font-size: 11px; line-height: 1.65; }
+.application-answer-field textarea { min-height: 100px; resize: vertical; }
+.application-answer-field > small { display: block; margin-top: 5px; color: var(--dim); font-size: 9px; text-align: right; }
+.application-choice-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.application-choice-list label { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; margin: 0; padding: 10px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; font-size: 11px; line-height: 1.5; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.application-choice-list label:hover { border-color: var(--accent-dark); background: var(--surface-raised); }
+.application-choice-list label.is-selected { border-color: var(--accent-dark); background: var(--callout); }
+.application-choice-list label:focus-within { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.application-choice-list input { flex: 0 0 auto; width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.application-choice-list label span { min-width: 0; overflow-wrap: anywhere; }
+.application-choice-list.application-yes-no { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 360px; }
+.application-answer-field .application-choice-list { width: 100%; }
 .application-submit-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 8px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
 .application-submit-footer > span { max-width: 320px; color: var(--dim); font-size: 9px; line-height: 1.6; }
 .application-public-footer { display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 18px; color: var(--dim); font-size: 9px; }
 .application-public-footer img { width: 17px; height: 17px; border-radius: 50%; }
-.application-public-state.application-opening-state { justify-items: stretch; padding: 37px; text-align: left; }
+.application-public-state.application-opening-state { justify-items: stretch; padding: 32px; text-align: left; }
 .application-opening-state > .panel-kicker { margin: 0; text-align: center; }
 .application-opening-state > h1, .application-opening-state > p { text-align: center; align-self: center; }
 .public-opening-list { display: grid; gap: 9px; margin-top: 15px; }
@@ -553,16 +584,21 @@ em { color: var(--accent); font-style: normal; }
   .dashboard-layout .applications-intro > .button { width: 100%; }
   .dashboard-layout .application-question { grid-template-columns: minmax(0, 1fr) auto; }
   .dashboard-layout .application-question .form-field { grid-column: 1 / -1; }
+  .dashboard-layout .application-options-field { grid-column: 1 / -1; }
   .dashboard-layout .application-card { grid-template-columns: 1fr; }
   .dashboard-layout .application-card-actions { justify-content: flex-start; }
   .dashboard-layout .applications-aside { display: block; }
   .application-public-page { padding: 22px 12px 35px; }
   .application-public-state { padding: 47px 20px; }
   .application-public-topline { padding: 14px 18px; }
-  .application-public-heading { padding: 25px 20px 18px; }
+  .application-public-heading { padding: 24px 20px 17px; }
   .application-verified { align-items: flex-start; margin: 0 20px 16px; }
   .application-verified > a { align-self: center; }
   .application-public-form { padding: 0 20px 22px; }
+  .application-answer-field legend { align-items: flex-start; }
+  .application-answer-field .form-label { align-items: flex-start; }
+  .application-choice-list { grid-template-columns: 1fr; }
+  .application-choice-list.application-yes-no { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .application-submit-footer { align-items: stretch; flex-direction: column; }
   .application-submit-footer .button { width: 100%; }
   .application-public-state.application-opening-state { padding: 28px 17px; }

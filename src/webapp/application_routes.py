@@ -55,11 +55,24 @@ def _application_questions(value):
         prompt = str(item.get("prompt", "")).strip()
         if not prompt or len(prompt) > 240:
             raise ValueError("Question prompts must be between 1 and 240 characters.")
-        questions.append({
+        question_type = str(item.get("type", "paragraph"))
+        if question_type not in {"short_text", "paragraph", "single_choice", "multi_choice", "yes_no", "date"}:
+            raise ValueError("Choose a supported question type.")
+        question = {
             "id": str(item.get("id") or uuid.uuid4().hex),
             "prompt": prompt,
+            "type": question_type,
             "required": bool(item.get("required", True)),
-        })
+        }
+        if question_type in {"single_choice", "multi_choice"}:
+            options = item.get("options", [])
+            if not isinstance(options, list):
+                raise ValueError("Choice questions need a list of options.")
+            options = list(dict.fromkeys(str(option).strip() for option in options if str(option).strip()))
+            if not 2 <= len(options) <= 20 or any(len(option) > 100 for option in options):
+                raise ValueError("Choice questions need 2–20 options, each up to 100 characters.")
+            question["options"] = options
+        questions.append(question)
     if not questions:
         raise ValueError("Add at least one application question.")
     return questions
@@ -198,6 +211,88 @@ def api_create_staff_application(guild_id):
     }), 201
 
 
+@app.route("/api/guild/<guild_id>/applications/<application_id>", methods=["PUT"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_update_staff_application(guild_id, application_id):
+    body = request.get_json(silent=True) or {}
+    title = str(body.get("title", "")).strip()
+    description = str(body.get("description", "")).strip()
+    role_id = str(body.get("role_id", ""))
+    if not title or len(title) > 100:
+        return jsonify({"error": "Give this application a title (up to 100 characters)."}), 400
+    if len(description) > 2000:
+        return jsonify({"error": "The description must be 2,000 characters or fewer."}), 400
+    if not role_id.isdigit():
+        return jsonify({"error": "Choose a valid server role for this opening."}), 400
+    try:
+        questions = _application_questions(body.get("questions"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    eligible_role_ids = body.get("eligible_role_ids", [])
+    if not isinstance(eligible_role_ids, list) or len(eligible_role_ids) > 20:
+        return jsonify({"error": "Choose up to 20 eligible roles."}), 400
+    eligible_role_ids = list(dict.fromkeys(str(item) for item in eligible_role_ids))
+    if any(not item.isdigit() for item in eligible_role_ids):
+        return jsonify({"error": "Eligibility roles must be valid server roles."}), 400
+    _, role_ids = _guild_resource_ids(int(guild_id))
+    if role_ids is not None and (role_id not in role_ids or any(item not in role_ids for item in eligible_role_ids)):
+        return jsonify({"error": "The selected role does not belong to this server."}), 400
+
+    try:
+        existing = run_on_bot_loop(_pool().fetchrow(
+            "SELECT id FROM staff_applications WHERE id = $1 AND guild_id = $2",
+            application_id, int(guild_id),
+        ))
+        if existing is None:
+            return jsonify({"error": "Application not found."}), 404
+        run_on_bot_loop(_pool().execute(
+            "UPDATE staff_applications SET role_id = $1, title = $2, description = $3, "
+            "questions = $4, eligible_role_ids = $5, updated_at = datetime('now') "
+            "WHERE id = $6 AND guild_id = $7",
+            role_id, title, description, questions, eligible_role_ids,
+            application_id, int(guild_id),
+        ))
+        updated = _application_dict(run_on_bot_loop(_pool().fetchrow(
+            "SELECT * FROM staff_applications WHERE id = $1 AND guild_id = $2",
+            application_id, int(guild_id),
+        )))
+        updated["submission_count"] = int(run_on_bot_loop(_pool().fetchval(
+            "SELECT COUNT(*) FROM staff_application_submissions WHERE application_id = $1",
+            application_id,
+        )) or 0)
+        return jsonify({"ok": True, "application": updated})
+    except Exception:
+        return jsonify({"error": "Application could not be updated."}), 503
+
+
+@app.route("/api/guild/<guild_id>/applications/<application_id>", methods=["DELETE"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_delete_staff_application(guild_id, application_id):
+    try:
+        application = run_on_bot_loop(_pool().fetchrow(
+            "SELECT id FROM staff_applications WHERE id = $1 AND guild_id = $2",
+            application_id, int(guild_id),
+        ))
+        if application is None:
+            return jsonify({"error": "Application not found."}), 404
+        run_on_bot_loop(_pool().execute(
+            "DELETE FROM staff_application_submissions WHERE application_id = $1",
+            application_id,
+        ))
+        run_on_bot_loop(_pool().execute(
+            "DELETE FROM staff_applications WHERE id = $1 AND guild_id = $2",
+            application_id, int(guild_id),
+        ))
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"error": "Application and its responses could not be deleted."}), 503
+
+
 @app.route("/api/guild/<guild_id>/applications/<application_id>/status", methods=["POST"])
 @require_auth
 @require_guild_access
@@ -233,8 +328,8 @@ def api_staff_application_submissions(guild_id, application_id):
         if application is None:
             return jsonify({"error": "Application not found."}), 404
         rows = run_on_bot_loop(_pool().fetch(
-            "SELECT user_id, answers, submitted_at FROM staff_application_submissions "
-            "WHERE application_id = $1 ORDER BY submitted_at DESC",
+            "SELECT user_id, answers, submitted_at, review_status, reviewed_by, reviewed_at "
+            "FROM staff_application_submissions WHERE application_id = $1 ORDER BY submitted_at DESC",
             application_id,
         ))
         user_ids = {str(row.get("user_id")) for row in rows}
@@ -249,10 +344,59 @@ def api_staff_application_submissions(guild_id, application_id):
                 "avatar_url": metadata.get(user_id, {}).get("avatar_url"),
                 "answers": _json_value(row.get("answers"), []),
                 "submitted_at": row.get("submitted_at"),
+                "review_status": row.get("review_status") or "pending",
+                "reviewed_by": row.get("reviewed_by"),
+                "reviewed_at": row.get("reviewed_at"),
             })
         return jsonify({"application": application, "submissions": submissions})
     except Exception:
         return jsonify({"error": "Application responses are temporarily unavailable."}), 503
+
+
+@app.route(
+    "/api/guild/<guild_id>/applications/<application_id>/submissions/<user_id>/review",
+    methods=["POST"],
+)
+@require_auth
+@require_guild_access
+@require_csrf
+def api_review_staff_application_submission(guild_id, application_id, user_id):
+    body = request.get_json(silent=True) or {}
+    status = body.get("status")
+    if status not in {"approved", "denied"}:
+        return jsonify({"error": "Review status must be approved or denied."}), 400
+    try:
+        application = run_on_bot_loop(_pool().fetchrow(
+            "SELECT id FROM staff_applications WHERE id = $1 AND guild_id = $2",
+            application_id, int(guild_id),
+        ))
+        if application is None:
+            return jsonify({"error": "Application not found."}), 404
+        submission = run_on_bot_loop(_pool().fetchrow(
+            "SELECT user_id FROM staff_application_submissions "
+            "WHERE application_id = $1 AND user_id = $2",
+            application_id, user_id,
+        ))
+        if submission is None:
+            return jsonify({"error": "Application response not found."}), 404
+        run_on_bot_loop(_pool().execute(
+            "UPDATE staff_application_submissions SET review_status = $1, reviewed_by = $2, "
+            "reviewed_at = datetime('now') WHERE application_id = $3 AND user_id = $4",
+            status, str(session["user"].get("id", "")), application_id, user_id,
+        ))
+        reviewed = run_on_bot_loop(_pool().fetchrow(
+            "SELECT review_status, reviewed_by, reviewed_at FROM staff_application_submissions "
+            "WHERE application_id = $1 AND user_id = $2",
+            application_id, user_id,
+        ))
+        return jsonify({
+            "ok": True,
+            "review_status": reviewed.get("review_status") or status,
+            "reviewed_by": reviewed.get("reviewed_by"),
+            "reviewed_at": reviewed.get("reviewed_at"),
+        })
+    except Exception:
+        return jsonify({"error": "Application response review could not be saved."}), 503
 
 
 @app.route("/api/applications/<guild_id>")
@@ -361,11 +505,35 @@ def api_submit_staff_application(guild_id, application_id):
     answers = []
     for question in application["questions"]:
         question_id = str(question.get("id", ""))
-        answer = str(raw_answers.get(question_id, "")).strip()
-        if question.get("required", True) and not answer:
+        question_type = question.get("type", "paragraph")
+        raw_answer = raw_answers.get(question_id, [] if question_type == "multi_choice" else "")
+        if question_type == "multi_choice":
+            if not isinstance(raw_answer, list) or any(not isinstance(value, str) for value in raw_answer):
+                return jsonify({"error": "Choose valid options for each question."}), 400
+            answer = list(dict.fromkeys(raw_answer))
+            if any(value not in question.get("options", []) for value in answer):
+                return jsonify({"error": "Choose valid options for each question."}), 400
+            missing = not answer
+        else:
+            if not isinstance(raw_answer, str):
+                return jsonify({"error": "Enter a valid answer for each question."}), 400
+            answer = raw_answer.strip()
+            missing = not answer
+            if question_type == "single_choice" and answer and answer not in question.get("options", []):
+                return jsonify({"error": "Choose a valid option for each question."}), 400
+            if question_type == "yes_no" and answer and answer not in {"yes", "no"}:
+                return jsonify({"error": "Choose yes or no for each question."}), 400
+            if question_type == "date" and answer:
+                try:
+                    from datetime import date
+                    date.fromisoformat(answer)
+                except ValueError:
+                    return jsonify({"error": "Enter a valid date for each date question."}), 400
+            limit = 200 if question_type == "short_text" else 4000
+            if len(answer) > limit:
+                return jsonify({"error": f"This answer must be {limit} characters or fewer."}), 400
+        if question.get("required", True) and missing:
             return jsonify({"error": f"Please answer: {question.get('prompt', 'each required question')}"}), 400
-        if len(answer) > 4000:
-            return jsonify({"error": "Each answer must be 4,000 characters or fewer."}), 400
         answers.append({"question_id": question_id, "prompt": question.get("prompt", ""), "answer": answer})
 
     receipt_id = uuid.uuid4().hex

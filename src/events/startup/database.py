@@ -110,9 +110,22 @@ async def _create_tables(bot):
             answers        TEXT NOT NULL DEFAULT '[]',
             receipt_id     TEXT NOT NULL,
             submitted_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            review_status  TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by    TEXT,
+            reviewed_at    TEXT,
             PRIMARY KEY (application_id, user_id)
         )
     """)
+    # Keep existing submissions intact while adding review metadata.
+    for col_name, col_def in [
+        ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
+        ("reviewed_by", "TEXT"),
+        ("reviewed_at", "TEXT"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE staff_application_submissions ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS staff_members (

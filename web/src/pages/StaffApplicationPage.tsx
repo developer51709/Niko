@@ -10,7 +10,7 @@ export function StaffApplicationPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [application, setApplication] = useState<PublicStaffApplication | null>(null);
   const [openings, setOpenings] = useState<PublicStaffApplication[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -46,6 +46,15 @@ export function StaffApplicationPage() {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!application) return;
+    const unanswered = application.questions.find((question) => {
+      if (!question.required) return false;
+      const answer = answers[question.id];
+      return Array.isArray(answer) ? answer.length === 0 : !answer?.trim();
+    });
+    if (unanswered) {
+      setError(`Please answer: ${unanswered.prompt}`);
+      return;
+    }
     setSending(true); setError("");
     submitStaffApplication(guildId, application.id, answers, auth?.csrf_token).then(() => setSubmitted(true)).catch((reason) => setError(reason instanceof Error ? reason.message : "Your application could not be submitted.")).finally(() => setSending(false));
   };
@@ -67,7 +76,19 @@ export function StaffApplicationPage() {
           <div className="application-public-heading"><span className="panel-kicker">STAFF APPLICATION · {application.role_name || "ROLE OPENING"}</span><h1>{application.title}</h1><p>{application.description || "Complete the questions below to apply for this opening."}</p></div>
           <div className="application-verified"><span className="application-verified-icon"><Icon name="shield" /></span><span><strong>Membership verified</strong><small>Signed in as {auth.user?.global_name || auth.user?.username || "your Discord account"}. Niko checked your server roles.</small></span><a href="/auth/logout">Switch account</a></div>
           <form className="application-public-form" onSubmit={submit}>
-            {application.questions.map((question, index) => <label className="form-field application-answer-field" key={question.id}><span className="application-question-count">QUESTION {String(index + 1).padStart(2, "0")}</span><span className="form-label">{question.prompt}{question.required && <i>Required</i>}</span><textarea required={question.required} maxLength={4000} rows={4} value={answers[question.id] || ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))} placeholder="Write your answer here…" /><small>{(answers[question.id] || "").length}/4000 characters</small></label>)}
+            {application.questions.map((question, index) => {
+              const type = question.type || "paragraph";
+              const value = answers[question.id] ?? (type === "multi_choice" ? [] : "");
+              const setValue = (next: string | string[]) => setAnswers((current) => ({ ...current, [question.id]: next }));
+              return <fieldset className="form-field application-answer-field" key={question.id}><legend><span className="application-question-count">{String(index + 1).padStart(2, "0")}</span><span className="form-label">{question.prompt}{question.required && <i>Required</i>}</span></legend>
+                {type === "short_text" ? <input type="text" required={question.required} maxLength={200} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder="Your answer" />
+                  : type === "single_choice" ? <div className="application-choice-list application-single-choice">{(question.options || []).map((option) => <label className={value === option ? "is-selected" : ""} key={option}><input type="radio" name={question.id} required={question.required && !value} checked={value === option} onChange={() => setValue(option)} /><span>{option}</span></label>)}</div>
+                  : type === "multi_choice" ? <div className="application-choice-list application-multi-choice">{(question.options || []).map((option) => <label className={Array.isArray(value) && value.includes(option) ? "is-selected" : ""} key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => setValue(event.target.checked ? [...(Array.isArray(value) ? value : []), option] : (Array.isArray(value) ? value : []).filter((item) => item !== option))} /><span>{option}</span></label>)}</div>
+                  : type === "yes_no" ? <div className="application-choice-list application-yes-no">{["yes", "no"].map((option) => <label className={value === option ? "is-selected" : ""} key={option}><input type="radio" name={question.id} required={question.required && !value} checked={value === option} onChange={() => setValue(option)} /><span>{option === "yes" ? "Yes" : "No"}</span></label>)}</div>
+                  : type === "date" ? <input type="date" required={question.required} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} />
+                  : <><textarea required={question.required} maxLength={4000} rows={4} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder="Write your answer here…" /><small>{(typeof value === "string" ? value : "").length}/4000 characters</small></>}
+              </fieldset>;
+            })}
             {error && <div className="notice warning" role="alert">{error}</div>}
             <div className="application-submit-footer"><span>Your submission is private to this server’s application managers.</span><button type="submit" className="button button-primary" disabled={sending}>{sending ? "Sending…" : "Submit application"} <Icon name="arrow" /></button></div>
           </form>

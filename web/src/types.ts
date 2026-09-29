@@ -226,8 +226,9 @@ export type AuthStatus = {
   csrf_token?: string;
 };
 
-export type ApplicationQuestion = { id: string; prompt: string; required: boolean };
-export type ApplicationAnswer = { question_id: string; prompt: string; answer: string };
+export type ApplicationQuestionType = "short_text" | "paragraph" | "single_choice" | "multi_choice" | "yes_no" | "date";
+export type ApplicationQuestion = { id: string; prompt: string; required: boolean; type?: ApplicationQuestionType; options?: string[] };
+export type ApplicationAnswer = { question_id: string; prompt: string; answer: string | string[] };
 export type StaffApplication = {
   id: string;
   guild_id: string;
@@ -248,6 +249,9 @@ export type StaffApplicationSubmission = {
   avatar_url?: string | null;
   answers: ApplicationAnswer[];
   submitted_at?: string;
+  review_status: "pending" | "approved" | "denied";
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
 };
 export type PublicStaffApplication = StaffApplication & {
   role_name?: string | null;
