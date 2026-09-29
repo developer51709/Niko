@@ -453,7 +453,8 @@ def api_save_server(guild_id):
             elif key in {"captcha_enabled", "captcha_kick_on_fail"}:
                 setattr(onboarding, key, bool(value))
             else:
-                if value is not None and len(str(value)) > (2000 if key in {"welcome_description", "rules_text"} else 200):
+                max_length = 4000 if key == "rules_text" else 2000 if key == "welcome_description" else 200
+                if value is not None and len(str(value)) > max_length:
                     return jsonify({"error": f"{key} is too long."}), 400
                 setattr(onboarding, key, value or None)
         run_on_bot_loop(save_config(numeric_guild_id, onboarding))
