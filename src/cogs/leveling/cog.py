@@ -207,6 +207,7 @@ class Leveling(commands.Cog):
                 view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
                     await lu_channel.send(view=view)
+                    self.bot.dispatch("sticky_feature_message", message.guild.id, lu_channel.id)
                 log.debug("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass

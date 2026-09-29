@@ -6,10 +6,10 @@ Commands (`sticky` group):
     sticky remove          — remove the sticky message from this channel
     sticky list             — list every channel with an active sticky in this server
 
-Behaviour: whenever a new (non-bot) message is sent in a channel with an
-active sticky, the old sticky post is deleted and a fresh copy is sent
-underneath it after a short debounce window — so a busy channel doesn't
-trigger a delete+repost on every single message.
+Behaviour: whenever a new human message is sent in a channel with an active
+sticky, or Niko posts to a configured starboard, level-up, or suggestion
+channel, the old sticky is reposted after a short debounce window. Niko's own
+sticky reposts are ignored to prevent repost loops.
 """
 
 from __future__ import annotations
@@ -54,6 +54,7 @@ class StickyCog(commands.Cog, name="Sticky"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._pending: set[int] = set()  # channel_ids with a repost currently scheduled
+        self._own_sticky_ids: set[int] = set()  # active sticky post IDs, including unsaved reposts
 
     # ── database helpers ────────────────────────────────────────────────
 
@@ -90,8 +91,9 @@ class StickyCog(commands.Cog, name="Sticky"):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
-                    "Sticky messages stay pinned to the bottom of a channel — every time "
-                    "someone posts, I delete the old copy and repost it underneath.\n\n"
+                    "Sticky messages stay pinned to the bottom of a channel. I repost them "
+                    "after new messages, including Niko's starboard, level-up, and suggestion "
+                    "posts in their configured channels.\n\n"
                     f"**`{prefix}sticky set <message>`** — create or update the sticky message here\n"
                     f"**`{prefix}sticky remove`** — remove the sticky message from this channel\n"
                     f"**`{prefix}sticky list`** — list every sticky message in this server"
@@ -127,6 +129,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         # Delete the previous sticky post (if any) before sending the new one.
         old_message_id = existing.get("message_id") if existing else None
         if old_message_id:
+            self._own_sticky_ids.discard(int(old_message_id))
             try:
                 old_msg = await ctx.channel.fetch_message(old_message_id)
                 await old_msg.delete()
@@ -137,6 +140,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
         try:
             posted = await ctx.channel.send(view=_sticky_view(message, color))
+            self._own_sticky_ids.add(posted.id)
         except discord.Forbidden:
             return await ctx.send(
                 view=_feedback("I don't have permission to send messages in this channel.", ok=False),
@@ -178,6 +182,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         )
 
         if entry.get("message_id"):
+            self._own_sticky_ids.discard(int(entry["message_id"]))
             try:
                 old_msg = await ctx.channel.fetch_message(entry["message_id"])
                 await old_msg.delete()
@@ -217,22 +222,75 @@ class StickyCog(commands.Cog, name="Sticky"):
 
     # ── restick logic ────────────────────────────────────────────────────
 
+    async def _is_feature_channel(self, guild_id: int, channel_id: int) -> bool:
+        """Check whether the channel is configured for a Niko message feature."""
+        configured_channels = (
+            await self.bot.cxn.fetchval(
+                "SELECT channel_id FROM starboard_config WHERE guild_id = $1",
+                guild_id,
+            ),
+            await self.bot.cxn.fetchval(
+                "SELECT level_up_channel FROM level_config WHERE guild_id = $1",
+                guild_id,
+            ),
+            await self.bot.cxn.fetchval(
+                "SELECT channel_id FROM suggestion_config WHERE guild_id = $1",
+                guild_id,
+            ),
+        )
+        return any(
+            configured is not None and int(configured) == channel_id
+            for configured in configured_channels
+        )
+
+    async def _schedule_repost(self, guild_id: int, channel_id: int):
+        """Schedule one debounced repost for a channel with an active sticky."""
+        if channel_id in self._pending:
+            return
+
+        # Reserve the channel before awaiting the DB so simultaneous gateway
+        # events cannot start duplicate repost tasks.
+        self._pending.add(channel_id)
+        try:
+            entry = await self._get(guild_id, channel_id)
+            if entry is None:
+                self._pending.discard(channel_id)
+                return
+
+            task = asyncio.create_task(self._repost_after_delay(guild_id, channel_id))
+            task.add_done_callback(lambda t: self._pending.discard(channel_id))
+        except Exception:
+            self._pending.discard(channel_id)
+            raise
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not message.guild or message.author.id == self.bot.user.id:
+        if not message.guild:
+            return
+        if message.id in self._own_sticky_ids:
             return
 
         entry = await self._get(message.guild.id, message.channel.id)
         if entry is None:
             return
 
-        channel_id = message.channel.id
-        if channel_id in self._pending:
-            return  # a repost is already scheduled for this channel — let it handle this burst
-        self._pending.add(channel_id)
+        if message.author.bot:
+            # Other bots stay ignored. Niko's posts only count in configured
+            # feature channels, and the current sticky ID/pending lock prevent
+            # our repost from scheduling another delete/send cycle.
+            if self.bot.user is None or message.author.id != self.bot.user.id:
+                return
+            if message.id == entry.get("message_id") or message.channel.id in self._pending:
+                return
+            if not await self._is_feature_channel(message.guild.id, message.channel.id):
+                return
 
-        task = asyncio.create_task(self._repost_after_delay(message.guild.id, channel_id))
-        task.add_done_callback(lambda t: self._pending.discard(channel_id))
+        await self._schedule_repost(message.guild.id, message.channel.id)
+
+    @commands.Cog.listener()
+    async def on_sticky_feature_message(self, guild_id: int, channel_id: int):
+        """Repost after a feature message, including level-ups without a set channel."""
+        await self._schedule_repost(guild_id, channel_id)
 
     async def _repost_after_delay(self, guild_id: int, channel_id: int):
         try:
@@ -248,6 +306,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
             old_message_id = entry.get("message_id")
             if old_message_id:
+                self._own_sticky_ids.discard(int(old_message_id))
                 try:
                     old_msg = await channel.fetch_message(old_message_id)
                     await old_msg.delete()
@@ -256,6 +315,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
             try:
                 posted = await channel.send(view=_sticky_view(entry["content"], entry.get("color", DEFAULT_COLOR)))
+                self._own_sticky_ids.add(posted.id)
             except (discord.Forbidden, discord.HTTPException):
                 return
 

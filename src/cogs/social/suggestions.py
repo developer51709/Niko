@@ -329,6 +329,7 @@ class Suggestions(commands.Cog):
         g["items"][str(sid)] = s
         await self._persist_config(ctx.guild.id, g)
         await self._persist_suggestion(ctx.guild.id, s)
+        self.bot.dispatch("sticky_feature_message", ctx.guild.id, ch.id)
         try:
             self.bot.add_view(_build_view(s, ctx), message_id=sent.id)
         except Exception:

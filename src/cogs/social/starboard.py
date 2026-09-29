@@ -371,6 +371,7 @@ class Starboard(commands.Cog):
                 )
                 starred[str(message.id)] = sent.id
                 await self._save_starred(payload.guild_id, message.id, sent.id)
+                self.bot.dispatch("sticky_feature_message", payload.guild_id, starboard_ch.id)
             except Exception:
                 pass
         else:
