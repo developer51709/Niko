@@ -8,6 +8,7 @@ consistent entry point.
 from __future__ import annotations
 
 import time
+import io
 
 import discord
 from discord.ext import commands
@@ -15,6 +16,7 @@ from discord.ext import commands
 from config.ids import OWNER_IDS
 from cogs.staff.owner import OwnerCog, _StatusPanelCog
 from cogs.staff.development import Development
+from utils.error_reports import get_error_report
 
 
 STAFF_ROLES = {
@@ -38,7 +40,7 @@ OWNER_ONLY_COMMANDS = {
 HEAD_ADMIN_COMMANDS = {
     "blacklist", "premium", "servers", "serverinvite", "announce",
 }
-SUPPORT_COMMANDS = {"ping", "latency", "uptime"}
+SUPPORT_COMMANDS = {"ping", "latency", "uptime", "getreport"}
 GRAPHIC_DESIGNER_COMMANDS = SUPPORT_COMMANDS | {"mem", "tasks", "guild", "channels", "roles", "members"}
 HEAD_SUPPORT_COMMANDS = GRAPHIC_DESIGNER_COMMANDS
 MODERATOR_COMMANDS = {"ping", "latency", "uptime"}
@@ -173,7 +175,7 @@ def _command_names_for_role(role: str) -> set[str]:
     if role == "head_support":
         return HEAD_SUPPORT_COMMANDS
     if role == "moderator":
-        return MODERATOR_COMMANDS
+        return MODERATOR_COMMANDS | {"getreport"}
     if role == "support":
         return SUPPORT_COMMANDS
     return set()
@@ -230,6 +232,28 @@ class StaffCog(commands.Cog):
             return await ctx.send("This command is restricted to official Niko staff.")
         await ctx.send(view=build_staff_help(self.bot, ctx, "all"))
 
+    @staff.command(name="getreport", help="Fetch a full error report using its six-character code.", hidden=True)
+    async def get_report(self, ctx: commands.Context, code: str):
+        """Fetch an error report by its six-character code."""
+        if not await is_staff_member(ctx):
+            return await ctx.send("This command is restricted to official Niko staff.")
+        report = await get_error_report(code, self.bot)
+        if report is None:
+            return await ctx.send("No error report was found for that code.")
+
+        report_file = discord.File(
+            io.BytesIO(report.encode("utf-8")),
+            filename=f"error-report-{code.strip().upper()}.txt",
+        )
+        try:
+            await ctx.author.send(
+                content=f"Error report `{code.strip().upper()}` attached.",
+                file=report_file,
+            )
+        except discord.Forbidden:
+            return await ctx.send("I couldn't DM you the report. Please enable DMs from this server and try again.")
+        await ctx.send(f"Sent error report `{code.strip().upper()}` to your DMs.")
+
     @staff.command(name="manage", hidden=True)
     async def staff_manage(self, ctx: commands.Context, target: discord.Member):
         if not _is_owner_user(ctx.author, ctx.bot):
@@ -251,6 +275,8 @@ class StaffCog(commands.Cog):
             parent = getattr(parent, "parent", None)
         role = await _role_for(ctx)
         if role == "owner":
+            return True
+        if command_name == "getreport":
             return True
         if command_name in OWNER_ONLY_COMMANDS:
             return False

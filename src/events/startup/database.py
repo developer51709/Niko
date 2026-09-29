@@ -1541,5 +1541,14 @@ async def init_database(bot):
             await MusicDatabase().init(bot)
         except Exception as e:
             logging.warning("DB", f"Could not init music database: {e}")
+
+        # Error reports use an isolated SQLite file / MongoDB database so
+        # tracebacks and invocation context never land in the primary DB.
+        try:
+            from utils.error_reports import ErrorReportDatabase
+
+            await ErrorReportDatabase().init(bot)
+        except Exception as e:
+            logging.warning("DB", f"Could not init error report database: {e}")
     except Exception as e:
         logging.error("DB", f"Failed to open database: {e}")

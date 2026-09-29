@@ -7,7 +7,10 @@ import sys
 import json
 import datetime
 import asyncio
+import platform
+from contextvars import ContextVar
 from colorama import Fore, Style, init as colorama_init
+from utils.error_reports import save_error_report
 from config.emojis import get_emoji
 from config.ids import OWNER_IDS
 from utils import logging
@@ -57,6 +60,7 @@ from discord.app_commands import (
 from discord.errors import Forbidden, HTTPException
 
 colorama_init(autoreset=True)
+_ERROR_REPORT_CODE: ContextVar[str | None] = ContextVar("error_report_code", default=None)
 
 
 def is_owner():
@@ -142,7 +146,10 @@ class ErrorHandler(commands.Cog):
 
 
     # Utility: embed generator
-    def error_embed(self, title, description):
+    def error_embed(self, title, description, report_code: str | None = None):
+        report_code = report_code or _ERROR_REPORT_CODE.get()
+        if report_code:
+            description = f"{description}\n\n-# Error report code: `{report_code}`"
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -156,18 +163,75 @@ class ErrorHandler(commands.Cog):
         view.add_item(container)
         return view
 
+    @staticmethod
+    def _prefix_report_details(ctx: commands.Context) -> str:
+        command = ctx.command
+        guild = ctx.guild
+        channel = ctx.channel
+        message = ctx.message
+        args = getattr(ctx, "args", ())
+        kwargs = getattr(ctx, "kwargs", {})
+        arg_offset = 2 if command and command.cog else 1
+        parsed_args = args[arg_offset:] if len(args) >= arg_offset else args
+        return (
+            "Invocation context\n"
+            "------------------\n"
+            f"Source: Prefix command\n"
+            f"Command: {command.qualified_name if command else '(unknown)'}\n"
+            f"Signature: {command.signature if command else '(unknown)'}\n"
+            f"Exact invocation: {getattr(message, 'content', '(unavailable)')}\n"
+            f"Parsed positional args: {parsed_args!r}\n"
+            f"Parsed keyword args: {kwargs!r}\n"
+            f"User: {ctx.author} (ID {ctx.author.id})\n"
+            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
+            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
+            f"Message ID: {getattr(message, 'id', 'n/a')}\n"
+            f"Message created at: {getattr(message, 'created_at', 'n/a')}\n"
+            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
+            f"Bot user: {ctx.bot.user} (ID {getattr(ctx.bot.user, 'id', 'n/a')})\n"
+            f"Python: {platform.python_version()}\n"
+        )
+
+    @staticmethod
+    def _slash_report_details(interaction: discord.Interaction) -> str:
+        command = interaction.command
+        guild = interaction.guild
+        channel = interaction.channel
+        try:
+            arguments = json.dumps(interaction.data, ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            arguments = repr(getattr(interaction, 'data', None))
+        return (
+            "Invocation context\n"
+            "------------------\n"
+            f"Source: Slash command\n"
+            f"Command: {command.qualified_name if command else '(unknown)'}\n"
+            f"Interaction ID: {interaction.id}\n"
+            f"Interaction created at: {interaction.created_at}\n"
+            f"Exact command arguments (interaction payload):\n{arguments}\n"
+            f"User: {interaction.user} (ID {interaction.user.id})\n"
+            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
+            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
+            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
+            f"Bot user: {interaction.client.user} (ID {getattr(interaction.client.user, 'id', 'n/a')})\n"
+            f"Python: {platform.python_version()}\n"
+        )
+
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
-
-        # Ignore errors already handled locally by the command
-        if hasattr(ctx.command, "on_error"):
-            return
 
         # Unwrap CommandInvokeError to get the original exception
         error = getattr(error, "original", error)
 
         # ── Silent / ignored ───────────────────────────────────────────────
         if isinstance(error, PfxCommandNotFound):
+            return
+
+        report_code, _ = await save_error_report(error, self._prefix_report_details(ctx), self.bot)
+        _ERROR_REPORT_CODE.set(report_code)
+        if ctx.command and hasattr(ctx.command, "on_error"):
+            # A command-local handler may use error_embed and include the same
+            # report code; do not produce a second response here.
             return
 
         # ── Permission errors ──────────────────────────────────────────────
@@ -358,7 +422,7 @@ class ErrorHandler(commands.Cog):
             return
 
         # ── Unexpected / critical errors ───────────────────────────────────
-        logging.error("error_handler", f"Unexpected error in command {ctx.command}: {error}")
+        logging.error("error_handler", f"Unexpected error in command {ctx.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
         view = self.error_embed(
@@ -377,7 +441,7 @@ class ErrorHandler(commands.Cog):
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
-
+        _ERROR_REPORT_CODE.set(None)
 
     # ── Slash command error handler ────────────────────────────────────────
     @commands.Cog.listener()
@@ -392,8 +456,15 @@ class ErrorHandler(commands.Cog):
                     await interaction.response.send_message(view=view, ephemeral=True)
             except discord.HTTPException:
                 pass
+            finally:
+                _ERROR_REPORT_CODE.set(None)
 
         if isinstance(error, (SlashCommandNotFound, CommandSignatureMismatch)):
+            return
+
+        report_code, _ = await save_error_report(error, self._slash_report_details(interaction), self.bot)
+        _ERROR_REPORT_CODE.set(report_code)
+        if interaction.command and interaction.command.on_error:
             return
 
         if isinstance(error, Forbidden):
@@ -447,7 +518,7 @@ class ErrorHandler(commands.Cog):
             return
 
         # ── Unexpected critical ────────────────────────────────────────────
-        logging.error("error_handler", f"Unexpected error in slash {interaction.command}: {error}")
+        logging.error("error_handler", f"Unexpected error in slash {interaction.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         await _reply(self.error_embed("Unexpected Error", "An unexpected error occurred. The developers have been notified."))
 
@@ -458,6 +529,7 @@ class ErrorHandler(commands.Cog):
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
+        _ERROR_REPORT_CODE.set(None)
 
 
     @commands.Cog.listener()
@@ -465,7 +537,12 @@ class ErrorHandler(commands.Cog):
         error = sys.exc_info()[1]
         if error is None:
             return
-        logging.error("error_handler", f"Unexpected error in event {event}: {error}")
+        report_code, _ = await save_error_report(
+            error,
+            f"Invocation context\n------------------\nSource: Gateway event\nEvent: {event}\nArguments: {args!r}\nKeyword arguments: {kwargs!r}\nBot user: {self.bot.user} (ID {getattr(self.bot.user, 'id', 'n/a')})\nPython: {platform.python_version()}",
+            self.bot,
+        )
+        logging.error("error_handler", f"Unexpected error in event {event} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=None))
 
