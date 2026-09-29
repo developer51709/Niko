@@ -12,6 +12,7 @@ const sections: [DashSection, string, string, string][] = [
   ["leveling", "Leveling", "spark", "Reward participation"],
   ["moderation", "Moderation", "shield", "Keep things steady"],
   ["server", "Server", "settings", "Manage server features"],
+  ["applications", "Applications", "users", "Staff role openings"],
   ["ai", "AI controls", "settings", "Shape Niko’s voice"],
   ["customization", "Customization", "paint", "Niko’s server identity"],
 ];

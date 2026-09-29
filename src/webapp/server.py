@@ -106,7 +106,8 @@ def configure_bot(bot) -> None:
     for module_name in (
         "webapp.auth_routes", "webapp.team_routes", "webapp.public_routes",
         "webapp.dashboard_routes", "webapp.donation_routes",
-        "webapp.transcript_routes", "webapp.card_routes", "webapp.site_routes",
+        "webapp.transcript_routes", "webapp.card_routes",
+        "webapp.application_routes", "webapp.site_routes",
     ):
         module = sys.modules.get(module_name)
         if module is not None:

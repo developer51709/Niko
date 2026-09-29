@@ -89,8 +89,34 @@ async def _create_tables(bot):
             pass
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_applications (
+            id                TEXT PRIMARY KEY,
+            guild_id          INTEGER NOT NULL,
+            role_id           TEXT NOT NULL,
+            title             TEXT NOT NULL,
+            description       TEXT NOT NULL DEFAULT '',
+            questions         TEXT NOT NULL DEFAULT '[]',
+            eligible_role_ids TEXT NOT NULL DEFAULT '[]',
+            status            TEXT NOT NULL DEFAULT 'open',
+            created_by        TEXT NOT NULL,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_application_submissions (
+            application_id TEXT NOT NULL,
+            user_id        TEXT NOT NULL,
+            answers        TEXT NOT NULL DEFAULT '[]',
+            receipt_id     TEXT NOT NULL,
+            submitted_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (application_id, user_id)
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS staff_members (
-            user_id     INTEGER PRIMARY KEY,
+             user_id     INTEGER PRIMARY KEY,
             role        TEXT NOT NULL,
             assigned_by INTEGER NOT NULL,
             assigned_at REAL NOT NULL,

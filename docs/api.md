@@ -50,6 +50,12 @@ performed server-side; the frontend must not be treated as the security boundary
 | GET | `/api/guild/<id>/levels` | XP leaderboard |
 | GET | `/api/guild/<id>/config` | Moderation, AI, leveling, and server config |
 | GET | `/api/guild/<id>/resources` | Available text channels and roles for dashboard selectors |
+| GET/POST | `/api/guild/<id>/applications` | List or create staff role openings |
+| POST | `/api/guild/<id>/applications/<application_id>/status` | Close or reopen an opening without changing its link or submissions |
+| GET | `/api/guild/<id>/applications/<application_id>/submissions` | Review applicant responses |
+| GET | `/api/applications/<guild_id>` | List open roles for a verified server member |
+| GET | `/api/applications/<guild_id>/<application_id>` | Load an eligible application form |
+| POST | `/api/applications/<guild_id>/<application_id>/submit` | Submit one application per Discord user and opening |
 | POST | `/api/guild/<id>/config/automod` | Update allowed AutoMod flags |
 | POST | `/api/guild/<id>/config/ai` | Update AI enabled state and personality |
 | POST | `/api/guild/<id>/config/leveling` | Update leveling controls |
@@ -57,7 +63,9 @@ performed server-side; the frontend must not be treated as the security boundary
 
 POST requests use JSON and return `{ "ok": true }` on success. The API only
 accepts the documented configuration keys and converts booleans/numbers before
-persisting them.
+persisting them. Staff application submissions require a Discord-authenticated
+session and are checked against current guild membership using the bot; each
+application/user pair is unique in the database.
 
 ## Adding an endpoint
 

@@ -10,6 +10,9 @@ import type {
   PublicConfig,
   UserOverview,
   StaffMember,
+  StaffApplication,
+  StaffApplicationSubmission,
+  PublicStaffApplication,
 } from "./types";
 
 export class ApiError extends Error {
@@ -49,6 +52,13 @@ export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
 export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
+export const getStaffApplications = (id: string) => api<StaffApplication[]>(`/api/guild/${id}/applications`);
+export const createStaffApplication = (id: string, body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean; application: StaffApplication }>(`/api/guild/${id}/applications`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const setStaffApplicationStatus = (guildId: string, applicationId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/guild/${guildId}/applications/${applicationId}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
+export const getStaffSubmissions = (guildId: string, applicationId: string) => api<{ application: StaffApplication; submissions: StaffApplicationSubmission[] }>(`/api/guild/${guildId}/applications/${applicationId}/submissions`);
+export const getPublicOpenings = (guildId: string) => api<{ openings: PublicStaffApplication[] }>(`/api/applications/${guildId}`);
+export const getPublicStaffApplication = (guildId: string, applicationId: string) => api<PublicStaffApplication>(`/api/applications/${guildId}/${applicationId}`);
+export const submitStaffApplication = (guildId: string, applicationId: string, answers: Record<string, string>, csrfToken?: string) => api<{ ok: boolean; message: string }>(`/api/applications/${guildId}/${applicationId}/submit`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ answers }) });
 
 export function saveConfig(
   id: string,

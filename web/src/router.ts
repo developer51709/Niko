@@ -1,5 +1,5 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "staff" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
-export type DashSection = "overview" | "leveling" | "moderation" | "server" | "ai" | "customization";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "staff" | "application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
+export type DashSection = "overview" | "leveling" | "moderation" | "server" | "applications" | "ai" | "customization";
 export type DashboardView = "overview" | "servers" | "guild";
 
 function normalizedPath(pathname: string) {
@@ -12,6 +12,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/docs") return "docs";
   if (path.startsWith("/docs/")) return "docs-detail";
   if (path === "/dashboard/staff" || path === "/dashboard/staff/") return "staff";
+  if (path.startsWith("/apply/")) return "application";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/team") return "team";
   if (path === "/support") return "support";
@@ -37,7 +38,7 @@ export function dashboardServersPath() {
 
 export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
-  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "ai", "customization"];
+  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "applications", "ai", "customization"];
   if (parts[1] === "servers") {
     return { view: "servers", guildId: null, section: "overview" };
   }

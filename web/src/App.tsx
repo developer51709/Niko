@@ -10,6 +10,7 @@ import { ChangelogPage } from "./pages/ChangelogPage";
 import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
 import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
+import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
 import { pageFromPath, type Page } from "./router";
 
@@ -28,6 +29,7 @@ export function App() {
   }
   if (page === "docs") return <DocsPage />;
   if (page === "staff") return <StaffDashboardPage />;
+  if (page === "application") return <StaffApplicationPage />;
   if (page === "dashboard") return <DashboardPage />;
   if (page === "team") return <TeamPage />;
   if (page === "team-member") return <TeamMemberPage id={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;

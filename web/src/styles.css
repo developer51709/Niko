@@ -434,3 +434,138 @@ em { color: var(--accent); font-style: normal; }
   .dashboard-layout .dash-main { width: calc(100% - 32px); padding: 36px 0 58px; }
   .dashboard-layout .dash-heading h2 { font-size: 38px; }
 }
+
+/* Guild staff applications */
+.dashboard-layout .applications-intro { display: flex; align-items: center; gap: 13px; padding: 17px 19px; margin: 0 0 14px; background: var(--callout); border: 1px solid var(--line); border-radius: 10px; }
+.dashboard-layout .applications-intro-icon { width: 39px; height: 39px; display: grid; place-items: center; color: var(--accent-dark); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.dashboard-layout .applications-intro > div { flex: 1; min-width: 0; }
+.dashboard-layout .applications-intro strong { display: block; margin-top: 5px; font-size: 13px; }
+.dashboard-layout .applications-intro p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.dashboard-layout .applications-success { margin-bottom: 12px; color: var(--sage); background: var(--callout); border: 1px solid var(--line); }
+.dashboard-layout .applications-layout { display: grid; grid-template-columns: minmax(0, 1fr) 275px; align-items: start; gap: 14px; }
+.dashboard-layout .applications-editor, .dashboard-layout .applications-aside { min-width: 0; border-radius: 12px; }
+.dashboard-layout .applications-editor .panel-heading { margin-bottom: 22px; }
+.dashboard-layout .applications-editor .panel-heading p { max-width: 570px; margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.dashboard-layout .applications-fields { gap: 14px; }
+.dashboard-layout .application-description { grid-column: 1 / -1; }
+.dashboard-layout .application-role-gates select { min-height: 98px; }
+.dashboard-layout .application-question-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 23px 0 11px; padding-top: 18px; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .application-question-heading small { display: block; margin-top: 4px; color: var(--dim); font-size: 10px; }
+.dashboard-layout .application-question-list { display: grid; gap: 9px; }
+.dashboard-layout .application-question { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 10px; padding: 11px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; }
+.dashboard-layout .application-required { display: flex; align-items: center; gap: 6px; min-height: 42px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.dashboard-layout .application-required input { accent-color: var(--accent); }
+.dashboard-layout .application-remove-question { width: 34px; height: 34px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; font-size: 19px; }
+.dashboard-layout .application-remove-question:hover { color: var(--accent-dark); background: var(--callout); }
+.dashboard-layout .applications-aside { padding: 20px; }
+.dashboard-layout .applications-aside h3 { margin: 8px 0; font-size: 16px; letter-spacing: -.04em; }
+.dashboard-layout .applications-aside > p { margin-bottom: 16px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.dashboard-layout .applications-check { display: flex; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .applications-check > span { color: var(--accent-dark); font: 10px "Space Mono", monospace; }
+.dashboard-layout .applications-check strong, .dashboard-layout .applications-check small { display: block; }
+.dashboard-layout .applications-check strong { font-size: 10px; }
+.dashboard-layout .applications-check small { margin-top: 3px; color: var(--dim); font-size: 9px; line-height: 1.5; }
+.dashboard-layout .applications-list-section { margin-top: 33px; }
+.dashboard-layout .applications-list-section .section-heading-row { align-items: center; }
+.dashboard-layout .applications-list-section .section-heading-row h3 { margin: 6px 0 0; font-size: 19px; }
+.dashboard-layout .applications-list { display: grid; gap: 9px; padding-top: 12px; }
+.dashboard-layout .application-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 18px; border-radius: 11px; }
+.dashboard-layout .application-card-main { min-width: 0; }
+.dashboard-layout .application-status { display: inline-flex; align-items: center; padding: 5px 8px; color: var(--muted); background: var(--surface-muted); border-radius: 999px; font: 9px "Space Mono", monospace; text-transform: uppercase; }
+.dashboard-layout .application-status.open { color: #4c7957; background: #e5eee5; }
+.dashboard-layout .application-status.closed { color: var(--dim); }
+.dashboard-layout .application-card h4 { margin: 9px 0 5px; font-size: 16px; letter-spacing: -.04em; }
+.dashboard-layout .application-card-main > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.dashboard-layout .application-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.dashboard-layout .application-meta span { padding: 5px 7px; color: var(--muted); background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 6px; font-size: 9px; }
+.dashboard-layout .application-card-actions { display: flex; align-content: start; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.dashboard-layout .application-response-list { grid-column: 1 / -1; display: grid; gap: 7px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .application-response { padding: 10px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 8px; }
+.dashboard-layout .application-response summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; font-size: 10px; }
+.dashboard-layout .application-response-identity { display: inline-flex; align-items: center; gap: 8px; }
+.dashboard-layout .application-response-identity img { width: 24px; height: 24px; object-fit: cover; border-radius: 50%; }
+.dashboard-layout .application-response time { color: var(--dim); font-size: 9px; }
+.dashboard-layout .application-answers { display: grid; gap: 12px; padding: 14px 0 3px; }
+.dashboard-layout .application-answers strong { font-size: 10px; }
+.dashboard-layout .application-answers p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; white-space: pre-wrap; }
+
+/* Public Discord-verified application form */
+.application-public-page { min-height: calc(100vh - 76px); padding: 35px 20px 50px; background: radial-gradient(ellipse at 50% 0, rgba(217,101,69,.09), transparent 42%), var(--canvas); }
+.application-public-shell { width: min(770px, 100%); margin: 0 auto; }
+.application-back-link { color: var(--muted); font-size: 11px; }
+.application-back-link:hover { color: var(--accent-dark); }
+.application-public-brand { display: flex; align-items: center; gap: 10px; margin: 29px 0 18px; color: var(--muted); font: 10px "Space Mono", monospace; letter-spacing: .08em; }
+.application-public-brand small { display: block; margin-top: 3px; color: var(--dim); font-size: 8px; }
+.application-public-mark { width: 31px; height: 31px; display: grid; place-items: center; color: #fffaf5; background: var(--accent); border-radius: 9px; font: 800 18px "Plus Jakarta Sans", sans-serif; }
+.application-public-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.application-public-state { display: grid; justify-items: center; padding: 65px 42px; text-align: center; }
+.application-public-state .panel-kicker { margin-top: 17px; }
+.application-public-state h1 { margin: 12px 0; font-size: clamp(30px, 5vw, 42px); letter-spacing: -.07em; }
+.application-public-state > p { max-width: 450px; margin: 0 0 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.application-public-state .button { min-width: 200px; }
+.application-public-symbol, .application-success-mark { width: 48px; height: 48px; display: grid; place-items: center; color: var(--accent-dark); background: var(--callout); border: 1px solid var(--line); border-radius: 14px; }
+.application-success-mark { color: #4c7957; background: #e5eee5; border-color: #d0e1d1; font-size: 22px; font-weight: 800; }
+.application-public-state .application-public-symbol + .panel-kicker { margin-top: 21px; }
+.application-public-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 17px 27px; background: var(--surface-raised); border-bottom: 1px solid var(--line-soft); }
+.application-server-tag { color: var(--muted); font-size: 10px; }
+.application-public-heading { padding: 31px 34px 23px; }
+.application-public-heading h1 { margin: 10px 0 8px; font-size: clamp(29px, 5vw, 42px); letter-spacing: -.07em; }
+.application-public-heading p { max-width: 620px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
+.application-verified { display: flex; align-items: center; gap: 11px; margin: 0 34px 23px; padding: 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }
+.application-verified-icon { width: 31px; height: 31px; display: grid; place-items: center; color: var(--sage); background: var(--callout); border-radius: 9px; }
+.application-verified > span:nth-child(2) { flex: 1; min-width: 0; }
+.application-verified strong, .application-verified small { display: block; }
+.application-verified strong { font-size: 10px; }
+.application-verified small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.application-verified > a { color: var(--dim); font-size: 9px; }
+.application-public-form { display: grid; gap: 0; padding: 0 34px 30px; }
+.application-answer-field { padding: 18px 0; border-top: 1px solid var(--line-soft); }
+.application-question-count { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .09em; }
+.application-answer-field .form-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; line-height: 1.55; }
+.application-answer-field .form-label i { color: var(--accent-dark); font: normal 9px "Space Mono", monospace; white-space: nowrap; }
+.application-answer-field textarea { min-height: 105px; background: var(--surface-raised); border-radius: 9px; font-size: 11px; line-height: 1.7; }
+.application-answer-field > small { align-self: flex-end; color: var(--dim); font-size: 9px; }
+.application-submit-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 8px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.application-submit-footer > span { max-width: 320px; color: var(--dim); font-size: 9px; line-height: 1.6; }
+.application-public-footer { display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 18px; color: var(--dim); font-size: 9px; }
+.application-public-footer img { width: 17px; height: 17px; border-radius: 50%; }
+.application-public-state.application-opening-state { justify-items: stretch; padding: 37px; text-align: left; }
+.application-opening-state > .panel-kicker { margin: 0; text-align: center; }
+.application-opening-state > h1, .application-opening-state > p { text-align: center; align-self: center; }
+.public-opening-list { display: grid; gap: 9px; margin-top: 15px; }
+.public-opening-card { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 15px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 10px; }
+.public-opening-card h2 { margin: 8px 0 4px; font-size: 15px; letter-spacing: -.04em; }
+.public-opening-card p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.public-opening-card .button { min-width: 100px; }
+.application-public-state .public-opening-list { text-align: left; }
+@media (prefers-color-scheme: dark) {
+  .dashboard-layout .application-status.open { color: #a7d5ad; background: #26372a; }
+  .application-success-mark { color: #a7d5ad; background: #26372a; border-color: #3d5741; }
+}
+@media (max-width: 900px) {
+  .dashboard-layout .applications-layout { grid-template-columns: 1fr; }
+  .dashboard-layout .applications-aside { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 13px; }
+  .dashboard-layout .applications-aside > .panel-kicker, .dashboard-layout .applications-aside h3, .dashboard-layout .applications-aside > p { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .dashboard-layout .applications-intro { align-items: flex-start; flex-wrap: wrap; }
+  .dashboard-layout .applications-intro > div { flex-basis: calc(100% - 55px); }
+  .dashboard-layout .applications-intro > .button { width: 100%; }
+  .dashboard-layout .application-question { grid-template-columns: minmax(0, 1fr) auto; }
+  .dashboard-layout .application-question .form-field { grid-column: 1 / -1; }
+  .dashboard-layout .application-card { grid-template-columns: 1fr; }
+  .dashboard-layout .application-card-actions { justify-content: flex-start; }
+  .dashboard-layout .applications-aside { display: block; }
+  .application-public-page { padding: 22px 12px 35px; }
+  .application-public-state { padding: 47px 20px; }
+  .application-public-topline { padding: 14px 18px; }
+  .application-public-heading { padding: 25px 20px 18px; }
+  .application-verified { align-items: flex-start; margin: 0 20px 16px; }
+  .application-verified > a { align-self: center; }
+  .application-public-form { padding: 0 20px 22px; }
+  .application-submit-footer { align-items: stretch; flex-direction: column; }
+  .application-submit-footer .button { width: 100%; }
+  .application-public-state.application-opening-state { padding: 28px 17px; }
+  .public-opening-card { align-items: flex-start; flex-direction: column; }
+  .public-opening-card .button { width: 100%; }
+}

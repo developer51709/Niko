@@ -12,6 +12,7 @@ from . import (  # noqa: E402,F401
     donation_routes,
     transcript_routes,
     card_routes,
+    application_routes,
     site_routes,
 )
 

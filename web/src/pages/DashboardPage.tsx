@@ -3,6 +3,7 @@ import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, ge
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
+import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
@@ -34,7 +35,9 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
       ? getOverview(guild.id).then(setOverview)
       : section === "leveling"
           ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
-          : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
+          : section === "applications"
+              ? getResources(guild.id).then(setResources)
+              : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
   }, [guild.id, section, refreshToken]);
 
@@ -48,6 +51,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
   if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
+  if (section === "applications") return <StaffApplicationsView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }

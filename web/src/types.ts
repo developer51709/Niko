@@ -226,6 +226,36 @@ export type AuthStatus = {
   csrf_token?: string;
 };
 
+export type ApplicationQuestion = { id: string; prompt: string; required: boolean };
+export type ApplicationAnswer = { question_id: string; prompt: string; answer: string };
+export type StaffApplication = {
+  id: string;
+  guild_id: string;
+  role_id: string;
+  title: string;
+  description: string;
+  questions: ApplicationQuestion[];
+  eligible_role_ids: string[];
+  status: "open" | "closed";
+  submission_count: number;
+  created_at?: string;
+  link: string;
+};
+export type StaffApplicationSubmission = {
+  user_id: string;
+  display_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  answers: ApplicationAnswer[];
+  submitted_at?: string;
+};
+export type PublicStaffApplication = StaffApplication & {
+  role_name?: string | null;
+  guild_name?: string | null;
+  eligible?: boolean;
+  already_submitted?: boolean;
+};
+
 // ── Documentation types ──────────────────────────────────────────────────────
 
 export type DocCategory =
