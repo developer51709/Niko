@@ -109,6 +109,13 @@ function staticMetadataPlugin(): Plugin {
     name: "niko-static-social-metadata",
     async closeBundle() {
       const dist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/website/dist");
+      const iconSvg = fs.readFileSync(path.resolve(fileURLToPath(new URL(".", import.meta.url)), "public/niko-app-icon.svg"), "utf8");
+      const iconDirectory = path.join(dist, "icons");
+      fs.mkdirSync(iconDirectory, { recursive: true });
+      for (const size of [192, 512]) {
+        const icon = new Resvg(iconSvg, { fitTo: { mode: "width", value: size } }).render();
+        fs.writeFileSync(path.join(iconDirectory, `niko-${size}.png`), icon.asPng());
+      }
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       for (const metadata of PAGE_METADATA) {
         const route = metadata.path === "/" ? "" : metadata.path.slice(1);
