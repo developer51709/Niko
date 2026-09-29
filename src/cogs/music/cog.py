@@ -113,6 +113,52 @@ def _wavelink_player(player):
     return player if isinstance(player, wavelink.Player) else None
 
 
+class MusicPlayer(wavelink.Player):
+    """Wavelink player that distinguishes real timeouts from cancellation.
+
+    Wavelink 3.5 catches ``CancelledError`` as if its own connection timer
+    expired. That turns external task cancellation into a misleading timeout
+    message and can leave discord.py's voice-client registration behind.
+    """
+
+    async def connect(
+        self,
+        *,
+        timeout: float = 10.0,
+        reconnect: bool,
+        self_deaf: bool = False,
+        self_mute: bool = False,
+    ) -> None:
+        if self.channel is discord.utils.MISSING:
+            raise wavelink.InvalidChannelStateException(
+                'Use "discord.VoiceChannel.connect(cls=...)" to connect a Player.'
+            )
+
+        if not self._guild:
+            self._guild = self.channel.guild
+
+        self.node._players[self._guild.id] = self
+        assert self.guild is not None
+        await self.guild.change_voice_state(
+            channel=self.channel,
+            self_mute=self_mute,
+            self_deaf=self_deaf,
+        )
+
+        try:
+            # wait_for times out the event waiter without cancelling this
+            # connect task, so an unrelated cancellation remains distinguishable.
+            await asyncio.wait_for(self._connection_event.wait(), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise asyncio.TimeoutError(
+                f"Unable to connect to {self.channel} as it exceeded the timeout "
+                f"of {timeout} seconds."
+            ) from exc
+        except asyncio.CancelledError:
+            await self.disconnect(force=True)
+            raise
+
+
 class MusicSystem(commands.Cog):
     """Music system — artwork cards, control panel, multi-source, autoplay."""
 
@@ -845,7 +891,7 @@ class MusicSystem(commands.Cog):
                 # message instead of reaching the global error handler.
                 player = await asyncio.wait_for(
                     _player_op(
-                        lambda: channel.connect(cls=wavelink.Player, timeout=20)
+                        lambda: channel.connect(cls=MusicPlayer, timeout=20)
                     ),
                     timeout=25,
                 )
