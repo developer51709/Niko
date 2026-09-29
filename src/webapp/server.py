@@ -57,7 +57,7 @@ from utils.donations import (
 )
 from cogs.donations.oxapay import OxaPayClient
 from config.ids import OWNER_IDS, DEVELOPER_IDS
-from cogs.admin.staff import STAFF_ROLES
+from cogs.staff.staff import STAFF_ROLES
 from utils.ai.config import get_ai_config, set_ai_config
 
 # ── Constants ────────────────────────────────────────────────────────────────

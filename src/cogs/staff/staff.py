@@ -13,8 +13,8 @@ import discord
 from discord.ext import commands
 
 from config.ids import OWNER_IDS
-from cogs.admin.owner import OwnerCog, _StatusPanelCog
-from cogs.admin.development import Development
+from cogs.staff.owner import OwnerCog, _StatusPanelCog
+from cogs.staff.development import Development
 
 
 STAFF_ROLES = {
@@ -31,7 +31,7 @@ ROLE_ORDER = ("head_admin", "moderator", "graphic_designer", "head_support", "su
 OWNER_ONLY_COMMANDS = {
     "broadcast", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
     "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "dev01",
-    "deveval", "devexec", "devsay", "devshutdown", "devload", "devunload", "devreload",
+    "devexec", "devsay",
     "sendstatuspanel",
 }
 

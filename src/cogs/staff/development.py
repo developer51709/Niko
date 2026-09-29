@@ -83,19 +83,16 @@ class Development(commands.Cog):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"### Cog Management\n`{prefix}devload <cog>`\n`{prefix}devunload <cog>`\n`{prefix}devreload <cog>`"
-            ),
-            discord.ui.TextDisplay(
                 content=f"### Diagnostics\n`{prefix}devping`\n`{prefix}devlatency`\n`{prefix}devuptime`\n`{prefix}devmem`\n`{prefix}devtasks`"
             ),
             discord.ui.TextDisplay(
                 content=f"### Guild Tools\n`{prefix}devguild`\n`{prefix}devchannels`\n`{prefix}devroles`\n`{prefix}devmembers`"
             ),
             discord.ui.TextDisplay(
-                content=f"### Eval / Exec\n`{prefix}deveval <code>`\n`{prefix}devexec <code>`"
+                content=f"### Eval / Exec\n`{prefix}devexec <code>` (executes code; owner eval is available in the owner command set)"
             ),
             discord.ui.TextDisplay(
-                content=f"### Bot Control\n`{prefix}devsay <msg>`\n`{prefix}devshutdown`"
+                content=f"### Bot Control\n`{prefix}devsay <msg>`"
             ),
             discord.ui.TextDisplay(
                 content=f"### Emoji Sync\n`{prefix}syncemojis`\n`{prefix}appemojis`\n`{prefix}emojistatus`"
@@ -104,66 +101,6 @@ class Development(commands.Cog):
         view.add_item(container)
 
         await ctx.send(view=view)
-
-    # -------------------------------
-    # Cog Management
-    # -------------------------------
-    @commands.command(name="devload")
-    async def dev_load(self, ctx, cog: str):
-        try:
-            await self.bot.load_extension(f"cogs.{cog}")
-            await ctx.send(f"Loaded `{cog}`.")
-        except Exception as e:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_danger')} Cog Load Error\nAn error occurred while loading the {cog} cog."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Traceback\n```\n{e}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-
-    @commands.command(name="devunload")
-    async def dev_unload(self, ctx, cog: str):
-        try:
-            await self.bot.unload_extension(f"cogs.{cog}")
-            await ctx.send(f"Unloaded `{cog}`.")
-        except Exception as e:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_danger')} Cog Unload Error\nAn error occurred while unloading the {cog} cog."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Traceback\n```\n{e}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-
-    @commands.command(name="devreload")
-    async def dev_reload(self, ctx, cog: str):
-        try:
-            await self.bot.reload_extension(f"cogs.{cog}")
-            await ctx.send(f"Reloaded `{cog}`.")
-        except Exception as e:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_danger')} Cog Reload Error\nAn error occurred while reloading the {cog} cog."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Traceback\n```\n{e}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
 
     # -------------------------------
     # Diagnostics
@@ -196,7 +133,7 @@ class Development(commands.Cog):
             mem_str = "N/A"
         await ctx.send(f"Memory usage: `{mem_str}`")
 
-    @commands.command(name="devtasks")
+    @commands.command(name="devtasks", help="View the active asyncio task count")
     async def dev_tasks(self, ctx):
         tasks = asyncio.all_tasks()
         await ctx.send(f"Active asyncio tasks: `{len(tasks)}`")
@@ -204,7 +141,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Guild Inspection
     # -------------------------------
-    @commands.command(name="devguild")
+    @commands.command(name="devguild", help="View info about a guild.")
     async def dev_guild(self, ctx, guild_id: int = None):
         if guild_id:
             g = self.bot.get_guild(guild_id)
@@ -269,41 +206,6 @@ class Development(commands.Cog):
     # -------------------------------
     # Eval / Exec
     # -------------------------------
-    @commands.command(name="deveval")
-    async def dev_eval(self, ctx, *, code: str):
-        """Evaluate Python code."""
-        code = code.strip("` ")
-
-        try:
-            result = eval(code)
-            if asyncio.iscoroutine(result):
-                result = await result
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_tick')} Evaluation Success\nThe code was evaluated successfully."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Result\n```\n{result}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-        except Exception as e:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_danger')} Evaluation Error\nAn error occurred while evaluating the code."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Traceback\n```\n{e}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-
     @commands.command(name="devexec")
     async def dev_exec(self, ctx, *, code: str):
         """Execute Python code."""
@@ -342,11 +244,6 @@ class Development(commands.Cog):
     async def dev_say(self, ctx, *, message: str):
         await ctx.message.delete()
         await ctx.send(message)
-
-    @commands.command(name="devshutdown")
-    async def dev_shutdown(self, ctx):
-        await ctx.send("Shutting down…")
-        await self.bot.close()
 
     # -------------------------------
     # Emoji Sync

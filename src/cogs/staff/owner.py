@@ -292,10 +292,9 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot profile picture
     # -------------------------------
-    @commands.command(name="setpfp")
+    @commands.command(name="setpfp", help="Set the bot's global profile picture.")
     @is_owner()
     async def set_pfp(self, ctx, url: str | None):
-        """Set the bot's profile picture."""
         downloading_view = discord.ui.LayoutView()
         downloading_container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -350,10 +349,9 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot banner
     # -------------------------------
-    @commands.command(name="setbanner")
+    @commands.command(name="setbanner", help="Set the bot's global profile banner.")
     @is_owner()
     async def set_banner(self, ctx, url: str | None):
-        """Set the bot's profile banner."""
         downloading_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -455,77 +453,35 @@ class OwnerCog(commands.Cog):
         await self.bot.change_presence(activity=activity)
         await ctx.send(f"{get_emoji('icon_tick')} Activity updated: **{activity_type.title()} {text}**")
 
-        # -------------------------------
-        # Cog Management
-        # -------------------------------
-        @commands.command(
-            name="load",
-            help="Load a cog (owner only)."
-        )
-        @is_owner()
-        async def load(self, ctx, cog: str):
-            try:
-                await self.bot.load_extension(f"cogs.{cog}")
-                await ctx.send(f"Loaded `{cog}`.")
-            except Exception as e:
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"## {get_emoji('icon_danger')} Cog Load Error\nAn error occurred while loading the {cog} cog."
-                    ),
-                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content=f"### Traceback\n```\n{e}\n```"
-                    )
-                )
-                view.add_item(container)
-                await ctx.send(view=view)
+    # -------------------------------
+    # Cog management
+    # -------------------------------
+    @commands.command(name="load", help="Load a cog (owner only).")
+    @is_owner()
+    async def load_cog(self, ctx: commands.Context, cog: str):
+        try:
+            await self.bot.load_extension(f"cogs.{cog}")
+            await ctx.send(f"Loaded `{cog}`.")
+        except Exception as exc:
+            await ctx.send(f"{get_emoji('icon_danger')} Could not load `{cog}`: `{exc}`")
 
-        @commands.command(
-            name="unload",
-            help="Unload a cog (owner only)."
-        )
-        @is_owner()
-        async def unload(self, ctx, cog: str):
-            try:
-                await self.bot.unload_extension(f"cogs.{cog}")
-                await ctx.send(f"Unloaded `{cog}`.")
-            except Exception as e:
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"## {get_emoji('icon_danger')} Cog Unload Error\nAn error occurred while unloading the {cog} cog."
-                    ),
-                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content=f"### Traceback\n```\n{e}\n```"
-                    )
-                )
-                view.add_item(container)
-                await ctx.send(view=view)
+    @commands.command(name="unload", help="Unload a cog (owner only).")
+    @is_owner()
+    async def unload_cog(self, ctx: commands.Context, cog: str):
+        try:
+            await self.bot.unload_extension(f"cogs.{cog}")
+            await ctx.send(f"Unloaded `{cog}`.")
+        except Exception as exc:
+            await ctx.send(f"{get_emoji('icon_danger')} Could not unload `{cog}`: `{exc}`")
 
-        @commands.command(
-            name="reload",
-            help="Reload a cog (owner only)."
-        )
-        @is_owner()
-        async def reload(self, ctx, cog: str):
-            try:
-                await self.bot.reload_extension(f"cogs.{cog}")
-                await ctx.send(f"Reloaded `{cog}`.")
-            except Exception as e:
-                view = discord.ui.LayoutView()
-                container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"## {get_emoji('icon_danger')} Cog Reload Error\nAn error occurred while reloading the {cog} cog."
-                    ),
-                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content=f"### Traceback\n```\n{e}\n```"
-                    )
-                )
-                view.add_item(container)
-                await ctx.send(view=view)
+    @commands.command(name="reload", help="Reload a cog (owner only).")
+    @is_owner()
+    async def reload_cog(self, ctx: commands.Context, cog: str):
+        try:
+            await self.bot.reload_extension(f"cogs.{cog}")
+            await ctx.send(f"Reloaded `{cog}`.")
+        except Exception as exc:
+            await ctx.send(f"{get_emoji('icon_danger')} Could not reload `{cog}`: `{exc}`")
 
     # -------------------------------
     # Restart bot
