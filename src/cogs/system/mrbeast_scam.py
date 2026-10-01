@@ -890,7 +890,7 @@ class _ReviewRejectButton(discord.ui.DynamicItem[discord.ui.Button], template=r"
         await cog._handle_review(interaction, "reject")  # type: ignore[attr-defined]
 
 
-class _FalsePositiveButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mrbeast:fp:[a-f0-9]+"):
+class _FalsePositiveButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mrbeast:fp:([a-f0-9]+)"):
     def __init__(self, image_hash: str) -> None:
         super().__init__(discord.ui.Button(
             label="Report False Positive",
@@ -911,7 +911,7 @@ class _FalsePositiveButton(discord.ui.DynamicItem[discord.ui.Button], template=r
         await cog._handle_false_positive(interaction, self.image_hash)  # type: ignore[attr-defined]
 
 
-class _RemoveScamButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mrbeast:remove:[a-f0-9]+"):
+class _RemoveScamButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mrbeast:remove:([a-f0-9]+)"):
     def __init__(self, image_hash: str) -> None:
         super().__init__(discord.ui.Button(
             label="Remove From Filter",
