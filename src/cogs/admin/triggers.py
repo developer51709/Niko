@@ -36,7 +36,7 @@ def _error_container(exc: Exception) -> discord.ui.Container:
     return discord.ui.Container(
         discord.ui.TextDisplay(
             content=(
-                f"### {get_emoji('icon_danger')} Something went wrong\n"
+                f"### {get_emoji('danger')} Something went wrong\n"
                 f"```\n{type(exc).__name__}: {exc}\n```\n"
                 f"-# Check the console for the full traceback."
             )
@@ -233,7 +233,7 @@ class _EditTriggerModal(discord.ui.Modal, title="Edit Trigger"):
 class _CreateButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            emoji=_partial("icon_plus"),
+            emoji=_partial("plus"),
             style=discord.ButtonStyle.success,
             custom_id="triggers:create",
         )
@@ -248,7 +248,7 @@ class _CreateButton(discord.ui.Button):
             perm_error = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Error"
+                    content=f"{get_emoji('cross')} Error"
                 ),
                 discord.ui.TextDisplay(
                     content="You need the `manage_guild` permission to do that."
@@ -265,7 +265,7 @@ class _CreateButton(discord.ui.Button):
 class _EditButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            emoji=_partial("icon_edit"),
+            emoji=_partial("edit"),
             label="Edit",
             style=discord.ButtonStyle.secondary,
             custom_id="triggers:edit",
@@ -281,7 +281,7 @@ class _EditButton(discord.ui.Button):
             perm_error = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Error"
+                    content=f"{get_emoji('cross')} Error"
                 ),
                 discord.ui.TextDisplay(
                     content="You need the `manage_guild` permission to do that."
@@ -315,7 +315,7 @@ class _ToggleButton(discord.ui.Button):
             perm_error = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Error"
+                    content=f"{get_emoji('cross')} Error"
                 ),
                 discord.ui.TextDisplay(
                     content="You need the `manage_guild` permission to do that."
@@ -344,7 +344,7 @@ class _ToggleButton(discord.ui.Button):
 class _DeleteButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
-            emoji=_partial("icon_trash"),
+            emoji=_partial("trash"),
             label="Delete",
             style=discord.ButtonStyle.danger,
             custom_id="triggers:delete",
@@ -360,7 +360,7 @@ class _DeleteButton(discord.ui.Button):
             perm_error = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Error"
+                    content=f"{get_emoji('cross')} Error"
                 ),
                 discord.ui.TextDisplay(
                     content="You need the `manage_guild` permission to do that."
@@ -492,7 +492,7 @@ class TriggersView(discord.ui.LayoutView):
             discord.ui.Section(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_message')} Custom Triggers\n"
+                        f"### {get_emoji('message')} Custom Triggers\n"
                         f"-# {total} trigger{'s' if total != 1 else ''} configured"
                     )
                 ),
@@ -511,7 +511,7 @@ class TriggersView(discord.ui.LayoutView):
                 discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=(
-                            f"-# No triggers yet — press {get_emoji('icon_plus')} "
+                            f"-# No triggers yet — press {get_emoji('plus')} "
                             "to create the first one."
                         )
                     )
@@ -597,7 +597,7 @@ class TriggersCog(commands.Cog, name="Triggers"):
             tb = _fmt_exc(exc)
             log.error("Triggers", f"triggers_panel command failed — {type(exc).__name__}: {exc}\n{tb}")
             await ctx.send(
-                f"{get_emoji('icon_danger')} Failed to open the triggers panel: `{exc}`",
+                f"{get_emoji('danger')} Failed to open the triggers panel: `{exc}`",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 

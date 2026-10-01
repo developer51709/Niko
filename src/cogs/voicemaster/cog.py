@@ -59,11 +59,11 @@ class DisconnectMemberSelect(discord.ui.Select):
 
             parts = []
             if disconnected:
-                parts.append(f"{get_emoji('icon_tick')} Disconnected: {', '.join(disconnected)}")
+                parts.append(f"{get_emoji('tick')} Disconnected: {', '.join(disconnected)}")
             if failed:
-                parts.append(f"{get_emoji('icon_cross')} Failed: {', '.join(failed)}")
+                parts.append(f"{get_emoji('cross')} Failed: {', '.join(failed)}")
 
-            msg = "\n".join(parts) or f"{get_emoji('icon_cross')} No members were disconnected."
+            msg = "\n".join(parts) or f"{get_emoji('cross')} No members were disconnected."
             await interaction.response.edit_message(
                 content=None,
                 view=make_container(f"-# {msg}")
@@ -72,7 +72,7 @@ class DisconnectMemberSelect(discord.ui.Select):
             logging.error("VoiceMaster", f"Disconnect callback error: {e}")
             await interaction.response.edit_message(
                 content=None,
-                view=make_container(f"-# {get_emoji('icon_cross')} An error occurred.", accent=COLOR_ERROR)
+                view=make_container(f"-# {get_emoji('cross')} An error occurred.", accent=COLOR_ERROR)
             )
 
 
@@ -85,22 +85,22 @@ class DisconnectMemberView(discord.ui.View):
 INTERFACE_TITLE = "## VoiceMaster | Interface"
 
 INTERFACE_COMMANDS = (
-    f"{get_emoji('vm_lock')} — [`Lock`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('vm_unlock')} — [`Unlock`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('vm_hide')} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('vm_unhide')} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('lock')} — [`Lock`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('unlock')} — [`Unlock`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('hide')} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
+    f"{get_emoji('unhide')} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('owner_icon')} — [`Claim`]({SUPPORT_URL}) the voice channel\n"
     f"{get_emoji('disconnect')} — [`Disconnect`]({SUPPORT_URL}) a member\n"
-    f"{get_emoji('icon_question')} — [`View`]({SUPPORT_URL}) channel information\n"
-    f"{get_emoji('icon_plus')} — [`Increase`]({SUPPORT_URL}) the user limit\n"
-    f"{get_emoji('icon_minus')} — [`Decrease`]({SUPPORT_URL}) the user limit"
+    f"{get_emoji('question')} — [`View`]({SUPPORT_URL}) channel information\n"
+    f"{get_emoji('plus')} — [`Increase`]({SUPPORT_URL}) the user limit\n"
+    f"{get_emoji('minus')} — [`Decrease`]({SUPPORT_URL}) the user limit"
 )
 
 async def success(ctx: commands.Context, message: str):
     view = discord.ui.LayoutView()
     container = discord.ui.Container(
         discord.ui.TextDisplay(
-            content=f"{get_emoji('icon_tick')} {message}"
+            content=f"{get_emoji('tick')} {message}"
         ),
         accent_colour=discord.Color.green()
     )
@@ -111,7 +111,7 @@ async def fail(ctx: commands.Context, message: str):
     view = discord.ui.LayoutView()
     container = discord.ui.Container(
         discord.ui.TextDisplay(
-            content=f"{get_emoji('icon_cross')} {message}"
+            content=f"{get_emoji('cross')} {message}"
         ),
         accent_colour=discord.Color.red()
     )
@@ -123,16 +123,16 @@ class VoiceMasterInterface(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
 
-        btn_lock       = discord.ui.Button(emoji=get_emoji('vm_lock'),       style=discord.ButtonStyle.gray, custom_id="vm_lock")
-        btn_unlock     = discord.ui.Button(emoji=get_emoji('vm_unlock'),     style=discord.ButtonStyle.gray, custom_id="vm_unlock")
-        btn_ghost      = discord.ui.Button(emoji=get_emoji('vm_hide'),       style=discord.ButtonStyle.gray, custom_id="vm_ghost")
-        btn_reveal     = discord.ui.Button(emoji=get_emoji('vm_unhide'),     style=discord.ButtonStyle.gray, custom_id="vm_reveal")
+        btn_lock       = discord.ui.Button(emoji=get_emoji('lock'),       style=discord.ButtonStyle.gray, custom_id="lock")
+        btn_unlock     = discord.ui.Button(emoji=get_emoji('unlock'),     style=discord.ButtonStyle.gray, custom_id="unlock")
+        btn_ghost      = discord.ui.Button(emoji=get_emoji('hide'),       style=discord.ButtonStyle.gray, custom_id="vm_ghost")
+        btn_reveal     = discord.ui.Button(emoji=get_emoji('unhide'),     style=discord.ButtonStyle.gray, custom_id="vm_reveal")
         btn_claim      = discord.ui.Button(emoji=get_emoji('owner_icon'),    style=discord.ButtonStyle.gray, custom_id="vm_claim")
 
         btn_disconnect = discord.ui.Button(emoji=get_emoji('disconnect'),    style=discord.ButtonStyle.gray, custom_id="vm_disconnect")
-        btn_info       = discord.ui.Button(emoji=get_emoji('icon_question'), style=discord.ButtonStyle.gray, custom_id="vm_info")
-        btn_increase   = discord.ui.Button(emoji=get_emoji('icon_plus'),     style=discord.ButtonStyle.gray, custom_id="vm_increase")
-        btn_decrease   = discord.ui.Button(emoji=get_emoji('icon_minus'),    style=discord.ButtonStyle.gray, custom_id="vm_decrease")
+        btn_info       = discord.ui.Button(emoji=get_emoji('question'), style=discord.ButtonStyle.gray, custom_id="vm_info")
+        btn_increase   = discord.ui.Button(emoji=get_emoji('plus'),     style=discord.ButtonStyle.gray, custom_id="vm_increase")
+        btn_decrease   = discord.ui.Button(emoji=get_emoji('minus'),    style=discord.ButtonStyle.gray, custom_id="vm_decrease")
 
         btn_lock.callback       = self._on_lock
         btn_unlock.callback     = self._on_unlock
@@ -184,7 +184,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         members = [m for m in channel.members if m != interaction.user and not m.bot]
         if not members:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('icon_cross')} No members to disconnect.", accent=COLOR_ERROR),
+                view=make_container(f"-# {get_emoji('cross')} No members to disconnect.", accent=COLOR_ERROR),
                 ephemeral=True
             )
             return
@@ -196,7 +196,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
     async def _resolve(self, interaction: discord.Interaction, *, owner_required: bool = True):
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('icon_cross')} You must be in a voice channel.", accent=COLOR_ERROR),
+                view=make_container(f"-# {get_emoji('cross')} You must be in a voice channel.", accent=COLOR_ERROR),
                 ephemeral=True
             )
             return None, None, True
@@ -204,7 +204,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         cog = interaction.client.get_cog("VoiceMaster")
         if not cog:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('icon_cross')} VoiceMaster is not available.", accent=COLOR_ERROR),
+                view=make_container(f"-# {get_emoji('cross')} VoiceMaster is not available.", accent=COLOR_ERROR),
                 ephemeral=True
             )
             return None, None, True
@@ -213,7 +213,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
 
         if owner_required and not await cog.is_channel_owner(interaction.user.id, channel.id):
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('icon_cross')} You don't own this voice channel.", accent=COLOR_ERROR),
+                view=make_container(f"-# {get_emoji('cross')} You don't own this voice channel.", accent=COLOR_ERROR),
                 ephemeral=True
             )
             return None, None, True
@@ -230,22 +230,22 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             if action == "lock":
                 await cog.lock_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('vm_lock')} Voice channel locked.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('lock')} Voice channel locked.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "unlock":
                 await cog.unlock_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('vm_unlock')} Voice channel unlocked.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('unlock')} Voice channel unlocked.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "ghost":
                 await cog.ghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('vm_hide')} Voice channel hidden.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('hide')} Voice channel hidden.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "unghost":
                 await cog.unghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('vm_unhide')} Voice channel revealed.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('unhide')} Voice channel revealed.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "claim":
                 if await cog.claim_channel(channel, interaction.user):
@@ -254,7 +254,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
                     )
                 else:
                     await interaction.response.send_message(
-                        view=make_container(f"-# {get_emoji('icon_cross')} Cannot claim this channel.", accent=COLOR_ERROR), ephemeral=True
+                        view=make_container(f"-# {get_emoji('cross')} Cannot claim this channel.", accent=COLOR_ERROR), ephemeral=True
                     )
             elif action == "info":
                 await interaction.response.send_message(
@@ -263,17 +263,17 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             elif action == "increase_limit":
                 await cog.increase_limit(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('icon_plus')} User limit increased.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('plus')} User limit increased.", accent=COLOR_SUCCESS), ephemeral=True
                 )
             elif action == "decrease_limit":
                 await cog.decrease_limit(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('icon_minus')} User limit decreased.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(f"-# {get_emoji('minus')} User limit decreased.", accent=COLOR_SUCCESS), ephemeral=True
                 )
         except Exception as exc:
             logging.error("VoiceMaster", f"Interface action '{action}' error: {exc}")
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('icon_cross')} An error occurred.", accent=COLOR_ERROR), ephemeral=True
+                view=make_container(f"-# {get_emoji('cross')} An error occurred.", accent=COLOR_ERROR), ephemeral=True
             )
 
 
@@ -515,7 +515,7 @@ class VoiceMaster(commands.Cog):
 
             view = ui.LayoutView(timeout=None)
             container = ui.Container(accent_color=COLOR_SUCCESS)
-            container.add_item(ui.TextDisplay(f"## {get_emoji('icon_tick')} VoiceMaster Setup Complete"))
+            container.add_item(ui.TextDisplay(f"## {get_emoji('tick')} VoiceMaster Setup Complete"))
             container.add_item(ui.Separator())
             container.add_item(ui.TextDisplay(
                 f"**Join Channel:** {join_channel.mention}\n"
@@ -562,7 +562,7 @@ class VoiceMaster(commands.Cog):
             await self.bot.cxn.execute("DELETE FROM voicemaster_settings WHERE guild_id = $1", ctx.guild.id)
             self._bust_cache(ctx.guild.id)
 
-            await success(ctx, f"{get_emoji('icon_refresh')} VoiceMaster has been reset.")
+            await success(ctx, f"{get_emoji('refresh')} VoiceMaster has been reset.")
         except Exception as e:
             logging.error("VoiceMaster", f"Reset error: {e}")
             await fail(ctx, "Failed to reset VoiceMaster.")
@@ -576,8 +576,8 @@ class VoiceMaster(commands.Cog):
                 cat.id if cat else None, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            msg = f"{get_emoji('icon_categories')} Voice channels will be created in: **{cat.name}**" if cat \
-                else f"{get_emoji('icon_categories')} Voice channels will be created without a specific category."
+            msg = f"{get_emoji('categories')} Voice channels will be created in: **{cat.name}**" if cat \
+                else f"{get_emoji('categories')} Voice channels will be created without a specific category."
             await success(ctx, msg)
         except Exception as e:
             logging.error("VoiceMaster", f"Category error: {e}")
@@ -601,7 +601,7 @@ class VoiceMaster(commands.Cog):
             container.add_item(ui.TextDisplay(f"## {BOT_NAME} | Default Settings"))
             container.add_item(ui.Separator())
             container.add_item(ui.TextDisplay(
-                f"**{get_emoji('icon_edit')} Default Name:** {default_name}\n"
+                f"**{get_emoji('edit')} Default Name:** {default_name}\n"
                 f"**{E.LIMIT} Default Limit:** {default_limit or 'No limit'}\n"
                 f"**{E.BITRATE} Default Bitrate:** {default_bitrate} kbps"
             ))
@@ -619,7 +619,7 @@ class VoiceMaster(commands.Cog):
                 "UPDATE voicemaster_settings SET default_name = $1 WHERE guild_id = $2", name, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            await success(ctx, f"{get_emoji('icon_edit')} Default channel name set to: **{name}**")
+            await success(ctx, f"{get_emoji('edit')} Default channel name set to: **{name}**")
         except Exception as e:
             logging.error("VM", f"Default name error: {e}")
             await fail(ctx, "Failed to set default name.")
@@ -705,7 +705,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.lock_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('vm_lock')} Voice channel locked.")
+            await success(ctx, f"{get_emoji('lock')} Voice channel locked.")
         except Exception as e:
             logging.error("VM", f"Lock error: {e}")
             await fail(ctx, "Failed to lock the voice channel.")
@@ -721,7 +721,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.unlock_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('vm_unlock')} Voice channel unlocked.")
+            await success(ctx, f"{get_emoji('unlock')} Voice channel unlocked.")
         except Exception as e:
             logging.error("VoiceMaster", f"Unlock error: {e}")
             await fail(ctx, "Failed to unlock the voice channel.")
@@ -737,7 +737,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.ghost_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('vm_hide')} Voice channel hidden.")
+            await success(ctx, f"{get_emoji('hide')} Voice channel hidden.")
         except Exception as e:
             logging.error("VoiceMaster", f"Ghost error: {e}")
             await fail(ctx, "Failed to hide the voice channel.")
@@ -753,7 +753,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await self.unghost_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('vm_unhide')} Voice channel revealed.")
+            await success(ctx, f"{get_emoji('unhide')} Voice channel revealed.")
         except Exception as e:
             logging.error("VoiceMaster", f"Unghost error: {e}")
             await fail(ctx, "Failed to reveal the voice channel.")
@@ -802,7 +802,7 @@ class VoiceMaster(commands.Cog):
             return
         try:
             await channel.edit(name=name)
-            await success(ctx, f"{get_emoji('icon_edit')} Channel renamed to **{name}**.")
+            await success(ctx, f"{get_emoji('edit')} Channel renamed to **{name}**.")
         except Exception as e:
             logging.error("VoiceMaster", f"Rename error: {e}")
             await fail(ctx, "Failed to rename the voice channel.")
@@ -867,7 +867,7 @@ class VoiceMaster(commands.Cog):
         try:
             await channel.set_permissions(target, connect=True)
             target_name = target.display_name if isinstance(target, discord.Member) else "Members with this role"
-            await success(ctx, f"{get_emoji('icon_tick')} **{target_name}** can now join your voice channel.")
+            await success(ctx, f"{get_emoji('tick')} **{target_name}** can now join your voice channel.")
         except Exception as e:
             logging.error("VoiceMaster", f"Permit error: {e}")
             await fail(ctx, "Failed to permit access.")
@@ -886,7 +886,7 @@ class VoiceMaster(commands.Cog):
             if isinstance(target, discord.Member) and target.voice and target.voice.channel == channel:
                 await target.move_to(None)
             target_name = target.display_name if isinstance(target, discord.Member) else "Members with this role"
-            await success(ctx, f"{get_emoji('icon_cross')} **{target_name}** can no longer join your voice channel.")
+            await success(ctx, f"{get_emoji('cross')} **{target_name}** can no longer join your voice channel.")
         except Exception as e:
             logging.error("VoiceMaster", f"Reject error: {e}")
             await fail(ctx, "Failed to reject access.")

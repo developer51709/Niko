@@ -154,7 +154,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         """Right-click a user → quick profile card with level + economy stats."""
         await interaction.response.defer(ephemeral=True)
 
-        lines: list[str] = [f"### {get_emoji('icon_user')} {member.display_name}"]
+        lines: list[str] = [f"### {get_emoji('user')} {member.display_name}"]
 
         # Level stats
         try:
@@ -216,7 +216,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             target = interaction.user.voice.channel  # type: ignore[union-attr]
         if target is None:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('icon_cross')} Join a voice channel or specify one with the `channel` option."),
+                view=_cv(f"{get_emoji('cross')} Join a voice channel or specify one with the `channel` option."),
                 ephemeral=True,
             )
             return
@@ -226,7 +226,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         perms = target.permissions_for(me)
         if not perms.manage_channels:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('icon_cross')} I need the **Manage Channels** permission to set voice status."),
+                view=_cv(f"{get_emoji('cross')} I need the **Manage Channels** permission to set voice status."),
                 ephemeral=True,
             )
             return
@@ -271,7 +271,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             mid = int(message_id)
         except ValueError:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('icon_cross')} Invalid message ID."), ephemeral=True
+                view=_cv(f"{get_emoji('cross')} Invalid message ID."), ephemeral=True
             )
             return
 
@@ -287,7 +287,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             )
         else:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('icon_cross')} Could not forward that message. Check that I have permission to send in the destination channel and the message exists."),
+                view=_cv(f"{get_emoji('cross')} Could not forward that message. Check that I have permission to send in the destination channel and the message exists."),
                 ephemeral=True,
             )
 
@@ -305,7 +305,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         try:
             raw = await self.bot.http.get_all_guild_stickers(interaction.guild_id)
         except Exception as e:
-            await interaction.followup.send(view=_cv(f"{get_emoji('icon_cross')} {e}"), ephemeral=True)
+            await interaction.followup.send(view=_cv(f"{get_emoji('cross')} {e}"), ephemeral=True)
             return
 
         if not raw:
@@ -314,7 +314,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             )
             return
 
-        lines = [f"### {get_emoji('icon_star')} Server Stickers — {interaction.guild.name}"]
+        lines = [f"### {get_emoji('star')} Server Stickers — {interaction.guild.name}"]
         for s in raw:
             fmt = s.get("format_type", 1)
             fmt_label = {1: "PNG", 2: "APNG", 3: "Lottie", 4: "GIF"}.get(fmt, "?")
@@ -333,13 +333,13 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         try:
             raw = await self.bot.http.get_all_guild_stickers(interaction.guild_id)
         except Exception as e:
-            await interaction.followup.send(view=_cv(f"{get_emoji('icon_cross')} {e}"), ephemeral=True)
+            await interaction.followup.send(view=_cv(f"{get_emoji('cross')} {e}"), ephemeral=True)
             return
 
         match = next((s for s in raw if s["name"].lower() == name.lower()), None)
         if not match:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('icon_cross')} No sticker named **{name}** found. Use `/sticker list`."),
+                view=_cv(f"{get_emoji('cross')} No sticker named **{name}** found. Use `/sticker list`."),
                 ephemeral=True,
             )
             return
@@ -377,7 +377,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         vc = interaction.guild.me.voice
         if not vc or not isinstance(vc.channel, discord.StageChannel):
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('icon_cross')} Niko must be in a Stage channel first."), ephemeral=True
+                view=_cv(f"{get_emoji('cross')} Niko must be in a Stage channel first."), ephemeral=True
             )
             return
 

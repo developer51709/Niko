@@ -62,9 +62,9 @@ class LotteryMixin:
 
         if count <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
 
         cost = LOTTERY_TICKET_PRICE * count
         data = await self.get_user_economy_data(ctx.author.id)

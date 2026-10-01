@@ -83,7 +83,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find the server to apply roles."
+                        content=f"{get_emoji('tick')} Verification passed! However, I could not find the server to apply roles."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -95,7 +95,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find you in the server."
+                        content=f"{get_emoji('tick')} Verification passed! However, I could not find you in the server."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -128,7 +128,7 @@ class Onboarding(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_tick')} Verification complete!"
+                    content=f"### {get_emoji('tick')} Verification complete!"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -170,7 +170,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### {get_emoji('icon_cross')} Verification failed!"
+                        content=f"### {get_emoji('cross')} Verification failed!"
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(
@@ -213,7 +213,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### {get_emoji('icon_cross')} Incorrect."
+                        content=f"### {get_emoji('cross')} Incorrect."
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(

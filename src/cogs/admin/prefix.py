@@ -43,7 +43,7 @@ class RemovePrefixSelect(discord.ui.Select):
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_check')} Prefix Removed"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Prefix Removed"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(content=f"Removed prefix: `{prefix}`"),
             accent_colour=discord.Color.green(),
@@ -106,7 +106,7 @@ class ResetPrefixButton(discord.ui.Button):
 def _permission_error_view():
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Error"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Error"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content="You need the `manage_guild` permission to use this button."),
         accent_colour=discord.Color.yellow(),
@@ -119,7 +119,7 @@ class PrefixConfigPanel(discord.ui.LayoutView):
         super().__init__()
         prefix_list = ", ".join(f"`{p}`" for p in prefixes)
         self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_settings')} Prefix Configuration"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('settings')} Prefix Configuration"),
             discord.ui.Separator(),
             discord.ui.TextDisplay(content=f"**Current Prefixes:** {prefix_list}"),
             discord.ui.Separator(),

@@ -382,7 +382,7 @@ class AutoMod(commands.Cog):
         lang = get_lang(guild)
         try:
             await guild.owner.send(
-                f"{get_emoji('icon_danger')} "
+                f"{get_emoji('danger')} "
                 + _t(lang, "extraid_dm",
                      guild=guild.name, count=len(raider_ids),
                      operator=str(operator) if operator else "unknown",
@@ -638,7 +638,7 @@ class AutoMod(commands.Cog):
 
         async def _do_dm():
             await guild.owner.send(
-                f"{get_emoji('icon_danger')} "
+                f"{get_emoji('danger')} "
                 + _t(lang, "raid_dm",
                      guild=guild.name, count=join_count,
                      interval=interval, action=action)

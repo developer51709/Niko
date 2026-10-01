@@ -650,7 +650,7 @@ class TicketPanelView(discord.ui.LayoutView):
         desc = cfg.panel_description or MESSAGES["cafe"]["en"]["panel_default_desc"]
         color_md = color_to_markdown(cfg.panel_color)
 
-        header = f"### {get_emoji('icon_ticket')} {title}"
+        header = f"### {get_emoji('ticket')} {title}"
         if color_md:
             header += f" {color_md}"
 
@@ -690,7 +690,7 @@ def build_ticket_header_view(
     Displays the ticket details and carries the persistent Staff Panel
     button that opens the ephemeral management panel.
     """
-    icon = get_emoji("icon_ticket")
+    icon = get_emoji("ticket")
     guild = channel.guild
     opener = guild.get_member(opener_id)
     opener_ref = opener.mention if opener else f"<@{opener_id}>"
@@ -869,7 +869,7 @@ def build_staff_panel_view(
 ) -> discord.ui.LayoutView:
     """The ephemeral staff panel shown after pressing the header button."""
     view = discord.ui.LayoutView(timeout=None)
-    icon = get_emoji("icon_ticket")
+    icon = get_emoji("ticket")
     title = msg(ctx_or_int, "panel_title", icon=icon, channel=channel.mention)
 
     if ticket.get("claimed_by"):

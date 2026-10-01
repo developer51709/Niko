@@ -237,7 +237,7 @@ class Leveling(commands.Cog):
     async def leveling(self, ctx):
         """Show a quick overview or help for the leveling system."""
         cfg = await self._guild_cfg(ctx.guild.id)
-        enabled_s = get_emoji("icon_tick") if cfg.get("xp_enabled", True) else get_emoji("icon_cross")
+        enabled_s = get_emoji("tick") if cfg.get("xp_enabled", True) else get_emoji("cross")
         embed_text = (
             f"### ☕ Leveling Commands\n"
             f"**Status:** {enabled_s} • **Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x` • "
@@ -509,7 +509,7 @@ class Leveling(commands.Cog):
         ) or "  *(none)*"
 
         body = (
-            f"**XP Enabled:** {get_emoji('icon_tick') if cfg.get('xp_enabled', True) else get_emoji('icon_cross')}\n"
+            f"**XP Enabled:** {get_emoji('tick') if cfg.get('xp_enabled', True) else get_emoji('cross')}\n"
             f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
             f"**XP Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n"
             f"**Level-Up Channel:** {lu_ch_str}\n"
@@ -538,7 +538,7 @@ class Leveling(commands.Cog):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        state = f"{get_emoji('icon_tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('icon_cross')} disabled"
+        state = f"{get_emoji('tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('cross')} disabled"
         await ctx.send(f"XP tracking is now **{state}** for this server.")
 
     @leveling_config.command(
@@ -616,7 +616,7 @@ class Leveling(commands.Cog):
         if not member:
             return await ctx.send("Please specify a member.")
         await self._save_user_data(ctx.guild.id, member.id, 0, 0)
-        await ctx.send(f"{get_emoji('icon_tick')} Reset XP and level for **{member.display_name}**.")
+        await ctx.send(f"{get_emoji('tick')} Reset XP and level for **{member.display_name}**.")
 
 
 async def setup(bot):

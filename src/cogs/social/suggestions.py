@@ -184,7 +184,7 @@ def _build_view(s: dict, ctx_like) -> discord.ui.LayoutView:
     else:
         title_key = "title_open"
 
-    title = msg(ctx_like, title_key, icon=get_emoji("icon_lightbulb"), id=s["id"], tick=get_emoji("icon_tick"), cross=get_emoji("icon_cross"))
+    title = msg(ctx_like, title_key, icon=get_emoji("lightbulb"), id=s["id"], tick=get_emoji("tick"), cross=get_emoji("cross"))
     author = ctx_like.guild.get_member(s["author_id"]) if (ctx_like and ctx_like.guild) else None
     author_str = author.mention if author else f"<@{s['author_id']}>"
     body = msg(ctx_like, "body", text=s["text"], author=author_str)
@@ -306,7 +306,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         ch = ctx.guild.get_channel(g.get("channel_id") or 0) if g.get("channel_id") else None
         if not ch:
-            return await ctx.send(f"{get_emoji('icon_cross')} {msg(ctx, 'no_channel')}")
+            return await ctx.send(f"{get_emoji('cross')} {msg(ctx, 'no_channel')}")
         sid = g["next_id"]
         g["next_id"] = sid + 1
 
@@ -336,9 +336,9 @@ class Suggestions(commands.Cog):
             pass
 
         if ctx.interaction:
-            await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}", ephemeral=True)
+            await ctx.send(f"{get_emoji('tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}", ephemeral=True)
         else:
-            await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}")
+            await ctx.send(f"{get_emoji('tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}")
 
     @suggest.command(
         name="channel",
@@ -350,7 +350,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         g["channel_id"] = channel.id
         await self._persist_config(ctx.guild.id, g)
-        await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, 'channel_set', channel=channel.mention)}")
+        await ctx.send(f"{get_emoji('tick')} {msg(ctx, 'channel_set', channel=channel.mention)}")
 
     @suggest.command(
         name="config",
@@ -362,7 +362,7 @@ class Suggestions(commands.Cog):
         g = self._g(ctx.guild.id)
         ch = ctx.guild.get_channel(g.get("channel_id") or 0) if g.get("channel_id") else None
         view = discord.ui.LayoutView()
-        body = msg(ctx, "config_title", icon=get_emoji("icon_settings")) + "\n" + \
+        body = msg(ctx, "config_title", icon=get_emoji("settings")) + "\n" + \
             msg(ctx, "config_body", channel=ch.mention if ch else "—")
         view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=body)))
         await ctx.send(view=view)
@@ -400,7 +400,7 @@ class Suggestions(commands.Cog):
                 await m.edit(view=_build_view(s, ctx))
             except Exception:
                 pass
-        await ctx.send(f"{get_emoji('icon_tick')} {msg(ctx, ack_key, id=sid)}")
+        await ctx.send(f"{get_emoji('tick')} {msg(ctx, ack_key, id=sid)}")
 
     # ───── voting ───────────────────────────────
 

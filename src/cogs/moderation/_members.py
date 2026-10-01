@@ -22,12 +22,12 @@ class _ModConfirmView(discord.ui.LayoutView):
         self._confirm_btn = discord.ui.Button(
             label="Confirm",
             style=discord.ButtonStyle.danger,
-            emoji=get_emoji("icon_tick") or "✅",
+            emoji=get_emoji("tick") or "✅",
         )
         self._cancel_btn = discord.ui.Button(
             label="Cancel",
             style=discord.ButtonStyle.secondary,
-            emoji=get_emoji("icon_cross") or "❌",
+            emoji=get_emoji("cross") or "❌",
         )
         self._confirm_btn.callback = self._on_confirm
         self._cancel_btn.callback = self._on_cancel
@@ -42,7 +42,7 @@ class _ModConfirmView(discord.ui.LayoutView):
         if interaction.user.id != self.invoker_id:
             err = discord.ui.LayoutView()
             err.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"{get_emoji('icon_cross')} Only the command invoker can use these buttons.")
+                discord.ui.TextDisplay(content=f"{get_emoji('cross')} Only the command invoker can use these buttons.")
             ))
             await interaction.response.send_message(view=err, ephemeral=True)
             return False
@@ -65,7 +65,7 @@ class _ModConfirmView(discord.ui.LayoutView):
         self._cancel_btn.disabled = True
         cancelled = discord.ui.LayoutView()
         cancelled.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_cross')} Action cancelled.")
+            discord.ui.TextDisplay(content=f"{get_emoji('cross')} Action cancelled.")
         ))
         await interaction.response.edit_message(view=cancelled)
         self._event.set()
@@ -173,7 +173,7 @@ class _MassRoleApplyButton(discord.ui.Button):
         super().__init__(
             label="Apply",
             style=discord.ButtonStyle.success,
-            emoji=get_emoji("icon_tick") or "✅",
+            emoji=get_emoji("tick") or "✅",
             disabled=not panel.selected_roles,
         )
 
@@ -281,7 +281,7 @@ class MassRolePanel(discord.ui.LayoutView):
         operations, skipped, error = self._plan()
         if error:
             return await interaction.response.edit_message(
-                view=_massrole_status_view(f"{get_emoji('icon_cross')} {error}", discord.Colour.red())
+                view=_massrole_status_view(f"{get_emoji('cross')} {error}", discord.Colour.red())
             )
 
         self._running = True
@@ -290,7 +290,7 @@ class MassRolePanel(discord.ui.LayoutView):
         action_label = MASSROLE_ACTIONS[self.action]
         target_label = MASSROLE_TARGETS[self.target_type]
         await interaction.response.edit_message(view=_massrole_status_view(
-            f"### {get_emoji('icon_loading')} Applying mass role update\n"
+            f"### {get_emoji('loading')} Applying mass role update\n"
             f"**Action:** {action_label} · **Targets:** {target_label}\n"
             f"Updating **{count:,}** member{'s' if count != 1 else ''}. "
             f"Estimated completion: **about {estimate} second{'s' if estimate != 1 else ''}**.\n"
@@ -317,7 +317,7 @@ class MassRolePanel(discord.ui.LayoutView):
         skipped_text = f"\nSkipped **{skipped:,}** member{'s' if skipped != 1 else ''} above my role." if skipped else ""
         failed_text = f"\nFailed for **{failed:,}** member{'s' if failed != 1 else ''}." if failed else ""
         await interaction.message.edit(view=_massrole_status_view(
-            f"### {get_emoji('icon_tick') if not failed else get_emoji('warning')} Mass role update complete\n"
+            f"### {get_emoji('tick') if not failed else get_emoji('warning')} Mass role update complete\n"
             f"Successfully updated **{updated:,}** member{'s' if updated != 1 else ''}."
             f"{failed_text}{skipped_text}",
             discord.Colour.green() if not failed else discord.Colour.orange(),
@@ -349,9 +349,9 @@ class MembersMixin:
         try:
             await member.kick(reason=reason)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} I don't have permission to kick that member."))
+            return await ctx.send(view=_cv2(f"{get_emoji('cross')} I don't have permission to kick that member."))
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} Failed to kick: {e}"))
+            return await ctx.send(view=_cv2(f"{get_emoji('cross')} Failed to kick: {e}"))
 
         result_view = _cv2(msg(ctx, "kicked", member=member, reason=reason))
         try:
@@ -387,9 +387,9 @@ class MembersMixin:
         try:
             await ctx.guild.ban(member, reason=reason, delete_message_days=7)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} I don't have permission to ban that user."))
+            return await ctx.send(view=_cv2(f"{get_emoji('cross')} I don't have permission to ban that user."))
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(f"{get_emoji('icon_cross')} Failed to ban: {e}"))
+            return await ctx.send(view=_cv2(f"{get_emoji('cross')} Failed to ban: {e}"))
 
         result_view = _cv2(msg(ctx, "banned", member=member, reason=reason))
         try:

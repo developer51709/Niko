@@ -79,7 +79,7 @@ class Development(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"# {get_emoji('icon_bug')} Developer Toolkit\n> Easy-to-use debugging and control commands."
+                content=f"# {get_emoji('bug')} Developer Toolkit\n> Easy-to-use debugging and control commands."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -193,7 +193,7 @@ class Development(commands.Cog):
     async def dev_members(self, ctx):
         lines = [
             f"`{m.id}` — **{m.display_name}** ({m.name})"
-            + (f" {get_emoji('icon_bot')}" if m.bot else "")
+            + (f" {get_emoji('bot')}" if m.bot else "")
             for m in sorted(ctx.guild.members, key=lambda m: m.display_name.lower())
         ]
         pages = paginate(lines, per_page=15)
@@ -227,7 +227,7 @@ class Development(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"## {get_emoji('icon_danger')} Execution Error\nAn error occurred while executing the code."
+                    content=f"## {get_emoji('danger')} Execution Error\nAn error occurred while executing the code."
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -251,18 +251,18 @@ class Development(commands.Cog):
     @commands.command(name="syncemojis", help="Sync bot emojis as application emojis and download assets")
     async def sync_emojis(self, ctx):
         """Manually trigger the application emoji sync."""
-        status_msg = await ctx.send(f"{get_emoji('icon_loading')} Syncing application emojis…")
+        status_msg = await ctx.send(f"{get_emoji('loading')} Syncing application emojis…")
         async with ctx.typing():
             try:
                 async with aiohttp.ClientSession() as session:
                     stats = await sync_application_emojis(self.bot, session=session)
             except Exception as exc:
-                await status_msg.edit(content=f"{get_emoji('icon_cross')} Sync failed: `{exc}`")
+                await status_msg.edit(content=f"{get_emoji('cross')} Sync failed: `{exc}`")
                 return
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_paint')} Application Emoji Sync — Complete"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('paint')} Application Emoji Sync — Complete"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
@@ -285,7 +285,7 @@ class Development(commands.Cog):
         try:
             emojis = await list_application_emojis(self.bot)
         except Exception as exc:
-            await ctx.send(f"{get_emoji('icon_cross')} Could not fetch application emojis: `{exc}`")
+            await ctx.send(f"{get_emoji('cross')} Could not fetch application emojis: `{exc}`")
             return
 
         if not emojis:
@@ -295,7 +295,7 @@ class Development(commands.Cog):
         lines = [f"{e} `:{e.name}:` — `{e.id}`" for e in sorted(emojis, key=lambda e: e.name.lower())]
         from utils.paginator import PaginatedView, paginate
         pages = paginate(lines, per_page=15)
-        view = PaginatedView(title=f"{get_emoji('icon_paint')} Application Emojis ({len(emojis)} total)", pages=pages)
+        view = PaginatedView(title=f"{get_emoji('paint')} Application Emojis ({len(emojis)} total)", pages=pages)
         await ctx.send(view=view)
 
     @commands.command(name="emojistatus", help="Show which config emojis are/aren't uploaded as application emojis")
@@ -304,7 +304,7 @@ class Development(commands.Cog):
         try:
             app_emojis = await list_application_emojis(self.bot)
         except Exception as exc:
-            await ctx.send(f"{get_emoji('icon_cross')} Could not fetch application emojis: `{exc}`")
+            await ctx.send(f"{get_emoji('cross')} Could not fetch application emojis: `{exc}`")
             return
 
         config_emojis = parse_config()
@@ -318,12 +318,12 @@ class Development(commands.Cog):
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_paint')} Emoji Sync Status"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('paint')} Emoji Sync Status"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
-                    f"**{get_emoji('icon_tick')} Synced ({len(synced)}):**\n{synced_list}\n\n"
-                    f"**{get_emoji('icon_danger')} Missing ({len(missing)}):**\n{missing_list}"
+                    f"**{get_emoji('tick')} Synced ({len(synced)}):**\n{synced_list}\n\n"
+                    f"**{get_emoji('danger')} Missing ({len(missing)}):**\n{missing_list}"
                 )
             ),
         )

@@ -76,7 +76,7 @@ def _payment_layout(
         discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('icon_heart')} Donation Invoice Created\n"
+                    f"### {get_emoji('heart')} Donation Invoice Created\n"
                     f"**Amount:** `${amount:.2f} USD` in **{currency}**\n"
                     f"**Track ID:** `{track_id}`\n"
                     f"**Expires in:** `{INVOICE_LIFETIME} minutes`\n\n"
@@ -159,7 +159,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=(
-                            f"### {get_emoji('icon_heart')} Thank you for donating!\n"
+                            f"### {get_emoji('heart')} Thank you for donating!\n"
                             f"Your donation of **${amount:.2f} USD** in **{currency}** "
                             f"has been confirmed. You've been granted the "
                             f"{get_emoji('badge_supporter')} **Supporter** badge!\n\n"
@@ -182,7 +182,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         discord.ui.Container(
                             discord.ui.TextDisplay(
                                 content=(
-                                    f"### {get_emoji('icon_heart')} New Supporter!\n"
+                                    f"### {get_emoji('heart')} New Supporter!\n"
                                     f"<@{user_id}> just donated **${amount:.2f} USD** in **{currency}**! "
                                     f"Thank you for supporting Niko! {get_emoji('badge_supporter')}"
                                 )
@@ -224,7 +224,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
     ):
         if not OXAPAY_KEY:
             return await interaction.followup.send(
-                f"{get_emoji('icon_danger')} Donations are not configured yet. "
+                f"{get_emoji('danger')} Donations are not configured yet. "
                 "Please try again later.",
                 ephemeral=True,
             )
@@ -241,7 +241,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if not result["success"]:
             return await interaction.followup.send(
-                f"{get_emoji('icon_danger')} Could not create invoice: "
+                f"{get_emoji('danger')} Could not create invoice: "
                 f"{result.get('message', 'Unknown error')}",
                 ephemeral=True,
             )
@@ -275,12 +275,12 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if amount < 1.0:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Minimum donation is `$1.00 USD`.",
+                f"{get_emoji('danger')} Minimum donation is `$1.00 USD`.",
                 ephemeral=bool(ctx.interaction),
             )
         if amount > 10_000.0:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Maximum single donation is `$10,000.00 USD`.",
+                f"{get_emoji('danger')} Maximum single donation is `$10,000.00 USD`.",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -289,7 +289,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donate to Niko\n"
+                        f"### {get_emoji('heart')} Donate to Niko\n"
                         f"**Amount:** `${amount:.2f} USD`\n\n"
                         f"Your donation helps cover hosting costs and keeps Niko running! "
                         f"As a thank-you you'll receive the "
@@ -326,7 +326,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if not OXAPAY_KEY:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Donations are not configured.",
+                f"{get_emoji('danger')} Donations are not configured.",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -335,10 +335,10 @@ class DonationCog(commands.Cog, name="DonationCog"):
         status = result.get("status", "Unknown")
 
         icons = {
-            "Paid":    get_emoji("icon_tick"),
-            "Waiting": get_emoji("icon_loading"),
-            "Expired": get_emoji("icon_cross"),
-            "Failed":  get_emoji("icon_danger"),
+            "Paid":    get_emoji("tick"),
+            "Waiting": get_emoji("loading"),
+            "Expired": get_emoji("cross"),
+            "Failed":  get_emoji("danger"),
         }
         icon = icons.get(status, "❓")
 
@@ -347,7 +347,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donation Status\n"
+                        f"### {get_emoji('heart')} Donation Status\n"
                         f"**Track ID:** `{track_id}`\n"
                         f"**Status:** {icon} `{status}`"
                     )
@@ -375,7 +375,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donor Info — {target.display_name}\n"
+                        f"### {get_emoji('heart')} Donor Info — {target.display_name}\n"
                         f"**Total Donated:** `${total:.2f} USD`\n"
                         f"**Badge:** {badge_line}"
                     )

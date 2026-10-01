@@ -147,7 +147,7 @@ def _afk_removed_view(user: discord.User, state: AFKState) -> discord.ui.LayoutV
     view = discord.ui.LayoutView()
     container = discord.ui.Container()
 
-    header = discord.ui.TextDisplay(content=f"### {get_emoji('icon_tick')} AFK Removed")
+    header = discord.ui.TextDisplay(content=f"### {get_emoji('tick')} AFK Removed")
     container.add_item(header)
     container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 

@@ -75,7 +75,7 @@ def under_development(feature = None):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_settings')} Under Development"
+                    content=f"### {get_emoji('settings')} Under Development"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(

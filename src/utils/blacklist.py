@@ -20,7 +20,7 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
         reason = user_entry.get("reason") or "No reason provided."
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
@@ -37,7 +37,7 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
             reason = guild_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"
@@ -66,7 +66,7 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
         reason = user_entry.get("reason") or "No reason provided."
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
@@ -86,7 +86,7 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
             reason = guild_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"

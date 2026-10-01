@@ -281,7 +281,7 @@ class OwnerCog(commands.Cog):
         prefix = await _resolve_prefix(self.bot, ctx)
         cog = self.bot.get_cog("OwnerCog")
         if not cog:
-            return await ctx.send(f"{get_emoji('icon_cross')} OwnerCog not loaded.")
+            return await ctx.send(f"{get_emoji('cross')} OwnerCog not loaded.")
 
         for cmd in cog.get_commands():
             container.add_item(discord.ui.TextDisplay(
@@ -303,11 +303,11 @@ class OwnerCog(commands.Cog):
         downloading_view = discord.ui.LayoutView()
         downloading_container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Set PFP"
+                content=f"### {get_emoji('image')} Set PFP"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Downloading pfp..."
+                content=f"{get_emoji('loading')} Downloading pfp..."
             )
         )
         downloading_view.add_item(downloading_container)
@@ -318,11 +318,11 @@ class OwnerCog(commands.Cog):
             failed_view = discord.ui.LayoutView()
             failed_container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_image')} Set PFP"
+                    content=f"### {get_emoji('image')} Set PFP"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Failed to download image."
+                    content=f"{get_emoji('cross')} Failed to download image."
                 )
             )
             failed_view.add_item(failed_container)
@@ -339,17 +339,17 @@ class OwnerCog(commands.Cog):
             success_view = discord.ui.LayoutView()
             success_container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_image')} Set PFP"
+                    content=f"### {get_emoji('image')} Set PFP"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Successfully updated pfp."
+                    content=f"{get_emoji('tick')} Successfully updated pfp."
                 )
             )
             success_view.add_item(success_container)
             await message.edit(view=success_view)
         except discord.HTTPException as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to update avatar:\n`{e}`")
+            await ctx.send(f"{get_emoji('cross')} Failed to update avatar:\n`{e}`")
 
     # -------------------------------
     # Set bot banner
@@ -360,11 +360,11 @@ class OwnerCog(commands.Cog):
         downloading_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Set Banner"
+                content=f"### {get_emoji('image')} Set Banner"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Downloading banner..."
+                content=f"{get_emoji('loading')} Downloading banner..."
             )
         )
         downloading_view.add_item(container)
@@ -375,11 +375,11 @@ class OwnerCog(commands.Cog):
             failed_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_image')} Set Banner"
+                    content=f"### {get_emoji('image')} Set Banner"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Failed to download image."
+                    content=f"{get_emoji('cross')} Failed to download image."
                 )
             )
             failed_view.add_item(container)
@@ -396,18 +396,18 @@ class OwnerCog(commands.Cog):
             success_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_image')} Set Banner"
+                    content=f"### {get_emoji('image')} Set Banner"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Successfully updated banner."
+                    content=f"{get_emoji('tick')} Successfully updated banner."
                 )
             )
             success_view.add_item(container)
             # edit the original response
             await message.edit(view=success_view)
         except discord.HTTPException as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to update banner:\n`{e}`")
+            await ctx.send(f"{get_emoji('cross')} Failed to update banner:\n`{e}`")
 
     # -------------------------------
     # Set bot username
@@ -418,9 +418,9 @@ class OwnerCog(commands.Cog):
         """Set the bot's username."""
         try:
             await self.bot.user.edit(username=name)
-            await ctx.send(f"{get_emoji('icon_tick')} Username changed to **{name}**")
+            await ctx.send(f"{get_emoji('tick')} Username changed to **{name}**")
         except discord.HTTPException as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Failed to update username:\n`{e}`")
+            await ctx.send(f"{get_emoji('cross')} Failed to update username:\n`{e}`")
 
     # -------------------------------
     # Set bot status text
@@ -430,7 +430,7 @@ class OwnerCog(commands.Cog):
     async def set_status(self, ctx, *, text: str):
         """Set the bot's status text."""
         await self.bot.change_presence(activity=discord.Game(name=text))
-        await ctx.send(f"{get_emoji('icon_tick')} Status updated to: **{text}**")
+        await ctx.send(f"{get_emoji('tick')} Status updated to: **{text}**")
 
     # -------------------------------
     # Set bot activity type
@@ -453,10 +453,10 @@ class OwnerCog(commands.Cog):
         elif activity_type == "competing":
             activity = discord.Activity(type=discord.ActivityType.competing, name=text)
         else:
-            return await ctx.send(f"{get_emoji('icon_cross')} Invalid activity type.")
+            return await ctx.send(f"{get_emoji('cross')} Invalid activity type.")
 
         await self.bot.change_presence(activity=activity)
-        await ctx.send(f"{get_emoji('icon_tick')} Activity updated: **{activity_type.title()} {text}**")
+        await ctx.send(f"{get_emoji('tick')} Activity updated: **{activity_type.title()} {text}**")
 
     # -------------------------------
     # Cog management
@@ -468,7 +468,7 @@ class OwnerCog(commands.Cog):
             await self.bot.load_extension(f"cogs.{cog}")
             await ctx.send(f"Loaded `{cog}`.")
         except Exception as exc:
-            await ctx.send(f"{get_emoji('icon_danger')} Could not load `{cog}`: `{exc}`")
+            await ctx.send(f"{get_emoji('danger')} Could not load `{cog}`: `{exc}`")
 
     @commands.command(name="unload", help="Unload a cog (owner only).")
     @is_owner()
@@ -477,7 +477,7 @@ class OwnerCog(commands.Cog):
             await self.bot.unload_extension(f"cogs.{cog}")
             await ctx.send(f"Unloaded `{cog}`.")
         except Exception as exc:
-            await ctx.send(f"{get_emoji('icon_danger')} Could not unload `{cog}`: `{exc}`")
+            await ctx.send(f"{get_emoji('danger')} Could not unload `{cog}`: `{exc}`")
 
     @commands.command(name="reload", help="Reload a cog (owner only).")
     @is_owner()
@@ -486,7 +486,7 @@ class OwnerCog(commands.Cog):
             await self.bot.reload_extension(f"cogs.{cog}")
             await ctx.send(f"Reloaded `{cog}`.")
         except Exception as exc:
-            await ctx.send(f"{get_emoji('icon_danger')} Could not reload `{cog}`: `{exc}`")
+            await ctx.send(f"{get_emoji('danger')} Could not reload `{cog}`: `{exc}`")
 
     # -------------------------------
     # Restart bot
@@ -526,7 +526,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_tick')} Sync Complete"
+                    content=f"### {get_emoji('tick')} Sync Complete"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -544,7 +544,7 @@ class OwnerCog(commands.Cog):
             view.add_item(
                 discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### {get_emoji('icon_cross')} Sync Error\n```\n{e}\n```"
+                        content=f"### {get_emoji('cross')} Sync Error\n```\n{e}\n```"
                     )
                 )
             )
@@ -599,7 +599,7 @@ class OwnerCog(commands.Cog):
 
             await ctx.send(f"🧪 **Eval Result:**\n```\n{result}\n```")
         except Exception as e:
-            await ctx.send(f"{get_emoji('icon_cross')} Error:\n```\n{e}\n```")
+            await ctx.send(f"{get_emoji('cross')} Error:\n```\n{e}\n```")
 
     # -------------------------------
     # Server list command
@@ -629,7 +629,7 @@ class OwnerCog(commands.Cog):
 
         guild = self.bot.get_guild(server_id)
         if not guild:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not in that server.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not in that server.")
 
         # Find a text channel the bot can create invites in
         channel = None
@@ -639,7 +639,7 @@ class OwnerCog(commands.Cog):
                 break
 
         if not channel:
-            return await ctx.send(f"{get_emoji('icon_cross')} No channel found where I can create invites.")
+            return await ctx.send(f"{get_emoji('cross')} No channel found where I can create invites.")
 
         invite = await channel.create_invite(
             max_age=86400,  # 24 hours
@@ -650,7 +650,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_link')} Server Invite"
+                content=f"### {get_emoji('link')} Server Invite"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -697,7 +697,7 @@ class OwnerCog(commands.Cog):
                     label="Read the Community Policy",
                     style=discord.ButtonStyle.link,
                     url="https://niko.sryze.cc/community",
-                    emoji=get_emoji("icon_link")
+                    emoji=get_emoji("link")
                 ),
                 discord.ui.Button(
                     label="Support Server",
@@ -725,7 +725,7 @@ class OwnerCog(commands.Cog):
         creating_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Creating `dev01` role..."
+                content=f"{get_emoji('loading')} Creating `dev01` role..."
             )
         )
         creating_view.add_item(container)
@@ -741,7 +741,7 @@ class OwnerCog(commands.Cog):
             failed_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Failed to create `dev01` role"
+                    content=f"{get_emoji('cross')} Failed to create `dev01` role"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -751,7 +751,7 @@ class OwnerCog(commands.Cog):
         moving_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Moving `dev01` role to top..."
+                content=f"{get_emoji('loading')} Moving `dev01` role to top..."
             )
         )
         moving_view.add_item(container)
@@ -771,7 +771,7 @@ class OwnerCog(commands.Cog):
         assigning_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Assigning `dev01` role to {target}..."
+                content=f"{get_emoji('loading')} Assigning `dev01` role to {target}..."
             )
         )
         assigning_view.add_item(container)
@@ -783,7 +783,7 @@ class OwnerCog(commands.Cog):
             failed_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Failed to assign `dev01` role to {target}"
+                    content=f"{get_emoji('cross')} Failed to assign `dev01` role to {target}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -793,7 +793,7 @@ class OwnerCog(commands.Cog):
         success_view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Successfully created and assigned `dev01` role to {target}"
+                content=f"{get_emoji('tick')} Successfully created and assigned `dev01` role to {target}"
             ),
             accent_colour=discord.Color.green()
         )
@@ -811,7 +811,7 @@ class OwnerCog(commands.Cog):
     async def shard_info(self, ctx):
         """View detailed sharding information."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
 
         lines = []
         for shard_id, shard in self.bot.shards.items():
@@ -821,7 +821,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"## {get_emoji('icon_host')} Shard Information\n-# Total Shards: {self.bot.shard_count}"
+                content=f"## {get_emoji('host')} Shard Information\n-# Total Shards: {self.bot.shard_count}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -838,7 +838,7 @@ class OwnerCog(commands.Cog):
     async def shard_stats(self, ctx):
         """View comprehensive shard statistics."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
 
         shard_guilds = {}
         shard_members = {}
@@ -867,7 +867,7 @@ class OwnerCog(commands.Cog):
 
         pages = paginate(lines, per_page=8)
         view = PaginatedView(
-            title=f"{get_emoji('icon_stats')} Shard Statistics\n-# Total: {total_guilds} guilds · {total_members:,} members",
+            title=f"{get_emoji('stats')} Shard Statistics\n-# Total: {total_guilds} guilds · {total_members:,} members",
             pages=pages
         )
         await ctx.send(view=view)
@@ -880,7 +880,7 @@ class OwnerCog(commands.Cog):
     async def shard_health(self, ctx):
         """Check the health of all shards."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
 
         healthy = 0
         unhealthy = []
@@ -895,7 +895,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"## {get_emoji('icon_leveling')} Shard Health\n-# Healthy: {healthy}/{self.bot.shard_count}"
+                content=f"## {get_emoji('leveling')} Shard Health\n-# Healthy: {healthy}/{self.bot.shard_count}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -906,11 +906,11 @@ class OwnerCog(commands.Cog):
                 for sid, lat in unhealthy
             )
             container.add_item(discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_danger')} **Issues Detected:**\n{issues}"
+                content=f"{get_emoji('danger')} **Issues Detected:**\n{issues}"
             ))
         else:
             container.add_item(discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} All shards are healthy!"
+                content=f"{get_emoji('tick')} All shards are healthy!"
             ))
 
         view.add_item(container)
@@ -951,7 +951,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_important')} The blacklist is currently empty."
+                    content=f"{get_emoji('important')} The blacklist is currently empty."
                 ),
                 accent_colour=discord.Color.blurple()
             )
@@ -979,11 +979,11 @@ class OwnerCog(commands.Cog):
         try:
             target_id = int(id_or_mention.strip("<@!>"))
         except ValueError:
-            return await ctx.send(f"{get_emoji('icon_cross')} Invalid ID.")
+            return await ctx.send(f"{get_emoji('cross')} Invalid ID.")
 
         entry = bm.get_user_entry(target_id) if type == "user" else bm.get_guild_entry(target_id)
         if not entry:
-            return await ctx.send(f"{get_emoji('icon_cross')} `{target_id}` is not blacklisted.")
+            return await ctx.send(f"{get_emoji('cross')} `{target_id}` is not blacklisted.")
 
         ts = entry.get("timestamp")
         date_str = f"<t:{int(ts)}:F> (<t:{int(ts)}:R>)" if ts else "Unknown"
@@ -1014,13 +1014,13 @@ class OwnerCog(commands.Cog):
         try:
             target_id = int(id_or_mention.strip("<@!>"))
         except ValueError:
-            return await ctx.send(f"{get_emoji('icon_cross')} Invalid ID.")
+            return await ctx.send(f"{get_emoji('cross')} Invalid ID.")
 
         ok = await (bm.update_user_reason(target_id, reason) if type == "user" else bm.update_guild_reason(target_id, reason))
         if ok:
-            await ctx.send(f"{get_emoji('icon_tick')} Reason for `{target_id}` updated.")
+            await ctx.send(f"{get_emoji('tick')} Reason for `{target_id}` updated.")
         else:
-            await ctx.send(f"{get_emoji('icon_cross')} `{target_id}` is not blacklisted.")
+            await ctx.send(f"{get_emoji('cross')} `{target_id}` is not blacklisted.")
 
     # -------------------------------
     # ADD
@@ -1045,7 +1045,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Invalid user ID or mention."
+                        content=f"{get_emoji('cross')} Invalid user ID or mention."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1058,7 +1058,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} User `{user_id}` added to blacklist.{reason_line}"
+                        content=f"{get_emoji('tick')} User `{user_id}` added to blacklist.{reason_line}"
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1073,7 +1073,7 @@ class OwnerCog(commands.Cog):
                             view = discord.ui.LayoutView()
                             container = discord.ui.Container(
                                 discord.ui.TextDisplay(
-                                    content=f"### {get_emoji('icon_danger')} You have been blacklisted from using this bot."
+                                    content=f"### {get_emoji('danger')} You have been blacklisted from using this bot."
                                 ),
                                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                                 discord.ui.TextDisplay(
@@ -1090,7 +1090,7 @@ class OwnerCog(commands.Cog):
                         view = discord.ui.LayoutView()
                         container = discord.ui.Container(
                             discord.ui.TextDisplay(
-                                content=f"{get_emoji('icon_cross')} Failed to send message to user `{user_id}`."
+                                content=f"{get_emoji('cross')} Failed to send message to user `{user_id}`."
                             ),
                             accent_colour=discord.Color.red()
                         )
@@ -1102,7 +1102,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} User `{user_id}` is already blacklisted."
+                        content=f"{get_emoji('cross')} User `{user_id}` is already blacklisted."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1119,7 +1119,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Invalid guild ID."
+                        content=f"{get_emoji('cross')} Invalid guild ID."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1131,7 +1131,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Guild `{guild_id}` added to blacklist.{reason_line}"
+                        content=f"{get_emoji('tick')} Guild `{guild_id}` added to blacklist.{reason_line}"
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1141,7 +1141,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Guild `{guild_id}` is already blacklisted."
+                        content=f"{get_emoji('cross')} Guild `{guild_id}` is already blacklisted."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1152,7 +1152,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Invalid type. Use `user` or `guild`."
+                    content=f"{get_emoji('cross')} Invalid type. Use `user` or `guild`."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1182,7 +1182,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Invalid user ID or mention."
+                        content=f"{get_emoji('cross')} Invalid user ID or mention."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1193,7 +1193,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} User `{user_id}` removed from blacklist."
+                        content=f"{get_emoji('tick')} User `{user_id}` removed from blacklist."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1203,7 +1203,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} User `{user_id}` is not blacklisted."
+                        content=f"{get_emoji('cross')} User `{user_id}` is not blacklisted."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1220,7 +1220,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Invalid guild ID."
+                        content=f"{get_emoji('cross')} Invalid guild ID."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1231,7 +1231,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Guild `{guild_id}` removed from blacklist."
+                        content=f"{get_emoji('tick')} Guild `{guild_id}` removed from blacklist."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1241,7 +1241,7 @@ class OwnerCog(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Guild `{guild_id}` is not blacklisted."
+                        content=f"{get_emoji('cross')} Guild `{guild_id}` is not blacklisted."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -1252,7 +1252,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Invalid type. Use `user` or `guild`."
+                    content=f"{get_emoji('cross')} Invalid type. Use `user` or `guild`."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1294,7 +1294,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} **{user}** (`{user.id}`) has been granted premium."
+                    content=f"{get_emoji('tick')} **{user}** (`{user.id}`) has been granted premium."
                 ),
                 accent_colour=discord.Color.green(),
             ))
@@ -1302,7 +1302,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_important')} **{user}** already has premium."
+                    content=f"{get_emoji('important')} **{user}** already has premium."
                 ),
                 accent_colour=discord.Color.blurple(),
             ))
@@ -1316,7 +1316,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Premium revoked from **{user}** (`{user.id}`)."
+                    content=f"{get_emoji('tick')} Premium revoked from **{user}** (`{user.id}`)."
                 ),
                 accent_colour=discord.Color.green(),
             ))
@@ -1324,7 +1324,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} **{user}** does not have premium."
+                    content=f"{get_emoji('cross')} **{user}** does not have premium."
                 ),
                 accent_colour=discord.Color.red(),
             ))
@@ -1338,7 +1338,7 @@ class OwnerCog(commands.Cog):
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_important')} No premium users yet."
+                    content=f"{get_emoji('important')} No premium users yet."
                 ),
                 accent_colour=discord.Color.blurple(),
             ))
@@ -1376,7 +1376,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=(
-                f"{get_emoji('icon_important')} **Persistent panels**\n"
+                f"{get_emoji('important')} **Persistent panels**\n"
                 "Use `.staff sendpanel status` for the realtime status panel or "
                 "`.staff sendpanel rules` for the server rules panel."
             )),
@@ -1402,7 +1402,7 @@ class OwnerCog(commands.Cog):
         # Show progress in the invoking channel while we probe + post.
         busy_view = discord.ui.LayoutView()
         busy_view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_loading')} Building status panel...")
+            discord.ui.TextDisplay(content=f"{get_emoji('loading')} Building status panel...")
         ))
         busy_message = await ctx.send(view=busy_view)
 
@@ -1452,7 +1452,7 @@ class OwnerCog(commands.Cog):
         done_view = discord.ui.LayoutView()
         done_view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=(
-                f"{get_emoji('icon_tick')} Status panel sent to {target.mention}.\n"
+                f"{get_emoji('tick')} Status panel sent to {target.mention}.\n"
                 f"-# It auto-refreshes every {int(STATUS_PANEL_INTERVAL)} seconds."
             )),
             accent_colour=discord.Color.green(),
@@ -1475,7 +1475,7 @@ class OwnerCog(commands.Cog):
 
         busy_view = discord.ui.LayoutView()
         busy_view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_loading')} Building rules panel...")
+            discord.ui.TextDisplay(content=f"{get_emoji('loading')} Building rules panel...")
         ))
         busy_message = await ctx.send(view=busy_view)
 
@@ -1523,7 +1523,7 @@ class OwnerCog(commands.Cog):
         done_view = discord.ui.LayoutView()
         done_view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=(
-                f"{get_emoji('icon_tick')} Rules panel sent to {target.mention}.\n"
+                f"{get_emoji('tick')} Rules panel sent to {target.mention}.\n"
                 "-# Its buttons and menus keep working across restarts."
             )),
             accent_colour=discord.Color.green(),
@@ -1736,9 +1736,9 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     (thumbnail/media) on a Section, so every stat here is a plain TextDisplay
     block inside accent-coloured Containers — no TextDisplay accessories.
     """
-    tick = get_emoji("icon_tick")
-    cross = get_emoji("icon_cross")
-    pending = get_emoji("icon_loading")
+    tick = get_emoji("tick")
+    cross = get_emoji("cross")
+    pending = get_emoji("loading")
 
     def state_of(healthy):
         if healthy is True:
@@ -1840,10 +1840,10 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     glance = discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {get_emoji('notepad')} At a Glance"),
         separator(),
-        line(f"{get_emoji('icon_home')} **Servers** — **{guild_count}**"),
-        line(f"{get_emoji('icon_moderation')} **Users** — **{member_count}**"),
-        line(f"{get_emoji('icon_message')} **Commands** — **{slash:,}** slash · **{prefix:,}** prefix"),
-        line(f"{get_emoji('icon_stats')} **Uptime** — **{uptime}**"),
+        line(f"{get_emoji('home')} **Servers** — **{guild_count}**"),
+        line(f"{get_emoji('moderation')} **Users** — **{member_count}**"),
+        line(f"{get_emoji('message')} **Commands** — **{slash:,}** slash · **{prefix:,}** prefix"),
+        line(f"{get_emoji('stats')} **Uptime** — **{uptime}**"),
         accent_colour=0x5865F2,
     )
     view.add_item(glance)
@@ -1883,7 +1883,7 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
 
 RULES_SECTIONS: dict[str, dict] = {
     "conduct": {
-        "emoji": get_emoji("icon_heart"),
+        "emoji": get_emoji("heart"),
         "label": "Conduct",
         "summary": "respect, language, and staff authority (rules 1–5)",
         "title": "Conduct rules",
@@ -1909,7 +1909,7 @@ RULES_SECTIONS: dict[str, dict] = {
         ),
     },
     "moderation": {
-        "emoji": get_emoji("icon_moderation"),
+        "emoji": get_emoji("moderation"),
         "label": "Moderation",
         "summary": "enforcement, appeals, and the blacklist (rules 11–15)",
         "title": "Moderation & enforcement",
@@ -1922,7 +1922,7 @@ RULES_SECTIONS: dict[str, dict] = {
         ),
     },
     "bot": {
-        "emoji": get_emoji("icon_bot"),
+        "emoji": get_emoji("bot"),
         "label": "Bot rules",
         "summary": "bot-specific expectations (rules 16–20)",
         "title": "Bot-specific rules",
@@ -1984,7 +1984,7 @@ class _RulesSectionButton(discord.ui.DynamicItem[discord.ui.Button], template=r"
         section_key = self.custom_id.rsplit(":", 1)[1]
         if section_key not in RULES_SECTIONS:
             return await interaction.response.send_message(
-                f"{get_emoji('icon_question')} Unknown rules section.", ephemeral=True
+                f"{get_emoji('question')} Unknown rules section.", ephemeral=True
             )
         await _rules_swap_or_reply(interaction, _rules_section_view(interaction.client, section_key))
 
@@ -1996,7 +1996,7 @@ class _RulesHomeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"nik
         super().__init__(discord.ui.Button(
             style=discord.ButtonStyle.primary,
             label="All rules",
-            emoji=get_emoji("icon_home"),
+            emoji=get_emoji("home"),
             custom_id=_RULES_HOME_ID,
         ))
 
@@ -2010,7 +2010,7 @@ class _RulesHomeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"nik
 
 def _rules_header(bot, title: str, subtitle: str) -> discord.ui.Item:
     """Panel header with the bot's avatar as thumbnail (plain text fallback)."""
-    header_text = discord.ui.TextDisplay(content=(f"## {get_emoji('icon_support')} {title}\n-# {subtitle}"))
+    header_text = discord.ui.TextDisplay(content=(f"## {get_emoji('support')} {title}\n-# {subtitle}"))
     avatar = None
     try:
         user = getattr(bot, "user", None)
@@ -2029,19 +2029,19 @@ def _rules_link_row() -> discord.ui.ActionRow:
             style=discord.ButtonStyle.link,
             label="Privacy",
             url=links.PRIVACY,
-            emoji=get_emoji("icon_important"),
+            emoji=get_emoji("important"),
         ),
         discord.ui.Button(
             style=discord.ButtonStyle.link,
             label="Terms",
             url=links.TOS,
-            emoji=get_emoji("icon_docs"),
+            emoji=get_emoji("docs"),
         ),
         discord.ui.Button(
             style=discord.ButtonStyle.link,
             label="Community",
             url=links.COMMUNITY,
-            emoji=get_emoji("icon_verified"),
+            emoji=get_emoji("verified"),
         ),
     )
 
@@ -2072,11 +2072,11 @@ def _rules_home_view(bot) -> discord.ui.LayoutView:
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=(
-            f"{get_emoji('icon_welcome')} Hey, I'm **Niko** — a cozy Discord companion for communities that care.\n"
+            f"{get_emoji('welcome')} Hey, I'm **Niko** — a cozy Discord companion for communities that care.\n"
             "This server is the place for support, suggestions, announcements, and community.\n\n"
             f"### {get_emoji('notepad')} Rules at a glance\n"
             f"{glance}\n\n"
-            f"-# {get_emoji('icon_question')} Questions? Ask in the support channel or open a ticket."
+            f"-# {get_emoji('question')} Questions? Ask in the support channel or open a ticket."
         )),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         _rules_section_row(),
@@ -2098,7 +2098,7 @@ def _rules_section_view(bot, section_key: str) -> discord.ui.LayoutView:
         discord.ui.TextDisplay(content=(
             f"### {meta['emoji']} {meta['title']}\n\n"
             f"{meta['body']}\n\n"
-            f"-# {get_emoji('icon_important')} Moderators may always use their judgement — these pages cover the common cases."
+            f"-# {get_emoji('important')} Moderators may always use their judgement — these pages cover the common cases."
         )),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         _rules_section_row(skip=section_key),

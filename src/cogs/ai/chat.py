@@ -89,7 +89,7 @@ class AICog(commands.Cog):
             except Exception as e:
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Error\nFailed to display memory:\n```\n{e}\n```")
+                    discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Error\nFailed to display memory:\n```\n{e}\n```")
                 ))
                 await ctx.send(view=view)
 

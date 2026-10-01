@@ -126,7 +126,7 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
 # ───────────────────────────────────────────────────
 
 def _lv_icon(val) -> str:
-    return get_emoji("icon_tick") if val else get_emoji("icon_cross")
+    return get_emoji("tick") if val else get_emoji("cross")
 
 
 def _colour_hex(rgb):
@@ -217,7 +217,7 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
         "### 🎖️ Level Roles\n"
         "Roles automatically awarded when a member reaches a certain level.\n\n"
         f"{roles_body}\n\n"
-        f"-# Click **{get_emoji('icon_plus')} Add Role** to assign a role to a level.\n"
+        f"-# Click **{get_emoji('plus')} Add Role** to assign a role to a level.\n"
         "-# Click **➖ Remove Role** to remove an assignment."
     )
 
@@ -347,7 +347,7 @@ class _LvEditXPBtn(discord.ui.Button):
         self._guild_id = guild_id
         super().__init__(
             label="Edit XP Values", style=discord.ButtonStyle.blurple,
-            emoji=get_emoji("icon_settings"))
+            emoji=get_emoji("settings"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -372,7 +372,7 @@ class _LvChannelSelect(discord.ui.ChannelSelect):
         cfg["level_up_channel"] = channel.id
         await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
-            content=f"{get_emoji('icon_tick')} Level-up announcements will now go to {channel.mention}.", view=None)
+            content=f"{get_emoji('tick')} Level-up announcements will now go to {channel.mention}.", view=None)
 
 
 class _LvClearChannelBtn(discord.ui.Button):
@@ -386,7 +386,7 @@ class _LvClearChannelBtn(discord.ui.Button):
         cfg["level_up_channel"] = None
         await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
-            content=f"{get_emoji('icon_tick')} Level-up announcements will now appear in the same channel as the message.", view=None)
+            content=f"{get_emoji('tick')} Level-up announcements will now appear in the same channel as the message.", view=None)
 
 
 class _LvSetChannelBtn(discord.ui.Button):
@@ -474,7 +474,7 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} **Level {self._level}** → {role.mention}"
+                content=f"{get_emoji('tick')} **Level {self._level}** → {role.mention}"
             ),
             accent_colour=discord.Color.green()
         )
@@ -518,7 +518,7 @@ class _LvAddRoleBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Add Role", style=discord.ButtonStyle.green, emoji=get_emoji("icon_plus"))
+        super().__init__(label="Add Role", style=discord.ButtonStyle.green, emoji=get_emoji("plus"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_LvAddRoleModal(self._cog, self._guild_id))
@@ -544,7 +544,7 @@ class _LvRemoveRoleSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Removed `{len(self.values)}` level role assignment(s)."
+                content=f"{get_emoji('tick')} Removed `{len(self.values)}` level role assignment(s)."
             ),
             accent_colour=discord.Color.green()
         )

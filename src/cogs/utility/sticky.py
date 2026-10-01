@@ -42,7 +42,7 @@ def _sticky_view(content: str, color: int) -> discord.ui.LayoutView:
 def _feedback(content: str, ok: bool = True) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"{get_emoji('icon_tick') if ok else get_emoji('icon_cross')} {content}"),
+        discord.ui.TextDisplay(content=f"{get_emoji('tick') if ok else get_emoji('cross')} {content}"),
         accent_colour=discord.Colour.green() if ok else discord.Colour.red(),
     ))
     return view

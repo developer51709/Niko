@@ -231,7 +231,7 @@ class Reminders(commands.Cog):
         class _Shim:
             pass
         s = _Shim(); s.guild = guild
-        text = msg(s, "remind_dm", icon=get_emoji("icon_reminder"), text=r["text"], ago=ago)
+        text = msg(s, "remind_dm", icon=get_emoji("reminder"), text=r["text"], ago=ago)
         # try DM first
         try:
             await user.send(view=cv2(text))
@@ -245,7 +245,7 @@ class Reminders(commands.Cog):
             if ch:
                 try:
                     await ch.send(content=user.mention, view=cv2(
-                        msg(s, "remind_chan", icon=get_emoji("icon_reminder"),
+                        msg(s, "remind_chan", icon=get_emoji("reminder"),
                             mention=user.mention, text=r["text"], ago=ago)))
                 except Exception:
                     pass
@@ -286,7 +286,7 @@ class Reminders(commands.Cog):
         }
         _save(self.reminders)
         ts = f"<t:{int(due.timestamp())}:R>"
-        await ctx.send(view=cv2(msg(ctx, "set_ok", icon=get_emoji("icon_reminder"), text=text, ts=ts)))
+        await ctx.send(view=cv2(msg(ctx, "set_ok", icon=get_emoji("reminder"), text=text, ts=ts)))
 
     @reminder.command(
         name="list",
@@ -306,7 +306,7 @@ class Reminders(commands.Cog):
             except Exception:
                 when = "?"
             lines.append(msg(ctx, "list_entry", id=r["id"], when=when, text=r["text"][:200]))
-        body = msg(ctx, "list_title", icon=get_emoji("icon_reminder")) + "\n" + "\n".join(lines)
+        body = msg(ctx, "list_title", icon=get_emoji("reminder")) + "\n" + "\n".join(lines)
         await ctx.send(view=cv2(body))
 
     @reminder.command(

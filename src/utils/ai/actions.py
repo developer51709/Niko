@@ -141,11 +141,11 @@ def _info_view(title: str, body: str, *, colour: discord.Colour = discord.Colour
 
 
 def _error_view(body: str) -> discord.ui.LayoutView:
-    return _info_view(f"{get_emoji('icon_danger')} AI Action Refused", body, colour=discord.Colour.red())
+    return _info_view(f"{get_emoji('danger')} AI Action Refused", body, colour=discord.Colour.red())
 
 
 def _success_view(body: str) -> discord.ui.LayoutView:
-    return _info_view(f"{get_emoji('icon_tick')} AI Action Completed", body, colour=discord.Colour.green())
+    return _info_view(f"{get_emoji('tick')} AI Action Completed", body, colour=discord.Colour.green())
 
 
 class AIActionConfirmView(discord.ui.LayoutView):
@@ -160,18 +160,18 @@ class AIActionConfirmView(discord.ui.LayoutView):
         self._confirm = discord.ui.Button(
             label="Confirm",
             style=discord.ButtonStyle.danger,
-            emoji=get_emoji("icon_tick") or "✅",
+            emoji=get_emoji("tick") or "✅",
         )
         self._cancel = discord.ui.Button(
             label="Cancel",
             style=discord.ButtonStyle.secondary,
-            emoji=get_emoji("icon_cross") or "❌",
+            emoji=get_emoji("cross") or "❌",
         )
         self._confirm.callback = self._on_confirm
         self._cancel.callback = self._on_cancel
 
         self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} {title}"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} {title}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=body),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -208,7 +208,7 @@ class AIActionConfirmView(discord.ui.LayoutView):
         await self._disable_buttons()
         await interaction.response.edit_message(
             view=_info_view(
-                f"{get_emoji('icon_cross')} Cancelled",
+                f"{get_emoji('cross')} Cancelled",
                 "Niko didn't do anything.",
                 colour=discord.Colour.greyple(),
             ),

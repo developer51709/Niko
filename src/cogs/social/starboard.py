@@ -283,7 +283,7 @@ class Starboard(commands.Cog):
         g = self._g(ctx.guild.id)
         ch = ctx.guild.get_channel(g["channel_id"]) if g.get("channel_id") else None
         ignored = ", ".join(f"<#{c}>" for c in g["ignored_channels"]) or "—"
-        body = msg(ctx, "config_title", icon=get_emoji("icon_settings")) + "\n" + msg(
+        body = msg(ctx, "config_title", icon=get_emoji("settings")) + "\n" + msg(
             ctx, "config_body",
             channel=ch.mention if ch else "—",
             threshold=g["threshold"],

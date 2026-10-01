@@ -160,7 +160,7 @@ class ProfileModal(discord.ui.Modal, title="Customize Server Profile"):
             if not (attachment.content_type or "").startswith("image/"):
                 name = "profile picture" if target == "pfp_bytes" else "banner"
                 await interaction.response.send_message(
-                    f"{get_emoji('icon_cross')} The {name} must be an image.",
+                    f"{get_emoji('cross')} The {name} must be an image.",
                     ephemeral=True,
                 )
                 return
@@ -178,7 +178,7 @@ class ProfileModal(discord.ui.Modal, title="Customize Server Profile"):
             self.view.updated_fields.add("bio")
 
         await interaction.response.send_message(
-            f"{get_emoji('icon_tick')} Profile details saved. Click **Apply** to update the bot.",
+            f"{get_emoji('tick')} Profile details saved. Click **Apply** to update the bot.",
             ephemeral=True,
         )
 

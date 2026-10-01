@@ -537,7 +537,7 @@ class TicketSetupView(discord.ui.LayoutView):
         desc = MESSAGES.get(personality, MESSAGES["normal"]).get(lang, {}).get("setup_desc") \
                 or MESSAGES["normal"]["en"]["setup_desc"]
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=title.format(icon=get_emoji("icon_ticket"))),
+            discord.ui.TextDisplay(content=title.format(icon=get_emoji("ticket"))),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=desc),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),

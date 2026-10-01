@@ -176,7 +176,7 @@ def _make_view(*items) -> discord.ui.LayoutView:
 # ──────────────────────────────────────────────
 class _AiDebugBtn(discord.ui.Button):
     def __init__(self, bot: commands.Bot, error_type: str, tb: str, file_name: str | None):
-        super().__init__(label="AI Debug", style=discord.ButtonStyle.primary, emoji=get_emoji('icon_ai'))
+        super().__init__(label="AI Debug", style=discord.ButtonStyle.primary, emoji=get_emoji('ai'))
         self.bot        = bot
         self.error_type = error_type
         self.tb         = tb
@@ -198,14 +198,14 @@ class _AiDebugBtn(discord.ui.Button):
                 max_tokens=1200,
             )
         except Exception as exc:
-            await interaction.followup.send(f"{get_emoji('icon_cross')} AI call failed: `{exc}`", ephemeral=True)
+            await interaction.followup.send(f"{get_emoji('cross')} AI call failed: `{exc}`", ephemeral=True)
             return
 
         display = analysis[:1900] + ("…" if len(analysis) > 1900 else "")
 
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} AI Analysis"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} AI Analysis"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=display),
         )
@@ -229,7 +229,7 @@ class _FixWithAiBtn(discord.ui.Button):
         file_name: str,
         file_path: Path,
     ):
-        super().__init__(label="Fix with AI", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_utility'))
+        super().__init__(label="Fix with AI", style=discord.ButtonStyle.danger, emoji=get_emoji('utility'))
         self.bot        = bot
         self.error_type = error_type
         self.tb         = tb
@@ -249,13 +249,13 @@ class _FixWithAiBtn(discord.ui.Button):
                 max_tokens=3000,
             )
         except Exception as exc:
-            await interaction.followup.send(f"{get_emoji('icon_cross')} AI call failed: `{exc}`", ephemeral=True)
+            await interaction.followup.send(f"{get_emoji('cross')} AI call failed: `{exc}`", ephemeral=True)
             return
 
         fixed_code = _extract_code_block(ai_output)
         if not fixed_code:
             await interaction.followup.send(
-                f"{get_emoji('icon_danger')} The AI didn't return a valid code block.\n```\n{ai_output[:1000]}\n```",
+                f"{get_emoji('danger')} The AI didn't return a valid code block.\n```\n{ai_output[:1000]}\n```",
                 ephemeral=True,
             )
             return
@@ -265,7 +265,7 @@ class _FixWithAiBtn(discord.ui.Button):
         try:
             self.file_path.write_text(fixed_code, encoding="utf-8")
         except Exception as exc:
-            await interaction.followup.send(f"{get_emoji('icon_cross')} Failed to write fix: `{exc}`", ephemeral=True)
+            await interaction.followup.send(f"{get_emoji('cross')} Failed to write fix: `{exc}`", ephemeral=True)
             return
 
         # Hot-reload if it's a cog
@@ -273,12 +273,12 @@ class _FixWithAiBtn(discord.ui.Button):
         if self.file_path.parent == COGS_DIR:
             try:
                 await self.bot.reload_extension(f"cogs.{self.file_name}")
-                reload_status = f"\n{get_emoji('icon_tick')} Cog `{self.file_name}` hot-reloaded successfully."
+                reload_status = f"\n{get_emoji('tick')} Cog `{self.file_name}` hot-reloaded successfully."
             except Exception as exc:
-                reload_status = f"\n{get_emoji('icon_danger')} Fix written but cog reload failed: `{exc}`"
+                reload_status = f"\n{get_emoji('danger')} Fix written but cog reload failed: `{exc}`"
 
         view = _make_view(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_utility')} Fix Applied — `{self.file_name}.py`"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('utility')} Fix Applied — `{self.file_name}.py`"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"{reload_status}\n-# Backup: `{backup_path.name}`".strip()
@@ -309,7 +309,7 @@ class _RevertBtn(discord.ui.Button):
         await interaction.response.defer(thinking=True)
 
         if not self.backup_path.exists():
-            await interaction.followup.send(f"{get_emoji('icon_danger')} Backup file not found.", ephemeral=True)
+            await interaction.followup.send(f"{get_emoji('danger')} Backup file not found.", ephemeral=True)
             return
 
         shutil.copy2(self.backup_path, self.file_path)
@@ -318,9 +318,9 @@ class _RevertBtn(discord.ui.Button):
         if self.file_path.parent == COGS_DIR:
             try:
                 await self.bot.reload_extension(f"cogs.{self.file_name}")
-                reload_status = f"{get_emoji('icon_tick')} `{self.file_name}` reverted and reloaded."
+                reload_status = f"{get_emoji('tick')} `{self.file_name}` reverted and reloaded."
             except Exception as exc:
-                reload_status = f"{get_emoji('icon_danger')} Reverted but reload failed: `{exc}`"
+                reload_status = f"{get_emoji('danger')} Reverted but reload failed: `{exc}`"
 
         view = _make_view(
             discord.ui.TextDisplay(content=f"### ↩️ Reverted — `{self.file_name}.py`"),
@@ -378,7 +378,7 @@ async def send_debug_report(
     file_label = f"`{file_name}.py`" if file_name else "*(unknown file)*"
 
     view = _make_view(
-        discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Bot Error Detected"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Bot Error Detected"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(

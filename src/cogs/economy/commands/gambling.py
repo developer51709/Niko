@@ -86,9 +86,9 @@ class GamblingMixin:
 
         if member.bot:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('bot')} No can do", "Bots have nothing in their pockets."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_bot')} No can do", "Bots have nothing in their pockets."))
+                return await ctx.send(view=_info_view(f"{get_emoji('bot')} No can do", "Bots have nothing in their pockets."))
 
         data   = await self.get_user_economy_data(ctx.author.id)
         target = await self.get_user_economy_data(member.id)
@@ -164,7 +164,7 @@ class GamblingMixin:
             await ctx.interaction.response.defer()
 
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Bad amount", "Bet must be at least **1** 🥐.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🥐.")
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
@@ -172,7 +172,7 @@ class GamblingMixin:
 
         call = call.lower().strip()
         if call not in ("heads", "h", "tails", "t"):
-            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Invalid call", "Pick **heads** or **tails**.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Invalid call", "Pick **heads** or **tails**.")
         call = "heads" if call in ("heads", "h") else "tails"
 
         effects = data.setdefault("effects", {})
@@ -220,14 +220,14 @@ class GamblingMixin:
             await ctx.interaction.response.defer()
 
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Bad amount", "Bet must be at least **1** 🥐.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🥐.")
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
             return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🥐 but only have **{data['balance']:,}**.")
 
         if not 1 <= target <= 99:
-            return await self._send_err(ctx, f"{get_emoji('icon_cross')} Invalid target", "Target must be between **1** and **99**.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Invalid target", "Target must be between **1** and **99**.")
 
         roll = random.randint(1, 100)
         won = roll >= target

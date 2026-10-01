@@ -121,7 +121,7 @@ class AiImageTools(commands.Cog):
     def _error_view(self, detail: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Generation Failed"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Generation Failed"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=detail),
             accent_colour=discord.Color.red(),
@@ -137,7 +137,7 @@ class AiImageTools(commands.Cog):
     def _premium_required_view(self, detail: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Premium Required"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Premium Required"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=detail),
         )
@@ -169,7 +169,7 @@ class AiImageTools(commands.Cog):
 
         file = discord.File(image, filename="generated_image.png")
         view = self.build_cv2_container(
-            f"{get_emoji('icon_image')} Generated Image",
+            f"{get_emoji('image')} Generated Image",
             f"-# Prompt: *{prompt[:200]}*",
             file,
         )
@@ -196,7 +196,7 @@ class AiImageTools(commands.Cog):
         if image_bytes is None:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} No Image Found"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} No Image Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content="Please attach an image or reply to one so I can edit it."),
             )
@@ -217,7 +217,7 @@ class AiImageTools(commands.Cog):
         result.seek(0)
         file = discord.File(result, filename="edited_image.png")
         view = self.build_cv2_container(
-            f"{get_emoji('icon_image')} Edited Image",
+            f"{get_emoji('image')} Edited Image",
             f"-# Prompt: *{prompt[:200]}*",
             file,
         )

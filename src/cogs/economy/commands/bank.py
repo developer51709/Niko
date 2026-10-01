@@ -54,15 +54,15 @@ class BankMixin:
                 amt = int(amount)
             except ValueError:
                 if ctx.interaction:
-                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
                 else:
-                    return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+                    return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
 
         if amt <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
 
         if amt > data["balance"]:
             if ctx.interaction:
@@ -106,15 +106,15 @@ class BankMixin:
                 amt = int(amount)
             except ValueError:
                 if ctx.interaction:
-                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
                 else:
-                    return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Use a number or `all`."))
+                    return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
 
         if amt <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to withdraw", "Your vault is empty."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to withdraw", "Your vault is empty."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to withdraw", "Your vault is empty."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to withdraw", "Your vault is empty."))
 
         if amt > data["bank"]:
             if ctx.interaction:

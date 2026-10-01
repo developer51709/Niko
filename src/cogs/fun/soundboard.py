@@ -60,13 +60,13 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
         lines: list[str] = []
 
         if guild_sounds:
-            lines.append(f"### {get_emoji('icon_music')} Guild Sounds")
+            lines.append(f"### {get_emoji('music')} Guild Sounds")
             for s in guild_sounds:
                 emo = f"{s.get('emoji_name', '')} " if s.get("emoji_name") else "🔊 "
                 lines.append(f"- {emo}**{s['name']}**  `-# id: {s['sound_id']}`")
 
         if default_sounds:
-            lines.append(f"\n### {get_emoji('icon_star')} Discord Default Sounds")
+            lines.append(f"\n### {get_emoji('star')} Discord Default Sounds")
             for s in default_sounds[:15]:
                 emo = f"{s.get('emoji_name', '')} " if s.get("emoji_name") else "🔊 "
                 lines.append(f"- {emo}**{s['name']}**")
@@ -93,7 +93,7 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
     async def soundboard_play(self, interaction: discord.Interaction, name: str) -> None:
         if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
             await interaction.response.send_message(
-                view=_container(f"{get_emoji('icon_cross')} You need to be in a voice channel."),
+                view=_container(f"{get_emoji('cross')} You need to be in a voice channel."),
                 ephemeral=True,
             )
             return
@@ -136,7 +136,7 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
 
         if sound_id is None:
             await interaction.followup.send(
-                view=_container(f"{get_emoji('icon_cross')} No sound named **{name}** found. Use `/soundboard list` to see available sounds."),
+                view=_container(f"{get_emoji('cross')} No sound named **{name}** found. Use `/soundboard list` to see available sounds."),
                 ephemeral=True,
             )
             return
@@ -155,7 +155,7 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
             )
         except discord.HTTPException as e:
             await interaction.followup.send(
-                view=_container(f"{get_emoji('icon_cross')} Could not play sound: {e}"),
+                view=_container(f"{get_emoji('cross')} Could not play sound: {e}"),
                 ephemeral=True,
             )
 
@@ -192,12 +192,12 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
             defaults = list(await interaction.client.http.get_soundboard_default_sounds())
         except Exception as e:
             await interaction.followup.send(
-                view=_container(f"{get_emoji('icon_cross')} Could not fetch default sounds: {e}"),
+                view=_container(f"{get_emoji('cross')} Could not fetch default sounds: {e}"),
                 ephemeral=True,
             )
             return
 
-        lines = [f"### {get_emoji('icon_star')} Discord Default Soundboard Sounds"]
+        lines = [f"### {get_emoji('star')} Discord Default Soundboard Sounds"]
         for s in defaults:
             emo = f"{s.get('emoji_name', '')} " if s.get("emoji_name") else ""
             lines.append(f"- {emo}**{s['name']}**")

@@ -233,7 +233,7 @@ class ServerLogger(commands.Cog):
         guild = member.guild
         created = member.created_at.strftime("%Y-%m-%d")
         account_age = (datetime.now(timezone.utc) - member.created_at).days
-        age_warn = f"\n-# {get_emoji('icon_danger')} New account — only **{account_age}d** old" if account_age < 7 else ""
+        age_warn = f"\n-# {get_emoji('danger')} New account — only **{account_age}d** old" if account_age < 7 else ""
 
         # ── Detect which invite was used ──────────
         used_invite = None
@@ -715,7 +715,7 @@ class ServerLogger(commands.Cog):
             perm_changes = []
             for perm, value in iter(after.permissions):
                 if getattr(before.permissions, perm) != value:
-                    symbol = get_emoji('icon_tick') if value else get_emoji('icon_cross')
+                    symbol = get_emoji('tick') if value else get_emoji('cross')
                     perm_changes.append(f"{symbol} `{perm.replace('_', ' ').title()}`")
             if perm_changes:
                 changes.append("**Permissions Changed:**\n" + " ".join(perm_changes))
@@ -915,7 +915,7 @@ class ServerLogger(commands.Cog):
         """Show the current logging configuration."""
         await self._reload()
         cfg = self._get_cfg(ctx.guild.id)
-        icon = get_emoji("icon_settings")
+        icon = get_emoji("settings")
 
         lines = []
         for key, info in CATEGORIES.items():

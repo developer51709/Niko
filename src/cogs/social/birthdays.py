@@ -314,7 +314,7 @@ class Birthdays(commands.Cog):
                 results.append(f"• {m.mention}")
         if not results:
             return await ctx.send(view=cv2(msg(ctx, "today_empty")))
-        body = msg(ctx, "today_title", icon=get_emoji("icon_heart")) + "\n" + "\n".join(results[:50])
+        body = msg(ctx, "today_title", icon=get_emoji("heart")) + "\n" + "\n".join(results[:50])
         await ctx.send(view=cv2(body))
 
     @birthday.command(
@@ -348,7 +348,7 @@ class Birthdays(commands.Cog):
         if not entries:
             return await ctx.send(view=cv2(msg(ctx, "upcoming_empty")))
         entries.sort()
-        body = msg(ctx, "upcoming_title", icon=get_emoji("icon_heart")) + "\n" + "\n".join(
+        body = msg(ctx, "upcoming_title", icon=get_emoji("heart")) + "\n" + "\n".join(
             f"• **{date}** · {who} · `in {d}d`" for d, who, date in entries[:30]
         )
         await ctx.send(view=cv2(body))
@@ -384,7 +384,7 @@ class Birthdays(commands.Cog):
         gcfg = await self._db_get_guild_config(ctx.guild.id)
         ch = ctx.guild.get_channel(gcfg.get("channel_id", 0)) if gcfg.get("channel_id") else None
         rl = ctx.guild.get_role(gcfg.get("role_id", 0)) if gcfg.get("role_id") else None
-        title = msg(ctx, "config_title", icon=get_emoji("icon_settings"))
+        title = msg(ctx, "config_title", icon=get_emoji("settings"))
         body = msg(ctx, "config_body",
                    channel=ch.mention if ch else "—",
                    role=rl.mention if rl else "—")

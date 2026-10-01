@@ -275,14 +275,14 @@ class Tags(commands.Cog):
             return await ctx.send(view=cv2(msg(ctx, "list_empty")))
         sorted_t = sorted(tags.values(), key=lambda x: x["name"])
         lines = [f"• `{t['name']}` · -# uses: {t.get('uses', 0)}" for t in sorted_t]
-        title = msg(ctx, "list_title", icon=get_emoji("icon_message"), n=len(sorted_t))
+        title = msg(ctx, "list_title", icon=get_emoji("message"), n=len(sorted_t))
         if len(lines) <= 20:
             body = title + "\n" + "\n".join(lines)
             return await ctx.send(view=cv2(body))
         pages = paginate(lines, per_page=20)
         # prepend title to each page
         pages = [title + "\n" + p for p in pages]
-        view = PaginatedView(title=msg(ctx, "list_title", icon=get_emoji("icon_message"), n=len(sorted_t)),
+        view = PaginatedView(title=msg(ctx, "list_title", icon=get_emoji("message"), n=len(sorted_t)),
                              pages=pages, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
         await ctx.send(view=view)
 
@@ -299,7 +299,7 @@ class Tags(commands.Cog):
         owner = ctx.guild.get_member(t["owner_id"])
         owner_str = owner.mention if owner else f"<@{t['owner_id']}>"
         body = msg(ctx, "info",
-                   icon=get_emoji("icon_message"), name=t["name"],
+                   icon=get_emoji("message"), name=t["name"],
                    owner=owner_str, uses=t.get("uses", 0), created=t.get("created_at", 0))
         await ctx.send(view=cv2(body))
 

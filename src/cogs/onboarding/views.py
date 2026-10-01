@@ -42,7 +42,7 @@ def feedback_view(content: str, ok: bool = True) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
         discord.ui.TextDisplay(
-            content=f"{get_emoji('icon_tick') if ok else get_emoji('icon_cross')} {content}"
+            content=f"{get_emoji('tick') if ok else get_emoji('cross')} {content}"
         ),
         accent_colour=discord.Color.green() if ok else discord.Color.red(),
     ))
@@ -197,7 +197,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Welcome message updated."
+                content=f"{get_emoji('tick')} Welcome message updated."
             ),
             accent_colour=discord.Color.green()
         )
@@ -234,7 +234,7 @@ class RulesModal(Modal, title="Set Rules Text"):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Rules text updated."
+                content=f"{get_emoji('tick')} Rules text updated."
             ),
             accent_colour=discord.Color.green()
         )
@@ -491,7 +491,7 @@ class SetWelcomeMsgBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -512,7 +512,7 @@ class SetWelcomeChannelBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -524,7 +524,7 @@ class SetWelcomeChannelBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Welcome channel set to {interaction.channel.mention}."
+                content=f"{get_emoji('tick')} Welcome channel set to {interaction.channel.mention}."
             ),
             accent_colour=discord.Color.green()
         )
@@ -544,7 +544,7 @@ class SetRulesTextBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -565,7 +565,7 @@ class PostRulesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -583,7 +583,7 @@ class PostRulesBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Rules message posted."
+                content=f"{get_emoji('tick')} Rules message posted."
             ),
             accent_colour=discord.Color.green()
         )
@@ -603,7 +603,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -612,7 +612,7 @@ class SetRulesRoleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_settings')} Reply in this channel with a role mention, ID, or name within 60 seconds."
+                content=f"{get_emoji('settings')} Reply in this channel with a role mention, ID, or name within 60 seconds."
             )
         )
         view.add_item(container)
@@ -630,7 +630,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Timed out. Try again."
+                    content=f"{get_emoji('cross')} Timed out. Try again."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -641,7 +641,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This must be used in a server."
+                    content=f"{get_emoji('cross')} This must be used in a server."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -653,7 +653,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Could not find that role. Use a mention, ID, or name."
+                    content=f"{get_emoji('cross')} Could not find that role. Use a mention, ID, or name."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -667,7 +667,7 @@ class SetRulesRoleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Rules role set to {role.mention}."
+                content=f"{get_emoji('tick')} Rules role set to {role.mention}."
             ),
             accent_colour=discord.Color.green()
         )
@@ -704,7 +704,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Added {', '.join(added)} as autorole(s)."
+                    content=f"{get_emoji('tick')} Added {', '.join(added)} as autorole(s)."
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -719,7 +719,7 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Those roles are already in the autorole list."
+                    content=f"{get_emoji('cross')} Those roles are already in the autorole list."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -775,7 +775,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Removed {', '.join(removed)} from autoroles."
+                    content=f"{get_emoji('tick')} Removed {', '.join(removed)} from autoroles."
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -788,7 +788,7 @@ class RemoveAutoroleSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Nothing was removed."
+                    content=f"{get_emoji('cross')} Nothing was removed."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -813,7 +813,7 @@ class AddAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -823,7 +823,7 @@ class AddAutoroleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_settings')} Select one or more roles to automatically assign to new members:"
+                content=f"{get_emoji('settings')} Select one or more roles to automatically assign to new members:"
             ),
             AddAutoroleView(self.guild_id, message)
         )
@@ -845,7 +845,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -856,7 +856,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} No autoroles are configured yet."
+                    content=f"{get_emoji('cross')} No autoroles are configured yet."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -867,7 +867,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_settings')} Select autoroles to remove:"
+                content=f"{get_emoji('settings')} Select autoroles to remove:"
             ),
             RemoveAutoroleView(self.guild_id, self.guild, message, await get_config(self.guild_id))
         )
@@ -879,7 +879,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
 
 class ClearAutorolesBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
+        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
         self.guild_id = guild_id
         self.author = author
 
@@ -888,7 +888,7 @@ class ClearAutorolesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -900,7 +900,7 @@ class ClearAutorolesBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} All autoroles cleared."
+                content=f"{get_emoji('tick')} All autoroles cleared."
             ),
             accent_colour=discord.Color.green()
         )
@@ -959,7 +959,7 @@ class ConfigureAutorolesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1045,7 +1045,7 @@ class RoleMenuManagerSelect(discord.ui.Select):
 
 class CreateRoleMenuBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Create Role Menu", style=discord.ButtonStyle.success, emoji=get_emoji('icon_plus'))
+        super().__init__(label="Create Role Menu", style=discord.ButtonStyle.success, emoji=get_emoji('plus'))
         self.guild_id = guild_id
         self.author = author
 
@@ -1122,7 +1122,7 @@ class ChangeMenuTypeSelect(discord.ui.Select):
 
 class ChangeMenuTypeBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Change Type", style=discord.ButtonStyle.secondary, emoji=get_emoji('icon_shuffle'))
+        super().__init__(label="Change Type", style=discord.ButtonStyle.secondary, emoji=get_emoji('shuffle'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1133,7 +1133,7 @@ class ChangeMenuTypeBtn(discord.ui.Button):
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose the new menu type:"),
+            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose the new menu type:"),
             discord.ui.ActionRow(ChangeMenuTypeSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -1172,7 +1172,7 @@ class RoleMenuAddRoleSelect(discord.ui.RoleSelect):
 
 class AddMenuOptionBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str, *, wizard: bool = False):
-        super().__init__(label="Add a Role", style=discord.ButtonStyle.success, emoji=get_emoji('icon_plus'))
+        super().__init__(label="Add a Role", style=discord.ButtonStyle.success, emoji=get_emoji('plus'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1189,7 +1189,7 @@ class AddMenuOptionBtn(discord.ui.Button):
             )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Which role should this option grant? Pick it from the dropdown below."),
+            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Which role should this option grant? Pick it from the dropdown below."),
             discord.ui.ActionRow(RoleMenuAddRoleSelect(self.guild_id, self.author, self.menu_id, interaction.message, wizard=self.wizard)),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -1231,7 +1231,7 @@ class EditMenuOptionSelect(discord.ui.Select):
 
 class EditMenuOptionBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Edit Role", style=discord.ButtonStyle.secondary, emoji=get_emoji('icon_edit'))
+        super().__init__(label="Edit Role", style=discord.ButtonStyle.secondary, emoji=get_emoji('edit'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1242,7 +1242,7 @@ class EditMenuOptionBtn(discord.ui.Button):
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose a role option to edit:"),
+            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose a role option to edit:"),
             discord.ui.ActionRow(EditMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -1297,7 +1297,7 @@ class RemoveMenuOptionSelect(discord.ui.Select):
 
 class RemoveMenuOptionBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Remove Role", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_minus'))
+        super().__init__(label="Remove Role", style=discord.ButtonStyle.danger, emoji=get_emoji('minus'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1314,7 +1314,7 @@ class RemoveMenuOptionBtn(discord.ui.Button):
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('icon_settings')} Choose role option(s) to remove:"),
+            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose role option(s) to remove:"),
             discord.ui.ActionRow(RemoveMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -1372,7 +1372,7 @@ class PostMenuBtn(discord.ui.Button):
 
 class ConfirmDeleteMenuBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
-        super().__init__(label="Confirm Delete", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
+        super().__init__(label="Confirm Delete", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1402,7 +1402,7 @@ class ConfirmDeleteMenuBtn(discord.ui.Button):
 
 class DeleteMenuBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Delete Menu", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
+        super().__init__(label="Delete Menu", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1414,7 +1414,7 @@ class DeleteMenuBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_settings')} Are you sure you want to delete this role menu? This cannot be undone."
+                content=f"{get_emoji('settings')} Are you sure you want to delete this role menu? This cannot be undone."
             ),
             discord.ui.ActionRow(ConfirmDeleteMenuBtn(self.guild_id, self.author, self.menu_id, message)),
             accent_colour=discord.Color.red(),
@@ -1429,7 +1429,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         super().__init__(
             label="Verify",
             style=discord.ButtonStyle.success,
-            emoji=get_emoji('icon_tick'),
+            emoji=get_emoji('tick'),
             custom_id=f"captcha_verify_{guild_id}",
         )
         self.guild_id = guild_id
@@ -1444,7 +1444,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Captcha verification is currently disabled for this server."
+                    content=f"{get_emoji('cross')} Captcha verification is currently disabled for this server."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1455,7 +1455,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You already have a captcha pending. Please check your DMs."
+                    content=f"{get_emoji('cross')} You already have a captcha pending. Please check your DMs."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1495,7 +1495,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             sent_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} A captcha has been sent to your DMs. Please check and reply with the code."
+                    content=f"{get_emoji('tick')} A captcha has been sent to your DMs. Please check and reply with the code."
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -1506,7 +1506,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             error_view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} I couldn't send you a DM. Please enable DMs from server members and try again."
+                    content=f"{get_emoji('cross')} I couldn't send you a DM. Please enable DMs from server members and try again."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1562,7 +1562,7 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Will **add** {', '.join(added)} on verification."
+                    content=f"{get_emoji('tick')} Will **add** {', '.join(added)} on verification."
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -1573,7 +1573,7 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Those roles are already configured."
+                    content=f"{get_emoji('cross')} Those roles are already configured."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1611,7 +1611,7 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_tick')} Will **remove** {', '.join(added)} on verification."
+                    content=f"{get_emoji('tick')} Will **remove** {', '.join(added)} on verification."
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -1622,7 +1622,7 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Those roles are already configured."
+                    content=f"{get_emoji('cross')} Those roles are already configured."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1643,7 +1643,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
         self.author = author
         self.guild = guild
 
-        status = f"{get_emoji('icon_tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('icon_cross')} Disabled"
+        status = f"{get_emoji('tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('cross')} Disabled"
         channel_text = (
             f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
         )
@@ -1672,7 +1672,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         class ToggleCaptchaBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label=toggle_label, style=toggle_style, emoji=get_emoji("icon_lock"))
+                super().__init__(label=toggle_label, style=toggle_style, emoji=get_emoji("lock"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1681,7 +1681,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1691,7 +1691,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 c.captcha_enabled = not c.captcha_enabled
                 await update_config(self_inner.guild_id, c)
                 # state = "enabled" if c.captcha_enabled else "disabled"
-                # emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
+                # emoji = get_emoji("tick") if state == "enabled" else get_emoji("cross")
                 # color = discord.Color.green() if state == "enabled" else discord.Color.red()
                 # view = discord.ui.LayoutView()
                 # container = discord.ui.Container(
@@ -1716,7 +1716,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1732,7 +1732,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Verification panel posted in this channel."
+                        content=f"{get_emoji('tick')} Verification panel posted in this channel."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1751,7 +1751,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1761,7 +1761,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_settings')} Select roles to **add** to members after they pass verification:"
+                        content=f"{get_emoji('settings')} Select roles to **add** to members after they pass verification:"
                     ),
                     CaptchaAddRolesView(self_inner.guild_id, message)
                 )
@@ -1779,7 +1779,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1789,7 +1789,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_settings')} Select roles to **remove** from members after they pass verification:"
+                        content=f"{get_emoji('settings')} Select roles to **remove** from members after they pass verification:"
                     ),
                     CaptchaRemoveRolesView(self_inner.guild_id, message)
                 )
@@ -1807,7 +1807,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1817,7 +1817,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 c.captcha_kick_on_fail = not c.captcha_kick_on_fail
                 await update_config(self_inner.guild_id, c)
                 state = "enabled" if c.captcha_kick_on_fail else "disabled"
-                emoji = get_emoji("icon_tick") if state == "enabled" else get_emoji("icon_cross")
+                emoji = get_emoji("tick") if state == "enabled" else get_emoji("cross")
                 color = discord.Color.green() if state == "enabled" else discord.Color.red()
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -1832,7 +1832,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         class ClearAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_trash"))
+                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("trash"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1841,7 +1841,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1853,7 +1853,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Cleared all roles to add."
+                        content=f"{get_emoji('tick')} Cleared all roles to add."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1863,7 +1863,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         class ClearRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_trash"))
+                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("trash"))
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1872,7 +1872,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1884,7 +1884,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Cleared all roles to remove."
+                        content=f"{get_emoji('tick')} Cleared all roles to remove."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -1920,7 +1920,7 @@ class ConfigureCaptchaBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} This button can only be used by the person that triggered the command."
+                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1951,7 +1951,7 @@ class AgreeButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} No role configured."
+                    content=f"{get_emoji('cross')} No role configured."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1963,7 +1963,7 @@ class AgreeButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} Configured role no longer exists."
+                    content=f"{get_emoji('cross')} Configured role no longer exists."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1974,7 +1974,7 @@ class AgreeButton(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} You have acknowledged the rules."
+                content=f"{get_emoji('tick')} You have acknowledged the rules."
             ),
             accent_colour=discord.Color.green()
         )
@@ -2371,7 +2371,7 @@ class RoleMenuWizardTypeView(discord.ui.LayoutView):
 
 class WizardFinishBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Finish Setup", style=discord.ButtonStyle.primary, emoji=get_emoji('icon_tick'))
+        super().__init__(label="Finish Setup", style=discord.ButtonStyle.primary, emoji=get_emoji('tick'))
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -2432,7 +2432,7 @@ class RoleMenuEditView(discord.ui.LayoutView):
 
         if menu is None:
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"{get_emoji('icon_cross')} This role menu no longer exists."),
+                discord.ui.TextDisplay(content=f"{get_emoji('cross')} This role menu no longer exists."),
                 discord.ui.ActionRow(BackToManagerBtn(guild_id, author)),
                 accent_colour=discord.Color.red(),
             )

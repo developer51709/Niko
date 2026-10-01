@@ -689,13 +689,13 @@ class InfoCog(commands.Cog):
         pf = target.public_flags
         _disc_flag_map = [
             ("staff",                  None,                        "🛡️"),
-            ("partner",                "icon_partner",             None),
-            ("bug_hunter",             "icon_bug",                 None),
-            ("bug_hunter_level_2",     "icon_bug",                 None),
+            ("partner",                "partner",             None),
+            ("bug_hunter",             "bug",                 None),
+            ("bug_hunter_level_2",     "bug",                 None),
             ("hypesquad_bravery",      "hypesquad_bravery",        None),
             ("hypesquad_brilliance",   "hypesquad_brilliance",     None),
             ("hypesquad_balance",      "hypesquad_balance",        None),
-            ("early_supporter",        "icon_premium",             None),
+            ("early_supporter",        "premium",             None),
             ("verified_bot_developer", "verified_developer_badge", None),
             ("active_developer",       "active_developer_badge",   None),
         ]
@@ -746,7 +746,7 @@ class InfoCog(commands.Cog):
                 f"<t:{int(target.premium_since.timestamp())}:R>"
             )
 
-        bot_tag = f" {get_emoji('icon_bot')}" if target.bot else ""
+        bot_tag = f" {get_emoji('bot')}" if target.bot else ""
 
         text = (
             f"## {target.display_name}{bot_tag}\n"
@@ -986,7 +986,7 @@ class InfoCog(commands.Cog):
     async def booststats(self, ctx):
         server = ctx.guild
         text = (
-            f"### {get_emoji('icon_boost')} {msg(ctx, 'booststats_title')}\n"
+            f"### {get_emoji('boost')} {msg(ctx, 'booststats_title')}\n"
             f"**{msg(ctx, 'booststats_count')}:** `{server.premium_subscription_count}`\n"
             f"**{msg(ctx, 'booststats_tier')}:** `{server.premium_tier}`\n"
             f"**{msg(ctx, 'booststats_boosters')}:** `{len(server.premium_subscribers)}`"
@@ -1127,7 +1127,7 @@ class InfoCog(commands.Cog):
     async def shards_command(self, ctx):
         """Display current shard information."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
 
         shard_guilds = {}
         shard_members = {}
@@ -1158,7 +1158,7 @@ class InfoCog(commands.Cog):
 
         pages = paginate(lines, per_page=8)
         view = PaginatedView(
-            title=f"{get_emoji('icon_host')} {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
+            title=f"{get_emoji('host')} {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
             pages=pages
         )
         await ctx.send(view=view)
@@ -1177,7 +1177,7 @@ class InfoCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
+                content=f"### {get_emoji('invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
             )
         )
         view.add_item(container)

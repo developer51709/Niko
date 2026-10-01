@@ -104,7 +104,7 @@ class ColorSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -125,7 +125,7 @@ class ColorSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -136,7 +136,7 @@ class ColorSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You must select a color first!"
+                    content=f"{get_emoji('cross')} You must select a color first!"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -148,7 +148,7 @@ class ColorSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Finding a profile picture for the selected color..."
+                content=f"{get_emoji('loading')} Finding a profile picture for the selected color..."
             )
         )
         view.add_item(container)
@@ -161,7 +161,7 @@ class ColorSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} An error occurred while finding the profile picture. Please try again later."
+                    content=f"{get_emoji('cross')} An error occurred while finding the profile picture. Please try again later."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -171,7 +171,7 @@ class ColorSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
+                content=f"### {get_emoji('image')} Profile Picture"
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -188,7 +188,7 @@ class ColorSelectView(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
+                content=f"### {get_emoji('image')} Profile Picture"
             ),
             discord.ui.ActionRow(
                 ColorSelect(ctx)
@@ -225,7 +225,7 @@ class GenderSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -245,7 +245,7 @@ class GenderSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -258,7 +258,7 @@ class GenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Finding a profile picture for the selected gender..."
+                content=f"{get_emoji('loading')} Finding a profile picture for the selected gender..."
             )
         )
         view.add_item(container)
@@ -269,7 +269,7 @@ class GenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
+                content=f"### {get_emoji('image')} Profile Picture"
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -286,7 +286,7 @@ class GenderSelectView(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Picture"
+                content=f"### {get_emoji('image')} Profile Picture"
             ),
             discord.ui.ActionRow(
                 GenderSelect(ctx)
@@ -316,7 +316,7 @@ class CoupleGenderSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -343,7 +343,7 @@ class CoupleGenderSelect2(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -363,7 +363,7 @@ class CoupleGenderSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You are not the author of this command."
+                    content=f"{get_emoji('cross')} You are not the author of this command."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -377,7 +377,7 @@ class CoupleGenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_loading')} Finding matching profile pictures for the selected genders..."
+                content=f"{get_emoji('loading')} Finding matching profile pictures for the selected genders..."
             )
         )
         view.add_item(container)
@@ -389,7 +389,7 @@ class CoupleGenderSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} We couldn't find any matching profile pictures for the selected genders."
+                    content=f"{get_emoji('cross')} We couldn't find any matching profile pictures for the selected genders."
                 ),
                 discord.ui.TextDisplay(
                     content="-# **Note from Developers:**\n-# This feature is still really new and not all the combinations are available yet. If you would like to help contribute to this feature, please feel free to add me on Discord (my username is `nyxenwastaken`) and send me message asking for more details on how you can contribute to the project.\n-# ~Sincerely, Nyxen"
@@ -402,7 +402,7 @@ class CoupleGenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Couple Profile Pictures"
+                content=f"### {get_emoji('image')} Couple Profile Pictures"
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -422,7 +422,7 @@ class CouplesGenderSelect(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Couple Profile Pictures"
+                content=f"### {get_emoji('image')} Couple Profile Pictures"
             ),
             discord.ui.ActionRow(
                 CoupleGenderSelect(ctx),
@@ -456,7 +456,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Profile Pictures\n"
+                content=f"### {get_emoji('image')} Profile Pictures\n"
                 f"Find new profile pictures.\n\n"
                 f"**Subcommands:**\n"
                 f"`{prefix}pfp color` - Find a profile picture with the specified color.\n"
@@ -512,7 +512,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_image')} Upload Profile Picture\n"
+                content=f"### {get_emoji('image')} Upload Profile Picture\n"
                 f"Upload a profile picture.\n\n"
                 f"**Subcommands:**\n"
                 f"`{prefix}pfp upload color <color>` - Upload a profile picture with the specified color.\n"
@@ -537,7 +537,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} No image found in the message."
+                    content=f"{get_emoji('cross')} No image found in the message."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -566,7 +566,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} The profile picture has been uploaded successfully."
+                content=f"{get_emoji('tick')} The profile picture has been uploaded successfully."
             ),
             accent_colour=discord.Color.green()
         )
@@ -587,7 +587,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
+                    content=f"{get_emoji('cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -599,7 +599,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} No image found in the message."
+                    content=f"{get_emoji('cross')} No image found in the message."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -616,7 +616,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} The profile picture has been uploaded successfully."
+                content=f"{get_emoji('tick')} The profile picture has been uploaded successfully."
             ),
             accent_colour=discord.Color.green()
         )
@@ -637,7 +637,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
+                    content=f"{get_emoji('cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -649,7 +649,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} No images found in the message or the number of images is not 2."
+                    content=f"{get_emoji('cross')} No images found in the message or the number of images is not 2."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -681,7 +681,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} The profile pictures have been uploaded successfully."
+                content=f"{get_emoji('tick')} The profile pictures have been uploaded successfully."
             ),
             accent_colour=discord.Color.green()
         )

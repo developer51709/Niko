@@ -224,15 +224,15 @@ class CurrencyMixin:
 
         if not member or member.bot or member.id == ctx.author.id:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad target", "Pick a real person other than yourself."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad target", "Pick a real person other than yourself."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
 
         if amount <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
 
         data   = await self.get_user_economy_data(ctx.author.id)
         target = await self.get_user_economy_data(member.id)

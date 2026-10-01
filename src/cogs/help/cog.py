@@ -20,7 +20,7 @@ class HelpCog(commands.Cog):
                 cmd = None
             if not cmd:
                 content = (
-                    f"### {get_emoji('icon_cross')} {_ui(lang, 'cmd_not_found_title')}\n"
+                    f"### {get_emoji('cross')} {_ui(lang, 'cmd_not_found_title')}\n"
                     f"{_ui(lang, 'cmd_not_found_body', name=command_name)}"
                 )
                 view = _make_layout(self.bot, content, lang, include_dropdown=False)

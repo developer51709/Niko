@@ -26,61 +26,61 @@ CATEGORIES: dict[str, dict] = {
     "moderation": {
         "label": "Moderation",
         "description": "Kicks, bans, warns, mutes, unbans, nickname changes",
-        "emoji_key": "icon_moderation",
+        "emoji_key": "moderation",
         "color": 0xED4245,
     },
     "automod": {
         "label": "AutoMod",
         "description": "Anti-spam, anti-link, bad words, mass mention, anti-nuke, anti-raid",
-        "emoji_key": "icon_automod",
+        "emoji_key": "automod",
         "color": 0xFEE75C,
     },
     "messages": {
         "label": "Messages",
         "description": "Message deletions, edits, bulk clears and purges",
-        "emoji_key": "icon_edit",
+        "emoji_key": "edit",
         "color": 0x5865F2,
     },
     "channels": {
         "label": "Channels",
         "description": "Channel lock/unlock, channel create/delete",
-        "emoji_key": "icon_utility",
+        "emoji_key": "utility",
         "color": 0x57F287,
     },
     "members": {
         "label": "Members",
         "description": "Member joins, leaves, role changes and avatar updates",
-        "emoji_key": "icon_welcome",
+        "emoji_key": "welcome",
         "color": 0x9B59B6,
     },
     "captcha": {
         "label": "Captcha",
         "description": "Captcha verifications — passes, failures, and kicks",
-        "emoji_key": "icon_moderation",
+        "emoji_key": "moderation",
         "color": 0x57F287,
     },
     "invites": {
         "label": "Invites",
         "description": "Invite creation, deletion, and usage tracking",
-        "emoji_key": "icon_utility",
+        "emoji_key": "utility",
         "color": 0x5865F2,
     },
     "roles": {
         "label": "Roles",
         "description": "Role creation, deletion, and permission/name updates",
-        "emoji_key": "icon_utility",
+        "emoji_key": "utility",
         "color": 0xFEE75C,
     },
     "server": {
         "label": "Server",
         "description": "Server settings, emoji, and sticker changes",
-        "emoji_key": "icon_settings",
+        "emoji_key": "settings",
         "color": 0xEB459E,
     },
     "voice": {
         "label": "Voice",
         "description": "Voice channel joins, leaves, and moves",
-        "emoji_key": "icon_utility",
+        "emoji_key": "utility",
         "color": 0x1ABC9C,
     },
 }
@@ -259,14 +259,14 @@ class KickButton(discord.ui.Button):
             return await interaction.response.send_message("Member not found (they may have already left).", ephemeral=True)
         try:
             await member.kick(reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('icon_tick')} Kicked **{member}**.", ephemeral=True)
+            await interaction.response.send_message(f"{get_emoji('tick')} Kicked **{member}**.", ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message("I don't have permission to kick that member.", ephemeral=True)
 
 
 class BanButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Ban", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_ban'), row=0)
+        super().__init__(label="Ban", style=discord.ButtonStyle.danger, emoji=get_emoji('ban'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
@@ -281,20 +281,20 @@ class BanButton(discord.ui.Button):
             try:
                 user = await interaction.client.fetch_user(self.target_id)
                 await guild.ban(user, reason=f"Quick action by {interaction.user}")
-                await interaction.response.send_message(f"{get_emoji('icon_tick')} Banned **{user}**.", ephemeral=True)
+                await interaction.response.send_message(f"{get_emoji('tick')} Banned **{user}**.", ephemeral=True)
             except Exception:
                 await interaction.response.send_message("Could not ban that user.", ephemeral=True)
             return
         try:
             await member.ban(reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('icon_tick')} Banned **{member}**.", ephemeral=True)
+            await interaction.response.send_message(f"{get_emoji('tick')} Banned **{member}**.", ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message("I don't have permission to ban that member.", ephemeral=True)
 
 
 class UnbanButton(discord.ui.Button):
     def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Unban", style=discord.ButtonStyle.success, emoji=get_emoji('icon_tick'), row=0)
+        super().__init__(label="Unban", style=discord.ButtonStyle.success, emoji=get_emoji('tick'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
@@ -307,7 +307,7 @@ class UnbanButton(discord.ui.Button):
         try:
             user = await interaction.client.fetch_user(self.target_id)
             await guild.unban(user, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('icon_tick')} Unbanned **{user}**.", ephemeral=True)
+            await interaction.response.send_message(f"{get_emoji('tick')} Unbanned **{user}**.", ephemeral=True)
         except discord.NotFound:
             await interaction.response.send_message("That user isn't banned.", ephemeral=True)
         except discord.Forbidden:
@@ -334,14 +334,14 @@ class UnmuteButton(discord.ui.Button):
             return await interaction.response.send_message("Moderation system unavailable.", ephemeral=True)
         try:
             await mod_utils.unmute_member(member, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('icon_tick')} Unmuted **{member}**.", ephemeral=True)
+            await interaction.response.send_message(f"{get_emoji('tick')} Unmuted **{member}**.", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"Failed to unmute: {e}", ephemeral=True)
 
 
 class UnlockButton(discord.ui.Button):
     def __init__(self, guild_id: int, channel_id: int):
-        super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji=get_emoji('icon_unlock'), row=0)
+        super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji=get_emoji('unlock'), row=0)
         self.guild_id = guild_id
         self.channel_id = channel_id
 
@@ -356,7 +356,7 @@ class UnlockButton(discord.ui.Button):
             return await interaction.response.send_message("Channel not found.", ephemeral=True)
         try:
             await channel.set_permissions(guild.default_role, send_messages=None, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('icon_tick')} Unlocked {channel.mention}.", ephemeral=True)
+            await interaction.response.send_message(f"{get_emoji('tick')} Unlocked {channel.mention}.", ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message("I don't have permission to unlock that channel.", ephemeral=True)
 
@@ -403,13 +403,13 @@ def _build_log_view(
     timestamp = f"-# <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n-# <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
     # set type specific emojis
     if title == "Member Joined":
-        emoji = get_emoji("icon_join")
+        emoji = get_emoji("join")
     if title == "Member Left":
-        emoji = get_emoji("icon_leave")
+        emoji = get_emoji("leave")
     if action_key == "Ban":
-        emoji = get_emoji("icon_ban")
+        emoji = get_emoji("ban")
     if title == "Avatar Updated":
-        emoji = get_emoji("icon_image")
+        emoji = get_emoji("image")
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 
@@ -489,7 +489,7 @@ class SelectChannelView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use this menu."
+                            content=f"{get_emoji('cross')} Only the command invoker can use this menu."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -509,7 +509,7 @@ class SelectChannelView(discord.ui.LayoutView):
                 super().__init__(
                     label="Save Channel",
                     style=discord.ButtonStyle.primary,
-                    emoji=get_emoji("icon_tick")
+                    emoji=get_emoji("tick")
                 )
 
             async def callback(s, interaction: discord.Interaction):
@@ -517,7 +517,7 @@ class SelectChannelView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use this button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use this button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -531,7 +531,7 @@ class SelectChannelView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Please select a channel first."
+                            content=f"{get_emoji('cross')} Please select a channel first."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -546,7 +546,7 @@ class SelectChannelView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} **{CATEGORIES[self.category]['label']}** logs → <#{self.selected_channel}>"
+                        content=f"{get_emoji('tick')} **{CATEGORIES[self.category]['label']}** logs → <#{self.selected_channel}>"
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -562,7 +562,7 @@ class SelectChannelView(discord.ui.LayoutView):
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_settings')} Select a channel for **{CATEGORIES[category]['label']}**"
+                content=f"### {get_emoji('settings')} Select a channel for **{CATEGORIES[category]['label']}**"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(_ChannelSelect()),
@@ -598,7 +598,7 @@ class LoggingSetupView(discord.ui.LayoutView):
             status = get_emoji("disabled") if disabled else get_emoji("enabled")
             lines.append(f"{status} **{info['label']}** — {ch_text}")
         summary = "\n".join(lines)
-        icon = get_emoji("icon_settings")
+        icon = get_emoji("settings")
 
         # Build select options
         select_options = []
@@ -627,7 +627,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_settings')} Category **{label}** selected. Now use the buttons below to configure it."
+                        content=f"{get_emoji('settings')} Category **{label}** selected. Now use the buttons below to configure it."
                     )
                 )
                 view.add_item(container)
@@ -641,7 +641,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 super().__init__(
                     label="Set Channel",
                     style=discord.ButtonStyle.primary,
-                    emoji=get_emoji("icon_plus")
+                    emoji=get_emoji("plus")
                 )
                 s._author = author
                 s._guild_id = guild_id
@@ -651,7 +651,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use these button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -666,7 +666,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                            content=f"{get_emoji('cross')} Please select a category from the dropdown first."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -685,7 +685,7 @@ class LoggingSetupView(discord.ui.LayoutView):
 
         class _ClearChannelBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Clear Channel", style=discord.ButtonStyle.secondary, emoji=get_emoji("icon_cross"))
+                super().__init__(label="Clear Channel", style=discord.ButtonStyle.secondary, emoji=get_emoji("cross"))
                 s._author = author
                 s._guild_id = guild_id
 
@@ -694,7 +694,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use these button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -708,7 +708,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                            content=f"{get_emoji('cross')} Please select a category from the dropdown first."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -724,7 +724,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Cleared channel for **{CATEGORIES[cat]['label']}** logs."
+                        content=f"{get_emoji('cross')} Cleared channel for **{CATEGORIES[cat]['label']}** logs."
                     ),
                     accent_colour=discord.Color.red()
                 )
@@ -737,7 +737,7 @@ class LoggingSetupView(discord.ui.LayoutView):
 
         class _ToggleBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Toggle Enable/Disable", style=discord.ButtonStyle.secondary, emoji=get_emoji('icon_refresh'))
+                super().__init__(label="Toggle Enable/Disable", style=discord.ButtonStyle.secondary, emoji=get_emoji('refresh'))
                 s._author = author
                 s._guild_id = guild_id
 
@@ -746,7 +746,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use these button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -760,7 +760,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Please select a category from the dropdown first."
+                            content=f"{get_emoji('cross')} Please select a category from the dropdown first."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -774,10 +774,10 @@ class LoggingSetupView(discord.ui.LayoutView):
                 dis = gc.setdefault("disabled", [])
                 if cat in dis:
                     dis.remove(cat)
-                    state, e = "enabled", get_emoji("icon_tick")
+                    state, e = "enabled", get_emoji("tick")
                 else:
                     dis.append(cat)
-                    state, e = "disabled", get_emoji("icon_cross")
+                    state, e = "disabled", get_emoji("cross")
                 await _save_guild_log_config(s._guild_id, gc)
                 color = discord.Color.green() if state == "enabled" else discord.Color.red()
                 view = discord.ui.LayoutView()
@@ -803,7 +803,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use these button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -820,7 +820,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} All log categories → {interaction.channel.mention}"
+                        content=f"{get_emoji('tick')} All log categories → {interaction.channel.mention}"
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -831,7 +831,7 @@ class LoggingSetupView(discord.ui.LayoutView):
 
         class _ClearAllBtn(discord.ui.Button):
             def __init__(s):
-                super().__init__(label="Clear All Channels", style=discord.ButtonStyle.danger, emoji=get_emoji('icon_trash'))
+                super().__init__(label="Clear All Channels", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
                 s._author = author
                 s._guild_id = guild_id
 
@@ -840,7 +840,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('icon_cross')} Only the command invoker can use these button."
+                            content=f"{get_emoji('cross')} Only the command invoker can use these button."
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -857,7 +857,7 @@ class LoggingSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_cross')} Cleared all logging channels."
+                        content=f"{get_emoji('cross')} Cleared all logging channels."
                     ),
                     accent_colour=discord.Color.red()
                 )

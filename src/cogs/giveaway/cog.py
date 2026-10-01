@@ -97,7 +97,7 @@ class Giveaway(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_giveaway')} Giveaway Commands"
+                content=f"### {get_emoji('giveaway')} Giveaway Commands"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(

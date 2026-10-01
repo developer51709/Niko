@@ -262,7 +262,7 @@ class Highlights(commands.Cog):
         if not u["keywords"]:
             return await ctx.send(view=cv2(msg(ctx, "list_empty")),
                                   ephemeral=True if ctx.interaction else False)
-        body = msg(ctx, "list_title", icon=get_emoji("icon_message")) + "\n" + "\n".join(
+        body = msg(ctx, "list_title", icon=get_emoji("message")) + "\n" + "\n".join(
             f"• `{k}`" for k in u["keywords"]
         )
         if u["ignore_users"]:
@@ -380,7 +380,7 @@ class Highlights(commands.Cog):
                     quote = quote[:800] + "…"
                 quote = "\n".join(f"> {l}" for l in quote.splitlines())
 
-                title = msg(message.guild, "notify_title", icon=get_emoji("icon_lightbulb"), kw=kw)
+                title = msg(message.guild, "notify_title", icon=get_emoji("lightbulb"), kw=kw)
                 body = msg(message.guild, "notify_body",
                            channel=message.channel.mention,
                            guild=message.guild.name,

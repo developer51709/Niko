@@ -16,7 +16,7 @@ class ExperimentsView(discord.ui.LayoutView):
         self.guild_id = guild_id
         super().__init__()
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} Experiments"))
+        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Experiments"))
         self.container.add_item(discord.ui.TextDisplay(content="> These are experimental features that are still under development. They may not work as expected and may change at any time."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="**AI Actions**"))
@@ -57,7 +57,7 @@ class ExperimentAboutButton(discord.ui.Button):
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Unknown Experiment"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Unknown Experiment"),
                 discord.ui.TextDisplay(content="The about page for this experiment could not be found.")
             )
             view.add_item(container)
@@ -70,11 +70,11 @@ class ExperimentToggle(discord.ui.Button):
         self.guild_id = guild_id
         current_status = get_ai_config(guild_id, f"{experiment}_experiment")
         if current_status == "True":
-            emoji = get_emoji("icon_tick")
+            emoji = get_emoji("tick")
             label = "Enabled"
             style = discord.ButtonStyle.green
         else:
-            emoji = get_emoji("icon_cross")
+            emoji = get_emoji("cross")
             label = "Disabled"
             style = discord.ButtonStyle.red
         super().__init__(label=label, style=style, emoji=emoji)
@@ -84,7 +84,7 @@ class ExperimentToggle(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error"
+                    content=f"### {get_emoji('danger')} Error"
                 ),
                 discord.ui.Separator(
                     visible=True,
@@ -101,12 +101,12 @@ class ExperimentToggle(discord.ui.Button):
         current_status = get_ai_config(guild_id, f"{self.experiment}_experiment")
         if current_status == "True":
             set_ai_config(guild_id, f"{self.experiment}_experiment", "False")
-            self.emoji = get_emoji("icon_cross")
+            self.emoji = get_emoji("cross")
             self.label = "Disabled"
             self.style = discord.ButtonStyle.red
         else:
             set_ai_config(guild_id, f"{self.experiment}_experiment", "True")
-            self.emoji = get_emoji("icon_tick")
+            self.emoji = get_emoji("tick")
             self.label = "Enabled"
             self.style = discord.ButtonStyle.green
         await interaction.response.edit_message(view=self.view)
@@ -116,7 +116,7 @@ class AIActionsExperimentAbout(discord.ui.LayoutView):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} AI Actions Experiment"))
+        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} AI Actions Experiment"))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="This experiment lets Niko take real action on your server when you ask in natural language."))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
@@ -156,7 +156,7 @@ class BetterContextExperimentAbout(discord.ui.LayoutView):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} Better Context Experiment"))
+        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Better Context Experiment"))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="Gives Niko awareness of recent conversation history so responses feel more natural and connected to what's happening in the channel."))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
@@ -171,7 +171,7 @@ class MultimodalExperimentAbout(discord.ui.LayoutView):
         super().__init__()
         self.bot = bot
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} Multimodal Conversation Experiment"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Multimodal Conversation Experiment"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=(
                 "When enabled, Niko can inspect up to three image attachments and "
@@ -202,7 +202,7 @@ class ExperimentsButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error"
+                    content=f"### {get_emoji('danger')} Error"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -235,7 +235,7 @@ class BotPersonalitySelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_ai')} Bot Personality"
+                content=f"### {get_emoji('ai')} Bot Personality"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -260,7 +260,7 @@ class BotPersonalityButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error"
+                    content=f"### {get_emoji('danger')} Error"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -273,7 +273,7 @@ class BotPersonalityButton(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_ai')} Bot Personality"
+                content=f"### {get_emoji('ai')} Bot Personality"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -335,7 +335,7 @@ class ToggleAIButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_danger')} Error"
+                    content=f"### {get_emoji('danger')} Error"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -370,7 +370,7 @@ class AIConfigPanel(discord.ui.LayoutView):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('icon_ai')} AI Configuration Panel"))
+        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} AI Configuration Panel"))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         self.container.add_item(discord.ui.TextDisplay(content="Use the options below to configure the AI settings for your server."))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))

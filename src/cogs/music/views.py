@@ -42,7 +42,7 @@ class _PauseResumeBtn(discord.ui.Button):
         super().__init__(
             label="Resume" if paused else "Pause",
             style=discord.ButtonStyle.success if paused else discord.ButtonStyle.secondary,
-            emoji=get_emoji("icon_play") if paused else get_emoji("icon_pause"),
+            emoji=get_emoji("play") if paused else get_emoji("pause"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -57,7 +57,7 @@ class _PauseResumeBtn(discord.ui.Button):
 
 class _SkipBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Skip", style=discord.ButtonStyle.primary, emoji=get_emoji('icon_skip'))
+        super().__init__(label="Skip", style=discord.ButtonStyle.primary, emoji=get_emoji('skip'))
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -71,7 +71,7 @@ class _SkipBtn(discord.ui.Button):
 
 class _StopBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Stop", style=discord.ButtonStyle.danger, emoji=get_emoji("icon_stop"))
+        super().__init__(label="Stop", style=discord.ButtonStyle.danger, emoji=get_emoji("stop"))
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -93,7 +93,7 @@ class _PrevBtn(discord.ui.Button):
         super().__init__(
             label="Prev",
             style=discord.ButtonStyle.secondary,
-            emoji=get_emoji("icon_rewind"),
+            emoji=get_emoji("rewind"),
             disabled=not enabled,
         )
         self.cog      = cog
@@ -121,7 +121,7 @@ class _LoopBtn(discord.ui.Button):
         super().__init__(
             label="Loop On" if loop else "Loop",
             style=discord.ButtonStyle.success if loop else discord.ButtonStyle.secondary,
-            emoji=get_emoji("icon_loop"),
+            emoji=get_emoji("loop"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -310,7 +310,7 @@ def _build_np_view(
         # Idle / stopped card
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_stop')} Nothing Playing"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('stop')} Nothing Playing"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"-# Use `.play <song>` to queue something up."),
             accent_colour=discord.Colour(0x5865F2),
@@ -334,7 +334,7 @@ def _build_np_view(
     else:
         src_badge = "🎵 Music"
 
-    status_icon = get_emoji("icon_pause") if player.paused else get_emoji("icon_play")
+    status_icon = get_emoji("pause") if player.paused else get_emoji("play")
 
     body = (
         f"### {status_icon} Now Playing\n"
@@ -342,7 +342,7 @@ def _build_np_view(
         f"by {author_name}\n\n"
         f"{duration}\n\n"
         f"-# {src_badge} · Vol {vol}% · "
-        f"{get_emoji('icon_loop') + ' Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
+        f"{get_emoji('loop') + ' Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
     ).rstrip(" · \n")
 
     # Build container items

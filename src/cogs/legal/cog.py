@@ -17,7 +17,7 @@ MESSAGES = {
     "normal": {
         "en": {
             # ── Privacy ──────────────────────────────────────────────
-            "privacy_title": f"{get_emoji('icon_important')} Privacy Policy",
+            "privacy_title": f"{get_emoji('important')} Privacy Policy",
             "privacy_body": (
                 "**Effective date:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. What we collect**\n"
@@ -58,7 +58,7 @@ MESSAGES = {
             ),
 
             # ── Terms ────────────────────────────────────────────────
-            "terms_title": f"{get_emoji('icon_important')} Terms of Service",
+            "terms_title": f"{get_emoji('important')} Terms of Service",
             "terms_body": (
                 "**Effective date:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. Acceptance**\n"
@@ -91,7 +91,7 @@ MESSAGES = {
             ),
 
             # ── Community ────────────────────────────────────────────
-            "community_title": f"{get_emoji('icon_users')} Community Policy",
+            "community_title": f"{get_emoji('user')} Community Policy",
             "community_body": (
                 "**Effective date:** " + EFFECTIVE_DATE + "\n\n"
                 "These community expectations apply to every server that uses Niko. By adding the bot to a server, "
@@ -134,7 +134,7 @@ MESSAGES = {
         },
 
         "de": {
-            "privacy_title": f"{get_emoji('icon_important')} Datenschutzerklärung",
+            "privacy_title": f"{get_emoji('important')} Datenschutzerklärung",
             "privacy_body": (
                 "**Gültig ab:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. Was wir speichern**\n"
@@ -172,7 +172,7 @@ MESSAGES = {
                 f"Wesentliche Änderungen werden im Support-Server angekündigt: {SUPPORT_SERVER}"
             ),
 
-            "terms_title": f"{get_emoji('icon_important')} Nutzungsbedingungen",
+            "terms_title": f"{get_emoji('important')} Nutzungsbedingungen",
             "terms_body": (
                 "**Gültig ab:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. Zustimmung**\n"
@@ -194,7 +194,7 @@ MESSAGES = {
                 f"**8. Kontakt:** {SUPPORT_SERVER}"
             ),
 
-            "community_title": f"{get_emoji('icon_users')} Community-Richtlinie",
+            "community_title": f"{get_emoji('user')} Community-Richtlinie",
             "community_body": (
                 "**Gültig ab:** " + EFFECTIVE_DATE + "\n\n"
                 "Diese Community-Standards gelten für jeden Server, der Niko nutzt. Mit dem Hinzufügen des Bots "
@@ -237,7 +237,7 @@ MESSAGES = {
         },
 
         "es": {
-            "privacy_title": f"{get_emoji('icon_important')} Política de Privacidad",
+            "privacy_title": f"{get_emoji('important')} Política de Privacidad",
             "privacy_body": (
                 "**Fecha de vigencia:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. Qué recopilamos**\n"
@@ -275,7 +275,7 @@ MESSAGES = {
                 f"Los cambios importantes se anunciarán en el servidor de soporte: {SUPPORT_SERVER}"
             ),
 
-            "terms_title": f"{get_emoji('icon_important')} Términos de Servicio",
+            "terms_title": f"{get_emoji('important')} Términos de Servicio",
             "terms_body": (
                 "**Fecha de vigencia:** " + EFFECTIVE_DATE + "\n\n"
                 "**1. Aceptación**\n"
@@ -295,7 +295,7 @@ MESSAGES = {
                 f"**8. Contacto:** {SUPPORT_SERVER}"
             ),
 
-            "community_title": f"{get_emoji('icon_users')} Política de Comunidad",
+            "community_title": f"{get_emoji('user')} Política de Comunidad",
             "community_body": (
                 "**Fecha de vigencia:** " + EFFECTIVE_DATE + "\n\n"
                 "Estas expectativas de comunidad aplican a cada servidor que usa Niko. Al añadir el bot a un servidor, "
@@ -369,7 +369,7 @@ class LegalCog(commands.Cog, name="Legal"):
     )
     async def legal(self, ctx: commands.Context):
         """Shows an overview pointing to the sub-commands."""
-        icon = get_emoji("icon_important")
+        icon = get_emoji("important")
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(

@@ -233,7 +233,7 @@ class ShopMixin:
         """Validate and commit a transaction selected through the private panel."""
         item = get_item(item_id)
         if not item or count < 1:
-            return await interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Invalid selection", "That item or amount is no longer available."), ephemeral=True)
+            return await interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Invalid selection", "That item or amount is no longer available."), ephemeral=True)
         data = await self.get_user_economy_data(interaction.user.id)
         iid = item_id.lower()
         if int(data.get("level", 0)) < int(item.get("min_level", 0)):
@@ -298,25 +298,25 @@ class ShopMixin:
         # Ensure the amount is a positive number
         if count <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
 
         # Check if the item exists
         item = get_item(item_id)
         if not item:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Out of stock", f"No item called `{item_id}`."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Out of stock", f"No item called `{item_id}`."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Out of stock", f"No item called `{item_id}`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Out of stock", f"No item called `{item_id}`."))
 
         # Check if the user meets the level requirements
         data = await self.get_user_economy_data(ctx.author.id)
         if data["level"] < item.get("min_level", 0):
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('vm_lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('vm_lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
+                return await ctx.send(view=_info_view(f"{get_emoji('lock')} Locked", f"**{item['name']}** requires career level **{item['min_level']}**."))
 
         # Check if the user has enough balance to buy the item
         total = item["price"] * count
@@ -353,18 +353,18 @@ class ShopMixin:
         # Verify the user provided a positive amount
         if count <= 0:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Count must be at least 1."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Count must be at least 1."))
 
         # Verify the item exists
         iid  = item_id.lower()
         item = get_item(iid)
         if not item:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Unknown item", f"No item called `{item_id}`."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown item", f"No item called `{item_id}`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Unknown item", f"No item called `{item_id}`."))
 
         # Ensure the user has enough to sell
         data = await self.get_user_economy_data(ctx.author.id)
@@ -402,7 +402,7 @@ class ShopMixin:
         untouched and the title/body explain why it could not be used.
         """
         if not item:
-            return False, f"{get_emoji('icon_cross')} Unknown item", f"No item called `{iid}`."
+            return False, f"{get_emoji('cross')} Unknown item", f"No item called `{iid}`."
         if int(data.get("inventory", {}).get(iid, 0)) < 1:
             return False, "📦 None in bag", f"You don't have any **{item['name']}**."
         if item["category"] == "collectible":

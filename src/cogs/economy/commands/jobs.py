@@ -28,7 +28,7 @@ class JobsMixin:
         lines = []
         for jid, j in JOBS.items():
             tag  = "  ← **current**" if jid == cur else ""
-            lock = "" if data["level"] >= j["min_level"] else f"  {get_emoji('vm_lock')} lvl {j['min_level']}"
+            lock = "" if data["level"] >= j["min_level"] else f"  {get_emoji('lock')} lvl {j['min_level']}"
             lines.append(
                 f"{j['emoji']} **{j['name']}** `({jid})`{tag}{lock}\n"
                 f"-# {j['min_pay']}–{j['max_pay']} coins/shift • +{j['xp_per_shift']} XP\n"
@@ -60,9 +60,9 @@ class JobsMixin:
         j = JOBS.get(job_id.lower())
         if not j:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
         body = (
             f"{j['emoji']} **{j['name']}**\n*{j['description']}*\n\n"
             f"• Min level: **{j['min_level']}**\n"
@@ -85,19 +85,19 @@ class JobsMixin:
         j = JOBS.get(jid)
         if not j:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
 
         if data["level"] < j["min_level"]:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
-                    f"{get_emoji('vm_lock')} Not yet",
+                    f"{get_emoji('lock')} Not yet",
                     f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
                 ))
             else:
                 return await ctx.send(view=_info_view(
-                    f"{get_emoji('vm_lock')} Not yet",
+                    f"{get_emoji('lock')} Not yet",
                     f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
                 ))
         data["job"] = jid
@@ -105,12 +105,12 @@ class JobsMixin:
         await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
-                f"{get_emoji('icon_tick')} Hired!",
+                f"{get_emoji('tick')} Hired!",
                 f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
             ))
         else:
             await ctx.send(view=_info_view(
-                f"{get_emoji('icon_tick')} Hired!",
+                f"{get_emoji('tick')} Hired!",
                 f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
             ))
 
@@ -122,9 +122,9 @@ class JobsMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         if data.get("job") == DEFAULT_JOB:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to quit", "You're already a barista."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", "You're already a barista."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Nothing to quit", "You're already a barista."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", "You're already a barista."))
         data["job"] = DEFAULT_JOB
         await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:

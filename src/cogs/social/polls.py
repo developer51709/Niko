@@ -191,7 +191,7 @@ def _build_poll_text(poll_row, counts: List[int], guild) -> str:
     shim = _guild_shim(guild)
     question = poll_row["question"]
     options = _options_from_row(poll_row)
-    title = msg(shim, "title", icon=get_emoji("icon_lightbulb"), question=question)
+    title = msg(shim, "title", icon=get_emoji("lightbulb"), question=question)
     total = sum(counts) or 1
     lines = []
     for i, opt in enumerate(options):
@@ -462,7 +462,7 @@ class PollSetupView(discord.ui.LayoutView):
         ch_disp = f"<#{s.channel_id}>" if s.channel_id else "—"
         # header
         header = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_lightbulb')} Poll Builder"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('lightbulb')} Poll Builder"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"**Question:** {q_disp}\n**Channel:** {ch_disp}\n**Options:** {len(s.options)}/10"),
             accent_colour=discord.Color.blurple(),
@@ -475,15 +475,15 @@ class PollSetupView(discord.ui.LayoutView):
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(content=f"**{idx+1}.** {opt}"),
                     discord.ui.ActionRow(
-                        _BuilderBtn("Edit", discord.ButtonStyle.secondary, f"{get_emoji('icon_edit')}", self, "edit", idx),
-                        _BuilderBtn("Delete", discord.ButtonStyle.danger, f"{get_emoji('icon_trash')}", self, "delete", idx),
+                        _BuilderBtn("Edit", discord.ButtonStyle.secondary, f"{get_emoji('edit')}", self, "edit", idx),
+                        _BuilderBtn("Delete", discord.ButtonStyle.danger, f"{get_emoji('trash')}", self, "delete", idx),
                     ),
                     accent_colour=discord.Color.greyple(),
                 )
                 self.add_item(container)
         else:
             self.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"-# No options yet — press {get_emoji('icon_plus')} **Add Option** to create one."),
+                discord.ui.TextDisplay(content=f"-# No options yet — press {get_emoji('plus')} **Add Option** to create one."),
                 accent_colour=discord.Color.greyple(),
             ))
 
@@ -493,13 +493,13 @@ class PollSetupView(discord.ui.LayoutView):
 
         controls = discord.ui.Container(
             discord.ui.ActionRow(
-                _BuilderBtn("Set Question", discord.ButtonStyle.primary, f"{get_emoji('icon_edit')}", self, "question"),
-                _BuilderBtn("Add Option", discord.ButtonStyle.primary, f"{get_emoji('icon_plus')}", self, "add_option"),
+                _BuilderBtn("Set Question", discord.ButtonStyle.primary, f"{get_emoji('edit')}", self, "question"),
+                _BuilderBtn("Add Option", discord.ButtonStyle.primary, f"{get_emoji('plus')}", self, "add_option"),
             ),
             discord.ui.ActionRow(_BuilderChannelSelect(self)),
             discord.ui.ActionRow(
-                _BuilderBtn("Send Poll", send_style, f"{get_emoji('icon_tick')}", self, "send"),
-                _BuilderBtn("Cancel", discord.ButtonStyle.danger, f"{get_emoji('icon_cross')}", self, "cancel"),
+                _BuilderBtn("Send Poll", send_style, f"{get_emoji('tick')}", self, "send"),
+                _BuilderBtn("Cancel", discord.ButtonStyle.danger, f"{get_emoji('cross')}", self, "cancel"),
             ),
             accent_colour=discord.Color.blurple(),
         )
@@ -553,14 +553,14 @@ class PollSetupView(discord.ui.LayoutView):
         if not s.channel_id:
             problems.append("- Channel is not set")
         if problems:
-            return await interaction.response.send_message(f"{get_emoji('icon_cross')} Can't send the poll yet:\n" + "\n".join(problems), ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('cross')} Can't send the poll yet:\n" + "\n".join(problems), ephemeral=True)
         guild = interaction.guild
         channel = guild.get_channel(s.channel_id) if guild else None
         if channel is None:
-            return await interaction.response.send_message(f"{get_emoji('icon_cross')} I can't find that channel anymore.", ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('cross')} I can't find that channel anymore.", ephemeral=True)
         me = guild.me if guild else None
         if me and not channel.permissions_for(me).send_messages:
-            return await interaction.response.send_message(f"{get_emoji('icon_cross')} I can't send messages in {channel.mention}.", ephemeral=True)
+            return await interaction.response.send_message(f"{get_emoji('cross')} I can't send messages in {channel.mention}.", ephemeral=True)
 
         question = s.question.strip()[:200]
         options = [o.strip()[:80] for o in s.options]
@@ -573,7 +573,7 @@ class PollSetupView(discord.ui.LayoutView):
         except Exception:
             pass
         # send stub then persistent view
-        stub_text = f"### {get_emoji('icon_lightbulb')} {question}\n" + "\n".join(f"**{NUMBER_EMOJIS[i]}** {o} — `0` votes (0%)" for i, o in enumerate(options)) + f"\n\n-# Click a button to vote · poll by <@{self.host_id}>"
+        stub_text = f"### {get_emoji('lightbulb')} {question}\n" + "\n".join(f"**{NUMBER_EMOJIS[i]}** {o} — `0` votes (0%)" for i, o in enumerate(options)) + f"\n\n-# Click a button to vote · poll by <@{self.host_id}>"
         stub_view = discord.ui.LayoutView()
         stub_view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=stub_text), accent_colour=discord.Color.blurple()))
         sent = await channel.send(view=stub_view)
@@ -776,7 +776,7 @@ class Polls(commands.Cog):
         # Reuse view's container content but without buttons -> fetch counts and build a read-only view
         poll_obj, counts, _ = await _fetch_poll_counts(self.bot, mid)
         text = _build_poll_text(poll_obj, counts, ctx.guild)  # type: ignore
-        title = msg(ctx, "results_title", icon=get_emoji("icon_lightbulb"))
+        title = msg(ctx, "results_title", icon=get_emoji("lightbulb"))
         ro_view = discord.ui.LayoutView()
         ro_view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=title + "\n" + text), accent_colour=discord.Color.blurple()))
         await ctx.send(view=ro_view)
