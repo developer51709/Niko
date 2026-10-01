@@ -1,4 +1,4 @@
-from . import general, afk, snipe, define, tags, reminders, highlights, translate, sticky
+from . import general, afk, snipe, define, tags, reminders, highlights, translate, sticky, image_tools
 
 
 async def setup(bot):
@@ -11,3 +11,4 @@ async def setup(bot):
     await highlights.setup(bot)
     await translate.setup(bot)
     await sticky.setup(bot)
+    await image_tools.setup(bot)
