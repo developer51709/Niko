@@ -1,15 +1,19 @@
 import { Footer } from "../components/Footer";
 import { PublicHeader } from "../components/PublicHeader";
 
+const EFFECTIVE_DATE = "1 October 2026";
+
 const legalCopy = {
   privacy: {
     title: "Privacy policy",
     intro: "Niko stores only the information needed to provide its Discord features. This page is the public, human-readable version of the policy.",
     sections: [
       ["Information we use", "User IDs connect economy balances, XP, reminders, birthdays, highlights, AI memory, and warnings. Server IDs keep per-server settings. Message content is processed in real time for AI, moderation, snipe, highlights, and leveling; short AI history is retained for the conversation feature. The dashboard stores daily aggregate message, join, and leave counts without message text or member IDs."],
+      ["Scam-image filter (experimental)", "When a member reports a message through the right-click scam report, the reported images and message context are sent to Niko staff for review. On confirmation, a perceptual hash (a compact numeric fingerprint) and a copy of the image are stored so similar images can be detected and removed automatically. Nothing is stored for servers without the filter enabled."],
+      ["Social notifier", "If a server follows social accounts, only the account name, platform, last-seen post ID, and target channel are stored."],
       ["How it is used", "Data is used only to operate Niko inside Discord. We do not sell, share, or transfer it for advertising."],
-      ["Storage and retention", "Data is stored by the server hosting Niko in local JSON and SQLite files. Economy, leveling, and configuration data remain until removed. Daily server activity totals are retained as aggregates. AI conversation history is limited and can be cleared with /clearhistory."],
-      ["Third-party services", "When enabled, AI messages and limited context are sent to the configured AI provider to generate a reply. Provider privacy terms also apply. Music and external lookup features may contact their respective services."],
+      ["Storage and retention", "Data is stored by the server hosting Niko in a database (SQLite or MongoDB, depending on deployment). Economy, leveling, and configuration data remain until removed. Daily server activity totals are retained as aggregates. AI conversation history is limited and can be cleared with /clearhistory."],
+      ["Third-party services", "When enabled, AI messages and limited context are sent to the configured AI provider to generate a reply. Provider privacy terms also apply. Other features may contact their respective services (social platforms for the notifier, Google Translate for translations); only the minimum data needed for the feature is shared."],
       ["Your choices", "Request deletion of data associated with your User ID by contacting the bot owner through the support server. Material changes are announced there."],
     ],
   },
@@ -45,7 +49,7 @@ export function LegalPage({ type }: { type: "privacy" | "terms" | "community" })
   return (
     <>
       <PublicHeader page={type} />
-      <main className="shell page-main legal-page"><div className="page-heading"><div className="eyebrow">Niko legal</div><h1>{content.title}</h1><p>{content.intro}</p><small>Effective date: 1 January 2025</small></div><div className="legal-copy">{content.sections.map(([heading, text]) => <section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}</div></main>
+      <main className="shell page-main legal-page"><div className="page-heading"><div className="eyebrow">Niko legal</div><h1>{content.title}</h1><p>{content.intro}</p><small>Effective date: {EFFECTIVE_DATE}</small></div><div className="legal-copy">{content.sections.map(([heading, text]) => <section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}</div></main>
       <Footer />
     </>
   );
