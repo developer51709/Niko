@@ -1,3 +1,5 @@
+from utils.nsfw_api import check_message_images
+
 from .views import *
 
 class AutoMod(commands.Cog):
@@ -172,6 +174,22 @@ class AutoMod(commands.Cog):
                                     f"Missing permissions to mute in {message.guild.name} — mute skipped silently.")
                 except discord.HTTPException:
                     pass
+                return
+
+        # ── NSFW image filter ────────────────────────
+        # Runs after the text filters and fails open when the NSFW API is
+        # unreachable or not configured (see utils.nsfw_api).
+        if cfg["automod"].get("nsfw_image_filter", False):
+            hit, score, filename = await check_message_images(message)
+            if hit:
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+                await utils.log_action(
+                    message.guild, "NSFW Filter",
+                    f"{message.author.mention} posted a flagged image in {message.channel.mention}.\n\n"
+                    f"**File:** `{filename or 'unknown'}`  •  Confidence: `{score:.0%}`")
                 return
 
     # ─── USER-INSTALLED APP ABUSE ─────────────────

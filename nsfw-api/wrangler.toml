@@ -1,0 +1,13 @@
+name = "niko-nsfw-api"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+# Workers AI binding — the "AI" environment object used by worker.js.
+[ai]
+binding = "AI"
+
+# Optional hardening: after deploying, run
+#   wrangler secret put AUTH_TOKEN
+# and set the same value as NSFW_API_TOKEN on the bot.
+# [vars]
+# AUTH_TOKEN = ""

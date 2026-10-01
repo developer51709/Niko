@@ -61,6 +61,11 @@ MESSAGES = {
         "massmention_max":   "  Max mentions: `{max}`",
         "scamimg_desc":      "**Scam Image Filter** — deletes known MrBeast scam images",
         "scamimg_note":      "-# ⚠️ Experimental — still in early testing and may have some reliability issues.",
+        "images_title":      "Image Filtering Settings",
+        "images_desc":       "Automatic moderation for images posted in your server.",
+        "nsfwimg_desc":      "**NSFW Filter** — deletes images classified as NSFW via AI (external API)",
+        "nsfwimg_note":      "-# ℹ️ Requires the bot host to have `NSFW_API_URL` configured; fails open if the API is unavailable.",
+        "section_images":    "**🖼️ Image Filtering**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke Settings",
         "nuke_desc":         "Protects your server against rogue moderators performing mass destructive actions.",
@@ -162,6 +167,11 @@ MESSAGES = {
         "massmention_max":   "  Max. Erwähnungen: `{max}`",
         "scamimg_desc":      "**Scam-Bildfilter** — löscht bekannte MrBeast-Betrugsbilder",
         "scamimg_note":      "-# ⚠️ Experimentell — befindet sich noch in frühen Tests und kann Zuverlässigkeitsprobleme haben.",
+        "images_title":      "Bildfilter-Einstellungen",
+        "images_desc":       "Automatische Moderation für in deinem Server gepostete Bilder.",
+        "nsfwimg_desc":      "**NSFW-Filter** — löscht per KI als NSFW eingestufte Bilder (externe API)",
+        "nsfwimg_note":      "-# ℹ️ Erfordert `NSFW_API_URL` auf dem Bot-Host; schlägt offen aus, wenn die API nicht erreichbar ist.",
+        "section_images":    "**🖼️ Bildfilter**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
         "nuke_desc":         "Schützt deinen Server vor böswilligen Moderatoren, die Massenaktionen durchführen.",
@@ -262,6 +272,11 @@ MESSAGES = {
         "massmention_max":   "  Máx menciones: `{max}`",
         "scamimg_desc":      "**Filtro de Imágenes de Estafa** — borra imágenes de estafa de MrBeast conocidas",
         "scamimg_note":      "-# ⚠️ Experimental — todavía en pruebas tempranas y puede tener problemas de fiabilidad.",
+        "images_title":      "Configuración del Filtrado de Imágenes",
+        "images_desc":       "Moderación automática para imágenes publicadas en tu servidor.",
+        "nsfwimg_desc":      "**Filtro NSFW** — borra imágenes clasificadas como NSFW por IA (API externa)",
+        "nsfwimg_note":      "-# ℹ️ Requiere `NSFW_API_URL` configurado en el host del bot; falla abierto si la API no está disponible.",
+        "section_images":    "**🖼️ Filtrado de Imágenes**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Configuración Anti-Nuke",
         "nuke_desc":         "Protege tu servidor contra moderadores corruptos que realizan acciones destructivas masivas.",
@@ -387,7 +402,9 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
         f"{_icon(am.get('antilink'))} Anti-Link\n"
         f"{_icon(am.get('badwords'))} Bad Words  •  "
-        f"{_icon(am.get('massmention'))} Mass Mention  •  "
+        f"{_icon(am.get('massmention'))} Mass Mention\n\n"
+        f"{_t(lang, 'section_images')}\n"
+        f"{_icon(am.get('nsfw_image_filter'))} NSFW  •  "
         f"{_icon(am.get('scam_image_filter'))} Scam Images\n\n"
         f"{_t(lang, 'section_antinuke')}\n"
         f"{_icon(am.get('antinuke'))} Enabled  •  "
@@ -419,7 +436,17 @@ def _build_filter_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antilink'))} {_t(lang, 'antilink_desc')}\n\n"
         f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n\n"
         f"{_icon(am.get('massmention'))} {_t(lang, 'massmention_desc')}\n"
-        f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}\n\n"
+        f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}"
+    )
+
+
+def _build_image_filter_text(cfg: dict, lang: str = "en") -> str:
+    am = cfg["automod"]
+    return (
+        f"### {get_emoji('message')} {_t(lang, 'images_title')}\n"
+        f"{_t(lang, 'images_desc')}\n\n"
+        f"{_icon(am.get('nsfw_image_filter'))} {_t(lang, 'nsfwimg_desc')}\n"
+        f"{_t(lang, 'nsfwimg_note')}\n\n"
         f"{_icon(am.get('scam_image_filter'))} {_t(lang, 'scamimg_desc')}\n"
         f"{_t(lang, 'scamimg_note')}"
     )
@@ -514,6 +541,8 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> 
 def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: str = "en") -> str:
     if section == "filter":
         return _build_filter_text(cfg, lang)
+    if section == "image_filter":
+        return _build_image_filter_text(cfg, lang)
     if section == "antinuke":
         return _build_antinuke_text(cfg, lang)
     if section == "antiraid":
@@ -646,6 +675,13 @@ class SectionSelect(discord.ui.Select):
                 emoji=get_emoji("message"),
                 description="Spam, links, bad words, mass mention",
                 default=(current_section == "filter")
+            ),
+            discord.SelectOption(
+                label="Image Filtering", 
+                value="image_filter", 
+                emoji="🖼️",
+                description="NSFW detection & MrBeast scam images",
+                default=(current_section == "image_filter")
             ),
             discord.SelectOption(
                 label="Anti-Nuke", 
@@ -1540,10 +1576,13 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
             ToggleButton("Mass Mention", "massmention", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
-            ToggleButton("Scam Images", "scam_image_filter", self, guild_id, section),
-        ))
-        container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(self, guild_id, section),
+        ))
+
+    elif section == "image_filter":
+        container.add_item(discord.ui.ActionRow(
+            ToggleButton("NSFW Filter", "nsfw_image_filter", self, guild_id, section),
+            ToggleButton("Scam Images", "scam_image_filter", self, guild_id, section),
         ))
 
     elif section == "antinuke":

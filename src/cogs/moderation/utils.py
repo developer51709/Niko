@@ -83,6 +83,7 @@ DEFAULT_GUILD_CONFIG = {
         "badwords":          True,
         "massmention":       False,
         "scam_image_filter": False,
+        "nsfw_image_filter": False,
         "antinuke":          False,
         "antiraid":          False,
         "antiraid_ext":      False,

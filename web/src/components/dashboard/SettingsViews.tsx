@@ -69,7 +69,7 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
       setState({ saving: false, message: "Moderation settings saved to Niko.", error: "" });
     }).catch((error) => setState({ saving: false, message: "", error: error instanceof Error ? error.message : "Could not save settings." }));
   };
-  const flags = [["antispam", "Anti-spam", "Detect repeated messages"], ["antilink", "Invite links", "Remove Discord invite links"], ["badwords", "Blocked words", "Filter words from the server list"], ["massmention", "Mass mentions", "Limit mention floods"], ["scam_image_filter", "Scam image filter", "Delete known MrBeast scam images"], ["antinuke", "Anti-nuke", "Protect channels and roles"], ["antiraid", "Join raid protection", "React to sudden join waves"], ["antiraid_ext", "External app protection", "Detect user-installed app abuse"]] as const;
+  const flags = [["antispam", "Anti-spam", "Detect repeated messages"], ["antilink", "Invite links", "Remove Discord invite links"], ["badwords", "Blocked words", "Filter words from the server list"], ["massmention", "Mass mentions", "Limit mention floods"], ["scam_image_filter", "Scam image filter", "Delete known MrBeast scam images"], ["nsfw_image_filter", "NSFW image filter", "AI-detect and delete NSFW images (requires NSFW_API_URL)"], ["antinuke", "Anti-nuke", "Protect channels and roles"], ["antiraid", "Join raid protection", "React to sudden join waves"], ["antiraid_ext", "External app protection", "Detect user-installed app abuse"]] as const;
   const experimentalFlags = new Set(["scam_image_filter"]);
   const activeFlags = flags.filter(([key]) => Boolean(values.automod?.[key])).length;
   return <>
