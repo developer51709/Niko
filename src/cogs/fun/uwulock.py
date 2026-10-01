@@ -66,7 +66,7 @@ msg = make_msg(MESSAGES)
 # UWU LOCK COG
 # -----------------------------
 class UwULock(commands.Cog):
-    """UwU‑lock system with cozy café personality + bilingual support."""
+    """UwU-lock system with cozy café personality + bilingual support."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -239,8 +239,22 @@ class UwULock(commands.Cog):
 
             text = self.uwuify(message.content)
             if message.stickers:
-                sticker_names = ", ".join(sticker.name for sticker in message.stickers)
-                text = f"{text}\n[Sticker: {sticker_names}]" if text else f"[Sticker: {sticker_names}]"
+                # Webhook messages cannot carry stickers (Webhook.send has no
+                # stickers parameter), so mirror them as closely as Discord
+                # allows: the matching guild emoji when one exists (stickers
+                # created from an emoji share its id), otherwise a text note.
+                guild_emojis = list(getattr(message.guild, "emojis", []) or [])
+                sticker_bits: list[str] = []
+                for sticker in message.stickers:
+                    emoji = self.bot.get_emoji(sticker.id)
+                    if emoji is None:
+                        emoji = discord.utils.find(
+                            lambda e, name=sticker.name.lower(): e.name.lower() == name,
+                            guild_emojis,
+                        )
+                    sticker_bits.append(str(emoji) if emoji else f"[Sticker: {sticker.name}]")
+                sticker_line = "".join(sticker_bits)
+                text = f"{text}\n{sticker_line}" if text else sticker_line
             if len(text) > 2000:
                 text = text[:1999] + "…"
             if not text and not files and not message.embeds:
@@ -329,7 +343,71 @@ class UwULock(commands.Cog):
     # -----------------------------
     # uwuify helper
     # -----------------------------
+    # Segments that must pass through the transformation untouched:
+    #   • markdown links ``[label](https://…)`` — kept atomic so no random
+    #     interjection can land between the URL and the closing paren
+    #   • bare URLs ``https://…`` — no more ``https://discowd.com``
+    #   • custom emojis ``<:name:123>`` / ``<a:name:123>`` (emoji names often
+    #     contain r/l, which would break the emoji reference)
+    #   • user/role mentions, channel mentions and timestamps
+    _PRESERVE_PATTERN = re.compile(
+        r"(\[[^\]]*\]\(https?://\S+\)"
+        r"|<a?:[a-zA-Z0-9_]+:\d+>"
+        r"|<@!?\d+>"
+        r"|<#\d+>"
+        r"|<t:\d+(?::\w+)?>"
+        r"|https?://\S+)",
+        re.IGNORECASE,
+    )
+
     def uwuify(self, text: str) -> str:
+        """Uwuify a message while preserving links and Discord markup.
+
+        The text is split into preserved / transformable segments; only the
+        transformable ones are uwuified, so URLs keep working. Markdown link
+        labels are still uwuified, but their target URL stays byte-identical.
+        Whitespace around preserved segments is restored, so the random
+        interjections/emoji never glue themselves to a link or mention.
+        """
+        out: list[str] = []
+        cursor = 0
+
+        def transform(chunk: str) -> str:
+            """Uwuify ``chunk`` while keeping its exact edge whitespace."""
+            core = chunk
+            lead_m = re.match(r"\s+", core)
+            trail_m = re.search(r"\s+$", core)
+            if lead_m:
+                core = core[lead_m.end():]
+            if trail_m:
+                core = core[: trail_m.start()]
+            if not core:
+                return chunk
+            piece = self._uwuify_text(core)
+            lead = lead_m.group(0) if lead_m else ""
+            trail = trail_m.group(0) if trail_m else ""
+            return f"{lead}{piece}{trail}"
+
+        for match in self._PRESERVE_PATTERN.finditer(text):
+            before = text[cursor:match.start()]
+            if before:
+                out.append(transform(before))
+
+            segment = match.group(0)
+            md = re.fullmatch(r"\[([^\]]*)\]\((https?://\S+)\)", segment, re.IGNORECASE)
+            if md:
+                # Markdown link: transform only the visible label.
+                out.append(f"[{self._uwuify_text(md.group(1))}]({md.group(2)})")
+            else:
+                out.append(segment)
+            cursor = match.end()
+
+        tail = text[cursor:]
+        if tail:
+            out.append(transform(tail))
+        return "".join(out)
+
+    def _uwuify_text(self, text: str) -> str:
         try:
             with open("blocked_words.json", "r") as f:
                 filters = json.load(f)
