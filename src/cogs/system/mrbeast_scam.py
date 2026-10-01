@@ -228,8 +228,14 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         return member.guild_permissions.manage_guild or member.guild_permissions.administrator
 
     async def _store_bits(self, bits: list[int], *, preview_url: str | None,
-                          confirmed_by: int) -> str:
-        """Add (or refresh) a confirmed scam hash, preserving its counters."""
+                          confirmed_by: int,
+                          fallback_preview_url: str | None = None) -> str:
+        """Add (or refresh) a confirmed scam hash, preserving its counters.
+
+        ``preview_url`` should be a review-channel attachment URL (stable).
+        Expiring reporter CDN links are only used as a fallback when no
+        durable preview exists, so the false-positive report keeps working.
+        """
         hex_hash = _hash_hex(bits)
         existing = await self.bot.cxn.fetchrow(
             "SELECT times_deleted, false_positives FROM mrbeast_scams WHERE image_hash = $1",
@@ -237,6 +243,9 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         )
         times_deleted = existing["times_deleted"] if existing else 0
         false_positives = existing["false_positives"] if existing else 0
+        if preview_url is None:
+            preview_url = fallback_preview_url
+
         await self.bot.cxn.execute(
             "INSERT OR REPLACE INTO mrbeast_scams "
             "(image_hash, hash_bits, preview_url, confirmed_by, confirmed_at, times_deleted, false_positives) "
@@ -425,6 +434,16 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             if bits_item is not None:
                 hash_bits_list.append(bits_item)
 
+        # A review-channel attachment URL is the only durable preview: the
+        # reporter's original CDN links expire (webp first). Capture it from
+        # the review message at confirm time; the reporter link stays as a
+        # fallback for hashes stored before this existed.
+        review_preview_url = None
+        for attachment in review_message.attachments:
+            if _is_image_attachment(attachment):
+                review_preview_url = attachment.url
+                break
+
         preview_url = None
         attachment_urls = report.get("attachments") if report else None
         if isinstance(attachment_urls, str):
@@ -458,7 +477,12 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         # in full, not just the first attachment.
         stored_hashes: list[str] = []
         for bits in hash_bits_list:
-            hex_hash = await self._store_bits(bits, preview_url=preview_url, confirmed_by=interaction.user.id)
+            hex_hash = await self._store_bits(
+                bits,
+                preview_url=review_preview_url,
+                fallback_preview_url=preview_url,
+                confirmed_by=interaction.user.id,
+            )
             stored_hashes.append(hex_hash)
 
         await self.bot.cxn.execute(
@@ -541,12 +565,18 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             logging.debug("MrBeastScam", "Detection skipped — no confirmed hashes in the database yet")
             return
 
+        # Keep the bytes of every image we read: attachment URLs are signed
+        # and stop resolving (webp first) as soon as the message is deleted,
+        # so the deletion log must re-upload the actual image data instead of
+        # linking the CDN.
+        blobs: list[tuple[str, bytes]] = []
         for attachment in images:
             try:
                 data = await attachment.read()
             except Exception as exc:
                 logging.debug("MrBeastScam", f"Could not read attachment {attachment.filename}: {exc}")
                 continue
+            blobs.append((attachment.filename or "image.png", data))
             bits = _dhash_bits(data)
             if bits is None:
                 continue
@@ -559,10 +589,16 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
                 f"Scam image matched in #{message.channel} ({message.guild.name}) — "
                 f"hash {matched_hash[:12]}… distance {distance}; deleting.",
             )
-            await self._delete_and_log(message, matched_hash, distance)
+            await self._delete_and_log(message, matched_hash, distance, blobs)
             return
 
-    async def _delete_and_log(self, message: discord.Message, matched_hash: str, distance: int) -> None:
+    async def _delete_and_log(
+        self,
+        message: discord.Message,
+        matched_hash: str,
+        distance: int,
+        blobs: list[tuple[str, bytes]] | None = None,
+    ) -> None:
         deleted = False
         try:
             await message.delete()
@@ -595,27 +631,64 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             return
 
         image_urls = [a.url for a in message.attachments if _is_image_attachment(a)][:4]
-        children: list[discord.ui.Item] = [
-            discord.ui.TextDisplay(content="### 🚩 MrBeast Scam Removed"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=body),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        ]
-        if image_urls:
-            children.append(discord.ui.MediaGallery(*[
-                MediaGalleryItem(media=url) for url in image_urls
-            ]))
-            children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        row = discord.ui.ActionRow()
-        row.add_item(_FalsePositiveButton(matched_hash))
-        children.append(row)
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(*children, accent_colour=discord.Colour(_ACCENT_WARN)))
+
+        def build_log_view(with_images: bool) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+            built: list[discord.File] = []
+            if with_images:
+                # Re-upload the actual image bytes: the deleted message's CDN
+                # URLs are signed and stop resolving (webp first) once the
+                # message is gone, so linking attachment.url leaves the log
+                # with dead images.
+                for i, (name, data) in enumerate((blobs or [])[:4]):
+                    if not data:
+                        continue
+                    built.append(discord.File(io.BytesIO(data), filename=_safe_upload_name(name, i)))
+
+            kids: list[discord.ui.Item] = [
+                discord.ui.TextDisplay(content="### 🚩 MrBeast Scam Removed"),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=body),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            ]
+            if built:
+                gallery = discord.ui.MediaGallery()
+                for file in built:
+                    gallery.add_item(media=file)
+                kids.append(gallery)
+                kids.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            elif image_urls:
+                # No bytes available — fall back to CDN links (these expire).
+                kids.append(discord.ui.MediaGallery(*[
+                    MediaGalleryItem(media=url) for url in image_urls
+                ]))
+                kids.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            row = discord.ui.ActionRow()
+            row.add_item(_FalsePositiveButton(matched_hash))
+            kids.append(row)
+            built_view = discord.ui.LayoutView()
+            built_view.add_item(discord.ui.Container(*kids, accent_colour=discord.Colour(_ACCENT_WARN)))
+            return built_view, built
 
         try:
-            await log_channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+            view, files = build_log_view(with_images=True)
+            await log_channel.send(
+                view=view,
+                files=files or None,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
         except discord.HTTPException as exc:
-            logging.error("MrBeastScam", f"Could not log scam deletion in {guild}: {exc}")
+            # Oversized or otherwise unuploadable images must not cost us the
+            # log entry itself — retry once without them. (The File streams
+            # were consumed by the failed multipart upload, so rebuild.)
+            logging.info(
+                "MrBeastScam",
+                f"Image upload failed for scam deletion log in {guild}: {exc} — retrying without images",
+            )
+            try:
+                view, _ = build_log_view(with_images=False)
+                await log_channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+            except discord.HTTPException as exc2:
+                logging.error("MrBeastScam", f"Could not log scam deletion in {guild}: {exc2}")
 
     # ── 4. false positive reporting ───────────────────────────────────────
 
@@ -639,6 +712,43 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         )
         preview_url = scam.get("preview_url") if scam else None
 
+        # Preview links can rot (reporter CDN URLs are signed and expire, webp
+        # first), so re-upload the actual bytes and only fall back to links.
+        preview_bytes: bytes | None = None
+        candidate_urls: list[str] = []
+        if preview_url:
+            candidate_urls.append(preview_url)
+        # Best effort: legacy reports stored a single hash and can be matched;
+        # newer rows keep a JSON list, which plain equality never matches.
+        try:
+            pending = await self.bot.cxn.fetch(
+                "SELECT attachments FROM mrbeast_scam_reports "
+                "WHERE image_hash = $1 AND status = $2 LIMIT 3",
+                image_hash, STATE_PENDING,
+            )
+        except Exception:
+            pending = []
+        for pending_row in pending or []:
+            urls = pending_row.get("attachments") if pending_row else None
+            if isinstance(urls, str):
+                try:
+                    urls = json.loads(urls)
+                except Exception:
+                    urls = []
+            if isinstance(urls, list):
+                for url in urls:
+                    if isinstance(url, str) and url not in candidate_urls:
+                        candidate_urls.append(url)
+        async with aiohttp.ClientSession() as session:
+            for url in candidate_urls[:4]:
+                try:
+                    async with session.get(url) as resp:
+                        if resp.status == 200:
+                            preview_bytes = await resp.read()
+                            break
+                except Exception:
+                    continue
+
         body = (
             f"**Flagged as false positive in:** {interaction.guild.name} (`{interaction.guild.id}`)\n"
             f"**By:** {interaction.user.mention} (`{interaction.user.id}`)\n"
@@ -648,25 +758,54 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if preview_url:
             body += f"\n[stored preview]({preview_url})"
 
-        children: list[discord.ui.Item] = [
-            discord.ui.TextDisplay(content="### 🧪 False Positive Report"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=body),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        ]
-        if preview_url:
-            children.append(discord.ui.MediaGallery(MediaGalleryItem(media=preview_url)))
-            children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         row = discord.ui.ActionRow()
         row.add_item(_RemoveScamButton(image_hash))
-        children.append(row)
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(*children, accent_colour=discord.Colour(_ACCENT_WARN)))
 
-        try:
-            await review_channel.send(view=view)
-        except discord.HTTPException as exc:
-            logging.error("MrBeastScam", f"Could not forward false positive: {exc}")
+        def build_fp_view(with_image: bool) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+            files: list[discord.File] = []
+            kids: list[discord.ui.Item] = [
+                discord.ui.TextDisplay(content="### 🧪 False Positive Report"),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=body),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            ]
+            if with_image:
+                if preview_bytes:
+                    file = discord.File(
+                        io.BytesIO(preview_bytes),
+                        filename=_safe_upload_name("false_positive_preview.png", 0),
+                    )
+                    gallery = discord.ui.MediaGallery()
+                    gallery.add_item(media=file)
+                    kids.append(gallery)
+                    kids.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+                    files.append(file)
+                elif preview_url:
+                    # Bytes unreachable — last resort is the (possibly dead) URL.
+                    kids.append(discord.ui.MediaGallery(MediaGalleryItem(media=preview_url)))
+                    kids.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            kids.append(row)
+            built_view = discord.ui.LayoutView()
+            built_view.add_item(discord.ui.Container(*kids, accent_colour=discord.Colour(_ACCENT_WARN)))
+            return built_view, files
+
+        async def deliver_fp(view_to_send: discord.ui.LayoutView,
+                             files_to_send: list[discord.File]) -> tuple[bool, Exception | None]:
+            try:
+                await review_channel.send(view=view_to_send, files=files_to_send or None)
+                return True, None
+            except discord.HTTPException as exc:
+                return False, exc
+
+        ok, first_exc = await deliver_fp(*build_fp_view(with_image=True))
+        if not ok:
+            logging.info(
+                "MrBeastScam",
+                f"Image upload failed for false positive report: {first_exc} — retrying without image",
+            )
+            ok, retry_exc = await deliver_fp(*build_fp_view(with_image=False))
+        if not ok:
+            logging.error("MrBeastScam", f"Could not forward false positive: {retry_exc}")
             await interaction.followup.send(
                 view=_cv("🚩 Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
                 ephemeral=True,
