@@ -658,6 +658,19 @@ async def _create_tables(bot):
             PRIMARY KEY (channel_id, guild_id)
         )
     """)
+    # ── Persistent rules panels (owner-owned, button-driven) ───────────────
+    # One row per channel where the owner posted the interactive rules panel.
+    # Panels are not auto-refreshed; the row only lets a re-run replace the
+    # old message instead of stacking duplicates.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS persistent_rules_panels (
+            channel_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            message_id   INTEGER NOT NULL,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (channel_id, guild_id)
+        )
+    """)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS server_activity (
             activity_id TEXT PRIMARY KEY,

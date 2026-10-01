@@ -34,7 +34,7 @@ OWNER_ONLY_COMMANDS = {
     "broadcast", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
     "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "dev01",
     "devexec", "devsay",
-    "sendstatuspanel",
+    "sendpanel",
 }
 
 HEAD_ADMIN_COMMANDS = {

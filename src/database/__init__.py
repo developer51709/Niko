@@ -165,6 +165,7 @@ PRIMARY_KEYS: dict = {
     "roleplay_actions": "message_id",
     "roleplay_blocks": ("blocker_id", "blocked_id"),
     "persistent_status_panels": ("channel_id", "guild_id"),
+    "persistent_rules_panels": ("channel_id", "guild_id"),
     "server_activity": "activity_id",
     "starboard_config": "guild_id",
     "starboard_messages": ("guild_id", "message_id"),

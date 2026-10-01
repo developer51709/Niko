@@ -221,6 +221,11 @@ class OwnerCog(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        # Persistent rules-panel buttons survive restarts (static custom ids).
+        bot.add_dynamic_items(_RulesSectionButton, _RulesHomeButton)
+
+    async def cog_unload(self) -> None:
+        self.bot.remove_dynamic_items(_RulesSectionButton, _RulesHomeButton)
 
     @commands.command(name="broadcast")
     @is_owner()
@@ -1358,15 +1363,34 @@ class OwnerCog(commands.Cog):
         await ctx.send(view=view)
 
     # -------------------------------
-    # Realtime status panel (Owner)
+    # Persistent panels (Owner)
     # -------------------------------
-    @commands.command(
-        name="sendstatuspanel",
+    @commands.group(
+        name="sendpanel",
+        invoke_without_command=True,
+        help="Send persistent panels for the support server (owner only).",
+    )
+    @is_owner()
+    async def sendpanel(self, ctx):
+        """Overview of the sendpanel sub-commands."""
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=(
+                f"{get_emoji('icon_important')} **Persistent panels**\n"
+                "Use `.staff sendpanel status` for the realtime status panel or "
+                "`.staff sendpanel rules` for the server rules panel."
+            )),
+            accent_colour=discord.Color.blurple(),
+        ))
+        await ctx.send(view=view)
+
+    @sendpanel.command(
+        name="status",
         aliases=["statuspanel"],
         help="Send the realtime bot status panel for the support server (owner only).",
     )
     @is_owner()
-    async def send_status_panel(self, ctx, channel: discord.TextChannel = None):
+    async def sendpanel_status(self, ctx, channel: discord.TextChannel = None):
         """Post (or refresh) the persistent realtime status panel in a channel."""
         target = channel or ctx.channel
         guild_id = getattr(getattr(target, "guild", None), "id", None)
@@ -1430,6 +1454,77 @@ class OwnerCog(commands.Cog):
             discord.ui.TextDisplay(content=(
                 f"{get_emoji('icon_tick')} Status panel sent to {target.mention}.\n"
                 f"-# It auto-refreshes every {int(STATUS_PANEL_INTERVAL)} seconds."
+            )),
+            accent_colour=discord.Color.green(),
+        ))
+        await busy_message.edit(view=done_view)
+
+    @sendpanel.command(
+        name="rules",
+        help="Send the persistent server rules panel for the support server (owner only).",
+    )
+    @is_owner()
+    async def sendpanel_rules(self, ctx, channel: discord.TextChannel = None):
+        """Post (or replace) the persistent rules panel in a channel."""
+        target = channel or ctx.channel
+        guild_id = getattr(getattr(target, "guild", None), "id", None)
+        if guild_id is None:
+            guild_id = getattr(ctx.guild, "id", None)
+        if guild_id is None:
+            return await ctx.send("This command must be used inside a server.")
+
+        busy_view = discord.ui.LayoutView()
+        busy_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"{get_emoji('icon_loading')} Building rules panel...")
+        ))
+        busy_message = await ctx.send(view=busy_view)
+
+        # Remove the previous rules panel for this channel so re-running
+        # replaces it instead of stacking duplicates.
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is not None:
+            try:
+                row = await cxn.fetchrow(
+                    "SELECT message_id FROM persistent_rules_panels "
+                    "WHERE channel_id = $1 AND guild_id = $2",
+                    target.id,
+                    guild_id,
+                )
+                if row:
+                    old = target.get_partial_message(int(row["message_id"]))
+                    await old.delete()
+            except Exception:
+                pass
+            try:
+                await cxn.execute(
+                    "DELETE FROM persistent_rules_panels "
+                    "WHERE channel_id = $1 AND guild_id = $2",
+                    target.id,
+                    guild_id,
+                )
+            except Exception:
+                pass
+
+        panel_message = await target.send(view=_build_rules_panel(self.bot))
+
+        if cxn is not None:
+            try:
+                await cxn.execute(
+                    "INSERT OR REPLACE INTO persistent_rules_panels "
+                    "(channel_id, guild_id, message_id, created_at) "
+                    "VALUES ($1, $2, $3, datetime('now'))",
+                    target.id,
+                    guild_id,
+                    panel_message.id,
+                )
+            except Exception as exc:
+                logging.warning("OwnerCog", f"Could not persist rules panel: {exc}")
+
+        done_view = discord.ui.LayoutView()
+        done_view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=(
+                f"{get_emoji('icon_tick')} Rules panel sent to {target.mention}.\n"
+                "-# Its buttons and menus keep working across restarts."
             )),
             accent_colour=discord.Color.green(),
         ))
@@ -1776,6 +1871,247 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
         accent_colour=0x2E3440,
     ))
     return view
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Persistent rules panel (support server)
+#
+#  The public panel message never changes — its buttons open *ephemeral*
+#  reader cards. Inside an ephemeral card, the buttons swap the card's
+#  content in place (that only edits the user's own ephemeral message).
+# ────────────────────────────────────────────────────────────────────────────
+
+RULES_SECTIONS: dict[str, dict] = {
+    "conduct": {
+        "emoji": get_emoji("icon_heart"),
+        "label": "Conduct",
+        "summary": "respect, language, and staff authority (rules 1–5)",
+        "title": "Conduct rules",
+        "body": (
+            "- **1. Be respectful.** No harassment, hate speech, discrimination, or personal attacks — treat everyone the way you'd like to be treated.\n"
+            "- **2. Keep it appropriate.** No NSFW content anywhere in this server.\n"
+            "- **3. No drama or targeted attacks.** Public call-outs and witch hunts are handled by staff, not members.\n"
+            "- **4. Use English.** It keeps support fast and inclusive; DMs are yours to use however you like.\n"
+            "- **5. Staff have the final say.** If a moderator asks you to stop something, stop — disputes can be raised politely afterwards."
+        ),
+    },
+    "content": {
+        "emoji": get_emoji("scroll"),
+        "label": "Content & channels",
+        "summary": "channels, spam, scams, and piracy (rules 6–10)",
+        "title": "Content & channel rules",
+        "body": (
+            "- **6. Right content in the right channel.** Keep questions in support channels, showcases in their dedicated channels, and memes in the lounge.\n"
+            "- **7. No spam, flooding, or self-promotion without permission.** This includes unsolicited DMs and advertising other bots or servers.\n"
+            "- **8. No malicious content.** No scams, phishing, malware, IP grabbers, or jump-scare links — report anything suspicious to staff instead of clicking it.\n"
+            "- **9. Piracy is not welcome.** No links to or requests for pirated media, software, or paid assets.\n"
+            "- **10. Use threads when topics drift.** Long side-discussions get moved into threads to keep channels readable."
+        ),
+    },
+    "moderation": {
+        "emoji": get_emoji("icon_moderation"),
+        "label": "Moderation",
+        "summary": "enforcement, appeals, and the blacklist (rules 11–15)",
+        "title": "Moderation & enforcement",
+        "body": (
+            "- **11. Moderators may act** on anything they judge to be against the spirit of these rules, even if it isn't listed.\n"
+            "- **12. Escalation ladder.** Typical progression: verbal warning → formal warning → timeout → kick → ban. Severe violations (scams, malware, raids, CSAM) skip straight to a ban and are reported to Discord's Trust & Safety.\n"
+            "- **13. Ban evasion is a permanent ban.** Alternate accounts made to return are removed on sight.\n"
+            "- **14. Appeals.** Ban appeals go through the support server ticket system — be honest; lying makes it worse.\n"
+            "- **15. Niko's global blacklist** is separate from this server's moderation. Abusing the bot itself (exploits, command spam) can get you blacklisted bot-wide under its Terms of Service."
+        ),
+    },
+    "bot": {
+        "emoji": get_emoji("icon_bot"),
+        "label": "Bot rules",
+        "summary": "bot-specific expectations (rules 16–20)",
+        "title": "Bot-specific rules",
+        "body": (
+            "- **16. Niko is a community project, not a product.** The operator provides no uptime guarantee; premium supports development but buys no SLA.\n"
+            "- **17. Economy items have no real value.** Bot currency and items cannot be sold, traded for money, or refunded.\n"
+            "- **18. Don't exploit bugs.** Found one? Report it in the support channel and don't farm it — exploiters lose balances and risk blacklisting.\n"
+            "- **19. Automated abuse is prohibited.** Self-bots, macro farms, and command spam hurt the bot for everyone.\n"
+            "- **20. AI replies are clearly marked.** Niko's AI features can be wrong — verify important things yourself."
+        ),
+    },
+}
+
+_RULES_HOME_ID = "niko:rules:home"
+_RULES_SECTION_PREFIX = "niko:rules:section:"
+_RULES_SECTION_IDS = list(RULES_SECTIONS.keys())
+
+
+def _rules_response_is_ephemeral(interaction: discord.Interaction) -> bool:
+    """True when the clicked message is already the user's ephemeral card."""
+    message = getattr(interaction, "message", None)
+    if message is None:
+        return False
+    try:
+        return bool(getattr(message.flags, "ephemeral", False))
+    except Exception:
+        return False
+
+
+async def _rules_swap_or_reply(interaction, view: discord.ui.LayoutView) -> None:
+    """Edit the ephemeral card in place, or open one from the public panel.
+
+    The public rules panel itself is never edited — every interaction on it
+    answers with a fresh ephemeral reader card instead.
+    """
+    if _rules_response_is_ephemeral(interaction):
+        await interaction.response.edit_message(view=view)
+    else:
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class _RulesSectionButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:section:[a-z]+"):
+    """Persistent 'view this rules section' button."""
+
+    def __init__(self, section_key: str) -> None:
+        meta = RULES_SECTIONS[section_key]
+        super().__init__(discord.ui.Button(
+            style=discord.ButtonStyle.secondary,
+            label=meta["label"],
+            emoji=meta["emoji"],
+            custom_id=_RULES_SECTION_PREFIX + section_key,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match.group(0).rsplit(":", 1)[1])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        section_key = self.custom_id.rsplit(":", 1)[1]
+        if section_key not in RULES_SECTIONS:
+            return await interaction.response.send_message(
+                f"{get_emoji('icon_question')} Unknown rules section.", ephemeral=True
+            )
+        await _rules_swap_or_reply(interaction, _rules_section_view(interaction.client, section_key))
+
+
+class _RulesHomeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:home"):
+    """Persistent 'back to the rules overview' button."""
+
+    def __init__(self) -> None:
+        super().__init__(discord.ui.Button(
+            style=discord.ButtonStyle.primary,
+            label="All rules",
+            emoji=get_emoji("icon_home"),
+            custom_id=_RULES_HOME_ID,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _rules_swap_or_reply(interaction, _rules_home_view(interaction.client))
+
+
+def _rules_header(bot, title: str, subtitle: str) -> discord.ui.Item:
+    """Panel header with the bot's avatar as thumbnail (plain text fallback)."""
+    header_text = discord.ui.TextDisplay(content=(f"## {get_emoji('icon_support')} {title}\n-# {subtitle}"))
+    avatar = None
+    try:
+        user = getattr(bot, "user", None)
+        avatar = getattr(user, "display_avatar", None)
+    except Exception:
+        avatar = None
+    if avatar is not None:
+        return discord.ui.Section(header_text, accessory=discord.ui.Thumbnail(str(avatar.url)))
+    return header_text
+
+
+def _rules_link_row() -> discord.ui.ActionRow:
+    """Link buttons to the legal documents on the website."""
+    return discord.ui.ActionRow(
+        discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="Privacy",
+            url=links.PRIVACY,
+            emoji=get_emoji("icon_important"),
+        ),
+        discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="Terms",
+            url=links.TOS,
+            emoji=get_emoji("icon_docs"),
+        ),
+        discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="Community",
+            url=links.COMMUNITY,
+            emoji=get_emoji("icon_verified"),
+        ),
+    )
+
+
+def _rules_section_row(skip: str | None = None) -> discord.ui.ActionRow:
+    """Row of section buttons (optionally skipping the active section)."""
+    row = discord.ui.ActionRow()
+    if skip is not None:
+        row.add_item(_RulesHomeButton())
+    for key in _RULES_SECTION_IDS:
+        if key != skip:
+            row.add_item(_RulesSectionButton(key))
+    return row
+
+
+def _rules_home_view(bot) -> discord.ui.LayoutView:
+    """The panel home: welcome text + rules-at-a-glance + interactive menu."""
+    glance = "\n".join(
+        f"> {meta['emoji']} **{meta['label']}** — {meta['summary']}"
+        for meta in RULES_SECTIONS.values()
+    )
+
+    items: list = [
+        _rules_header(
+            bot,
+            "Niko Support — Server Rules",
+            "Welcome! Tap a topic for the full rules — everything lives in this one message.",
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=(
+            f"{get_emoji('icon_welcome')} Hey, I'm **Niko** — a cozy Discord companion for communities that care.\n"
+            "This server is the place for support, suggestions, announcements, and community.\n\n"
+            f"### {get_emoji('notepad')} Rules at a glance\n"
+            f"{glance}\n\n"
+            f"-# {get_emoji('icon_question')} Questions? Ask in the support channel or open a ticket."
+        )),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        _rules_section_row(),
+        _rules_link_row(),
+    ]
+
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(*items, accent_colour=0xC8A882))
+    return view
+
+
+def _rules_section_view(bot, section_key: str) -> discord.ui.LayoutView:
+    """One rules section with home/sibling navigation and legal links."""
+    meta = RULES_SECTIONS[section_key]
+
+    items: list = [
+        _rules_header(bot, f"Rules — {meta['label']}", meta["summary"]),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=(
+            f"### {meta['emoji']} {meta['title']}\n\n"
+            f"{meta['body']}\n\n"
+            f"-# {get_emoji('icon_important')} Moderators may always use their judgement — these pages cover the common cases."
+        )),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        _rules_section_row(skip=section_key),
+        _rules_link_row(),
+    ]
+
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(*items, accent_colour=0x5865F2))
+    return view
+
+
+def _build_rules_panel(bot) -> discord.ui.LayoutView:
+    return _rules_home_view(bot)
 
 
 class _StatusPanelCog(commands.Cog):
