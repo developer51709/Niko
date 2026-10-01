@@ -78,13 +78,14 @@ async def _save_guild_moderation_config(guild_id: int, cfg: dict):
 
 DEFAULT_GUILD_CONFIG = {
     "automod": {
-        "antispam":     False,
-        "antilink":     False,
-        "badwords":     True,
-        "massmention":  False,
-        "antinuke":     False,
-        "antiraid":     False,
-        "antiraid_ext": False,
+        "antispam":          False,
+        "antilink":          False,
+        "badwords":          True,
+        "massmention":       False,
+        "scam_image_filter": False,
+        "antinuke":          False,
+        "antiraid":          False,
+        "antiraid_ext":      False,
     },
     "spam_threshold": 6,
     "spam_interval": 7,

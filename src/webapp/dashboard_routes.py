@@ -277,7 +277,7 @@ def api_save_automod(guild_id):
 
     allowed_flags = {
         "antispam", "antilink", "badwords", "massmention",
-        "antinuke", "antiraid", "antiraid_ext",
+        "scam_image_filter", "antinuke", "antiraid", "antiraid_ext",
     }
     existing = guild_config.get("automod", {})
     for key in allowed_flags:

@@ -436,6 +436,36 @@ async def _create_tables(bot):
             data     TEXT
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mrbeast_scams (
+            image_hash    TEXT PRIMARY KEY,
+            hash_bits     TEXT NOT NULL,
+            preview_url   TEXT,
+            source_url    TEXT,
+            confirmed_by  TEXT NOT NULL,
+            confirmed_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            times_deleted INTEGER NOT NULL DEFAULT 0,
+            false_positives INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mrbeast_scam_reports (
+            report_id    TEXT PRIMARY KEY,
+            message_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            channel_id   INTEGER NOT NULL,
+            reporter_id  INTEGER NOT NULL,
+            author_id    INTEGER NOT NULL,
+              content     TEXT NOT NULL DEFAULT '',
+            attachments  TEXT NOT NULL DEFAULT '[]',
+            image_hash   TEXT,
+            status       TEXT NOT NULL DEFAULT 'pending',
+            review_message_id INTEGER,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            resolved_by  TEXT,
+            resolved_at  TEXT
+        )
+    """)
 
     # Migrate legacy modlog / moderation JSON stores into the database
     await _migrate_logging_config(bot)

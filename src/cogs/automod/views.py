@@ -59,6 +59,8 @@ MESSAGES = {
         "badwords_desc":     "**Bad Words** — deletes blocked words (manage with `!badwords`)",
         "massmention_desc":  "**Mass Mention** — mutes members who mass-mention",
         "massmention_max":   "  Max mentions: `{max}`",
+        "scamimg_desc":      "**Scam Image Filter** — deletes known MrBeast scam images",
+        "scamimg_note":      "-# ⚠️ Experimental — still in early testing and may have some reliability issues.",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke Settings",
         "nuke_desc":         "Protects your server against rogue moderators performing mass destructive actions.",
@@ -158,6 +160,8 @@ MESSAGES = {
         "badwords_desc":     "**Verbotene Wörter** — löscht gesperrte Wörter (verwalten mit `!badwords`)",
         "massmention_desc":  "**Massen-Erwähnung** — stummt Mitglieder bei Massen-Mentions",
         "massmention_max":   "  Max. Erwähnungen: `{max}`",
+        "scamimg_desc":      "**Scam-Bildfilter** — löscht bekannte MrBeast-Betrugsbilder",
+        "scamimg_note":      "-# ⚠️ Experimentell — befindet sich noch in frühen Tests und kann Zuverlässigkeitsprobleme haben.",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
         "nuke_desc":         "Schützt deinen Server vor böswilligen Moderatoren, die Massenaktionen durchführen.",
@@ -256,6 +260,8 @@ MESSAGES = {
         "badwords_desc":     "**Palabras Prohibidas** — borra palabras bloqueadas (gestiona con `!badwords`)",
         "massmention_desc":  "**Menciones Masivas** — silencia a quien hace menciones masivas",
         "massmention_max":   "  Máx menciones: `{max}`",
+        "scamimg_desc":      "**Filtro de Imágenes de Estafa** — borra imágenes de estafa de MrBeast conocidas",
+        "scamimg_note":      "-# ⚠️ Experimental — todavía en pruebas tempranas y puede tener problemas de fiabilidad.",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Configuración Anti-Nuke",
         "nuke_desc":         "Protege tu servidor contra moderadores corruptos que realizan acciones destructivas masivas.",
@@ -381,7 +387,8 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
         f"{_icon(am.get('antilink'))} Anti-Link\n"
         f"{_icon(am.get('badwords'))} Bad Words  •  "
-        f"{_icon(am.get('massmention'))} Mass Mention\n\n"
+        f"{_icon(am.get('massmention'))} Mass Mention  •  "
+        f"{_icon(am.get('scam_image_filter'))} Scam Images\n\n"
         f"{_t(lang, 'section_antinuke')}\n"
         f"{_icon(am.get('antinuke'))} Enabled  •  "
         f"Action: `{an.get('action', 'strip')}`  •  "
@@ -412,7 +419,9 @@ def _build_filter_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antilink'))} {_t(lang, 'antilink_desc')}\n\n"
         f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n\n"
         f"{_icon(am.get('massmention'))} {_t(lang, 'massmention_desc')}\n"
-        f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}"
+        f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}\n\n"
+        f"{_icon(am.get('scam_image_filter'))} {_t(lang, 'scamimg_desc')}\n"
+        f"{_t(lang, 'scamimg_note')}"
     )
 
 
@@ -1529,6 +1538,9 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         container.add_item(discord.ui.ActionRow(
             ToggleButton("Bad Words", "badwords", self, guild_id, section),
             ToggleButton("Mass Mention", "massmention", self, guild_id, section),
+        ))
+        container.add_item(discord.ui.ActionRow(
+            ToggleButton("Scam Images", "scam_image_filter", self, guild_id, section),
         ))
         container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(self, guild_id, section),

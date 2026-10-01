@@ -76,7 +76,10 @@ async def handle_message(bot, msg: discord.Message):
         called_by_ping = bot.user in msg.mentions and not msg.reference
 
     # ── 5. Nothing triggered AI → stop ────────────────────────────────────────
-    if not (called_by_name or called_by_ping or is_ai_command or image_attachments or voice_attachments):
+    # Attachments alone never start a conversation — they only carry extra
+    # context when the AI was already triggered by name, ping, or command.
+    # Otherwise every image posted in the server would wake the AI.
+    if not (called_by_name or called_by_ping or is_ai_command):
         return
 
     # ── 5. Extract user input ─────────────────────────────────────────────────

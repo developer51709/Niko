@@ -444,7 +444,13 @@ class ErrorHandler(commands.Cog):
         _ERROR_REPORT_CODE.set(None)
 
     # ── Slash command error handler ────────────────────────────────────────
-    @commands.Cog.listener()
+    # ── Slash command / context menu error handler ──────────────────────────
+    # NOTE: discord.py does NOT dispatch an "on_app_command_error" gateway
+    # event, so this cannot be a @commands.Cog.listener(). App-command errors
+    # flow through CommandTree.on_error, whose default implementation only
+    # logs "Ignoring exception in command" and never tells the user. We bind
+    # it in setup() below so every slash/context-menu error reaches the
+    # interaction.response / interaction.followup replies here.
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         error = getattr(error, "original", error)
 
@@ -522,15 +528,22 @@ class ErrorHandler(commands.Cog):
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         await _reply(self.error_embed("Unexpected Error", "An unexpected error occurred. The developers have been notified."))
 
-        cog_name = interaction.command.cog.__class__.__name__.lower() if interaction.command and interaction.command.cog else None
-        if cog_name:
+        cog_name = None
+        command = interaction.command
+        cog = getattr(command, "cog", None)
+        if cog is None and command is not None:
+            # Context menus have no .cog attribute; fall back to the bound
+            # callback's class (cog methods carry a __self__).
+            binding = getattr(getattr(command, "callback", None), "__self__", None)
+            cog = binding if isinstance(binding, commands.Cog) else None
+        if cog is not None:
+            cog_name = cog.__class__.__name__.lower()
             import os as _os
             cog_files = [f[:-3] for f in _os.listdir("src/cogs") if f.endswith(".py")]
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
         _ERROR_REPORT_CODE.set(None)
-
 
     @commands.Cog.listener()
     async def on_error(self, event, *args, **kwargs):
@@ -549,3 +562,13 @@ class ErrorHandler(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
+
+    # Route every application-command error through the cog handler above.
+    # Tree.error registers a CommandTree.on_error override — the only hook
+    # discord.py actually calls for slash / context menu errors.
+    handler_cog = bot.get_cog("ErrorHandler")
+    if handler_cog is not None:
+
+        @bot.tree.error
+        async def _tree_on_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+            await handler_cog.on_app_command_error(interaction, error)

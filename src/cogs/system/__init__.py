@@ -1,4 +1,4 @@
-from . import error_handler, image_tools, introduction, webhook_proxy, ip_detector, fileinput_patch, nitro, server_stats
+from . import error_handler, image_tools, introduction, webhook_proxy, ip_detector, fileinput_patch, nitro, server_stats, mrbeast_scam
 
 
 async def setup(bot):
@@ -10,3 +10,4 @@ async def setup(bot):
     await fileinput_patch.setup(bot)
     await nitro.setup(bot)
     await server_stats.setup(bot)
+    await mrbeast_scam.setup(bot)

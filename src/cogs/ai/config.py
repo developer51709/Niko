@@ -176,6 +176,8 @@ class MultimodalExperimentAbout(discord.ui.LayoutView):
             discord.ui.TextDisplay(content=(
                 "When enabled, Niko can inspect up to three image attachments and "
                 "use the transcription of a Discord voice message as conversation context.\n\n"
+                "Attachments never start a conversation on their own — they are only "
+                "used when Niko is already triggered by name, ping, or the ai command.\n\n"
                 "Images use the configured vision model and voice messages use the "
                 "configured transcription model. If processing fails, Niko falls back "
                 "to the text that was sent. Media is not stored by the bot."
