@@ -4,6 +4,14 @@ Startup — Discord presence / status setter.
 Status configuration is read from src.config.status so it can be edited in one
 place instead of via environment variables. Multi-message rotation is supported
 when STATUS_ROTATE is enabled in that config.
+
+Status messages support the following placeholder variables, which are
+substituted with live bot values every time the presence updates:
+
+    {servers}   — number of guilds the bot is in
+    {users}     — total member count across all guilds
+    {shards}    — number of shards the bot is running on
+    {commands}  — number of registered commands
 """
 
 import asyncio
@@ -12,6 +20,38 @@ import discord
 from utils import logging
 
 from config import status as status_config
+
+
+def _collect_status_variables(bot) -> dict[str, str]:
+    """Gather live bot values that can be referenced inside status messages."""
+    guilds = list(getattr(bot, "guilds", None) or [])
+    user_count = sum(getattr(g, "member_count", None) or 0 for g in guilds)
+    shards = getattr(bot, "shard_count", None) or len(getattr(bot, "shards", None) or {}) or 1
+
+    command_count = getattr(bot, "_status_command_count", None)
+    if command_count is None:
+        try:
+            command_count = len(list(bot.walk_commands()))
+        except Exception:
+            command_count = 0
+
+    return {
+        "servers": str(len(guilds)),
+        "users": str(user_count),
+        "shards": str(shards),
+        "commands": str(command_count),
+    }
+
+
+def _format_status_text(bot, text: str) -> str:
+    """Substitute supported {variable} placeholders in a status message."""
+    if not text or "{" not in text:
+        return text
+    try:
+        return text.format(**_collect_status_variables(bot))
+    except Exception:
+        # Never let a malformed placeholder break presence updates.
+        return text
 
 
 def _build_activity(text: str, status_type: str, status_link: str) -> discord.BaseActivity:
@@ -50,7 +90,8 @@ async def set_status(bot):
     status_type = status_config.STATUS_TYPE
 
     try:
-        await bot.change_presence(activity=_build_activity(status_config.STATUS_MESSAGE, status_type, status_link))
+        text = _format_status_text(bot, status_config.STATUS_MESSAGE)
+        await bot.change_presence(activity=_build_activity(text, status_type, status_link))
     except Exception as exc:
         logging.error("status", f"Failed to set initial bot status: {exc}")
 
@@ -108,6 +149,7 @@ async def _start_rotation_task(bot, status_link: str, *, start_idx: int = 0) -> 
                     if types
                     else status_config.STATUS_TYPE
                 )
+                text = _format_status_text(bot, text)
 
                 activity = _build_activity(text, kind, status_link)
                 await bot.change_presence(activity=activity)
