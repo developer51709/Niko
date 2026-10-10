@@ -49,6 +49,22 @@ export type Guild = {
   invite_url?: string | null;
 };
 
+export type StaffGuild = {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  owner_id: string | null;
+  owner_name: string;
+  member_count: number;
+  channel_count: number;
+  created_at: string | null;
+  bot_avatar_url: string | null;
+  bot_banner_url: string | null;
+  profile_name: string | null;
+  blacklisted: boolean;
+  blacklist_reason: string | null;
+};
+
 export type User = {
   id: string;
   username?: string;

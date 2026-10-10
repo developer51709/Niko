@@ -1,0 +1,47 @@
+@font-face {
+  font-family: "Discord Cherry Bomb One";
+  src: url("/fonts/cherry-bomb-one.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord Chicle";
+  src: url("/fonts/chicle.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord MuseoModerno";
+  src: url("/fonts/museo-moderno-variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord Neo Castel";
+  src: url("/fonts/neo-castel.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord Pixelify Sans";
+  src: url("/fonts/pixelify-sans-variable.ttf") format("truetype");
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord Sinistre";
+  src: url("/fonts/sinistre-variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Discord Zilla Slab";
+  src: url("/fonts/zilla-slab.ttf") format("truetype");
+  font-display: swap;
+}
+
+.profile-preview-name-font-3 { font-family: "Discord Cherry Bomb One", cursive !important; }
+.profile-preview-name-font-4 { font-family: "Discord Chicle", cursive !important; }
+.profile-preview-name-font-6 { font-family: "Discord MuseoModerno", sans-serif !important; }
+.profile-preview-name-font-7 { font-family: "Discord Neo Castel", serif !important; }
+.profile-preview-name-font-8 { font-family: "Discord Pixelify Sans", monospace !important; }
+.profile-preview-name-font-10 { font-family: "Discord Sinistre", cursive !important; }
+.profile-preview-name-font-11 { font-family: "gg sans", system-ui, sans-serif !important; }
+.profile-preview-name-font-12 { font-family: "Discord Zilla Slab", serif !important; }

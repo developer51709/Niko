@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -945,25 +946,46 @@ async def create_pool(db_path: str) -> Union[SQLitePool, MongoPool]:
     Prefers MongoDB whenever MONGODB_URL is configured and reachable; falls
     back to SQLite (data/database.db) otherwise — identical behaviour either
     way because every call site speaks the pool API, not the raw driver.
+
+    MongoDB connection attempts are retried a few times before falling back
+    to SQLite: a single transient ping timeout during a production restart
+    must never silently switch the bot to an empty local database (which
+    would look like "all config resets on deploy").
     """
     global _shared_pool
     mongo_url = os.getenv("MONGODB_URL")
     if mongo_url:
-        try:
-            from motor.motor_asyncio import AsyncIOMotorClient
+        from motor.motor_asyncio import AsyncIOMotorClient
 
-            db_name = os.getenv("MONGODB_DATABASE", "discord_bot")
-            client = AsyncIOMotorClient(
-                mongo_url,
-                serverSelectionTimeoutMS=4000,
-                connectTimeoutMS=4000,
-            )
-            await client.admin.command("ping")
-            pool = MongoPool(client, db_name)
-            _shared_pool = pool
-            return pool
-        except Exception as e:
-            print(f"Failed to connect to MongoDB: {e}. Falling back to SQLite.")
+        db_name = os.getenv("MONGODB_DATABASE", "discord_bot")
+        attempts = 3
+        for attempt in range(1, attempts + 1):
+            client = None
+            try:
+                client = AsyncIOMotorClient(
+                    mongo_url,
+                    serverSelectionTimeoutMS=6000,
+                    connectTimeoutMS=6000,
+                )
+                await client.admin.command("ping")
+                pool = MongoPool(client, db_name)
+                _shared_pool = pool
+                return pool
+            except Exception as e:
+                if client is not None:
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
+                if attempt < attempts:
+                    from utils import logging
+                    logging.warning(
+                        "DB",
+                        f"MongoDB connection attempt {attempt}/{attempts} failed: {e}. Retrying…",
+                    )
+                    await asyncio.sleep(2)
+                else:
+                    print(f"Failed to connect to MongoDB after {attempts} attempts: {e}. Falling back to SQLite.")
 
     db = await aiosqlite.connect(db_path)
     await db.execute("PRAGMA journal_mode=WAL")

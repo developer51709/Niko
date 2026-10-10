@@ -11,7 +11,13 @@ import { formatNumber } from "../utils/format";
 export function HomePage() {
   const config = useBotConfig();
   const [stats, setStats] = useState<BotStats | null>(null);
-  useEffect(() => { getStats().then(setStats).catch(() => undefined); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => getStats().then((s) => { if (!cancelled) setStats(s); }).catch(() => undefined);
+    refresh();
+    const interval = setInterval(refresh, 10_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   const features = [
     ["spark", "AI that remembers", "Thoughtful conversation with a cozy personality and controls that respect your community."],

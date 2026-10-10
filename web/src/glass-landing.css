@@ -1,0 +1,341 @@
+/* Shared dark glass treatment: let the ambient canvas show through without sacrificing contrast. */
+.hero-art .workspace-preview,
+.feature-grid .feature-card,
+.shell > .callout {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: rgba(8, 9, 11, .72);
+  border: 1px solid rgba(230, 237, 248, .22);
+  border-radius: 20px;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .12);
+  backdrop-filter: blur(26px) saturate(155%);
+  -webkit-backdrop-filter: blur(26px) saturate(155%);
+}
+
+.hero-art .workspace-preview::before,
+.feature-grid .feature-card::before,
+.shell > .callout::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .075), transparent 45%);
+  pointer-events: none;
+}
+
+.hero-art .workspace-preview {
+  width: min(100%, 490px);
+  border-radius: 24px;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+.hero-art .workspace-preview:hover,
+.feature-grid .feature-card:hover {
+  background-color: rgba(18, 20, 23, .82);
+  border-color: rgba(230, 237, 248, .34);
+  box-shadow: 0 26px 72px rgba(0, 0, 0, .36), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+
+.workspace-preview-top,
+.preview-sidebar,
+.preview-main,
+.feature-card > *,
+.shell > .callout > * {
+  position: relative;
+  z-index: 1;
+}
+.workspace-preview-top { border-bottom-color: rgba(230, 237, 248, .14); }
+.preview-sidebar { border-right-color: rgba(230, 237, 248, .14); }
+.preview-sidebar b { border-radius: 8px; background: rgba(255, 255, 255, .09); }
+.preview-line { border-top-color: rgba(230, 237, 248, .14); }
+.feature-grid .feature-card {
+  min-height: 232px;
+  padding: 23px 21px;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+.feature-grid .feature-card:hover { transform: translateY(-3px); }
+.feature-grid .feature-icon { border-radius: 10px; background: rgba(255, 255, 255, .1); }
+.shell > .callout {
+  padding: 40px 42px;
+  border-radius: 22px;
+  color: #f4f5f7;
+}
+.shell > .callout .section-kicker { color: #d5d9df; }
+.shell > .callout h2 { color: #f4f5f7; }
+.shell > .callout .button-primary { border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .32); }
+
+/* Shared public listing-page intro and CTA strip. */
+.site-content .docs-page { padding-top: 78px; }
+.site-content .public-page-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 36px;
+  padding: 54px 0 38px;
+  margin-bottom: 38px;
+  border-bottom: 1px solid rgba(226, 234, 246, .15);
+}
+.site-content .public-page-intro-copy { max-width: 720px; }
+.site-content .public-page-intro h1 {
+  margin: 15px 0 16px;
+  color: #f4f5f7;
+  font-size: clamp(38px, 5.5vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -.07em;
+}
+.site-content .public-page-intro h1 em { color: #d5d9df; font-style: normal; }
+.site-content .public-page-intro p {
+  max-width: 620px;
+  margin: 0;
+  color: #b4bac3;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.site-content .public-page-intro-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 9px; }
+.site-content .public-page-intro-actions .button { min-height: 43px; border-radius: 12px; }
+.site-content .public-page-intro-actions .button-muted { color: #f4f5f7; background: rgba(255, 255, 255, .06); border-color: rgba(226, 234, 246, .18); }
+.site-content .public-page-intro-actions .button-muted:hover { background: rgba(255, 255, 255, .1); border-color: rgba(226, 234, 246, .3); }
+.site-content .public-page-intro-actions .button-primary { color: #17191d; }
+
+/* Docs */
+.site-content .docs-page .public-page-intro-copy { max-width: 600px; }
+.site-content .docs-page .public-page-intro h1 { max-width: 11ch; font-size: clamp(42px, 5vw, 58px); }
+.site-content .docs-page .public-page-intro p { max-width: 440px; }
+.site-content .docs-page .section-articles,
+.site-content .docs-page .category-articles,
+.site-content .docs-page .category-results-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.site-content .docs-page .section-header { padding: 16px 18px; }
+.site-content .docs-page .doc-card-content { min-height: 188px; padding: 18px; }
+.site-content .docs-page .doc-card-header { margin-bottom: 18px; }
+.site-content .docs-page .doc-title { font-size: 16px; line-height: 1.4; }
+.site-content .docs-page .doc-excerpt { font-size: 12px; line-height: 1.65; }
+.site-content .docs-page {
+  --ink: #f4f5f7;
+  --muted: #b4bac3;
+  --dim: #858c96;
+  --line: rgba(226, 234, 246, .15);
+  --line-soft: rgba(226, 234, 246, .1);
+  --surface: rgba(17, 22, 31, .54);
+  --surface-muted: rgba(255, 255, 255, .075);
+  --surface-raised: rgba(20, 21, 24, .9);
+  --docs-card-line: rgba(226, 234, 246, .2);
+  --docs-card-line-strong: rgba(226, 234, 246, .28);
+  --docs-accent-soft: rgba(213, 220, 229, .08);
+  --accent: #aab1ba;
+  --accent-dark: #d5d9df;
+  --filter-border: rgba(213, 220, 229, .2);
+}
+.site-content .docs-page .search-input-wrapper,
+.site-content .docs-page .search-results-dropdown,
+.site-content .docs-page .section-header,
+.site-content .docs-page .doc-card,
+.site-content .docs-page .docs-footer-note,
+.site-content .docs-page .mobile-nav-panel {
+  background: rgba(9, 10, 12, .78);
+  border-color: rgba(226, 234, 246, .2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .docs-page .docs-category-filters { background: rgba(5, 6, 7, .88); border-color: rgba(226, 234, 246, .14); }
+.site-content .docs-page .docs-search-section { padding-top: 0; }
+.site-content .command-toolbar { margin-top: 0; }
+.site-content .team-grid { margin-top: 0; }
+.site-content .changelog-tags { padding-top: 0; }
+.site-content .docs-page .doc-card { overflow: hidden; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
+.site-content .docs-page .doc-card:hover,
+.site-content .docs-page .doc-card.highlighted { background: rgba(18, 20, 23, .9); border-color: rgba(213, 220, 229, .26); }
+.site-content .docs-page .section-icon,
+.site-content .docs-page .doc-highlights,
+.site-content .docs-page .filter-tab.active { border-radius: 11px; }
+.site-content .docs-page .docs-footer-note { padding: 22px; margin-top: 24px; color: #d5d9df; }
+.site-content .docs-page .docs-footer-note p { color: #b4bac3; }
+.site-content .docs-page .docs-footer-note a { color: #d5d9df; }
+.site-content .docs-detail-page .doc-article-header,
+.site-content .docs-detail-page .doc-article-content,
+.site-content .docs-detail-page .doc-article-footer,
+.site-content .docs-detail-page .doc-toc,
+.site-content .docs-page .docs-not-found {
+  padding: 24px;
+  color: #f4f5f7;
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .docs-detail-page .doc-article-content { margin-top: 20px; }
+
+/* Commands */
+.site-content .commands-grid .command-card,
+.site-content .command-dialog,
+.site-content .command-dialog .command-detail-section,
+.site-content .command-toolbar .search-field {
+  color: #f4f5f7;
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .commands-grid .command-card:hover { background: rgba(18, 20, 23, .9); border-color: rgba(213, 220, 229, .26); }
+.site-content .commands-grid .command-card-description,
+.site-content .command-dialog .command-dialog-description,
+.site-content .command-dialog .command-parameter p { color: #b4bac3; }
+.site-content .commands-grid .command-name,
+.site-content .commands-grid .command-expand,
+.site-content .command-dialog-kicker { color: #d5d9df; }
+.site-content .commands-grid .command-type,
+.site-content .commands-grid .category-tag,
+.site-content .command-dialog .command-usage,
+.site-content .command-dialog .command-detail-list li,
+.site-content .command-dialog .subcommand-list code { background: rgba(255, 255, 255, .08); border-radius: 9px; }
+.site-content .command-toolbar .search-field input { color: #f4f5f7; }
+
+/* Team cards and member profile; higher specificity intentionally overrides the page-local style block. */
+.site-content .team-card,
+.site-content .team-profile-card,
+.site-content .team-activity,
+.site-content .team-activity .activity-card {
+  color: #f4f5f7;
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .team-card { overflow: hidden; }
+.site-content .team-card:hover { background: rgba(18, 20, 23, .9); border-color: rgba(213, 220, 229, .26); }
+.site-content .team-card h2,
+.site-content .team-profile-card h1,
+.site-content .team-activity .activity-copy span { color: #f4f5f7; }
+.site-content .team-card p,
+.site-content .team-profile-bio,
+.site-content .team-profile-handle,
+.site-content .team-status,
+.site-content .team-activity .presence-line { color: #b4bac3; }
+.site-content .team-role { color: #d5d9df; }
+.site-content .team-profile-links a { color: #d5d9df; background: rgba(255, 255, 255, .07); border-color: rgba(226, 234, 246, .16); }
+.site-content .team-profile-banner { border-radius: 18px 18px 0 0; }
+.site-content .team-profile-card { border-top: 0; border-radius: 0 0 18px 18px; }
+.site-content .team-avatar { border-color: rgba(15, 20, 29, .9); }
+
+/* Changelog timeline and release details */
+.site-content .changelog-entry-card,
+.site-content .changelog-highlight-card,
+.site-content .changelog-chart-container,
+.site-content .changelog-change-group,
+.site-content .changelog-commit,
+.site-content .changelog-timeline .changelog-highlight-mini {
+  color: #f4f5f7;
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .changelog-entry-card:hover,
+.site-content .changelog-highlight-card:hover { background: rgba(18, 20, 23, .9); border-color: rgba(213, 220, 229, .26); }
+.site-content .changelog-entry-title,
+.site-content .changelog-highlight-mini strong { color: #f4f5f7; }
+.site-content .changelog-entry-summary,
+.site-content .changelog-highlight-mini p,
+.site-content .changelog-detail-summary { color: #b4bac3; }
+.site-content .changelog-read-more,
+.site-content .changelog-entry-date,
+.site-content .changelog-detail-meta { color: #d5d9df; }
+.site-content .changelog-tag-btn { color: #b4bac3; border-radius: 10px; }
+.site-content .changelog-tag-btn:hover,
+.site-content .changelog-tag-btn.active { color: #d5d9df; background: rgba(213, 220, 229, .08); border-color: rgba(213, 220, 229, .2); }
+.site-content .changelog-highlight-mini { border-radius: 12px !important; }
+.site-content .changelog-detail-header,
+.site-content .changelog-detail-nav,
+.site-content .changelog-not-found {
+  padding: 24px;
+  color: #f4f5f7;
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .changelog-detail-header { margin-bottom: 30px; }
+.site-content .changelog-detail-header h1 { color: #f4f5f7; }
+.site-content .changelog-detail-nav { margin-top: 28px; }
+.site-content .changelog-highlight-card h3,
+.site-content .changelog-change-group li,
+.site-content .changelog-commit .commit-msg,
+.site-content .chart-metric-label,
+.site-content .chart-legend-label,
+.site-content .chart-bar-label { color: #b4bac3; }
+.site-content .chart-metric { background: rgba(255, 255, 255, .06); border-radius: 12px; }
+.site-content .chart-bar-track,
+.site-content .chart-timeline-track { background: rgba(255, 255, 255, .1); border-radius: 9px; }
+.site-content .changelog-tag,
+.site-content .changelog-version { border-radius: 9px; }
+
+/* More rounded public surfaces while keeping compact chips and circular controls intact. */
+.site-content .docs-grid article,
+.site-content .support-faq-list,
+.site-content .support-contact-card,
+.site-content .auth-card,
+.site-content .dash-stat,
+.site-content .dash-panel,
+.site-content .server-card,
+.site-content .application-public-card { border-radius: 16px; }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .hero-art .workspace-preview,
+  .feature-grid .feature-card,
+  .shell > .callout,
+  .site-content .docs-page .doc-card,
+  .site-content .commands-grid .command-card,
+  .site-content .team-card,
+  .site-content .team-profile-card,
+  .site-content .changelog-entry-card,
+  .site-content .changelog-highlight-card { background: rgba(5, 6, 7, .94); }
+}
+
+@media (max-width: 800px) {
+  .site-content .docs-page { padding-top: 78px; }
+  .site-content .public-page-intro { align-items: flex-start; flex-direction: column; gap: 22px; padding: 42px 0 30px; margin-bottom: 30px; }
+  .site-content .public-page-intro-actions { width: 100%; }
+  .site-content .docs-page .public-page-intro h1 { max-width: 12ch; }
+}
+
+@media (max-width: 640px) {
+  .site-content .docs-page { padding-top: 53px; }
+  .hero-art .workspace-preview { border-radius: 20px; }
+  .site-content .public-page-intro { padding: 34px 0 26px; }
+  .site-content .public-page-intro h1 { font-size: clamp(36px, 11vw, 48px); }
+  .site-content .public-page-intro-actions { align-items: stretch; flex-direction: column; }
+  .site-content .public-page-intro-actions .button { width: 100%; }
+  .feature-grid .feature-card { border-radius: 18px; }
+  .shell > .callout { align-items: stretch; padding: 28px; border-radius: 18px; }
+  .site-content .team-grid { grid-template-columns: 1fr; }
+  .site-content .docs-page .section-articles,
+  .site-content .docs-page .category-articles,
+  .site-content .docs-page .category-results-grid { grid-template-columns: 1fr; }
+  .site-content .docs-page .doc-card-content { min-height: 0; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .hero-art .workspace-preview,
+  .feature-grid .feature-card,
+  .shell > .callout,
+  .site-content .docs-page .search-input-wrapper,
+  .site-content .docs-page .search-results-dropdown,
+  .site-content .docs-page .doc-card,
+  .site-content .commands-grid .command-card,
+  .site-content .team-card,
+  .site-content .team-profile-card,
+  .site-content .changelog-entry-card,
+  .site-content .changelog-highlight-card { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(5, 6, 7, .96); }
+}

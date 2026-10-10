@@ -28,6 +28,160 @@ def api_staff_me():
     member = next((item for item in _load_staff_rows() if item["id"] == str(session["user"]["id"])), None)
     return jsonify({"role": role, "role_label": "Owner" if role == "owner" else _staff_role_label(role), "profile": member or _staff_row({"user_id": session["user"]["id"], "role": role})})
 
+
+_GUILD_MANAGEMENT_ROLES = {"owner", "developer", "head_admin"}
+
+
+def _require_guild_management_role():
+    role = _current_staff_role()
+    if role not in _GUILD_MANAGEMENT_ROLES:
+        return None, (jsonify({"error": "Guild management is restricted to the owner, developers, and Head Admins."}), 403)
+    if _discord_bot is None:
+        return None, (jsonify({"error": "The Discord bot is not available."}), 503)
+    return role, None
+
+
+@app.route("/api/staff/guilds")
+@require_auth
+def api_staff_guilds():
+    role, error = _require_guild_management_role()
+    if error:
+        return error
+    try:
+        from utils.blacklist_manager import BlacklistManager
+        manager = BlacklistManager()
+        if not manager._loaded:
+            run_on_bot_loop(manager.load())
+        blacklisted = {str(entry["id"]): entry for entry in manager.get_guild_entries()}
+        result = []
+        for guild in sorted(_discord_bot.guilds, key=lambda item: item.name.casefold()):
+            owner_id = str(getattr(guild, "owner_id", "") or "")
+            bot_member = getattr(guild, "me", None)
+            avatar_asset = getattr(bot_member, "guild_avatar", None) if bot_member else None
+            banner_asset = getattr(bot_member, "guild_banner", None) if bot_member else None
+            entry = blacklisted.get(str(guild.id))
+            icon = getattr(guild, "icon", None)
+            result.append({
+                "id": str(guild.id),
+                "name": guild.name,
+                "icon_url": str(icon.url) if icon else None,
+                "owner_id": owner_id or None,
+                "owner_name": (getattr(guild.owner, "global_name", None) or getattr(guild.owner, "name", None)) if getattr(guild, "owner", None) else f"User {owner_id}" if owner_id else "Unknown owner",
+                "member_count": int(getattr(guild, "member_count", 0) or 0),
+                "channel_count": len(getattr(guild, "channels", ()) or ()),
+                "created_at": guild.created_at.isoformat() if getattr(guild, "created_at", None) else None,
+                "bot_avatar_url": str(avatar_asset.url) if avatar_asset else None,
+                "bot_banner_url": str(banner_asset.url) if banner_asset else None,
+                "profile_name": getattr(bot_member, "display_name", None) if bot_member else None,
+                "blacklisted": entry is not None,
+                "blacklist_reason": entry.get("reason") if entry else None,
+            })
+        return jsonify({"guilds": result, "count": len(result), "role": role})
+    except Exception:
+        return jsonify({"error": "Guild information is temporarily unavailable."}), 503
+
+
+@app.route("/api/staff/guilds/<guild_id>/blacklist", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_guild_blacklist(guild_id):
+    role, error = _require_guild_management_role()
+    if error:
+        return error
+    if not guild_id.isdigit() or _discord_bot.get_guild(int(guild_id)) is None:
+        return jsonify({"error": "That guild is not currently available to the bot."}), 404
+    body = request.get_json(silent=True) or {}
+    action = body.get("action")
+    reason = str(body.get("reason", "")).strip()
+    if action not in {"add", "remove"}:
+        return jsonify({"error": "Choose add or remove for the blacklist action."}), 400
+    if action == "add" and not reason:
+        return jsonify({"error": "Enter a reason before blacklisting this guild."}), 400
+    if len(reason) > 1000:
+        return jsonify({"error": "Blacklist reason must be 1,000 characters or fewer."}), 400
+    try:
+        from utils.blacklist_manager import BlacklistManager
+        manager = BlacklistManager()
+        changed = run_on_bot_loop(
+            manager.add_guild(int(guild_id), reason=reason, added_by=int(session["user"]["id"]))
+            if action == "add" else manager.remove_guild(int(guild_id))
+        )
+        if not changed:
+            return jsonify({"error": "The guild blacklist could not be changed."}), 409
+        return jsonify({"ok": True, "blacklisted": action == "add"})
+    except Exception:
+        return jsonify({"error": "The guild blacklist could not be changed."}), 503
+
+
+@app.route("/api/staff/guilds/<guild_id>/profile/reset", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_reset_guild_profile(guild_id):
+    role, error = _require_guild_management_role()
+    if error:
+        return error
+    if not guild_id.isdigit() or _discord_bot.get_guild(int(guild_id)) is None:
+        return jsonify({"error": "That guild is not currently available to the bot."}), 404
+    if not DISCORD_BOT_TOKEN:
+        return jsonify({"error": "The Discord bot token is not configured."}), 503
+    response = req.patch(
+        f"{DISCORD_API}/guilds/{int(guild_id)}/members/@me",
+        headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}", "Content-Type": "application/json"},
+        json={"nick": None, "bio": None, "avatar": None, "banner": None, "display_name_font_id": None, "display_name_effect_id": None, "display_name_colors": None},
+        timeout=10,
+    )
+    if response.status_code not in (200, 204):
+        return jsonify({"error": "Discord rejected the guild profile reset.", "details": response.text[:250]}), 502
+    try:
+        if getattr(_discord_bot, "cxn", None):
+            run_on_bot_loop(_discord_bot.cxn.execute("DELETE FROM guild_profiles WHERE guild_id = $1", int(guild_id)))
+        conn = sqlite_connect()
+        try:
+            if conn:
+                conn.execute("DELETE FROM guild_profiles WHERE guild_id = ?", (int(guild_id),))
+                conn.commit()
+        finally:
+            if conn:
+                conn.close()
+    except Exception:
+        return jsonify({"error": "Discord profile was reset, but stored style settings could not be cleared."}), 503
+    return jsonify({"ok": True})
+
+
+@app.route("/api/staff/guilds/<guild_id>/moderation-notice", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_moderation_notice(guild_id):
+    role, error = _require_guild_management_role()
+    if error:
+        return error
+    if not guild_id.isdigit():
+        return jsonify({"error": "Invalid guild ID."}), 400
+    guild = _discord_bot.get_guild(int(guild_id))
+    if guild is None:
+        return jsonify({"error": "That guild is not currently available to the bot."}), 404
+    body = request.get_json(silent=True) or {}
+    notice = str(body.get("message", "")).strip()
+    if not notice or len(notice) > 1500:
+        return jsonify({"error": "A moderation notice is required (up to 1,500 characters)."}), 400
+    async def send_notice():
+        owner = guild.owner or await _discord_bot.fetch_user(int(guild.owner_id))
+        embed = discord.Embed(
+            title="Official moderation notice",
+            description=notice,
+            colour=discord.Colour(0xC8A882),
+        )
+        embed.add_field(name="Server", value=f"{guild.name} (`{guild.id}`)", inline=False)
+        embed.set_footer(text="Niko moderation team · Please reply through the official support server if you need clarification.")
+        await owner.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        return str(owner.id)
+    try:
+        import discord
+        owner_id = run_on_bot_loop(send_notice())
+        return jsonify({"ok": True, "recipient_id": owner_id})
+    except Exception:
+        return jsonify({"error": "The moderation notice could not be delivered to the guild owner."}), 502
+
 @app.route("/api/staff/profile", methods=["POST"])
 @require_auth
 @require_csrf

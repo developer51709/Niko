@@ -105,25 +105,25 @@ class Development(commands.Cog):
     # -------------------------------
     # Diagnostics
     # -------------------------------
-    @commands.command(name="devping")
+    @commands.command(name="devping", help="Check the bot's response time.")
     async def dev_ping(self, ctx):
         before = time.monotonic()
         msg = await ctx.send("Pinging…")
         ping = (time.monotonic() - before) * 1000
         await msg.edit(content=f"Pong! `{ping:.2f}ms`")
 
-    @commands.command(name="devlatency")
+    @commands.command(name="devlatency", help="View the bot's websocket latency.")
     async def dev_latency(self, ctx):
         await ctx.send(f"Websocket latency: `{self.bot.latency * 1000:.2f}ms`")
 
-    @commands.command(name="devuptime")
+    @commands.command(name="devuptime", help="View how long the bot has been running.")
     async def dev_uptime(self, ctx):
         delta = time.time() - self.start_time
         hours, remainder = divmod(delta, 3600)
         minutes, seconds = divmod(remainder, 60)
         await ctx.send(f"Uptime: `{int(hours)}h {int(minutes)}m {int(seconds)}s`")
 
-    @commands.command(name="devmem")
+    @commands.command(name="devmem", help="View the bot process's memory usage.")
     async def dev_memory(self, ctx):
         try:
             process = psutil.Process(os.getpid())
@@ -141,7 +141,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Guild Inspection
     # -------------------------------
-    @commands.command(name="devguild", help="View info about a guild.")
+    @commands.command(name="devguild", help="View information about a server.")
     async def dev_guild(self, ctx, guild_id: int = None):
         if guild_id:
             g = self.bot.get_guild(guild_id)
@@ -162,7 +162,7 @@ class Development(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="devchannels")
+    @commands.command(name="devchannels", help="List the channels in the current server.")
     async def dev_channels(self, ctx):
         lines = [
             f"`{c.id}` — **{c.name}** ({type(c).__name__})"
@@ -175,7 +175,7 @@ class Development(commands.Cog):
         )
         await ctx.send(view=view)
 
-    @commands.command(name="devroles")
+    @commands.command(name="devroles", help="List the roles in the current server.")
     async def dev_roles(self, ctx):
         lines = [
             f"`{r.id}` — **{r.name}**"
@@ -189,7 +189,7 @@ class Development(commands.Cog):
         )
         await ctx.send(view=view)
 
-    @commands.command(name="devmembers")
+    @commands.command(name="devmembers", help="List the members in the current server.")
     async def dev_members(self, ctx):
         lines = [
             f"`{m.id}` — **{m.display_name}** ({m.name})"
@@ -206,7 +206,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Eval / Exec
     # -------------------------------
-    @commands.command(name="devexec")
+    @commands.command(name="devexec", help="Execute Python code in the bot process.")
     async def dev_exec(self, ctx, *, code: str):
         """Execute Python code."""
         code = textwrap.dedent(code.strip("` "))
@@ -240,7 +240,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Bot Control
     # -------------------------------
-    @commands.command(name="devsay")
+    @commands.command(name="devsay", help="Send a message as the bot.")
     async def dev_say(self, ctx, *, message: str):
         await ctx.message.delete()
         await ctx.send(message)

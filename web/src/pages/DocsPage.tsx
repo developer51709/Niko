@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { PublicHeader } from "../components/PublicHeader";
+import { PublicPageIntro } from "../components/PublicPageIntro";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { DocSearchBar } from "../components/DocSearchBar";
@@ -89,21 +90,11 @@ export function DocsPage() {
     <>
       <PublicHeader page="docs" />
       <main className="shell page-main docs-page">
-        {/* Hero Section */}
-        <div className="docs-hero">
-          <div className="docs-hero-content">
-            <div className="eyebrow docs-eyebrow">Documentation Center</div>
-            <h1 className="docs-title">
-              Everything you need to know about
-              <br />
-              <span className="title-accent">using Niko</span>
-            </h1>
-            <p className="docs-subtitle">
-              Comprehensive guides, command references, and tips to help you
-              get the most out of your server bot.
-            </p>
-          </div>
-        </div>
+        <PublicPageIntro
+          eyebrow="Documentation center"
+          title={<>Niko, <em>explained.</em></>}
+          description="Quick guides and clear answers for setting up and getting more from your Discord bot."
+        />
 
         {/* Search Section */}
         <div className={`docs-search-section ${showResults ? "active" : ""}`}>

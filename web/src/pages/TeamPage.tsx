@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getTeam, getTeamMember } from "../api";
 import { PublicHeader } from "../components/PublicHeader";
+import { PublicPageIntro } from "../components/PublicPageIntro";
 import { Footer } from "../components/Footer";
 import { navigate } from "../router";
 import type { StaffEmoji, StaffMember } from "../types";
@@ -89,7 +90,11 @@ export function TeamPage() {
     };
   }, []);
   return <><style>{teamStyles}</style><PublicHeader page="team" /><main className="shell page-main">
-    <div className="page-heading"><div className="eyebrow">The people behind Niko</div><h1>Meet the team.</h1><p>A small group of builders, moderators, and creative minds keeping Niko friendly, useful, and moving forward.</p></div>
+    <PublicPageIntro
+      eyebrow="The people behind Niko"
+      title={<>Meet the <em>team.</em></>}
+      description="A small group of builders, moderators, and creative minds keeping Niko friendly, useful, and moving forward."
+    />
     <div className="team-grid">{members.map((member) => <button className="team-card" key={member.id} onClick={() => navigate(`/team/${member.id}`)}>
       <div className="team-card-art" style={member.public_banner_url ? { backgroundImage: `url(${member.public_banner_url})` } : undefined} />
       <div className="team-card-body">{avatar(member) ? <img className="team-avatar" src={avatar(member)!} alt="" /> : <span className="team-avatar team-avatar-fallback">{member.name.slice(0, 1)}</span>}<div><span className="team-role">{member.role_label}</span><h2>{member.name}</h2><p>{member.bio || "Part of the Niko team."}</p></div></div>

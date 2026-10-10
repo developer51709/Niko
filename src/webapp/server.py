@@ -800,11 +800,15 @@ def _current_staff_role() -> str | None:
     if not user_id:
         return None
     try:
-        if int(user_id) in OWNER_IDS:
+        numeric_user_id = int(user_id)
+        if numeric_user_id in OWNER_IDS:
             return "owner"
+        if numeric_user_id in DEVELOPER_IDS:
+            return "developer"
     except (TypeError, ValueError):
         return None
 
+    
     # Staff authorization must use the same live database as the bot. The
     # previous SQLite-only lookup denied valid staff on Mongo/live-pool setups.
     if _discord_bot is not None and getattr(_discord_bot, "cxn", None):

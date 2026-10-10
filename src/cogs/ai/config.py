@@ -216,79 +216,52 @@ class ExperimentsButton(discord.ui.Button):
         view = ExperimentsView(self.bot, guild_id)
         await interaction.response.send_message(view=view, ephemeral=True)
 
+
 class BotPersonalitySelect(discord.ui.Select):
     def __init__(self, bot: commands.Bot):
         super().__init__(
             placeholder="Select a personality",
             options=[
                 discord.SelectOption(label="Normal", value="normal"),
-                discord.SelectOption(label="Café", value="cafe")
-            ]
+                discord.SelectOption(label="Café", value="cafe"),
+            ],
         )
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
-        # perm check handled by the button
-        guild_id = interaction.guild.id
         personality = self.values[0]
-        set_ai_config(guild_id, "personality", personality)
+        set_ai_config(interaction.guild.id, "personality", personality)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {get_emoji('ai')} Bot Personality"
-            ),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Bot Personality"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"The bot personality has been set to **{personality}** for this server."
-            ),
-            accent_colour=discord.Color.green()
+            discord.ui.TextDisplay(content=f"The bot personality has been set to **{personality}** for this server."),
+            accent_colour=discord.Color.green(),
         )
         view.add_item(container)
         await interaction.response.edit_message(view=view)
-            
+
+
 class BotPersonalityButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot):
-        super().__init__(
-            label="Bot Personality",
-            style=discord.ButtonStyle.secondary
-        )
+        super().__init__(label="Bot Personality", style=discord.ButtonStyle.secondary)
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
-        # require manage guild perm
         if not interaction.user.guild_permissions.manage_guild:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('danger')} Error"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="You need the `manage_guild` permission to use this button."
-                ),
-                accent_colour=discord.Color.yellow()
+            return await interaction.response.send_message(
+                "You need the `manage_guild` permission to use this button.", ephemeral=True
             )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {get_emoji('ai')} Bot Personality"
-            ),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Bot Personality"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="Select the personality you want the bot to have."
-            ),
-            discord.ui.ActionRow(
-                BotPersonalitySelect(self.bot)
-            ),
-            discord.ui.TextDisplay(
-                content="-# **Note:** This feature is still under development and may not work as expected."
-            )
+            discord.ui.TextDisplay(content="Select the personality you want the bot to have."),
+            discord.ui.ActionRow(BotPersonalitySelect(self.bot)),
+            discord.ui.TextDisplay(content="-# **Note:** This feature is still under development and may not work as expected."),
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
-
 
 
 class AINameModal(discord.ui.Modal, title="Rename the AI"):

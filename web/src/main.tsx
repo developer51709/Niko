@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
 import "./guild-settings.css";
+import "./discord-name-fonts.css";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

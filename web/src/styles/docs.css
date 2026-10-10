@@ -72,7 +72,7 @@
 .doc-search-bar.expanded .search-input-wrapper {
   background: var(--surface);
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(217, 101, 69, .16), var(--shadow-soft);
+  box-shadow: 0 0 0 3px rgba(67, 191, 208, .18), var(--shadow-soft);
 }
 
 .search-icon {

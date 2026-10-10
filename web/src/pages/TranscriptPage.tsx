@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
+import { DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
 
 // ── Types mirroring the stored transcript message payloads ────────────────
 
@@ -81,6 +82,7 @@ type TranscriptData = {
   message_count: number;
   messages: TranscriptMessage[];
   created_at: string;
+  mention_names?: DiscordMentionNames;
 };
 
 const FORMATS = [
@@ -118,317 +120,14 @@ function isVideoMedia(media?: Cv2Media): boolean {
   return isVideoUrl(url);
 }
 
-// ── Discord-style markdown renderer (safe, no HTML) ────────────────────────
-
-type MdNode =
-  | { kind: "text"; text: string }
-  | { kind: "code"; text: string }
-  | { kind: "link"; text: string; url: string }
-  | { kind: "emoji"; name: string; id: string; animated: boolean }
-  | { kind: "timestamp"; unix: number; style: string; raw: string }
-  | { kind: "fmt"; fmt: string; children: MdNode[] };
-
-type MdToken =
-  | { type: "text"; text: string }
-  | { type: "code"; text: string }
-  | { type: "link"; text: string; url: string }
-  | { type: "emoji"; name: string; id: string; animated: boolean }
-  | { type: "timestamp"; unix: number; style: string; raw: string }
-  | { type: "marker"; fmt: string };
-
-const MD_TOKEN_RE =
-  /(`[^`\n]+`)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)\] ]+)\))|(\*\*)|(?<!\*)\*(?!\*)|(~~)/g;
-
-const AUTOLINK_RE = /(https?:\/\/[^\s<>)]+)/g;
-
-const MARKER_TEXT: Record<string, string> = { bold: "**", italic: "*", strike: "~~" };
-
-const TIMESTAMP_STYLES = new Set(["t", "T", "d", "D", "f", "F", "R"]);
-
-function formatDiscordTimestamp(unix: number, style: string): string | null {
-  if (!Number.isFinite(unix) || !TIMESTAMP_STYLES.has(style)) return null;
-  const date = new Date(unix * 1000);
-  if (Number.isNaN(date.getTime())) return null;
-  if (style === "R") {
-    const seconds = unix - Math.floor(Date.now() / 1000);
-    const absolute = Math.abs(seconds);
-    const unit = absolute < 60 ? "second" : absolute < 3600 ? "minute" : absolute < 86400 ? "hour" : absolute < 604800 ? "day" : absolute < 2592000 ? "week" : absolute < 31536000 ? "month" : "year";
-    const divisor = unit === "second" ? 1 : unit === "minute" ? 60 : unit === "hour" ? 3600 : unit === "day" ? 86400 : unit === "week" ? 604800 : unit === "month" ? 2592000 : 31536000;
-    return new Intl.RelativeTimeFormat(undefined, { numeric: "always" }).format(Math.round(seconds / divisor), unit);
-  }
-  const options: Intl.DateTimeFormatOptions = {
-    ...(style === "t" || style === "T" ? { hour: "numeric", minute: "2-digit" } : {}),
-    ...(style === "T" ? { second: "2-digit" } : {}),
-    ...(style === "d" ? { year: "numeric", month: "2-digit", day: "2-digit" } : {}),
-    ...(style === "D" ? { year: "numeric", month: "long", day: "numeric" } : {}),
-    ...(style === "f" ? { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : {}),
-    ...(style === "F" ? { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" } : {}),
-  };
-  return new Intl.DateTimeFormat(undefined, options).format(date);
-}
-
-function tokenizeMd(input: string): MdToken[] {
-  const tokens: MdToken[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  const pushText = (raw: string) => {
-    if (!raw) return;
-    // AUTOLINK_RE has one capture group, so split interleaves URLs at odd
-    // indices: [text?, url, text, url, ...]
-    const parts = raw.split(/(<a?:[A-Za-z0-9_~]+:\d+>|<t:-?\d+:[tTdDfFR]>)/g);
-    for (const part of parts) {
-      if (!part) continue;
-      const emoji = part.match(/^<(a?):([A-Za-z0-9_~]+):(\d+)>$/);
-      if (emoji) {
-        tokens.push({ type: "emoji", name: emoji[2], id: emoji[3], animated: emoji[1] === "a" });
-        continue;
-      }
-      const timestamp = part.match(/^<t:(-?\d+):([tTdDfFR])>$/);
-      if (timestamp) {
-        tokens.push({ type: "timestamp", unix: Number(timestamp[1]), style: timestamp[2], raw: part });
-        continue;
-      }
-      const linked = part.split(AUTOLINK_RE);
-      for (let i = 0; i < linked.length; i++) {
-        if (!linked[i]) continue;
-        if (i % 2 === 1) tokens.push({ type: "link", text: linked[i], url: linked[i] });
-        else tokens.push({ type: "text", text: linked[i] });
-      }
-    }
-  };
-
-  MD_TOKEN_RE.lastIndex = 0;
-  while ((match = MD_TOKEN_RE.exec(input)) !== null) {
-    if (match.index > lastIndex) {
-      pushText(input.slice(lastIndex, match.index));
-    }
-    if (match[1] !== undefined) {
-      tokens.push({ type: "code", text: match[1].slice(1, -1) });
-    } else if (match[2] !== undefined) {
-      tokens.push({ type: "link", text: match[3], url: match[4] });
-    } else if (match[5] !== undefined) {
-      tokens.push({ type: "marker", fmt: "bold" });
-    } else if (match[6] !== undefined) {
-      tokens.push({ type: "marker", fmt: "italic" });
-    } else if (match[7] !== undefined) {
-      tokens.push({ type: "marker", fmt: "strike" });
-    }
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < input.length) {
-    pushText(input.slice(lastIndex));
-  }
-  return tokens;
-}
-
-function markdownToNodes(text: string): MdNode[] {
-  const roots: MdNode[] = [];
-  const stack: { fmt: string; children: MdNode[] }[] = [];
-  const openSet = new Set<string>();
-  const append = (node: MdNode) => {
-    if (stack.length > 0) stack[stack.length - 1].children.push(node);
-    else roots.push(node);
-  };
-
-  for (const token of tokenizeMd(text)) {
-    if (token.type === "text") {
-      append({ kind: "text", text: token.text });
-    } else if (token.type === "code") {
-      append({ kind: "code", text: token.text });
-    } else if (token.type === "link") {
-      append({ kind: "link", text: token.text, url: token.url });
-    } else if (token.type === "emoji") {
-      append({ kind: "emoji", name: token.name, id: token.id, animated: token.animated });
-    } else if (token.type === "timestamp") {
-      append({ kind: "timestamp", unix: token.unix, style: token.style, raw: token.raw });
-    } else if (token.type === "marker") {
-      if (openSet.has(token.fmt)) {
-        // Closing marker: wrap content since its opening into a fmt node
-        const idx = stack.map((s) => s.fmt).lastIndexOf(token.fmt);
-        const closed = stack.splice(idx);
-        closed.forEach((frame) => openSet.delete(frame.fmt));
-        const node: MdNode = { kind: "fmt", fmt: token.fmt, children: [...closed[0].children] };
-        // Frames opened after the matched one never closed on their own
-        // (malformed input) — render their markers literally, in order.
-        for (const level of closed.slice(1)) {
-          node.children.push({ kind: "text", text: MARKER_TEXT[level.fmt] ?? "" });
-          node.children.push(...level.children);
-        }
-        append(node);
-      } else {
-        stack.push({ fmt: token.fmt, children: [] });
-        openSet.add(token.fmt);
-      }
-    }
-  }
-  // Unclosed openers become literal marker text followed by their content
-  if (stack.length > 0) {
-    for (const frame of stack) {
-      append({ kind: "text", text: MARKER_TEXT[frame.fmt] ?? "" });
-      for (const child of frame.children) append(child);
-    }
-  }
-  return roots;
-}
-
-const renderMdNodes = (nodes: MdNode[], keyPrefix: string): ReactNode =>
-  nodes.map((node, i) => {
-    const key = `${keyPrefix}-${i}`;
-    switch (node.kind) {
-      case "text":
-        return <span key={key}>{node.text}</span>;
-      case "code":
-        return (
-          <code
-            key={key}
-            style={{
-              background: "#2b2d31",
-              border: "1px solid #3f4147",
-              borderRadius: 4,
-              padding: "0 5px",
-              color: "#f2b8c2",
-              fontFamily: "monospace",
-              fontSize: "0.92em",
-            }}
-          >
-            {node.text}
-          </code>
-        );
-      case "emoji":
-        return (
-          <img
-            key={key}
-            src={`https://cdn.discordapp.com/emojis/${node.id}.${node.animated ? "gif" : "png"}`}
-            alt={`:${node.name}:`}
-            title={`:${node.name}:`}
-            style={{ width: 22, height: 22, objectFit: "contain", verticalAlign: "-0.35em", display: "inline-block" }}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).alt = `:${node.name}:`;
-            }}
-          />
-        );
-      case "timestamp": {
-        const formatted = formatDiscordTimestamp(node.unix, node.style);
-        return formatted ? (
-          <time key={key} dateTime={new Date(node.unix * 1000).toISOString()} title={node.raw}>
-            {formatted}
-          </time>
-        ) : (
-          <span key={key}>{node.raw}</span>
-        );
-      }
-      case "link":
-        return (
-          <a
-            key={key}
-            href={node.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#00a8fc", textDecoration: "none" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none";
-            }}
-          >
-            {node.text}
-          </a>
-        );
-      case "fmt": {
-        const base: CSSProperties = {};
-        if (node.fmt === "bold") base.fontWeight = 700;
-        if (node.fmt === "italic") base.fontStyle = "italic";
-        if (node.fmt === "strike") base.textDecoration = "line-through";
-        return (
-          <span key={key} style={base}>
-            {renderMdNodes(node.children, key)}
-          </span>
-        );
-      }
-    }
-  });
-
-const inlineMd = (text: string): ReactNode => renderMdNodes(markdownToNodes(text), "md");
-
-/** Render full message content including block-level Discord markdown. */
-function MarkdownBlock({ text, muted }: { text: string; muted?: boolean }) {
-  const lines = text.split("\n");
-  const rendered: ReactNode[] = [];
-
-  lines.forEach((line, i) => {
-    const trimmed = line.trimStart();
-    const isLast = i === lines.length - 1;
-    const br = isLast ? null : <br key={`br${i}`} />;
-
-    if (trimmed.startsWith("-# ")) {
-      rendered.push(
-        <span key={i} style={{ color: muted ? "#6d737a" : "#949ba4", fontSize: 12 }}>
-          {inlineMd(trimmed.slice(3))}
-          {br}
-        </span>
-      );
-    } else if (/^#{1,4}\s/.test(trimmed)) {
-      rendered.push(
-        <span key={i} style={{ color: "#f2f3f5", fontWeight: 700, fontSize: 16 }}>
-          {inlineMd(trimmed)}
-          {br}
-        </span>
-      );
-    } else if (trimmed.startsWith("> ")) {
-      rendered.push(
-        <span
-          key={i}
-          style={{
-            display: "inline-block",
-            color: "#b5bac1",
-            borderLeft: "3px solid #4e5058",
-            paddingLeft: 8,
-          }}
-        >
-          {inlineMd(trimmed.slice(2))}
-          {br}
-        </span>
-      );
-    } else if (trimmed.startsWith("```")) {
-      rendered.push(
-        <pre
-          key={i}
-          style={{
-            background: "#2b2d31",
-            border: "1px solid #3f4147",
-            borderRadius: 6,
-            padding: "10px 12px",
-            overflowX: "auto",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontFamily: "monospace",
-            fontSize: 12.5,
-            color: "#dbdee1",
-            margin: "2px 0",
-          }}
-        >
-          {trimmed.replace(/^```[a-zA-Z]*/, "").replace(/```$/, "")}
-          {br}
-        </pre>
-      );
-    } else {
-      rendered.push(
-        <span key={i}>
-          {inlineMd(line)}
-          {br}
-        </span>
-      );
-    }
-  });
-
-  return <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{rendered}</span>;
+// ── Discord-style markdown renderer ───────────────────────────────────────
+function MarkdownBlock({ text, mentionNames }: { text: string; mentionNames?: DiscordMentionNames }) {
+  return <DiscordMarkdown text={text} mentionNames={mentionNames} />;
 }
 
 // ── Embed renderer ─────────────────────────────────────────────────────────
 
-function EmbedView({ embed }: { embed: TranscriptEmbed }) {
+function EmbedView({ embed, mentionNames }: { embed: TranscriptEmbed; mentionNames?: DiscordMentionNames }) {
   const color = colorCss(embed.color) || "#5865f2";
   const author = embed.author;
   const footer = embed.footer;
@@ -466,16 +165,16 @@ function EmbedView({ embed }: { embed: TranscriptEmbed }) {
           <div style={{ color: "#00a8fc", fontWeight: 600, margin: "2px 0 4px", fontSize: 14 }}>
             {embed.url ? (
               <a href={embed.url} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>
-                <MarkdownBlock text={embed.title} />
+                <MarkdownBlock text={embed.title} mentionNames={mentionNames} />
               </a>
             ) : (
-              <MarkdownBlock text={embed.title} />
+              <MarkdownBlock text={embed.title} mentionNames={mentionNames} />
             )}
           </div>
         )}
         {embed.description && (
           <div style={{ color: "#dbdee1", fontSize: 13, lineHeight: 1.5 }}>
-            <MarkdownBlock text={embed.description} />
+            <MarkdownBlock text={embed.description} mentionNames={mentionNames} />
           </div>
         )}
         {embed.fields && embed.fields.length > 0 && (
@@ -487,12 +186,12 @@ function EmbedView({ embed }: { embed: TranscriptEmbed }) {
               >
                 {field.name && (
                   <div style={{ color: "#f2f3f5", fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
-                    <MarkdownBlock text={field.name} />
+                    <MarkdownBlock text={field.name} mentionNames={mentionNames} />
                   </div>
                 )}
                 {field.value && (
                   <div style={{ color: "#dbdee1", fontSize: 13 }}>
-                    <MarkdownBlock text={field.value} />
+                    <MarkdownBlock text={field.value} mentionNames={mentionNames} />
                   </div>
                 )}
               </div>
@@ -543,7 +242,7 @@ function EmbedView({ embed }: { embed: TranscriptEmbed }) {
 
 // ── CV2 component renderer ─────────────────────────────────────────────────
 
-function Cv2ComponentView({ component }: { component: Cv2Component }) {
+function Cv2ComponentView({ component, mentionNames }: { component: Cv2Component; mentionNames?: DiscordMentionNames }) {
   switch (component.type) {
     case 17: {
       // Container
@@ -565,7 +264,7 @@ function Cv2ComponentView({ component }: { component: Cv2Component }) {
           )}
           <div style={{ flex: 1, minWidth: 0, padding: "6px 12px 8px" }}>
             {(component.components || []).map((child, i) => (
-              <Cv2ComponentView key={i} component={child} />
+              <Cv2ComponentView key={i} component={child} mentionNames={mentionNames} />
             ))}
           </div>
         </div>
@@ -576,7 +275,7 @@ function Cv2ComponentView({ component }: { component: Cv2Component }) {
       return (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "6px 0" }}>
           {(component.components || []).map((child, i) => (
-            <Cv2ComponentView key={i} component={child} />
+            <Cv2ComponentView key={i} component={child} mentionNames={mentionNames} />
           ))}
         </div>
       );
@@ -631,7 +330,7 @@ function Cv2ComponentView({ component }: { component: Cv2Component }) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0" }}>
           {children.map((child, i) => (
-            <Cv2ComponentView key={i} component={child} />
+            <Cv2ComponentView key={i} component={child} mentionNames={mentionNames} />
           ))}
         </div>
       );
@@ -640,7 +339,7 @@ function Cv2ComponentView({ component }: { component: Cv2Component }) {
       // TextDisplay
       return (
         <div style={{ color: "#dbdee1", fontSize: 14, lineHeight: 1.5, margin: "4px 0", wordBreak: "break-word" }}>
-          <MarkdownBlock text={component.content || ""} />
+          <MarkdownBlock text={component.content || ""} mentionNames={mentionNames} />
         </div>
       );
     }
@@ -785,11 +484,11 @@ function Cv2ComponentView({ component }: { component: Cv2Component }) {
   }
 }
 
-function Cv2Components({ components }: { components: Cv2Component[] }) {
+function Cv2Components({ components, mentionNames }: { components: Cv2Component[]; mentionNames?: DiscordMentionNames }) {
   return (
     <>
       {components.map((comp, i) => (
-        <Cv2ComponentView key={i} component={comp} />
+        <Cv2ComponentView key={i} component={comp} mentionNames={mentionNames} />
       ))}
     </>
   );
@@ -797,11 +496,11 @@ function Cv2Components({ components }: { components: Cv2Component[] }) {
 
 // ── One transcript message ─────────────────────────────────────────────────
 
-function MessageContent({ text }: { text: string }) {
-  return <MarkdownBlock text={text} />;
+function MessageContent({ text, mentionNames }: { text: string; mentionNames?: DiscordMentionNames }) {
+  return <MarkdownBlock text={text} mentionNames={mentionNames} />;
 }
 
-function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
+function TranscriptMessageView({ msg, mentionNames }: { msg: TranscriptMessage; mentionNames?: DiscordMentionNames }) {
   const hasRich = !!(
     (msg.attachments && msg.attachments.length > 0) ||
     (msg.embeds && msg.embeds.length > 0) ||
@@ -826,7 +525,7 @@ function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
 
       {msg.content ? (
         <div style={{ color: "#dbdee1" }}>
-          <MessageContent text={msg.content} />
+          <MessageContent text={msg.content} mentionNames={mentionNames} />
         </div>
       ) : !hasRich ? (
         <div style={{ color: "#6d737a", fontStyle: "italic", fontSize: 13 }}>
@@ -882,7 +581,7 @@ function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
       {msg.embeds && msg.embeds.length > 0 && (
         <>
           {msg.embeds.map((embed, i) => (
-            <EmbedView key={i} embed={embed} />
+            <EmbedView key={i} embed={embed} mentionNames={mentionNames} />
           ))}
         </>
       )}
@@ -905,7 +604,7 @@ function TranscriptMessageView({ msg }: { msg: TranscriptMessage }) {
         </div>
       )}
 
-      {msg.components && msg.components.length > 0 && <Cv2Components components={msg.components} />}
+      {msg.components && msg.components.length > 0 && <Cv2Components components={msg.components} mentionNames={mentionNames} />}
     </div>
   );
 }
@@ -1015,7 +714,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
           }}
         >
           {data.messages.map((msg, i) => (
-            <TranscriptMessageView key={i} msg={msg} />
+            <TranscriptMessageView key={i} msg={msg} mentionNames={data.mention_names} />
           ))}
           {data.messages.length === 0 && (
             <div style={{ padding: 40, textAlign: "center", color: "#949ba4" }}>

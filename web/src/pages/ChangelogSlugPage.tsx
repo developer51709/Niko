@@ -202,7 +202,7 @@ function PieChart({ chart }: { chart: Extract<ChangelogChart, { type: "pie" }> }
     .map((s) => {
       const startPct = (s.start / 360) * 100;
       const endPct = (s.end / 360) * 100;
-      return `${s.color || "#d96545"} ${startPct}% ${endPct}%`;
+      return `${s.color || "#43bfd0"} ${startPct}% ${endPct}%`;
     })
     .join(", ");
 
@@ -235,7 +235,7 @@ function DonutChart({ chart }: { chart: Extract<ChangelogChart, { type: "donut" 
     (result, item) => {
       const start = (result.current / total) * 100;
       const end = ((result.current + item.value) / total) * 100;
-      result.css += `${item.color || "#d96545"} ${start}% ${end}%, `;
+      result.css += `${item.color || "#43bfd0"} ${start}% ${end}%, `;
       result.current += item.value;
       return result;
     },

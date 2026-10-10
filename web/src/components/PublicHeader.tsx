@@ -2,7 +2,7 @@ import { useState, type MouseEvent } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { navigate, type Page } from "../router";
 import { Brand } from "./Brand";
-import { Icon } from "./Icon";
+import { PublicHeaderActions } from "./PublicHeaderActions";
 
 const publicLinks = [
   { label: "Home", path: "/", page: "home" as Page },
@@ -42,42 +42,13 @@ export function PublicHeader({ page }: { page: Page }) {
         </nav>
       )}
       <div className="header-actions">
-        {isDashboard ? (
-          <div className="dashboard-menu">
-            <button
-              className="button button-small button-muted dashboard-menu-trigger"
-              type="button"
-              aria-expanded={menuOpen}
-              aria-controls="dashboard-navigation-menu"
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <Icon name={menuOpen ? "close" : "menu"} />
-              <span>Menu</span>
-            </button>
-            {menuOpen && (
-              <nav id="dashboard-navigation-menu" className="dashboard-menu-popover" aria-label="Dashboard navigation">
-                <span className="dashboard-menu-label">Navigate</span>
-                {publicLinks.map((link) => (
-                  <a key={link.path} href={link.path} onClick={goTo(link.path)}>
-                    {link.label}
-                  </a>
-                ))}
-                <a className="dashboard-menu-current" href="/dashboard" aria-current="page" onClick={goTo("/dashboard")}>
-                  Dashboard
-                </a>
-              </nav>
-            )}
-          </div>
-        ) : (
-          <>
-            <a className="button button-small button-muted dashboard-link" href="/dashboard" onClick={goTo("/dashboard")}>
-              Dashboard <Icon name="arrow" />
-            </a>
-            <a className="button button-small button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">
-              Add to Discord
-            </a>
-          </>
-        )}
+        <PublicHeaderActions
+          inviteUrl={config?.invite_url}
+          onNavigate={goTo}
+          isDashboard={isDashboard}
+          menuOpen={menuOpen}
+          onMenuToggle={() => setMenuOpen((open) => !open)}
+        />
       </div>
     </header>
   );

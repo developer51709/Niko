@@ -69,29 +69,6 @@ MESSAGES = {
             "level_up":       "¡Has subido de nivel! Ahora eres nivel {level}.",
         },
     },
-    "cafe": {
-        "en": {
-            "daily_wait":     "patience, bestie! your daily treats aren't ready yet ☕🍰",
-            "daily_success":  "yesss! you got your daily {reward} coins. go buy something cute! 🍬✨",
-            "work_wait":      "you're working too hard! take a coffee break ☕💤",
-            "work_success":   "good job! you worked a shift and earned {reward} coins for the tip jar 🍯✨",
-            "level_up":       "level up! you're now level {level} ✨ keep grinding bestie",
-        },
-        "de": {
-            "daily_wait":     "Geduld, Liebes! Deine täglichen Leckereien sind noch nicht fertig ☕🍰",
-            "daily_success":  "yesss! Du hast deine täglichen {reward} Münzen bekommen 🍬✨",
-            "work_wait":      "Du arbeitest zu hart! Mach eine Kaffeepause ☕💤",
-            "work_success":   "Gute Arbeit! Du hast eine Schicht gearbeitet und {reward} Münzen verdient 🍯✨",
-            "level_up":       "Aufstieg! Du bist jetzt Level {level} ✨",
-        },
-        "es": {
-            "daily_wait":     "¡paciencia, amix! tus delicias diarias aún no están listas ☕🍰",
-            "daily_success":  "¡yesss! recibiste tus {reward} monedas diarias 🍬✨",
-            "work_wait":      "¡estás trabajando demasiado! tómate un descanso ☕💤",
-            "work_success":   "¡buen trabajo! ganaste {reward} monedas para el bote de propinas 🍯✨",
-            "level_up":       "¡subiste de nivel! ahora eres nivel {level} ✨",
-        },
-    },
 }
 
 

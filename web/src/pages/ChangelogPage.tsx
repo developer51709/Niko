@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
+import { PublicPageIntro } from "../components/PublicPageIntro";
 import { CHANGELOG, getChangelogTags } from "../data/changelog";
 import { navigate } from "../router";
 
@@ -17,21 +18,11 @@ export function ChangelogPage() {
     <>
       <PublicHeader page="home" />
       <main className="shell page-main changelog-page">
-        {/* Hero */}
-        <div className="changelog-hero">
-          <div className="eyebrow">
-            <span className="status-dot" /> What's new
-          </div>
-          <h1 className="changelog-title">
-            Changelog
-            <br />
-            <span className="title-accent">& updates</span>
-          </h1>
-          <p className="changelog-subtitle">
-            A record of every improvement, fix, and new feature added to Niko.
-            Grouped by release for clarity.
-          </p>
-        </div>
+        <PublicPageIntro
+          eyebrow="What’s new"
+          title={<>Changelog <em>&amp; updates.</em></>}
+          description="A record of every improvement, fix, and new feature added to Niko, grouped by release for clarity."
+        />
 
         {/* Tags */}
         <div className="changelog-tags">

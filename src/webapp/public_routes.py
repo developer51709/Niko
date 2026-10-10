@@ -81,6 +81,16 @@ def api_public_config():
 
 @app.route("/api/botstats")
 def api_botstats():
+    # Prefer live values from the running bot so the numbers are realtime
+    # instead of the startup snapshot in data/bot_stats.json.
+    if _discord_bot is not None and getattr(_discord_bot, "loop", None) is not None:
+        try:
+            live = run_on_bot_loop(_live_bot_stats(), timeout=5)
+            if live:
+                return jsonify(live)
+        except Exception:
+            pass
+
     stats = load_json(BOT_STATS, {})
     econ_count = len(glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json")))
     return jsonify({
@@ -91,3 +101,36 @@ def api_botstats():
         "version":       stats.get("version", "1.0"),
         "economy_users": econ_count,
     })
+
+
+async def _live_bot_stats():
+    """Collect stats directly from the connected bot (runs on the bot loop)."""
+    bot = _discord_bot
+    if bot is None or not getattr(bot, "is_ready", lambda: False)():
+        return None
+    guilds = list(bot.guilds)
+    user_count = sum(g.member_count or 0 for g in guilds)
+    try:
+        # walk_commands includes nested prefix commands; the app tree includes
+        # context menus alongside slash commands, including names not yet in
+        # the startup registry.
+        command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
+    except Exception:
+        command_registry = load_json("data/commands.json", None)
+        if isinstance(command_registry, list):
+            command_count = sum(
+                1 for command in command_registry
+                if isinstance(command, dict) and command.get("name")
+            )
+        else:
+            command_count = load_json(BOT_STATS, {}).get("command_count", 76)
+    if not command_count:
+        command_count = load_json(BOT_STATS, {}).get("command_count", 76)
+    return {
+        "guild_count":   len(guilds),
+        "user_count":    user_count,
+        "command_count": command_count,
+        "uptime_since":  load_json(BOT_STATS, {}).get("uptime_since"),
+        "version":       load_json(BOT_STATS, {}).get("version", "1.0"),
+        "economy_users": len(glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))),
+    }

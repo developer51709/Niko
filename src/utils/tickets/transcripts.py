@@ -321,7 +321,7 @@ def _discord_timestamp_text(unix: int, style: str) -> Optional[str]:
     return value.strftime("%b %-d, %Y %-I:%M %p UTC")
 
 
-def _md_to_html(text: Any) -> str:
+def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
     """Convert a light markdown subset into safe HTML.
 
     Supports bold, italics, underline, strikethrough, inline code, links and
@@ -380,6 +380,19 @@ def _md_to_html(text: Any) -> str:
 
     value = re.sub(r"&lt;t:(-?\d+):([tTdDfFR])&gt;", _timestamp, value)
 
+    def _mention(match: "re.Match[str]") -> str:
+        raw_id = match.group(1) or match.group(2) or match.group(3)
+        kind = "user" if match.group(1) else "role" if match.group(2) else "channel"
+        label = (mention_names or {}).get(kind, {}).get(raw_id)
+        safe_label = _esc(label or raw_id)
+        if kind == "user":
+            return f'<a class="discord-md-mention discord-md-mention-user" href="https://discord.com/users/{raw_id}" data-discord-user-id="{raw_id}" role="button" tabindex="0">@{safe_label}</a>'
+        css_kind = "channel" if kind == "channel" else "role"
+        prefix = "#" if kind == "channel" else "@"
+        return f'<span class="discord-md-mention discord-md-mention-{css_kind}">{prefix}{safe_label}</span>'
+
+    value = re.sub(r"&lt;@!?(\d+)&gt;|&lt;@&amp;(\d+)&gt;|&lt;#(\d+)&gt;", _mention, value)
+
     lines = value.split("\n")
     html_lines = []
     for line in lines:
@@ -400,7 +413,7 @@ def _md_to_html(text: Any) -> str:
     return value
 
 
-def _embed_to_html(embed: dict) -> str:
+def _embed_to_html(embed: dict, mention_names: dict | None = None) -> str:
     """Render a single embed payload into an HTML block."""
     color = _color_css(embed.get("color"))
     style = f"border-left-color: {color};" if color else ""
@@ -422,7 +435,7 @@ def _embed_to_html(embed: dict) -> str:
 
     desc = embed.get("description")
     if desc:
-        parts.append(f'<div class="embed-desc">{_md_to_html(desc)}</div>')
+        parts.append(f'<div class="embed-desc">{_md_to_html(desc, mention_names)}</div>')
 
     fields = embed.get("fields") or []
     if fields:
@@ -432,8 +445,8 @@ def _embed_to_html(embed: dict) -> str:
             value = field.get("value", "")
             cls = "embed-field embed-field-inline" if field.get("inline") else "embed-field"
             field_html.append(
-                f'<div class="{cls}"><div class="embed-field-name">{_md_to_html(name)}</div>'
-                f'<div class="embed-field-value">{_md_to_html(value)}</div></div>'
+                f'<div class="{cls}"><div class="embed-field-name">{_md_to_html(name, mention_names)}</div>'
+                f'<div class="embed-field-value">{_md_to_html(value, mention_names)}</div></div>'
             )
         parts.append(f'<div class="embed-fields">{"".join(field_html)}</div>')
 
@@ -482,20 +495,20 @@ def _component_children(component: dict) -> List[dict]:
     return children
 
 
-def _component_to_html(component: dict) -> str:
+def _component_to_html(component: dict, mention_names: dict | None = None) -> str:
     """Recursively render one CV2 component payload into HTML."""
     ctype = component.get("type")
     if ctype == _TYPE_CONTAINER:
         accent = _color_css(component.get("accent_color"))
         style = f"border-color: {accent};" if accent else ""
         bar = f'<div class="cv2-bar" style="background:{accent};"></div>' if accent else ""
-        inner = "".join(_component_to_html(c) for c in _component_children(component))
+        inner = "".join(_component_to_html(c, mention_names) for c in _component_children(component))
         return (
             f'<div class="cv2-card" style="{style}">{bar}'
             f'<div class="cv2-card-inner">{inner}</div></div>'
         )
     if ctype == _TYPE_ACTION_ROW:
-        inner = "".join(_component_to_html(c) for c in _component_children(component))
+        inner = "".join(_component_to_html(c, mention_names) for c in _component_children(component))
         return f'<div class="cv2-row">{inner}</div>'
     if ctype == _TYPE_BUTTON:
         style = component.get("style")
@@ -510,12 +523,12 @@ def _component_to_html(component: dict) -> str:
         return f'<span class="cv2-btn{disabled}">{label_html}</span>'
     if ctype == _TYPE_SECTION:
         children = [c for c in _component_children(component)]
-        main = "".join(_component_to_html(c) for c in children)
+        main = "".join(_component_to_html(c, mention_names) for c in children)
         return f'<div class="cv2-section">{main}</div>'
     if ctype == _TYPE_TEXT_DISPLAY:
-        return f'<div class="cv2-text">{_md_to_html(component.get("content"))}</div>'
+        return f'<div class="cv2-text">{_md_to_html(component.get("content"), mention_names)}</div>'
     if ctype == _TYPE_LABEL:
-        return f'<div class="cv2-label">{_md_to_html(component.get("content"))}</div>'
+        return f'<div class="cv2-label">{_md_to_html(component.get("content"), mention_names)}</div>'
     if ctype == _TYPE_SEPARATOR:
         if component.get("divider", True):
             return '<div class="cv2-sep"></div>'
@@ -537,7 +550,7 @@ def _component_to_html(component: dict) -> str:
             if not url:
                 continue
             desc = item.get("description")
-            desc_html = f'<figcaption>{_md_to_html(desc)}</figcaption>' if desc else ""
+            desc_html = f'<figcaption>{_md_to_html(desc, mention_names)}</figcaption>' if desc else ""
             content_type = media.get("content_type") or ""
             if content_type.startswith("video/") or _is_video_url(url):
                 items_html.append(
@@ -555,8 +568,8 @@ def _component_to_html(component: dict) -> str:
     return ""
 
 
-def _components_to_html(components: List[dict]) -> str:
-    return "".join(_component_to_html(c) for c in components)
+def _components_to_html(components: List[dict], mention_names: dict | None = None) -> str:
+    return "".join(_component_to_html(c, mention_names) for c in components)
 
 
 def _flatten_message_text(msg: dict, indented: bool = False) -> List[str]:
@@ -653,7 +666,7 @@ def export_txt(messages: List[dict]) -> str:
     return "\n".join(lines).strip()
 
 
-def export_html(messages: List[dict], metadata: dict) -> str:
+def export_html(messages: List[dict], metadata: dict, mention_names: dict | None = None, user_profiles: dict | None = None) -> str:
     """Styled HTML transcript page (rich: content, attachments, embeds, CV2)."""
     title = metadata.get("channel_name", "Transcript")
     guild = metadata.get("guild_name", "Server")
@@ -667,7 +680,7 @@ def export_html(messages: List[dict], metadata: dict) -> str:
         author_id = msg.get("author_id", "")
         content = msg.get("content", "")
 
-        content_html = f'<div class="content">{_md_to_html(content)}</div>' if content else ""
+        content_html = f'<div class="content">{_md_to_html(content, mention_names)}</div>' if content else ""
 
         attachments = msg.get("attachments") or []
         att_html = ""
@@ -678,11 +691,11 @@ def export_html(messages: List[dict], metadata: dict) -> str:
             ) + "</div>"
 
         embeds_html = "".join(
-            _embed_to_html(embed) for embed in msg.get("embeds") or []
+            _embed_to_html(embed, mention_names) for embed in msg.get("embeds") or []
             if isinstance(embed, dict)
         )
 
-        components_html = _components_to_html(msg.get("components") or [])
+        components_html = _components_to_html(msg.get("components") or [], mention_names)
 
         stickers_html = ""
         for sticker in msg.get("stickers") or []:
@@ -716,6 +729,7 @@ def export_html(messages: List[dict], metadata: dict) -> str:
         )
 
     msg_block = chr(10).join(msg_rows)
+    profile_json = json.dumps(user_profiles or {}, ensure_ascii=False).replace("</", "<\\/")
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -738,6 +752,28 @@ def export_html(messages: List[dict], metadata: dict) -> str:
   .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
   .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
   .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
+  .discord-md-mention {{ display: inline; padding: 1px 4px; color: #dce4ff; background: rgba(88, 101, 242, .3); border-radius: 4px; font-weight: 650; line-height: 1.5; text-decoration: none; }}
+  .discord-md-mention-role {{ color: #f1d7ff; background: rgba(160, 89, 198, .24); }}
+  .discord-md-mention-user {{ cursor: pointer; }}
+  .discord-profile-popover {{ position: fixed; inset: 0; z-index: 100; pointer-events: none; }}
+  .discord-profile-card {{ position: fixed; left: var(--profile-left); top: var(--profile-top); width: min(20rem, calc(100vw - 1.5rem)); max-height: min(35rem, calc(100dvh - 1.5rem)); overflow-y: auto; border: 1px solid rgb(255 255 255 / .08); border-radius: .85rem; background: #111214; color: #f2f3f5; box-shadow: 0 18px 52px rgb(0 0 0 / .58); pointer-events: auto; font-size: 13px; line-height: 1.45; }}
+  .discord-profile-banner {{ height: 5.5rem; background: #202225 center / cover no-repeat; }}
+  .discord-profile-body {{ position: relative; padding: 0 16px 16px; }}
+  .discord-profile-avatar-wrap {{ position: relative; display: block; width: 76px; height: 76px; margin-top: -38px; }}
+  .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 6px solid #111214; border-radius: 50%; object-fit: cover; background: #313338; }}
+  .discord-profile-avatar-decoration {{ position: absolute; inset: -10px; width: 96px; height: 96px; object-fit: contain; pointer-events: none; }}
+  .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
+  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }}
+  .discord-profile-guild-tag img {{ width: 14px; height: 14px; object-fit: contain; }}
+  .discord-profile-username {{ margin: 0; color: #b5bac1; }}
+  .discord-profile-about {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid #3f4147; }}
+  .discord-profile-about h3 {{ margin-bottom: 5px; color: #b5bac1; font-size: 11px; text-transform: uppercase; }}
+  .discord-profile-about p {{ white-space: pre-wrap; }}
+  .discord-profile-full-link {{ display: block; margin-top: 14px; padding: 8px; border-radius: 5px; background: #5865f2; color: white; text-align: center; text-decoration: none; }}
+  .discord-profile-state {{ padding: 18px; }}
+  @media (prefers-reduced-transparency: reduce) {{
+    .discord-profile-card {{ box-shadow: none; }}
+  }}
   .stickers {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
   .sticker img {{ width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; display: block; }}
   .ts-muted {{ color: #6d737a; }}
@@ -796,6 +832,49 @@ def export_html(messages: List[dict], metadata: dict) -> str:
 {msg_block}
 <script>
 (() => {{
+  const mentionProfiles = {profile_json};
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "'": "&#39;" }})[char]);
+  const closeProfile = () => document.querySelector(".discord-profile-popover")?.remove();
+  const openProfile = (link) => {{
+    closeProfile();
+    const profile = mentionProfiles[link.dataset.discordUserId];
+    if (!profile) return;
+    const rect = link.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+    const top = Math.max(12, Math.min(rect.bottom + 8, window.innerHeight - 320));
+    const popover = document.createElement("div");
+    popover.className = "discord-profile-popover";
+    const card = document.createElement("div");
+    card.className = "discord-profile-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", escapeHtml(profile.display_name) + " Discord profile");
+    card.style.setProperty("--profile-left", left + "px");
+    card.style.setProperty("--profile-top", top + "px");
+    const banner = profile.banner_url
+      ? '<img class="discord-profile-banner" src="' + escapeHtml(profile.banner_url) + '" alt="">'
+      : '<div class="discord-profile-banner" style="background-color:' + (/^#[0-9a-f]+$/i.test(profile.banner_color || '') && profile.banner_color.length === 7 ? profile.banner_color : '#202225') + '"></div>';
+    const avatar = profile.avatar_url
+      ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">' + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '') + '</span>'
+      : '';
+    const guildTag = profile.guild_tag
+      ? '<div class="discord-profile-guild-tag">' + (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span></div>'
+      : '';
+    card.innerHTML = banner + '<div class="discord-profile-body">' + avatar + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>' + guildTag + '<p class="discord-profile-username">' + escapeHtml(profile.username) + '</p>' + (profile.guild_nick ? '<p>Server name: ' + escapeHtml(profile.guild_nick) + '</p>' : '') + (profile.bio ? '<section class="discord-profile-about"><h3>About Me</h3><p>' + escapeHtml(profile.bio) + '</p></section>' : '') + '<a class="discord-profile-full-link" href="https://discord.com/users/' + encodeURIComponent(profile.id) + '" target="_blank" rel="noopener noreferrer">Open Discord profile</a></div>';
+    popover.appendChild(card);
+    document.body.appendChild(popover);
+    popover.addEventListener("click", (event) => {{ if (event.target === popover) closeProfile(); }});
+  }};
+  document.addEventListener("click", (event) => {{
+    const link = event.target.closest?.("[data-discord-user-id]");
+    if (!link) {{ if (!event.target.closest?.(".discord-profile-card")) closeProfile(); return; }}
+    event.preventDefault();
+    openProfile(link);
+  }});
+  document.addEventListener("keydown", (event) => {{
+    if (event.key === "Escape") closeProfile();
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("[data-discord-user-id]")) {{ event.preventDefault(); openProfile(event.target); }}
+  }});
   const styles = {{
     t: {{ hour: "numeric", minute: "2-digit" }},
     T: {{ hour: "numeric", minute: "2-digit", second: "2-digit" }},

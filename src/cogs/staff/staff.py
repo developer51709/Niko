@@ -226,7 +226,7 @@ class StaffCog(commands.Cog):
             return await ctx.send("This command is restricted to official Niko staff.")
         await ctx.send(view=build_staff_help(self.bot, ctx, "all"))
 
-    @staff.command(name="help", hidden=True)
+    @staff.command(name="help", help="Show staff commands available to your role.", hidden=True)
     async def staff_help(self, ctx: commands.Context):
         if not await is_staff_member(ctx):
             return await ctx.send("This command is restricted to official Niko staff.")
@@ -254,7 +254,7 @@ class StaffCog(commands.Cog):
             return await ctx.send("I couldn't DM you the report. Please enable DMs from this server and try again.")
         await ctx.send(f"Sent error report `{code.strip().upper()}` to your DMs.")
 
-    @staff.command(name="manage", hidden=True)
+    @staff.command(name="manage", help="Assign or revoke a staff role for a member.", hidden=True)
     async def staff_manage(self, ctx: commands.Context, target: discord.Member):
         if not _is_owner_user(ctx.author, ctx.bot):
             return await ctx.send("Only the bot owner can manage staff access.")

@@ -227,7 +227,7 @@ class OwnerCog(commands.Cog):
     async def cog_unload(self) -> None:
         self.bot.remove_dynamic_items(_RulesSectionButton, _RulesHomeButton)
 
-    @commands.command(name="broadcast")
+    @commands.command(name="broadcast", help="Compose and publish an official announcement to configured servers.")
     @is_owner()
     async def broadcast(self, ctx: commands.Context, *, message: str = ""):
         """Open the owner-only interactive builder for an official broadcast.
@@ -265,7 +265,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Owner help command
     # -------------------------------
-    @commands.command(name="ownerhelp")
+    @commands.command(name="ownerhelp", help="Show commands available to the bot owner.")
     @is_owner()
     async def owner_help(self, ctx):
         """Shows help for owner-only commands."""
@@ -412,7 +412,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot username
     # -------------------------------
-    @commands.command(name="setusername")
+    @commands.command(name="setusername", help="Set the bot's global username.")
     @is_owner()
     async def set_name(self, ctx, *, name: str):
         """Set the bot's username."""
@@ -425,7 +425,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot status text
     # -------------------------------
-    @commands.command(name="setstatus")
+    @commands.command(name="setstatus", help="Set the bot's playing status text.")
     @is_owner()
     async def set_status(self, ctx, *, text: str):
         """Set the bot's status text."""
@@ -435,7 +435,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot activity type
     # -------------------------------
-    @commands.command(name="setactivity")
+    @commands.command(name="setactivity", help="Set the bot's activity type and text.")
     @is_owner()
     async def set_activity(self, ctx, activity_type: str, *, text: str):
         """
@@ -491,7 +491,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Restart bot
     # -------------------------------
-    @commands.command(name="restart")
+    @commands.command(name="restart", help="Restart the bot process.")
     @is_owner()
     async def restart_bot(self, ctx):
         """Restart the bot."""
@@ -501,7 +501,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shutdown bot
     # -------------------------------
-    @commands.command(name="shutdown")
+    @commands.command(name="shutdown", help="Shut down the bot process.")
     @is_owner()
     async def shutdown_bot(self, ctx):
         """Shut down the bot."""
@@ -511,7 +511,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Sync slash commands
     # -------------------------------
-    @commands.command(name="sync")
+    @commands.command(name="sync", help="Sync application commands globally or to this server.")
     @is_owner()
     async def sync_commands(self, ctx, scope: str = "global"):
         """Sync application commands."""
@@ -553,7 +553,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Eval command
     # -------------------------------
-    @commands.command(name="eval")
+    @commands.command(name="eval", help="Evaluate Python code in the bot process.")
     @is_owner()
     async def eval_code(self, ctx, *, code: str):
         """Evaluate Python code (owner only)."""
@@ -604,7 +604,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Server list command
     # -------------------------------
-    @commands.command(name="servers")
+    @commands.command(name="servers", help="List servers the bot has joined.")
     @is_owner()
     async def list_servers(self, ctx):
         """List all servers the bot is in with multipage navigation."""
@@ -622,7 +622,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Server invite command
     # -------------------------------
-    @commands.command(name="serverinvite")
+    @commands.command(name="serverinvite", help="Create a single-use invite to a server.")
     @is_owner()
     async def server_invite(self, ctx, server_id: int):
         """Create a single-use, 24-hour invite for a server."""
@@ -675,7 +675,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Announce command
     # -------------------------------
-    @commands.command(name="announce")
+    @commands.command(name="announce", help="Send the community policy announcement in this channel.")
     @is_owner()
     async def announce(self, ctx):
         """Send a predefined announcement to the current channel."""
@@ -715,7 +715,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Dev01 command
     # -------------------------------
-    @commands.command(name="dev01")
+    @commands.command(name="dev01", help="Create and assign the dev01 role.")
     @is_owner()
     async def dev01(self, ctx, target: discord.Member = None):
         """Create and grant the dev01 role with all permissions"""
@@ -806,7 +806,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard info (Owner)
     # -------------------------------
-    @commands.command(name="shardinfo")
+    @commands.command(name="shardinfo", help="View detailed information about the bot's shards.")
     @is_owner()
     async def shard_info(self, ctx):
         """View detailed sharding information."""
@@ -833,7 +833,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard stats (Owner)
     # -------------------------------
-    @commands.command(name="shardstats")
+    @commands.command(name="shardstats", help="View statistics for the bot's shards.")
     @is_owner()
     async def shard_stats(self, ctx):
         """View comprehensive shard statistics."""
@@ -875,7 +875,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard health (Owner)
     # -------------------------------
-    @commands.command(name="shardhealth")
+    @commands.command(name="shardhealth", help="Check the health of the bot's shards.")
     @is_owner()
     async def shard_health(self, ctx):
         """Check the health of all shards."""

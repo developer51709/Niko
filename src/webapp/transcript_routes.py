@@ -1,12 +1,27 @@
 """Flask routes for transcript."""
 
+import json
+
+from flask import Response
+
 from . import server as _server
+from .discord_text_routes import resolve_discord_text_mentions
 
 globals().update({
     name: value
     for name, value in vars(_server).items()
     if not name.startswith("__")
 })
+
+def _resolve_transcript_mentions(guild_id, messages):
+    """Resolve all transcript mentions through the shared bounded resolver."""
+    if not isinstance(messages, list):
+        return {"user": {}, "channel": {}, "role": {}}
+    # Scan the full serialized payload: mentions can appear in content, embeds,
+    # and nested Components V2 text fields, not only the top-level content.
+    text = json.dumps(messages, ensure_ascii=False)
+    return resolve_discord_text_mentions(guild_id, text)
+
 
 @app.route("/api/transcript/<transcript_id>")
 def api_get_transcript(transcript_id):
@@ -29,6 +44,9 @@ def api_get_transcript(transcript_id):
             result["messages"] = json.loads(messages)
         except (json.JSONDecodeError, TypeError):
             result["messages"] = []
+    result["mention_names"] = _resolve_transcript_mentions(
+        result.get("guild_id"), result.get("messages", [])
+    )
     return jsonify(result)
 
 @app.route("/api/transcript/<transcript_id>/download")
@@ -86,7 +104,11 @@ def api_download_transcript(transcript_id):
         except Exception:
             pass
         metadata["guild_name"] = guild_name
-        content = export_html(messages, metadata)
+        mention_text = json.dumps(messages, ensure_ascii=False)
+        mention_names = _resolve_transcript_mentions(result.get("guild_id"), messages)
+        from .discord_text_routes import resolve_discord_user_profiles
+        user_profiles = resolve_discord_user_profiles(result.get("guild_id"), mention_text)
+        content = export_html(messages, metadata, mention_names, user_profiles)
         return Response(
             content,
             mimetype="text/html",

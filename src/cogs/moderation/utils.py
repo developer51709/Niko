@@ -173,12 +173,43 @@ class ModerationUtils(commands.Cog):
         self.bot = bot
         ensure_files()
         self.config: dict = {}
+        # Guild IDs whose config was created in-memory before the initial
+        # database load finished; reconciled once the load completes.
+        self._stale_entries: set = set()
+        # Gate for the initial database load. Until it completes, new guild
+        # entries must NOT be persisted — otherwise a message arriving before
+        # the load finishes would write DEFAULT_GUILD_CONFIG over the real
+        # stored config and every toggle would "reset" on next restart.
+        self._initial_load_done = asyncio.Event()
         self.bot.loop.create_task(self._load_config_task())
         self.bot.loop.create_task(self.mute_watcher())
 
     async def _load_config_task(self):
         """Populate the moderation config from the database once ready."""
-        self.config = await _load_all_moderation_configs()
+        try:
+            loaded = await _load_all_moderation_configs()
+            # Merge instead of replace: guilds created in the meantime keep
+            # their in-memory state, everything else comes from the database.
+            for gid, cfg in loaded.items():
+                self.config.setdefault(gid, cfg)
+            # Reconcile entries created before the load finished: replace the
+            # placeholder defaults with the real stored config when one exists.
+            for gid in list(self._stale_entries):
+                stored = loaded.get(gid)
+                if isinstance(stored, dict) and stored:
+                    self.config[gid] = stored
+                _migrate_guild_config(self.config[gid])
+            self._stale_entries.clear()
+        finally:
+            self._initial_load_done.set()
+
+    def _mark_stale_entry(self, gid: str):
+        """Track cache entries created before the initial DB load finished.
+
+        Their DB-backed state is unknown, so they are re-merged from the
+        database once the load completes instead of being trusted as-is.
+        """
+        self._stale_entries.add(gid)
 
     # ---------- CONFIG HELPERS ----------
 
@@ -187,9 +218,15 @@ class ModerationUtils(commands.Cog):
         if gid not in self.config:
             import copy
             self.config[gid] = copy.deepcopy(DEFAULT_GUILD_CONFIG)
-            self.save_config()
+            if not self._initial_load_done.is_set():
+                # The database may still contain real settings for this guild
+                # that haven't been read yet — do NOT persist defaults now.
+                self._mark_stale_entry(gid)
+            else:
+                self.save_config(guild_id)
         else:
             _migrate_guild_config(self.config[gid])
+
         return self.config[gid]
 
     def get_mod_config(self, guild_id: int) -> dict:
@@ -205,7 +242,8 @@ class ModerationUtils(commands.Cog):
         guild. Safe to call from the bot loop or from Flask worker threads.
         """
         targets = [guild_id] if guild_id is not None else [
-            int(gid) for gid in self.config if str(gid).isdigit()
+            int(gid) for gid in self.config
+            if str(gid).isdigit() and str(gid) not in self._stale_entries
         ]
         if not targets:
             return

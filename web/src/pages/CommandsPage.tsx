@@ -3,6 +3,7 @@ import { getCommands } from "../api";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
+import { PublicPageIntro } from "../components/PublicPageIntro";
 import { type Command, type CommandParameter, type CommandType } from "../types";
 
 const PREFERRED_LOCALE = typeof navigator !== "undefined" ? (navigator.language || "en").slice(0, 2) : "en";
@@ -140,7 +141,11 @@ export function CommandsPage() {
     <>
       <PublicHeader page="commands" />
       <main className="shell page-main">
-        <div className="page-heading"><div className="eyebrow">Reference library</div><h1>Everything Niko<br /><em>knows how to do.</em></h1><p>Browse slash, prefix, hybrid, and context commands from the live bot registry. Select any command for permissions, aliases, parameters, usage, and subcommands.</p></div>
+        <PublicPageIntro
+          eyebrow="Reference library"
+          title={<>Everything Niko <em>knows how to do.</em></>}
+          description="Browse slash, prefix, hybrid, and context commands from the live bot registry. Select a command to see its permissions, aliases, parameters, usage, and subcommands."
+        />
         <div className="command-toolbar">
           <label className="search-field"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search commands" aria-label="Search commands" /></label>
           <div className="command-filters">

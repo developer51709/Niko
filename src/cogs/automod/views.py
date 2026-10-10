@@ -64,7 +64,7 @@ MESSAGES = {
         "images_title":      "Image Filtering Settings",
         "images_desc":       "Automatic moderation for images posted in your server.",
         "nsfwimg_desc":      "**NSFW Filter** — deletes images classified as NSFW via AI (external API)",
-        "nsfwimg_note":      "-# ℹ️ Requires the bot host to have `NSFW_API_URL` configured; fails open if the API is unavailable.",
+        "nsfwimg_note":      "-# ⚠️ **Note:** This feature is still in testing and might not work properly.",
         "section_images":    "**🖼️ Image Filtering**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke Settings",
@@ -170,7 +170,7 @@ MESSAGES = {
         "images_title":      "Bildfilter-Einstellungen",
         "images_desc":       "Automatische Moderation für in deinem Server gepostete Bilder.",
         "nsfwimg_desc":      "**NSFW-Filter** — löscht per KI als NSFW eingestufte Bilder (externe API)",
-        "nsfwimg_note":      "-# ℹ️ Erfordert `NSFW_API_URL` auf dem Bot-Host; schlägt offen aus, wenn die API nicht erreichbar ist.",
+        "nsfwimg_note":      "-# ⚠️ **Hinweis:** Diese Funktion befindet sich noch in der Testphase und funktioniert möglicherweise nicht richtig.",
         "section_images":    "**🖼️ Bildfilter**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
@@ -275,7 +275,7 @@ MESSAGES = {
         "images_title":      "Configuración del Filtrado de Imágenes",
         "images_desc":       "Moderación automática para imágenes publicadas en tu servidor.",
         "nsfwimg_desc":      "**Filtro NSFW** — borra imágenes clasificadas como NSFW por IA (API externa)",
-        "nsfwimg_note":      "-# ℹ️ Requiere `NSFW_API_URL` configurado en el host del bot; falla abierto si la API no está disponible.",
+        "nsfwimg_note":      "-# ⚠️ **Nota:** Esta función todavía está en pruebas y puede que no funcione correctamente.",
         "section_images":    "**🖼️ Filtrado de Imágenes**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Configuración Anti-Nuke",
@@ -374,10 +374,33 @@ def get_lang(ctx_or_guild=None) -> str:
     return "en"
 
 
+# Mapping of plain-emoji placeholders used in MESSAGES strings to Niko's
+# custom server emojis, applied uniformly by _t() across every language.
+_CUSTOM_EMOJI_MAP = {
+    "💣": get_emoji("danger"),
+    "🌊": get_emoji("warning"),
+    "🖼️": get_emoji("image"),
+    "🖼": get_emoji("image"),
+    "⚠️": get_emoji("warning"),
+    "⚠": get_emoji("warning"),
+    "🚨": get_emoji("danger"),
+    "☕": get_emoji("heart"),
+}
+
+
+def _custom_emojis(text: str) -> str:
+    """Replace stock emojis in a panel string with Niko's custom emojis."""
+    for stock, custom in _CUSTOM_EMOJI_MAP.items():
+        if stock in text:
+            text = text.replace(stock, custom)
+    return text
+
+
 def _t(lang: str, key: str, **kwargs) -> str:
-    """Look up a localised string and apply format kwargs."""
+    """Look up a localised string, apply format kwargs and custom emojis."""
     text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
-    return text.format(**kwargs) if kwargs else text
+    text = text.format(**kwargs) if kwargs else text
+    return _custom_emojis(text)
 
 
 # ──────────────────────────────────────────────────
@@ -605,7 +628,7 @@ def _build_nuke_dm_view(
     if lang == "de":
         labels  = _NUKE_ACTION_LABELS_DE
         taken   = _NUKE_TAKEN_DE
-        title   = "### 🚨 Anti-Nuke ausgelöst"
+        title   = f"### {get_emoji('danger')} Anti-Nuke ausgelöst"
         lines   = [
             f"**Server:** {guild.name}",
             f"**Täter:** {offender} (`{offender.id}`)",
@@ -617,7 +640,7 @@ def _build_nuke_dm_view(
     elif lang == "es":
         labels  = _NUKE_ACTION_LABELS_ES
         taken   = _NUKE_TAKEN_ES
-        title   = "### 🚨 Anti-Nuke Activado"
+        title   = f"### {get_emoji('danger')} Anti-Nuke Activado"
         lines   = [
             f"**Servidor:** {guild.name}",
             f"**Infractor:** {offender} (`{offender.id}`)",
@@ -629,7 +652,7 @@ def _build_nuke_dm_view(
     else:
         labels  = _NUKE_ACTION_LABELS
         taken   = _NUKE_TAKEN_EN
-        title   = "### 🚨 Anti-Nuke Triggered"
+        title   = f"### {get_emoji('danger')} Anti-Nuke Triggered"
         lines   = [
             f"**Server:** {guild.name}",
             f"**Offender:** {offender} (`{offender.id}`)",
@@ -679,21 +702,21 @@ class SectionSelect(discord.ui.Select):
             discord.SelectOption(
                 label="Image Filtering", 
                 value="image_filter", 
-                emoji="🖼️",
+                emoji=get_emoji("image"),
                 description="NSFW detection & MrBeast scam images",
                 default=(current_section == "image_filter")
             ),
             discord.SelectOption(
                 label="Anti-Nuke", 
                 value="antinuke", 
-                emoji="💣",
+                emoji=get_emoji("danger"),
                 description="Stop rogue mods from mass-deleting",
                 default=(current_section == "antinuke")
             ),
             discord.SelectOption(
                 label="Anti-Raid", 
                 value="antiraid", 
-                emoji="🌊",
+                emoji=get_emoji("warning"),
                 description="Stop mass member join attacks",
                 default=(current_section == "antiraid")
             ),

@@ -14,11 +14,15 @@ def write_bot_stats(bot):
     try:
         os.makedirs("data", exist_ok=True)
         user_count = sum(g.member_count or 0 for g in bot.guilds)
+        try:
+            command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
+        except Exception:
+            command_count = 76
         payload = {
             "guild_count":   len(bot.guilds),
             "guild_ids":     [g.id for g in bot.guilds],
             "user_count":    user_count,
-            "command_count": 76,
+            "command_count": command_count,
             "version":       "1.0",
             "uptime_since":  datetime.datetime.utcnow().isoformat(),
         }
@@ -88,7 +92,7 @@ def write_commands(bot):
             )
             if isinstance(description, dict):
                 description = description.get("en") or next(iter(description.values()), "")
-            return str(description).strip()
+            return str(description or "").strip()
 
         permission_names = (
             "administrator", "manage_guild", "manage_channels", "manage_roles",
@@ -211,7 +215,9 @@ def write_commands(bot):
             if os.path.exists(stats_path):
                 with open(stats_path) as f:
                     stats = json.load(f)
-                stats["command_count"] = len(commands_data)
+                stats["command_count"] = sum(
+                    1 for command in commands_data if command.get("name")
+                )
                 with open(stats_path, "w") as f:
                     json.dump(stats, f)
         except Exception:
