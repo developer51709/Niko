@@ -106,7 +106,7 @@ def configure_bot(bot) -> None:
     for module_name in (
         "webapp.auth_routes", "webapp.team_routes", "webapp.public_routes",
         "webapp.dashboard_routes", "webapp.donation_routes",
-        "webapp.transcript_routes", "webapp.card_routes",
+        "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
         "webapp.application_routes", "webapp.site_routes",
     ):
         module = sys.modules.get(module_name)
@@ -1114,22 +1114,63 @@ def _serialize_ticket_config(cfg) -> dict:
 
 def _profile_row_to_dict(row) -> dict:
     if not row:
-        return {"display_name": None, "bio": None, "avatar_url": None, "banner_url": None}
+        return {"display_name": None, "bio": None, "avatar_url": None, "banner_url": None, "name_font_id": None, "name_effect_id": 2, "name_colors": []}
+    colors = row.get("name_colors")
+    try:
+        colors = json.loads(colors) if colors else []
+    except (TypeError, ValueError):
+        colors = []
     return {
         "display_name": row.get("display_name"),
         "bio": row.get("bio"),
-        "avatar_url": row.get("avatar_url"),
-        "banner_url": row.get("banner_url"),
+        "avatar_url": None,
+        "banner_url": None,
+        "name_font_id": row.get("name_font_id"),
+        "name_effect_id": row.get("name_effect_id") or 2,
+        "name_colors": colors,
     }
 
 
+def _discord_guild_profile_assets(guild_id: str) -> dict:
+    """Resolve profile images from Discord instead of retaining uploaded copies."""
+    guild_int = int(guild_id)
+    if DISCORD_BOT_TOKEN:
+        try:
+            response = req.get(
+                f"{DISCORD_API}/guilds/{guild_int}/members/@me",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                timeout=8,
+            )
+            if response.status_code == 200:
+                payload = response.json()
+                user = payload.get("user") or {}
+                bot_id = str(user.get("id") or getattr(getattr(_discord_bot, "user", None), "id", ""))
+                avatar_hash = payload.get("avatar")
+                banner_hash = payload.get("banner")
+                avatar_ext = "gif" if str(avatar_hash or "").startswith("a_") else "png"
+                banner_ext = "gif" if str(banner_hash or "").startswith("a_") else "png"
+                return {
+                    "avatar_url": f"https://cdn.discordapp.com/guilds/{guild_int}/users/{bot_id}/avatars/{avatar_hash}.{avatar_ext}?size=512" if avatar_hash and bot_id else None,
+                    "banner_url": f"https://cdn.discordapp.com/guilds/{guild_int}/users/{bot_id}/banners/{banner_hash}.{banner_ext}?size=1024" if banner_hash and bot_id else None,
+                }
+        except Exception:
+            pass
+
+    guild = _discord_bot.get_guild(guild_int) if _discord_bot is not None else None
+    member = getattr(guild, "me", None) if guild else None
+    avatar = getattr(getattr(member, "guild_avatar", None), "url", None)
+    banner = getattr(getattr(member, "guild_banner", None), "url", None)
+    return {"avatar_url": str(avatar) if avatar else None, "banner_url": str(banner) if banner else None}
+
+
 def _get_runtime_guild_profile(guild_id: str) -> dict:
-    """Read the persisted per-guild bot profile from the shared database."""
+    """Read profile text/style from storage and images directly from Discord."""
+    assets = _discord_guild_profile_assets(guild_id)
     async def read_from_bot():
         if _discord_bot is None or not getattr(_discord_bot, "cxn", None):
             return None
         return await _discord_bot.cxn.fetchrow(
-            "SELECT display_name, bio, avatar_url, banner_url "
+            "SELECT display_name, bio, name_font_id, name_effect_id, name_colors "
             "FROM guild_profiles WHERE guild_id = $1",
             int(guild_id),
         )
@@ -1138,7 +1179,7 @@ def _get_runtime_guild_profile(guild_id: str) -> dict:
         try:
             row = run_on_bot_loop(read_from_bot())
             if row:
-                return _profile_row_to_dict(row)
+                return {**_profile_row_to_dict(row), **assets}
         except Exception:
             pass
 
@@ -1146,14 +1187,14 @@ def _get_runtime_guild_profile(guild_id: str) -> dict:
     if conn is not None:
         try:
             row = conn.execute(
-                "SELECT display_name, bio, avatar_url, banner_url "
+                "SELECT display_name, bio, name_font_id, name_effect_id, name_colors "
                 "FROM guild_profiles WHERE guild_id = ?",
                 (int(guild_id),),
             ).fetchone()
             if row:
-                return _profile_row_to_dict(dict(zip(
-                    ("display_name", "bio", "avatar_url", "banner_url"), row
-                )))
+                return {**_profile_row_to_dict(dict(zip(
+                    ("display_name", "bio", "name_font_id", "name_effect_id", "name_colors"), row
+                ))), **assets}
         except sqlite3.Error:
             pass
         finally:
@@ -1161,12 +1202,13 @@ def _get_runtime_guild_profile(guild_id: str) -> dict:
 
     guild = _discord_bot.get_guild(int(guild_id)) if _discord_bot is not None else None
     member = getattr(guild, "me", None) if guild is not None else None
-    avatar = getattr(getattr(member, "display_avatar", None), "url", None)
     return {
         "display_name": getattr(member, "display_name", None) if member else None,
         "bio": None,
-        "avatar_url": str(avatar) if avatar else None,
-        "banner_url": None,
+        **assets,
+        "name_font_id": None,
+        "name_effect_id": 2,
+        "name_colors": [],
     }
 
 
@@ -1175,13 +1217,14 @@ def _save_runtime_guild_profile(guild_id: int, profile: dict) -> None:
     async def save_to_bot():
         await _discord_bot.cxn.execute(
             "INSERT OR REPLACE INTO guild_profiles "
-            "(guild_id, display_name, bio, avatar_url, banner_url, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, datetime('now'))",
+            "(guild_id, display_name, bio, name_font_id, name_effect_id, name_colors, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, datetime('now'))",
             guild_id,
             profile.get("display_name"),
             profile.get("bio"),
-            profile.get("avatar_url"),
-            profile.get("banner_url"),
+            profile.get("name_font_id"),
+            profile.get("name_effect_id"),
+            json.dumps(profile.get("name_colors") or []),
         )
 
     if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
@@ -1194,14 +1237,15 @@ def _save_runtime_guild_profile(guild_id: int, profile: dict) -> None:
     try:
         conn.execute(
             "INSERT OR REPLACE INTO guild_profiles "
-            "(guild_id, display_name, bio, avatar_url, banner_url, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            "(guild_id, display_name, bio, name_font_id, name_effect_id, name_colors, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
             (
                 guild_id,
                 profile.get("display_name"),
                 profile.get("bio"),
-                profile.get("avatar_url"),
-                profile.get("banner_url"),
+                profile.get("name_font_id"),
+                profile.get("name_effect_id"),
+                json.dumps(profile.get("name_colors") or []),
             ),
         )
         conn.commit()

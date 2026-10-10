@@ -134,6 +134,9 @@ export type GuildProfile = {
   bio?: string | null;
   avatar_url?: string | null;
   banner_url?: string | null;
+  name_font_id?: number | null;
+  name_effect_id?: number | null;
+  name_colors?: number[];
 };
 
 export type ServerConfig = {

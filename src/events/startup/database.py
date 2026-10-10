@@ -332,11 +332,22 @@ async def _create_tables(bot):
             guild_id       INTEGER PRIMARY KEY,
             display_name   TEXT,
             bio            TEXT,
-            avatar_url     TEXT,
-            banner_url     TEXT,
+            name_font_id   INTEGER,
+            name_effect_id INTEGER,
+            name_colors    TEXT,
             updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    for column, definition in (
+        ("name_font_id", "INTEGER"),
+        ("name_effect_id", "INTEGER"),
+        ("name_colors", "TEXT"),
+    ):
+        try:
+            await bot.cxn.execute(f"ALTER TABLE guild_profiles ADD COLUMN {column} {definition}")
+        except Exception:
+            # Existing installations already have the column.
+            pass
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS triggers (

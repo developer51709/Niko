@@ -1,5 +1,6 @@
 """Flask routes for dashboard."""
 
+import binascii
 from . import server as _server
 
 globals().update({
@@ -571,7 +572,7 @@ def api_save_server(guild_id):
 def api_save_profile(guild_id):
     """Apply and persist the bot's per-server Discord profile."""
     body = request.get_json(silent=True) or {}
-    allowed = {"display_name", "bio", "avatar_url", "banner_url"}
+    allowed = {"display_name", "bio", "avatar_url", "banner_url", "avatar_upload_data", "banner_upload_data", "name_font_id", "name_effect_id", "name_colors"}
     unknown = set(body) - allowed
     if unknown:
         return jsonify({"error": f"Unsupported profile fields: {', '.join(sorted(unknown))}"}), 400
@@ -582,39 +583,108 @@ def api_save_profile(guild_id):
 
     current = _get_runtime_guild_profile(guild_id)
     profile = {**current}
-    for key in allowed:
+    for key in ("display_name", "bio", "avatar_url", "banner_url", "avatar_upload_data", "banner_upload_data"):
         if key in body:
             value = body[key]
             if value is not None and not isinstance(value, str):
                 return jsonify({"error": f"{key} must be text or empty."}), 400
             profile[key] = value.strip() if isinstance(value, str) else None
+    for key in ("name_font_id", "name_effect_id", "name_colors"):
+        if key in body:
+            profile[key] = body[key]
 
     if profile["display_name"] and len(profile["display_name"]) > 32:
         return jsonify({"error": "Display name must be 32 characters or fewer."}), 400
     if profile["bio"] and len(profile["bio"]) > 190:
         return jsonify({"error": "Bio must be 190 characters or fewer."}), 400
 
+    font_id = profile.get("name_font_id")
+    effect_id = profile.get("name_effect_id", 2)
+    colors = profile.get("name_colors") or []
+    if font_id is not None:
+        try:
+            font_id = int(font_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Choose a valid display-name font."}), 400
+        if font_id not in {3, 4, 6, 7, 8, 10, 11, 12}:
+            return jsonify({"error": "Choose a valid display-name font."}), 400
+    try:
+        effect_id = int(effect_id or 2)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Choose a valid display-name effect."}), 400
+    if effect_id not in {1, 2, 3, 4, 5, 6}:
+        return jsonify({"error": "Choose a valid display-name effect."}), 400
+    if not isinstance(colors, list) or len(colors) > 2:
+        return jsonify({"error": "Choose one or two display-name colors."}), 400
+    try:
+        colors = [int(color) for color in colors]
+    except (TypeError, ValueError):
+        return jsonify({"error": "Display-name colors must be valid color values."}), 400
+    if any(color < 0 or color > 16777215 for color in colors):
+        return jsonify({"error": "Display-name colors must be valid color values."}), 400
+    if colors:
+        color_limits = {1: (1, 1), 2: (2, 2), 3: (1, 1), 4: (1, 1), 5: (1, 1), 6: (1, 2)}
+        minimum, maximum = color_limits[effect_id]
+        if not minimum <= len(colors) <= maximum:
+            return jsonify({"error": "The selected name effect requires a different number of colors."}), 400
+    elif effect_id == 2:
+        colors = [5793266, 5763719]
+    profile.update(name_font_id=font_id, name_effect_id=effect_id, name_colors=colors)
+
     image_payload = {}
+    uploaded_assets = set()
     for key in ("avatar_url", "banner_url"):
-        value = profile[key]
+        upload_key = key.replace("_url", "_upload_data")
+        image_data = profile.pop(upload_key, None)
+        value = image_data or profile[key]
+        field = key.removesuffix("_url")
+        # The UI submits the currently displayed Discord CDN URL with every profile save.
+        # Leave it alone unless the user explicitly clears it or supplies a replacement.
+        if not image_data and key in body and value and value == current.get(key):
+            continue
         if not value:
-            image_payload[key.removesuffix("_url")] = None
+            if key in body and not image_data:
+                image_payload[field] = None
+                uploaded_assets.add(field)
+                profile[key] = None
+            continue
+        image_key = "avatar_upload_data" if field == "avatar" else "banner_upload_data"
+        is_upload = bool(image_data) or image_key in body
+        if is_upload:
+            if not value.startswith("data:image/"):
+                return jsonify({"error": f"{key} upload must be a valid image."}), 400
+            try:
+                header, encoded = value.split(",", 1)
+                content_type = header[5:].split(";", 1)[0].lower()
+                image_bytes = base64.b64decode(encoded, validate=True)
+            except (ValueError, binascii.Error):
+                return jsonify({"error": f"{key} must be a valid image."}), 400
+            if content_type not in {"image/png", "image/jpeg", "image/gif", "image/webp"}:
+                return jsonify({"error": f"{key} must be PNG, JPG, GIF, or WebP."}), 400
+            if len(image_bytes) > 8 * 1024 * 1024:
+                return jsonify({"error": f"{key} must be 8 MB or smaller."}), 400
+            image_payload[field] = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+            uploaded_assets.add(field)
+            profile[key] = None
             continue
         parsed = urlparse(value)
         if parsed.scheme != "https" or not parsed.netloc:
             return jsonify({"error": f"{key} must be an HTTPS image URL."}), 400
         try:
-            image_response = req.get(value, timeout=10, allow_redirects=False)
+            image_response = req.get(value, timeout=10, allow_redirects=False, stream=True)
+            content_length = int(image_response.headers.get("Content-Length", 0) or 0)
+            if content_length > 8 * 1024 * 1024:
+                return jsonify({"error": f"{key} must be 8 MB or smaller."}), 400
             image_response.raise_for_status()
             content_type = image_response.headers.get("Content-Type", "").split(";", 1)[0].lower()
             if not content_type.startswith("image/"):
                 return jsonify({"error": f"{key} must point to an image."}), 400
-            image_bytes = image_response.content
+            image_bytes = image_response.raw.read(8 * 1024 * 1024 + 1)
             if len(image_bytes) > 8 * 1024 * 1024:
                 return jsonify({"error": f"{key} must be 8 MB or smaller."}), 400
-            image_payload[key.removesuffix("_url")] = (
-                f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-            )
+            image_payload[field] = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+            uploaded_assets.add(field)
+            profile[key] = None
         except Exception as error:
             return jsonify({"error": f"Could not fetch {key}: {error}"}), 400
 
@@ -624,9 +694,14 @@ def api_save_profile(guild_id):
     patch_body = {
         "nick": profile["display_name"] or None,
         "bio": profile["bio"] or None,
-        "avatar": image_payload["avatar"],
-        "banner": image_payload["banner"],
+        "display_name_font_id": profile["name_font_id"],
+        "display_name_effect_id": profile["name_effect_id"] if profile["name_colors"] else None,
+        "display_name_colors": profile["name_colors"] if profile["name_colors"] else None,
     }
+    if "avatar" in uploaded_assets:
+        patch_body["avatar"] = image_payload["avatar"]
+    if "banner" in uploaded_assets:
+        patch_body["banner"] = image_payload["banner"]
     response = req.patch(
         f"{DISCORD_API}/guilds/{numeric_guild_id}/members/@me",
         headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
@@ -636,8 +711,12 @@ def api_save_profile(guild_id):
     if response.status_code not in (200, 204):
         return jsonify({"error": "Discord rejected the profile update.", "details": response.text[:300]}), 502
 
+    profile["avatar_url"] = None
+    profile["banner_url"] = None
+    profile.update(_discord_guild_profile_assets(guild_id))
+    persisted_profile = {key: value for key, value in profile.items() if key not in {"avatar_url", "banner_url"}}
     try:
-        _save_runtime_guild_profile(numeric_guild_id, profile)
+        _save_runtime_guild_profile(numeric_guild_id, persisted_profile)
     except Exception as error:
         return jsonify({"error": f"Profile applied, but could not persist it: {error}"}), 503
     return jsonify({"ok": True, "profile": profile})
