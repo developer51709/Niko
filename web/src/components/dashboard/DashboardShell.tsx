@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { PublicHeader } from "../PublicHeader";
 import { Icon } from "../Icon";
-import { dashboardPath, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../../router";
+import { navigate, type DashboardView, type DashSection } from "../../router";
 import { displayName, formatNumber } from "../../utils/format";
 import type { BotStats, Guild, User } from "../../types";
 import { GuildIcon } from "./GuildIcon";
@@ -50,6 +50,7 @@ export function DashboardShell({
   staffRole,
   children,
 }: Props) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const installedGuilds = guilds.filter((guild) => guild.installed !== false);
   const sectionNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-nav-mobile" : "dash-nav"} aria-label="Server settings">
@@ -58,7 +59,7 @@ export function DashboardShell({
           key={id}
           className={view === "guild" && section === id ? "active" : ""}
           aria-current={view === "guild" && section === id ? "page" : undefined}
-          onClick={() => onSectionChange(id)}
+          onClick={() => { onSectionChange(id); setSidebarOpen(false); }}
         >
           <Icon name={icon} /><span>{label}</span>
         </button>
@@ -68,13 +69,13 @@ export function DashboardShell({
 
   const primaryNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-primary-nav dash-nav-mobile" : "dash-nav dash-primary-nav"} aria-label="Dashboard">
-      <button className={view === "overview" ? "active" : ""} aria-current={view === "overview" ? "page" : undefined} onClick={onHome}>
+      <button className={view === "overview" ? "active" : ""} aria-current={view === "overview" ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
         <Icon name="grid" /><span>My overview</span>
       </button>
-      <button className={view === "servers" ? "active" : ""} aria-current={view === "servers" ? "page" : undefined} onClick={onServers}>
+      <button className={view === "servers" ? "active" : ""} aria-current={view === "servers" ? "page" : undefined} onClick={() => { onServers(); setSidebarOpen(false); }}>
         <Icon name="users" /><span>My servers</span>
       </button>
-      {staffRole && <button onClick={() => navigate("/dashboard/staff")}><Icon name="shield" /><span>Staff workspace</span></button>}
+      {staffRole && <button onClick={() => { navigate("/dashboard/staff"); setSidebarOpen(false); }}><Icon name="shield" /><span>Staff workspace</span></button>}
     </nav>
   );
 
@@ -85,14 +86,14 @@ export function DashboardShell({
           <span className="sr-only">Switch server</span>
           <select value={selectedGuild?.id || ""} onChange={(e) => {
             const guild = installedGuilds.find((item) => item.id === e.target.value);
-            if (guild) onGuildChange(guild);
+            if (guild) { onGuildChange(guild); setSidebarOpen(false); }
           }}>
             <option value="" disabled>Switch server</option>
             {installedGuilds.map((guild) => <option value={guild.id} key={guild.id}>{guild.name}</option>)}
           </select>
         </label>
       ) : (
-        <button className="button button-muted button-small top-action" onClick={onServers}><Icon name="users" /> Browse servers</button>
+        <button className="button button-muted button-small top-action" onClick={() => { onServers(); setSidebarOpen(false); }}><Icon name="users" /> Browse servers</button>
       )}
       <button className="button button-muted button-small top-action refresh-action" onClick={onRefresh} disabled={refreshing} aria-label="Refresh dashboard data">
         <Icon name="spark" /> {refreshing ? "Refreshing…" : "Refresh data"}
@@ -105,34 +106,48 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-layout">
-      <aside className="dash-sidebar">
-        <div className="dash-mobile-controls">{topActions()}</div>
-        <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
-        {primaryNav()}
-        {view === "guild" && selectedGuild && (
-          <>
-            <div className="side-label side-label-settings">Current server</div>
-            <div className="side-guild">
-              <GuildIcon guild={selectedGuild} />
-              <span><strong>{selectedGuild.name}</strong><small>Live configuration</small></span>
-              <span className="guild-presence" title="Niko is connected"><span className="status-dot" /></span>
-            </div>
-            <div className="side-settings-caption"><span>Settings map</span><small>Pick a room to tune</small></div>
-            {sectionNav()}
-          </>
-        )}
-        <div className="sidebar-bottom">
-          <span className="online-label"><span className="status-dot" /> Niko is online</span>
-          <small>{formatNumber(stats?.guild_count)} connected servers · v{stats?.version || "1.0"}</small>
-          <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Back to public site <Icon name="arrow" /></a>
+      <PublicHeader
+        page="dashboard"
+        sidebarOpen={sidebarOpen}
+        onSidebarToggle={() => setSidebarOpen((open) => !open)}
+      />
+      <button
+        className={`dashboard-sidebar-backdrop${sidebarOpen ? " is-visible" : ""}`}
+        type="button"
+        aria-label="Close dashboard navigation"
+        aria-hidden={!sidebarOpen}
+        tabIndex={sidebarOpen ? 0 : -1}
+        onClick={() => setSidebarOpen(false)}
+      />
+      <div className="dashboard-workspace">
+        <aside id="dashboard-sidebar" className={`dash-sidebar${sidebarOpen ? " is-open" : ""}`}>
+          <div className="dash-mobile-controls">{topActions()}</div>
+          <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
+          {primaryNav()}
+          {view === "guild" && selectedGuild && (
+            <>
+              <div className="side-label side-label-settings">Current server</div>
+              <div className="side-guild">
+                <GuildIcon guild={selectedGuild} />
+                <span><strong>{selectedGuild.name}</strong><small>Live configuration</small></span>
+                <span className="guild-presence" title="Niko is connected"><span className="status-dot" /></span>
+              </div>
+              <div className="side-settings-caption"><span>Settings map</span><small>Pick a room to tune</small></div>
+              {sectionNav()}
+            </>
+          )}
+          <div className="sidebar-bottom">
+            <span className="online-label"><span className="status-dot" /> Niko is online</span>
+            <small>{formatNumber(stats?.guild_count)} connected servers · v{stats?.version || "1.0"}</small>
+            <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Back to public site <Icon name="arrow" /></a>
+          </div>
+        </aside>
+        <div className="dash-content">
+          <div className="dash-contextbar">{topActions()}</div>
+          <div className="mobile-primary-bar">{primaryNav(true)}</div>
+          {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
+          <main className="dash-main">{children}</main>
         </div>
-      </aside>
-      <div className="dash-content">
-        <PublicHeader page="dashboard" />
-        <div className="dash-contextbar">{topActions()}</div>
-        <div className="mobile-primary-bar">{primaryNav(true)}</div>
-        {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
-        <main className="dash-main">{children}</main>
       </div>
     </div>
   );

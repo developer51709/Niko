@@ -741,6 +741,40 @@
   max-width: 720px;
 }
 
+.doc-article-content .doc-discord-markdown {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.doc-article-content .doc-inline-markdown { display: inline; color: inherit; font: inherit; line-height: inherit; vertical-align: baseline; }
+.doc-article-content .doc-inline-markdown .discord-md-heading,
+.doc-article-content .doc-inline-markdown .discord-md-block-code,
+.doc-article-content .doc-inline-markdown .discord-md-table-wrap { display: none; }
+.doc-article-content .doc-inline-markdown .discord-md-link { color: var(--accent-dark); text-decoration: underline; text-decoration-color: var(--filter-border); text-underline-offset: 2px; }
+.doc-article-content .doc-inline-markdown .discord-md-code { color: var(--accent-dark); background: var(--docs-accent-soft); border-color: var(--filter-border); }
+.doc-article-content .doc-discord-markdown .discord-md-heading {
+  padding-top: 24px;
+  margin: 0 0 11px;
+  color: var(--ink);
+  border-top: 1px solid var(--line);
+  font-size: 18px;
+  line-height: 1.35;
+  letter-spacing: -.04em;
+}
+
+.doc-article-content .doc-discord-markdown .discord-md-heading:first-child { padding-top: 0; border-top: 0; }
+.doc-article-content .doc-discord-markdown h1.discord-md-heading { font-size: 24px; }
+.doc-article-content .doc-discord-markdown h2.discord-md-heading { font-size: 21px; }
+.doc-article-content .doc-discord-markdown h3.discord-md-heading { font-size: 17px; }
+.doc-article-content .doc-discord-markdown .discord-md-block-code { color: var(--ink); background: var(--surface-muted); border-color: var(--docs-card-line); font-family: "Space Mono", monospace; }
+.doc-article-content .doc-discord-markdown .discord-md-code { color: var(--accent-dark); background: var(--docs-accent-soft); border-color: var(--filter-border); }
+.doc-article-content .doc-discord-markdown .discord-md-link { color: var(--accent-dark); text-decoration: underline; text-decoration-color: var(--filter-border); text-underline-offset: 2px; }
+.doc-article-content .doc-discord-markdown .discord-md-quote { padding: 12px 15px; margin: 18px 0; color: var(--muted); background: var(--docs-accent-soft); border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; }
+.doc-article-content .doc-discord-markdown .discord-md-subtext { color: var(--dim); font-size: .88em; }
+.doc-article-content .doc-discord-markdown .discord-md-mention { color: var(--accent-dark); background: var(--docs-accent-soft); }
+
 .doc-paragraph {
   margin: 0 0 16px;
   color: var(--ink);

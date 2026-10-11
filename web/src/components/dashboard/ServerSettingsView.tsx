@@ -1,6 +1,8 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
+import { DiscordMarkdown } from "../DiscordMarkdown";
+import { RoleSelect } from "./RoleSelect";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { DashHeading } from "./DashboardViews";
 
@@ -66,16 +68,6 @@ function channelsWithSelected(resources: GuildResources | null, selected: string
   const channels = resources?.channels || [];
   if (!selectedId || channels.some((channel) => String(channel.id) === selectedId)) return channels;
   return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
-}
-
-function rolesWithSelected(resources: GuildResources | null, selected: Array<string | number> = []) {
-  const roles = resources?.roles || [];
-  const known = new Set(roles.map((role) => String(role.id)));
-  const unavailable = selected
-    .map(String)
-    .filter((roleId, index, ids) => roleId && !known.has(roleId) && ids.indexOf(roleId) === index)
-    .map((roleId) => ({ id: roleId, name: `Unavailable role (${roleId})` }));
-  return [...unavailable, ...roles];
 }
 
 function initialValues(server?: ServerConfig) {
@@ -161,7 +153,6 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
   const welcomeChannels = channelsWithSelected(resources, values.welcome_channel);
   const rulesChannels = channelsWithSelected(resources, values.rules_channel);
   const ticketChannels = channelsWithSelected(resources, values.panel_channel_id);
-  const supportRoles = rolesWithSelected(resources, values.support_roles);
 
   return <>
     <DashHeading eyebrow="Server settings" title="Make Niko fit your room." text="Manage the settings that shape how Niko behaves in this server. Economy balances remain global to each user and are not configured here." />
@@ -172,12 +163,12 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       <section className="dash-panel settings-panel"><SectionTitle label="Welcome flow" title="Welcome and rules" detail="Choose where new members see your welcome message and rules." icon="users" /><div className="form-grid">
         <Field label="Welcome channel"><select value={welcomeChannel} onChange={(event) => setValue("welcome_channel", event.target.value)}><option value="">Disabled</option>{welcomeChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Welcome title"><input value={values.welcome_title} maxLength={200} onChange={(event) => setValue("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field>
-        <Field label="Welcome message" hint="Supports {user} and {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => setValue("welcome_description", event.target.value)} placeholder="Welcome {user}!" /></Field>
+        <Field label="Welcome message" hint="Supports {user} and {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => setValue("welcome_description", event.target.value)} placeholder="Welcome {user}!" />{values.welcome_description.trim() && <DiscordMarkdown text={values.welcome_description.replace(/\{user\}/g, "@member").replace(/\{name\}/g, "member")} className="role-select-preview" interactiveUsers={false} />}</Field>
         <Field label="Accent color" hint="Hex color, for example 5865F2"><div className="color-picker"><div className="color-field-control"><button type="button" className="color-preview" style={{ backgroundColor: previewColor(values.welcome_color) }} onClick={() => setColorPickerOpen((open) => !open)} aria-label="Choose welcome accent color" aria-expanded={colorPickerOpen} /><input value={values.welcome_color} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div>{colorPickerOpen && <div className="color-picker-popover" role="dialog" aria-label="Choose accent color"><div className="color-picker-header"><strong>Choose color</strong><button type="button" className="color-picker-close" onClick={() => setColorPickerOpen(false)} aria-label="Close color picker">×</button></div><input className="color-picker-native" type="color" value={previewColor(values.welcome_color)} onChange={(event) => setWelcomeColor(event.target.value)} /><div className="color-picker-value"><span>#</span><input value={values.welcome_color.replace(/^#/, "")} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div></div>}</div></Field>
         <Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => setValue("welcome_image", event.target.value)} placeholder="https://..." /></Field>
         <Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => setValue("rules_channel", event.target.value)}><option value="">Not configured</option>{rulesChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
-        <Field label="Rules text"><textarea rows={4} maxLength={2000} value={values.rules_text} onChange={(event) => setValue("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." /></Field>
-        <Field label="Role after rules acknowledgment"><select value={values.rules_role_id} onChange={(event) => setValue("rules_role_id", event.target.value)}><option value="">No role</option>{rolesWithSelected(resources, values.rules_role_id ? [values.rules_role_id] : []).map((role) => <option value={role.id} key={role.id}>@{role.name}</option>)}</select></Field>
+        <Field label="Rules text"><textarea rows={4} maxLength={2000} value={values.rules_text} onChange={(event) => setValue("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." />{values.rules_text.trim() && <DiscordMarkdown text={values.rules_text} className="role-select-preview" interactiveUsers={false} />}</Field>
+        <Field label="Role after rules acknowledgment"><RoleSelect roles={resources?.roles || []} value={values.rules_role_id} placeholder="No role" onChange={(roleId) => setValue("rules_role_id", roleId)} /></Field>
       </div></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
@@ -187,9 +178,9 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       <section className="dash-panel settings-panel"><SectionTitle label="Support desk" title="Ticket panel" detail="Configure the public panel and decide who can handle tickets." icon="users" /><div className="form-grid">
         <Field label="Panel title"><input value={values.panel_title} maxLength={200} onChange={(event) => setValue("panel_title", event.target.value)} placeholder="Open a Ticket" /></Field>
         <Field label="Panel channel"><select value={ticketChannel} onChange={(event) => setValue("panel_channel_id", event.target.value)}><option value="">Keep current panel channel</option>{ticketChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
-        <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValue("panel_description", event.target.value)} placeholder="Tell members what the ticket panel is for." /></Field>
+        <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValue("panel_description", event.target.value)} placeholder="Tell members what the ticket panel is for." />{values.panel_description.trim() && <DiscordMarkdown text={values.panel_description} className="role-select-preview" interactiveUsers={false} />}</Field>
         <div className="form-grid-wide"><StringOptionList label="Ticket categories" hint="Add a separate category for each ticket option." options={values.panel_categories} placeholder="Category" onChange={(categories) => setValue("panel_categories", categories)} /></div>
-        <Field label="Support roles" hint="Hold Ctrl/Cmd to select more than one"><select multiple value={values.support_roles} onChange={(event) => setValue("support_roles", Array.from(event.target.selectedOptions, (option) => option.value))}>{supportRoles.map((role) => <option value={role.id} key={role.id}>@{role.name}</option>)}</select></Field>
+        <Field label="Support roles" hint="Select the roles that can manage ticket requests."><RoleSelect roles={resources?.roles || []} value={values.support_roles} multiple ariaLabel="Support roles" onChange={(roleIds) => setValue("support_roles", roleIds)} /></Field>
       </div><p className="form-hint">Saving panel settings updates the existing posted panel when Niko can find its saved message.</p></section>
       <SaveFooter state={state} />
     </form>

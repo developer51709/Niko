@@ -1,4 +1,5 @@
 import { isValidElement, useEffect } from "react";
+import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
@@ -53,47 +54,9 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
     );
   }
 
-  // Inline markdown: bold, italic, inline code, and links
-  const renderInline = (text: string): React.ReactNode[] => {
-    const nodes: React.ReactNode[] = [];
-    const pattern = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    let key = 0;
-    while ((match = pattern.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        nodes.push(text.slice(lastIndex, match.index));
-      }
-      const token = match[0];
-      if (token.startsWith("`") && token.endsWith("`") && token.length > 2) {
-        nodes.push(<code key={key++} className="doc-inline-code">{token.slice(1, -1)}</code>);
-      } else if (token.startsWith("[")) {
-        const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (link) {
-          nodes.push(
-            <a key={key++} href={link[2]} target="_blank" rel="noreferrer">
-              {renderInline(link[1])}
-            </a>
-          );
-        } else {
-          nodes.push(token);
-        }
-      } else if (token.startsWith("**")) {
-        nodes.push(<strong key={key++}>{renderInline(token.slice(2, -2))}</strong>);
-      } else if (token.startsWith("*")) {
-        nodes.push(<em key={key++}>{renderInline(token.slice(1, -1))}</em>);
-      } else {
-        nodes.push(token);
-      }
-      lastIndex = match.index + token.length;
-    }
-    if (lastIndex < text.length) {
-      nodes.push(text.slice(lastIndex));
-    }
-    return nodes;
-  };
+  const renderInline = (text: string) => <DiscordMarkdown text={text} inline className="doc-inline-markdown" interactiveUsers={false} />;
 
-  // Parse markdown-like content (simple rendering)
+  // Keep the docs library's table/list layout while rendering inline Discord formatting consistently.
   const renderContent = (content: string) => {
     const lines = content.split("\n");
     const elements: React.ReactNode[] = [];
@@ -209,7 +172,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
         flushList();
         elements.push(
           <h4 key={`h-${i}`} className="doc-heading doc-heading-h4">
-            {trimmed.slice(4)}
+            {renderInline(trimmed.slice(4))}
           </h4>
         );
         i += 1;
@@ -219,7 +182,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
         flushList();
         elements.push(
           <h3 key={`h-${i}`} className="doc-heading doc-heading-h3">
-            {trimmed.slice(3)}
+            {renderInline(trimmed.slice(3))}
           </h3>
         );
         i += 1;
@@ -229,7 +192,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
         flushList();
         elements.push(
           <h2 key={`h-${i}`} className="doc-heading doc-heading-h2">
-            {trimmed.slice(2)}
+            {renderInline(trimmed.slice(2))}
           </h2>
         );
         i += 1;

@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { navigate, type Page } from "../router";
 import { Brand } from "./Brand";
+import { Icon } from "./Icon";
 import { PublicHeaderActions } from "./PublicHeaderActions";
 
 const publicLinks = [
@@ -12,7 +13,7 @@ const publicLinks = [
   { label: "Changelog", path: "/changelog", page: "changelog" as Page },
 ];
 
-export function PublicHeader({ page }: { page: Page }) {
+export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { page: Page; sidebarOpen?: boolean; onSidebarToggle?: () => void }) {
   const config = useBotConfig();
   const isDashboard = page === "dashboard";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,6 +26,18 @@ export function PublicHeader({ page }: { page: Page }) {
 
   return (
     <header className={`site-header${isDashboard ? " dashboard-header" : ""}`}>
+      {isDashboard && onSidebarToggle && (
+        <button
+          className="dashboard-sidebar-toggle"
+          type="button"
+          aria-label={sidebarOpen ? "Close dashboard navigation" : "Open dashboard navigation"}
+          aria-expanded={sidebarOpen}
+          aria-controls="dashboard-sidebar"
+          onClick={onSidebarToggle}
+        >
+          <Icon name={sidebarOpen ? "close" : "menu"} />
+        </button>
+      )}
       <Brand onNavigate={() => setMenuOpen(false)} />
       {!isDashboard && (
         <nav className="site-nav" aria-label="Main navigation">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
+import { resolveDiscordText } from "../api";
 
 export type DiscordMentionNames = Partial<Record<"user" | "channel" | "role", Record<string, string>>>;
 type Format = "bold" | "italic" | "italicAlt" | "underline" | "strike" | "spoiler";
@@ -106,7 +107,7 @@ function tokenize(text: string): Node[] {
   return roots;
 }
 
-function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "discord-md"): ReactNode[] {
+function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "discord-md", interactiveUsers = true): ReactNode[] {
   return nodes.map((node, index) => {
     const key = `${prefix}-${index}`;
     if (node.kind === "text") return <span key={key}>{node.text}</span>;
@@ -121,17 +122,17 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
     if (node.kind === "mention") {
       const label = node.mention === "everyone" ? node.id : names?.[node.mention]?.[node.id] || `${node.mention === "channel" ? "#" : "@"}${node.id}`;
       const mentionLabel = node.mention === "user" && !label.startsWith("@") ? `@${label}` : label;
-      if (node.mention === "user") {
+      if (node.mention === "user" && interactiveUsers) {
         return <button key={key} type="button" className={`discord-md-mention discord-md-mention-${node.mention}`} data-discord-user-id={node.id} title={`user · ${node.id}`}>{mentionLabel}</button>;
       }
-      return <span key={key} className={`discord-md-mention discord-md-mention-${node.mention}`} title={node.mention === "everyone" ? undefined : `${node.mention} · ${node.id}`}>{label}</span>;
+      return <span key={key} className={`discord-md-mention discord-md-mention-${node.mention}`} title={node.mention === "everyone" ? undefined : `${node.mention} · ${node.id}`}>{mentionLabel}</span>;
     }
     const style: CSSProperties = node.format === "bold" ? { fontWeight: 700 }
       : node.format === "italic" || node.format === "italicAlt" ? { fontStyle: "italic" }
         : node.format === "underline" ? { textDecoration: "underline" }
           : node.format === "strike" ? { textDecoration: "line-through" }
             : { background: "#3f4147", borderRadius: 3 };
-    return <span key={key} style={style}>{renderInline(node.children, names, key)}</span>;
+    return <span key={key} style={style}>{renderInline(node.children, names, key, interactiveUsers)}</span>;
   });
 }
 
@@ -142,12 +143,46 @@ type TranscriptProfile = {
   avatar_decoration_url: string | null;
 };
 
-export function DiscordMarkdown({ text, mentionNames, className, style }: {
+export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {
   text: string;
   mentionNames?: DiscordMentionNames;
+  guildId?: string;
   className?: string;
   style?: CSSProperties;
+  interactiveUsers?: boolean;
+  inline?: boolean;
 }) {
+  const [resolvedNames, setResolvedNames] = useState<{ key: string; names: DiscordMentionNames }>({ key: "", names: {} });
+  const resolutionKey = `${guildId || ""}:${text}`;
+  const mentionNamesKey = JSON.stringify(mentionNames || {});
+  useEffect(() => {
+    const mentions = { user: new Set<string>(), channel: new Set<string>(), role: new Set<string>() };
+    const mentionPattern = /<@!?(\d+)>|<@&(\d+)>|<#(\d+)>/g;
+    let match: RegExpExecArray | null;
+    while ((match = mentionPattern.exec(text))) {
+      if (match[1]) mentions.user.add(match[1]);
+      else if (match[2]) mentions.role.add(match[2]);
+      else if (match[3]) mentions.channel.add(match[3]);
+    }
+    const hasMissingNames = (["user", "channel", "role"] as const).some((kind) =>
+      Array.from(mentions[kind]).some((id) => !mentionNames?.[kind]?.[id]),
+    );
+    if (!hasMissingNames) return;
+    let active = true;
+    void resolveDiscordText(text, guildId).then((result) => {
+      if (active) setResolvedNames({ key: resolutionKey, names: result.mention_names });
+    }).catch(() => {
+      // Keep the ID fallback when Discord name lookup is unavailable.
+    });
+    return () => { active = false; };
+  }, [guildId, mentionNamesKey, resolutionKey, text]);
+  const resolvedMentionNames: DiscordMentionNames = {
+    ...(resolvedNames.key === resolutionKey ? resolvedNames.names : {}),
+    ...mentionNames,
+    user: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.user : {}), ...mentionNames?.user },
+    channel: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.channel : {}), ...mentionNames?.channel },
+    role: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.role : {}), ...mentionNames?.role },
+  };
   const [profile, setProfile] = useState<TranscriptProfile | null>(null);
   const [profilePosition, setProfilePosition] = useState({ left: 12, top: 12 });
   const profileCardRef = useRef<HTMLDivElement>(null);
@@ -211,7 +246,7 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
     }
   }, []);
   useEffect(() => {
-    if (!profile && !profileLoading && !profileError) return;
+    if (!interactiveUsers || (!profile && !profileLoading && !profileError)) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeProfile(); };
     const onClick = (event: MouseEvent) => {
       const target = event.target;
@@ -220,10 +255,19 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
     return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
-  }, [closeProfile, profile, profileError, profileLoading]);
+  }, [closeProfile, interactiveUsers, profile, profileError, profileLoading]);
 
   const lines = text.split("\n");
   const children: ReactNode[] = [];
+  const renderInlineText = (line: string, key: string | number) => {
+    let content = line;
+    const task = content.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/);
+    const ordered = content.match(/^\s*(\d+)\.\s+(.*)$/);
+    if (task) content = `• ${task[2]}`;
+    else if (/^\s*[-*]\s+/.test(content)) content = `• ${content.replace(/^\s*[-*]\s+/, "")}`;
+    else if (ordered) content = `${ordered[1]}. ${ordered[2]}`;
+    return <span key={key} className={task ? "discord-md-task" : undefined}>{renderInline(tokenize(content), resolvedMentionNames, `line-${key}`, interactiveUsers)}</span>;
+  };
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const trimmed = line.trimStart();
@@ -234,23 +278,37 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
       children.push(<pre className="discord-md-block-code" key={`code-${index}`}><code>{code.join("\n")}</code></pre>);
       continue;
     }
+    const isTableRow = (value: string) => value.trimStart().startsWith("|");
+    if (isTableRow(line)) {
+      const rows: string[][] = [];
+      while (index < lines.length && isTableRow(lines[index])) {
+        rows.push(lines[index++].trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()));
+      }
+      index -= 1;
+      const isSeparator = (cells: string[]) => cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell.replace(/\s+/g, "")));
+      const header = rows[0];
+      const body = rows.length > 1 && isSeparator(rows[1]) ? rows.slice(2) : rows.slice(1);
+      children.push(<div className="discord-md-table-wrap" key={`table-${index}`}><table className="discord-md-table"><thead><tr>{header.map((cell, cellIndex) => <th key={cellIndex}>{renderInline(tokenize(cell), resolvedMentionNames, `table-head-${index}-${cellIndex}`, interactiveUsers)}</th>)}</tr></thead><tbody>{body.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{renderInline(tokenize(cell), resolvedMentionNames, `table-${index}-${rowIndex}-${cellIndex}`, interactiveUsers)}</td>)}</tr>)}</tbody></table></div>);
+      continue;
+    }
     const heading = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (heading) {
       const Heading = `h${heading[1].length}` as "h1" | "h2" | "h3" | "h4";
-      children.push(<Heading className="discord-md-heading" key={index}>{renderInline(tokenize(heading[2]), mentionNames, `line-${index}`)}</Heading>);
+      children.push(<Heading className="discord-md-heading" key={index}>{renderInline(tokenize(heading[2]), resolvedMentionNames, `line-${index}`, interactiveUsers)}</Heading>);
       continue;
     }
     const quote = trimmed.match(/^>\s?(.*)$/);
     const subtext = trimmed.startsWith("-# ");
     const content = subtext ? trimmed.slice(3) : quote ? quote[1] : line;
-    const inline = renderInline(tokenize(content), mentionNames, `line-${index}`);
+    const inline = renderInlineText(content, index);
     children.push(quote
       ? <blockquote className="discord-md-quote" key={index}>{inline}</blockquote>
       : subtext
         ? <small className="discord-md-subtext" key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</small>
         : <span key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</span>);
   }
-  return <div className={`discord-markdown${className ? ` ${className}` : ""}`} style={style} onClick={(event) => {
+  const Wrapper = inline ? "span" : "div";
+  return <Wrapper className={`discord-markdown${inline ? " discord-markdown-inline" : ""}${className ? ` ${className}` : ""}`} style={style} onClick={interactiveUsers ? (event) => {
     const target = event.target;
     if (target instanceof Element) {
       const mention = target.closest<HTMLElement>("[data-discord-user-id]");
@@ -259,9 +317,9 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
         void openProfile(mention.dataset.discordUserId || "", mention);
       }
     }
-  }}>
+  } : undefined}>
     {children}
-    {(profileLoading || profileError || profile) && createPortal(<div className="discord-profile-popover" role="presentation">
+    {interactiveUsers && (profileLoading || profileError || profile) && createPortal(<div className="discord-profile-popover" role="presentation">
       <div ref={profileCardRef} className="discord-profile-card" role={profileError ? "alert" : profileLoading ? "status" : "dialog"} aria-label={profile ? `${profile.display_name} Discord profile` : undefined} style={{ "--profile-left": `${profilePosition.left}px`, "--profile-top": `${profilePosition.top}px` } as CSSProperties}>
         {profileLoading ? <div className="discord-profile-state">Loading Discord profile…</div> : profileError ? <div className="discord-profile-state">{profileError}</div> : profile && <>
           {profile.banner_url
@@ -285,5 +343,5 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
         </>}
       </div>
     </div>, document.body)}
-  </div>;
+  </Wrapper>;
 }

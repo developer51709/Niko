@@ -77,6 +77,33 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-markdown .discord-md-timestamp { display: inline-block; padding: 0 4px; color: #b5bac1; background: rgba(79, 84, 92, .48); border-radius: 3px; font-size: .92em; }
 .discord-markdown .discord-md-quote { margin: 4px 0; padding-left: 9px; color: #b5bac1; border-left: 3px solid #4e5058; }
 .discord-markdown .discord-md-subtext { display: inline-block; width: 100%; color: #949ba4; font-size: .86em; }
+.discord-markdown .discord-md-role,
+.discord-markdown .discord-md-channel { color: var(--accent-dark); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.role-select { position: relative; display: block; width: 100%; }
+.role-select select { appearance: none; }
+.role-select:not(.role-select-multiple) select { padding-right: 38px; }
+.role-select .role-select-chevron { position: absolute; top: 50%; right: 13px; color: var(--dim); font-size: 17px; line-height: 1; transform: translateY(-55%); pointer-events: none; }
+.role-select-multiple select { min-height: 142px !important; padding: 6px !important; }
+.role-select-multiple option { padding: 8px 10px; border-radius: 4px; }
+.role-select-multiple option:checked { color: var(--ink); background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
+.role-select select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 2px; }
+.role-select-selected { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.role-select-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 5px 7px; color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised)); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 999px; font-size: 10px; }
+.role-select-chip button { display: grid; place-items: center; padding: 2px; color: var(--muted); background: transparent; border: 0; border-radius: 50%; }
+.role-select-chip button:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.role-select-preview { margin-top: 8px; padding: 10px 12px; color: var(--muted); background: color-mix(in srgb, var(--surface-raised) 82%, transparent); border: 1px solid var(--line-soft); border-radius: 8px; font-size: 11px; line-height: 1.6; }
+.discord-markdown .discord-md-task { display: inline; }
+.discord-markdown .discord-md-table-wrap { max-width: 100%; margin: 8px 0; overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 7px; }
+.discord-markdown .discord-md-table { width: 100%; border-collapse: collapse; font-size: .9em; }
+.discord-markdown .discord-md-table th,
+.discord-markdown .discord-md-table td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+.discord-markdown .discord-md-table th { color: var(--ink); background: color-mix(in srgb, var(--surface-raised) 75%, transparent); font-weight: 700; }
+.discord-markdown .discord-md-table tr:last-child td { border-bottom: 0; }
+.discord-markdown .discord-md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-raised) 45%, transparent); }
+.dashboard-layout .role-select-preview { color: var(--muted); background: rgba(255,255,255,.035); border-color: var(--line); }
+.dashboard-layout .role-select-preview .discord-md-heading { margin: 4px 0; }
+.application-description-preview { color: var(--muted); font-size: 11px; line-height: 1.65; }
+.role-select-preview:empty { display: none; }
 .icon { width: 17px; height: 17px; flex: 0 0 auto; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
