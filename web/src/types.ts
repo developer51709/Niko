@@ -46,6 +46,8 @@ export type Guild = {
   owner?: boolean;
   permissions?: number;
   installed?: boolean;
+  blacklisted?: boolean;
+  blacklist_reason?: string | null;
   invite_url?: string | null;
 };
 
@@ -63,6 +65,38 @@ export type StaffGuild = {
   profile_name: string | null;
   blacklisted: boolean;
   blacklist_reason: string | null;
+  bot_permissions: { name: string; label: string; granted: boolean }[];
+  role_count: number;
+  category_count: number;
+};
+
+export type StaffBlacklistEntry = { id: string; reason: string | null; timestamp: number; added_by: string | null };
+export type StaffBlacklist = { users: StaffBlacklistEntry[]; guilds: StaffBlacklistEntry[] };
+export type BlacklistAppealStatus = {
+  status: "eligible" | "pending" | "approved" | "denied" | "not_blacklisted" | "not_eligible";
+  can_appeal: boolean;
+  reason?: string;
+  appeal_id?: string;
+  appeal_text?: string;
+  blacklist_reason?: string | null;
+  created_at?: number;
+  reviewed_at?: number | null;
+  staff_note?: string | null;
+  previous_appeal?: BlacklistAppealStatus;
+};
+export type BlacklistAppeal = {
+  appeal_id: string;
+  user_id: string;
+  guild_id?: string | null;
+  username?: string | null;
+  appeal_text: string;
+  blacklist_reason?: string | null;
+  blacklist_timestamp?: number | null;
+  status: "pending" | "approved" | "denied";
+  created_at: number;
+  reviewed_by?: string | null;
+  reviewed_at?: number | null;
+  staff_note?: string | null;
 };
 
 export type User = {
@@ -243,6 +277,8 @@ export type AuthStatus = {
   oauth_available: boolean;
   user?: User;
   csrf_token?: string;
+  blacklisted?: boolean;
+  blacklist_reason?: string | null;
 };
 
 export type ApplicationQuestionType = "short_text" | "paragraph" | "single_choice" | "multi_choice" | "yes_no" | "date";

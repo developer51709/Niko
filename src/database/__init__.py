@@ -163,6 +163,7 @@ PRIMARY_KEYS: dict = {
     "mutes": "id",
     "blacklist_users": "id",
     "blacklist_guilds": "id",
+    "blacklist_appeals": "appeal_id",
     "roleplay_actions": "message_id",
     "roleplay_blocks": ("blocker_id", "blocked_id"),
     "persistent_status_panels": ("channel_id", "guild_id"),
@@ -380,7 +381,7 @@ class MongoPool:
         query = query.strip()
         head = query.split(None, 1)[0].upper() if query else ""
         upper_head = query[:40].upper()
-        if head == "CREATE" and "TABLE" in upper_head:
+        if head == "CREATE" and ("TABLE" in upper_head or "INDEX" in upper_head):
             return  # schema-less: collections are created implicitly
         if head in ("ALTER", "DROP", "PRAGMA", "BEGIN", "COMMIT"):
             return
@@ -699,10 +700,21 @@ class MongoPool:
 
         collection = self._db[table]
         if mode == "ignore":
-            existing = await collection.find_one({"_id": _id}, {"_id": 1})
-            if existing:
-                return
-            await collection.insert_one(doc)
+            insert_values = {key: value for key, value in doc.items() if key != "_id"}
+            await collection.update_one(
+                {"_id": _id},
+                {"$setOnInsert": insert_values},
+                upsert=True,
+            )
+            return
+        if table == "blacklist_guilds":
+            # Guilds may be re-blacklisted after their former entry is removed
+            # or marked inactive; do not replace documents carrying extra state.
+            await collection.update_one(
+                {"_id": _id},
+                {"$set": {key: value for key, value in doc.items() if key != "_id"}},
+                upsert=True,
+            )
             return
         await collection.replace_one({"_id": _id}, doc, upsert=True)
 

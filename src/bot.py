@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_interaction_blacklist
+from utils.abuse_detection import record_request, strike_notice
 from utils.gateway import patch_identify
 from utils.proxy_manager import WebshareProxyManager
 from utils import logging
@@ -62,7 +63,16 @@ if WEBSHARE_API_KEY:
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
 async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
-    return await check_interaction_blacklist(interaction)
+    if not await check_interaction_blacklist(interaction):
+        return False
+    abuse = await record_request(interaction.user.id, reason="spamming commands")
+    if abuse.get("abuse"):
+        try:
+            await interaction.response.send_message(strike_notice(abuse), ephemeral=True)
+        except discord.HTTPException:
+            pass
+        return False
+    return True
 
 
 # CommandTree.interaction_check is an override hook, not a decorator. Assign

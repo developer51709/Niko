@@ -12,6 +12,7 @@ import { ChangelogPage } from "./pages/ChangelogPage";
 import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
 import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
+import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
 import { pageFromPath, type Page } from "./router";
@@ -31,6 +32,7 @@ export function App() {
     pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1]} />;
   } else if (page === "docs") pageContent = <DocsPage />;
   else if (page === "staff") pageContent = <StaffDashboardPage />;
+  else if (page === "appeal") pageContent = <BlacklistAppealPage />;
   else if (page === "application") pageContent = <StaffApplicationPage />;
   else if (page === "dashboard") pageContent = <DashboardPage />;
   else if (page === "team") pageContent = <TeamPage />;

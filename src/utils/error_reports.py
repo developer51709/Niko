@@ -144,6 +144,33 @@ class ErrorReportDatabase:
             return report
         return _REPORT_CACHE.get(code)
 
+    async def list_reports(self, bot=None, limit: int = 100) -> list[dict[str, str]]:
+        """Return a bounded, newest-first index for the staff dashboard."""
+        await self.ensure(bot)
+        reports = []
+        bounded_limit = max(1, min(int(limit), 100))
+        if self.pool is not None:
+            rows = await self.pool.fetch(
+                f"SELECT code, report, created_at FROM error_reports ORDER BY created_at DESC LIMIT {bounded_limit}"
+            )
+            reports.extend({
+                "code": str(row["code"]),
+                "report": str(row["report"]),
+                "created_at": str(row["created_at"]),
+            } for row in rows)
+        known_codes = {item["code"] for item in reports}
+        for code, report in _REPORT_CACHE.items():
+            if code not in known_codes:
+                occurred_at = next((line.partition(": ")[2] for line in report.splitlines() if line.startswith("Occurred (UTC):")), "")
+                reports.append({"code": code, "report": report, "created_at": occurred_at})
+        reports.sort(key=lambda item: item["created_at"], reverse=True)
+        return reports[:bounded_limit]
+
+
+async def list_error_reports(bot=None, limit: int = 100) -> list[dict[str, str]]:
+    """Return recent error reports for staff tooling."""
+    return await _REPORT_DATABASE.list_reports(bot, limit)
+
 
 _REPORT_DATABASE = ErrorReportDatabase()
 

@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  AlertTriangle,
   BarChart3,
   BookOpen,
   ExternalLink,
@@ -23,6 +24,7 @@ import {
 
 const icons: Record<string, LucideIcon> = {
   arrow: ArrowRight,
+  alert: AlertTriangle,
   grid: LayoutGrid,
   terminal: Terminal,
   chart: BarChart3,

@@ -1081,7 +1081,7 @@ class OwnerCog(commands.Cog):
                                 ),
                                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                                 discord.ui.TextDisplay(
-                                    content=f"-# If you believe this is a mistake, please open a ticket in the [support server]({links.SUPPORT_SERVER})."
+                                    content=f"-# If you believe this is a mistake, submit a blacklist appeal at {links.WEBSITE}/appeals/blacklist."
                                 ),
                                 accent_colour=discord.Color.red()
                             )

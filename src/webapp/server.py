@@ -107,7 +107,7 @@ def configure_bot(bot) -> None:
         "webapp.auth_routes", "webapp.team_routes", "webapp.public_routes",
         "webapp.dashboard_routes", "webapp.donation_routes",
         "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
-        "webapp.application_routes", "webapp.site_routes",
+        "webapp.application_routes", "webapp.site_routes", "webapp.appeal_routes",
     ):
         module = sys.modules.get(module_name)
         if module is not None:
@@ -424,8 +424,25 @@ def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
         conn.close()
 
 
+def _load_blacklist_manager():
+    """Load the shared blacklist cache on the bot loop when needed."""
+    from utils.blacklist_manager import BlacklistManager
+
+    manager = BlacklistManager()
+    if not manager._loaded and _discord_bot is not None:
+        run_on_bot_loop(manager._ensure_loaded())
+    return manager
+
+
+def _current_user_blacklist_entry():
+    user_id = session.get("user", {}).get("id")
+    if not user_id:
+        return None
+    return _load_blacklist_manager().get_user_entry(int(user_id))
+
+
 def require_auth(f):
-    """Decorator: return 401 JSON if the session has no Discord user."""
+    """Require a signed-in, non-blacklisted user for dashboard API access."""
     @wraps(f)
     def _inner(*args, **kwargs):
         if not ensure_access_token():
@@ -433,7 +450,35 @@ def require_auth(f):
                 "error": "Not authenticated",
                 "login_url": "/auth/login",
             }), 401
+        try:
+            entry = _current_user_blacklist_entry()
+        except Exception:
+            return jsonify({"error": "Account access could not be verified."}), 503
+        if entry:
+            return jsonify({
+                "error": "This Discord account is blacklisted from the dashboard.",
+                "blacklisted": True,
+                "scope": "user",
+                "reason": entry.get("reason") or "No reason provided.",
+            }), 403
         return f(*args, **kwargs)
+    return _inner
+
+
+def require_dashboard_auth(f):
+    """Authenticate a dashboard status check while allowing it to report a ban."""
+    @wraps(f)
+    def _inner(*args, **kwargs):
+        if not ensure_access_token():
+            return jsonify({"error": "Not authenticated", "login_url": "/auth/login"}), 401
+        try:
+            entry = _current_user_blacklist_entry()
+        except Exception:
+            return jsonify({"error": "Account access could not be verified."}), 503
+        return jsonify({
+            "blacklisted": bool(entry),
+            "reason": (entry.get("reason") or "No reason provided.") if entry else None,
+        })
     return _inner
 
 
@@ -519,6 +564,18 @@ def require_guild_access(f):
     def _inner(guild_id, *args, **kwargs):
         if str(guild_id) not in managed_guild_ids():
             return jsonify({"error": "You do not have Manage Server access to this guild."}), 403
+        try:
+            guild_entry = _load_blacklist_manager().get_guild_entry(int(guild_id))
+        except Exception:
+            return jsonify({"error": "Guild access could not be verified."}), 503
+        if guild_entry:
+            return jsonify({
+                "error": "This server is blacklisted from using the dashboard.",
+                "blacklisted": True,
+                "scope": "guild",
+                "guild_id": str(guild_id),
+                "reason": guild_entry.get("reason") or "No reason provided.",
+            }), 403
         return f(guild_id, *args, **kwargs)
     return _inner
 

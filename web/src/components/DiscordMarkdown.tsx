@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 
 export type DiscordMentionNames = Partial<Record<"user" | "channel" | "role", Record<string, string>>>;
@@ -119,8 +120,9 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
     }
     if (node.kind === "mention") {
       const label = node.mention === "everyone" ? node.id : names?.[node.mention]?.[node.id] || `${node.mention === "channel" ? "#" : "@"}${node.id}`;
+      const mentionLabel = node.mention === "user" && !label.startsWith("@") ? `@${label}` : label;
       if (node.mention === "user") {
-        return <button key={key} type="button" className={`discord-md-mention discord-md-mention-${node.mention}`} data-discord-user-id={node.id} title={`user · ${node.id}`}>{label}</button>;
+        return <button key={key} type="button" className={`discord-md-mention discord-md-mention-${node.mention}`} data-discord-user-id={node.id} title={`user · ${node.id}`}>{mentionLabel}</button>;
       }
       return <span key={key} className={`discord-md-mention discord-md-mention-${node.mention}`} title={node.mention === "everyone" ? undefined : `${node.mention} · ${node.id}`}>{label}</span>;
     }
@@ -148,21 +150,52 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
 }) {
   const [profile, setProfile] = useState<TranscriptProfile | null>(null);
   const [profilePosition, setProfilePosition] = useState({ left: 12, top: 12 });
+  const profileCardRef = useRef<HTMLDivElement>(null);
+  const profileTriggerRef = useRef<HTMLElement | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   const requestRef = useRef(0);
   const closeProfile = useCallback(() => {
     requestRef.current += 1;
+    profileTriggerRef.current = null;
     setProfile(null);
     setProfileLoading(false);
     setProfileError("");
   }, []);
+  const positionProfile = useCallback(() => {
+    const trigger = profileTriggerRef.current;
+    const card = profileCardRef.current;
+    if (!trigger || !card) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 12;
+    const gap = 8;
+    const width = card.offsetWidth;
+    const height = card.offsetHeight;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    const below = rect.bottom + gap;
+    const top = below + height <= window.innerHeight - margin
+      ? below
+      : Math.max(margin, rect.top - height - gap);
+    setProfilePosition({ left, top: Math.min(top, window.innerHeight - height - margin) });
+  }, []);
+  useLayoutEffect(() => {
+    if (!profileLoading && !profileError && !profile) return;
+    positionProfile();
+  }, [positionProfile, profile, profileError, profileLoading]);
+  useEffect(() => {
+    if (!profileLoading && !profileError && !profile) return;
+    window.addEventListener("resize", positionProfile);
+    window.addEventListener("scroll", positionProfile, true);
+    return () => {
+      window.removeEventListener("resize", positionProfile);
+      window.removeEventListener("scroll", positionProfile, true);
+    };
+  }, [positionProfile, profile, profileError, profileLoading]);
   const openProfile = useCallback(async (userId: string, trigger: HTMLElement) => {
     if (!/^\d{1,22}$/.test(userId)) return;
     const requestId = ++requestRef.current;
-    const rect = trigger.getBoundingClientRect();
-    const width = Math.min(320, window.innerWidth - 24);
-    setProfilePosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), top: Math.max(12, Math.min(rect.bottom + 8, window.innerHeight - 340)) });
+    profileTriggerRef.current = trigger;
+    setProfilePosition({ left: 12, top: 12 });
     setProfile(null);
     setProfileError("");
     setProfileLoading(true);
@@ -228,8 +261,8 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
     }
   }}>
     {children}
-    {(profileLoading || profileError || profile) && <div className="discord-profile-popover" role="presentation">
-      <div className="discord-profile-card" role={profileError ? "alert" : profileLoading ? "status" : "dialog"} aria-label={profile ? `${profile.display_name} Discord profile` : undefined} style={{ "--profile-left": `${profilePosition.left}px`, "--profile-top": `${profilePosition.top}px` } as CSSProperties}>
+    {(profileLoading || profileError || profile) && createPortal(<div className="discord-profile-popover" role="presentation">
+      <div ref={profileCardRef} className="discord-profile-card" role={profileError ? "alert" : profileLoading ? "status" : "dialog"} aria-label={profile ? `${profile.display_name} Discord profile` : undefined} style={{ "--profile-left": `${profilePosition.left}px`, "--profile-top": `${profilePosition.top}px` } as CSSProperties}>
         {profileLoading ? <div className="discord-profile-state">Loading Discord profile…</div> : profileError ? <div className="discord-profile-state">{profileError}</div> : profile && <>
           {profile.banner_url
             ? <img className="discord-profile-banner" src={profile.banner_url} alt="" />
@@ -251,6 +284,6 @@ export function DiscordMarkdown({ text, mentionNames, className, style }: {
           </div>
         </>}
       </div>
-    </div>}
+    </div>, document.body)}
   </div>;
 }

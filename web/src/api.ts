@@ -14,6 +14,9 @@ import type {
   StaffApplicationSubmission,
   PublicStaffApplication,
   StaffGuild,
+  StaffBlacklist,
+  BlacklistAppeal,
+  BlacklistAppealStatus,
 } from "./types";
 
 export class ApiError extends Error {
@@ -39,6 +42,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const getAuth = () => api<AuthStatus>("/auth/status");
+export const getDashboardAccess = () => api<{ blacklisted: boolean; scope?: "user"; reason?: string }>("/api/dashboard/access");
 export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getStats = () => api<BotStats>("/api/botstats");
 export const resolveDiscordText = (text: string, guildId?: string) => api<{
@@ -57,6 +61,17 @@ export const getStaffGuilds = () => api<{ guilds: StaffGuild[]; count: number; r
 export const setStaffGuildBlacklist = (guildId: string, action: "add" | "remove", reason: string, csrfToken?: string) => api<{ ok: boolean; blacklisted: boolean }>(`/api/staff/guilds/${guildId}/blacklist`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ action, reason }) });
 export const resetStaffGuildProfile = (guildId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/guilds/${guildId}/profile/reset`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
 export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken?: string) => api<{ ok: boolean; recipient_id: string }>(`/api/staff/guilds/${guildId}/moderation-notice`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ message }) });
+export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
+export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
+export const getBlacklistAppealStatus = () => api<BlacklistAppealStatus>("/api/appeals/blacklist");
+export const submitBlacklistAppeal = (appeal: string, csrfToken?: string) => api<{ ok: boolean; appeal_id: string; status: "pending" }>("/api/appeals/blacklist", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ appeal }) });
+export const getGuildBlacklistAppealStatus = (guildId: string) => api<BlacklistAppealStatus>(`/api/appeals/guild/${encodeURIComponent(guildId)}`);
+export const submitGuildBlacklistAppeal = (guildId: string, appeal: string, csrfToken?: string) => api<{ ok: boolean; appeal_id: string; status: "pending" }>(`/api/appeals/guild/${encodeURIComponent(guildId)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ appeal }) });
+export const getStaffBlacklistAppeals = () => api<{ appeals: BlacklistAppeal[] }>("/api/staff/blacklist-appeals");
+export const reviewStaffBlacklistAppeal = (appealId: string, status: "approved" | "denied", note: string, csrfToken?: string) => api<{ ok: boolean; status: "approved" | "denied" }>(`/api/staff/blacklist-appeals/${encodeURIComponent(appealId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status, note }) });
+export const updateStaffBlacklist = (type: "user" | "guild", action: "add" | "remove" | "update", id: string, reason: string, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/blacklist", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ type, action, id, reason }) });
+export const createStaffGuildInvite = (guildId: string, csrfToken?: string) => api<{ ok: boolean; url: string; channel: string; expires_in: number; max_uses: number }>(`/api/staff/guilds/${guildId}/invite`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+export const leaveStaffGuild = (guildId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/guilds/${guildId}/leave`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
 export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
 export const getUserOverview = () => api<UserOverview>("/api/me/overview");

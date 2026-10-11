@@ -4,7 +4,10 @@ Both return True / False (blocked or not).
 """
 import discord
 from config.emojis import get_emoji
+from config.links import WEBSITE
 from utils.blacklist_manager import BlacklistManager
+
+BLACKLIST_APPEAL_URL = f"{WEBSITE}/appeals/blacklist"
 
 
 async def check_message_blacklist(msg: discord.Message) -> bool:
@@ -24,7 +27,7 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                        "If you believe this is a mistake, please open a ticket in the support server."
+                        f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
             ),
             accent_colour=discord.Color.red(),
         ))
@@ -41,7 +44,7 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                            "If you believe this is a mistake, please open a ticket in the support server."
+                            f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
                 ),
                 accent_colour=discord.Color.red(),
             ))
@@ -70,7 +73,7 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                        "If you believe this is a mistake, please open a ticket in the support server."
+                        f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
             ),
             accent_colour=discord.Color.red(),
         ))
@@ -90,7 +93,7 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                            "If you believe this is a mistake, please open a ticket in the support server."
+                            f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
                 ),
                 accent_colour=discord.Color.red(),
             ))

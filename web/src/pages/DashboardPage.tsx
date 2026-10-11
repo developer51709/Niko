@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAuth, getConfig, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
@@ -7,6 +7,7 @@ import { StaffApplicationsView } from "../components/dashboard/StaffApplications
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
+import type { PublicConfig } from "../types";
 import { dashboardPath, dashboardRoute, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../router";
 import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
@@ -56,6 +57,21 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 
+function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, embedded = false }: { scope: "user" | "guild"; reason?: string | null; guildId?: string; guildName?: string; supportUrl?: string | null; embedded?: boolean }) {
+  const safeSupportUrl = supportUrl?.trim();
+  const [appealable, setAppealable] = useState<boolean | null>(scope !== "guild");
+  useEffect(() => {
+    if (scope !== "guild" || !guildId) return;
+    let active = true;
+    setAppealable(null);
+    getGuildBlacklistAppealStatus(guildId)
+      .then((status) => { if (active) setAppealable(status.can_appeal); })
+      .catch(() => { if (active) setAppealable(false); });
+    return () => { active = false; };
+  }, [guildId, scope]);
+  return <>{!embedded && <PublicHeader page="dashboard" />}<div className={`auth-page blacklist-appeal-page${embedded ? " blacklist-appeal-embedded" : ""}`}><section className="auth-card blacklist-appeal-card" role="alert"><span className="blacklist-appeal-mark"><Icon name="lock" /></span><div className="eyebrow">Dashboard access restricted</div><h1>{scope === "guild" ? "This server is blacklisted." : "This account is blacklisted."}</h1><p>{scope === "guild" ? `${guildName || "This server"} can’t use Niko’s dashboard or bot features right now.` : "This Discord account can’t access Niko’s dashboard or bot features right now."}</p><div className="blacklist-appeal-reason"><span className="panel-kicker">Reason for the restriction</span><p>{reason?.trim() || "No reason was recorded. Contact the support team for clarification."}</p></div><p className="blacklist-appeal-note">If you believe this restriction was made in error, submit an appeal directly to the Niko team. You don’t need to join the support server.</p>{scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">Appeal this blacklist <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>Appeal this server blacklist <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{appealable === null ? "Checking appeal eligibility…" : "This guild blacklist cannot be appealed"}</button>}{safeSupportUrl && <a className="back-link" href={safeSupportUrl} target="_blank" rel="noreferrer">Or visit the support server <Icon name="external" /></a>}{!embedded && <a className="back-link" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>Return to the public site</a>}</section></div></>;
+}
+
 function DashboardLoading() {
   return <div className="section-loading section-skeleton dashboard-loading" role="status">
     <div className="skeleton-title" /><div className="skeleton-copy" /><div className="skeleton-grid"><i /><i /><i /></div>
@@ -73,6 +89,7 @@ export function DashboardPage() {
   const [selectedGuild, setSelectedGuild] = useState<Guild | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [blacklist, setBlacklist] = useState<{ blacklisted: boolean; scope?: "user"; reason?: string } | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [staffRole, setStaffRole] = useState<string | null>(null);
@@ -90,10 +107,14 @@ export function DashboardPage() {
         setAuth(authStatus);
         setStats(botStats);
         if (!authStatus.authenticated) return null;
-        return Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]).then(([profile, availableGuilds, staffStatus]) => {
+        return getDashboardAccess().then((access) => {
+          setBlacklist(access);
+          if (access.blacklisted) return null;
+          return Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]).then(([profile, availableGuilds, staffStatus]) => {
           setUserOverview(profile);
           setGuilds(availableGuilds);
-          setStaffRole(staffStatus?.role || null);
+            setStaffRole(staffStatus?.role || null);
+          });
         });
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard unavailable"))
@@ -117,6 +138,9 @@ export function DashboardPage() {
   if (loading || !auth) return <div className="dashboard-state"><div className="loading-ring" /><p>Connecting to Niko…</p></div>;
   if (error) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><span className="auth-mark">!</span><div className="eyebrow">Connection issue</div><h1>Couldn’t load<br /><em>your workspace.</em></h1><p>{error}</p><button className="button button-primary" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button></div></main></>;
   if (!auth.authenticated) return <AuthCard auth={auth} />;
+  if (blacklist?.blacklisted) {
+    return <BlacklistAppealScreen scope="user" reason={blacklist.reason} supportUrl={config?.support_server_url} />;
+  }
 
   const changeGuild = (guild: Guild) => {
     if (guild.installed === false) return;
@@ -142,10 +166,14 @@ export function DashboardPage() {
       setAuth(authStatus);
       setStats(botStats);
       if (authStatus.authenticated) {
-        const [profile, availableGuilds, staffStatus] = await Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]);
-        setUserOverview(profile);
-        setGuilds(availableGuilds);
-        setStaffRole(staffStatus?.role || null);
+        const access = await getDashboardAccess();
+        setBlacklist(access);
+        if (!access.blacklisted) {
+          const [profile, availableGuilds, staffStatus] = await Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]);
+          setUserOverview(profile);
+          setGuilds(availableGuilds);
+          setStaffRole(staffStatus?.role || null);
+        }
       }
       setRefreshToken((value) => value + 1);
       setError("");
@@ -161,7 +189,9 @@ export function DashboardPage() {
     content = <ServersView guilds={guilds} onManage={openGuild} />;
   } else if (route.view === "guild") {
     content = selectedGuild
-      ? <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
+      ? selectedGuild.blacklisted
+        ? <BlacklistAppealScreen scope="guild" guildId={selectedGuild.id} guildName={selectedGuild.name} reason={selectedGuild.blacklist_reason || undefined} supportUrl={config?.support_server_url} embedded />
+        : <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
     content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} />;

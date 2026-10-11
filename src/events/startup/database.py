@@ -609,9 +609,64 @@ async def _create_tables(bot):
             id         INTEGER PRIMARY KEY,
             reason     TEXT,
             timestamp  REAL,
-            added_by   INTEGER
+            added_by   INTEGER,
+            expires_at REAL,
+            status     TEXT NOT NULL DEFAULT 'active',
+            appeal_id  TEXT
         )
     """)
+    for statement in (
+        "ALTER TABLE blacklist_users ADD COLUMN expires_at REAL",
+        "ALTER TABLE blacklist_users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE blacklist_users ADD COLUMN appeal_id TEXT",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass  # Existing database already has the column.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_appeals (
+            appeal_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            guild_id INTEGER,
+            username TEXT,
+            appeal_text TEXT NOT NULL,
+            blacklist_reason TEXT,
+            blacklist_timestamp REAL,
+            blacklist_added_by INTEGER,
+            blacklist_expires_at REAL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at REAL NOT NULL,
+            reviewed_by INTEGER,
+            reviewed_at REAL,
+            staff_note TEXT
+        )
+    """)
+    try:
+        await bot.cxn.execute("ALTER TABLE blacklist_appeals ADD COLUMN guild_id INTEGER")
+    except Exception:
+        pass  # Existing database already has the column.
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_appeals_user ON blacklist_appeals (user_id, created_at)")
+    await bot.cxn.execute("DROP INDEX IF EXISTS idx_blacklist_appeals_pending_user")
+    await bot.cxn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_blacklist_appeals_pending_user ON blacklist_appeals (user_id) WHERE status = 'pending' AND guild_id IS NULL")
+    await bot.cxn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_blacklist_appeals_pending_guild ON blacklist_appeals (guild_id) WHERE status = 'pending' AND guild_id IS NOT NULL")
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_appeals_status ON blacklist_appeals (status, created_at)")
+
+    await bot.cxn.execute("UPDATE blacklist_users SET status = 'active' WHERE status IS NULL OR status = ''")
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS abuse_strikes (
+            user_id      INTEGER PRIMARY KEY,
+            strikes      INTEGER NOT NULL DEFAULT 0,
+            updated_at   REAL NOT NULL
+        )
+    """)
+
+    try:
+        await bot.cxn.execute("DELETE FROM blacklist_users WHERE expires_at IS NOT NULL AND expires_at <= $1", time.time())
+    except Exception as e:
+        logging.warning("DB", f"Could not clean expired temporary blacklists: {e}")
+
 
     # ── Roleplay actions (persistent "do it back" buttons) ──────────────
     # One row per roleplay message that carries a back-button. Row state is
@@ -650,9 +705,20 @@ async def _create_tables(bot):
             id         INTEGER PRIMARY KEY,
             reason     TEXT,
             timestamp  REAL,
-            added_by   INTEGER
+            added_by   INTEGER,
+            status     TEXT NOT NULL DEFAULT 'active',
+            appeal_id  TEXT
         )
     """)
+    for statement in (
+        "ALTER TABLE blacklist_guilds ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE blacklist_guilds ADD COLUMN appeal_id TEXT",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass
+    await bot.cxn.execute("UPDATE blacklist_guilds SET status = 'active' WHERE status IS NULL OR status = ''")
     await _migrate_blacklist_data(bot)
 
     # ── Persistent status panels (owner-owned, auto-refreshing) ──────────────────
@@ -1623,6 +1689,12 @@ async def init_database(bot):
     logging.info("DB", f"Opening database: {DATABASE_PATH}")
     try:
         bot.cxn = await database.create_pool(DATABASE_PATH)
+        if getattr(bot.cxn, "db_type", None) == "sqlite":
+            logging.warning(
+                "DB",
+                "SQLite database support is deprecated and scheduled for removal "
+                "between December 1 and December 10, 2026. Migrate to MongoDB before then.",
+            )
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
         # Eagerly load the blacklist cache from the database so hot-path

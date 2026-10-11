@@ -9,6 +9,19 @@ globals().update({
     if not name.startswith("__")
 })
 
+@app.route("/api/dashboard/access")
+@require_dashboard_auth
+def api_dashboard_access():
+    entry = _current_user_blacklist_entry()
+    if not entry:
+        return jsonify({"blacklisted": False})
+    return jsonify({
+        "blacklisted": True,
+        "scope": "user",
+        "reason": entry.get("reason") or "No reason provided.",
+    })
+
+
 @app.route("/api/me")
 @require_auth
 def api_me():
@@ -76,6 +89,12 @@ def api_guilds():
                 if icon_hash else None
             )
             installed = str(g["id"]) in present
+            blacklist_entry = None
+            if installed and _discord_bot is not None:
+                try:
+                    blacklist_entry = _load_blacklist_manager().get_guild_entry(int(g["id"]))
+                except Exception:
+                    return jsonify({"error": "Guild blacklist status could not be verified."}), 503
             result.append({
                 "id":       g["id"],
                 "name":     g["name"],
@@ -83,6 +102,8 @@ def api_guilds():
                 "owner":    bool(g.get("owner")),
                 "permissions": perms,
                 "installed": installed,
+                "blacklisted": blacklist_entry is not None,
+                "blacklist_reason": blacklist_entry.get("reason") if blacklist_entry else None,
                 "invite_url": (
                     f"https://discord.com/oauth2/authorize?"
                     f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands', 'guild_id': g['id']})}"

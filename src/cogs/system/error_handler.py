@@ -13,6 +13,7 @@ from colorama import Fore, Style, init as colorama_init
 from utils.error_reports import save_error_report
 from config.emojis import get_emoji
 from config.ids import OWNER_IDS
+from config.links import WEBSITE
 from utils import logging
 from utils.ai.debugging import send_debug_report
 from utils.blacklist_manager import BlacklistManager
@@ -119,7 +120,7 @@ def is_blacklisted():
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+                discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, submit a blacklist appeal at {WEBSITE}/appeals/blacklist."),
                 accent_colour=discord.Color.red()
             ))
             await ctx.send(view=view)
@@ -132,7 +133,7 @@ def is_blacklisted():
                 view.add_item(discord.ui.Container(
                     discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+                    discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, contact Niko support at {WEBSITE}/support."),
                     accent_colour=discord.Color.red()
                 ))
                 await ctx.send(view=view)
@@ -222,6 +223,12 @@ class ErrorHandler(commands.Cog):
 
         # Unwrap CommandInvokeError to get the original exception
         error = getattr(error, "original", error)
+
+        # ── Automated anti-abuse strike ────────────────────────────────────
+        from utils.abuse_detection import AbuseRateLimit, strike_notice
+        if isinstance(error, AbuseRateLimit):
+            await ctx.send(strike_notice(error.result))
+            return
 
         # ── Silent / ignored ───────────────────────────────────────────────
         if isinstance(error, PfxCommandNotFound):

@@ -98,9 +98,15 @@ def auth_status():
             "oauth_available": oauth_enabled(),
         })
     session.setdefault("csrf_token", secrets.token_urlsafe(24))
+    try:
+        blacklist_entry = _current_user_blacklist_entry()
+    except Exception:
+        return jsonify({"error": "Account access could not be verified."}), 503
     return jsonify({
         "authenticated":   True,
         "oauth_available": True,
         "user":            session["user"],
         "csrf_token":      session["csrf_token"],
+        "blacklisted":     bool(blacklist_entry),
+        "blacklist_reason": (blacklist_entry.get("reason") or "No reason provided.") if blacklist_entry else None,
     })
