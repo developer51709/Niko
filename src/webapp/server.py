@@ -108,10 +108,13 @@ def configure_bot(bot) -> None:
         "webapp.dashboard_routes", "webapp.donation_routes",
         "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
         "webapp.application_routes", "webapp.site_routes", "webapp.appeal_routes",
+        "webapp.backup_routes",
     ):
         module = sys.modules.get(module_name)
         if module is not None:
             module._discord_bot = bot
+            if module_name == "webapp.backup_routes":
+                module.configure_backup_proxy()
 
 
 def run_on_bot_loop(awaitable, timeout: float = 8):

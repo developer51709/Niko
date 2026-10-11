@@ -46,19 +46,13 @@ bot = commands.AutoShardedBot(
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | database.MongoPool | None = None
 
-# ── Webshare proxy failover ─────────────────────────────────────────────────
-# Armed only when WEBSHARE_API_KEY is set.  On a Discord global rate limit the
-# manager routes the bot through a Webshare proxy within milliseconds and
-# keeps probing the direct IP every 10 minutes until the limit clears.
+# ── Proxy failover ───────────────────────────────────────────────────────────
+# This manager can use Webshare and/or owner-registered, credential-verified
+# standby proxies. Standby mode never starts another Discord gateway client.
 WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
-bot.proxy_manager: WebshareProxyManager | None = None
-if WEBSHARE_API_KEY:
-    _proxy_manager = WebshareProxyManager(WEBSHARE_API_KEY)
-    if _proxy_manager.attach(bot):
-        bot.proxy_manager = _proxy_manager
-        logging.info("ProxyManager", "Webshare proxy failover armed.")
-    else:
-        logging.warning("ProxyManager", "Webshare proxy failover could not be armed.")
+bot.proxy_manager: WebshareProxyManager | None = WebshareProxyManager(WEBSHARE_API_KEY)
+if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
+    logging.info("ProxyManager", "Webshare proxy failover armed.")
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
@@ -116,6 +110,22 @@ if __name__ == "__main__":
             pass
 
     async def main():
+        if os.getenv("BACKUP_MODE", "").lower() in {"1", "true", "yes"}:
+            from utils.backup_proxy import serve_backup_proxy
+
+            server = await serve_backup_proxy(
+                os.getenv("BACKUP_PROXY_HOST", "0.0.0.0"),
+                int(os.getenv("PORT", os.getenv("BACKUP_PROXY_PORT", "10000"))),
+                os.getenv("BACKUP_TLS_CERT") or None,
+                os.getenv("BACKUP_TLS_KEY") or None,
+                os.getenv("DISCORD_BOT_TOKEN", ""),
+                os.getenv("SESSION_SECRET", ""),
+            )
+            logging.info("Backup", "Standby proxy online; this instance will not connect to Discord.")
+            async with server:
+                await server.serve_forever()
+            return
+
         if not TOKEN:
             logging.error(
                 "Startup",

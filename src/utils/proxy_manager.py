@@ -14,8 +14,8 @@ moment that probe confirms the direct IP is no longer rate limited (any
 non-429 response), the proxy is disabled again so the Webshare 1 GB/month
 bandwidth allowance is only consumed while it is genuinely needed.
 
-The system is opt-in: without a ``WEBSHARE_API_KEY`` environment variable it
-stays completely dormant and nothing is patched.
+Webshare is optional; owner-registered standby instances can independently arm
+this failover without requiring a Webshare API key.
 """
 
 from __future__ import annotations
@@ -65,6 +65,9 @@ class WebshareProxyManager:
         self._session: aiohttp.ClientSession | None = None
         self._verify_task: asyncio.Task | None = None
         self._user_agent = "DiscordBot (https://discord.com, 2.7.1)"
+        self._backup_proxy_urls: list[str] = []
+        self._backup_proxy_index = 0
+        self._attached_bot_http = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     def attach(self, bot) -> bool:
@@ -76,8 +79,10 @@ class WebshareProxyManager:
         this wraps ``static_login`` and installs the hook the moment the real
         session is created.  Returns True when the failover is armed.
         """
-        if not self.api_key:
+        if not self.api_key and not self._backup_proxy_urls:
             return False
+        if self._attached_bot_http is bot.http:
+            return True
 
         self.http = bot.http
         try:
@@ -88,7 +93,8 @@ class WebshareProxyManager:
         session = self._current_session()
         if session is not None:
             self._install_hook(session)
-            logging.info("ProxyManager", "Global rate-limit failover armed (Webshare).")
+            self._attached_bot_http = bot.http
+            logging.info("ProxyManager", "Global rate-limit failover armed.")
             return True
 
         try:
@@ -108,8 +114,9 @@ class WebshareProxyManager:
                 session = manager._current_session()
                 if session is not None:
                     manager._install_hook(session)
+                    manager._attached_bot_http = bot.http
                     logging.info(
-                        "ProxyManager", "Global rate-limit failover armed (Webshare)."
+                        "ProxyManager", "Global rate-limit failover armed."
                     )
             except Exception as exc:
                 logging.error(
@@ -118,7 +125,8 @@ class WebshareProxyManager:
             return data
 
         bot.http.static_login = wrapped_static_login
-        logging.info("ProxyManager", "Global rate-limit failover armed (Webshare).")
+        self._attached_bot_http = bot.http
+        logging.info("ProxyManager", "Global rate-limit failover armed.")
         return True
 
     def _current_session(self):
@@ -194,9 +202,16 @@ class WebshareProxyManager:
             self._session = None
 
     # ── Proxy control ─────────────────────────────────────────────────────────
+    def set_backup_proxies(self, proxy_urls: list[str]) -> None:
+        """Set authenticated standby proxy URLs registered by the bot owner."""
+        self._backup_proxy_urls = [url for url in proxy_urls if isinstance(url, str) and url.startswith("https://")]
+        self._backup_proxy_index = 0
+        if self._proxy_url and self._proxy_url.startswith("https://") and self._proxy_url not in self._backup_proxy_urls:
+            self.disable()
+
     async def enable(self) -> None:
-        """Fetch a Webshare proxy and route the bot through it (idempotent)."""
-        if not self.api_key or self.http is None:
+        """Route the bot through Webshare or an authenticated backup on a global 429."""
+        if self.http is None:
             return
         if self.enabled and self._proxy_url:
             return
@@ -204,23 +219,30 @@ class WebshareProxyManager:
             if self.enabled and self._proxy_url:
                 return
 
-            proxies = self._cached_proxies()
-            if not proxies:
+            proxies = self._cached_proxies() if self.api_key else []
+            if self.api_key and not proxies:
                 try:
                     proxies = await asyncio.wait_for(
                         self._fetch_proxies(), timeout=_FETCH_TIMEOUT_SECONDS
                     )
                 except Exception as exc:
                     logging.error("ProxyManager", f"Failed to fetch Webshare proxies: {exc}")
-                    return
-            if not proxies:
-                logging.warning(
-                    "ProxyManager",
-                    "No valid Webshare proxies available — staying on the direct IP.",
-                )
+            if proxies:
+                self._apply_proxy(random.choice(proxies))
                 return
-
-            self._apply_proxy(random.choice(proxies))
+            if self._backup_proxy_urls:
+                url = self._backup_proxy_urls[self._backup_proxy_index % len(self._backup_proxy_urls)]
+                self._backup_proxy_index += 1
+                if self.http is not None:
+                    self.http.proxy = url
+                    self.http.proxy_auth = None
+                self._proxy_url = url
+                self._active_proxy = None
+                self.enabled = True
+                logging.warning("ProxyManager", "Global rate limit detected — routed through a registered standby instance.")
+                self._ensure_verify_task()
+                return
+            logging.warning("ProxyManager", "No Webshare proxy or registered standby is available — staying on the direct IP.")
 
     def disable(self) -> None:
         """Drop the proxy and go back to the direct IP immediately."""
@@ -234,6 +256,14 @@ class WebshareProxyManager:
     def rotate(self) -> None:
         """Switch to another cached proxy (used when the active one errors)."""
         proxies = self._cached_proxies()
+        if self._active_proxy is None and len(self._backup_proxy_urls) > 1:
+            self._backup_proxy_index += 1
+            url = self._backup_proxy_urls[self._backup_proxy_index % len(self._backup_proxy_urls)]
+            self._proxy_url = url
+            if self.http is not None:
+                self.http.proxy = url
+                self.http.proxy_auth = None
+            return
         if len(proxies) > 1 and self._active_proxy is not None:
             candidates = [p for p in proxies if p is not self._active_proxy]
             if candidates:

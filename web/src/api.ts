@@ -17,6 +17,7 @@ import type {
   StaffBlacklist,
   BlacklistAppeal,
   BlacklistAppealStatus,
+  BackupInstance,
 } from "./types";
 
 export class ApiError extends Error {
@@ -55,6 +56,9 @@ export const resolveDiscordText = (text: string, guildId?: string) => api<{
 export const getTeam = () => api<StaffMember[]>("/api/team");
 export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
+export const getStaffBackups = () => api<{ backups: BackupInstance[] }>("/api/staff/backups");
+export const addStaffBackup = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean; backup: BackupInstance }>("/api/staff/backups", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
+export const removeStaffBackup = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/backups/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const saveStaffProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const saveGlobalProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/global-profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const getStaffGuilds = () => api<{ guilds: StaffGuild[]; count: number; role: string }>("/api/staff/guilds");

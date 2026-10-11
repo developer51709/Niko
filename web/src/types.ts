@@ -72,6 +72,7 @@ export type StaffGuild = {
 
 export type StaffBlacklistEntry = { id: string; reason: string | null; timestamp: number; added_by: string | null };
 export type StaffBlacklist = { users: StaffBlacklistEntry[]; guilds: StaffBlacklistEntry[] };
+export type BackupInstance = { id: string; name: string; url: string; created_at: number };
 export type BlacklistAppealStatus = {
   status: "eligible" | "pending" | "approved" | "denied" | "not_blacklisted" | "not_eligible";
   can_appeal: boolean;
