@@ -200,7 +200,8 @@ async def _fetch_discord_user_profile(guild_id, user_id):
     return {
         "id": str(user_id),
         "username": getattr(user, "name", None) or getattr(user, "username", None) or f"user-{user_id}",
-        "display_name": getattr(member, "display_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or f"user-{user_id}",
+        # The popup represents the Discord user profile, never a server-specific nickname.
+        "display_name": getattr(user, "global_name", None) or getattr(user, "name", None) or getattr(user, "username", None) or f"user-{user_id}",
         "avatar_url": str(avatar.url) if avatar is not None else None,
         "banner_url": str(banner.url) if banner is not None else None,
         "banner_color": banner_color,

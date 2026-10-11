@@ -14,7 +14,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
   if (!entry) {
     return (
       <>
-        <PublicHeader page="home" />
+        <PublicHeader page="changelog-detail" />
         <main className="shell page-main changelog-page">
           <div className="changelog-not-found">
             <Icon name="doc" size={48} />
@@ -32,7 +32,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
 
   return (
     <>
-      <PublicHeader page="home" />
+      <PublicHeader page="changelog-detail" />
       <main className="shell page-main changelog-page changelog-detail">
         {/* Back nav */}
         <div className="changelog-back">

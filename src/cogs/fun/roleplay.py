@@ -131,7 +131,6 @@ ACTIONS: dict = {
                     "¡{author} cruzó la sala corriendo solo para abrazar a {target}! 🏃",
                     "¡{author} abrazó a {target} — confort máximo conseguido! 💯",
                 ],
-            },
         },
     },
     "kiss": {
@@ -206,7 +205,6 @@ ACTIONS: dict = {
                     "¡{author} giró a {target} y le besó la mejilla! 🌀",
                     "¡{author} besó a {target} — corazones por todas partes! 💞",
                 ],
-            },
         },
     },
     "cuddle": {
@@ -281,7 +279,6 @@ ACTIONS: dict = {
                     "¡{author} se derritió en un mimo con {target}! 🫠",
                     "¡{author} le dio mimos a {target} hasta que se fue toda la tristeza! 💖",
                 ],
-            },
         },
     },
     "pat": {
@@ -356,7 +353,6 @@ ACTIONS: dict = {
                     "¡{author} le concedió a {target} palmaditas ceremoniales de alto nivel! 🎖️",
                     "¡{author} acarició la cabeza de {target} y le arregló el humor entero! 💯",
                 ],
-            },
         },
     },
     "poke": {
@@ -431,7 +427,6 @@ ACTIONS: dict = {
                     "¡{author} le picó a {target} — ¡esto ya es un desafío! 🎯",
                     "¡{author} le picó a {target} y declaró la victoria! 🏆",
                 ],
-            },
         },
     },
     "tickle": {
@@ -506,7 +501,6 @@ ACTIONS: dict = {
                     "¡{author} le hizo cosquillas a {target} con precisión de experto! 🎯",
                     "¡{author} le hizo cosquillas a {target} y lo grabó como evidencia! 📸",
                 ],
-            },
         },
     },
     "highfive": {
@@ -581,7 +575,6 @@ ACTIONS: dict = {
                     "¡{author} chocó esos cinco con {target} y bailó un poquito! 💃",
                     "¡{author} chocó esos cinco con {target} — ¡nivel de amistad aumentado! 💯",
                 ],
-            },
         },
     },
     "slap": {
@@ -656,7 +649,6 @@ ACTIONS: dict = {
                     "¡{author} abofeteó a {target} — suavecito, con cariño! 💖",
                     "¡{author} abofeteó a {target} y todo el chat se quedó boquiabierto! 😱",
                 ],
-            },
         },
     },
     "bonk": {
@@ -731,7 +723,6 @@ ACTIONS: dict = {
                     "¡{author} bonkeó a {target} — directo a la cárcel del bonk, sin pasar por la casilla de salida! 🚔",
                     "¡{author} bonkeó a {target} con amor y energía de bonk! 💖",
                 ],
-            },
         },
     },
     "yeet": {
@@ -808,7 +799,6 @@ ACTIONS: dict = {
                 ],
             },
         },
-    },
 }
 
 # Shared strings (need-mention prompt, playful footer, GIF-fetch failure

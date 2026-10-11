@@ -1,0 +1,101 @@
+---
+slug: "social-overview"
+title: "Social Features Overview"
+category: "social"
+excerpt: "Explore Niko's social features including birthdays, polls, suggestions, and more."
+tags: ["social","birthdays","polls","suggestions","starboard"]
+order: 1
+---
+# Social Features Overview
+
+Niko includes various social features to help build community engagement.
+
+## Available Features
+
+### Birthdays
+Track and celebrate member birthdays:
+
+```
+.birthday set MM-DD
+.birthday remove
+.birthday today
+```
+
+Birthdays are stored per member and can be announced in a designated channel.
+
+### Polls
+Create polls for server decisions:
+
+```
+.poll create <question> | <option 1> | <option 2>
+.poll end <message id>
+.poll results <message id>
+```
+
+Members vote with buttons and results update in real time.
+
+### Suggestions
+Let members submit suggestions:
+
+```
+.suggest submit <suggestion>
+```
+
+Suggestions can be voted on and reviewed by moderators.
+
+### Starboard
+Highlight starred messages:
+
+```
+.starboard channel <channel>
+```
+
+Messages with enough stars are automatically posted to the starboard channel.
+
+### Giveaways
+Host giveaways for your community:
+
+```
+.giveaway start
+.giveaway reroll <message id>
+```
+
+`.giveaway start` opens an interactive setup panel for the prize, duration, winners, channel, and join requirements.
+
+### Roleplay
+Express yourself with animated roleplay actions:
+
+```
+.hug @friend
+.pat @friend
+```
+
+Available actions include hug, kiss, cuddle, pat, poke, tickle, highfive, slap, bonk, and yeet. They work with prefix commands and the right-click **Roleplay** menu. If you'd rather someone not use roleplay commands on you, block them with [`.rpblock`](/docs/social-roleplay-blocks).
+
+## Configuration
+
+Most social features are configured through:
+- Discord commands
+- Web dashboard
+
+### Birthday Channel
+Set where birthday announcements appear:
+
+```
+.birthday channel <channel>
+```
+
+### Starboard Threshold
+Set how many stars trigger starboard posting:
+
+```
+.starboard threshold <count>
+```
+
+## Engagement Tips
+
+1. **Use birthdays**: Celebrate community members
+2. **Run regular polls**: Let members have a voice
+3. **Feature suggestions**: Show you listen to feedback
+4. **Star great content**: Highlight quality contributions
+5. **Host giveaways**: Reward active members

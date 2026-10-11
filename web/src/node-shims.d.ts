@@ -1,3 +1,7 @@
+interface ImportMeta {
+  glob<T>(pattern: string, options: { eager: true; query: string; import: string }): Record<string, T>;
+}
+
 declare module "node:fs" {
   const fs: any;
   export default fs;

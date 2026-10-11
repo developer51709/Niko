@@ -110,17 +110,19 @@ async def _live_bot_stats():
         return None
     guilds = list(bot.guilds)
     user_count = sum(g.member_count or 0 for g in guilds)
-    try:
-        # walk_commands includes nested prefix commands; the app tree includes
-        # context menus alongside slash commands, including names not yet in
-        # the startup registry.
-        command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
-    except Exception:
+    command_count = getattr(bot, "_status_command_count", None)
+    if command_count is None:
+        # The public registry uses the same filtering and deduplication as the
+        # commands page, including nested slash commands and context menus.
         command_registry = load_json("data/commands.json", None)
         if isinstance(command_registry, list):
             command_count = sum(
                 1 for command in command_registry
-                if isinstance(command, dict) and command.get("name")
+                if isinstance(command, dict)
+                and command.get("name")
+                and not _is_internal_command(command.get("cog"), command.get("module"))
+                and str(command["name"]).lower() not in _LEGACY_INTERNAL_COMMAND_NAMES
+                and str(command["name"]) not in _live_internal_command_names()
             )
         else:
             command_count = load_json(BOT_STATS, {}).get("command_count", 76)

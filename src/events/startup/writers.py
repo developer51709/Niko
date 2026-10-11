@@ -14,10 +14,12 @@ def write_bot_stats(bot):
     try:
         os.makedirs("data", exist_ok=True)
         user_count = sum(g.member_count or 0 for g in bot.guilds)
-        try:
-            command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
-        except Exception:
-            command_count = 76
+        command_count = getattr(bot, "_status_command_count", None)
+        if command_count is None:
+            try:
+                command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
+            except Exception:
+                command_count = 76
         payload = {
             "guild_count":   len(bot.guilds),
             "guild_ids":     [g.id for g in bot.guilds],
@@ -206,6 +208,62 @@ def write_commands(bot):
 
         commands_data.sort(key=lambda x: (x["category"], x["type"], x["name"]))
 
+        internal_command_names = set()
+
+        def collect_internal_command_names(command, qualified_name=None):
+            binding = getattr(command, "binding", None) or getattr(command, "cog", None)
+            callback = getattr(command, "callback", None)
+            cog_name = getattr(command, "cog_name", None)
+            if is_internal_cog(
+                cog_name,
+                type(binding).__name__ if binding is not None else None,
+                getattr(callback, "__module__", None),
+            ):
+                name = qualified_name or getattr(command, "qualified_name", None) or getattr(command, "name", None)
+                if name:
+                    internal_command_names.add(str(name))
+                    internal_command_names.add(str(getattr(command, "name", name)))
+
+        try:
+            for command in bot.walk_commands():
+                collect_internal_command_names(command)
+        except Exception:
+            pass
+
+        def collect_internal_app_names(command, parent_name=None):
+            name = getattr(command, "name", None)
+            if not name:
+                return
+            qualified_name = f"{parent_name} {name}" if parent_name else str(name)
+            collect_internal_command_names(command, qualified_name)
+            for child in getattr(command, "commands", []) or []:
+                collect_internal_app_names(child, qualified_name)
+
+        try:
+            for command in bot.tree.get_commands():
+                collect_internal_app_names(command)
+        except Exception:
+            pass
+
+        legacy_internal_names = {
+            "ownerhelp", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
+            "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "servers",
+            "serverinvite", "announce", "dev01", "shardinfo", "shardstats", "shardhealth",
+            "blacklist", "blacklist info", "blacklist reason", "blacklist add", "blacklist remove",
+            "premium", "premium add", "premium remove", "premium list",
+            "devhelp", "devload", "devunload", "devreload", "devping", "devlatency",
+            "devuptime", "devmem", "devtasks", "devguild", "devchannels", "devroles",
+            "devmembers", "deveval", "devexec", "devsay", "devshutdown", "syncemojis",
+            "appemojis", "emojistatus", "staff", "staff help", "staff manage",
+        }
+        public_command_count = sum(
+            1 for command in commands_data
+            if command.get("name")
+            and command.get("name") not in internal_command_names
+            and str(command["name"]).lower() not in legacy_internal_names
+        )
+        bot._status_command_count = public_command_count
+
         os.makedirs("data", exist_ok=True)
         with open("data/commands.json", "w") as f:
             json.dump(commands_data, f)
@@ -215,9 +273,7 @@ def write_commands(bot):
             if os.path.exists(stats_path):
                 with open(stats_path) as f:
                     stats = json.load(f)
-                stats["command_count"] = sum(
-                    1 for command in commands_data if command.get("name")
-                )
+                stats["command_count"] = public_command_count
                 with open(stats_path, "w") as f:
                     json.dump(stats, f)
         except Exception:

@@ -16,7 +16,7 @@ export function ChangelogPage() {
 
   return (
     <>
-      <PublicHeader page="home" />
+      <PublicHeader page="changelog" />
       <main className="shell page-main changelog-page">
         <PublicPageIntro
           eyebrow="What’s new"

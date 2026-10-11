@@ -7,10 +7,10 @@ import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 import * as fontkit from "fontkit";
 import { CHANGELOG, type ChangelogEntry } from "./src/data/changelog";
-import { DOCS } from "./src/data/docs";
-import type { DocPage } from "./src/types";
 
 const SITE_URL = "https://niko.sryze.cc";
+const DOC_CONTENT_DIRECTORY = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "src/content/docs");
+const DOC_FRONTMATTER_FIELD = /^([a-z_]+):\s*(.*)$/;
 const DEFAULT_DESCRIPTION = "Niko is the warm, capable Discord companion for communities that care.";
 
 type PageMetadata = { path: string; title: string; description: string; section: string };
@@ -19,8 +19,29 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-function metadataForDoc(doc: DocPage): PageMetadata {
-  return { path: `/docs/${doc.slug}`, title: `${doc.title} — Niko docs`, description: doc.excerpt, section: "Documentation" };
+function docsMetadata(): PageMetadata[] {
+  return fs.readdirSync(DOC_CONTENT_DIRECTORY)
+    .filter((file: string) => file.endsWith(".mdx"))
+    .map((file: string) => {
+      const source = fs.readFileSync(path.join(DOC_CONTENT_DIRECTORY, file), "utf8");
+      const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+      if (!frontmatter) throw new Error(`Invalid MDX frontmatter in ${file}`);
+      const values = new Map<string, string>();
+      for (const line of frontmatter[1].split(/\r?\n/)) {
+        const field = line.match(DOC_FRONTMATTER_FIELD);
+        if (field) values.set(field[1], field[2]);
+      }
+      const slug = values.get("slug");
+      const title = values.get("title");
+      const excerpt = values.get("excerpt");
+      if (!slug || !title || !excerpt) throw new Error(`Missing required MDX metadata in ${file}`);
+      return {
+        path: `/docs/${JSON.parse(slug) as string}`,
+        title: `${JSON.parse(title) as string} — Niko docs`,
+        description: JSON.parse(excerpt) as string,
+        section: "Documentation",
+      };
+    });
 }
 
 function metadataForChangelog(entry: ChangelogEntry): PageMetadata {
@@ -38,7 +59,7 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/privacy", title: "Privacy policy — Niko", description: "Learn what information Niko uses and how it supports Discord communities.", section: "Niko legal" },
   { path: "/terms", title: "Terms of service — Niko", description: "The terms that apply when you use Niko in a Discord server.", section: "Niko legal" },
   { path: "/community", title: "Community policy — Niko", description: "The community expectations for every server using Niko.", section: "Niko legal" },
-  ...DOCS.map(metadataForDoc),
+  ...docsMetadata(),
   ...CHANGELOG.map(metadataForChangelog),
 ];
 

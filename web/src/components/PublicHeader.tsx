@@ -31,8 +31,8 @@ export function PublicHeader({ page }: { page: Page }) {
           {publicLinks.map((link) => (
             <a
               key={link.path}
-              className={page === link.page ? "active" : ""}
-              aria-current={page === link.page ? "page" : undefined}
+              className={page === link.page || (link.page === "changelog" && page === "changelog-detail") ? "active" : ""}
+              aria-current={page === link.page || (link.page === "changelog" && page === "changelog-detail") ? "page" : undefined}
               href={link.path}
               onClick={goTo(link.path)}
             >
