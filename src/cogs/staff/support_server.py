@@ -229,7 +229,11 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
     """Apply public read-only and voice access permissions consistently."""
     return discord.PermissionOverwrite(
         view_channel=not staff_only,
-        send_messages=not (key in {"rules", "announcements", "status", "polls", "staff_announcements", "staff_rules"}),
+        send_messages=not (key in {
+            "welcome", "rules", "roles", "announcements", "status", "polls",
+            "giveaways", "tickets", "support_guide", "voice_panel",
+            "staff_announcements", "staff_rules",
+        }),
         read_message_history=True,
         connect=not staff_only,
         speak=not staff_only,
@@ -499,6 +503,40 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
                 await member.add_roles(specific, reason="Synchronize Niko staff assignment")
             if stale:
                 await member.remove_roles(*stale, reason="Remove obsolete Niko staff assignment")
+
+
+class SupportGuidePanel(discord.ui.LayoutView):
+    """Persistent public support directory with safe next steps for members."""
+
+    def __init__(self, channels: dict[str, int]):
+        super().__init__(timeout=None)
+        help_channel = f"<#{int(channels['help'])}>"
+        ticket_channel = f"<#{int(channels['tickets'])}>"
+        rules_channel = f"<#{int(channels['rules'])}>"
+        announcements_channel = f"<#{int(channels['announcements'])}>"
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    "# Need a hand?\n"
+                    "Find the right place to get help with Niko. Keep public posts free of private account details."
+                )
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    "**Community help**\n"
+                    f"For setup questions, troubleshooting, and general advice, open a post in {help_channel}. "
+                    "Include what you tried and any error text; never post passwords, tokens, or payment details.\n\n"
+                    "**Private or account-specific help**\n"
+                    f"Use {ticket_channel} for account access, billing, moderation appeals, safety concerns, "
+                    "or anything you should not share publicly. Staff will follow up in your private ticket.\n\n"
+                    "**Guides and updates**\n"
+                    f"Check {rules_channel} before posting and {announcements_channel} for official Niko updates."
+                )
+            ),
+            accent_colour=0xC8A882,
+        )
+        self.add_item(container)
 
 
 class SupportPingPanel(discord.ui.LayoutView):

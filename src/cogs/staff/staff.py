@@ -17,7 +17,7 @@ from discord.ext import commands
 
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from cogs.staff.support_server import (
-    CHANNEL_SPECS, ROLE_SPECS, SupportPingPanel, assign_support_roles,
+    CHANNEL_SPECS, ROLE_SPECS, SupportGuidePanel, SupportPingPanel, assign_support_roles,
     create_support_invite, get_support_ids, persist_support_ids,
     reconcile_structure, support_rules_text,
 )
@@ -630,6 +630,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     await post("staff_announcements", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content="# Staff announcements\nOfficial internal updates and operational notices are posted here."), accent_colour=0xC8A882)), channel_key="staff_announcements")
     welcome_content = f"# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand.\n\n[Join the support server]({invite_url})" if invite_url else "# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand."
     await post("welcome", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=welcome_content), accent_colour=0xC8A882)), channel_key="welcome")
+    await post("support_guide", SupportGuidePanel(channels), channel_key="support_guide")
     roles_message = await post("notification_roles", SupportPingPanel(), channel_key="roles")
     ticket_message = await post("tickets", TicketPanelView(guild.id, get_ticket_config(guild.id)))
     ticket_cfg = get_ticket_config(guild.id)
@@ -663,6 +664,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
         pool, guild.id, "forum-guidelines", forum.id, guideline_post.thread.id,
     )
 
+    bot.add_view(SupportGuidePanel(channels))
     bot.add_view(VoiceMasterInterface(), message_id=voice_message.id)
     bot.add_view(TicketPanelView(guild.id, get_ticket_config(guild.id)), message_id=ticket_message.id)
     bot.add_view(SupportPingPanel(), message_id=roles_message.id)

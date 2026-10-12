@@ -13,7 +13,7 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, _create_stage_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _sync_stage_category, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -24,7 +24,7 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(ROLE_SPECS["owner"][0], "Niko Owner")
         self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review"} <= CHANNEL_SPECS.keys())
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
-        self.assertEqual(CHANNEL_SPECS["event_voice"][2], "stage")
+        self.assertNotIn("event_voice", CHANNEL_SPECS)
         self.assertIn("giveaways", CHANNEL_SPECS)
         self.assertEqual(CHANNEL_SPECS["giveaways"][0], CHANNEL_SPECS["events"][0])
         self.assertTrue(all(name.istitle() or name == "Logs" for name in {spec[0] for spec in CHANNEL_SPECS.values()}))
@@ -40,47 +40,24 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(CHANNEL_SPECS["member_logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["message_logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "Logs")
-        self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] not in {"voice", "stage"}})
-        self.assertNotIn("event_voice", CHANNEL_TOPICS)
+        self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
         self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_voice", "scam_review")))
 
-    def test_poll_channel_is_read_only_for_members(self):
-        overwrite = _everyone_channel_overwrite("polls", staff_only=False)
-        self.assertFalse(overwrite.send_messages)
-        self.assertTrue(overwrite.view_channel)
-        self.assertTrue(overwrite.read_message_history)
-        self.assertTrue(_everyone_channel_overwrite("announcements", False).send_messages is False)
-
-    def test_stage_channel_speaking_is_limited_to_staff(self):
-        self.assertFalse(_everyone_channel_overwrite("event_voice", False).speak)
+    def test_configured_bot_channels_are_read_only_for_members(self):
+        read_only_channels = ("welcome", "roles", "support_guide", "tickets", "giveaways", "voice_panel")
+        for key in read_only_channels:
+            with self.subTest(channel=key):
+                overwrite = _everyone_channel_overwrite(key, staff_only=False)
+                self.assertFalse(overwrite.send_messages)
+                self.assertTrue(overwrite.view_channel)
+                self.assertTrue(overwrite.read_message_history)
+        self.assertFalse(_everyone_channel_overwrite("polls", False).send_messages)
+        self.assertFalse(_everyone_channel_overwrite("announcements", False).send_messages)
+        self.assertTrue(_everyone_channel_overwrite("general", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("general", False).speak)
-
-    def test_stage_creation_uses_no_disallowed_permission_or_topic_arguments(self):
-        async def check():
-            guild = SimpleNamespace(create_stage_channel=AsyncMock(return_value="created"))
-            result = await _create_stage_channel(guild, "Community Stage", SimpleNamespace(id=2))
-            self.assertEqual(result, "created")
-            kwargs = guild.create_stage_channel.await_args.kwargs
-            self.assertEqual(set(kwargs), {"category", "reason"})
-            self.assertNotIn("overwrites", kwargs)
-            self.assertNotIn("topic", kwargs)
-        asyncio.run(check())
-
-    def test_stage_reconciliation_never_edits_channel_overwrites(self):
-        async def check():
-            category = SimpleNamespace(id=10)
-            channel = SimpleNamespace(category_id=5, edit=AsyncMock())
-            await _sync_stage_category(channel, category)
-            channel.edit.assert_awaited_once_with(
-                category=category,
-                reason="Move Niko Stage into its configured category",
-            )
-            channel.category_id = category.id
-            channel.edit.reset_mock()
-            await _sync_stage_category(channel, category)
-            channel.edit.assert_not_awaited()
-        asyncio.run(check())
+        self.assertTrue(_everyone_channel_overwrite("voice_panel", False).connect)
+        self.assertFalse(_everyone_channel_overwrite("welcome", True).view_channel)
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):
         async def check():
@@ -137,6 +114,14 @@ class SupportServerStructureTests(unittest.TestCase):
             "moderation": 11, "automod": 12, "members": 13, "messages": 14, "channels": 15,
         })
 
+    def test_support_guide_panel_is_persistent_and_routes_members_to_help(self):
+        panel = SupportGuidePanel({"help": 101, "tickets": 102, "rules": 103, "announcements": 104})
+        self.assertIsNone(panel.timeout)
+        text = "\n".join(item.content for item in panel.walk_children() if isinstance(item, discord.ui.TextDisplay))
+        for channel_id in (101, 102, 103, 104):
+            self.assertIn(f"<#{channel_id}>", text)
+        self.assertIn("passwords, tokens, or payment details", text)
+
     def test_staff_rules_panel_is_a_multi_section_cv2_handbook(self):
         view = _staff_rules_panel()
         text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
@@ -157,6 +142,43 @@ class SupportServerStructureTests(unittest.TestCase):
                 self.assertTrue(command.hidden)
                 self.assertTrue(command.checks)
             await bot.close()
+        asyncio.run(check())
+
+    def test_support_update_reconciles_permissions_before_reposting_panels(self):
+        async def check():
+            operations = []
+            bot = SimpleNamespace()
+            author = SimpleNamespace(id=next(iter(staff_module.OWNER_IDS)))
+            guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD)
+            progress = SimpleNamespace(edit=AsyncMock())
+            async def send(*args, **kwargs):
+                operations.append("progress")
+                return progress
+            ctx = SimpleNamespace(author=author, bot=bot, guild=guild, send=send)
+            async def reconcile(target_guild):
+                operations.append("reconcile_permissions")
+                self.assertIs(target_guild, guild)
+                return ({"staff": 1}, {"support_guide": 2})
+            async def persist(*args): operations.append("persist")
+            async def invite(*args): operations.append("invite"); return "https://discord.gg/example"
+            async def configure(*args): operations.append("configure")
+            async def panels(*args, **kwargs):
+                operations.append("post_panels")
+                self.assertEqual(args[3]["support_guide"], 2)
+            async def roles(*args): operations.append("assign_roles")
+            with patch.object(staff_module, "_is_owner_user", return_value=True), \
+                 patch.object(staff_module, "reconcile_structure", new=reconcile), \
+                 patch.object(staff_module, "persist_support_ids", new=persist), \
+                 patch.object(staff_module, "create_support_invite", new=invite), \
+                 patch.object(staff_module, "_configure_support_systems", new=configure), \
+                 patch.object(staff_module, "_send_support_panels", new=panels), \
+                 patch.object(staff_module, "assign_support_roles", new=roles):
+                await StaffCog.support_update.callback(SimpleNamespace(bot=bot), ctx)
+            self.assertEqual(operations, [
+                "progress", "reconcile_permissions", "persist", "invite",
+                "configure", "post_panels", "assign_roles",
+            ])
+            progress.edit.assert_awaited_once()
         asyncio.run(check())
 
     def test_confirmed_rebuild_runs_full_orchestration_after_dm_and_preflight(self):
@@ -322,7 +344,7 @@ class SupportServerStructureTests(unittest.TestCase):
                     self.cfg = cfg
             class FakeVoiceMasterInterface:
                 pass
-            channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "welcome", "roles", "tickets", "voice_panel", "help"), 100)}
+            channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "welcome", "roles", "tickets", "support_guide", "voice_panel", "help", "announcements"), 100)}
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value=None), execute=AsyncMock())
             panel_calls = []
             class FlexibleGuild:
@@ -364,6 +386,12 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual(ticket_cfg.panel_channel_id, message.channel.id)
             self.assertEqual(ticket_cfg.panel_message_id, message.id)
             self.assertEqual(panel_calls, [(44, message.channel.id, message.id)])
+            panel_registry_calls = [
+                call for call in pool.execute.await_args_list
+                if call.args and "INSERT INTO support_server_panels" in call.args[0]
+            ]
+            self.assertTrue(any(call.args[2] == "support_guide" and call.args[3] == channels["support_guide"] for call in panel_registry_calls))
+            self.assertTrue(any(isinstance(call.args[0], SupportGuidePanel) for call in bot.add_view.call_args_list))
 
         asyncio.run(check())
 
