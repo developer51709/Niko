@@ -214,6 +214,16 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
     )
 
 
+async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, category: discord.CategoryChannel) -> None:
+    """Keep a designated channel before the other channels in its category."""
+    siblings = [item for item in category.channels if item.id != channel.id]
+    if not siblings:
+        return
+    first_position = min(item.position for item in siblings)
+    if channel.position >= first_position:
+        await channel.edit(position=first_position, reason="Keep staff guidelines at the top of the staff category")
+
+
 async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False) -> tuple[dict, dict]:
     """Create/repair canonical roles, channels, and category-based permissions."""
     if guild.id != SUPPORT_GUILD:
@@ -321,6 +331,10 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await channel.edit(**edit_kwargs, reason="Reconcile Niko support channel permissions")
             await _pace()
         channels[key] = channel.id
+
+    staff_rules_channel = guild.get_channel(channels["staff_rules"])
+    if staff_rules_channel is not None:
+        await _move_channel_to_category_top(staff_rules_channel, categories["STAFF"])
 
     for category_name in LEGACY_CATEGORY_NAMES:
         legacy_category = discord.utils.get(guild.categories, name=category_name)

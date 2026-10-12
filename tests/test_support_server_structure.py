@@ -13,7 +13,7 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, _everyone_channel_overwrite, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -45,6 +45,18 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_stage_channel_speaking_is_limited_to_staff(self):
         self.assertFalse(_everyone_channel_overwrite("event_voice", False).speak)
         self.assertTrue(_everyone_channel_overwrite("general", False).speak)
+
+    def test_staff_rules_channel_is_moved_to_top_of_category(self):
+        async def check():
+            channel = SimpleNamespace(id=1, position=7, edit=AsyncMock())
+            siblings = [SimpleNamespace(id=2, position=3), SimpleNamespace(id=3, position=5)]
+            category = SimpleNamespace(channels=[*siblings, channel])
+            await _move_channel_to_category_top(channel, category)
+            channel.edit.assert_awaited_once_with(
+                position=3,
+                reason="Keep staff guidelines at the top of the staff category",
+            )
+        asyncio.run(check())
 
     def test_configure_support_systems_saves_distinct_log_channel_ids(self):
         async def check():
