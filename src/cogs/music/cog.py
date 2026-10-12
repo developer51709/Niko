@@ -238,6 +238,8 @@ class MusicSystem(commands.Cog):
                 # Track selected for playback. This remains available while
                 # Wavelink is processing a node handoff or event update.
                 "current_track": None,
+                # Track/node pair already retried after a Lavalink load failure.
+                "failed_track_retry": None,
                 # Autoplay "ghost queue": pre-resolved Last.fm suggestions
                 # that play only when the manual queue runs dry. It never
                 # feeds tracks into player.queue, so manual queue changes
@@ -688,9 +690,42 @@ class MusicSystem(commands.Cog):
         guild_id = player.guild.id
         state    = self._state(guild_id)
 
+        # A TrackEnd event for the track we just replaced can arrive after a
+        # newer TrackStart (notably during Lavalink node handoff). It must not
+        # clear the newer track's state, consume its queue, or idle its panel.
+        active_track = getattr(player, "current", None) or state.get("current_track")
+        if payload.track and active_track and payload.track != active_track:
+            log.debug(
+                "Music",
+                f"Ignoring stale TrackEnd for {payload.track.title!r}; "
+                f"{active_track.title!r} is active.",
+            )
+            return
+
+        reason = str(getattr(payload, "reason", "") or "")
+        if reason == "loadFailed" and payload.track:
+            track_key = getattr(payload.track, "encoded", None) or (
+                getattr(payload.track, "author", ""),
+                getattr(payload.track, "title", ""),
+            )
+            retry = state.get("failed_track_retry")
+            current_node = getattr(getattr(player, "node", None), "identifier", None)
+            if not retry or retry[0] != track_key:
+                state["failed_track_retry"] = (track_key, current_node)
+                log.warning(
+                    "Music",
+                    f"Lavalink failed to load {payload.track.title!r} on "
+                    f"{current_node or 'unknown'}; trying another node.",
+                )
+                if await self._failover_player(player, payload.track):
+                    await self._update_np_message(player.guild)
+                    return
+
         # Push finished track to history and remove it from the live panel.
         if payload.track:
             state["history"].append(payload.track)
+            state["failed_track_retry"] = None
+
             state["last_track"] = payload.track
             if state.get("current_track") is payload.track or state.get("current_track") == payload.track:
                 state["current_track"] = None
@@ -704,7 +739,6 @@ class MusicSystem(commands.Cog):
             await self._update_np_message(player.guild)
             return
 
-        reason  = str(getattr(payload, "reason", "") or "")
         natural = reason in ("finished", "replaced")
 
         # Queue has more tracks — manual queue always wins over autoplay.
