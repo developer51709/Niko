@@ -12,8 +12,9 @@ from discord.ext import commands
 sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
-from cogs.staff.staff import StaffCog
+from cogs.staff.staff import StaffCog, _save_support_panel_record, _save_voice_master_settings
 from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, create_support_invite, get_support_invite, persist_support_ids
+from cogs.automod import mrbeast_scam
 from database import SQLitePool
 
 
@@ -135,6 +136,51 @@ class SupportServerStructureTests(unittest.TestCase):
             )
             self.assertEqual(json.loads(row["role_ids"]), {"staff": 13})
             self.assertEqual(json.loads(row["channel_ids"]), {"welcome": 22, "rules": 23})
+            await connection.close()
+
+        asyncio.run(check())
+
+    def test_support_setup_upserts_all_existing_sqlite_rows(self):
+        async def check():
+            connection = await aiosqlite.connect(":memory:")
+            await connection.executescript("""
+                CREATE TABLE support_server_config (
+                    guild_id INTEGER PRIMARY KEY, role_ids TEXT, channel_ids TEXT,
+                    invite_url TEXT, updated_at TEXT
+                );
+                CREATE TABLE support_server_panels (
+                    guild_id INTEGER, panel_key TEXT, channel_id INTEGER,
+                    message_id INTEGER, updated_at TEXT, PRIMARY KEY (guild_id, panel_key)
+                );
+                CREATE TABLE voicemaster_settings (
+                    guild_id INTEGER PRIMARY KEY, join_channel_id INTEGER, category_id INTEGER,
+                    default_name TEXT, default_limit INTEGER, default_bitrate INTEGER
+                );
+            """)
+            await connection.commit()
+            pool = SQLitePool(connection)
+            guild_id = staff_module.SUPPORT_GUILD
+            bot = SimpleNamespace(cxn=pool)
+            guild = SimpleNamespace(id=guild_id, get_channel=lambda _: SimpleNamespace(id=31, create_invite=AsyncMock(return_value=SimpleNamespace(url="https://discord.gg/sqlite"))))
+
+            await persist_support_ids(bot, guild, {"staff": 12}, {"welcome": 21})
+            invite = await create_support_invite(bot, guild, {"welcome": 31, "general": 32})
+            original_review_channel = mrbeast_scam.SCAM_REVIEW_CHANNEL
+            await mrbeast_scam.set_review_channel(bot, 41)
+            mrbeast_scam.SCAM_REVIEW_CHANNEL = original_review_channel
+            await _save_support_panel_record(pool, guild_id, "welcome", 31, 51)
+            await _save_support_panel_record(pool, guild_id, "welcome", 32, 52)
+            await _save_voice_master_settings(pool, guild_id, 61, 62)
+            await _save_voice_master_settings(pool, guild_id, 63, 64)
+
+            config = await pool.fetchrow("SELECT role_ids, channel_ids, invite_url FROM support_server_config WHERE guild_id = $1", guild_id)
+            panel = await pool.fetchrow("SELECT channel_id, message_id FROM support_server_panels WHERE guild_id = $1 AND panel_key = $2", guild_id, "welcome")
+            voice = await pool.fetchrow("SELECT join_channel_id, category_id FROM voicemaster_settings WHERE guild_id = $1", guild_id)
+            self.assertEqual(json.loads(config["role_ids"]), {"staff": 12})
+            self.assertEqual(json.loads(config["channel_ids"]), {"welcome": 21, "scam_review": 41})
+            self.assertEqual(config["invite_url"], invite)
+            self.assertEqual((panel["channel_id"], panel["message_id"]), (32, 52))
+            self.assertEqual((voice["join_channel_id"], voice["category_id"]), (63, 64))
             await connection.close()
 
         asyncio.run(check())

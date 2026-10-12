@@ -490,6 +490,25 @@ async def bot_member_preflight(guild):
         raise RuntimeError("For the destructive setup, give Niko Administrator temporarily; then rerun the confirmed command. This prevents partial loss from inaccessible channels/roles.")
 
 
+async def _save_support_panel_record(pool, guild_id: int, panel_key: str, channel_id: int, message_id: int) -> None:
+    """Upsert a panel registry row using adapter-compatible conflict arguments."""
+    await pool.execute(
+        "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) "
+        "VALUES ($1, $2, $3, $4, datetime('now')) "
+        "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $5, message_id = $6, updated_at = datetime('now')",
+        guild_id, panel_key, channel_id, message_id, channel_id, message_id,
+    )
+
+
+async def _save_voice_master_settings(pool, guild_id: int, channel_id: int, category_id: int) -> None:
+    """Upsert the support guild's voice-master channel configuration."""
+    await pool.execute(
+        "INSERT INTO voicemaster_settings (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate) "
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guild_id) DO UPDATE SET join_channel_id = $7, category_id = $8",
+        guild_id, channel_id, category_id, "{user}'s Channel", 0, 64000, channel_id, category_id,
+    )
+
+
 async def _configure_support_systems(bot, guild, roles, channels):
     from utils.onboarding.utils import get_config, update_config
     from utils.tickets.utils import get_ticket_config, async_update_ticket_config
@@ -539,12 +558,11 @@ async def _configure_support_systems(bot, guild, roles, channels):
     from cogs.automod import mrbeast_scam
     await mrbeast_scam.set_review_channel(bot, int(channels["scam_review"]))
 
-    await bot.cxn.execute(
-        "INSERT INTO voicemaster_settings (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate) "
-        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guild_id) DO UPDATE SET join_channel_id = $7, category_id = $8",
-        guild.id, int(channels["voice_join"]), guild.get_channel(int(channels["voice_join"])).category_id,
-        "{user}'s Channel", 0, 64000, int(channels["voice_join"]),
-        guild.get_channel(int(channels["voice_join"])).category_id,
+    join_channel = guild.get_channel(int(channels["voice_join"]))
+    if join_channel is None:
+        raise RuntimeError("The configured voice-master join channel disappeared before its settings were saved.")
+    await _save_voice_master_settings(
+        bot.cxn, guild.id, join_channel.id, join_channel.category_id,
     )
     voice_cog = bot.get_cog("VoiceMaster")
     if voice_cog:
@@ -570,11 +588,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
         message = await channel.send(view=view)
-        await pool.execute(
-            "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, $2, $3, $4, datetime('now')) "
-            "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $5, message_id = $6, updated_at = datetime('now')",
-            guild.id, key, channel.id, message.id, channel.id, message.id,
-        )
+        await _save_support_panel_record(pool, guild.id, key, channel.id, message.id)
         if unique_table:
             old_unique = await pool.fetchrow(f"SELECT message_id FROM {unique_table} WHERE channel_id = $1 AND guild_id = $2", channel.id, guild.id)
             if old_unique:
@@ -627,10 +641,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     await guideline_post.message.pin(reason="Keep support forum guidelines at the top")
     await _support_api_pause()
     await guideline_post.thread.edit(locked=True, archived=True, reason="Lock the read-only forum guidelines thread")
-    await pool.execute(
-        "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, 'forum-guidelines', $2, $3, datetime('now')) "
-        "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $2, message_id = $3, updated_at = datetime('now')",
-        guild.id, forum.id, guideline_post.thread.id,
+    await _save_support_panel_record(
+        pool, guild.id, "forum-guidelines", forum.id, guideline_post.thread.id,
     )
 
     bot.add_view(VoiceMasterInterface(), message_id=voice_message.id)

@@ -146,6 +146,8 @@ PRIMARY_KEYS: dict = {
     "youtube_history": ("channel_id", "video_id"),
     "voicemaster_settings": "guild_id",
     "voicemaster_channels": "channel_id",
+    "support_server_config": "guild_id",
+    "support_server_panels": ("guild_id", "panel_key"),
     "onboarding": "guild_id",
     "logging_config": "guild_id",
     "logging_webhooks": ("guild_id", "channel_id"),

@@ -61,8 +61,9 @@ async def set_review_channel(bot, channel_id: int) -> None:
     await bot.cxn.execute(
         "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, invite_url, updated_at) "
         "VALUES ($1, $2, $3, $4, datetime('now')) "
-        "ON CONFLICT (guild_id) DO UPDATE SET channel_ids = $3, updated_at = datetime('now')",
+        "ON CONFLICT (guild_id) DO UPDATE SET channel_ids = $5, updated_at = datetime('now')",
         SCAM_REVIEW_GUILD, role_ids, json.dumps(channel_map), current.get("invite_url") if current else None,
+        json.dumps(channel_map),
     )
     SCAM_REVIEW_CHANNEL = channel_id
 
