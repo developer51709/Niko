@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "staff" | "appeal" | "application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
 export type DashSection = "overview" | "leveling" | "moderation" | "server" | "applications" | "ai" | "customization";
 export type DashboardView = "overview" | "servers" | "guild";
 
@@ -13,6 +13,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/docs") return "docs";
   if (path.startsWith("/docs/")) return "docs-detail";
   if (path === "/dashboard/staff" || path === "/dashboard/staff/") return "staff";
+  if (path === "/team/apply" || path.startsWith("/team/apply/")) return "team-application";
   if (path.startsWith("/apply/")) return "application";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/team") return "team";

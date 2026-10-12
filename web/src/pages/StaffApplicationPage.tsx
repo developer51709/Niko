@@ -41,7 +41,7 @@ export function StaffApplicationPage() {
       if (active) setError(reason instanceof Error ? reason.message : "The application could not be loaded.");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [guildId, applicationId]);
+  }, [guildId, applicationId, config?.support_server_url]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

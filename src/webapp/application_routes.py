@@ -535,7 +535,6 @@ def api_submit_staff_application(guild_id, application_id):
         if question.get("required", True) and missing:
             return jsonify({"error": f"Please answer: {question.get('prompt', 'each required question')}"}), 400
         answers.append({"question_id": question_id, "prompt": question.get("prompt", ""), "answer": answer})
-
     receipt_id = uuid.uuid4().hex
     try:
         run_on_bot_loop(_pool().execute(

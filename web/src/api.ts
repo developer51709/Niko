@@ -18,6 +18,9 @@ import type {
   BlacklistAppeal,
   BlacklistAppealStatus,
   BackupInstance,
+  TeamRecruitmentOpening,
+  TeamRecruitmentSettings,
+  TeamRecruitmentSubmission,
 } from "./types";
 
 export class ApiError extends Error {
@@ -54,6 +57,14 @@ export const resolveDiscordText = (text: string, guildId?: string) => api<{
   body: JSON.stringify({ text, ...(guildId ? { guild_id: guildId } : {}) }),
 });
 export const getTeam = () => api<StaffMember[]>("/api/team");
+export const getTeamRecruitmentOpenings = () => api<{ openings: TeamRecruitmentOpening[] }>("/api/team-recruitment");
+export const getTeamRecruitmentOpening = (openingId: string) => api<TeamRecruitmentOpening>(`/api/team-recruitment/${encodeURIComponent(openingId)}`);
+export const submitTeamRecruitmentApplication = (openingId: string, answers: Record<string, string | string[]>, csrfToken?: string) => api<{ ok: boolean; message: string }>(`/api/team-recruitment/${encodeURIComponent(openingId)}/submit`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ answers }) });
+export const getTeamRecruitmentSettings = () => api<TeamRecruitmentSettings>("/api/staff/team-recruitment");
+export const createTeamRecruitmentOpening = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean; id: string }>("/api/staff/team-recruitment", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const setTeamRecruitmentOpeningStatus = (openingId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
+export const getTeamRecruitmentSubmissions = (openingId: string) => api<{ opening: TeamRecruitmentOpening; submissions: TeamRecruitmentSubmission[] }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions`);
+export const reviewTeamRecruitmentSubmission = (openingId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied" }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions/${encodeURIComponent(userId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
 export const getStaffBackups = () => api<{ backups: BackupInstance[] }>("/api/staff/backups");

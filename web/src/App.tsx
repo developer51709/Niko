@@ -14,6 +14,7 @@ import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
 import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
+import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
 import { pageFromPath, type Page } from "./router";
 
@@ -34,6 +35,7 @@ export function App() {
   else if (page === "staff") pageContent = <StaffDashboardPage />;
   else if (page === "appeal") pageContent = <BlacklistAppealPage />;
   else if (page === "application") pageContent = <StaffApplicationPage />;
+  else if (page === "team-application") pageContent = <TeamStaffApplicationPage />;
   else if (page === "dashboard") pageContent = <DashboardPage />;
   else if (page === "team") pageContent = <TeamPage />;
   else if (page === "team-member") pageContent = <TeamMemberPage id={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;

@@ -16,7 +16,8 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from config.ids import SUPPORT_GUILD, SUPPORTER_ROLE
+from config.ids import SUPPORT_GUILD
+from cogs.staff.support_server import support_role, get_support_ids
 from utils import logging
 from utils.donations import add_donor, get_total_donated, is_supporter
 from .oxapay import OxaPayClient
@@ -196,15 +197,13 @@ class DonationCog(commands.Cog, name="DonationCog"):
     # ── Role helpers ──────────────────────────────
 
     async def _grant_supporter_role(self, user_id: int):
-        """Grant SUPPORTER_ROLE in the support server, silently if user isn't there."""
-        if not SUPPORTER_ROLE:
-            return
+        """Grant the database-configured supporter role in the support server."""
         support_guild = self.bot.get_guild(SUPPORT_GUILD)
         if not support_guild:
             return
         try:
             member = support_guild.get_member(user_id) or await support_guild.fetch_member(user_id)
-            role = support_guild.get_role(SUPPORTER_ROLE)
+            role = await support_role(self.bot, "supporter")
             if role and role not in member.roles:
                 await member.add_roles(role, reason="Crypto donation confirmed via OxaPay")
                 logging.success("Donations", f"Granted supporter role to {member} ({user_id})")
@@ -389,11 +388,11 @@ class DonationCog(commands.Cog, name="DonationCog"):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Auto-grant supporter role when a known donor joins the support server."""
-        if member.guild.id != SUPPORT_GUILD or not SUPPORTER_ROLE:
+        if member.guild.id != SUPPORT_GUILD:
             return
         try:
             if await is_supporter(self.bot, member.id):
-                role = member.guild.get_role(SUPPORTER_ROLE)
+                role = await support_role(self.bot, "supporter")
                 if role and role not in member.roles:
                     await member.add_roles(
                         role, reason="Auto-granted: existing donor joining support server"

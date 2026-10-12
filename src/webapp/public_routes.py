@@ -9,6 +9,14 @@ globals().update({
     if not name.startswith("__")
 })
 
+
+async def _current_support_invite():
+    """Resolve the currently valid invite from the support configuration table."""
+    if _discord_bot is None or getattr(_discord_bot, "cxn", None) is None:
+        return None
+    from cogs.staff.support_server import get_support_invite
+    return await get_support_invite(_discord_bot)
+
 @app.route("/api/commands")
 def api_commands():
     """Public endpoint — returns public bot commands from the startup registry."""
@@ -64,7 +72,7 @@ def api_public_config():
             bot_avatar_url = str(_discord_bot.user.display_avatar.url)
         except Exception:
             bot_avatar_url = None
-    return jsonify({
+    config = {
         "application_id": DISCORD_CLIENT_ID,
         "bot_avatar_url": bot_avatar_url,
         "invite_url": (
@@ -72,12 +80,16 @@ def api_public_config():
             f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"
         ),
         "oauth_available": oauth_enabled(),
-        "support_server_url": (
-            getattr(bot_links, "SUPPORT_SERVER", "").strip() or None
-            if isinstance(getattr(bot_links, "SUPPORT_SERVER", ""), str)
-            else None
-        ),
-    })
+    }
+    if _discord_bot is not None and getattr(_discord_bot, "loop", None) is not None and _discord_bot.loop.is_running():
+        try:
+            config["support_server_url"] = run_on_bot_loop(_current_support_invite())
+        except Exception as exc:
+            logging.warning("PublicConfig", f"Could not load current support invite: {exc}")
+            config["support_server_url"] = None
+    else:
+        config["support_server_url"] = None
+    return jsonify(config)
 
 @app.route("/api/botstats")
 def api_botstats():

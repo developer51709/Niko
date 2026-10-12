@@ -282,19 +282,20 @@ export type AuthStatus = {
   blacklist_reason?: string | null;
 };
 
-export type ApplicationQuestionType = "short_text" | "paragraph" | "single_choice" | "multi_choice" | "yes_no" | "date";
-export type ApplicationQuestion = { id: string; prompt: string; required: boolean; type?: ApplicationQuestionType; options?: string[] };
-export type ApplicationAnswer = { question_id: string; prompt: string; answer: string | string[] };
+export type StaffApplicationQuestionType = "short_text" | "paragraph" | "single_choice" | "multi_choice" | "yes_no" | "date";
+export type StaffApplicationQuestion = { id: string; prompt: string; required: boolean; type?: StaffApplicationQuestionType; options?: string[] };
+export type StaffApplicationAnswer = { question_id: string; prompt: string; answer: string | string[] };
 export type StaffApplication = {
   id: string;
   guild_id: string;
   role_id: string;
   title: string;
   description: string;
-  questions: ApplicationQuestion[];
+  questions: StaffApplicationQuestion[];
   eligible_role_ids: string[];
   status: "open" | "closed";
   submission_count: number;
+  role_name?: string | null;
   created_at?: string;
   link: string;
 };
@@ -303,12 +304,39 @@ export type StaffApplicationSubmission = {
   display_name: string;
   username?: string | null;
   avatar_url?: string | null;
-  answers: ApplicationAnswer[];
+  answers: StaffApplicationAnswer[];
   submitted_at?: string;
   review_status: "pending" | "approved" | "denied";
   reviewed_by?: string | null;
   reviewed_at?: string | null;
 };
+export type TeamRecruitmentQuestionType = "short_text" | "paragraph" | "single_choice" | "multi_choice" | "yes_no" | "date";
+export type TeamRecruitmentQuestion = { id: string; prompt: string; required: boolean; type?: TeamRecruitmentQuestionType; options?: string[] };
+export type TeamRecruitmentAnswer = { question_id: string; prompt: string; answer: string | string[] };
+export type TeamRecruitmentOpening = {
+  id: string;
+  role_id: string;
+  title: string;
+  description: string;
+  questions: TeamRecruitmentQuestion[];
+  status: "open" | "closed";
+  submission_count: number;
+  role_name?: string | null;
+  created_at?: string;
+  link: string;
+  already_submitted?: boolean;
+  eligible?: boolean;
+};
+export type TeamRecruitmentSubmission = {
+  user_id: string;
+  display_name: string;
+  answers: TeamRecruitmentAnswer[];
+  submitted_at?: string;
+  review_status: "pending" | "approved" | "denied";
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+};
+export type TeamRecruitmentSettings = { openings: TeamRecruitmentOpening[] };
 export type PublicStaffApplication = StaffApplication & {
   role_name?: string | null;
   guild_name?: string | null;

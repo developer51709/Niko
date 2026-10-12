@@ -14,6 +14,7 @@ from . import (  # noqa: E402,F401
     transcript_routes,
     card_routes,
     application_routes,
+    team_recruitment_routes,
     site_routes,
     appeal_routes,
     backup_routes,

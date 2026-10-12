@@ -10,13 +10,8 @@ from config.emojis import get_emoji
 class MessagesMixin:
     """clear and purge commands."""
 
-    @commands.hybrid_command(description="Clear messages in this channel",
-                             help="{ 'en': 'Clear messages in this channel.', 'de': 'Nachrichten löschen.', 'es': 'Borra mensajes en este canal.' }")
-    @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx, amount=None):
-        if not amount:
-            return await ctx.send(msg(ctx, "no_amount"))
-        amount = int(amount)
+    async def _purge_messages(self, ctx, member: discord.Member = None, amount: int = 100):
+        amount = max(1, min(int(amount), 1000))
         if ctx.interaction is not None:
             await ctx.defer(ephemeral=True)
         else:
@@ -24,36 +19,40 @@ class MessagesMixin:
                 await ctx.message.delete()
             except (discord.HTTPException, AttributeError):
                 pass
-        deleted = await _chunked_purge(ctx.channel, amount)
-        await ctx.send(f"{get_emoji('broom')} {msg(ctx, 'cleared', count=len(deleted))}", delete_after=5)
-        body = (
-            f"**Channel:** {ctx.channel.mention}\n"
-            f"**Messages Deleted:** {len(deleted)}\n"
-            f"**Moderator:** {ctx.author.mention}"
-        )
-        await self.logger().log_event(ctx.guild, "moderation", "Clear", body, action_key="Clear")
 
-    @commands.hybrid_command(description="Purge messages from a specific user",
-                             help="{ 'en': 'Purge messages from a specific user.', 'de': 'Nachrichten eines Nutzers löschen.', 'es': 'Elimina mensajes de un usuario específico.' }")
-    @commands.has_permissions(manage_messages=True)
-    async def purge(self, ctx, member: discord.Member = None, amount: int = 100):
-        if not member:
-            return await ctx.send(msg(ctx, "no_channel"))
-        def check(m):
-            return m.author.id == member.id
-        if ctx.interaction is not None:
-            await ctx.defer(ephemeral=True)
-        else:
-            try:
-                await ctx.message.delete()
-            except (discord.HTTPException, AttributeError):
-                pass
+        check = (lambda message: message.author.id == member.id) if member else None
         deleted = await _chunked_purge(ctx.channel, amount, check=check)
-        await ctx.send(f"{get_emoji('broom')} {msg(ctx, 'purged', count=len(deleted), member=member)}", delete_after=5)
-        body = (
-            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Channel:** {ctx.channel.mention}\n"
-            f"**Messages Deleted:** {len(deleted)}\n"
-            f"**Moderator:** {ctx.author.mention}"
-        )
-        await self.logger().log_event(ctx.guild, "messages", "Purge", body, target_id=member.id, action_key="Purge")
+        if member:
+            message = msg(ctx, "purged", count=len(deleted), member=member)
+            category, action = "messages", "Purge"
+            body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Channel:** {ctx.channel.mention}\n"
+                f"**Messages Deleted:** {len(deleted)}\n"
+                f"**Moderator:** {ctx.author.mention}"
+            )
+            target_id = member.id
+        else:
+            message = msg(ctx, "cleared", count=len(deleted))
+            category, action = "moderation", "Clear"
+            body = (
+                f"**Channel:** {ctx.channel.mention}\n"
+                f"**Messages Deleted:** {len(deleted)}\n"
+                f"**Moderator:** {ctx.author.mention}"
+            )
+            target_id = None
+
+        await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5)
+        await self.logger().log_event(ctx.guild, category, action, body, target_id=target_id, action_key=action)
+
+    @commands.hybrid_command(name="purge", description="Clear messages, optionally from one member",
+                             help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
+    @commands.has_permissions(manage_messages=True)
+    async def purge(self, ctx, amount: int = 100, member: discord.Member = None):
+        await self._purge_messages(ctx, member, amount)
+
+    @commands.hybrid_command(name="clear", description="Clear messages, optionally from one member",
+                             help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
+    @commands.has_permissions(manage_messages=True)
+    async def clear(self, ctx, amount: int = 100, member: discord.Member = None):
+        await self._purge_messages(ctx, member, amount)

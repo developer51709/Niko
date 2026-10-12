@@ -13,7 +13,8 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
-from config.ids import DEVELOPER_IDS, SUPPORT_GUILD, BUGBOUNTY_ROLE, SUPPORTER_ROLE, PARTNER_ROLE
+from config.ids import DEVELOPER_IDS, SUPPORT_GUILD
+from cogs.staff.support_server import get_support_ids
 from utils.donations import is_supporter
 
 MESSAGES = {
@@ -552,12 +553,13 @@ async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
             if member is None:
                 member = await support_guild.fetch_member(user_id)
             role_ids = {r.id for r in member.roles}
-            if BUGBOUNTY_ROLE and BUGBOUNTY_ROLE in role_ids:
+            configured_roles = (await get_support_ids(bot))["roles"]
+            if configured_roles.get("bugbounty") and int(configured_roles["bugbounty"]) in role_ids:
                 badges.append(get_emoji("badge_bugbounty"))
             supporter_emoji = get_emoji("badge_supporter")
-            if SUPPORTER_ROLE and SUPPORTER_ROLE in role_ids and supporter_emoji not in badges:
+            if configured_roles.get("supporter") and int(configured_roles["supporter"]) in role_ids and supporter_emoji not in badges:
                 badges.append(supporter_emoji)
-            if PARTNER_ROLE and PARTNER_ROLE in role_ids:
+            if configured_roles.get("partner") and int(configured_roles["partner"]) in role_ids:
                 badges.append(get_emoji("badge_partner"))
         except (discord.NotFound, discord.HTTPException):
             pass

@@ -9,11 +9,18 @@ from __future__ import annotations
 
 import time
 import io
+import asyncio
+
 
 import discord
 from discord.ext import commands
 
-from config.ids import OWNER_IDS
+from config.ids import OWNER_IDS, SUPPORT_GUILD
+from cogs.staff.support_server import (
+    CHANNEL_SPECS, ROLE_SPECS, SupportPingPanel, assign_support_roles,
+    create_support_invite, get_support_ids, persist_support_ids,
+    reconcile_structure, support_rules_text,
+)
 from cogs.staff.owner import OwnerCog, _StatusPanelCog
 from cogs.staff.development import Development
 from utils.error_reports import get_error_report
@@ -34,7 +41,7 @@ OWNER_ONLY_COMMANDS = {
     "broadcast", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
     "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "dev01",
     "devexec", "devsay",
-    "sendpanel",
+    "sendpanel", "supportsetup", "supportupdate",
 }
 
 HEAD_ADMIN_COMMANDS = {
@@ -64,13 +71,23 @@ async def set_staff_role(bot, user_id: int, role: str | None, assigned_by: int) 
     pool = getattr(bot, "cxn", None)
     if pool is None:
         raise RuntimeError("The staff database is not ready yet.")
+    if role is not None and role not in STAFF_ROLES:
+        raise ValueError(f"Unknown Niko staff role: {role}")
     if role is None:
         await pool.execute("DELETE FROM staff_members WHERE user_id = $1", int(user_id))
+        support_guild = bot.get_guild(SUPPORT_GUILD)
+        member = support_guild.get_member(int(user_id)) if support_guild else None
+        if member:
+            await sync_member_staff_roles(bot, member, None)
         return
     await pool.execute(
         "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
         int(user_id), role, int(assigned_by), int(time.time()),
     )
+    support_guild = bot.get_guild(SUPPORT_GUILD)
+    member = support_guild.get_member(int(user_id)) if support_guild else None
+    if member:
+        await sync_member_staff_roles(bot, member, role)
 
 
 async def is_staff_member(ctx: commands.Context) -> bool:
@@ -83,6 +100,32 @@ async def _role_for(ctx: commands.Context) -> str | None:
     if _is_owner_user(ctx.author, ctx.bot):
         return "owner"
     return await get_staff_role(ctx.bot, ctx.author.id)
+
+
+async def sync_member_staff_roles(bot, member: discord.Member, staff_key: str | None) -> None:
+    if member.guild.id != SUPPORT_GUILD:
+        return
+    roles = (await get_support_ids(bot))["roles"]
+
+    to_add, to_remove = [], []
+    shared_id = roles.get("staff")
+    shared = member.guild.get_role(int(shared_id)) if shared_id else None
+    valid_staff_key = staff_key if staff_key in ROLE_ORDER else None
+    if shared and valid_staff_key and shared not in member.roles:
+        to_add.append(shared)
+    elif shared and not valid_staff_key and shared in member.roles:
+        to_remove.append(shared)
+    for key in ROLE_ORDER:
+        role_id = roles.get(key)
+        role = member.guild.get_role(int(role_id)) if role_id else None
+        if role and key == valid_staff_key and role not in member.roles:
+            to_add.append(role)
+        elif role and key != valid_staff_key and role in member.roles:
+            to_remove.append(role)
+    if to_remove:
+        await member.remove_roles(*to_remove, reason="Niko staff assignment changed")
+    if to_add:
+        await member.add_roles(*to_add, reason="Niko staff assignment changed")
 
 
 class StaffRoleSelect(discord.ui.Select):
@@ -232,6 +275,107 @@ class StaffCog(commands.Cog):
             return await ctx.send("This command is restricted to official Niko staff.")
         await ctx.send(view=build_staff_help(self.bot, ctx, "all"))
 
+    @staff.command(name="supportsetup", help="Rebuild the official support server after an explicit confirmation.", hidden=True)
+    @commands.guild_only()
+    async def support_setup(self, ctx: commands.Context):
+        if not _is_owner_user(ctx.author, ctx.bot):
+            return await ctx.send("Only the bot owner can rebuild the support server.")
+        if ctx.guild.id != SUPPORT_GUILD:
+            return await ctx.send("This command only works inside the configured support guild.")
+        decision = {"confirmed": False}
+        confirmation = discord.ui.LayoutView(timeout=120)
+        confirmation_text = discord.ui.TextDisplay(content="## ⚠️ Rebuild the official support server? — This deletes all channels and manageable custom roles, then recreates the configured community. Managed roles and Niko’s own role are preserved. This cannot be undone.")
+        confirm_button = discord.ui.Button(label="Rebuild server", style=discord.ButtonStyle.danger)
+        cancel_button = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.secondary)
+
+        def set_confirmation_text(content: str) -> None:
+            for component in confirmation.walk_children():
+                if isinstance(component, discord.ui.TextDisplay):
+                    component.content = content
+                    return
+
+        async def choose(interaction: discord.Interaction, confirmed: bool):
+            if interaction.user.id != ctx.author.id:
+                return await interaction.response.send_message("Only the command author can confirm this rebuild.", ephemeral=True)
+            decision["confirmed"] = confirmed
+            for item in (confirm_button, cancel_button):
+                item.disabled = True
+            set_confirmation_text(
+                "Confirmed. Rebuilding the support server… this may take a few minutes."
+                if confirmed else "Support-server rebuild cancelled."
+            )
+            await interaction.response.edit_message(view=confirmation)
+            confirmation.stop()
+
+        confirm_button.callback = lambda interaction: choose(interaction, True)
+        cancel_button.callback = lambda interaction: choose(interaction, False)
+        confirmation.add_item(discord.ui.Container(
+            confirmation_text,
+            discord.ui.ActionRow(confirm_button, cancel_button),
+            accent_colour=discord.Colour.red(),
+        ))
+        response = await ctx.send(view=confirmation)
+        if await confirmation.wait() or not decision["confirmed"]:
+            for item in (confirm_button, cancel_button):
+                item.disabled = True
+            set_confirmation_text(
+                "Support-server rebuild cancelled (confirmation timed out)."
+                if not decision["confirmed"] else "Support-server rebuild cancelled."
+            )
+            await response.edit(view=confirmation)
+            return
+        # The invoking channel is about to be deleted during rebuild, so secure
+        # a durable progress channel before making any destructive API calls.
+        try:
+            progress = await ctx.author.send("Support-server rebuild confirmed; setup is in progress…")
+        except discord.Forbidden:
+            set_confirmation_text(
+                "Setup was not started: I could not DM you progress updates. "
+                "Enable DMs from this server, then run `.staff supportsetup` again."
+            )
+            await response.edit(view=confirmation)
+            return
+        try:
+            await bot_member_preflight(ctx.guild)
+            roles, channels = await reconcile_structure(ctx.guild, destructive=True)
+            await persist_support_ids(self.bot, ctx.guild, roles, channels)
+            invite_url = await create_support_invite(self.bot, ctx.guild, channels)
+            await _configure_support_systems(self.bot, ctx.guild, roles, channels)
+            await _send_support_panels(self.bot, ctx.guild, roles, channels, invite_url=invite_url)
+            await assign_support_roles(self.bot, ctx.guild, roles)
+        except Exception as exc:
+            report = f"Support setup stopped: `{type(exc).__name__}: {exc}`. Review permissions/role hierarchy, then run `.staff supportupdate` to finish safely."
+            try:
+                await progress.edit(content=report)
+            except discord.HTTPException:
+                await ctx.author.send(report)
+            return
+        report = f"✅ Support server rebuilt: **{len(roles)} roles**, **{len(channels)} channels**, panels posted and current members synchronized."
+        try:
+            await progress.edit(content=report)
+        except discord.HTTPException:
+            await ctx.author.send(report)
+
+    @staff.command(name="supportupdate", help="Repair the support server structure and refresh its panels.", hidden=True)
+    @commands.guild_only()
+    async def support_update(self, ctx: commands.Context):
+        if not _is_owner_user(ctx.author, ctx.bot):
+            return await ctx.send("Only the bot owner can update the support server.")
+        if ctx.guild.id != SUPPORT_GUILD:
+            return await ctx.send("This command only works inside the configured support guild.")
+        progress = await ctx.send("Checking and reconciling the support server…")
+        try:
+            roles, channels = await reconcile_structure(ctx.guild)
+            await persist_support_ids(self.bot, ctx.guild, roles, channels)
+            invite_url = await create_support_invite(self.bot, ctx.guild, channels)
+            await _configure_support_systems(self.bot, ctx.guild, roles, channels)
+            await _send_support_panels(self.bot, ctx.guild, roles, channels, invite_url=invite_url)
+            await assign_support_roles(self.bot, ctx.guild, roles)
+        except Exception as exc:
+            await progress.edit(content=f"Support update incomplete: `{type(exc).__name__}: {exc}`.")
+            return
+        await progress.edit(content=f"✅ Support server reconciled: **{len(roles)} roles** and **{len(channels)} channels** verified; panels and member roles refreshed.")
+
     @staff.command(name="getreport", help="Fetch a full error report using its six-character code.", hidden=True)
     async def get_report(self, ctx: commands.Context, code: str):
         """Fetch an error report by its six-character code."""
@@ -338,6 +482,172 @@ class StaffCog(commands.Cog):
                     command.name = name = "dev01"
                 command.add_check(self._staff_check)
                 self.staff.add_command(command)
+
+
+async def bot_member_preflight(guild):
+    bot_member = guild.me
+    if bot_member is None or not bot_member.guild_permissions.administrator:
+        raise RuntimeError("For the destructive setup, give Niko Administrator temporarily; then rerun the confirmed command. This prevents partial loss from inaccessible channels/roles.")
+
+
+async def _configure_support_systems(bot, guild, roles, channels):
+    from utils.onboarding.utils import get_config, update_config
+    from utils.tickets.utils import get_ticket_config, async_update_ticket_config
+
+    onboarding = await get_config(guild.id)
+    onboarding.welcome_channel = int(channels["welcome"])
+    onboarding.welcome_title = "Welcome to the Niko community"
+    onboarding.welcome_description = "Welcome {user}! Start with the rules, choose your notification roles, and ask for help any time."
+    onboarding.autorole_ids = [int(roles["member"])]
+    onboarding.welcome_color = 0xC8A882
+    onboarding.welcome_image = None
+    onboarding.captcha_enabled = False
+    onboarding.captcha_channel_id = None
+    onboarding.captcha_panel_message_id = None
+    onboarding.captcha_add_role_ids = []
+    onboarding.captcha_remove_role_ids = []
+    onboarding.captcha_kick_on_fail = False
+
+    await update_config(guild.id, onboarding)
+    from utils.onboarding.config import _pool
+    onboarding_pool = _pool()
+    if onboarding_pool is None:
+        raise RuntimeError("The database is unavailable; onboarding settings could not be saved.")
+    if onboarding_pool.db_type != "mongodb":
+        saved_config = await onboarding_pool.fetchrow("SELECT guild_id FROM onboarding WHERE guild_id = $1", guild.id)
+    else:
+        saved_config = await onboarding_pool.collection("onboarding").find_one({"_id": str(guild.id)})
+    if not saved_config:
+        raise RuntimeError("Onboarding settings could not be saved to the database.")
+
+    ticket_cfg = get_ticket_config(guild.id)
+    ticket_cfg.panel_title = "Contact Niko Support"
+    ticket_cfg.panel_description = "Open a private ticket for account help, bot troubleshooting, safety concerns, or other questions that need staff attention."
+    ticket_cfg.panel_categories = ["General Support", "Bug Report", "Account & Billing", "Moderation Appeal"]
+    ticket_cfg.support_roles = [int(roles[key]) for key in ("staff", "head_admin", "moderator", "head_support", "support")]
+    ticket_cfg.panel_channel_id = int(channels["tickets"])
+    ticket_cfg.panel_message_id = None
+    if not await async_update_ticket_config(guild.id, ticket_cfg):
+        raise RuntimeError("Ticket settings could not be saved to the database.")
+
+    from cogs.logging.formatters import _guild_config, _load_log_config, _save_guild_log_config
+    all_logs = await _load_log_config()
+    log_cfg = dict(_guild_config(all_logs, guild.id))
+    log_cfg.update({"moderation": int(channels["logs"]), "automod": int(channels["automod_logs"]), "members": int(channels["logs"]), "messages": int(channels["logs"]), "channels": int(channels["logs"])})
+    await _save_guild_log_config(guild.id, log_cfg)
+
+    from cogs.automod import mrbeast_scam
+    await mrbeast_scam.set_review_channel(bot, int(channels["scam_review"]))
+
+    await bot.cxn.execute(
+        "INSERT INTO voicemaster_settings (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate) "
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guild_id) DO UPDATE SET join_channel_id = $2, category_id = $3",
+        guild.id, int(channels["voice_join"]), guild.get_channel(int(channels["voice_join"])).category_id,
+        "{user}'s Channel", 0, 64000,
+    )
+    voice_cog = bot.get_cog("VoiceMaster")
+    if voice_cog:
+        voice_cog._bust_cache(guild.id)
+
+
+async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str | None = None):
+    from cogs.staff.owner import _build_status_panel, _collect_status
+    from cogs.tickets.views import TicketPanelView
+    from utils.tickets.utils import get_ticket_config
+    from cogs.voicemaster.cog import VoiceMasterInterface
+
+    pool = bot.cxn
+
+    async def post(key, view, *, unique_table=None, channel_key=key):
+        channel = guild.get_channel(int(channels[channel_key]))
+        if channel is None:
+            raise RuntimeError(f"Configured channel `{channel_key}` disappeared before panel post.")
+        old = await pool.fetchrow("SELECT message_id FROM support_server_panels WHERE guild_id = $1 AND panel_key = $2", guild.id, key)
+        if old:
+            try:
+                await channel.get_partial_message(int(old["message_id"])).delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+        message = await channel.send(view=view)
+        await pool.execute(
+            "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, $2, $3, $4, datetime('now')) "
+            "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $3, message_id = $4, updated_at = datetime('now')",
+            guild.id, key, channel.id, message.id,
+        )
+        if unique_table:
+            old_unique = await pool.fetchrow(f"SELECT message_id FROM {unique_table} WHERE channel_id = $1 AND guild_id = $2", channel.id, guild.id)
+            if old_unique:
+                try:
+                    await channel.get_partial_message(int(old_unique["message_id"])).delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+            await pool.execute(f"DELETE FROM {unique_table} WHERE channel_id = $1 AND guild_id = $2", channel.id, guild.id)
+            await pool.execute(
+                f"INSERT INTO {unique_table} (channel_id, guild_id, message_id, created_at) VALUES ($1, $2, $3, datetime('now'))",
+                channel.id, guild.id, message.id,
+            )
+        return message
+
+    status = await _collect_status(bot)
+    await post("status", _build_status_panel(bot, status), unique_table="persistent_status_panels")
+    # Rules panel content is intentionally the established `.staff sendpanel rules` panel,
+    # not the onboarding rules acknowledgement flow.
+    from cogs.staff.owner import _build_rules_panel
+    await post("rules", _build_rules_panel(bot), unique_table="persistent_rules_panels")
+    await post("staff_rules", _staff_rules_panel(), channel_key="staff_rules")
+    await post("staff_announcements", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content="# Staff announcements\nOfficial internal updates and operational notices are posted here."), accent_colour=0xC8A882)), channel_key="staff_announcements")
+    welcome_content = f"# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand.\n\n[Join the support server]({invite_url})" if invite_url else "# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand."
+    await post("welcome", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=welcome_content), accent_colour=0xC8A882)), channel_key="welcome")
+    roles_message = await post("notification_roles", SupportPingPanel(), channel_key="roles")
+    ticket_message = await post("tickets", TicketPanelView(guild.id, get_ticket_config(guild.id)))
+    ticket_cfg = get_ticket_config(guild.id)
+    ticket_cfg.panel_channel_id = ticket_message.channel.id
+    ticket_cfg.panel_message_id = ticket_message.id
+    await async_update_ticket_config(guild.id, ticket_cfg)
+    voice_message = await post("voice_panel", VoiceMasterInterface())
+    forum = guild.get_channel(int(channels["help"]))
+    if not isinstance(forum, discord.ForumChannel):
+        raise RuntimeError("The configured public help channel is not a forum.")
+    old_guidelines = await pool.fetchrow("SELECT message_id FROM support_server_panels WHERE guild_id = $1 AND panel_key = 'forum-guidelines'", guild.id)
+    if old_guidelines:
+        old_thread = guild.get_thread(int(old_guidelines["message_id"]))
+        if old_thread:
+            try:
+                await old_thread.delete(reason="Refresh support forum guidelines")
+                await _support_api_pause()
+            except discord.HTTPException:
+                pass
+    guideline_post = await forum.create_thread(
+        name="Read first · community guidelines",
+        content="# Welcome to Niko Support\n\n• Be kind and respectful.\n• Search existing posts before opening a new help topic.\n• Never share passwords, tokens, payment details, or other private information.\n• Use a private support ticket for account-specific or sensitive matters.\n• Keep each post focused and include relevant steps, error messages, and screenshots.",
+        reason="Publish support forum guidelines",
+    )
+    await _support_api_pause()
+    await guideline_post.message.pin(reason="Keep support forum guidelines at the top")
+    await _support_api_pause()
+    await guideline_post.thread.edit(locked=True, archived=True, reason="Lock the read-only forum guidelines thread")
+    await pool.execute(
+        "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, 'forum-guidelines', $2, $3, datetime('now')) "
+        "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $2, message_id = $3, updated_at = datetime('now')",
+        guild.id, forum.id, guideline_post.thread.id,
+    )
+
+    bot.add_view(VoiceMasterInterface(), message_id=voice_message.id)
+    bot.add_view(TicketPanelView(guild.id, get_ticket_config(guild.id)), message_id=ticket_message.id)
+    bot.add_view(SupportPingPanel(), message_id=roles_message.id)
+
+
+async def _support_api_pause():
+    await asyncio.sleep(0.35)
+
+
+def _staff_rules_panel():
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=f"# Staff guidelines\n{support_rules_text()}"),
+        accent_colour=0xC8A882,
+    ))
+    return view
 
 
 async def setup(bot):

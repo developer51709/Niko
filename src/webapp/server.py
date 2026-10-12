@@ -107,7 +107,7 @@ def configure_bot(bot) -> None:
         "webapp.auth_routes", "webapp.team_routes", "webapp.public_routes",
         "webapp.dashboard_routes", "webapp.donation_routes",
         "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
-        "webapp.application_routes", "webapp.site_routes", "webapp.appeal_routes",
+        "webapp.application_routes", "webapp.team_recruitment_routes", "webapp.site_routes", "webapp.appeal_routes",
         "webapp.backup_routes",
     ):
         module = sys.modules.get(module_name)

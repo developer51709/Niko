@@ -1,4 +1,6 @@
 from .views import *
+from config.ids import SUPPORT_GUILD
+from utils import logging
 
 class Onboarding(commands.Cog):
     def __init__(self, bot):
@@ -231,6 +233,13 @@ class Onboarding(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         cfg = await get_config(member.guild.id)
+        if member.guild.id == SUPPORT_GUILD:
+            try:
+                from cogs.staff.support_server import get_support_ids, assign_join_roles
+                support_ids = await get_support_ids(self.bot)
+                await assign_join_roles(self.bot, member, support_ids["roles"])
+            except Exception as exc:
+                logging.warning("Onboarding", f"Support role synchronization failed for {member.id}: {exc}")
 
         # ── Autoroles ─────────────────────────────
         if cfg.autorole_ids:

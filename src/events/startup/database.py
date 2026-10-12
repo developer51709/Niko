@@ -127,6 +127,58 @@ async def _create_tables(bot):
         except Exception:
             pass
 
+    # Niko's official team recruitment is intentionally isolated from guild
+    # staff applications: no guild administrator or guild API can manage these.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_team_openings (
+            id TEXT PRIMARY KEY,
+            role_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            questions TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'open',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_team_submissions (
+            opening_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            answers TEXT NOT NULL DEFAULT '[]',
+            receipt_id TEXT NOT NULL,
+            submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            review_status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by TEXT,
+            reviewed_at TEXT,
+            PRIMARY KEY (opening_id, user_id)
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS support_server_config (
+            guild_id INTEGER PRIMARY KEY,
+            role_ids TEXT NOT NULL DEFAULT '{}',
+            channel_ids TEXT NOT NULL DEFAULT '{}',
+            invite_url TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    try:
+        await bot.cxn.execute("ALTER TABLE support_server_config ADD COLUMN invite_url TEXT")
+    except Exception:
+        pass
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS support_server_panels (
+            guild_id INTEGER NOT NULL,
+            panel_key TEXT NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (guild_id, panel_key)
+        )
+    """)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS staff_members (
              user_id     INTEGER PRIMARY KEY,

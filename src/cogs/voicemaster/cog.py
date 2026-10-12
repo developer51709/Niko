@@ -2,6 +2,7 @@ import asyncio
 from typing import Union
 
 import discord
+from config.ids import SUPPORT_GUILD
 from discord import ui
 from discord.ext import commands
 
@@ -221,6 +222,8 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         return cog, channel, False
 
     async def _dispatch(self, interaction: discord.Interaction, action: str):
+        if interaction.guild_id != SUPPORT_GUILD:
+            return await interaction.response.send_message("This voice panel is for the official Niko support server.", ephemeral=True)
         owner_required = action not in ("claim", "info")
         cog, channel, err = await self._resolve(interaction, owner_required=owner_required)
         if err:

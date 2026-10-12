@@ -351,6 +351,15 @@ def api_save_staff_profile():
                 f"UPDATE staff_members SET {assignments} WHERE user_id = ${len(params)}",
                 *params,
             )
+            try:
+                from cogs.staff.staff import sync_member_staff_roles
+                guild = _discord_bot.get_guild(SUPPORT_GUILD)
+                member = guild.get_member(user_id) if guild else None
+                if member:
+                    current_role = await _discord_bot.cxn.fetchrow("SELECT role FROM staff_members WHERE user_id = $1", user_id)
+                    await sync_member_staff_roles(_discord_bot, member, str(current_role["role"]) if current_role else None)
+            except Exception:
+                pass
         try:
             run_on_bot_loop(save_to_bot())
             return jsonify({"ok": True})

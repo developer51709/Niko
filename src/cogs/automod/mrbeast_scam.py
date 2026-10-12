@@ -36,6 +36,36 @@ from discord.ext import commands
 from config.ids import OWNER_IDS, SCAM_REVIEW_CHANNEL, SCAM_REVIEW_GUILD
 from utils import logging
 
+
+async def set_review_channel(bot, channel_id: int) -> None:
+    """Persist the scam-review channel and update this process immediately."""
+    global SCAM_REVIEW_CHANNEL
+    channel_id = int(channel_id)
+    if not channel_id:
+        raise ValueError("Scam-review channel ID must be non-zero.")
+    current = await bot.cxn.fetchrow(
+        "SELECT role_ids, channel_ids, invite_url FROM support_server_config WHERE guild_id = $1",
+        SCAM_REVIEW_GUILD,
+    )
+    role_ids = current.get("role_ids") if current else "{}"
+    channel_ids = current.get("channel_ids") if current else "{}"
+    if not isinstance(role_ids, str):
+        role_ids = json.dumps(role_ids or {})
+    if not isinstance(channel_ids, str):
+        channel_ids = json.dumps(channel_ids or {})
+    try:
+        channel_map = json.loads(channel_ids or "{}")
+    except (TypeError, ValueError):
+        channel_map = {}
+    channel_map["scam_review"] = channel_id
+    await bot.cxn.execute(
+        "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, invite_url, updated_at) "
+        "VALUES ($1, $2, $3, $4, datetime('now')) "
+        "ON CONFLICT (guild_id) DO UPDATE SET channel_ids = $3, updated_at = datetime('now')",
+        SCAM_REVIEW_GUILD, role_ids, json.dumps(channel_map), current.get("invite_url") if current else None,
+    )
+    SCAM_REVIEW_CHANNEL = channel_id
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 # Hamming distance below which an image counts as "similar" to a known scam.
@@ -196,6 +226,27 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             _ReviewConfirmButton, _ReviewRejectButton, _FalsePositiveButton, _RemoveScamButton
         )
 
+    async def cog_load(self) -> None:
+        """Restore the current support-server review channel after restarts."""
+        pool = getattr(self.bot, "cxn", None)
+        if pool is None:
+            return
+        row = await pool.fetchrow(
+            "SELECT channel_ids FROM support_server_config WHERE guild_id = $1",
+            SCAM_REVIEW_GUILD,
+        )
+        if not row:
+            return
+        channel_ids = row.get("channel_ids")
+        if isinstance(channel_ids, str):
+            try:
+                channel_ids = json.loads(channel_ids)
+            except (TypeError, ValueError):
+                return
+        if isinstance(channel_ids, dict) and channel_ids.get("scam_review"):
+            global SCAM_REVIEW_CHANNEL
+            SCAM_REVIEW_CHANNEL = int(channel_ids["scam_review"])
+
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self._ctx_report.name, type=self._ctx_report.type)
         self.bot.remove_dynamic_items(
@@ -205,13 +256,13 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
     # ── helpers ───────────────────────────────────────────────────────────
 
     def _review_guild(self) -> discord.Guild | None:
-        if not SCAM_REVIEW_GUILD or not SCAM_REVIEW_CHANNEL:
+        if not SCAM_REVIEW_GUILD:
             return None
         return self.bot.get_guild(SCAM_REVIEW_GUILD)
 
     def _review_channel(self) -> discord.abc.Messageable | None:
         guild = self._review_guild()
-        if guild is None:
+        if guild is None or not SCAM_REVIEW_CHANNEL:
             return None
         channel = guild.get_channel(SCAM_REVIEW_CHANNEL)
         return channel if isinstance(channel, discord.TextChannel) else None

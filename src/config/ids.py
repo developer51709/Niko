@@ -15,7 +15,5 @@ SUPPORT_GUILD  = 1497250915034337330
 SCAM_REVIEW_GUILD   = 1497250915034337330
 SCAM_REVIEW_CHANNEL = 1555030193133981777  # set to a channel ID in the review server to enable
 
-# role ids for the badges in the userinfo command
-BUGBOUNTY_ROLE = 1526272293368496128
-SUPPORTER_ROLE = 1523451924018364569
-PARTNER_ROLE   = 1526302927684239482
+# Support-server role IDs are provisioned by `.staff supportsetup` and stored
+# in support_server_config; do not hardcode role IDs here.
