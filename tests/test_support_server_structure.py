@@ -5,6 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import aiosqlite
 import discord
 from discord.ext import commands
 
@@ -12,7 +13,8 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, create_support_invite, get_support_invite
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, create_support_invite, get_support_invite, persist_support_ids
+from database import SQLitePool
 
 
 class SupportServerStructureTests(unittest.TestCase):
@@ -111,6 +113,30 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual(json.loads(args[3]), {"polls": 44, "welcome": 11, "general": 22})
             self.assertEqual(args[4], url)
             pool.execute.assert_awaited_once()
+        asyncio.run(check())
+
+    def test_persist_support_ids_updates_existing_sqlite_record(self):
+        async def check():
+            connection = await aiosqlite.connect(":memory:")
+            await connection.execute(
+                "CREATE TABLE support_server_config (guild_id INTEGER PRIMARY KEY, role_ids TEXT, channel_ids TEXT, updated_at TEXT)"
+            )
+            await connection.commit()
+            pool = SQLitePool(connection)
+            bot = SimpleNamespace(cxn=pool)
+            guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD)
+
+            await persist_support_ids(bot, guild, {"staff": 12}, {"welcome": 21})
+            await persist_support_ids(bot, guild, {"staff": 13}, {"welcome": 22, "rules": 23})
+
+            row = await pool.fetchrow(
+                "SELECT role_ids, channel_ids FROM support_server_config WHERE guild_id = $1",
+                guild.id,
+            )
+            self.assertEqual(json.loads(row["role_ids"]), {"staff": 13})
+            self.assertEqual(json.loads(row["channel_ids"]), {"welcome": 22, "rules": 23})
+            await connection.close()
+
         asyncio.run(check())
 
     def test_invite_reader_uses_saved_database_url(self):

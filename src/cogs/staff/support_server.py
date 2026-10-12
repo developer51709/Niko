@@ -81,6 +81,61 @@ CHANNEL_TOPICS = {
 
 API_STEP_DELAY = 0.35
 
+# Discord community servers prevent deleting channels referenced by these
+# server-level settings. Repoint them to the new canonical channels first.
+COMMUNITY_SYSTEM_CHANNELS = {
+    "rules_channel": "rules",
+    "public_updates_channel": "announcements",
+    "safety_alerts_channel": "automod_logs",
+}
+
+
+def _community_system_channel_ids(guild: discord.Guild) -> set[int]:
+    return {
+        channel.id
+        for attribute in COMMUNITY_SYSTEM_CHANNELS
+        if (channel := getattr(guild, attribute, None)) is not None
+    }
+
+
+def _community_system_channels_need_relink(guild: discord.Guild) -> bool:
+    for attribute, key in COMMUNITY_SYSTEM_CHANNELS.items():
+        channel = getattr(guild, attribute, None)
+        if channel is None:
+            continue
+        category_name, expected_name, kind, _ = CHANNEL_SPECS[key]
+        expected_type = discord.ForumChannel if kind == "forum" else discord.TextChannel
+        if (not isinstance(channel, expected_type) or channel.name != expected_name
+                or getattr(getattr(channel, "category", None), "name", None) != category_name):
+            return True
+    return False
+
+
+async def _replace_community_system_channels(guild: discord.Guild, channels: dict[str, int]) -> None:
+    """Relink Discord's required community channels, then remove their old channels."""
+    old_channels: dict[int, discord.TextChannel] = {}
+    updates = {}
+    for attribute, key in COMMUNITY_SYSTEM_CHANNELS.items():
+        old_channel = getattr(guild, attribute, None)
+        channel_id = channels.get(key)
+        replacement = guild.get_channel(int(channel_id)) if channel_id else None
+        if old_channel is None or replacement is None or old_channel.id == replacement.id:
+            continue
+        old_channels[old_channel.id] = old_channel
+        updates[attribute] = replacement
+
+    if not updates:
+        return
+    if not guild.me.guild_permissions.manage_guild:
+        raise RuntimeError("Niko needs Manage Server to move the community rules, updates, and safety-alert channels safely.")
+
+    await guild.edit(**updates, reason="Move community system channels to the reconciled Niko support structure")
+    await _pace()
+    for channel in old_channels.values():
+        await channel.delete(reason="Replace obsolete Discord community system channel")
+        await _pace()
+
+
 async def _pace():
     import asyncio
     await asyncio.sleep(API_STEP_DELAY)
@@ -121,8 +176,8 @@ async def persist_support_ids(bot, guild: discord.Guild, roles: dict, channels: 
         raise RuntimeError("The database is not ready; support structure was not saved.")
     await pool.execute(
         "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, updated_at) VALUES ($1, $2, $3, datetime('now')) "
-        "ON CONFLICT (guild_id) DO UPDATE SET role_ids = $2, channel_ids = $3, updated_at = datetime('now')",
-        guild.id, json.dumps(roles), json.dumps(channels),
+        "ON CONFLICT (guild_id) DO UPDATE SET role_ids = $4, channel_ids = $5, updated_at = datetime('now')",
+        guild.id, json.dumps(roles), json.dumps(channels), json.dumps(roles), json.dumps(channels),
     )
 
 
@@ -147,10 +202,17 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         raise RuntimeError("Niko needs Manage Channels and Manage Roles in the support server.")
     if destructive and not bot_member.guild_permissions.administrator:
         raise RuntimeError("Niko needs Administrator for the destructive setup to avoid partially deleting channels it cannot manage.")
+    if (not bot_member.guild_permissions.manage_guild
+            and (destructive or _community_system_channels_need_relink(guild))):
+        raise RuntimeError("Niko needs Manage Server to repoint the community rules, updates, and safety-alert channels before replacing them.")
 
+    protected_system_channel_ids = _community_system_channel_ids(guild)
     if destructive:
-        # Leave @everyone, managed/integration roles, and the bot's own role intact.
+        # Discord rejects deleting channels configured as community system
+        # channels. Keep them until their settings point at replacements.
         for channel in list(guild.channels):
+            if channel.id in protected_system_channel_ids:
+                continue
             await channel.delete(reason="Owner-confirmed Niko support server rebuild")
             await _pace()
         for role in list(guild.roles):
@@ -203,8 +265,9 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
                 overwrites[staff_specific_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
         expected_type = {"voice": discord.VoiceChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
         if channel is not None and not isinstance(channel, expected_type):
-            await channel.delete(reason="Replace support channel with canonical channel type")
-            await _pace()
+            if channel.id not in protected_system_channel_ids:
+                await channel.delete(reason="Replace support channel with canonical channel type")
+                await _pace()
             channel = None
         topic = CHANNEL_TOPICS.get(key, "")
         if channel is None:
@@ -223,6 +286,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await _pace()
         channels[key] = channel.id
 
+    await _replace_community_system_channels(guild, channels)
     return roles, channels
 
 
