@@ -728,7 +728,7 @@ class MongoPool:
         """INSERT ... ON CONFLICT (col) DO UPDATE SET expr = ..."""
         m = re.match(
             r"INSERT\s+INTO\s+([A-Za-z_]\w*)\s*\((.*?)\)\s*VALUES\s*\((.*?)\)\s*"
-            r"ON\s+CONFLICT\s*\((\w+)\)\s*DO\s+UPDATE\s+SET\s+(.*)$",
+            r"ON\s+CONFLICT\s*\(([\w\s,]+)\)\s*DO\s+UPDATE\s+SET\s+(.*)$",
             q,
             re.IGNORECASE | re.DOTALL,
         )
