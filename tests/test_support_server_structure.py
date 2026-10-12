@@ -13,7 +13,7 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, _create_stage_channel, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -25,12 +25,21 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review"} <= CHANNEL_SPECS.keys())
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
         self.assertEqual(CHANNEL_SPECS["event_voice"][2], "stage")
+        self.assertIn("giveaways", CHANNEL_SPECS)
+        self.assertEqual(CHANNEL_SPECS["giveaways"][0], CHANNEL_SPECS["events"][0])
+        self.assertTrue(all(name.istitle() or name == "Logs" for name in {spec[0] for spec in CHANNEL_SPECS.values()}))
+        category_sizes = {}
+        for category, _name, _kind, _staff_only in CHANNEL_SPECS.values():
+            category_sizes[category] = category_sizes.get(category, 0) + 1
+        self.assertTrue(all(size >= 3 for size in category_sizes.values()), category_sizes)
+        self.assertEqual({tag.name for tag in HELP_FORUM_TAGS}, {"Bug", "Setup", "Account", "Feature request", "Solved"})
+        self.assertTrue(all(not any(char.isupper() for char in category if char.isalpha()) for category in ()))
         self.assertEqual(CHANNEL_SPECS["polls"][0], CHANNEL_SPECS["announcements"][0])
-        self.assertEqual(CHANNEL_SPECS["staff_rules"][0], "STAFF")
-        self.assertEqual(CHANNEL_SPECS["logs"][0], "STAFF · LOGS")
-        self.assertEqual(CHANNEL_SPECS["member_logs"][0], "STAFF · LOGS")
-        self.assertEqual(CHANNEL_SPECS["message_logs"][0], "STAFF · LOGS")
-        self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "STAFF · LOGS")
+        self.assertEqual(CHANNEL_SPECS["staff_rules"][0], "Staff")
+        self.assertEqual(CHANNEL_SPECS["logs"][0], "Logs")
+        self.assertEqual(CHANNEL_SPECS["member_logs"][0], "Logs")
+        self.assertEqual(CHANNEL_SPECS["message_logs"][0], "Logs")
+        self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "Logs")
         self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
         self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_voice", "scam_review")))
@@ -45,6 +54,17 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_stage_channel_speaking_is_limited_to_staff(self):
         self.assertFalse(_everyone_channel_overwrite("event_voice", False).speak)
         self.assertTrue(_everyone_channel_overwrite("general", False).speak)
+
+    def test_stage_creation_uses_no_disallowed_permission_or_topic_arguments(self):
+        async def check():
+            guild = SimpleNamespace(create_stage_channel=AsyncMock(return_value="created"))
+            result = await _create_stage_channel(guild, "Community Stage", SimpleNamespace(id=2))
+            self.assertEqual(result, "created")
+            kwargs = guild.create_stage_channel.await_args.kwargs
+            self.assertEqual(set(kwargs), {"category", "reason"})
+            self.assertNotIn("overwrites", kwargs)
+            self.assertNotIn("topic", kwargs)
+        asyncio.run(check())
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):
         async def check():

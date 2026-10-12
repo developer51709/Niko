@@ -28,35 +28,59 @@ ROLE_SPECS = {
 
 # Channel blueprint: key -> (category, name, kind, staff_only)
 CHANNEL_SPECS = {
-    "welcome": ("START HERE", "welcome", "text", False),
-    "rules": ("START HERE", "rules", "text", False),
-    "roles": ("START HERE", "roles", "text", False),
-    "announcements": ("UPDATES · READ ONLY", "announcements", "text", False),
-    "polls": ("UPDATES · READ ONLY", "polls", "text", False),
-    "status": ("UPDATES · READ ONLY", "niko-status", "text", False),
+    "welcome": ("Start Here", "welcome", "text", False),
+    "rules": ("Start Here", "rules", "text", False),
+    "roles": ("Start Here", "roles", "text", False),
+    "announcements": ("Updates", "announcements", "text", False),
+    "polls": ("Updates", "polls", "text", False),
+    "status": ("Updates", "niko-status", "text", False),
 
-    "general": ("COMMUNITY · CHAT", "general", "text", False),
-    "introductions": ("COMMUNITY · CHAT", "introductions", "text", False),
-    "media": ("COMMUNITY · CREATIONS", "share-your-setup", "text", False),
-    "memes": ("COMMUNITY · CREATIONS", "memes", "text", False),
-    "suggestions": ("COMMUNITY · IDEAS", "suggestions", "text", False),
-    "events": ("COMMUNITY · EVENTS", "events", "text", False),
-    "event_chat": ("COMMUNITY · EVENTS", "event-chat", "text", False),
-    "event_voice": ("COMMUNITY · EVENTS", "Community Stage", "stage", False),
-    "help": ("SUPPORT", "community-help", "forum", False),
-    "tickets": ("SUPPORT", "create-a-ticket", "text", False),
-    "staff_rules": ("STAFF", "staff-guidelines", "text", True),
-    "staff_announcements": ("STAFF", "staff-announcements", "text", True),
-    "staff_chat": ("STAFF", "staff-chat", "text", True),
-    "staff_voice": ("STAFF", "staff-voice", "voice", True),
-    "logs": ("STAFF · LOGS", "moderation-logs", "text", True),
-    "member_logs": ("STAFF · LOGS", "member-logs", "text", True),
-    "message_logs": ("STAFF · LOGS", "message-logs", "text", True),
-    "channel_logs": ("STAFF · LOGS", "server-change-logs", "text", True),
-    "automod_logs": ("STAFF · LOGS", "automod-logs", "text", True),
-    "scam_review": ("STAFF · LOGS", "scam-review", "text", True),
-    "voice_join": ("VOICE MASTER", "Join to Create", "voice", False),
-    "voice_panel": ("VOICE MASTER", "voice-master", "text", False),
+    "general": ("Community", "general", "text", False),
+    "introductions": ("Community", "introductions", "text", False),
+    "media": ("Community", "share-your-setup", "text", False),
+    "memes": ("Community", "memes", "text", False),
+    "suggestions": ("Community", "suggestions", "text", False),
+    "events": ("Events", "events", "text", False),
+    "event_chat": ("Events", "event-chat", "text", False),
+    "event_voice": ("Events", "Community Stage", "stage", False),
+    "giveaways": ("Events", "giveaways", "text", False),
+    "help": ("Support", "community-help", "forum", False),
+    "tickets": ("Support", "create-a-ticket", "text", False),
+    "support_guide": ("Support", "support-guide", "text", False),
+    "staff_rules": ("Staff", "staff-guidelines", "text", True),
+    "staff_announcements": ("Staff", "staff-announcements", "text", True),
+    "staff_chat": ("Staff", "staff-chat", "text", True),
+    "staff_voice": ("Staff", "staff-voice", "voice", True),
+    "logs": ("Logs", "moderation-logs", "text", True),
+    "member_logs": ("Logs", "member-logs", "text", True),
+    "message_logs": ("Logs", "message-logs", "text", True),
+    "channel_logs": ("Logs", "server-change-logs", "text", True),
+    "automod_logs": ("Logs", "automod-logs", "text", True),
+    "scam_review": ("Logs", "scam-review", "text", True),
+    "voice_join": ("Voice", "Join to Create", "voice", False),
+    "voice_lounge": ("Voice", "Community Voice", "voice", False),
+    "voice_panel": ("Voice", "voice-master", "text", False),
+}
+
+HELP_FORUM_TAGS = (
+    discord.ForumTag(name="Bug"),
+    discord.ForumTag(name="Setup"),
+    discord.ForumTag(name="Account"),
+    discord.ForumTag(name="Feature request"),
+    discord.ForumTag(name="Solved"),
+)
+
+_LEGACY_CATEGORY_NAMES = {
+    "START HERE", "UPDATES · READ ONLY", "COMMUNITY", "COMMUNITY · LOUNGE",
+    "COMMUNITY · CHAT", "COMMUNITY · CREATIONS", "COMMUNITY · IDEAS",
+    "COMMUNITY · EVENTS", "SUPPORT", "STAFF", "STAFF · LOGS", "VOICE MASTER",
+} - {category for category, *_ in CHANNEL_SPECS.values()}
+
+LEGACY_CHANNEL_SPECS = {
+    "raffles": ("Events", "giveaways", "COMMUNITY · EVENTS", "giveaways"),
+    "support_forum": ("Support", "community-help", "SUPPORT", "community-help"),
+    "support_tickets": ("Support", "create-a-ticket", "SUPPORT", "create-a-ticket"),
+    "stage": ("Events", "Community Stage", "COMMUNITY · EVENTS", "Community Stage"),
 }
 
 CHANNEL_TOPICS = {
@@ -72,12 +96,16 @@ CHANNEL_TOPICS = {
     "suggestions": "Share ideas and feature suggestions for Niko.",
     "events": "Official event announcements and schedules.",
     "event_chat": "Talk about current and upcoming community events.",
+    "giveaways": "Official Niko community giveaways, entries, and winner announcements.",
+    "support_guide": "Helpful support links, ticket guidance, and privacy reminders.",
+    "event_voice": "Community Stage for live events and hosted conversations.",
     "polls": "Official polls and voting. This channel is read-only for members.",
     "help": "Public peer-to-peer help forum. Open a private ticket for account or sensitive issues.",
     "tickets": "Open a private support ticket for account help, bugs, safety, or moderation appeals.",
     "staff_announcements": "Internal staff updates and operational notices.",
     "staff_rules": "Private staff guidelines and expectations.",
     "staff_chat": "Private staff coordination and discussion.",
+    "staff_announcements": "Internal staff updates and operational notices.",
     "logs": "Internal moderation action records.",
     "member_logs": "Internal member join, leave, and profile-change records.",
     "message_logs": "Internal message edit and deletion records.",
@@ -88,8 +116,6 @@ CHANNEL_TOPICS = {
 }
 
 API_STEP_DELAY = 0.35
-LEGACY_CATEGORY_NAMES = {"COMMUNITY", "COMMUNITY · LOUNGE"}
-
 # Discord community servers prevent deleting channels referenced by these
 # server-level settings. Repoint them to the new canonical channels first.
 COMMUNITY_SYSTEM_CHANNELS = {
@@ -213,6 +239,15 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
     )
 
 
+async def _create_stage_channel(guild: discord.Guild, name: str, category: discord.CategoryChannel):
+    """Create a Stage with only supported creation fields; set ACLs afterward."""
+    return await guild.create_stage_channel(
+        name,
+        category=category,
+        reason="Niko support server structure",
+    )
+
+
 async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, category: discord.CategoryChannel) -> None:
     """Keep a designated channel before the other channels in its category."""
     siblings = [item for item in category.channels if item.id != channel.id]
@@ -272,7 +307,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     categories: dict[str, discord.CategoryChannel] = {}
     for category_name in dict.fromkeys(spec[0] for spec in CHANNEL_SPECS.values()):
         category = discord.utils.get(guild.categories, name=category_name)
-        staff_only = category_name.startswith("STAFF")
+        staff_only = any(spec[0] == category_name and spec[3] for spec in CHANNEL_SPECS.values())
         overwrites = {
             everyone: discord.PermissionOverwrite(view_channel=not staff_only),
             staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
@@ -317,25 +352,50 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             if kind == "voice":
                 channel = await guild.create_voice_channel(name, category=category, overwrites=overwrites, reason="Niko support server structure")
             elif kind == "stage":
-                channel = await guild.create_stage_channel(name, category=category, overwrites=overwrites, reason="Niko support server structure")
+                channel = await _create_stage_channel(guild, name, category)
             elif kind == "forum":
-                channel = await guild.create_forum(name, topic=topic, category=category, overwrites=overwrites, slowmode_delay=5, default_thread_slowmode_delay=5, reason="Niko support server structure")
+                channel = await guild.create_forum(name, topic=topic, category=category, overwrites=overwrites, slowmode_delay=5, default_thread_slowmode_delay=5, available_tags=HELP_FORUM_TAGS, reason="Niko support server structure")
             else:
                 channel = await guild.create_text_channel(name, category=category, topic=topic, overwrites=overwrites, slowmode_delay=2, reason="Niko support server structure")
             await _pace()
         else:
             edit_kwargs = {"category": category, "overwrites": overwrites}
-            if kind in {"text", "forum"}:
-                edit_kwargs.update(topic=topic, slowmode_delay=5 if kind == "forum" else 2)
+            if kind == "text":
+                edit_kwargs.update(topic=topic, slowmode_delay=2)
+            elif kind == "forum":
+                edit_kwargs.update(topic=topic, slowmode_delay=5)
             await channel.edit(**edit_kwargs, reason="Reconcile Niko support channel permissions")
+            await _pace()
+        if kind == "stage" and channel is not None:
+            # Stage creation omits normal permission fields; apply the ACL in a second call.
+            await channel.edit(category=category, overwrites=overwrites, reason="Set Niko Stage access permissions")
+            await _pace()
+        if kind == "forum" and channel is not None:
+            # Keep our standard tags while retaining other configured tags (up to Discord's limit).
+            existing_tags = list(getattr(channel, "available_tags", ()))
+            standard_names = {tag.name for tag in HELP_FORUM_TAGS}
+            custom_tags = [tag for tag in existing_tags if tag.name not in standard_names]
+            await channel.edit(available_tags=[*HELP_FORUM_TAGS, *custom_tags[:15]], reason="Set community help forum tags")
             await _pace()
         channels[key] = channel.id
 
     staff_rules_channel = guild.get_channel(channels["staff_rules"])
     if staff_rules_channel is not None:
-        await _move_channel_to_category_top(staff_rules_channel, categories["STAFF"])
+        await _move_channel_to_category_top(staff_rules_channel, categories["Staff"])
 
-    for category_name in LEGACY_CATEGORY_NAMES:
+    for _legacy_key, (target_category_name, target_name, legacy_category_name, legacy_name) in LEGACY_CHANNEL_SPECS.items():
+        old_category = discord.utils.get(guild.categories, name=legacy_category_name)
+        target_category = categories[target_category_name]
+        target_channel = discord.utils.get(target_category.channels, name=target_name)
+        if old_category is not None:
+            legacy_channel = discord.utils.get(old_category.channels, name=legacy_name)
+            if (legacy_channel is not None and target_channel is not None
+                    and legacy_channel.id != target_channel.id
+                    and legacy_channel.id not in protected_system_channel_ids):
+                await legacy_channel.delete(reason="Replace legacy support channel after structure reorganization")
+                await _pace()
+
+    for category_name in _LEGACY_CATEGORY_NAMES:
         legacy_category = discord.utils.get(guild.categories, name=category_name)
         if legacy_category is not None and not legacy_category.channels:
             await legacy_category.delete(reason="Remove empty legacy support category after reorganization")
