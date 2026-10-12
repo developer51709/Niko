@@ -1,5 +1,5 @@
 export type Page = "home" | "commands" | "docs" | "docs-detail" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
-export type DashSection = "overview" | "leveling" | "moderation" | "server" | "applications" | "ai" | "customization";
+export type DashSection = "overview" | "leveling" | "moderation" | "server" | "onboarding" | "tickets" | "applications" | "ai" | "customization";
 export type DashboardView = "overview" | "servers" | "guild";
 
 function normalizedPath(pathname: string) {
@@ -40,7 +40,7 @@ export function dashboardServersPath() {
 
 export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
-  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "applications", "ai", "customization"];
+  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "onboarding", "tickets", "applications", "ai", "customization"];
   if (parts[1] === "servers") {
     return { view: "servers", guildId: null, section: "overview" };
   }

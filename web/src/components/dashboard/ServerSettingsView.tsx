@@ -63,6 +63,29 @@ function previewColor(value: string) {
   return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex}` : "#5865F2";
 }
 
+function ColorPicker({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
+  const [open, setOpen] = useState(false);
+  const color = previewColor(value);
+  const update = (next: string) => onChange(next.replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0, 6));
+  return <div className="color-picker">
+    <div className="color-field-control">
+      <button type="button" className="color-preview" style={{ backgroundColor: color }} onClick={() => setOpen((current) => !current)} aria-label={`Choose ${label.toLowerCase()}`} aria-expanded={open} />
+      <input aria-label={`${label} hex value`} value={value} maxLength={6} onChange={(event) => update(event.target.value)} placeholder="5865F2" />
+    </div>
+    {open && <div className="color-picker-popover" role="dialog" aria-label={`Choose ${label.toLowerCase()}`}>
+      <div className="color-picker-header"><strong>Choose color</strong><button type="button" className="color-picker-close" onClick={() => setOpen(false)} aria-label="Close color picker">×</button></div>
+      <input className="color-picker-native" type="color" value={color} onChange={(event) => update(event.target.value)} />
+      <div className="color-picker-value"><span>#</span><input aria-label={`${label} hex value`} value={value} maxLength={6} onChange={(event) => update(event.target.value)} placeholder="5865F2" /></div>
+    </div>}
+  </div>;
+}
+
+function TicketCategories({ categories, onChange }: { categories: string[]; onChange: (value: string[]) => void }) {
+  return <div className="settings-category-editor"><div className="settings-option-list">
+    {categories.map((category, index) => <div className="settings-option-row" key={`${category}-${index}`}><input aria-label={`Ticket category ${index + 1}`} value={category} maxLength={80} onChange={(event) => onChange(categories.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`Category ${index + 1}`} /><button type="button" className="settings-option-remove" onClick={() => onChange(categories.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ticket category ${index + 1}`}>Remove</button></div>)}
+  </div><button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...categories, ""])}>＋ Add category</button><small>Add a separate option for each kind of support request.</small></div>;
+}
+
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
   const selectedId = selected ? String(selected) : "";
   const channels = resources?.channels || [];
@@ -98,7 +121,6 @@ function initialValues(server?: ServerConfig) {
 export function ServerSettingsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const [values, setValues] = useState(() => initialValues(config?.server));
   const [state, setState] = useState(initialSave);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   useEffect(() => {
     if (config?.server) setValues(initialValues(config.server));
@@ -164,7 +186,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         <Field label="Welcome channel"><select value={welcomeChannel} onChange={(event) => setValue("welcome_channel", event.target.value)}><option value="">Disabled</option>{welcomeChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Welcome title"><input value={values.welcome_title} maxLength={200} onChange={(event) => setValue("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field>
         <Field label="Welcome message" hint="Supports {user} and {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => setValue("welcome_description", event.target.value)} placeholder="Welcome {user}!" />{values.welcome_description.trim() && <DiscordMarkdown text={values.welcome_description.replace(/\{user\}/g, "@member").replace(/\{name\}/g, "member")} className="role-select-preview" interactiveUsers={false} />}</Field>
-        <Field label="Accent color" hint="Hex color, for example 5865F2"><div className="color-picker"><div className="color-field-control"><button type="button" className="color-preview" style={{ backgroundColor: previewColor(values.welcome_color) }} onClick={() => setColorPickerOpen((open) => !open)} aria-label="Choose welcome accent color" aria-expanded={colorPickerOpen} /><input value={values.welcome_color} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div>{colorPickerOpen && <div className="color-picker-popover" role="dialog" aria-label="Choose accent color"><div className="color-picker-header"><strong>Choose color</strong><button type="button" className="color-picker-close" onClick={() => setColorPickerOpen(false)} aria-label="Close color picker">×</button></div><input className="color-picker-native" type="color" value={previewColor(values.welcome_color)} onChange={(event) => setWelcomeColor(event.target.value)} /><div className="color-picker-value"><span>#</span><input value={values.welcome_color.replace(/^#/, "")} maxLength={6} onChange={(event) => setWelcomeColor(event.target.value)} placeholder="5865F2" /></div></div>}</div></Field>
+        <Field label="Accent color" hint="Hex color, for example 5865F2"><ColorPicker value={values.welcome_color} label="welcome accent color" onChange={setWelcomeColor} /></Field>
         <Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => setValue("welcome_image", event.target.value)} placeholder="https://..." /></Field>
         <Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => setValue("rules_channel", event.target.value)}><option value="">Not configured</option>{rulesChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Rules text"><textarea rows={4} maxLength={2000} value={values.rules_text} onChange={(event) => setValue("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." />{values.rules_text.trim() && <DiscordMarkdown text={values.rules_text} className="role-select-preview" interactiveUsers={false} />}</Field>
@@ -179,7 +201,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         <Field label="Panel title"><input value={values.panel_title} maxLength={200} onChange={(event) => setValue("panel_title", event.target.value)} placeholder="Open a Ticket" /></Field>
         <Field label="Panel channel"><select value={ticketChannel} onChange={(event) => setValue("panel_channel_id", event.target.value)}><option value="">Keep current panel channel</option>{ticketChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
         <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValue("panel_description", event.target.value)} placeholder="Tell members what the ticket panel is for." />{values.panel_description.trim() && <DiscordMarkdown text={values.panel_description} className="role-select-preview" interactiveUsers={false} />}</Field>
-        <div className="form-grid-wide"><StringOptionList label="Ticket categories" hint="Add a separate category for each ticket option." options={values.panel_categories} placeholder="Category" onChange={(categories) => setValue("panel_categories", categories)} /></div>
+        <div className="form-grid-wide"><Field label="Ticket categories"><TicketCategories categories={values.panel_categories} onChange={(categories) => setValue("panel_categories", categories)} /></Field></div>
         <Field label="Support roles" hint="Select the roles that can manage ticket requests."><RoleSelect roles={resources?.roles || []} value={values.support_roles} multiple ariaLabel="Support roles" onChange={(roleIds) => setValue("support_roles", roleIds)} /></Field>
       </div><p className="form-hint">Saving panel settings updates the existing posted panel when Niko can find its saved message.</p></section>
       <SaveFooter state={state} />

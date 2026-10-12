@@ -6,6 +6,7 @@ import type {
   GuildConfig,
   GuildResources,
   GuildOverview,
+  GuildTicketsResponse,
   LevelRow,
   PublicConfig,
   UserOverview,
@@ -94,6 +95,8 @@ export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
 export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
+export const getGuildTickets = (id: string) => api<GuildTicketsResponse>(`/api/guild/${id}/tickets`);
+export const updateGuildTicketStatus = (guildId: string, channelId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/guild/${guildId}/tickets/${channelId}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getStaffApplications = (id: string) => api<StaffApplication[]>(`/api/guild/${id}/applications`);
 export const createStaffApplication = (id: string, body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean; application: StaffApplication }>(`/api/guild/${id}/applications`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const updateStaffApplication = (guildId: string, applicationId: string, body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean; application: StaffApplication }>(`/api/guild/${guildId}/applications/${applicationId}`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });

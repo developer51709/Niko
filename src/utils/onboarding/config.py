@@ -62,6 +62,7 @@ class OnboardingConfig:
 
     # Autoroles — assigned immediately when a member joins
     autorole_ids: list[int] | None = None
+    bot_autorole_ids: list[int] | None = None
 
     # Captcha verification
     captcha_enabled: bool = False
@@ -87,7 +88,7 @@ def _to_doc(guild_id: int, cfg: OnboardingConfig) -> dict:
         value = getattr(cfg, f.name)
         if f.name == "role_menus" and isinstance(value, dict):
             doc[f.name] = {str(k): v for k, v in value.items()}
-        elif f.name in ("autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"):
+        elif f.name in ("autorole_ids", "bot_autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"):
             doc[f.name] = [int(r) for r in (value or [])]
         elif f.name in _INT_FIELDS and value is not None:
             doc[f.name] = int(value)

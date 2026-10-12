@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
-import { AiView, CustomizationSettings, ModerationView } from "../components/dashboard/SettingsViews";
+import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
@@ -52,6 +52,8 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
   if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
+  if (section === "onboarding") return <OnboardingView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
+  if (section === "tickets") return <TicketsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "applications") return <StaffApplicationsView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;

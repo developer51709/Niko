@@ -227,6 +227,99 @@ def api_guild_config(guild_id):
         "server":     server_cfg,
     })
 
+@app.route("/api/guild/<guild_id>/tickets")
+@require_auth
+@require_guild_access
+def api_guild_tickets(guild_id):
+    from utils.tickets.utils import get_ticket_config
+
+    try:
+        guild_number = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid guild ID."}), 400
+    cfg = get_ticket_config(guild_number)
+    ticket_config = _serialize_ticket_config(cfg)
+    transcripts = []
+    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+        try:
+            from utils.tickets.transcripts import get_guild_transcripts
+            from datetime import datetime
+            rows = run_on_bot_loop(get_guild_transcripts(_discord_bot.cxn, guild_number, limit=50))
+            transcripts = [
+                {**dict(row), "transcript_id": str(row.get("transcript_id", "")),
+                 "opener_id": str(row.get("opener_id", "")),
+                 "claimed_by": str(row["claimed_by"]) if row.get("claimed_by") else None,
+                 "created_at": row["created_at"].isoformat() if isinstance(row.get("created_at"), datetime) else str(row.get("created_at", "")),
+                 "url": f"/transcript/{row.get('transcript_id', '')}"}
+                for row in rows
+            ]
+        except Exception:
+            return jsonify({"error": "Ticket transcripts are unavailable."}), 503
+    return jsonify({"config": ticket_config, "tickets": ticket_config["open_tickets"], "transcripts": transcripts})
+
+@app.route("/api/guild/<guild_id>/tickets/<channel_id>/status", methods=["POST"])
+@require_auth
+@require_guild_access
+@require_csrf
+def api_update_ticket_status(guild_id, channel_id):
+    body = request.get_json(silent=True) or {}
+    status = body.get("status")
+    if status not in {"open", "closed"}:
+        return jsonify({"error": "Ticket status must be open or closed."}), 400
+    try:
+        channel_number = int(channel_id)
+        guild_number = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid ticket channel."}), 400
+
+    from utils.tickets.utils import async_update_ticket_config, get_ticket_config
+    cfg = get_ticket_config(guild_number)
+    ticket = next((item for item in cfg.open_tickets if str(item.get("channel_id")) == str(channel_number)), None)
+    if ticket is None:
+        return jsonify({"error": "Ticket not found."}), 404
+    channel = _discord_bot.get_channel(channel_number) if _discord_bot is not None else None
+    if channel is None or getattr(getattr(channel, "guild", None), "id", None) != guild_number:
+        return jsonify({"error": "Ticket channel is not available in this server."}), 404
+    if status == "open":
+        try:
+            run_on_bot_loop(channel.edit(name=channel.name.removeprefix("closed-"), reason="Reopened from dashboard"))
+            member = channel.guild.get_member(int(ticket.get("opener_id", 0)))
+            if member is not None:
+                run_on_bot_loop(channel.set_permissions(member, send_messages=True, reason="Reopened from dashboard"))
+        except Exception:
+            return jsonify({"error": "Ticket channel could not be reopened."}), 503
+    else:
+        try:
+            run_on_bot_loop(channel.edit(name=channel.name if channel.name.startswith("closed-") else f"closed-{channel.name}"[:95], reason="Closed from dashboard"))
+            member = channel.guild.get_member(int(ticket.get("opener_id", 0)))
+            if member is not None:
+                run_on_bot_loop(channel.set_permissions(member, send_messages=False, reason="Closed from dashboard"))
+        except Exception:
+            return jsonify({"error": "Ticket channel could not be closed."}), 503
+    if ticket.get("message_id"):
+        try:
+            from cogs.tickets.views import build_ticket_header_view
+            opener_id = int(ticket.get("opener_id", 0))
+            header_view = build_ticket_header_view(
+                channel.guild,
+                category=ticket.get("category", "General"),
+                opener_id=opener_id,
+                channel=channel,
+                claimed_by=ticket.get("claimed_by"),
+                status=status,
+            )
+            run_on_bot_loop(channel.get_partial_message(int(ticket["message_id"])).edit(view=header_view))
+        except Exception:
+            # The panel may be absent in older/partially migrated tickets;
+            # channel permission/name changes remain the authoritative action.
+            pass
+    ticket["status"] = status
+    try:
+        run_on_bot_loop(async_update_ticket_config(guild_number, cfg))
+    except Exception:
+        return jsonify({"error": "Ticket status could not be saved."}), 503
+    return jsonify({"ok": True, "status": status})
+
 @app.route("/api/guild/<guild_id>/resources")
 @require_auth
 @require_guild_access
@@ -426,10 +519,12 @@ def api_save_server(guild_id):
         if not isinstance(onboarding_data, dict):
             return jsonify({"error": "Onboarding settings must be an object."}), 400
         onboarding = run_on_bot_loop(load_config(numeric_guild_id))
+        previous_captcha_channel_id = onboarding.captcha_channel_id
+        previous_captcha_panel_message_id = onboarding.captcha_panel_message_id
         allowed = {
             "welcome_channel", "welcome_title", "welcome_description",
             "welcome_color", "welcome_image", "rules_channel", "rules_text",
-            "rules_role_id", "autorole_ids", "captcha_enabled",
+            "rules_role_id", "autorole_ids", "bot_autorole_ids", "captcha_enabled",
             "captcha_channel_id", "captcha_add_role_ids", "captcha_remove_role_ids",
             "captcha_kick_on_fail",
         }
@@ -463,7 +558,7 @@ def api_save_server(guild_id):
                 if color is not None and not 0 <= color <= 0xFFFFFF:
                     return jsonify({"error": "Welcome color must be a valid hexadecimal color."}), 400
                 onboarding.welcome_color = color
-            elif key in {"autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"}:
+            elif key in {"autorole_ids", "bot_autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"}:
                 if not isinstance(value, list) or any(not str(item).isdigit() for item in value):
                     return jsonify({"error": f"{key} must contain valid Discord IDs."}), 400
                 existing_role_ids = {str(item) for item in (getattr(onboarding, key, None) or [])}
@@ -481,6 +576,15 @@ def api_save_server(guild_id):
                     return jsonify({"error": f"{key} is too long."}), 400
                 setattr(onboarding, key, value or None)
         run_on_bot_loop(save_config(numeric_guild_id, onboarding))
+        if "captcha_channel_id" in onboarding_data:
+            try:
+                run_on_bot_loop(_refresh_captcha_panel(
+                    numeric_guild_id,
+                    previous_captcha_channel_id,
+                    previous_captcha_panel_message_id,
+                ))
+            except Exception as error:
+                return jsonify({"error": f"Verification settings saved, but the panel could not be posted: {error}"}), 503
 
     logging_data = body.get("logging")
     if logging_data is not None:
@@ -539,9 +643,14 @@ def api_save_server(guild_id):
                 tickets.panel_color = int(str(value).replace("#", ""), 16) if value not in (None, "") else None
             except ValueError:
                 return jsonify({"error": "Ticket panel color must be hexadecimal."}), 400
+            if tickets.panel_color is not None and not 0 <= tickets.panel_color <= 0xFFFFFF:
+                return jsonify({"error": "Ticket panel color must be a six-digit hexadecimal color."}), 400
         if "panel_image" in tickets_data:
             value = tickets_data["panel_image"]
-            tickets.panel_image = str(value).strip() if value else None
+            image_url = str(value).strip() if value else ""
+            if image_url and (len(image_url) > 1000 or not image_url.startswith(("https://", "http://"))):
+                return jsonify({"error": "Ticket panel image must be a valid HTTP(S) URL under 1000 characters."}), 400
+            tickets.panel_image = image_url or None
         if "panel_categories" in tickets_data:
             categories = tickets_data["panel_categories"]
             if not isinstance(categories, list) or any(not isinstance(item, str) or not item.strip() for item in categories):

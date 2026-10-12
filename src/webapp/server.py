@@ -534,7 +534,11 @@ def managed_guild_ids() -> set[str]:
     """Return manageable mutual guilds, cached briefly in the signed session."""
     cached_at = session.get("managed_guilds_at", 0)
     cached_ids = session.get("managed_guild_ids")
-    if cached_ids is not None and time.time() - cached_at < 60:
+    if cached_ids is not None and time.time() - cached_at < 300:
+        # This cache is populated from OAuth-manageable guilds that were
+        # confirmed mutual when /api/guilds ran. Do not intersect it with the
+        # gateway cache again here: guilds can populate asynchronously and
+        # temporarily disappear from that cache while the owner switches tabs.
         return {str(guild_id) for guild_id in cached_ids}
 
     if not ensure_access_token():
@@ -545,12 +549,20 @@ def managed_guild_ids() -> set[str]:
     try:
         all_guilds = discord_get("/users/@me/guilds", token)
     except Exception:
+        # Keep a recently OAuth-verified authorization decision through a
+        # transient Discord API failure instead of turning it into a false 403.
+        cached_ids = session.get("managed_guild_ids")
+        if cached_ids is not None and time.time() - session.get("managed_guilds_at", 0) < 300:
+            return {str(guild_id) for guild_id in cached_ids}
         return set()
 
     present = bot_guild_ids()
     manageable = []
     for guild in all_guilds:
-        permissions = int(guild.get("permissions", 0))
+        try:
+            permissions = int(guild.get("permissions", 0))
+        except (TypeError, ValueError):
+            permissions = 0
         if (
             bool(permissions & (MANAGE_GUILD_PERM | ADMINISTRATOR_PERM))
             or bool(guild.get("owner"))
@@ -1156,7 +1168,7 @@ def _serialize_onboarding_config(cfg) -> dict:
     ):
         if serialized.get(field) is not None:
             serialized[field] = str(serialized[field])
-    for field in ("autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"):
+    for field in ("autorole_ids", "bot_autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"):
         if serialized.get(field) is not None:
             serialized[field] = [str(value) for value in serialized[field]]
     return serialized
@@ -1164,6 +1176,24 @@ def _serialize_onboarding_config(cfg) -> dict:
 
 def _serialize_ticket_config(cfg) -> dict:
     """Return the editable ticket settings without internal open-ticket state."""
+    guild = _discord_bot.get_guild(int(cfg.guild_id)) if _discord_bot is not None else None
+    tickets = []
+    for ticket in (cfg.open_tickets or []):
+        if not isinstance(ticket, dict):
+            continue
+        channel_id = str(ticket.get("channel_id", ""))
+        channel = _discord_bot.get_channel(int(channel_id)) if _discord_bot is not None and channel_id.isdigit() else None
+        opener_id = str(ticket.get("opener_id", ""))
+        opener = guild.get_member(int(opener_id)) if guild is not None and opener_id.isdigit() else None
+        tickets.append({
+            **ticket,
+            "channel_id": channel_id,
+            "opener_id": opener_id,
+            "message_id": str(ticket["message_id"]) if ticket.get("message_id") else None,
+            "claimed_by": str(ticket["claimed_by"]) if ticket.get("claimed_by") else None,
+            "channel_name": getattr(channel, "name", None),
+            "opener_name": getattr(opener, "display_name", None),
+        })
     return {
         "panel_title": cfg.panel_title,
         "panel_description": cfg.panel_description,
@@ -1173,6 +1203,7 @@ def _serialize_ticket_config(cfg) -> dict:
         "panel_channel_id": str(cfg.panel_channel_id) if cfg.panel_channel_id else None,
         "panel_message_id": str(cfg.panel_message_id) if cfg.panel_message_id else None,
         "support_roles": [str(role_id) for role_id in (cfg.support_roles or [])],
+        "open_tickets": tickets,
     }
 
 
@@ -1371,6 +1402,64 @@ async def _refresh_ticket_panel(guild_id: int) -> None:
         await message.edit(view=TicketPanelView(guild_id, cfg))
     except Exception:
         pass
+
+
+async def _refresh_captcha_panel(
+    guild_id: int,
+    previous_channel_id: int | None = None,
+    previous_message_id: int | None = None,
+) -> None:
+    """Post or update the public Verify panel in its configured channel."""
+    from utils.onboarding.config import load_config, save_config
+    from cogs.onboarding.views import CaptchaPanelView
+
+    guild = _discord_bot.get_guild(guild_id) if _discord_bot is not None else None
+    cfg = await load_config(guild_id)
+    if guild is None:
+        raise RuntimeError("The selected server is not available to the bot.")
+    if not cfg.captcha_channel_id:
+        if previous_channel_id and previous_message_id:
+            previous_channel = guild.get_channel(previous_channel_id)
+            if previous_channel is not None:
+                try:
+                    previous_message = await previous_channel.fetch_message(previous_message_id)
+                    await previous_message.delete()
+                except Exception:
+                    pass
+        cfg.captcha_panel_message_id = None
+        await save_config(guild_id, cfg)
+        return
+    channel = guild.get_channel(cfg.captcha_channel_id)
+    if channel is None:
+        raise RuntimeError("The configured verification panel channel is unavailable.")
+
+    panel_view = CaptchaPanelView(guild_id)
+    message = None
+    if previous_channel_id == cfg.captcha_channel_id and previous_message_id:
+        try:
+            message = await channel.fetch_message(previous_message_id)
+            await message.edit(view=panel_view)
+        except Exception:
+            message = None
+    if message is None:
+        message = await channel.send(view=panel_view)
+        if previous_channel_id and previous_message_id and previous_channel_id != channel.id:
+            previous_channel = guild.get_channel(previous_channel_id)
+            if previous_channel is not None:
+                try:
+                    previous_message = await previous_channel.fetch_message(previous_message_id)
+                    await previous_message.delete()
+                except Exception:
+                    pass
+
+    cfg.captcha_channel_id = channel.id
+    cfg.captcha_panel_message_id = message.id
+    await save_config(guild_id, cfg)
+    _discord_bot.add_view(panel_view, message_id=message.id)
+
+
+
+
 
 
 

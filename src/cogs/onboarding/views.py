@@ -1647,6 +1647,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
         channel_text = (
             f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
         )
+        delivery_text = "DM (always; independent of panel channel)"
         add_roles = (
             ", ".join(f"<@&{r}>" for r in cfg.captcha_add_role_ids)
             if cfg.captcha_add_role_ids
@@ -1661,7 +1662,8 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
         info = (
             f"**Status:** {status}\n"
-            f"**Channel:** {channel_text}\n"
+            f"**Verification panel channel:** {channel_text}\n"
+            f"**Captcha challenge delivery:** {delivery_text}\n"
             f"**Roles to add:** {add_roles}\n"
             f"**Roles to remove:** {remove_roles}\n"
             f"**Kick on 3 failed attempts:** {kick_text}"
@@ -1723,9 +1725,25 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
                 c = await get_config(self_inner.guild_id)
-                c.captcha_channel_id = interaction.channel.id
                 panel_view = CaptchaPanelView(self_inner.guild_id)
-                msg = await interaction.channel.send(view=panel_view)
+                msg = None
+                if c.captcha_channel_id == interaction.channel.id and c.captcha_panel_message_id:
+                    try:
+                        msg = await interaction.channel.fetch_message(c.captcha_panel_message_id)
+                        await msg.edit(view=panel_view)
+                    except discord.HTTPException:
+                        msg = None
+                if msg is None:
+                    msg = await interaction.channel.send(view=panel_view)
+                    if c.captcha_channel_id and c.captcha_panel_message_id and c.captcha_channel_id != interaction.channel.id:
+                        old_channel = interaction.guild.get_channel(c.captcha_channel_id)
+                        if old_channel is not None:
+                            try:
+                                old_message = await old_channel.fetch_message(c.captcha_panel_message_id)
+                                await old_message.delete()
+                            except discord.HTTPException:
+                                pass
+                c.captcha_channel_id = interaction.channel.id
                 c.captcha_panel_message_id = msg.id
                 await update_config(self_inner.guild_id, c)
                 interaction.client.add_view(panel_view, message_id=msg.id)

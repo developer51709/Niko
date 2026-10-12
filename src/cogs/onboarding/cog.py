@@ -242,10 +242,11 @@ class Onboarding(commands.Cog):
                 logging.warning("Onboarding", f"Support role synchronization failed for {member.id}: {exc}")
 
         # ── Autoroles ─────────────────────────────
-        if cfg.autorole_ids:
+        configured_role_ids = cfg.bot_autorole_ids if member.bot else cfg.autorole_ids
+        if configured_role_ids:
             roles_to_add = [
                 member.guild.get_role(rid)
-                for rid in cfg.autorole_ids
+                for rid in configured_role_ids
                 if member.guild.get_role(rid)
             ]
             if roles_to_add:
@@ -253,7 +254,7 @@ class Onboarding(commands.Cog):
                 # blow through Discord's role-edit rate limit.
                 await role_assign_limiter.acquire(member.guild.id)
                 try:
-                    await member.add_roles(*roles_to_add, reason="Onboarding autoroles")
+                    await member.add_roles(*roles_to_add, reason="Onboarding bot autoroles" if member.bot else "Onboarding member autoroles")
                 except discord.Forbidden:
                     pass  # bot lacks permission — silently skip
                 except discord.HTTPException:

@@ -152,12 +152,13 @@ export type OnboardingConfig = {
   welcome_channel?: number | null;
   welcome_title?: string | null;
   welcome_description?: string | null;
-  welcome_color?: number | null;
+  welcome_color?: number | null | string;
   welcome_image?: string | null;
   rules_channel?: number | null;
   rules_text?: string | null;
   rules_role_id?: number | null;
   autorole_ids?: number[];
+  bot_autorole_ids?: number[];
   captcha_enabled?: boolean;
   captcha_channel_id?: number | null;
   captcha_add_role_ids?: number[];
@@ -172,12 +173,41 @@ export type LoggingConfig = Record<string, string | number | null> & {
 export type TicketConfig = {
   panel_title?: string | null;
   panel_description?: string | null;
-  panel_color?: number | null;
+  panel_color?: number | null | string;
   panel_image?: string | null;
   panel_categories?: string[];
   panel_channel_id?: string | null;
   panel_message_id?: string | null;
   support_roles?: string[];
+  open_tickets?: TicketRow[];
+};
+
+export type TicketRow = {
+  channel_id: string;
+  message_id?: string | number | null;
+  opener_id: string;
+  opener_name?: string | null;
+  channel_name?: string;
+  category?: string;
+  status?: "open" | "closed";
+  claimed_by?: string | null;
+};
+
+export type TicketTranscript = {
+  transcript_id: string;
+  channel_name: string;
+  opener_id: string;
+  category: string;
+  claimed_by?: string | null;
+  message_count: number;
+  created_at: string;
+  url: string;
+};
+
+export type GuildTicketsResponse = {
+  config: TicketConfig;
+  tickets: TicketRow[];
+  transcripts: TicketTranscript[];
 };
 
 export type GuildProfile = {

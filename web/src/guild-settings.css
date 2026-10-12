@@ -51,6 +51,14 @@
   letter-spacing: .1em;
   text-transform: uppercase;
 }
+
+.ticket-filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.ticket-filter-row .button.is-active { color: var(--ink); border-color: var(--accent); }
+.ticket-channel-link { margin-left: 8px; color: var(--muted); font-size: 10px; text-decoration: none; }
+.ticket-channel-link:hover { color: var(--accent); }
+.ticket-admin-row > div { min-width: 0; }
+.ticket-admin-row > div > strong,
+.ticket-admin-row > div > small { display: block; }
 @keyframes dash-menu-in {
   from { opacity: 0; transform: translateY(-4px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -144,6 +152,22 @@
 .rank-1 { color: var(--accent-dark); }
 .empty-state { padding: 54px; background: var(--surface); border-color: var(--line); }
 .settings-stack { gap: 15px; }
+.dashboard-layout .guild-feature-settings { gap: 16px; }
+.dashboard-layout .guild-feature-settings > .settings-panel { padding: 24px; }
+.dashboard-layout .ticket-settings-stack .form-grid-wide { grid-column: 1 / -1; }
+.dashboard-layout .settings-category-editor { display: grid; gap: 8px; }
+.dashboard-layout .settings-category-editor > small { color: var(--dim); font-size: 10px; }
+.dashboard-layout .settings-category-editor .settings-option-list { gap: 9px; }
+.dashboard-layout .settings-category-editor .settings-option-row input { min-height: 42px; }
+.dashboard-layout .settings-category-editor .settings-option-add { margin-top: 2px; }
+.dashboard-layout .color-picker { min-width: 0; }
+.dashboard-layout .color-field-control { min-height: 42px; }
+.dashboard-layout .color-preview { width: 42px; height: 42px; }
+.ticket-admin-list { display: grid; gap: 8px; }
+.ticket-admin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 13px 14px; background: rgba(255,255,255,.025); border: 1px solid var(--line-soft); border-radius: 10px; }
+.ticket-admin-row > div { display: grid; gap: 4px; min-width: 0; }
+.ticket-admin-row strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.ticket-admin-row small { color: var(--muted); font-size: 9px; line-height: 1.5; }
 .settings-panel { max-width: none; }
 .settings-intro { display: flex; align-items: center; gap: 14px; max-width: 920px; min-height: 80px; padding: 14px 17px; margin: -4px 0 15px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
 .leveling-settings-intro { max-width: 920px; margin-top: 20px; margin-bottom: 16px; }
@@ -311,6 +335,9 @@
   .settings-intro strong, .settings-intro p { overflow-wrap: anywhere; }
   .server-logging-row .form-field { min-width: 0; }
   .server-logging-row .compact-setting-row { width: 100%; }
+  .dashboard-layout .guild-feature-settings > .settings-panel { padding: 18px; }
+  .dashboard-layout .settings-category-editor .settings-option-row { align-items: stretch; }
+  .dashboard-layout .settings-category-editor .settings-option-remove { flex: 0 0 auto; }
 }
 
 /* Dashboard overview contrast and navigation refinements. */

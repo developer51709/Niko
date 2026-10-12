@@ -599,6 +599,24 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
 
     pool = bot.cxn
 
+    async def remove_panel(key):
+        """Remove an obsolete setup panel and its registry row, if present."""
+        old = await pool.fetchrow(
+            "SELECT channel_id, message_id FROM support_server_panels WHERE guild_id = $1 AND panel_key = $2",
+            guild.id, key,
+        )
+        if old:
+            channel = guild.get_channel(int(old["channel_id"]))
+            if channel is not None:
+                try:
+                    await channel.get_partial_message(int(old["message_id"])).delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+            await pool.execute(
+                "DELETE FROM support_server_panels WHERE guild_id = $1 AND panel_key = $2",
+                guild.id, key,
+            )
+
     async def post(key, view, *, unique_table=None, channel_key=None):
         channel_key = _panel_channel_key(key, channel_key)
         channel = guild.get_channel(int(channels[channel_key]))
@@ -626,6 +644,11 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
             )
         return message
 
+    # These channels are self-explanatory; remove legacy setup panels as well
+    # as stopping them from being reposted on future support-server refreshes.
+    await remove_panel("welcome")
+    await remove_panel("staff_announcements")
+
     status = await _collect_status(bot)
     await post("status", _build_status_panel(bot, status), unique_table="persistent_status_panels")
     # Rules panel content is intentionally the established `.staff sendpanel rules` panel,
@@ -633,7 +656,6 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     from cogs.staff.owner import _build_rules_panel
     await post("rules", _build_rules_panel(bot), unique_table="persistent_rules_panels")
     await post("staff_rules", _staff_rules_panel(), channel_key="staff_rules")
-    await post("staff_announcements", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=f"# Staff announcements\nOfficial internal updates and operational notices are posted here.\n\n<@&{int(roles['staff'])}>"), accent_colour=0xC8A882)), channel_key="staff_announcements")
     website_url = f"{WEBSITE.rstrip('/')}/discord"
     invite_url_bot = f"https://discord.com/oauth2/authorize?client_id={bot.user.id}&permissions=8&scope=bot%20applications.commands"
     partnership_ad = discord.ui.LayoutView().add_item(discord.ui.Container(
@@ -651,12 +673,25 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
         accent_colour=0xC8A882,
     ))
     await post("partnership_ad", partnership_ad, channel_key="partnership_ad")
-    await post("partnership_info", discord.ui.LayoutView().add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content="# Partnership information\nPartner listings are managed by the Niko Partnerships team. Contact a Partnership Manager or Partnerships & Promotions Lead to discuss a listing. All ads must link to an active, moderated Discord community and follow our community rules."),
+    partnership_info = discord.ui.LayoutView().add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=(
+            "# Niko server partnerships\n"
+            "We partner with welcoming Discord communities that share a genuine interest in helping people discover and get more from Niko. The Partnerships team reviews listings and helps keep recommendations useful, safe, and relevant.\n\n"
+            "## Who can apply?\n"
+            "Your server should be active, well-moderated, and have a clear purpose. We do not list servers built around scams, harassment, hate, illegal activity, or misleading promotions. Partnership is a mutual recommendation—not a paid placement or an endorsement of every post made by a partner community.\n\n"
+            "## What to include\n"
+            "Contact a **Partnership Manager** or **Partnerships & Promotions Lead** with:\n"
+            "- A permanent invite link and a short description of your community.\n"
+            "- The audience you serve and why your members may be interested in Niko.\n"
+            "- What kind of collaboration or listing you have in mind.\n\n"
+            "## Listing guidelines\n"
+            "Keep advertisements accurate, respectful, and relevant. Use only links you own or are authorized to share; do not post referral bait, mass-DM members, or repeatedly bump an ad. Tell the team if your invite, server focus, or moderation standards change.\n\n"
+            "## Review and questions\n"
+            "Partnerships are reviewed by the Niko team and are not guaranteed. A listing may be declined or removed if it becomes inactive or no longer meets these standards. Please contact the Partnership team privately if you have questions or need to update a listing."
+        )),
         accent_colour=0xC8A882,
-    )), channel_key="partnership_info")
-    welcome_content = f"# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand.\n\n[Join the support server]({invite_url})" if invite_url else "# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand."
-    await post("welcome", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=welcome_content), accent_colour=0xC8A882)), channel_key="welcome")
+    ))
+    await post("partnership_info", partnership_info, channel_key="partnership_info")
     await post("support_guide", SupportGuidePanel(channels), channel_key="support_guide")
     roles_message = await post("notification_roles", SupportPingPanel(), channel_key="roles")
     ticket_message = await post("tickets", TicketPanelView(guild.id, get_ticket_config(guild.id)))
@@ -679,14 +714,29 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
             except discord.HTTPException:
                 pass
     guideline_post = await forum.create_thread(
-        name="Read first · community guidelines",
-        content="# Welcome to Niko Support\n\n• Be kind and respectful.\n• Search existing posts before opening a new help topic.\n• Never share passwords, tokens, payment details, or other private information.\n• Use a private support ticket for account-specific or sensitive matters.\n• Keep each post focused and include relevant steps, error messages, and screenshots.",
-        reason="Publish support forum guidelines",
+        name="Post guidelines",
+        content=(
+            "# Posting in community-help\n\n"
+            "Use this forum for Niko questions that other community members can help answer. A little context makes it much easier for someone to reproduce the issue and point you in the right direction.\n\n"
+            "## Before you post\n"
+            "- Search the forum for a similar question and check the documentation or command guide.\n"
+            "- Choose the closest topic tag, such as **Bug**, **Setup**, or **Feature request**.\n"
+            "- Keep one question or issue per post, with a clear, specific title.\n\n"
+            "## Help us understand\n"
+            "Include what you were trying to do, the steps you took, what you expected, and what happened instead. For bugs, add the command or feature involved, the relevant error text, and screenshots when useful. Mention your platform or client if it may matter. Be patient—volunteers may not be online right away.\n\n"
+            "## Keep everyone safe\n"
+            "Be respectful and assume good intent. Never post passwords, authentication tokens, payment details, private messages, or other sensitive personal information. Redact private data from screenshots. Move account-specific, moderation, or otherwise sensitive cases to a private support ticket.\n\n"
+            "## Follow up\n"
+            "Reply in your original post with useful updates, and mark the topic **Solved** when you find an answer. Please do not bump repeatedly, advertise, or share content that violates the server rules."
+        ),
+        reason="Publish community-help post guidelines",
     )
     await _support_api_pause()
-    await guideline_post.message.pin(reason="Keep support forum guidelines at the top")
+    await guideline_post.thread.edit(
+        pinned=True, locked=True, archived=True,
+        reason="Pin and lock the read-only community-help post guidelines",
+    )
     await _support_api_pause()
-    await guideline_post.thread.edit(locked=True, archived=True, reason="Lock the read-only forum guidelines thread")
     await _save_support_panel_record(
         pool, guild.id, "forum-guidelines", forum.id, guideline_post.thread.id,
     )
