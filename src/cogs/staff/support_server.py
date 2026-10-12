@@ -72,7 +72,6 @@ CHANNEL_TOPICS = {
     "suggestions": "Share ideas and feature suggestions for Niko.",
     "events": "Official event announcements and schedules.",
     "event_chat": "Talk about current and upcoming community events.",
-    "event_voice": "Community Stage for live events and hosted conversations.",
     "polls": "Official polls and voting. This channel is read-only for members.",
     "help": "Public peer-to-peer help forum. Open a private ticket for account or sensitive issues.",
     "tickets": "Open a private support ticket for account help, bugs, safety, or moderation appeals.",
