@@ -13,7 +13,7 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, _create_stage_channel, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, _create_stage_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _sync_stage_category, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -40,7 +40,8 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(CHANNEL_SPECS["member_logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["message_logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "Logs")
-        self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
+        self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] not in {"voice", "stage"}})
+        self.assertNotIn("event_voice", CHANNEL_TOPICS)
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
         self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_voice", "scam_review")))
 
@@ -64,6 +65,21 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual(set(kwargs), {"category", "reason"})
             self.assertNotIn("overwrites", kwargs)
             self.assertNotIn("topic", kwargs)
+        asyncio.run(check())
+
+    def test_stage_reconciliation_never_edits_channel_overwrites(self):
+        async def check():
+            category = SimpleNamespace(id=10)
+            channel = SimpleNamespace(category_id=5, edit=AsyncMock())
+            await _sync_stage_category(channel, category)
+            channel.edit.assert_awaited_once_with(
+                category=category,
+                reason="Move Niko Stage into its configured category",
+            )
+            channel.category_id = category.id
+            channel.edit.reset_mock()
+            await _sync_stage_category(channel, category)
+            channel.edit.assert_not_awaited()
         asyncio.run(check())
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):

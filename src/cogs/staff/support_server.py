@@ -98,7 +98,6 @@ CHANNEL_TOPICS = {
     "event_chat": "Talk about current and upcoming community events.",
     "giveaways": "Official Niko community giveaways, entries, and winner announcements.",
     "support_guide": "Helpful support links, ticket guidance, and privacy reminders.",
-    "event_voice": "Community Stage for live events and hosted conversations.",
     "polls": "Official polls and voting. This channel is read-only for members.",
     "help": "Public peer-to-peer help forum. Open a private ticket for account or sensitive issues.",
     "tickets": "Open a private support ticket for account help, bugs, safety, or moderation appeals.",
@@ -240,12 +239,18 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
 
 
 async def _create_stage_channel(guild: discord.Guild, name: str, category: discord.CategoryChannel):
-    """Create a Stage with only supported creation fields; set ACLs afterward."""
+    """Create a Stage with supported fields; permissions inherit from its category."""
     return await guild.create_stage_channel(
         name,
         category=category,
         reason="Niko support server structure",
     )
+
+
+async def _sync_stage_category(channel: discord.StageChannel, category: discord.CategoryChannel) -> None:
+    """Move an existing Stage only when needed; never write channel overwrites."""
+    if getattr(channel, "category_id", None) != category.id:
+        await channel.edit(category=category, reason="Move Niko Stage into its configured category")
 
 
 async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, category: discord.CategoryChannel) -> None:
@@ -358,6 +363,10 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             else:
                 channel = await guild.create_text_channel(name, category=category, topic=topic, overwrites=overwrites, slowmode_delay=2, reason="Niko support server structure")
             await _pace()
+        elif kind == "stage":
+            # Stage channels inherit category ACLs; per-channel overwrites are unsupported.
+            await _sync_stage_category(channel, category)
+            await _pace()
         else:
             edit_kwargs = {"category": category, "overwrites": overwrites}
             if kind == "text":
@@ -365,10 +374,6 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             elif kind == "forum":
                 edit_kwargs.update(topic=topic, slowmode_delay=5)
             await channel.edit(**edit_kwargs, reason="Reconcile Niko support channel permissions")
-            await _pace()
-        if kind == "stage" and channel is not None:
-            # Stage creation omits normal permission fields; apply the ACL in a second call.
-            await channel.edit(category=category, overwrites=overwrites, reason="Set Niko Stage access permissions")
             await _pace()
         if kind == "forum" and channel is not None:
             # Keep our standard tags while retaining other configured tags (up to Discord's limit).
