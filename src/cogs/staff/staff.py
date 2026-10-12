@@ -552,7 +552,7 @@ async def _configure_support_systems(bot, guild, roles, channels):
     from cogs.logging.formatters import _guild_config, _load_log_config, _save_guild_log_config
     all_logs = await _load_log_config()
     log_cfg = dict(_guild_config(all_logs, guild.id))
-    log_cfg.update({"moderation": int(channels["logs"]), "automod": int(channels["automod_logs"]), "members": int(channels["logs"]), "messages": int(channels["logs"]), "channels": int(channels["logs"])})
+    log_cfg.update(_support_log_channels(channels))
     await _save_guild_log_config(guild.id, log_cfg)
 
     from cogs.automod import mrbeast_scam
@@ -574,10 +574,21 @@ def _panel_channel_key(panel_key: str, channel_key: str | None = None) -> str:
     return channel_key or panel_key
 
 
+def _support_log_channels(channels: dict) -> dict[str, int]:
+    """Map each logging event group to its dedicated support-server channel."""
+    return {
+        "moderation": int(channels["logs"]),
+        "automod": int(channels["automod_logs"]),
+        "members": int(channels["member_logs"]),
+        "messages": int(channels["message_logs"]),
+        "channels": int(channels["channel_logs"]),
+    }
+
+
 async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str | None = None):
     from cogs.staff.owner import _build_status_panel, _collect_status
     from cogs.tickets.views import TicketPanelView
-    from utils.tickets.utils import get_ticket_config
+    from utils.tickets.utils import get_ticket_config, async_update_ticket_config
     from cogs.voicemaster.cog import VoiceMasterInterface
 
     pool = bot.cxn
@@ -624,7 +635,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     ticket_cfg = get_ticket_config(guild.id)
     ticket_cfg.panel_channel_id = ticket_message.channel.id
     ticket_cfg.panel_message_id = ticket_message.id
-    await async_update_ticket_config(guild.id, ticket_cfg)
+    if not await async_update_ticket_config(guild.id, ticket_cfg):
+        raise RuntimeError("Ticket panel message settings could not be saved to the database.")
     voice_message = await post("voice_panel", VoiceMasterInterface())
     forum = guild.get_channel(int(channels["help"]))
     if not isinstance(forum, discord.ForumChannel):
@@ -662,10 +674,13 @@ async def _support_api_pause():
 
 def _staff_rules_panel():
     view = discord.ui.LayoutView()
-    view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"# Staff guidelines\n{support_rules_text()}"),
-        accent_colour=0xC8A882,
-    ))
+    sections = support_rules_text().split("\n\n")
+    items = [
+        discord.ui.TextDisplay(content="# Staff guidelines\n-# Niko Support · Internal team handbook"),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+    ]
+    items.extend(discord.ui.TextDisplay(content=section) for section in sections)
+    view.add_item(discord.ui.Container(*items, accent_colour=0xC8A882))
     return view
 
 

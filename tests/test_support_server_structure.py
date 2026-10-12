@@ -3,7 +3,7 @@ import json
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import aiosqlite
 import discord
@@ -12,8 +12,8 @@ from discord.ext import commands
 sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
-from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, _everyone_channel_overwrite, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -24,9 +24,80 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(ROLE_SPECS["owner"][0], "Niko Owner")
         self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review"} <= CHANNEL_SPECS.keys())
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
+        self.assertEqual(CHANNEL_SPECS["event_voice"][2], "stage")
+        self.assertEqual(CHANNEL_SPECS["polls"][0], CHANNEL_SPECS["announcements"][0])
+        self.assertEqual(CHANNEL_SPECS["staff_rules"][0], "STAFF")
+        self.assertEqual(CHANNEL_SPECS["logs"][0], "STAFF · LOGS")
+        self.assertEqual(CHANNEL_SPECS["member_logs"][0], "STAFF · LOGS")
+        self.assertEqual(CHANNEL_SPECS["message_logs"][0], "STAFF · LOGS")
+        self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "STAFF · LOGS")
         self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
         self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_voice", "scam_review")))
+
+    def test_poll_channel_is_read_only_for_members(self):
+        overwrite = _everyone_channel_overwrite("polls", staff_only=False)
+        self.assertFalse(overwrite.send_messages)
+        self.assertTrue(overwrite.view_channel)
+        self.assertTrue(overwrite.read_message_history)
+        self.assertTrue(_everyone_channel_overwrite("announcements", False).send_messages is False)
+
+    def test_stage_channel_speaking_is_limited_to_staff(self):
+        self.assertFalse(_everyone_channel_overwrite("event_voice", False).speak)
+        self.assertTrue(_everyone_channel_overwrite("general", False).speak)
+
+    def test_configure_support_systems_saves_distinct_log_channel_ids(self):
+        async def check():
+            import utils.onboarding.config as onboarding_config
+            import utils.onboarding.utils as onboarding_utils
+            import utils.tickets.utils as ticket_utils
+            import cogs.logging.formatters as log_formatters
+
+            saved = {}
+            async def get_onboarding(_guild_id):
+                return SimpleNamespace()
+            async def update_onboarding(_guild_id, _config):
+                return None
+            async def load_logs():
+                return {}
+            async def save_logs(guild_id, config):
+                saved.update(config)
+            pool = SimpleNamespace(db_type="sqlite", fetchrow=AsyncMock(return_value={"guild_id": 1}))
+            ticket_config = SimpleNamespace(panel_title="", panel_description="", panel_categories=[], support_roles=[], panel_channel_id=None, panel_message_id=None)
+            channels = {"logs": 11, "automod_logs": 12, "member_logs": 13, "message_logs": 14, "channel_logs": 15, "scam_review": 16, "voice_join": 17, "tickets": 18, "welcome": 19}
+            roles = {key: value for key, value in zip(("member", "staff", "head_admin", "moderator", "head_support", "support"), range(21, 27))}
+            guild = SimpleNamespace(id=1, get_channel=lambda channel_id: SimpleNamespace(id=channel_id, category_id=20))
+            bot = SimpleNamespace(cxn=object(), get_cog=lambda _name: None)
+            with patch.object(onboarding_utils, "get_config", new=get_onboarding), \
+                 patch.object(onboarding_utils, "update_config", new=update_onboarding), \
+                 patch.object(onboarding_config, "_pool", return_value=pool), \
+                 patch.object(ticket_utils, "get_ticket_config", return_value=ticket_config), \
+                 patch.object(ticket_utils, "async_update_ticket_config", new=AsyncMock(return_value=True)), \
+                 patch.object(log_formatters, "_load_log_config", new=load_logs), \
+                 patch.object(log_formatters, "_save_guild_log_config", new=save_logs), \
+                 patch("cogs.automod.mrbeast_scam.set_review_channel", new=AsyncMock()), \
+                 patch.object(staff_module, "_save_voice_master_settings", new=AsyncMock()):
+                await staff_module._configure_support_systems(bot, guild, roles, channels)
+            self.assertEqual({key: saved[key] for key in ("moderation", "automod", "members", "messages", "channels")}, {
+                "moderation": 11, "automod": 12, "members": 13, "messages": 14, "channels": 15,
+            })
+        asyncio.run(check())
+
+    def test_support_log_groups_have_separate_destinations(self):
+        channels = {"logs": 11, "automod_logs": 12, "member_logs": 13, "message_logs": 14, "channel_logs": 15}
+        self.assertEqual(_support_log_channels(channels), {
+            "moderation": 11, "automod": 12, "members": 13, "messages": 14, "channels": 15,
+        })
+
+    def test_staff_rules_panel_is_a_multi_section_cv2_handbook(self):
+        view = _staff_rules_panel()
+        text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+        self.assertIn("Our purpose", text)
+        self.assertIn("Member support", text)
+        self.assertIn("Moderation & safety", text)
+        self.assertIn("Confidentiality & representation", text)
+        self.assertIn("Team conduct", text)
+        self.assertGreaterEqual(sum(isinstance(item, discord.ui.Separator) for item in view.walk_children()), 1)
 
     def test_support_commands_are_private_and_owner_only(self):
         async def check():
@@ -183,6 +254,68 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual((panel["channel_id"], panel["message_id"]), (32, 52))
             self.assertEqual((voice["join_channel_id"], voice["category_id"]), (63, 64))
             await connection.close()
+
+        asyncio.run(check())
+
+    def test_send_support_panels_updates_ticket_message_config(self):
+        async def check():
+            import cogs.tickets.views as ticket_views
+            import cogs.voicemaster.cog as voice_cog_module
+            import utils.tickets.utils as ticket_utils
+
+            class FakeForumChannel(discord.ForumChannel):
+                pass
+
+            ticket_cfg = SimpleNamespace(panel_channel_id=None, panel_message_id=None)
+            message = SimpleNamespace(id=9876, channel=SimpleNamespace(id=8765))
+            class FakeTicketPanelView:
+                def __init__(self, guild_id, cfg):
+                    self.guild_id = guild_id
+                    self.cfg = cfg
+            class FakeVoiceMasterInterface:
+                pass
+            channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "welcome", "roles", "tickets", "voice_panel", "help"), 100)}
+            pool = SimpleNamespace(fetchrow=AsyncMock(return_value=None), execute=AsyncMock())
+            panel_calls = []
+            class FlexibleGuild:
+                id = 44
+                def get_channel(self, channel_id):
+                    if channel_id == channels["help"]:
+                        forum = object.__new__(FakeForumChannel)
+                        forum.id = channel_id
+                        forum.create_thread = AsyncMock(return_value=SimpleNamespace(message=SimpleNamespace(pin=AsyncMock()), thread=SimpleNamespace(id=7788, edit=AsyncMock())))
+                        return forum
+                    if channel_id == channels["tickets"]:
+                        return SimpleNamespace(id=channel_id, send=AsyncMock(return_value=message), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
+                    return SimpleNamespace(id=channel_id, send=AsyncMock(return_value=message), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
+                def get_thread(self, _thread_id):
+                    return None
+            bot = SimpleNamespace(
+                cxn=pool,
+                add_view=Mock(),
+            )
+            async def update_config(guild_id, cfg):
+                panel_calls.append((guild_id, cfg.panel_channel_id, cfg.panel_message_id))
+                return True
+            with patch.object(ticket_views, "TicketPanelView", FakeTicketPanelView), \
+                 patch.object(voice_cog_module, "VoiceMasterInterface", FakeVoiceMasterInterface), \
+                 patch.object(ticket_utils, "get_ticket_config", return_value=ticket_cfg), \
+                 patch.object(ticket_utils, "async_update_ticket_config", new=update_config), \
+                 patch("cogs.staff.owner._collect_status", new=AsyncMock(return_value={})), \
+                 patch("cogs.staff.owner._build_status_panel", return_value=object()), \
+                 patch("cogs.staff.owner._build_rules_panel", return_value=object()), \
+                 patch("cogs.staff.staff._staff_rules_panel", return_value=object()), \
+                 patch.object(staff_module, "SupportPingPanel", return_value=object()), \
+                 patch("cogs.staff.staff._support_api_pause", new=AsyncMock()):
+                await _send_support_panels(
+                    bot,
+                    FlexibleGuild(),
+                    {},
+                    channels,
+                )
+            self.assertEqual(ticket_cfg.panel_channel_id, message.channel.id)
+            self.assertEqual(ticket_cfg.panel_message_id, message.id)
+            self.assertEqual(panel_calls, [(44, message.channel.id, message.id)])
 
         asyncio.run(check())
 

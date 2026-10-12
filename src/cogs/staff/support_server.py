@@ -30,27 +30,31 @@ ROLE_SPECS = {
 CHANNEL_SPECS = {
     "welcome": ("START HERE", "welcome", "text", False),
     "rules": ("START HERE", "rules", "text", False),
-    "announcements": ("START HERE", "announcements", "text", False),
     "roles": ("START HERE", "roles", "text", False),
-    "status": ("START HERE", "niko-status", "text", False),
-    "introductions": ("COMMUNITY", "introductions", "text", False),
-    "general": ("COMMUNITY", "general", "text", False),
-    "media": ("COMMUNITY", "share-your-setup", "text", False),
-    "memes": ("COMMUNITY", "memes", "text", False),
-    "suggestions": ("COMMUNITY", "suggestions", "text", False),
-    "events": ("COMMUNITY", "events", "text", False),
-    "event_chat": ("COMMUNITY", "event-chat", "text", False),
-    "polls": ("COMMUNITY", "polls", "text", False),
-    "event_voice": ("COMMUNITY", "Community Stage", "voice", False),
+    "announcements": ("UPDATES · READ ONLY", "announcements", "text", False),
+    "polls": ("UPDATES · READ ONLY", "polls", "text", False),
+    "status": ("UPDATES · READ ONLY", "niko-status", "text", False),
+
+    "general": ("COMMUNITY · CHAT", "general", "text", False),
+    "introductions": ("COMMUNITY · CHAT", "introductions", "text", False),
+    "media": ("COMMUNITY · CREATIONS", "share-your-setup", "text", False),
+    "memes": ("COMMUNITY · CREATIONS", "memes", "text", False),
+    "suggestions": ("COMMUNITY · IDEAS", "suggestions", "text", False),
+    "events": ("COMMUNITY · EVENTS", "events", "text", False),
+    "event_chat": ("COMMUNITY · EVENTS", "event-chat", "text", False),
+    "event_voice": ("COMMUNITY · EVENTS", "Community Stage", "stage", False),
     "help": ("SUPPORT", "community-help", "forum", False),
     "tickets": ("SUPPORT", "create-a-ticket", "text", False),
-    "logs": ("STAFF", "server-logs", "text", True),
-    "automod_logs": ("STAFF", "automod-logs", "text", True),
-    "scam_review": ("STAFF", "scam-review", "text", True),
-    "staff_announcements": ("STAFF", "staff-announcements", "text", True),
     "staff_rules": ("STAFF", "staff-guidelines", "text", True),
+    "staff_announcements": ("STAFF", "staff-announcements", "text", True),
     "staff_chat": ("STAFF", "staff-chat", "text", True),
     "staff_voice": ("STAFF", "staff-voice", "voice", True),
+    "logs": ("STAFF · LOGS", "moderation-logs", "text", True),
+    "member_logs": ("STAFF · LOGS", "member-logs", "text", True),
+    "message_logs": ("STAFF · LOGS", "message-logs", "text", True),
+    "channel_logs": ("STAFF · LOGS", "server-change-logs", "text", True),
+    "automod_logs": ("STAFF · LOGS", "automod-logs", "text", True),
+    "scam_review": ("STAFF · LOGS", "scam-review", "text", True),
     "voice_join": ("VOICE MASTER", "Join to Create", "voice", False),
     "voice_panel": ("VOICE MASTER", "voice-master", "text", False),
 }
@@ -68,19 +72,24 @@ CHANNEL_TOPICS = {
     "suggestions": "Share ideas and feature suggestions for Niko.",
     "events": "Official event announcements and schedules.",
     "event_chat": "Talk about current and upcoming community events.",
-    "polls": "Community polls and voting. Opt into the Polls role for pings.",
+    "event_voice": "Community Stage for live events and hosted conversations.",
+    "polls": "Official polls and voting. This channel is read-only for members.",
     "help": "Public peer-to-peer help forum. Open a private ticket for account or sensitive issues.",
     "tickets": "Open a private support ticket for account help, bugs, safety, or moderation appeals.",
     "staff_announcements": "Internal staff updates and operational notices.",
     "staff_rules": "Private staff guidelines and expectations.",
     "staff_chat": "Private staff coordination and discussion.",
-    "logs": "Internal server event and moderation logs.",
+    "logs": "Internal moderation action records.",
+    "member_logs": "Internal member join, leave, and profile-change records.",
+    "message_logs": "Internal message edit and deletion records.",
+    "channel_logs": "Internal channel and role change records.",
     "automod_logs": "Internal automod actions and alerts.",
     "scam_review": "Private review queue for reported scam images.",
     "voice_panel": "Create a temporary voice channel by joining the voice room below.",
 }
 
 API_STEP_DELAY = 0.35
+LEGACY_CATEGORY_NAMES = {"COMMUNITY", "COMMUNITY · LOUNGE"}
 
 # Discord community servers prevent deleting channels referenced by these
 # server-level settings. Repoint them to the new canonical channels first.
@@ -194,6 +203,17 @@ async def _ensure_role(guild: discord.Guild, key: str) -> discord.Role:
     return role
 
 
+def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.PermissionOverwrite:
+    """Apply public read-only and stage audience permissions consistently."""
+    return discord.PermissionOverwrite(
+        view_channel=not staff_only,
+        send_messages=not (key in {"rules", "announcements", "status", "polls", "staff_announcements", "staff_rules"}),
+        read_message_history=True,
+        connect=not staff_only,
+        speak=not staff_only and key != "event_voice",
+    )
+
+
 async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False) -> tuple[dict, dict]:
     """Create/repair canonical roles, channels, and category-based permissions."""
     if guild.id != SUPPORT_GUILD:
@@ -243,7 +263,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     categories: dict[str, discord.CategoryChannel] = {}
     for category_name in dict.fromkeys(spec[0] for spec in CHANNEL_SPECS.values()):
         category = discord.utils.get(guild.categories, name=category_name)
-        staff_only = category_name == "STAFF"
+        staff_only = category_name.startswith("STAFF")
         overwrites = {
             everyone: discord.PermissionOverwrite(view_channel=not staff_only),
             staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
@@ -262,8 +282,11 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     for key, (category_name, name, kind, staff_only) in CHANNEL_SPECS.items():
         category = categories[category_name]
         channel = discord.utils.get(category.channels, name=name)
+        if channel is None:
+            # Reuse the old channel when a category is renamed or reorganized.
+            channel = discord.utils.get(guild.channels, name=name)
         overwrites = {
-            everyone: discord.PermissionOverwrite(view_channel=not staff_only, send_messages=not (key in {"rules", "announcements", "status", "staff_announcements", "staff_rules"}), read_message_history=True, connect=not staff_only, speak=not staff_only),
+            everyone: _everyone_channel_overwrite(key, staff_only),
             staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
             owner_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True),
             bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, connect=True, speak=True),
@@ -274,7 +297,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             staff_specific_role = guild.get_role(int(staff_id)) if staff_id else None
             if staff_specific_role:
                 overwrites[staff_specific_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
-        expected_type = {"voice": discord.VoiceChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
+        expected_type = {"voice": discord.VoiceChannel, "stage": discord.StageChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
         if channel is not None and not isinstance(channel, expected_type):
             if channel.id not in protected_system_channel_ids:
                 await channel.delete(reason="Replace support channel with canonical channel type")
@@ -284,6 +307,8 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         if channel is None:
             if kind == "voice":
                 channel = await guild.create_voice_channel(name, category=category, overwrites=overwrites, reason="Niko support server structure")
+            elif kind == "stage":
+                channel = await guild.create_stage_channel(name, category=category, overwrites=overwrites, reason="Niko support server structure")
             elif kind == "forum":
                 channel = await guild.create_forum(name, topic=topic, category=category, overwrites=overwrites, slowmode_delay=5, default_thread_slowmode_delay=5, reason="Niko support server structure")
             else:
@@ -291,11 +316,17 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await _pace()
         else:
             edit_kwargs = {"category": category, "overwrites": overwrites}
-            if kind != "voice":
+            if kind in {"text", "forum"}:
                 edit_kwargs.update(topic=topic, slowmode_delay=5 if kind == "forum" else 2)
             await channel.edit(**edit_kwargs, reason="Reconcile Niko support channel permissions")
             await _pace()
         channels[key] = channel.id
+
+    for category_name in LEGACY_CATEGORY_NAMES:
+        legacy_category = discord.utils.get(guild.categories, name=category_name)
+        if legacy_category is not None and not legacy_category.channels:
+            await legacy_category.delete(reason="Remove empty legacy support category after reorganization")
+            await _pace()
 
     await _replace_community_system_channels(guild, channels)
     return roles, channels
@@ -443,11 +474,27 @@ class SupportPingPanel(discord.ui.LayoutView):
 
 
 def support_rules_text() -> str:
-    return ("## Staff guidelines\n- Protect private information and keep staff discussions confidential.\n"
-            "- Be calm, fair, and consistent; explain moderation decisions respectfully.\n"
-            "- Escalate safety concerns and serious incidents to the owner promptly.\n"
-            "- Do not promise features, uptime, or outcomes on behalf of the project.\n"
-            "- Keep support conversations in the right channel and document important decisions.")
+    return (
+        "## Our purpose\n"
+        "Help make the Niko community safe, welcoming, and useful. Treat every member with patience and dignity, whether they are new, frustrated, or asking a basic question.\n\n"
+        "## Member support\n"
+        "- Listen first, ask clarifying questions, and give accurate steps without talking down to anyone.\n"
+        "- Keep public help in the support forum; move account-specific or sensitive cases into a private ticket.\n"
+        "- Never ask members to post passwords, tokens, payment details, or other private information.\n\n"
+        "## Moderation & safety\n"
+        "- Apply the community rules consistently and proportionately. Explain decisions calmly and avoid public arguments.\n"
+        "- Preserve relevant context, document significant actions in the appropriate log, and do not delete evidence of an active safety incident.\n"
+        "- Escalate credible threats, exploitation, privacy risks, and uncertain high-impact cases to the owner or head admin promptly.\n\n"
+        "## Confidentiality & representation\n"
+        "- Keep tickets, applications, reports, staff chat, and member data inside authorized staff spaces. Share only what is necessary to resolve a case.\n"
+        "- Do not share screenshots or quote private conversations outside the team without approval.\n"
+        "- You speak for Niko only when authorized: do not promise features, release dates, uptime, refunds, or outcomes.\n\n"
+        "## Team conduct\n"
+        "- Be respectful with teammates, accept feedback, and resolve disagreements privately and constructively.\n"
+        "- Use staff announcements for official updates, staff chat for coordination, and the log channels for operational records.\n"
+        "- If you make a mistake, own it, tell the appropriate lead, and help correct the impact. When unsure, pause and ask a lead before acting."
+    )
+
 
 
 def member_join_roles(member: discord.Member, roles: dict) -> list[discord.Role]:
