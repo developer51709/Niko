@@ -42,7 +42,6 @@ CHANNEL_SPECS = {
     "suggestions": ("Community", "suggestions", "text", False),
     "events": ("Events", "events", "text", False),
     "event_chat": ("Events", "event-chat", "text", False),
-    "event_voice": ("Events", "Community Stage", "stage", False),
     "giveaways": ("Events", "giveaways", "text", False),
     "help": ("Support", "community-help", "forum", False),
     "tickets": ("Support", "create-a-ticket", "text", False),
@@ -80,7 +79,6 @@ LEGACY_CHANNEL_SPECS = {
     "raffles": ("Events", "giveaways", "COMMUNITY · EVENTS", "giveaways"),
     "support_forum": ("Support", "community-help", "SUPPORT", "community-help"),
     "support_tickets": ("Support", "create-a-ticket", "SUPPORT", "create-a-ticket"),
-    "stage": ("Events", "Community Stage", "COMMUNITY · EVENTS", "Community Stage"),
 }
 
 CHANNEL_TOPICS = {
@@ -228,29 +226,14 @@ async def _ensure_role(guild: discord.Guild, key: str) -> discord.Role:
 
 
 def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.PermissionOverwrite:
-    """Apply public read-only and stage audience permissions consistently."""
+    """Apply public read-only and voice access permissions consistently."""
     return discord.PermissionOverwrite(
         view_channel=not staff_only,
         send_messages=not (key in {"rules", "announcements", "status", "polls", "staff_announcements", "staff_rules"}),
         read_message_history=True,
         connect=not staff_only,
-        speak=not staff_only and key != "event_voice",
+        speak=not staff_only,
     )
-
-
-async def _create_stage_channel(guild: discord.Guild, name: str, category: discord.CategoryChannel):
-    """Create a Stage with supported fields; permissions inherit from its category."""
-    return await guild.create_stage_channel(
-        name,
-        category=category,
-        reason="Niko support server structure",
-    )
-
-
-async def _sync_stage_category(channel: discord.StageChannel, category: discord.CategoryChannel) -> None:
-    """Move an existing Stage only when needed; never write channel overwrites."""
-    if getattr(channel, "category_id", None) != category.id:
-        await channel.edit(category=category, reason="Move Niko Stage into its configured category")
 
 
 async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, category: discord.CategoryChannel) -> None:
@@ -346,7 +329,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             staff_specific_role = guild.get_role(int(staff_id)) if staff_id else None
             if staff_specific_role:
                 overwrites[staff_specific_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
-        expected_type = {"voice": discord.VoiceChannel, "stage": discord.StageChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
+        expected_type = {"voice": discord.VoiceChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
         if channel is not None and not isinstance(channel, expected_type):
             if channel.id not in protected_system_channel_ids:
                 await channel.delete(reason="Replace support channel with canonical channel type")
@@ -356,16 +339,10 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         if channel is None:
             if kind == "voice":
                 channel = await guild.create_voice_channel(name, category=category, overwrites=overwrites, reason="Niko support server structure")
-            elif kind == "stage":
-                channel = await _create_stage_channel(guild, name, category)
             elif kind == "forum":
                 channel = await guild.create_forum(name, topic=topic, category=category, overwrites=overwrites, slowmode_delay=5, default_thread_slowmode_delay=5, available_tags=HELP_FORUM_TAGS, reason="Niko support server structure")
             else:
                 channel = await guild.create_text_channel(name, category=category, topic=topic, overwrites=overwrites, slowmode_delay=2, reason="Niko support server structure")
-            await _pace()
-        elif kind == "stage":
-            # Stage channels inherit category ACLs; per-channel overwrites are unsupported.
-            await _sync_stage_category(channel, category)
             await _pace()
         else:
             edit_kwargs = {"category": category, "overwrites": overwrites}
