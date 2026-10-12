@@ -569,6 +569,11 @@ async def _configure_support_systems(bot, guild, roles, channels):
         voice_cog._bust_cache(guild.id)
 
 
+def _panel_channel_key(panel_key: str, channel_key: str | None = None) -> str:
+    """Resolve a panel's target channel without evaluating a parameter as a default."""
+    return channel_key or panel_key
+
+
 async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str | None = None):
     from cogs.staff.owner import _build_status_panel, _collect_status
     from cogs.tickets.views import TicketPanelView
@@ -577,7 +582,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
 
     pool = bot.cxn
 
-    async def post(key, view, *, unique_table=None, channel_key=key):
+    async def post(key, view, *, unique_table=None, channel_key=None):
+        channel_key = _panel_channel_key(key, channel_key)
         channel = guild.get_channel(int(channels[channel_key]))
         if channel is None:
             raise RuntimeError(f"Configured channel `{channel_key}` disappeared before panel post.")

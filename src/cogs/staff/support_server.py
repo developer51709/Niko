@@ -5,10 +5,11 @@ import json
 
 import discord
 
-from config.ids import SUPPORT_GUILD
+from config.ids import OWNER_IDS, SUPPORT_GUILD
 from utils import logging
 
 ROLE_SPECS = {
+    "owner": ("Niko Owner", 0xC8A882, True),
     "staff": ("Niko Staff", 0xC8A882, True),
     "head_admin": ("Head Admin", 0xE74C3C, True),
     "moderator": ("Moderator", 0xE67E22, True),
@@ -228,9 +229,17 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     for key in ROLE_SPECS:
         roles[key] = (await _ensure_role(guild, key)).id
 
+    for owner_id in OWNER_IDS:
+        owner = guild.get_member(int(owner_id))
+        owner_role = guild.get_role(roles["owner"])
+        if owner is not None and owner_role is not None and owner_role not in owner.roles:
+            await owner.add_roles(owner_role, reason="Assign the Niko owner role during support setup")
+            await _pace()
+
     bot_member = guild.me
     everyone = guild.default_role
     staff_role = guild.get_role(roles["staff"])
+    owner_role = guild.get_role(roles["owner"])
     categories: dict[str, discord.CategoryChannel] = {}
     for category_name in dict.fromkeys(spec[0] for spec in CHANNEL_SPECS.values()):
         category = discord.utils.get(guild.categories, name=category_name)
@@ -238,6 +247,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         overwrites = {
             everyone: discord.PermissionOverwrite(view_channel=not staff_only),
             staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
+            owner_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True),
             bot_member: discord.PermissionOverwrite(view_channel=True, manage_channels=True, manage_permissions=True, send_messages=True, read_message_history=True, connect=True, speak=True),
         }
         if category is None:
@@ -255,10 +265,11 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         overwrites = {
             everyone: discord.PermissionOverwrite(view_channel=not staff_only, send_messages=not (key in {"rules", "announcements", "status", "staff_announcements", "staff_rules"}), read_message_history=True, connect=not staff_only, speak=not staff_only),
             staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
+            owner_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True),
             bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, connect=True, speak=True),
         }
         # Staff application role tiers are allowed in internal staff spaces too.
-        for staff_key in ("head_admin", "moderator", "head_support", "graphic_designer", "support"):
+        for staff_key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"):
             staff_id = roles.get(staff_key)
             staff_specific_role = guild.get_role(int(staff_id)) if staff_id else None
             if staff_specific_role:
@@ -331,6 +342,10 @@ async def assign_join_roles(bot, member: discord.Member, roles: dict) -> None:
     if member.guild.id != SUPPORT_GUILD:
         return
     additions = member_join_roles(member, roles)
+    if member.id in OWNER_IDS and roles.get("owner"):
+        owner_role = member.guild.get_role(int(roles["owner"]))
+        if owner_role and owner_role not in member.roles:
+            additions.append(owner_role)
     from utils.donations import is_supporter
     supporter = member.guild.get_role(int(roles["supporter"])) if roles.get("supporter") else None
     if supporter and supporter not in member.roles and await is_supporter(bot, member.id):
@@ -339,7 +354,9 @@ async def assign_join_roles(bot, member: discord.Member, roles: dict) -> None:
     if pool:
         row = await pool.fetchrow("SELECT role FROM staff_members WHERE user_id = $1", member.id)
         staff_key = str(row["role"]) if row else None
-        if staff_key in {"head_admin", "moderator", "head_support", "graphic_designer", "support"}:
+        if member.id in OWNER_IDS:
+            staff_key = "owner"
+        if staff_key in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"}:
             if roles.get("staff"):
                 shared = member.guild.get_role(int(roles["staff"]))
                 if shared and shared not in member.roles:
@@ -362,7 +379,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
     staff_by_user = {int(row["user_id"]): str(row["role"]) for row in staff_rows}
     from config.ids import OWNER_IDS
     for owner_id in OWNER_IDS:
-        staff_by_user.setdefault(int(owner_id), "head_admin")
+        staff_by_user[int(owner_id)] = "owner"
     try:
         members = [member async for member in guild.fetch_members(limit=None)]
     except (discord.Forbidden, discord.HTTPException):
@@ -380,7 +397,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
         if shared_staff and member.id in staff_by_user and shared_staff not in member.roles:
             add.append(shared_staff)
         staff_key = staff_by_user.get(member.id)
-        if staff_key not in {"head_admin", "moderator", "head_support", "graphic_designer", "support"}:
+        if staff_key not in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"}:
             staff_key = None
         if staff_key and roles.get(staff_key):
             specific = guild.get_role(int(roles[staff_key]))
@@ -390,7 +407,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
             await member.add_roles(*add, reason="Synchronize Niko support server roles")
         if staff_key:
             specific = guild.get_role(int(roles[staff_key])) if roles.get(staff_key) else None
-            stale = [guild.get_role(int(roles[key])) for key in ("head_admin", "moderator", "head_support", "graphic_designer", "support") if key != staff_key and roles.get(key)]
+            stale = [guild.get_role(int(roles[key])) for key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support") if key != staff_key and roles.get(key)]
             stale = [role for role in stale if role and role in member.roles]
             if specific and specific not in member.roles:
                 await member.add_roles(specific, reason="Synchronize Niko staff assignment")

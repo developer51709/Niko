@@ -12,15 +12,16 @@ from discord.ext import commands
 sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
-from cogs.staff.staff import StaffCog, _save_support_panel_record, _save_voice_master_settings
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, ROLE_SPECS, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
-from database import SQLitePool
+from database import MongoPool, SQLitePool
 
 
 class SupportServerStructureTests(unittest.TestCase):
     def test_blueprint_contains_requested_channels_roles_and_descriptions(self):
-        self.assertTrue({"staff", "supporter", "member", "announcements_ping", "events_ping", "community_ping", "polls_ping"} <= ROLE_SPECS.keys())
+        self.assertTrue({"owner", "staff", "supporter", "member", "announcements_ping", "events_ping", "community_ping", "polls_ping"} <= ROLE_SPECS.keys())
+        self.assertEqual(ROLE_SPECS["owner"][0], "Niko Owner")
         self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review"} <= CHANNEL_SPECS.keys())
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
         self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
@@ -182,6 +183,99 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual((panel["channel_id"], panel["message_id"]), (32, 52))
             self.assertEqual((voice["join_channel_id"], voice["category_id"]), (63, 64))
             await connection.close()
+
+        asyncio.run(check())
+
+    def test_panel_channel_default_is_resolved_at_call_time(self):
+        self.assertEqual(_panel_channel_key("welcome"), "welcome")
+        self.assertEqual(_panel_channel_key("tickets", "support"), "support")
+
+    def test_support_role_sync_assigns_owner_role_to_configured_owner(self):
+        async def check():
+            from config.ids import OWNER_IDS
+            owner_id = next(iter(OWNER_IDS))
+            owner_role = SimpleNamespace(id=77)
+            base_role = SimpleNamespace(id=78)
+            staff_role = SimpleNamespace(id=79)
+            member = SimpleNamespace(id=owner_id, roles=[], add_roles=AsyncMock())
+            async def fetch_members(limit=None):
+                yield member
+            guild = SimpleNamespace(
+                members=[member],
+                fetch_members=fetch_members,
+                get_role=lambda role_id: {77: owner_role, 78: base_role, 79: staff_role}.get(role_id),
+            )
+            pool = SimpleNamespace(fetch=AsyncMock(return_value=[]))
+            bot = SimpleNamespace(cxn=pool, user=SimpleNamespace(id=999))
+            with patch("utils.donations.is_supporter", new=AsyncMock(return_value=False)):
+                await assign_support_roles(bot, guild, {"owner": 77, "member": 78, "staff": 79})
+            member.add_roles.assert_awaited()
+            assigned_ids = {role.id for call in member.add_roles.await_args_list for role in call.args}
+            self.assertTrue({base_role.id, owner_role.id, staff_role.id} <= assigned_ids)
+        asyncio.run(check())
+
+    def test_joining_configured_bot_owner_gets_owner_role(self):
+        async def check():
+            from config.ids import OWNER_IDS
+            owner_id = next(iter(OWNER_IDS))
+            owner_role = SimpleNamespace(id=77)
+            member_role = SimpleNamespace(id=78)
+            member = SimpleNamespace(
+                id=owner_id,
+                guild=SimpleNamespace(id=staff_module.SUPPORT_GUILD, get_role=lambda role_id: {77: owner_role, 78: member_role}.get(role_id)),
+                roles=[],
+                add_roles=AsyncMock(),
+            )
+            bot = SimpleNamespace(cxn=None)
+            await assign_join_roles(bot, member, {"owner": 77, "member": 78})
+            assigned_ids = {role.id for call in member.add_roles.await_args_list for role in call.args}
+            self.assertTrue({owner_role.id, member_role.id} <= assigned_ids)
+        asyncio.run(check())
+
+    def test_mongodb_support_config_upserts_accept_conflict_assignments(self):
+        class Collection:
+            def __init__(self):
+                self.update_one = AsyncMock(return_value=SimpleNamespace(upserted_id=None))
+
+        class Database:
+            def __init__(self):
+                self.collections = {}
+
+            def __getitem__(self, name):
+                return self.collections.setdefault(name, Collection())
+
+        class Client:
+            def __init__(self):
+                self.database = Database()
+
+            def __getitem__(self, _name):
+                return self.database
+
+        async def check():
+            client = Client()
+            pool = MongoPool(client, "test")
+            guild_id = staff_module.SUPPORT_GUILD
+            await pool.execute(
+                "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, updated_at) VALUES ($1, $2, $3, datetime('now')) "
+                "ON CONFLICT (guild_id) DO UPDATE SET role_ids = $4, channel_ids = $5, updated_at = datetime('now')",
+                guild_id, '{"staff":1}', '{"welcome":2}', '{"staff":3}', '{"welcome":4}',
+            )
+            config_calls = client.database["support_server_config"].update_one.await_args_list
+            self.assertEqual(config_calls[0].args[0], {"_id": guild_id})
+            self.assertEqual(config_calls[1].args[1]["$set"]["role_ids"], '{"staff":3}')
+            self.assertEqual(config_calls[1].args[1]["$set"]["channel_ids"], '{"welcome":4}')
+            self.assertIn("updated_at", config_calls[1].args[1]["$set"])
+
+            await pool.execute(
+                "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, $2, $3, $4, datetime('now')) "
+                "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $5, message_id = $6, updated_at = datetime('now')",
+                guild_id, "welcome", 31, 51, 32, 52,
+            )
+            panel_calls = client.database["support_server_panels"].update_one.await_args_list
+            self.assertEqual(panel_calls[0].args[0], {"_id": f"{guild_id}_welcome"})
+            self.assertEqual(panel_calls[1].args[1]["$set"]["channel_id"], 32)
+            self.assertEqual(panel_calls[1].args[1]["$set"]["message_id"], 52)
+            self.assertIn("updated_at", panel_calls[1].args[1]["$set"])
 
         asyncio.run(check())
 
