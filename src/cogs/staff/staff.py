@@ -638,12 +638,14 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     invite_url_bot = f"https://discord.com/oauth2/authorize?client_id={bot.user.id}&permissions=8&scope=bot%20applications.commands"
     partnership_ad = discord.ui.LayoutView().add_item(discord.ui.Container(
         discord.ui.TextDisplay(content=(
-            "# Meet Niko — your server’s new favorite bot\n"
-            "Make your Discord community easier to run and more fun to be part of. Niko brings powerful moderation and AutoMod, "
-            "support tickets, leveling, music, games, economy, and friendly AI chat together in one polished bot.\n\n"
-            "**Bring Niko to your server**\n"
+            "# Meet Niko — your server’s new favorite bot (probably)\n"
+            "You know what every server needs? Fewer spammy command messages in chat and one less mod saying ‘please read the rules.’ Niko can help with both.\n\n"
+            "Get powerful moderation and configurable AutoMod, private support tickets, leveling and activity rewards, music, games, economy features, and friendly AI chat — all in one bot. "
+            "Set up the tools your community actually wants, from keeping conversations tidy to giving members new ways to hang out.\n\n"
+            "Basically, Niko handles some of the busywork so your staff can spend less time putting out tiny fires and more time being part of the community. Your members get useful features; your mods get a breather. Everyone wins. (Even the person who always forgets the command.)\n\n"
+            "**Curious? Give Niko a spot in your server.**\n"
             f"[Add Niko to Discord]({invite_url_bot})\n\n"
-            "**Get help, guides, and meet the community**\n"
+            "Need setup help, want to swap ideas, or just want to meet other Niko users? Our official support community has guides and real people ready to help.\n"
             f"[Join the official Niko support server]({website_url})"
         )),
         accent_colour=0xC8A882,

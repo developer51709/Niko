@@ -23,7 +23,9 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_blueprint_contains_requested_channels_roles_and_descriptions(self):
         self.assertTrue({"owner", "staff", "supporter", "member", "announcements_ping", "events_ping", "community_ping", "polls_ping"} <= ROLE_SPECS.keys())
         self.assertEqual(ROLE_SPECS["owner"][0], "Niko Owner")
-        self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review"} <= CHANNEL_SPECS.keys())
+        self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review", "bot_commands"} <= CHANNEL_SPECS.keys())
+        self.assertEqual(CHANNEL_SPECS["bot_commands"][:3], ("Community", "bot-commands", "text"))
+        self.assertIn("command messages out of the main community chat", CHANNEL_TOPICS["bot_commands"])
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
         self.assertNotIn("event_voice", CHANNEL_SPECS)
         self.assertIn("giveaways", CHANNEL_SPECS)
@@ -67,6 +69,7 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertFalse(_everyone_channel_overwrite("announcements", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("general", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("general", False).speak)
+        self.assertTrue(_everyone_channel_overwrite("bot_commands", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("voice_panel", False).connect)
         self.assertFalse(_everyone_channel_overwrite("welcome", True).view_channel)
 
@@ -444,6 +447,12 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertIn("AutoMod", partnership_ad_text)
             self.assertIn("support tickets", partnership_ad_text)
             self.assertIn("friendly AI chat", partnership_ad_text)
+            self.assertIn("configurable AutoMod", partnership_ad_text)
+            self.assertIn("activity rewards", partnership_ad_text)
+            self.assertIn("less time putting out tiny fires", partnership_ad_text)
+            self.assertIn("(Even the person who always forgets the command.)", partnership_ad_text)
+            self.assertIn("Curious? Give Niko a spot in your server.", partnership_ad_text)
+            self.assertGreaterEqual(len(partnership_ad_text), 700)
             panel_registry_calls = [
                 call for call in pool.execute.await_args_list
                 if call.args and "INSERT INTO support_server_panels" in call.args[0]

@@ -40,6 +40,7 @@ CHANNEL_SPECS = {
     "status": ("Updates", "niko-status", "text", False),
 
     "general": ("Community", "general", "text", False),
+    "bot_commands": ("Community", "bot-commands", "text", False),
     "introductions": ("Community", "introductions", "text", False),
     "media": ("Community", "share-your-setup", "text", False),
     "memes": ("Community", "memes", "text", False),
@@ -96,6 +97,7 @@ CHANNEL_TOPICS = {
     "status": "Official Niko service status and incident updates.",
     "introductions": "Introduce yourself to the Niko community.",
     "general": "Community conversation about Niko and beyond.",
+    "bot_commands": "Use Niko's commands here to keep command messages out of the main community chat.",
     "media": "Share your desk, setup, art, and Niko screenshots.",
     "memes": "Keep memes friendly and within the community rules.",
     "suggestions": "Share ideas and feature suggestions for Niko.",
