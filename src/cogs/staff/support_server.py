@@ -311,8 +311,8 @@ async def create_support_invite(bot, guild: discord.Guild, channels: dict) -> st
     channel_ids["general"] = int(channels["general"])
     await pool.execute(
         "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, invite_url, updated_at) "
-        "VALUES ($1, $2, $3, $4, datetime('now')) ON CONFLICT (guild_id) DO UPDATE SET invite_url = $4, updated_at = datetime('now')",
-        guild.id, json.dumps(role_ids), json.dumps(channel_ids), invite.url,
+        "VALUES ($1, $2, $3, $4, datetime('now')) ON CONFLICT (guild_id) DO UPDATE SET invite_url = $5, updated_at = datetime('now')",
+        guild.id, json.dumps(role_ids), json.dumps(channel_ids), invite.url, invite.url,
     )
     return invite.url
 

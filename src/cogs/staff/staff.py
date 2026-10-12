@@ -541,9 +541,10 @@ async def _configure_support_systems(bot, guild, roles, channels):
 
     await bot.cxn.execute(
         "INSERT INTO voicemaster_settings (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate) "
-        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guild_id) DO UPDATE SET join_channel_id = $2, category_id = $3",
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (guild_id) DO UPDATE SET join_channel_id = $7, category_id = $8",
         guild.id, int(channels["voice_join"]), guild.get_channel(int(channels["voice_join"])).category_id,
-        "{user}'s Channel", 0, 64000,
+        "{user}'s Channel", 0, 64000, int(channels["voice_join"]),
+        guild.get_channel(int(channels["voice_join"])).category_id,
     )
     voice_cog = bot.get_cog("VoiceMaster")
     if voice_cog:
@@ -571,8 +572,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
         message = await channel.send(view=view)
         await pool.execute(
             "INSERT INTO support_server_panels (guild_id, panel_key, channel_id, message_id, updated_at) VALUES ($1, $2, $3, $4, datetime('now')) "
-            "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $3, message_id = $4, updated_at = datetime('now')",
-            guild.id, key, channel.id, message.id,
+            "ON CONFLICT (guild_id, panel_key) DO UPDATE SET channel_id = $5, message_id = $6, updated_at = datetime('now')",
+            guild.id, key, channel.id, message.id, channel.id, message.id,
         )
         if unique_table:
             old_unique = await pool.fetchrow(f"SELECT message_id FROM {unique_table} WHERE channel_id = $1 AND guild_id = $2", channel.id, guild.id)
