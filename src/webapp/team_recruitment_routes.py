@@ -50,6 +50,21 @@ APPROVAL_NEXT_STEPS = {
         "Share your preferred tools and availability for design requests.",
         "Coordinate with the owner before starting your first design brief.",
     ],
+    "event_coordinator": [
+        "Meet with the owner to review the upcoming event calendar and format.",
+        "Coordinate event schedules and announcements with the team.",
+        "Use the event channels to keep members informed and activities welcoming.",
+    ],
+    "partnerships_promotions_lead": [
+        "Align with the owner on partnership goals and promotion standards.",
+        "Coordinate partnership campaigns and review partner-server listings.",
+        "Work with Partnership Managers to keep public promotions current and safe.",
+    ],
+    "partnership_manager": [
+        "Review the partnership requirements and public listing guidelines.",
+        "Coordinate with the Partnerships & Promotions Lead on partner enquiries.",
+        "Keep partner-server advertisements accurate, active, and community-safe.",
+    ],
 }
 
 # Fixed applications map directly to official roles defined in staff.py.
@@ -99,6 +114,33 @@ TEAM_ROLE_APPLICATIONS = {
             {"id": "portfolio", "prompt": "Share links to examples of your design work or portfolio.", "type": "paragraph", "required": True},
             {"id": "process", "prompt": "Walk us through how you take a visual brief from idea to final design.", "type": "paragraph", "required": True},
             {"id": "tools", "prompt": "Which design tools and visual styles do you work with most?", "type": "short_text", "required": True},
+        ],
+    },
+    "event_coordinator": {
+        "title": "Event Coordinator",
+        "description": "Plan and run welcoming events that bring the Niko community together.",
+        "questions": [
+            {"id": "event_experience", "prompt": "Describe an event or activity you have planned or helped run.", "type": "paragraph", "required": True},
+            {"id": "event_idea", "prompt": "What is one event you would organize for the Niko community, and how would it work?", "type": "paragraph", "required": True},
+            {"id": "event_support", "prompt": "How would you make sure an event stays welcoming and runs smoothly?", "type": "paragraph", "required": True},
+        ],
+    },
+    "partnerships_promotions_lead": {
+        "title": "Partnerships & Promotions Lead",
+        "description": "Lead Niko’s partnership strategy, promotional standards, and partner-server relationships.",
+        "questions": [
+            {"id": "partnership_experience", "prompt": "Describe your experience managing partnerships or community promotions.", "type": "paragraph", "required": True},
+            {"id": "partnership_standards", "prompt": "How would you evaluate whether a server is a good fit for a Niko partnership?", "type": "paragraph", "required": True},
+            {"id": "partnership_campaign", "prompt": "How would you organize a mutually useful promotion between two communities?", "type": "paragraph", "required": True},
+        ],
+    },
+    "partnership_manager": {
+        "title": "Partnership Manager",
+        "description": "Review partnership enquiries and maintain accurate, safe partner-server listings.",
+        "questions": [
+            {"id": "manager_experience", "prompt": "What experience do you have working with Discord communities or server partnerships?", "type": "paragraph", "required": True},
+            {"id": "listing_review", "prompt": "What would you check before approving a server advertisement in our partners channel?", "type": "paragraph", "required": True},
+            {"id": "enquiry_response", "prompt": "How would you respond to a partnership enquiry that does not meet our standards?", "type": "paragraph", "required": True},
         ],
     },
 }

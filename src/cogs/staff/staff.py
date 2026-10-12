@@ -16,6 +16,7 @@ import discord
 from discord.ext import commands
 
 from config.ids import OWNER_IDS, SUPPORT_GUILD
+from config.links import WEBSITE
 from cogs.staff.support_server import (
     CHANNEL_SPECS, ROLE_SPECS, SupportGuidePanel, SupportPingPanel, assign_support_roles,
     create_support_invite, get_support_ids, persist_support_ids,
@@ -32,8 +33,11 @@ STAFF_ROLES = {
     "head_support": "Head of Support",
     "graphic_designer": "Graphic Designer",
     "support": "Support Team",
+    "event_coordinator": "Event Coordinator",
+    "partnerships_promotions_lead": "Partnerships & Promotions Lead",
+    "partnership_manager": "Partnership Manager",
 }
-ROLE_ORDER = ("head_admin", "moderator", "graphic_designer", "head_support", "support")
+ROLE_ORDER = ("head_admin", "moderator", "graphic_designer", "head_support", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager")
 
 # Commands which are deliberately reserved for the bot owner, even when a
 # staff member has another role. Blacklist is relaxed below for Head Admins.
@@ -220,6 +224,8 @@ def _command_names_for_role(role: str) -> set[str]:
     if role == "moderator":
         return MODERATOR_COMMANDS | {"getreport"}
     if role == "support":
+        return SUPPORT_COMMANDS
+    if role in {"event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
         return SUPPORT_COMMANDS
     return set()
 
@@ -627,7 +633,26 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     from cogs.staff.owner import _build_rules_panel
     await post("rules", _build_rules_panel(bot), unique_table="persistent_rules_panels")
     await post("staff_rules", _staff_rules_panel(), channel_key="staff_rules")
-    await post("staff_announcements", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content="# Staff announcements\nOfficial internal updates and operational notices are posted here."), accent_colour=0xC8A882)), channel_key="staff_announcements")
+    await post("staff_announcements", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=f"# Staff announcements\nOfficial internal updates and operational notices are posted here.\n\n<@&{int(roles['staff'])}>"), accent_colour=0xC8A882)), channel_key="staff_announcements")
+    website_url = f"{WEBSITE.rstrip('/')}/discord"
+    invite_url_bot = f"https://discord.com/oauth2/authorize?client_id={bot.user.id}&permissions=8&scope=bot%20applications.commands"
+    partnership_ad = discord.ui.LayoutView().add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=(
+            "# Meet Niko — your server’s new favorite bot\n"
+            "Make your Discord community easier to run and more fun to be part of. Niko brings powerful moderation and AutoMod, "
+            "support tickets, leveling, music, games, economy, and friendly AI chat together in one polished bot.\n\n"
+            "**Bring Niko to your server**\n"
+            f"[Add Niko to Discord]({invite_url_bot})\n\n"
+            "**Get help, guides, and meet the community**\n"
+            f"[Join the official Niko support server]({website_url})"
+        )),
+        accent_colour=0xC8A882,
+    ))
+    await post("partnership_ad", partnership_ad, channel_key="partnership_ad")
+    await post("partnership_info", discord.ui.LayoutView().add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content="# Partnership information\nPartner listings are managed by the Niko Partnerships team. Contact a Partnership Manager or Partnerships & Promotions Lead to discuss a listing. All ads must link to an active, moderated Discord community and follow our community rules."),
+        accent_colour=0xC8A882,
+    )), channel_key="partnership_info")
     welcome_content = f"# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand.\n\n[Join the support server]({invite_url})" if invite_url else "# Welcome to Niko\nStart with the server rules, choose your notification roles, and ask the community whenever you need a hand."
     await post("welcome", discord.ui.LayoutView().add_item(discord.ui.Container(discord.ui.TextDisplay(content=welcome_content), accent_colour=0xC8A882)), channel_key="welcome")
     await post("support_guide", SupportGuidePanel(channels), channel_key="support_guide")

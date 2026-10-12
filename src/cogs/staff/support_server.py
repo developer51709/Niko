@@ -10,12 +10,16 @@ from utils import logging
 
 ROLE_SPECS = {
     "owner": ("Niko Owner", 0xC8A882, True),
-    "staff": ("Niko Staff", 0xC8A882, True),
+    "staff": ("Niko Staff", 0, False),
     "head_admin": ("Head Admin", 0xE74C3C, True),
     "moderator": ("Moderator", 0xE67E22, True),
     "head_support": ("Head of Support", 0x3498DB, True),
     "graphic_designer": ("Graphic Designer", 0x9B59B6, True),
     "support": ("Support Team", 0x2ECC71, True),
+    "event_coordinator": ("Event Coordinator", 0x1ABC9C, True),
+    "partnerships_promotions_lead": ("Partnerships & Promotions Lead", 0xE67E22, True),
+    "partnership_manager": ("Partnership Manager", 0x3498DB, True),
+    "partnerships_ping": ("Partnerships", 0x5865F2, False),
     "supporter": ("Supporter", 0xF1C40F, False),
     "bugbounty": ("Bug Bounty", 0xE84393, False),
     "partner": ("Partner", 0x1ABC9C, False),
@@ -41,6 +45,9 @@ CHANNEL_SPECS = {
     "memes": ("Community", "memes", "text", False),
     "suggestions": ("Community", "suggestions", "text", False),
     "events": ("Events", "events", "text", False),
+    "partnership_info": ("Partnerships", "partnership-info", "text", False),
+    "partnership_ad": ("Partnerships", "partnership-ad", "text", False),
+    "partners": ("Partnerships", "partners", "text", False),
     "event_chat": ("Events", "event-chat", "text", False),
     "giveaways": ("Events", "giveaways", "text", False),
     "help": ("Support", "community-help", "forum", False),
@@ -93,6 +100,9 @@ CHANNEL_TOPICS = {
     "memes": "Keep memes friendly and within the community rules.",
     "suggestions": "Share ideas and feature suggestions for Niko.",
     "events": "Official event announcements and schedules.",
+    "partnership_info": "Information and requirements for official Niko server partnerships.",
+    "partnership_ad": "Official partnership information and links for the Niko community.",
+    "partners": "Partner server advertisements and community recommendations.",
     "event_chat": "Talk about current and upcoming community events.",
     "giveaways": "Official Niko community giveaways, entries, and winner announcements.",
     "support_guide": "Helpful support links, ticket guidance, and privacy reminders.",
@@ -215,14 +225,57 @@ async def persist_support_ids(bot, guild: discord.Guild, roles: dict, channels: 
 
 async def _ensure_role(guild: discord.Guild, key: str) -> discord.Role:
     name, colour, hoist = ROLE_SPECS[key]
+    mentionable = key == "staff" or key.endswith("_ping")
+    role_colour = discord.Colour.default() if colour == 0 else discord.Colour(colour)
     role = discord.utils.get(guild.roles, name=name)
     if role is None:
-        role = await guild.create_role(name=name, colour=discord.Colour(colour), hoist=hoist, mentionable=key.endswith("_ping"), reason="Niko support server structure")
+        role = await guild.create_role(name=name, colour=role_colour, hoist=hoist, mentionable=mentionable, reason="Niko support server structure")
         await _pace()
-    elif role.colour.value != colour or role.hoist != hoist or role.mentionable != key.endswith("_ping"):
-        await role.edit(colour=discord.Colour(colour), hoist=hoist, mentionable=key.endswith("_ping"), reason="Reconcile Niko support server role")
-        await _pace()
+    else:
+        if role.colour.value != colour or role.hoist != hoist or role.mentionable != mentionable:
+            await role.edit(colour=role_colour, hoist=hoist, mentionable=mentionable, reason="Reconcile Niko support server role")
+            await _pace()
     return role
+
+
+def _staff_channel_overwrites(guild: discord.Guild, roles: dict, everyone: discord.Role, bot_member: discord.Member, key: str, staff_only: bool) -> dict:
+    """Build explicit channel permissions so category grants cannot bypass read-only policy."""
+    owner_id = roles.get("owner")
+    owner_role = guild.get_role(int(owner_id)) if owner_id else None
+    is_partnership_channel = key in {"partnership_info", "partnership_ad", "partners"}
+    overwrites = {
+        everyone: _everyone_channel_overwrite(key, staff_only),
+        bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, connect=True, speak=True),
+    }
+    if owner_role:
+        overwrites[owner_role] = discord.PermissionOverwrite(view_channel=True, send_messages=not is_partnership_channel, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True)
+    restricted_posts = key in {"staff_rules", "staff_announcements"}
+    staff_keys = ("owner", "head_admin") if restricted_posts else (
+        "owner", "head_admin", "moderator", "head_support", "graphic_designer",
+        "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager",
+    )
+    if key == "events":
+        staff_keys = ("owner", "head_admin", "event_coordinator")
+    if is_partnership_channel:
+        for staff_key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator"):
+            role_id = roles.get(staff_key)
+            role = guild.get_role(int(role_id)) if role_id else None
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)
+        staff_keys = ("partnerships_promotions_lead", "partnership_manager")
+    if key == "staff_announcements":
+        staff_id = roles.get("staff")
+        staff_role = guild.get_role(int(staff_id)) if staff_id else None
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)
+    for staff_key in staff_keys:
+        role_id = roles.get(staff_key)
+        role = guild.get_role(int(role_id)) if role_id else None
+        if role:
+            overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
+    if key == "partners":
+        overwrites[everyone] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)
+    return overwrites
 
 
 def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.PermissionOverwrite:
@@ -231,8 +284,8 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
         view_channel=not staff_only,
         send_messages=not (key in {
             "welcome", "rules", "roles", "announcements", "status", "polls",
-            "giveaways", "tickets", "support_guide", "voice_panel",
-            "staff_announcements", "staff_rules",
+            "events", "giveaways", "tickets", "support_guide", "voice_panel",
+            "staff_announcements", "staff_rules", "partnership_info", "partnership_ad",
         }),
         read_message_history=True,
         connect=not staff_only,
@@ -300,12 +353,20 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     for category_name in dict.fromkeys(spec[0] for spec in CHANNEL_SPECS.values()):
         category = discord.utils.get(guild.categories, name=category_name)
         staff_only = any(spec[0] == category_name and spec[3] for spec in CHANNEL_SPECS.values())
+        head_admin_role = guild.get_role(roles["head_admin"])
+        # Keep category permissions neutral for sending messages. Channel
+        # overwrites below are the source of truth, so role grants cannot bypass
+        # read-only channel restrictions through Discord's overwrite merging.
         overwrites = {
             everyone: discord.PermissionOverwrite(view_channel=not staff_only),
-            staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
-            owner_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True),
+            owner_role: discord.PermissionOverwrite(view_channel=True, read_message_history=True, connect=True, speak=True),
             bot_member: discord.PermissionOverwrite(view_channel=True, manage_channels=True, manage_permissions=True, send_messages=True, read_message_history=True, connect=True, speak=True),
         }
+        for staff_key in ("head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"):
+            staff_id = roles.get(staff_key)
+            staff_specific_role = guild.get_role(int(staff_id)) if staff_id else None
+            if staff_specific_role:
+                overwrites[staff_specific_role] = discord.PermissionOverwrite(view_channel=True, read_message_history=True, connect=True, speak=True)
         if category is None:
             category = await guild.create_category(category_name, overwrites=overwrites, reason="Niko support server structure")
             await _pace()
@@ -321,18 +382,9 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         if channel is None:
             # Reuse the old channel when a category is renamed or reorganized.
             channel = discord.utils.get(guild.channels, name=name)
-        overwrites = {
-            everyone: _everyone_channel_overwrite(key, staff_only),
-            staff_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True),
-            owner_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True),
-            bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, connect=True, speak=True),
-        }
-        # Staff application role tiers are allowed in internal staff spaces too.
-        for staff_key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"):
-            staff_id = roles.get(staff_key)
-            staff_specific_role = guild.get_role(int(staff_id)) if staff_id else None
-            if staff_specific_role:
-                overwrites[staff_specific_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
+        # Explicit per-channel grants make read-only rules hold even for staff
+        # who inherit broader permissions from roles or categories.
+        overwrites = _staff_channel_overwrites(guild, roles, everyone, bot_member, key, staff_only)
         expected_type = {"voice": discord.VoiceChannel, "forum": discord.ForumChannel}.get(kind, discord.TextChannel)
         if channel is not None and not isinstance(channel, expected_type):
             if channel.id not in protected_system_channel_ids:
@@ -446,7 +498,7 @@ async def assign_join_roles(bot, member: discord.Member, roles: dict) -> None:
         staff_key = str(row["role"]) if row else None
         if member.id in OWNER_IDS:
             staff_key = "owner"
-        if staff_key in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"}:
+        if staff_key in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
             if roles.get("staff"):
                 shared = member.guild.get_role(int(roles["staff"]))
                 if shared and shared not in member.roles:
@@ -467,6 +519,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
     shared_staff = guild.get_role(int(roles["staff"]))
     staff_rows = await pool.fetch("SELECT user_id, role FROM staff_members")
     staff_by_user = {int(row["user_id"]): str(row["role"]) for row in staff_rows}
+    supported_staff_keys = {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}
     from config.ids import OWNER_IDS
     for owner_id in OWNER_IDS:
         staff_by_user[int(owner_id)] = "owner"
@@ -487,7 +540,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
         if shared_staff and member.id in staff_by_user and shared_staff not in member.roles:
             add.append(shared_staff)
         staff_key = staff_by_user.get(member.id)
-        if staff_key not in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support"}:
+        if staff_key not in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
             staff_key = None
         if staff_key and roles.get(staff_key):
             specific = guild.get_role(int(roles[staff_key]))
@@ -497,7 +550,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
             await member.add_roles(*add, reason="Synchronize Niko support server roles")
         if staff_key:
             specific = guild.get_role(int(roles[staff_key])) if roles.get(staff_key) else None
-            stale = [guild.get_role(int(roles[key])) for key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support") if key != staff_key and roles.get(key)]
+            stale = [guild.get_role(int(roles[key])) for key in supported_staff_keys if key != staff_key and roles.get(key)]
             stale = [role for role in stale if role and role in member.roles]
             if specific and specific not in member.roles:
                 await member.add_roles(specific, reason="Synchronize Niko staff assignment")
@@ -544,7 +597,7 @@ class SupportPingPanel(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
         row = discord.ui.ActionRow()
-        for key, label, emoji in (("announcements_ping", "Announcements", "📣"), ("events_ping", "Events", "🎉"), ("community_ping", "Community", "💬"), ("polls_ping", "Polls", "📊")):
+        for key, label, emoji in (("announcements_ping", "Announcements", "📣"), ("events_ping", "Events", "🎉"), ("community_ping", "Community", "💬"), ("polls_ping", "Polls", "📊"), ("partnerships_ping", "Partnerships", "🤝")):
             button = discord.ui.Button(label=label, emoji=emoji, style=discord.ButtonStyle.secondary, custom_id=f"niko:support:role:{key}")
             button.callback = self._toggle_role
             row.add_item(button)

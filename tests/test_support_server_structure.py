@@ -13,7 +13,8 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from webapp import team_recruitment_routes
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _staff_channel_overwrites, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -36,6 +37,13 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertTrue(all(not any(char.isupper() for char in category if char.isalpha()) for category in ()))
         self.assertEqual(CHANNEL_SPECS["polls"][0], CHANNEL_SPECS["announcements"][0])
         self.assertEqual(CHANNEL_SPECS["staff_rules"][0], "Staff")
+        self.assertEqual(CHANNEL_SPECS["partnership_info"][0], "Partnerships")
+        self.assertEqual(CHANNEL_SPECS["partnership_ad"][0], "Partnerships")
+        self.assertEqual(CHANNEL_SPECS["partners"][0], "Partnerships")
+        self.assertEqual(ROLE_SPECS["staff"], ("Niko Staff", 0, False))
+        self.assertEqual(ROLE_SPECS["partnerships_ping"][0], "Partnerships")
+        self.assertTrue({"event_coordinator", "partnerships_promotions_lead", "partnership_manager"} <= ROLE_SPECS.keys())
+        self.assertTrue({"event_coordinator", "partnerships_promotions_lead", "partnership_manager"} <= team_recruitment_routes.TEAM_ROLE_APPLICATIONS.keys())
         self.assertEqual(CHANNEL_SPECS["logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["member_logs"][0], "Logs")
         self.assertEqual(CHANNEL_SPECS["message_logs"][0], "Logs")
@@ -52,12 +60,46 @@ class SupportServerStructureTests(unittest.TestCase):
                 self.assertFalse(overwrite.send_messages)
                 self.assertTrue(overwrite.view_channel)
                 self.assertTrue(overwrite.read_message_history)
+        for key in ("events", "staff_announcements", "staff_rules", "partnership_info", "partnership_ad"):
+            with self.subTest(channel=key):
+                self.assertFalse(_everyone_channel_overwrite(key, False).send_messages)
         self.assertFalse(_everyone_channel_overwrite("polls", False).send_messages)
         self.assertFalse(_everyone_channel_overwrite("announcements", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("general", False).send_messages)
         self.assertTrue(_everyone_channel_overwrite("general", False).speak)
         self.assertTrue(_everyone_channel_overwrite("voice_panel", False).connect)
         self.assertFalse(_everyone_channel_overwrite("welcome", True).view_channel)
+
+    def test_partnership_and_staff_channel_overrides_limit_writers(self):
+        everyone = discord.Object(id=99)
+        role_ids = {"owner": 1, "head_admin": 2, "moderator": 5, "event_coordinator": 6, "partnerships_promotions_lead": 3, "partnership_manager": 4, "staff": 7}
+        roles = {role_id: discord.Object(id=role_id) for role_id in role_ids.values()}
+        bot_member = discord.Object(id=8)
+        guild = SimpleNamespace(get_role=lambda role_id: roles.get(role_id))
+        role_map = {key: value for key, value in role_ids.items()}
+        for key in ("partnership_info", "partnership_ad", "partners"):
+            with self.subTest(channel=key):
+                overwrites = _staff_channel_overwrites(guild, role_map, everyone, bot_member, key, False)
+                self.assertFalse(overwrites[roles[1]].send_messages)
+                self.assertFalse(overwrites[roles[2]].send_messages)
+                self.assertFalse(overwrites[roles[5]].send_messages)
+                self.assertTrue(overwrites[roles[3]].send_messages)
+                self.assertTrue(overwrites[roles[4]].send_messages)
+                self.assertTrue(overwrites[bot_member].send_messages)
+                self.assertFalse(overwrites[everyone].send_messages)
+        events = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "events", False)
+        self.assertFalse(events[everyone].send_messages)
+        self.assertNotIn(roles[5], events)
+        self.assertTrue(events[roles[6]].send_messages)
+        staff_posts = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "staff_announcements", True)
+        self.assertFalse(staff_posts[roles[7]].send_messages)
+        self.assertTrue(staff_posts[roles[1]].send_messages)
+        self.assertTrue(staff_posts[roles[2]].send_messages)
+        guidelines = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "staff_rules", True)
+        self.assertTrue(guidelines[roles[1]].send_messages)
+        self.assertTrue(guidelines[roles[2]].send_messages)
+        self.assertNotIn(roles[5], guidelines)
+        self.assertEqual(ROLE_SPECS["staff"][1:], (0, False))
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):
         async def check():
@@ -344,9 +386,10 @@ class SupportServerStructureTests(unittest.TestCase):
                     self.cfg = cfg
             class FakeVoiceMasterInterface:
                 pass
-            channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "welcome", "roles", "tickets", "support_guide", "voice_panel", "help", "announcements"), 100)}
+            channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "partnership_ad", "partnership_info", "welcome", "roles", "tickets", "support_guide", "voice_panel", "help", "announcements"), 100)}
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value=None), execute=AsyncMock())
             panel_calls = []
+            sent_views = {}
             class FlexibleGuild:
                 id = 44
                 def get_channel(self, channel_id):
@@ -355,13 +398,17 @@ class SupportServerStructureTests(unittest.TestCase):
                         forum.id = channel_id
                         forum.create_thread = AsyncMock(return_value=SimpleNamespace(message=SimpleNamespace(pin=AsyncMock()), thread=SimpleNamespace(id=7788, edit=AsyncMock())))
                         return forum
+                    async def capture_send(*, view=None):
+                        sent_views[channel_id] = view
+                        return message
                     if channel_id == channels["tickets"]:
-                        return SimpleNamespace(id=channel_id, send=AsyncMock(return_value=message), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
-                    return SimpleNamespace(id=channel_id, send=AsyncMock(return_value=message), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
+                        return SimpleNamespace(id=channel_id, send=AsyncMock(side_effect=capture_send), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
+                    return SimpleNamespace(id=channel_id, send=AsyncMock(side_effect=capture_send), get_partial_message=lambda _: SimpleNamespace(delete=AsyncMock()))
                 def get_thread(self, _thread_id):
                     return None
             bot = SimpleNamespace(
                 cxn=pool,
+                user=SimpleNamespace(id=4242),
                 add_view=Mock(),
             )
             async def update_config(guild_id, cfg):
@@ -380,17 +427,29 @@ class SupportServerStructureTests(unittest.TestCase):
                 await _send_support_panels(
                     bot,
                     FlexibleGuild(),
-                    {},
+                    {"staff": 0},
                     channels,
                 )
             self.assertEqual(ticket_cfg.panel_channel_id, message.channel.id)
             self.assertEqual(ticket_cfg.panel_message_id, message.id)
             self.assertEqual(panel_calls, [(44, message.channel.id, message.id)])
+            partnership_ad_text = "\\n".join(
+                component.content
+                for component in sent_views[channels["partnership_ad"]].walk_children()
+                if isinstance(component, discord.ui.TextDisplay)
+            )
+            self.assertIn("https://niko.sryze.cc/discord", partnership_ad_text)
+            self.assertIn("https://discord.com/oauth2/authorize?client_id=4242&permissions=8", partnership_ad_text)
+            self.assertIn("moderation", partnership_ad_text)
+            self.assertIn("AutoMod", partnership_ad_text)
+            self.assertIn("support tickets", partnership_ad_text)
+            self.assertIn("friendly AI chat", partnership_ad_text)
             panel_registry_calls = [
                 call for call in pool.execute.await_args_list
                 if call.args and "INSERT INTO support_server_panels" in call.args[0]
             ]
             self.assertTrue(any(call.args[2] == "support_guide" and call.args[3] == channels["support_guide"] for call in panel_registry_calls))
+            self.assertTrue(any(call.args[2] == "partnership_ad" and call.args[3] == channels["partnership_ad"] for call in panel_registry_calls))
             self.assertTrue(any(isinstance(call.args[0], SupportGuidePanel) for call in bot.add_view.call_args_list))
 
         asyncio.run(check())
