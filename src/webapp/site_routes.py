@@ -16,6 +16,18 @@ def root():
 def dashboard_redirect():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
+@app.route("/llms.txt")
+def llms_index():
+    return send_from_directory(WEB_DIST_DIR, "llms.txt", mimetype="text/plain")
+
+@app.route("/docs/<slug>.md")
+def docs_markdown(slug):
+    return send_from_directory(WEB_DIST_DIR, f"docs/{slug}.md", mimetype="text/markdown")
+
+@app.route("/changelog/<slug>.md")
+def changelog_markdown(slug):
+    return send_from_directory(WEB_DIST_DIR, f"changelog/{slug}.md", mimetype="text/markdown")
+
 @app.route("/commands")
 @app.route("/leaderboard")
 @app.route("/docs")

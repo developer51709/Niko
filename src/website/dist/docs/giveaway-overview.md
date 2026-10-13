@@ -1,0 +1,66 @@
+# Giveaway System
+
+Niko's giveaway system lets you run interactive giveaways with join requirements, timed entries, and automatic winner selection — all managed through an interactive UI panel.
+
+## Starting a Giveaway
+
+```
+.giveaway start
+```
+
+This opens an interactive setup panel where you configure:
+
+- **Prize** — What the winners receive (text)
+- **Duration** — How long the giveaway runs (e.g. 1h, 2d, 30m)
+- **Number of Winners** — How many people win (default: 1)
+- **Channel** — Which channel to post in
+- **Join Requirements** — Account age, time in server, required roles, or booster-only
+
+All settings are configured through buttons on the panel — no need to remember command syntax.
+
+## Duration Format
+
+Use `s` (seconds), `m` (minutes), `h` (hours), or `d` (days):
+
+| Format | Meaning |
+|--------|---------|
+| `30m` | 30 minutes |
+| `2h` | 2 hours |
+| `1d` | 1 day |
+| `12h` | 12 hours |
+
+## Join Requirements
+
+You can restrict who can enter a giveaway:
+
+- **Minimum Account Age** — New accounts can't enter
+- **Minimum Time in Server** — Must have been in the server for a set duration
+- **Required Roles** — Must have one or more specific roles
+- **Booster Only** — Only server boosters can enter
+
+These are configured through the interactive panel when starting a giveaway.
+
+## Rerolling
+
+If you need to pick a new winner:
+
+```
+.giveaway reroll <message_id>
+```
+
+Replace `<message_id>` with the ID of the giveaway message (right-click → Copy Message ID).
+
+> **Note:** Only members with **Manage Server** permission can start and reroll giveaways.
+
+## How It Works
+
+1. Niko posts an interactive giveaway message with a "Join" button
+2. Members click the button to enter
+3. A background task checks every 15 seconds for ended giveaways
+4. When time runs out, winners are randomly selected from participants
+5. The giveaway message updates to show winners, and a winner announcement is sent
+
+## Requirements
+
+- **Manage Server** permission to start and reroll giveaways
+- Bot needs **Send Messages** and **Add Reactions** permissions in the giveaway channel

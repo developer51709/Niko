@@ -1,0 +1,39 @@
+# Quick Start Guide
+
+Use this checklist to bring Niko into your server and set up features gradually. Slash commands are available from Discord's `/` picker; prefix commands use `.` by default and may also use a server-specific prefix.
+
+## 1. Invite Niko
+
+Use **Invite Niko** on the [home page](/) or the invite link in the site header. Select your server and authorize the permissions requested for the features you plan to use. You need permission to add applications to the server.
+
+## 2. Check permissions and role order
+
+Make sure Niko can view the channels where it should work and send the response types those features need. For moderation, role assignment, or onboarding actions, its role must be above the roles it needs to manage. Grant additional permissions only when enabling a feature that needs them.
+
+## 3. Choose your first features
+
+- **Moderation:** run `.automod` to open the AutoMod panel and choose the protections you want.
+- **Onboarding:** use `.onboarding setup` to configure onboarding. Related options include `.onboarding role-menu`, `.onboarding autoroles`, and `.onboarding captcha`.
+- **Logging:** run `.logging status` to review server event logging configuration.
+- **Leveling:** use `/leveling config` to review leveling settings. `/leveling rank` and `/leveling leaderboard` show member progress.
+- **Dashboard:** open the dashboard from the website to configure supported server settings visually.
+
+These are real command entry points; individual controls may be in their interactive panels rather than separate commands. Use the [live command directory](/commands) to confirm current names, invocation type, and options.
+
+## 4. Test in a staff channel
+
+Try a harmless command first, then verify that the response is visible to the intended members. For moderation and automation, test with a staff team before enabling settings broadly. Review logging destinations and exemptions as part of that test.
+
+## Troubleshooting
+
+### Niko does not respond
+
+Confirm that Niko is online, can view the channel, and that the command is available in Discord's command picker. For prefix commands, use the configured server prefix.
+
+### A command or action is missing
+
+Some commands require server permissions, a supported context, or a feature setting. Check the command card's permissions and usage in the [commands page](/commands), then check the related feature panel.
+
+### Need help?
+
+Browse the [documentation library](/docs), review the live [command reference](/commands), or contact the team through the support server linked in the site header.

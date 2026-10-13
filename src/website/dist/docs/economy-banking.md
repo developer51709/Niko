@@ -1,0 +1,67 @@
+# Banking and Interest
+
+Niko's banking system lets you earn passive income by saving your money.
+
+## How Banking Works
+
+### Balance vs Bank
+- **Balance**: Cash you carry (used for shopping and gambling)
+- **Bank**: Savings that earn interest (more secure, earns passive income)
+
+### Bank Tiers
+Higher bank tiers earn better interest rates:
+
+| Tier | Name | Interest Rate |
+|------|------|---------------|
+| 0 | Basic | 0.5% daily |
+| 1 | Silver | 1% daily |
+| 2 | Gold | 2% daily |
+| 3 | Platinum | 3% daily |
+| 4 | Diamond | 5% daily |
+
+## Interest Calculations
+
+Interest is calculated on your **bank balance** (up to the tier cap):
+
+```
+Interest = min(bank_balance, tier_cap) * interest_rate
+```
+
+Interest is distributed every 30 minutes and logged to your transaction history.
+
+## Bank Commands
+
+### Deposit
+Move money from balance to bank:
+
+```
+.bank deposit <amount>
+```
+
+### Withdraw
+Take money from bank to balance:
+
+```
+.bank withdraw <amount>
+```
+
+### Bank Info
+Check your bank status:
+
+```
+.bank
+```
+
+### Upgrade Your Vault
+Raise your bank cap and interest rate:
+
+```
+.bank upgrade
+```
+
+## Banking Tips
+
+1. **Deposit regularly**: More money in bank = more interest
+2. **Reach higher tiers**: Better interest rates compound faster
+3. **Keep some cash**: You need balance for shopping and gambling
+4. **Check daily**: Interest compounds daily, so consistent saving helps

@@ -1,0 +1,37 @@
+# Practical Community Setup Tips
+
+Niko has several independent tools for welcoming members, moderating chat, and keeping staff informed. Start with the settings your server actually needs, then review the live [command directory](/commands) for current names and usage.
+
+## Start with the basics
+
+- Give Niko only the Discord permissions your enabled features need. For moderation actions, place Niko's role above the roles it must manage.
+- Keep server rules and moderator responsibilities clear to members and staff.
+- Configure one feature at a time and test it in a private channel before relying on it across the server.
+
+## Make moderation predictable
+
+Use Niko's `.automod` prefix command to open the AutoMod settings panel. Enable only the protections your community needs, then tune thresholds and exemptions to avoid catching normal conversation. Automated filters are a backstop, not a substitute for moderator review.
+
+Use moderation commands such as `/warn`, `/mute`, `/kick`, and `/ban` consistently with your published rules. When a setting or command is unavailable, check Niko's online status, its channel permissions, and the [live command directory](/commands).
+
+## Welcome and orient new members
+
+The `.onboarding` command group includes `.onboarding setup`, `.onboarding role-menu`, `.onboarding autoroles`, and `.onboarding captcha`. Configure the welcome and verification steps to match your server's rules, and make sure new members can reach the channels and resources they need.
+
+## Encourage healthy participation
+
+Niko's leveling commands are available through `/leveling`, including `/leveling rank`, `/leveling leaderboard`, and `/leveling config`. Use a sensible XP cooldown and multiplier, and make role rewards achievable without encouraging spam.
+
+For community activities, use tools such as polls, suggestions, birthdays, and giveaways when they fit your members' interests. Participation should be optional and accessible; avoid treating activity counts as a measure of member value.
+
+## Keep staff informed
+
+Use `.logging status` to review the logging configuration, then select suitable channels for the events your staff need to audit. Restrict access to log channels because they may contain moderation and member information.
+
+## When something is not working
+
+1. Confirm Niko is online and has access to the channel.
+2. Check role hierarchy and the permission required for that action.
+3. Confirm the feature is enabled in its settings panel.
+4. Search the [live command directory](/commands) for the exact command and arguments.
+5. If the issue persists, ask for help in the support server and include the command name and a brief description—never share tokens or private credentials.

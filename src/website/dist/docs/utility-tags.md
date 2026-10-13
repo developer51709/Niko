@@ -1,0 +1,99 @@
+# Tags System Guide
+
+Tags let you create custom short commands that expand to longer messages or information.
+
+## What are Tags?
+
+Tags are custom commands you can create for your server. When someone uses a tag, Niko responds with the tag's content.
+
+## Creating Tags
+
+### Basic Tag
+```
+.tag create <name> <content>
+```
+
+Example:
+```
+.tag create rules Welcome to the server! Please read the rules in #rules-channel.
+```
+
+### Tag with Embed
+Tags can include formatting and even embeds for richer responses.
+
+## Using Tags
+
+### Call a Tag
+```
+.tag <name>
+```
+
+Example:
+```
+.tag rules
+```
+
+### List All Tags
+```
+.tag list
+```
+
+### Show a Tag's Raw Content
+```
+.tag raw <name>
+```
+
+## Managing Tags
+
+### Edit a Tag
+```
+.tag edit <name> <new content>
+```
+
+### Delete a Tag
+```
+.tag delete <name>
+```
+
+### Tag Info
+See a tag's owner, creation date, and usage count:
+
+```
+.tag info <name>
+```
+
+## Tag Permissions
+
+### Who Can Use Tags
+Tags are public by default. Set permissions as needed.
+
+### Who Can Manage Tags
+Tag creators can edit/delete their own tags. Administrators can manage all tags.
+
+## Use Cases
+
+### Server Information
+- Rules summaries
+- FAQ answers
+- Role descriptions
+- Channel purposes
+
+### Commonly Used Text
+- Welcome messages
+- Event announcements
+- Form templates
+- Standard responses
+
+### Fun Content
+- Jokes and memes
+- Quotes
+- Easter eggs
+- Secret messages
+
+## Tips
+
+1. **Keep names simple**: Easy to remember and type
+2. **Use for FAQs**: Quick answers to common questions
+3. **Organize with prefixes**: Group related tags (e.g., `info-rules`, `info-roles`)
+4. **Regular maintenance**: Remove outdated tags
+5. **Share with community**: Let members know useful tags exist

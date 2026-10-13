@@ -1,0 +1,81 @@
+# Starboard
+
+The starboard system automatically reposts popular messages to a dedicated channel when they reach a configurable reaction threshold. It's a great way to highlight the best content in your server.
+
+## How It Works
+
+1. Members react to a message with the trigger emoji (default: ⭐)
+2. When the reaction count reaches the threshold, the message is posted to the starboard channel
+3. If the reaction count later drops below the threshold, the starboard post is removed
+4. If a message is already on the starboard and gets more reactions, the post updates in place
+
+## Setting Up the Starboard
+
+### Set the Starboard Channel
+
+```
+.starboard channel <channel>
+```
+
+```
+.starboard channel #starboard
+```
+
+### Set the Threshold
+
+```
+.starboard threshold <number>
+```
+
+```
+.starboard threshold 5
+```
+
+The threshold is the number of reactions needed before a message appears on the starboard (minimum: 1, maximum: 50, default: 3).
+
+### Set the Trigger Emoji
+
+```
+.starboard emoji <emoji>
+```
+
+```
+.starboard emoji ⭐
+```
+
+### Ignore Channels
+
+Prevent messages from certain channels from appearing on the starboard:
+
+```
+.starboard ignore <channel>
+.starboard unignore <channel>
+```
+
+### Disable the Starboard
+
+```
+.starboard disable
+```
+
+### View Configuration
+
+```
+.starboard config
+```
+
+## Starboard Post Format
+
+Starboard posts display:
+
+- Star count and source channel
+- Author name and relative timestamp
+- Message content (truncated at 1500 characters)
+- Image attachments embedded as a MediaGallery
+- A "Jump to message" link
+
+## Requirements
+
+- **Manage Server** permission to configure the starboard
+- The bot needs **Read Messages** and **Send Messages** permissions in both the source channels and the starboard channel
+- Bot does **not** post messages from other bots to the starboard

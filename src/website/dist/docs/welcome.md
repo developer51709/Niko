@@ -1,0 +1,21 @@
+# Welcome to Niko
+
+Niko is a feature-rich Discord bot designed to help server owners and moderators build engaging communities. Whether you're running a small friend group chat or a large public server, Niko provides the tools you need.
+
+## What Can Niko Do?
+
+- **Economy**: A complete economy system with jobs, banking, shop, lottery, and gambling mini-games
+- **Leveling**: XP-based leveling system with customizable rewards and announcements
+- **Moderation**: Full-featured moderation tools including warns, mutes, kicks, bans, and logging
+- **AutoMod**: Automated moderation with anti-spam, anti-link, bad word filtering, and anti-raid protection
+- **Social Features**: Birthday tracking, polls, suggestions, starboard, and more
+- **Voice Features**: Music playback and voice channel management
+- **AI Integration**: AI-powered chat and moderation assistance
+- **Dashboard**: Web dashboard for configuring your server settings
+
+## Getting Help
+
+- Use the `/help` command in Discord for quick command references
+- Browse this documentation for detailed guides
+- Join our support server for community help
+- Check the GitHub repository for development info

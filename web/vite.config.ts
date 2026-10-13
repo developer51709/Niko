@@ -48,6 +48,73 @@ function metadataForChangelog(entry: ChangelogEntry): PageMetadata {
   return { path: `/changelog/${entry.slug}`, title: `${entry.title} — Niko changelog`, description: entry.summary, section: entry.version ? `Changelog · v${entry.version}` : "Changelog" };
 }
 
+function changelogMarkdown(entry: ChangelogEntry) {
+  const lines = [
+    `# ${entry.title}`,
+    "",
+    `- Date: ${entry.date}`,
+    ...(entry.version ? [`- Version: ${entry.version}`] : []),
+    `- Tags: ${entry.tags.join(", ")}`,
+    "",
+    entry.summary,
+    "",
+    "## Highlights",
+    ...entry.highlights.flatMap((highlight) => ["", `### ${highlight.title}`, highlight.description]),
+    "",
+    "## Changes",
+    ...entry.changes.flatMap((group) => ["", `### ${group.category}`, ...group.items.map((item) => `- ${item}`)]),
+    ...(entry.chart ? ["", "## Chart data", "", "```json", JSON.stringify(entry.chart, null, 2), "```"] : []),
+    ...(entry.commits.length ? ["", "## Commits", ...entry.commits.map((commit) => `- ${commit}`)] : []),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+function writeMachineReadableContent(dist: string) {
+  const docLinks: string[] = [];
+  for (const file of fs.readdirSync(DOC_CONTENT_DIRECTORY).filter((name: string) => name.endsWith(".mdx"))) {
+    const source = fs.readFileSync(path.join(DOC_CONTENT_DIRECTORY, file), "utf8");
+    const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+    if (!frontmatter) throw new Error(`Invalid MDX frontmatter in ${file}`);
+    const values = new Map<string, string>();
+    for (const line of frontmatter[1].split(/\r?\n/)) {
+      const field = line.match(DOC_FRONTMATTER_FIELD);
+      if (field) values.set(field[1], field[2]);
+    }
+    const slug = values.get("slug");
+    const title = values.get("title");
+    if (!slug || !title) throw new Error(`Missing required MDX metadata in ${file}`);
+    const body = frontmatter[2].trim();
+    const markdown = `${body.startsWith("#") ? "" : `# ${JSON.parse(title) as string}\n\n`}${body}\n`;
+    const markdownPath = path.join(dist, "docs", `${JSON.parse(slug) as string}.md`);
+    fs.mkdirSync(path.dirname(markdownPath), { recursive: true });
+    fs.writeFileSync(markdownPath, markdown);
+    docLinks.push(`- [${JSON.parse(title) as string}](https://niko.sryze.cc/docs/${JSON.parse(slug) as string}.md)`);
+  }
+
+  const changelogLinks = CHANGELOG.map((entry) => {
+    const markdownPath = path.join(dist, "changelog", `${entry.slug}.md`);
+    fs.mkdirSync(path.dirname(markdownPath), { recursive: true });
+    fs.writeFileSync(markdownPath, changelogMarkdown(entry));
+    return `- [${entry.title}](https://niko.sryze.cc/changelog/${entry.slug}.md) — ${entry.summary}`;
+  });
+
+  const index = [
+    "# Niko",
+    "",
+    "> Niko is a Discord bot and companion for community servers. This index links to its complete public documentation and release notes in Markdown format.",
+    "",
+    "## Documentation",
+    "",
+    ...docLinks,
+    "",
+    "## Changelog",
+    "",
+    ...changelogLinks,
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(dist, "llms.txt"), index);
+}
+
 const PAGE_METADATA: PageMetadata[] = [
   { path: "/", title: "Niko — Discord companion", description: DEFAULT_DESCRIPTION, section: "Discord companion" },
   { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference" },
@@ -141,6 +208,7 @@ function staticMetadataPlugin(): Plugin {
           .toFile(path.join(iconDirectory, `niko-${size}.png`));
       }
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
+      writeMachineReadableContent(dist);
       for (const metadata of PAGE_METADATA) {
         const route = metadata.path === "/" ? "" : metadata.path.slice(1);
         const htmlPath = path.join(dist, route, "index.html");
