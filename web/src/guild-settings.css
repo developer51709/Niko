@@ -239,6 +239,27 @@
 @media (max-width: 640px) { .profile-editor-panel { padding: 18px; }.profile-editor-heading { flex-direction: column; }.profile-preview-banner { height: 132px; }.profile-preview-avatar { top: 93px; width: 78px; height: 78px; border-radius: 24px; }.profile-preview-body { padding: 47px 17px 19px; }.profile-preview-name { flex-wrap: wrap; font-size: 19px; }.profile-preview-bio { align-items: flex-start; flex-direction: column; gap: 8px; }.profile-color-fields { grid-template-columns: 1fr; } }
 .settings-section-title { margin-bottom: 18px; }
 .settings-section-title p { margin: 6px 0 0; color: var(--dim); font-size: 10px; line-height: 1.5; }
+/* One shared treatment for top-right icons on guild settings and analytics cards. */
+.dashboard-layout .settings-panel > .panel-heading,
+.dashboard-layout .server-stats-card > .panel-heading { gap: 18px; }
+.dashboard-layout .settings-panel > .panel-heading > div,
+.dashboard-layout .server-stats-card > .panel-heading > div { min-width: 0; }
+.dashboard-layout .settings-panel > .panel-heading > .panel-icon,
+.dashboard-layout .server-stats-card > .panel-heading > .panel-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  color: var(--sage);
+  background: rgba(139, 213, 177, .09);
+  border: 1px solid rgba(139, 213, 177, .22);
+  border-radius: 11px;
+}
+.dashboard-layout .settings-panel > .panel-heading > .panel-icon .icon,
+.dashboard-layout .server-stats-card > .panel-heading > .panel-icon .icon {
+  width: 17px;
+  height: 17px;
+  color: inherit;
+}
 .setting-row { min-height: 69px; padding: 13px 8px; border-color: var(--line-soft); border-radius: 9px; transition: background .18s ease, border-color .18s ease; }
 .setting-row:hover { background: rgba(255, 255, 255, .045); }
 .setting-row strong { font-size: 12px; }

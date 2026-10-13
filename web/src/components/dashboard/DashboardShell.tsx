@@ -8,15 +8,15 @@ import { GuildIcon } from "./GuildIcon";
 import { UserAvatar } from "./UserAvatar";
 
 const sections: [DashSection, string, string, string][] = [
-  ["overview", "Overview", "grid", "At a glance"],
-  ["leveling", "Leveling", "spark", "Reward participation"],
-  ["moderation", "Moderation", "shield", "Keep things steady"],
-  ["server", "Server", "settings", "Manage server features"],
-  ["onboarding", "Onboarding", "users", "Welcome and join roles"],
-  ["tickets", "Tickets", "users", "Support desk and transcripts"],
-  ["applications", "Applications", "users", "Staff role openings"],
-  ["ai", "AI controls", "settings", "Shape Niko’s voice"],
-  ["customization", "Customization", "paint", "Niko’s server identity"],
+  ["overview", "Overview", "guild_overview", "At a glance"],
+  ["leveling", "Leveling", "guild_leveling", "Reward participation"],
+  ["moderation", "Moderation", "guild_moderation", "Keep things steady"],
+  ["server", "Server", "guild_server", "Manage server features"],
+  ["onboarding", "Onboarding", "guild_onboarding", "Welcome and join roles"],
+  ["tickets", "Tickets", "guild_tickets", "Support desk and transcripts"],
+  ["applications", "Applications", "guild_applications", "Staff role openings"],
+  ["ai", "AI controls", "guild_ai", "Shape Niko’s voice"],
+  ["customization", "Customization", "guild_customization", "Niko’s server identity"],
 ];
 
 type Props = {
