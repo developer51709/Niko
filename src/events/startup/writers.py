@@ -67,7 +67,7 @@ def write_commands(bot):
     }
 
     try:
-        from discord import app_commands
+        from discord import Permissions, app_commands
         from discord.ext import commands
         commands_data = []
         hybrid_names = set()
@@ -96,11 +96,7 @@ def write_commands(bot):
                 description = description.get("en") or next(iter(description.values()), "")
             return str(description or "").strip()
 
-        permission_names = (
-            "administrator", "manage_guild", "manage_channels", "manage_roles",
-            "manage_messages", "moderate_members", "kick_members", "ban_members",
-            "mention_everyone", "manage_webhooks", "manage_nicknames",
-        )
+        permission_names = set(Permissions.VALID_FLAGS)
 
         def text_value(value):
             return str(value).strip() if value is not None else ""
@@ -127,10 +123,42 @@ def write_commands(bot):
             return [item for item in (parameter_metadata(param) for param in params) if item]
 
         def command_permissions(cmd):
-            permissions = getattr(cmd, "default_permissions", None)
-            if permissions is None:
-                return []
-            return [name.replace("_", " ").title() for name in permission_names if bool(getattr(permissions, name, False))]
+            required = set()
+            default_permissions = getattr(cmd, "default_permissions", None)
+            if default_permissions is not None:
+                required.update(
+                    name for name in permission_names
+                    if bool(getattr(default_permissions, name, False))
+                )
+
+            # discord.py stores has_permissions/bot_has_permissions decorators
+            # as predicate closures on command checks. Inspect the captured
+            # permission mappings for both prefix and application commands.
+            pending = list(getattr(cmd, "checks", ()) or ())
+            visited = set()
+            while pending:
+                value = pending.pop()
+                if id(value) in visited:
+                    continue
+                visited.add(id(value))
+                if isinstance(value, dict):
+                    required.update(
+                        name for name, enabled in value.items()
+                        if name in permission_names and bool(enabled)
+                    )
+                    pending.extend(value.values())
+                elif isinstance(value, (tuple, list, set)):
+                    pending.extend(value)
+                elif callable(value):
+                    for cell in getattr(value, "__closure__", ()) or ():
+                        try:
+                            pending.append(cell.cell_contents)
+                        except ValueError:
+                            continue
+                    pending.extend((getattr(value, "__defaults__", None) or ()))
+                    pending.extend((getattr(value, "__kwdefaults__", None) or {}).values())
+
+            return [name.replace("_", " ").title() for name in sorted(required)]
 
         def command_aliases(cmd):
             aliases = getattr(cmd, "aliases", None)

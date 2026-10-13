@@ -72,7 +72,8 @@ def test_html_export_escapes_untrusted_live_profile_data():
 
     assert "&lt;img src=x onerror=alert(1)&gt;" in html
     assert "</script><script>alert(1)</script>" not in html
-    assert '"display_name": "<b>bad<\\\\/b>"' in html
+    assert '"display_name": "<b>bad<\\/b>"' in html
+    assert '"bio": "<\\/script><script>alert(1)<\\/script>"' in html
 
 
 def test_invalid_discord_timestamp_is_left_as_text():

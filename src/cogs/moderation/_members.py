@@ -331,7 +331,13 @@ class MembersMixin:
     @commands.hybrid_command(description="Kick a member from the server",
                              help="{ 'en': 'Kick a member from the server.', 'de': 'Mitglied kicken.', 'es': 'Expulsa a un miembro del servidor.' }")
     @commands.has_permissions(kick_members=True)
-    async def kick(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
+    async def kick(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(default=None, description="The server member to kick."),
+        *,
+        reason: str = commands.parameter(default="No reason provided", description="Why the member is being kicked."),
+    ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="kick"))
 
@@ -369,7 +375,13 @@ class MembersMixin:
     @commands.hybrid_command(description="Ban a member from the server",
                              help="{ 'en': 'Ban a member from the server.', 'de': 'Mitglied bannen.', 'es': 'Banea a un miembro del servidor.' }")
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, member: discord.User = None, *, reason: str = "No reason provided"):
+    async def ban(
+        self,
+        ctx,
+        member: discord.User = commands.parameter(default=None, description="The user to ban; they do not need to be in the server."),
+        *,
+        reason: str = commands.parameter(default="No reason provided", description="Why the user is being banned."),
+    ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
 
@@ -407,7 +419,12 @@ class MembersMixin:
     @commands.hybrid_command(description="Unban a user by ID",
                              help="{ 'en': 'Unban a member from the server.', 'de': 'Mitglied entbannen.', 'es': 'Desbanea a un miembro del servidor.' }")
     @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id=None, reason=None):
+    async def unban(
+        self,
+        ctx,
+        user_id=commands.parameter(default=None, description="The ID of the user to unban."),
+        reason=commands.parameter(default=None, description="Optional reason for the unban."),
+    ):
         if not user_id:
             return await ctx.send(msg(ctx, "no_user_id"))
         user = await self.bot.fetch_user(user_id)
@@ -424,7 +441,13 @@ class MembersMixin:
     @commands.hybrid_command(description="Warn a member",
                              help="{ 'en': 'Warn a member.', 'de': 'Mitglied verwarnen.', 'es': 'Advierte a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
-    async def warn(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
+    async def warn(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(default=None, description="The server member to warn."),
+        *,
+        reason: str = commands.parameter(default="No reason provided", description="The reason for the warning."),
+    ):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="warn"))
@@ -439,7 +462,7 @@ class MembersMixin:
     @commands.hybrid_command(description="View a member's warnings",
                              help="{ 'en': 'View a members warnings.', 'de': 'Verwarnungen anzeigen.', 'es': 'Ver las advertencias de un miembro.' }")
     @commands.has_permissions(moderate_members=True)
-    async def warnings(self, ctx, member: discord.Member = None):
+    async def warnings(self, ctx, member: discord.Member = commands.parameter(default=None, description="The member whose warnings to view.")):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="view warnings for"))
@@ -455,7 +478,7 @@ class MembersMixin:
     @commands.hybrid_command(description="Clear all warnings for a member",
                              help="{ 'en': 'Clear all warnings for a member.', 'de': 'Verwarnungen löschen.', 'es': 'Borra todas las advertencias de un miembro.' }")
     @commands.has_permissions(moderate_members=True)
-    async def clearwarnings(self, ctx, member: discord.Member = None):
+    async def clearwarnings(self, ctx, member: discord.Member = commands.parameter(default=None, description="The member whose warnings to clear.")):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member_warns"))
@@ -471,7 +494,13 @@ class MembersMixin:
     @commands.hybrid_command(description="Mute a member",
                              help="{ 'en': 'Mute a member.', 'de': 'Mitglied stummschalten.', 'es': 'Silencia a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
-    async def mute(self, ctx, member: discord.Member = None, *, reason: str = "No reason provided"):
+    async def mute(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(default=None, description="The server member to mute."),
+        *,
+        reason: str = commands.parameter(default="No reason provided", description="The reason for the mute."),
+    ):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="mute"))
@@ -492,7 +521,14 @@ class MembersMixin:
     @commands.hybrid_command(description="Temporarily mute a member (seconds)",
                              help="{ 'en': 'Temporarily mute a member (seconds).', 'de': 'Zeitlich stummschalten.', 'es': 'Silencia temporalmente a un miembro (segundos).' }")
     @commands.has_permissions(moderate_members=True)
-    async def tempmute(self, ctx, member: discord.Member = None, duration=None, *, reason: str = "No reason provided"):
+    async def tempmute(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(default=None, description="The server member to mute temporarily."),
+        duration=commands.parameter(default=None, description="How long to mute them, in seconds."),
+        *,
+        reason: str = commands.parameter(default="No reason provided", description="The reason for the temporary mute."),
+    ):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="tempmute"))
@@ -516,7 +552,7 @@ class MembersMixin:
     @commands.hybrid_command(description="Unmute a member",
                              help="{ 'en': 'Unmute a member.', 'de': 'Stummschaltung aufheben.', 'es': 'Quita el silencio a un miembro.' }")
     @commands.has_permissions(moderate_members=True)
-    async def unmute(self, ctx, member: discord.Member = None):
+    async def unmute(self, ctx, member: discord.Member = commands.parameter(default=None, description="The server member to unmute.")):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
@@ -538,7 +574,13 @@ class MembersMixin:
     @commands.hybrid_command(description="Change a member's nickname",
                              help="{ 'en': 'Change a members nickname.', 'de': 'Spitznamen ändern.', 'es': 'Cambia el apodo de un miembro.' }")
     @commands.has_permissions(manage_nicknames=True)
-    async def nick(self, ctx, member: discord.Member = None, *, nickname=None):
+    async def nick(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(default=None, description="The server member whose nickname to change."),
+        *,
+        nickname=commands.parameter(default=None, description="The new nickname to set."),
+    ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="rename"))
         if not nickname:

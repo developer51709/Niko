@@ -7,6 +7,7 @@ interface DocSearchBarProps {
   placeholder?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  onEnter?: () => void;
 }
 
 export function DocSearchBar({
@@ -15,6 +16,7 @@ export function DocSearchBar({
   placeholder = "Search documentation...",
   onFocus,
   onBlur,
+  onEnter,
 }: DocSearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,9 +51,12 @@ export function DocSearchBar({
     onChange(e.target.value);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       inputRef.current?.blur();
+    } else if (e.key === "Enter") {
+      onEnter?.();
+      setIsExpanded(false);
     }
   };
 

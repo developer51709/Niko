@@ -37,6 +37,6 @@ def test_groq_request_uses_vision_content_and_transcription_model():
     assert 'GROQ_BASE_URL' in source
     assert 'GROQ_TRANSCRIPTION_MODEL' in source
     assert 'GROQ_VISION_MODEL' in source
-    assert 'meta-llama/llama-4-scout-17b-16e-instruct' in source
+    assert 'qwen/qwen3.8-27b' in source
     assert 'whisper-large-v3-turbo' in source
     assert '"type": "image_url"' in source

@@ -147,7 +147,7 @@ def test_public_discord_user_profile_endpoint_fetches_live_member_data(monkeypat
     bot = SimpleNamespace(
         loop=SimpleNamespace(is_running=lambda: True),
         guilds=[guild],
-        get_guild=lambda guild_id: None,
+        get_guild=lambda guild_id: guild if guild_id == 123 else None,
         fetch_user=lambda user_id: asyncio.sleep(0, result=user),
     )
     monkeypatch.setattr(routes, "_discord_bot", bot)
@@ -156,7 +156,8 @@ def test_public_discord_user_profile_endpoint_fetches_live_member_data(monkeypat
     response = app.test_client().get("/api/discord/users/456")
 
     assert response.status_code == 200
-    assert response.get_json()["display_name"] == "Server Nickname"
+    assert response.get_json()["display_name"] == "Global Name"
+    assert response.get_json()["guild_nick"] == "Server Nickname"
     profile = response.get_json()
     assert profile["avatar_url"] == "https://cdn.example/avatar.png"
     assert profile["banner_url"] is None

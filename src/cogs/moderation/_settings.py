@@ -26,7 +26,7 @@ class SettingsMixin:
 
     @badwords.command(name="add", description="Add a blocked word")
     @commands.has_permissions(manage_guild=True)
-    async def badwords_add(self, ctx, *, word: str = None):
+    async def badwords_add(self, ctx, *, word: str = commands.parameter(default=None, description="The word or phrase to block.")):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -35,7 +35,7 @@ class SettingsMixin:
 
     @commands.has_permissions(manage_guild=True)
     @badwords.command(name="remove", description="Remove a blocked word")
-    async def badwords_remove(self, ctx, *, word: str = None):
+    async def badwords_remove(self, ctx, *, word: str = commands.parameter(default=None, description="The blocked word or phrase to remove.")):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -81,7 +81,12 @@ class SettingsMixin:
 
     @whitelist.command(name="add", description="Add a user or role to the automod whitelist")
     @commands.has_permissions(manage_guild=True)
-    async def whitelist_add(self, ctx, target_type: str = None, target: str = None):
+    async def whitelist_add(
+        self,
+        ctx,
+        target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
+        target: str = commands.parameter(default=None, description="The user or role mention, or its ID."),
+    ):
         utils = self.utils()
         if not target_type or target_type.lower() not in ("user", "role"):
             return await ctx.send(msg(ctx, "wl_invalid_type"))
@@ -109,7 +114,12 @@ class SettingsMixin:
 
     @whitelist.command(name="remove", aliases=["rm"], description="Remove a user or role from the automod whitelist")
     @commands.has_permissions(manage_guild=True)
-    async def whitelist_remove(self, ctx, target_type: str = None, target: str = None):
+    async def whitelist_remove(
+        self,
+        ctx,
+        target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
+        target: str = commands.parameter(default=None, description="The user or role mention, or its ID."),
+    ):
         utils = self.utils()
         if not target_type or target_type.lower() not in ("user", "role"):
             return await ctx.send(msg(ctx, "wl_invalid_type"))

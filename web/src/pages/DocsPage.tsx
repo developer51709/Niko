@@ -61,10 +61,9 @@ export function DocsPage() {
   };
 
   const handleSearchBlur = () => {
-    // Keep results visible if there's a query
-    if (!filters.query) {
-      setShowResults(false);
-    }
+    // Let a result button's click finish before unmounting the dropdown.
+    // The query remains applied to the page; only its overlapping suggestions close.
+    window.setTimeout(() => setShowResults(false), 180);
   };
 
   const handleResultClick = (slug: string) => {
@@ -101,10 +100,14 @@ export function DocsPage() {
           <div className="docs-search-container">
             <DocSearchBar
               value={filters.query}
-              onChange={setQuery}
+              onChange={(value) => {
+                setQuery(value);
+                setShowResults(true);
+              }}
               placeholder="Search documentation, commands, guides..."
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
+              onEnter={() => setShowResults(false)}
             />
 
             {/* Results Dropdown */}
@@ -126,7 +129,7 @@ export function DocsPage() {
                   </button>
                 </div>
                 <div className="search-results-list">
-                  {results.slice(0, 8).map((result, index) => (
+                  {results.slice(0, 8).map((result) => (
                     <button
                       key={result.page.slug}
                       className="search-result-item"

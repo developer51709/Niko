@@ -6,7 +6,7 @@ from discord.ext import commands
 
 sys.path.insert(0, "src")
 
-from cogs.admin.staff import STAFF_ROLES, StaffCog  # noqa: E402
+from cogs.staff.staff import STAFF_ROLES, StaffCog  # noqa: E402
 
 
 async def _check_staff_cog():
@@ -21,7 +21,16 @@ async def _check_staff_cog():
     assert "ownerhelp" not in names
     assert len(names) == len(root.commands)
     assert all(command.hidden for command in root.commands)
-    assert set(STAFF_ROLES) == {"head_admin", "moderator", "head_support", "support"}
+    assert set(STAFF_ROLES) == {
+        "head_admin",
+        "moderator",
+        "head_support",
+        "graphic_designer",
+        "support",
+        "event_coordinator",
+        "partnerships_promotions_lead",
+        "partnership_manager",
+    }
 
 
 if __name__ == "__main__":

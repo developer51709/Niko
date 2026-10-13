@@ -18,8 +18,14 @@ class PurgeCountArgumentTests(unittest.TestCase):
         command = MessagesMixin.clear
         parameters = list(inspect.signature(command.callback).parameters.values())
         self.assertEqual([parameter.name for parameter in parameters[2:]], ["count", "user"])
-        self.assertEqual(parameters[2].default, inspect.Parameter.empty)
-        self.assertIsNone(parameters[3].default)
+        self.assertTrue(parameters[2].default.required)
+        self.assertEqual(parameters[2].default.description, "How many recent messages to delete (1–1000).")
+        self.assertFalse(parameters[3].default.required)
+        self.assertIsNone(parameters[3].default.default)
+        self.assertEqual(
+            parameters[3].default.description,
+            "Optionally limit deletion to this member's messages.",
+        )
 
     def test_purge_is_an_alias_of_clear(self):
         self.assertIn("purge", MessagesMixin.clear.aliases)
@@ -30,7 +36,9 @@ class PurgeCountArgumentTests(unittest.TestCase):
             ctx = SimpleNamespace()
             cog = SimpleNamespace(_purge_messages=AsyncMock())
 
-            await MessagesMixin.clear.callback(cog, ctx, 25)
+            # Direct callback calls bypass discord.py's argument parser, so
+            # supply the optional converter result explicitly as None.
+            await MessagesMixin.clear.callback(cog, ctx, 25, None)
             cog._purge_messages.assert_awaited_once_with(ctx, None, 25)
 
         asyncio.run(check())

@@ -48,5 +48,10 @@ class MessagesMixin:
     @commands.hybrid_command(name="clear", aliases=["purge"], description="Clear messages, optionally from one member",
                              help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
     @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx, count: int, user: discord.Member = None):
+    async def clear(
+        self,
+        ctx,
+        count: int = commands.parameter(description="How many recent messages to delete (1–1000)."),
+        user: discord.Member = commands.parameter(default=None, description="Optionally limit deletion to this member's messages."),
+    ):
         await self._purge_messages(ctx, user, count)
