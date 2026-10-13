@@ -119,6 +119,8 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/", title: "Niko — Discord companion", description: DEFAULT_DESCRIPTION, section: "Discord companion" },
   { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference" },
   { path: "/team", title: "Team — Niko", description: "Meet the owners, developers, moderators, support staff, and creatives behind Niko.", section: "Niko team" },
+  { path: "/team/apply", title: "Join the Niko Team — Staff Applications", description: "Explore open staff roles and apply to help build a safer, friendlier Niko community.", section: "Staff applications" },
+  { path: "/leaderboard", title: "Global Economy Leaderboard — Niko", description: "See the global Niko café standings and discover who has earned the most coins.", section: "Global leaderboard" },
   { path: "/support", title: "Support — Niko", description: "Find answers, browse Niko documentation, and connect with the community for help.", section: "Niko support" },
   { path: "/discord", title: "Niko support server", description: "Join the official Niko Discord support server for help, community updates, and feedback.", section: "Join the community" },
   { path: "/docs", title: "Documentation — Niko", description: "Guides, command references, and practical tips for getting the most out of Niko.", section: "Documentation center" },
@@ -209,7 +211,8 @@ function staticMetadataPlugin(): Plugin {
       }
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       writeMachineReadableContent(dist);
-      for (const metadata of PAGE_METADATA) {
+      const totalPages = PAGE_METADATA.length;
+      for (const [index, metadata] of PAGE_METADATA.entries()) {
         const route = metadata.path === "/" ? "" : metadata.path.slice(1);
         const htmlPath = path.join(dist, route, "index.html");
         const assetPath = route || "home";
@@ -234,6 +237,17 @@ function staticMetadataPlugin(): Plugin {
           fitTo: { mode: "width", value: 1200 },
         }).render();
         fs.writeFileSync(pngPath, raster.asPng());
+        const completed = index + 1;
+        const prefix = "Open Graph cards [";
+        const suffix = `] ${completed}/${totalPages}`;
+        const consoleWidth = process.stdout.columns ?? 80;
+        const progressWidth = Math.max(1, consoleWidth - prefix.length - suffix.length - 1);
+        const filled = Math.round((completed / totalPages) * progressWidth);
+        const progress = `${"#".repeat(filled)}${"-".repeat(progressWidth - filled)}`;
+        const progressInterval = Math.max(1, Math.ceil(totalPages / 10));
+        if (completed === totalPages || (process.stdout.isTTY && completed % progressInterval === 0)) {
+          process.stdout.write(`${process.stdout.isTTY ? "\r" : ""}\u001b[36m${prefix}\u001b[0m\u001b[32m${progress}\u001b[0m${suffix}${completed === totalPages ? "\n" : ""}`);
+        }
       }
     },
   };
