@@ -133,10 +133,230 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["review_status"], "approved")
+        self.assertTrue(response.get_json()["dm_sent"])
         self.assertEqual(len([event for event in events if event[0] == "dm"]), 1)
-        self.assertEqual(len(saved_updates), 1)
-        self.assertEqual(saved_updates[0][0], "approved")
-        self.assertEqual([event[0] for event in events], ["role", "dm", "saved"])
+        self.assertEqual(len(saved_updates), 2)
+        self.assertEqual(saved_updates[0][0:2], (123, "moderator"))
+        self.assertEqual(saved_updates[0][2], next(iter(OWNER_IDS)))
+        self.assertEqual(saved_updates[1][0], "approved")
+        self.assertEqual([event[0] for event in events], ["role", "saved", "saved", "dm"])
+        self.assertIn(role, member.roles)
+
+    def test_review_keeps_approval_when_decision_dm_fails(self):
+        events = []
+
+        class FakeRole:
+            id = 123
+            name = "Moderator"
+
+        class FakeMember:
+            def __init__(self):
+                self.roles = []
+
+            async def add_roles(self, role, *, reason):
+                self.roles.append(role)
+                events.append("role-added")
+
+            async def remove_roles(self, role, *, reason):
+                self.roles.remove(role)
+                events.append("role-removed")
+
+        member = FakeMember()
+        role = FakeRole()
+
+        class FakeGuild:
+            roles = [role]
+
+            def get_role(self, role_id):
+                return role if role_id == role.id else None
+
+            def get_member(self, user_id):
+                return member
+
+        class FakeUser:
+            async def send(self, *, view):
+                events.append("dm-failed")
+                raise routes.discord.Forbidden(response=None, message="DMs disabled")
+
+        class FakeBot:
+            cxn = object()
+
+            def get_user(self, user_id):
+                return FakeUser()
+
+            def get_guild(self, guild_id):
+                return FakeGuild()
+
+        class FakePool:
+            async def fetchrow(self, query, opening_id, user_id):
+                return {"user_id": user_id}
+
+            async def execute(self, query, *params):
+                events.append("staff-saved" if "staff_members" in query else "review-saved")
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            routes, "_pool", return_value=FakePool()
+        ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+            routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ):
+            response = client.post(
+                "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+                json={"status": "approved"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"ok": True, "review_status": "approved", "dm_sent": False})
+        self.assertEqual(events, ["role-added", "staff-saved", "review-saved", "dm-failed"])
+        self.assertIn(role, member.roles)
+
+    def test_staff_persistence_failure_rolls_back_new_discord_role(self):
+        events = []
+
+        class FakeRole:
+            id = 123
+            name = "Moderator"
+
+        class FakeMember:
+            def __init__(self):
+                self.roles = []
+
+            async def add_roles(self, role, *, reason):
+                self.roles.append(role)
+                events.append("role-added")
+
+            async def remove_roles(self, role, *, reason):
+                self.roles.remove(role)
+                events.append("role-removed")
+
+        member = FakeMember()
+        role = FakeRole()
+
+        class FakeGuild:
+            roles = [role]
+
+            def get_role(self, role_id):
+                return role if role_id == role.id else None
+
+            def get_member(self, user_id):
+                return member
+
+        class FakeBot:
+            cxn = object()
+
+            def get_guild(self, guild_id):
+                return FakeGuild()
+
+        class FakePool:
+            async def fetchrow(self, query, opening_id, user_id):
+                return {"user_id": user_id}
+
+            async def execute(self, query, *params):
+                if "staff_members" in query:
+                    events.append("staff-write-failed")
+                    raise RuntimeError("database unavailable")
+                events.append("review-saved")
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            routes, "_pool", return_value=FakePool()
+        ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+            routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ):
+            response = client.post(
+                "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+                json={"status": "approved"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(events, ["role-added", "staff-write-failed", "role-removed"])
+        self.assertEqual(member.roles, [])
+
+    def test_approval_saves_staff_role_through_shared_pool(self):
+        events = []
+
+        class FakeRole:
+            id = 123
+            name = "Moderator"
+
+        class FakeMember:
+            roles = []
+
+            async def add_roles(self, role, *, reason):
+                self.roles.append(role)
+
+        member = FakeMember()
+        role = FakeRole()
+
+        class FakeGuild:
+            roles = [role]
+
+            def get_role(self, role_id):
+                return role if role_id == role.id else None
+
+            def get_member(self, user_id):
+                return member
+
+        class FakeUser:
+            async def send(self, *, view):
+                events.append("dm")
+
+        class FakeBot:
+            def get_guild(self, guild_id):
+                return FakeGuild()
+
+            def get_user(self, user_id):
+                return FakeUser()
+
+        class FakePool:
+            async def fetchrow(self, query, opening_id, user_id):
+                return {"user_id": user_id}
+
+            async def execute(self, query, *params):
+                events.append((query, params))
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            routes, "_pool", return_value=FakePool()
+        ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+            routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ):
+            response = client.post(
+                "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+                json={"status": "approved"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [event[0] if isinstance(event, tuple) else event for event in events],
+            [
+                "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
+                "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') WHERE opening_id = $3 AND user_id = $4",
+                "dm",
+            ],
+        )
+        self.assertEqual(events[0][1][1], "moderator")
         self.assertIn(role, member.roles)
 
     def test_review_rolls_back_new_role_when_decision_dm_fails(self):
@@ -205,9 +425,12 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 headers={"X-CSRF-Token": "test-csrf"},
             )
 
-        self.assertEqual(response.status_code, 502)
-        self.assertEqual(events, ["role-added", "role-removed"])
-        self.assertEqual(member.roles, [])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["review_status"], "approved")
+        self.assertFalse(response.get_json()["dm_sent"])
+        self.assertEqual(events[:3], ["role-added", "saved", "saved"])
+        self.assertNotIn("role-removed", events)
+        self.assertIn(role, member.roles)
 
     def test_review_denial_does_not_assign_a_team_role(self):
         events = []
@@ -249,7 +472,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(events, ["dm", "saved"])
+        self.assertEqual(events, ["saved", "dm"])
 
     def test_guild_administrator_cannot_manage_or_review_team_recruitment(self):
         endpoints = [
@@ -289,7 +512,6 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                     )
                     self.assertEqual(response.status_code, 403)
                     self.assertIn("owner", response.get_json()["error"].lower())
-
 
 if __name__ == "__main__":
     unittest.main()

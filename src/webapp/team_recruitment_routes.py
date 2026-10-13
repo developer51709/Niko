@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 import uuid
 from functools import wraps
 
@@ -592,9 +593,7 @@ async def _apply_team_role(user_id, role_key):
 
 
 async def _persist_staff_assignment(user_id, role_key, assigned_by):
-    pool = getattr(_discord_bot, "cxn", None) if _discord_bot is not None else None
-    if pool is None:
-        raise RuntimeError("The staff database is not available to persist the approved role.")
+    pool = _pool()
     role = "support" if role_key == "support" else role_key
     await pool.execute(
         "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
@@ -640,27 +639,36 @@ def review_staff_team_submission(opening_id, user_id):
             assigned_member, assigned_role, role_was_added = run_on_bot_loop(
                 _apply_team_role(user_id, role_key)
             )
-        run_on_bot_loop(_send_review_dm(user_id, role_key, status))
-        if status == "approved":
-            run_on_bot_loop(_persist_staff_assignment(user_id, role_key, int(session["user"].get("id", 0))))
+            run_on_bot_loop(_persist_staff_assignment(
+                user_id, role_key, int(session["user"].get("id", 0))
+            ))
+        run_on_bot_loop(_pool().execute(
+            "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') "
+            "WHERE opening_id = $3 AND user_id = $4",
+            status, str(session["user"].get("id", "")), opening_id, user_id,
+        ))
     except discord.Forbidden:
         if role_was_added:
             try:
                 run_on_bot_loop(_remove_team_role(assigned_member, assigned_role, role_key))
             except Exception:
                 log.exception("Could not roll back the %s role for applicant %s", role_key, user_id)
-        return jsonify({"error": "The decision was not saved because Discord blocked the role assignment or DM. Check the bot's role permissions and ask the applicant to allow DMs from the support server."}), 502
+        return jsonify({"error": "The decision was not saved because Discord blocked the role assignment. Check the bot's role permissions."}), 502
     except Exception:
         if role_was_added:
             try:
                 run_on_bot_loop(_remove_team_role(assigned_member, assigned_role, role_key))
             except Exception:
                 log.exception("Could not roll back the %s role for applicant %s", role_key, user_id)
-        log.exception("Could not assign role or send %s DM to team applicant %s for %s", status, user_id, opening_id)
-        return jsonify({"error": "The decision was not saved because the applicant could not be assigned or notified."}), 502
-    run_on_bot_loop(_pool().execute(
-        "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') "
-        "WHERE opening_id = $3 AND user_id = $4",
-        status, str(session["user"].get("id", "")), opening_id, user_id,
-    ))
-    return jsonify({"ok": True, "review_status": status})
+        log.exception("Could not assign role or save %s decision for team applicant %s for %s", status, user_id, opening_id)
+        return jsonify({"error": "The decision could not be saved. The applicant was not notified."}), 502
+
+    # Sending a DM is best-effort and must not undo a role or database decision
+    # that has already been applied; Discord may reject DMs independently.
+    dm_sent = True
+    try:
+        run_on_bot_loop(_send_review_dm(user_id, role_key, status))
+    except Exception:
+        dm_sent = False
+        log.exception("Could not send %s decision DM to team applicant %s for %s", status, user_id, opening_id)
+    return jsonify({"ok": True, "review_status": status, "dm_sent": dm_sent})
