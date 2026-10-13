@@ -14,23 +14,35 @@ from cogs.moderation._msg_commands import MessagesMixin
 
 
 class PurgeCountArgumentTests(unittest.TestCase):
-    def test_count_is_first_optional_argument_for_prefix_commands(self):
-        for name in ("purge", "clear"):
-            with self.subTest(command=name):
-                parameters = list(inspect.signature(getattr(MessagesMixin, name).callback).parameters)
-                self.assertEqual(parameters[2:], ["amount", "member"])
+    def test_clear_requires_count_then_accepts_optional_user(self):
+        command = MessagesMixin.clear
+        parameters = list(inspect.signature(command.callback).parameters.values())
+        self.assertEqual([parameter.name for parameter in parameters[2:]], ["count", "user"])
+        self.assertEqual(parameters[2].default, inspect.Parameter.empty)
+        self.assertIsNone(parameters[3].default)
 
-    def test_count_only_invocation_does_not_bind_count_as_member(self):
+    def test_purge_is_an_alias_of_clear(self):
+        self.assertIn("purge", MessagesMixin.clear.aliases)
+        self.assertFalse(hasattr(MessagesMixin, "purge"))
+
+    def test_count_only_invocation_uses_count_and_no_user(self):
         async def check():
             ctx = SimpleNamespace()
             cog = SimpleNamespace(_purge_messages=AsyncMock())
 
-            for name in ("purge", "clear"):
-                with self.subTest(command=name):
-                    command = getattr(MessagesMixin, name)
-                    await command.callback(cog, ctx, 25)
-                    cog._purge_messages.assert_awaited_with(ctx, None, 25)
-                    cog._purge_messages.reset_mock()
+            await MessagesMixin.clear.callback(cog, ctx, 25)
+            cog._purge_messages.assert_awaited_once_with(ctx, None, 25)
+
+        asyncio.run(check())
+
+    def test_count_and_user_invocation_preserves_argument_order(self):
+        async def check():
+            ctx = SimpleNamespace()
+            user = object()
+            cog = SimpleNamespace(_purge_messages=AsyncMock())
+
+            await MessagesMixin.clear.callback(cog, ctx, 25, user)
+            cog._purge_messages.assert_awaited_once_with(ctx, user, 25)
 
         asyncio.run(check())
 

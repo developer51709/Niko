@@ -45,14 +45,8 @@ class MessagesMixin:
         await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5)
         await self.logger().log_event(ctx.guild, category, action, body, target_id=target_id, action_key=action)
 
-    @commands.hybrid_command(name="purge", description="Clear messages, optionally from one member",
+    @commands.hybrid_command(name="clear", aliases=["purge"], description="Clear messages, optionally from one member",
                              help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
     @commands.has_permissions(manage_messages=True)
-    async def purge(self, ctx, amount: int = 100, member: discord.Member = None):
-        await self._purge_messages(ctx, member, amount)
-
-    @commands.hybrid_command(name="clear", description="Clear messages, optionally from one member",
-                             help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
-    @commands.has_permissions(manage_messages=True)
-    async def clear(self, ctx, amount: int = 100, member: discord.Member = None):
-        await self._purge_messages(ctx, member, amount)
+    async def clear(self, ctx, count: int, user: discord.Member = None):
+        await self._purge_messages(ctx, user, count)

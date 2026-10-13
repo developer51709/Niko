@@ -118,6 +118,7 @@ export type UserOverview = {
   total_earned: number;
   economy_rank: number | null;
   economy_profiles: number;
+  leaderboard_private: boolean;
 };
 
 export type LevelRow = {

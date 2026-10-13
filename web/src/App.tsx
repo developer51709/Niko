@@ -4,6 +4,7 @@ import PixelSnow from "./components/PixelSnow";
 import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
+import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
 import { LegalPage } from "./pages/LegalPage";
@@ -28,6 +29,7 @@ export function App() {
 
   let pageContent;
   if (page === "commands") pageContent = <CommandsPage />;
+  else if (page === "leaderboard") pageContent = <LeaderboardPage />;
   else if (page === "docs-detail") {
     const pathParts = window.location.pathname.split("/");
     pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1]} />;

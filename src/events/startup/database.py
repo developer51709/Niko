@@ -420,6 +420,7 @@ async def _create_tables(bot):
             balance          INTEGER DEFAULT 100,
             bank             INTEGER DEFAULT 0,
             net_worth        INTEGER DEFAULT 100,
+            leaderboard_private INTEGER NOT NULL DEFAULT 0,
             total_earned     INTEGER DEFAULT 100,
             total_spent      INTEGER DEFAULT 0,
             xp               INTEGER DEFAULT 0,
@@ -467,6 +468,14 @@ async def _create_tables(bot):
         INSERT OR IGNORE INTO economy_lottery (id, pot, next_draw, last_winner, last_pot)
         VALUES (1, 1000, ?, NULL, 0)
     """, int(time.time()) + 604800)  # 7 days from now
+
+    # Existing SQLite installations need the privacy preference column too.
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE economy_users ADD COLUMN leaderboard_private INTEGER NOT NULL DEFAULT 0"
+        )
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
 
     # Migrate economy data from JSON files to database
     await _migrate_economy_data(bot)
@@ -1242,19 +1251,20 @@ async def _migrate_economy_data(bot):
                 
                 await bot.cxn.execute("""
                     INSERT INTO economy_users (
-                        user_id, balance, bank, net_worth, total_earned, total_spent,
+                        user_id, balance, bank, net_worth, leaderboard_private, total_earned, total_spent,
                         xp, level, job, times_worked, bank_tier, last_interest,
                         last_interest_day, daily_streak, last_daily, last_work,
                         last_crime, last_rob, last_heist, last_slots, last_blackjack,
                         last_roulette, last_casino, last_gamble, last_bet, last_race,
                         last_fight, last_duel, inventory, effects, lottery_tickets,
                         transactions, achievements
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     user_id,
                     data.get("balance", 100),
                     data.get("bank", 0),
                     data.get("net_worth", 100),
+                    int(bool(data.get("leaderboard_private", False))),
                     data.get("total_earned", 100),
                     data.get("total_spent", 0),
                     data.get("xp", 0),

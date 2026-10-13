@@ -91,6 +91,7 @@ export const leaveStaffGuild = (guildId: string, csrfToken?: string) => api<{ ok
 export const getCommands = () => api<Command[]>("/api/commands");
 export const getGuilds = () => api<Guild[]>("/api/guilds");
 export const getUserOverview = () => api<UserOverview>("/api/me/overview");
+export const saveEconomyPrivacy = (leaderboard_private: boolean, csrfToken?: string) => api<{ ok: boolean; leaderboard_private: boolean }>("/api/me/economy-privacy", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ leaderboard_private }) });
 export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/overview`);
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);

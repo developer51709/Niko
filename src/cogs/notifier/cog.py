@@ -524,6 +524,8 @@ class Notifier(commands.Cog):
         channel: discord.TextChannel | None = None,
     ):
         """Choose where official Niko staff broadcasts are delivered."""
+        if ctx.interaction is not None:
+            await ctx.defer(ephemeral=True)
         channel = channel or ctx.channel
         await self.bot.cxn.execute(
             "INSERT OR REPLACE INTO notification_channels (guild_id, channel_id, updated_at) "

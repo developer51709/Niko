@@ -535,7 +535,10 @@ class MongoPool:
 
         where_clause = None
         order_by = []
+        limit_expr = None
+        offset_expr = None
         limit = None
+        offset = 0
         if tail:
             wm = re.search(
                 r"\bWHERE\b\s+(.*?)(?=\bORDER\s+BY\b|\bLIMIT\b|$)",
@@ -560,9 +563,12 @@ class MongoPool:
                         else "ASC"
                     )
                     order_by.append((bits[0], 1 if direction == "ASC" else -1))
-            lm = re.search(r"\bLIMIT\s+(\d+)", tail, re.IGNORECASE)
-            if lm:
-                limit = int(lm.group(1))
+            lm = re.search(
+                r"\bLIMIT\s+(\?|\d+)(?:\s+OFFSET\s+(\?|\d+))?",
+                tail,
+                re.IGNORECASE,
+            )
+            limit_expr, offset_expr = lm.groups() if lm else (None, None)
 
         upper_cols = columns_raw.upper()
         if "COUNT(" in upper_cols or "SUM(" in upper_cols:
@@ -572,6 +578,19 @@ class MongoPool:
 
         parser = _ConditionParser(args)
         filter_dict = parser.parse(where_clause)
+        if limit_expr == "?":
+            if parser.pos >= len(args):
+                raise ValueError("Missing argument for LIMIT clause")
+            limit = int(args[parser.pos])
+            parser.pos += 1
+        elif limit_expr is not None:
+            limit = int(limit_expr)
+        if offset_expr == "?":
+            if parser.pos >= len(args):
+                raise ValueError("Missing argument for OFFSET clause")
+            offset = int(args[parser.pos])
+        elif offset_expr is not None:
+            offset = int(offset_expr)
         filter_dict = self._apply_pk_filter(table, filter_dict)
 
         projection = None
@@ -585,6 +604,8 @@ class MongoPool:
         cursor = self._db[table].find(filter_dict, projection)
         if order_by:
             cursor = cursor.sort(order_by)
+        if offset:
+            cursor = cursor.skip(offset)
         if limit is not None:
             cursor = cursor.limit(limit)
         docs = await cursor.to_list(length=None)
@@ -809,6 +830,7 @@ class MongoPool:
                 target: row.get(select_col)
                 for target, select_col in zip(target_columns, select_cols)
             }
+
             _id = self._resolve_id(table, doc)
             if _id is None:
                 continue

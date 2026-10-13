@@ -60,9 +60,64 @@ def api_me_overview():
         "daily_streak": profile.get("daily_streak", 0),
         "achievements": profile.get("achievements", 0),
         "total_earned": profile.get("total_earned", 0),
+        "leaderboard_private": bool(profile.get("leaderboard_private", False)),
         "economy_rank": rank,
         "economy_profiles": len(profiles),
     })
+
+@app.route("/api/me/economy-privacy", methods=["POST"])
+@require_auth
+@require_csrf
+def api_save_economy_privacy():
+    """Save the signed-in user's global economy leaderboard identity setting."""
+    body = request.get_json(silent=True) or {}
+    value = body.get("leaderboard_private")
+    if not isinstance(value, bool):
+        return jsonify({"error": "leaderboard_private must be true or false."}), 400
+    user_id = session["user"].get("id")
+    if not str(user_id or "").isdigit():
+        return jsonify({"error": "The signed-in Discord account is invalid."}), 400
+    pool = getattr(_discord_bot, "cxn", None) if _discord_bot is not None else None
+    if pool is not None:
+        async def save_preference():
+            await pool.execute(
+                "INSERT INTO economy_users (user_id, leaderboard_private) VALUES ($1, $2) "
+                "ON CONFLICT(user_id) DO UPDATE SET leaderboard_private = $2",
+                int(user_id), int(value),
+            )
+        try:
+            run_on_bot_loop(save_preference())
+        except Exception:
+            return jsonify({"error": "Your economy privacy setting could not be saved."}), 503
+        economy = _discord_bot.get_cog("EconomyCog") if _discord_bot is not None else None
+        if economy is not None:
+            cached = getattr(economy, "economy_data", {}).get(str(user_id))
+            if cached is not None:
+                cached["leaderboard_private"] = int(value)
+        return jsonify({"ok": True, "leaderboard_private": value})
+
+    conn = sqlite_connect()
+    if conn is None:
+        return jsonify({"error": "The bot database is unavailable."}), 503
+    try:
+        conn.execute(
+            "INSERT INTO economy_users (user_id, leaderboard_private) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET leaderboard_private = excluded.leaderboard_private",
+            (int(user_id), int(value)),
+        )
+        conn.commit()
+    except sqlite3.Error:
+        conn.rollback()
+        return jsonify({"error": "Your economy privacy setting could not be saved."}), 500
+    finally:
+        conn.close()
+    economy = _discord_bot.get_cog("EconomyCog") if _discord_bot is not None else None
+    if economy is not None:
+        cached = getattr(economy, "economy_data", {}).get(str(user_id))
+        if cached is not None:
+            cached["leaderboard_private"] = int(value)
+    return jsonify({"ok": True, "leaderboard_private": value})
+
 
 @app.route("/api/guilds")
 @require_auth

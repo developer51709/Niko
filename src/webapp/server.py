@@ -251,6 +251,10 @@ def _normalize_economy_row(row) -> dict:
     """Convert an economy database row into the dashboard response shape."""
     balance = int(row.get("balance", 0) or 0)
     bank = int(row.get("bank", 0) or 0)
+    try:
+        leaderboard_private = bool(int(row.get("leaderboard_private", 0) or 0))
+    except (TypeError, ValueError):
+        leaderboard_private = bool(row.get("leaderboard_private", False))
     achievements = row.get("achievements", [])
     if isinstance(achievements, str):
         try:
@@ -262,6 +266,7 @@ def _normalize_economy_row(row) -> dict:
         "balance": balance,
         "bank": bank,
         "net_worth": balance + bank,
+        "leaderboard_private": leaderboard_private,
         "level": int(row.get("level", 0) or 0),
         "job": row.get("job") or "barista",
         "daily_streak": int(row.get("daily_streak", 0) or 0),
@@ -381,7 +386,7 @@ def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
     """
     query = (
         "SELECT user_id, balance, bank, level, job, daily_streak, "
-        "achievements, total_earned FROM economy_users"
+        "achievements, total_earned, leaderboard_private FROM economy_users"
     )
     if _discord_bot is not None and hasattr(_discord_bot, "cxn"):
         async def read_from_bot():
@@ -425,6 +430,86 @@ def get_runtime_economy_rows(guild_id: str | None = None) -> list[dict] | None:
         return None
     finally:
         conn.close()
+
+
+def get_runtime_leaderboard_page(offset: int, limit: int) -> tuple[list[dict], int] | None:
+    """Read one top-worth leaderboard page, with a strict database-side bound."""
+    offset = max(0, int(offset))
+    limit = max(1, min(int(limit), 100))
+    pool = getattr(_discord_bot, "cxn", None) if _discord_bot is not None else None
+    if pool is not None:
+        async def read_page():
+            page = await pool.fetch(
+                "SELECT user_id, balance, bank, leaderboard_private "
+                "FROM economy_users ORDER BY net_worth DESC, user_id ASC LIMIT $1 OFFSET $2",
+                limit, offset,
+            )
+            count = await pool.fetchval("SELECT COUNT(*) FROM economy_users")
+            return page, int(count or 0)
+        try:
+            rows, total = run_on_bot_loop(read_page())
+            return [_normalize_economy_row(row) for row in rows], total
+        except Exception:
+            return None
+
+    conn = sqlite_connect()
+    if conn is None:
+        return None
+    try:
+        cursor = conn.execute(
+            "SELECT user_id, balance, bank, leaderboard_private FROM economy_users "
+            "ORDER BY net_worth DESC, user_id ASC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        columns = [column[0] for column in cursor.description]
+        rows = [_normalize_economy_row(dict(zip(columns, raw))) for raw in cursor.fetchall()]
+        total = conn.execute("SELECT COUNT(*) FROM economy_users").fetchone()[0]
+        return rows, int(total or 0)
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def get_mutual_leaderboard_identity_ids(target_user_ids: set[str]) -> set[str] | None:
+    """Resolve target identities visible to the signed-in viewer via mutual guilds.
+
+    Fail closed on membership uncertainty: unavailable Discord auth or guild
+    data never makes private profiles visible to a broader audience.
+    """
+    viewer = session.get("user") or {}
+    if not viewer.get("id") or not target_user_ids:
+        return set()
+    if not ensure_access_token():
+        return set()
+    try:
+        viewer_guild_ids = {
+            str(guild["id"])
+            for guild in discord_get("/users/@me/guilds", session.get("access_token", ""))
+            if guild.get("id")
+        }
+    except Exception:
+        return None
+    if not viewer_guild_ids or _discord_bot is None:
+        return set()
+
+    async def find_mutual_members():
+        visible = set()
+        for guild in _discord_bot.guilds:
+            if str(guild.id) not in viewer_guild_ids:
+                continue
+            for user_id in target_user_ids - visible:
+                try:
+                    if guild.get_member(int(user_id)) is not None:
+                        visible.add(user_id)
+                except (TypeError, ValueError):
+                    continue
+        return visible
+
+    try:
+        return run_on_bot_loop(find_mutual_members())
+    except Exception:
+        return None
 
 
 def _load_blacklist_manager():

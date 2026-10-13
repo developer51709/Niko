@@ -17,6 +17,7 @@ def dashboard_redirect():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
 @app.route("/commands")
+@app.route("/leaderboard")
 @app.route("/docs")
 @app.route("/team")
 @app.route("/support")

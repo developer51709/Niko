@@ -17,6 +17,83 @@ async def _current_support_invite():
     from cogs.staff.support_server import get_support_invite
     return await get_support_invite(_discord_bot)
 
+@app.route("/api/economy/leaderboard")
+def api_economy_leaderboard():
+    """Return one ranked page, revealing private identities only when permitted."""
+    try:
+        page = int(request.args.get("page", "1"))
+        if page < 1:
+            raise ValueError("page must be positive")
+    except (TypeError, ValueError):
+        return jsonify({"error": "Page must be a positive integer."}), 400
+    page_size = 20
+    offset = (page - 1) * page_size
+    result = get_runtime_leaderboard_page(offset, page_size)
+    if result is None:
+        return jsonify({"error": "The café leaderboard is temporarily unavailable."}), 503
+    rows, total = result
+    viewer_id = str((session.get("user") or {}).get("id", ""))
+    official_staff = False
+    if viewer_id:
+        official_staff = _current_staff_role() is not None
+    private_ids = {row["user_id"] for row in rows if row.get("leaderboard_private")}
+    mutual_ids = set()
+    if private_ids and viewer_id and not official_staff:
+        resolved = get_mutual_leaderboard_identity_ids(private_ids - {viewer_id})
+        if resolved is None:
+            return jsonify({"error": "Private profile access could not be verified."}), 503
+        mutual_ids = resolved
+    visible_ids = {
+        row["user_id"] for row in rows
+        if not row.get("leaderboard_private")
+        or row["user_id"] == viewer_id
+        or official_staff
+        or row["user_id"] in mutual_ids
+    }
+    identities = {}
+    if visible_ids and _discord_bot is not None:
+        async def read_identities():
+            found = {}
+            for user_id in visible_ids:
+                user = _discord_bot.get_user(int(user_id))
+                if user is None:
+                    for guild in _discord_bot.guilds:
+                        member = guild.get_member(int(user_id))
+                        if member is not None:
+                            user = member
+                            break
+                if user is None:
+                    try:
+                        user = await _discord_bot.fetch_user(int(user_id))
+                    except Exception:
+                        continue
+                avatar = getattr(user, "display_avatar", None)
+                found[user_id] = {
+                    "username": getattr(user, "name", None),
+                    "display_name": getattr(user, "global_name", None) or getattr(user, "display_name", None) or getattr(user, "name", None),
+                    "avatar_url": str(avatar.url) if avatar is not None else None,
+                }
+            return found
+        try:
+            identities = run_on_bot_loop(read_identities())
+        except Exception:
+            identities = {}
+
+    entries = []
+    for rank, row in enumerate(rows, start=offset + 1):
+        user_id = row["user_id"]
+        identity = identities.get(user_id) if user_id in visible_ids else None
+        entries.append({
+            "rank": rank,
+            "net_worth": row["net_worth"],
+            "private": bool(row.get("leaderboard_private")),
+            "username": identity.get("username") if identity else None,
+            "display_name": identity.get("display_name") if identity else None,
+            "avatar_url": identity.get("avatar_url") if identity else None,
+        })
+    return jsonify({"entries": entries, "page": page, "page_size": page_size, "total": total, "pages": (total + page_size - 1) // page_size})
+
+
 @app.route("/api/commands")
 def api_commands():
     """Public endpoint — returns public bot commands from the startup registry."""

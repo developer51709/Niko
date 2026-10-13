@@ -196,7 +196,7 @@ export function DashboardPage() {
         : <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
-    content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} />;
+    content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} csrfToken={auth.csrf_token} />;
   }
 
   return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>

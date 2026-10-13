@@ -103,6 +103,7 @@ def _default_user() -> dict:
         "balance":       100,
         "bank":          0,
         "net_worth":     100,
+        "leaderboard_private": 0,
         "total_earned":  100,
         "total_spent":   0,
         # career
@@ -290,19 +291,20 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
         
         await bot.cxn.execute("""
             INSERT OR REPLACE INTO economy_users (
-                user_id, balance, bank, net_worth, total_earned, total_spent,
+                user_id, balance, bank, net_worth, leaderboard_private, total_earned, total_spent,
                 xp, level, job, times_worked, bank_tier, last_interest,
                 last_interest_day, daily_streak, last_daily, last_work,
                 last_crime, last_rob, last_heist, last_slots, last_blackjack,
                 last_roulette, last_casino, last_gamble, last_bet, last_race,
                 last_fight, last_duel, inventory, effects, lottery_tickets,
                 transactions, achievements
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             user_id,
             data.get("balance", 100),
             data.get("bank", 0),
             net_worth,
+            int(bool(data.get("leaderboard_private", False))),
             data.get("total_earned", 100),
             data.get("total_spent", 0),
             data.get("xp", 0),
