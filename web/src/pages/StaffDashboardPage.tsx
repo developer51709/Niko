@@ -2,11 +2,18 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { addStaffBackup, createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBackups, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, removeStaffBackup, resetStaffGuildProfile, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist } from "../api";
 import { DiscordMarkdown } from "../components/DiscordMarkdown";
+import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
 import { Icon } from "../components/Icon";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, navigate } from "../router";
 import type { AuthStatus, BackupInstance, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBlacklistEntry, StaffGuild, StaffMember } from "../types";
+
+type ReviewedTeamSubmission = TeamRecruitmentSubmission & {
+  opening_id: string;
+  opening_title: string;
+  role_name?: string | null;
+};
 
 const PUBLIC_LINK_TYPES = [
   ["website", "Website"],
@@ -27,6 +34,7 @@ const PUBLIC_LINK_TYPES = [
 
 export function StaffDashboardPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
+  const [accessLoading, setAccessLoading] = useState(true);
   const [staff, setStaff] = useState<{ role: string; role_label: string; profile: StaffMember } | null>(null);
   const [stats, setStats] = useState<BotStats | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -39,8 +47,7 @@ export function StaffDashboardPage() {
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [activeTab, setActiveTab] = useState<"profile" | "global" | "guilds" | "blacklist" | "appeals" | "reports" | "backups" | "team-recruitment">("profile");
   const [nikoApplications, setNikoApplications] = useState<TeamRecruitmentOpening[]>([]);
-  const [nikoSubmissions, setNikoSubmissions] = useState<TeamRecruitmentSubmission[]>([]);
-  const [nikoSelectedApplication, setNikoSelectedApplication] = useState<string | null>(null);
+  const [nikoSubmissions, setNikoSubmissions] = useState<ReviewedTeamSubmission[]>([]);
   const [nikoBusy, setNikoBusy] = useState(false);
   const [nikoError, setNikoError] = useState("");
   const [backups, setBackups] = useState<BackupInstance[]>([]);
@@ -78,37 +85,52 @@ export function StaffDashboardPage() {
   const [inviteGuildId, setInviteGuildId] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getAuth(), getStaffMe(), getStats(), getGuilds()])
-      .then(([authStatus, staffStatus, botStats, availableGuilds]) => {
-        setAuth(authStatus);
-        setStaff(staffStatus);
-        setStats(botStats);
-        setGuilds(availableGuilds);
-        setForm({
-          public_bio: staffStatus.profile.bio || "",
-          public_banner_url: staffStatus.profile.public_banner_url || "",
-          public_visible: staffStatus.profile.visible !== false,
-        });
-        setLinks(staffStatus.profile.public_links || []);
-        if (staffStatus.role === "owner") {
-          getStaffBackups().then((result) => setBackups(result.backups)).catch((reason) => setBackupError(reason instanceof Error ? reason.message : "Backup list unavailable."));
-          getTeamRecruitmentSettings().then((result) => setNikoApplications(result.openings)).catch((reason) => setNikoError(reason instanceof Error ? reason.message : "Team Applications page unavailable."));
+    let active = true;
+    getAuth().then(async (authStatus) => {
+      if (!active) return;
+      setAuth(authStatus);
+      if (!authStatus.authenticated) {
+        setAccessLoading(false);
+        return;
+      }
+      const staffStatus = await getStaffMe();
+      if (!active) return;
+      setStaff(staffStatus);
+      setAccessLoading(false);
+      const [botStats, availableGuilds] = await Promise.all([getStats(), getGuilds()]);
+      if (!active) return;
+      setStats(botStats);
+      setGuilds(availableGuilds);
+      setForm({
+        public_bio: staffStatus.profile.bio || "",
+        public_banner_url: staffStatus.profile.public_banner_url || "",
+        public_visible: staffStatus.profile.visible !== false,
+      });
+      setLinks(staffStatus.profile.public_links || []);
+      if (staffStatus.role === "owner") {
+        getStaffBackups().then((result) => setBackups(result.backups)).catch((reason) => setBackupError(reason instanceof Error ? reason.message : "Backup list unavailable."));
+        void refreshNikoApplications();
+      }
+      if (["owner", "developer", "head_admin"].includes(staffStatus.role)) {
+        setStaffGuildsLoading(true);
+        getStaffGuilds().then((result) => setStaffGuilds(result.guilds)).catch((reason) => setGuildActionError(reason instanceof Error ? reason.message : "Guild list unavailable.")).finally(() => setStaffGuildsLoading(false));
+        getStaffBlacklist().then(setBlacklistEntries).catch((reason) => setGuildActionError(reason instanceof Error ? reason.message : "Blacklist unavailable."));
+        if (["owner", "head_admin"].includes(staffStatus.role)) {
+          getStaffBlacklistAppeals().then((result) => setAppeals(result.appeals)).catch((reason) => setAppealsError(reason instanceof Error ? reason.message : "Appeals unavailable."));
         }
-        if (["owner", "developer", "head_admin"].includes(staffStatus.role)) {
-          setStaffGuildsLoading(true);
-          getStaffGuilds().then((result) => setStaffGuilds(result.guilds)).catch((reason) => setGuildActionError(reason instanceof Error ? reason.message : "Guild list unavailable.")).finally(() => setStaffGuildsLoading(false));
-          getStaffBlacklist().then(setBlacklistEntries).catch((reason) => setGuildActionError(reason instanceof Error ? reason.message : "Blacklist unavailable."));
-          if (["owner", "head_admin"].includes(staffStatus.role)) {
-            getStaffBlacklistAppeals().then((result) => setAppeals(result.appeals)).catch((reason) => setAppealsError(reason instanceof Error ? reason.message : "Appeals unavailable."));
-          }
-        }
-        void loadErrorReports();
-      })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Staff access unavailable."));
+      }
+      void loadErrorReports();
+    }).catch((reason) => {
+      if (active) {
+        setError(reason instanceof Error ? reason.message : "Staff access unavailable.");
+        setAccessLoading(false);
+      }
+    });
+    return () => { active = false; };
   }, []);
 
-  if (!auth || (!staff && !error)) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking staff access…</p></div>;
-  if (error || !staff || !auth.authenticated) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff workspace</div><h1>Private team area.</h1><p>{!auth?.authenticated ? "Sign in with Discord to continue." : error || "This area is only available to official Niko staff."}</p>{!auth?.authenticated && <a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff">Continue with Discord</a>}<button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
+  if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Verifying your account and staff access…</p></div>;
+  if (error || !staff || !auth?.authenticated) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff workspace</div><h1>{!auth && error ? "Staff access unavailable." : "Private team area."}</h1><p>{!auth && error ? error : !auth?.authenticated ? "You are not logged in. Sign in with Discord to continue to staff settings." : error || "This area is only available to official Niko staff."}</p>{auth && !auth.authenticated && <a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff">Continue with Discord</a>}<button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
 
   const signedInUser = auth.user!;
   const discordDefaultAvatar = `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(signedInUser.id) % 5n)}.png`;
@@ -200,28 +222,40 @@ export function StaffDashboardPage() {
     catch (reason) { setBackupError(reason instanceof Error ? reason.message : "Backup could not be removed."); }
     finally { setBackupBusy(false); }
   };
-  const refreshNikoApplications = async () => {
+  async function refreshNikoApplications() {
     setNikoBusy(true); setNikoError("");
-    try { const result = await getTeamRecruitmentSettings(); setNikoApplications(result.openings); }
-    catch (reason) { setNikoError(reason instanceof Error ? reason.message : "Team Applications page unavailable."); }
+    try {
+      const result = await getTeamRecruitmentSettings();
+      const groupedSubmissions = await Promise.all(result.openings.map(async (opening) => {
+        const response = await getTeamRecruitmentSubmissions(opening.id);
+        return response.submissions.map((submission) => ({
+          ...submission,
+          opening_id: opening.id,
+          opening_title: opening.title,
+          role_name: opening.role_name,
+        }));
+      }));
+      setNikoApplications(result.openings);
+      setNikoSubmissions(groupedSubmissions.flat().sort((left, right) => {
+        if (left.review_status === "pending" && right.review_status !== "pending") return -1;
+        if (right.review_status === "pending" && left.review_status !== "pending") return 1;
+        return (right.submitted_at || "").localeCompare(left.submitted_at || "");
+      }));
+    } catch (reason) { setNikoError(reason instanceof Error ? reason.message : "Team Applications page unavailable."); }
     finally { setNikoBusy(false); }
-  };
-  const loadNikoSubmissions = async (applicationId: string) => {
-    setNikoSelectedApplication(applicationId); setNikoBusy(true); setNikoError("");
-    try { setNikoSubmissions((await getTeamRecruitmentSubmissions(applicationId)).submissions); }
-    catch (reason) { setNikoError(reason instanceof Error ? reason.message : "Application responses unavailable."); }
-    finally { setNikoBusy(false); }
-  };
+  }
   const toggleNikoOpening = async (application: TeamRecruitmentOpening) => {
     setNikoBusy(true); setNikoError("");
     try { await setTeamRecruitmentOpeningStatus(application.id, application.status === "open" ? "closed" : "open", auth.csrf_token); await refreshNikoApplications(); }
     catch (reason) { setNikoError(reason instanceof Error ? reason.message : "Opening status could not be changed."); }
     finally { setNikoBusy(false); }
   };
-  const reviewNikoSubmission = async (applicationId: string, submission: TeamRecruitmentSubmission, status: "approved" | "denied") => {
+  const reviewNikoSubmission = async (submission: ReviewedTeamSubmission, status: "approved" | "denied") => {
     setNikoBusy(true); setNikoError("");
-    try { await reviewTeamRecruitmentSubmission(applicationId, submission.user_id, status, auth.csrf_token); await loadNikoSubmissions(applicationId); await refreshNikoApplications(); }
-    catch (reason) { setNikoError(reason instanceof Error ? reason.message : "The application decision could not be saved."); }
+    try {
+      await reviewTeamRecruitmentSubmission(submission.opening_id, submission.user_id, status, auth.csrf_token);
+      await refreshNikoApplications();
+    } catch (reason) { setNikoError(reason instanceof Error ? reason.message : "The application decision could not be saved."); }
     finally { setNikoBusy(false); }
   };
   const saveGlobal = async () => {
@@ -274,7 +308,22 @@ export function StaffDashboardPage() {
         <div className="staff-panel-footer"><span>Changes apply immediately to your public profile.</span><button type="button" className="button button-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save public listing"}</button></div>
       </section>
 
-      <aside className="staff-sidebar-card"><span className="panel-kicker">Profile rules</span><h3>Stay consistent with Discord</h3><p>Your global display name and profile picture sync automatically, so updates made in Discord are reflected here without another form.</p><div className="staff-rule"><span>Identity</span><strong>Discord synced</strong></div><div className="staff-rule"><span>Editable</span><strong>Bio · banner · links · visibility</strong></div></aside>
+      <aside className="staff-sidebar-card staff-profile-sidebar">
+        <section className="staff-profile-preview" aria-label="Live public profile preview">
+          <div className="staff-profile-preview-banner">
+            {form.public_banner_url && <img src={form.public_banner_url} alt="" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />}
+            <span>Public profile</span>
+          </div>
+          <div className="staff-profile-preview-body">
+            <DiscordStatusAvatar status={staff.profile.status} className="staff-profile-preview-avatar" label={staff.profile.status_label || staff.profile.status || "Offline"}><img className="staff-profile-preview-avatar" src={signedInAvatar} alt="" /></DiscordStatusAvatar>
+            <div className="staff-profile-preview-identity"><strong>{signedInUser.global_name || signedInUser.username || staff.profile.name}</strong><span>{staff.role_label}</span></div>
+            <p className={form.public_bio.trim() ? "" : "is-placeholder"}>{form.public_bio.trim() || "Your introduction will appear here."}</p>
+            {links.some((link) => link.type.trim() && link.url.trim()) && <div className="staff-profile-preview-links">{links.filter((link) => link.type.trim() && link.url.trim()).map((link, index) => <span key={`${link.type}-${index}`}>{link.label || PUBLIC_LINK_TYPES.find(([value]) => value === link.type)?.[1] || link.type}</span>)}</div>}
+            <div className={`staff-profile-preview-visibility${form.public_visible ? " is-visible" : ""}`}><i />{form.public_visible ? "Visible on Team page" : "Hidden from Team page"}</div>
+          </div>
+        </section>
+        <div className="staff-profile-rules"><span className="panel-kicker">Profile rules</span><h3>Stay consistent with Discord</h3><p>Your global display name and profile picture sync automatically, so updates made in Discord are reflected here without another form.</p><div className="staff-rule"><span>Identity</span><strong>Discord synced</strong></div><div className="staff-rule"><span>Editable</span><strong>Bio · banner · links · visibility</strong></div></div>
+      </aside>
     </div></section>}
 
     {activeTab === "global" && canManageGlobal && <section id="staff-global-panel" role="tabpanel" aria-labelledby="staff-global-tab" className="staff-panel staff-global-panel"><div className="staff-panel-heading"><div><span className="panel-kicker">Graphic direction</span><h2>Global Niko profile</h2><p>Reserved for Graphic Designers, Head Admins, and owners. Paste publicly reachable image URLs.</p></div><span className="staff-step">02</span></div><div className="staff-fields staff-fields-two"><label className="form-field"><span className="form-label">Bot avatar URL</span><input value={global.avatar_url} onChange={(e) => setGlobal({ ...global, avatar_url: e.target.value })} placeholder="https://…" /></label><label className="form-field"><span className="form-label">Bot banner URL</span><input value={global.banner_url} onChange={(e) => setGlobal({ ...global, banner_url: e.target.value })} placeholder="https://…" /></label></div><div className="staff-panel-footer"><span>Updates the bot-wide Discord profile.</span><button type="button" className="button button-primary" onClick={saveGlobal} disabled={savingGlobal}>{savingGlobal ? "Updating…" : "Update global profile"}</button></div></section>}
@@ -308,7 +357,7 @@ export function StaffDashboardPage() {
     </section>}
     {activeTab === "appeals" && canReviewAppeals && <section id="staff-appeals-panel" role="tabpanel" aria-labelledby="staff-appeals-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Trust &amp; safety</span><h2>Blacklist appeals</h2><p>Review requests privately. Approval removes the active restriction while preserving its appealed history; denied appeals cannot be resubmitted.</p></div><div className="staff-guild-count"><strong>{appeals.filter((appeal) => appeal.status === "pending").length}</strong><span>pending review</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">Visible to the bot owner and Head Admins</span><button type="button" className="button button-muted" onClick={() => void loadAppeals()} disabled={appealsLoading}><Icon name="spark" />{appealsLoading ? "Refreshing…" : "Refresh appeals"}</button></div>{appealsError && <div className="notice warning" role="alert">{appealsError}</div>}{appealsLoading && appeals.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading appeals…</p></div> : appeals.length === 0 ? <div className="staff-guild-empty">No blacklist appeals have been submitted.</div> : <div className="staff-guild-list">{appeals.map((appeal) => <article className={`staff-guild-card staff-appeal-card staff-appeal-${appeal.status}`} key={appeal.appeal_id}><div className="staff-appeal-header"><div className="staff-appeal-identity"><span className="panel-kicker">{appeal.guild_id ? "Guild appeal" : "User appeal"}</span><strong>{appeal.guild_id ? `Guild ${appeal.guild_id}` : appeal.username || "Discord user"}</strong><small>{appeal.guild_id ? `Submitted by user ${appeal.user_id}` : `Discord ID · ${appeal.user_id}`} <span aria-hidden="true">·</span> {new Date(appeal.created_at * 1000).toLocaleString()}</small></div><span className={`staff-guild-status${appeal.status === "denied" ? " is-blocked" : appeal.status === "pending" ? " is-pending" : " is-approved"}`}><i />{appeal.status}</span></div><div className="staff-appeal-reason staff-appeal-context"><span className="panel-kicker">Blacklist reason</span><p>{appeal.blacklist_reason || "No reason recorded."}</p></div><div className="staff-appeal-reason staff-appeal-message"><span className="panel-kicker">Appeal statement</span><p>{appeal.appeal_text}</p></div>{appeal.status === "pending" ? <><label className="form-field"><span className="form-label">Staff note {"(optional)"}</span><textarea rows={3} maxLength={2000} value={appealNotes[appeal.appeal_id] || ""} onChange={(event) => setAppealNotes((current) => ({ ...current, [appeal.appeal_id]: event.target.value }))} placeholder="Add context for the decision; the user can see this note…" /><small>{(appealNotes[appeal.appeal_id] || "").length}/2000 · shown to the user with the decision</small></label><div className="staff-appeal-actions"><button type="button" className="button button-muted" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "denied")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Deny appeal"}</button><button type="button" className="button button-primary" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "approved")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Approve appeal"}</button></div></> : <><div className="staff-appeal-reason staff-appeal-note"><span className="panel-kicker">Staff decision note</span><p>{appeal.staff_note || "No note added."}</p></div><small className="staff-appeal-reviewed">{appeal.status === "approved" ? "Approved" : "Denied"}{appeal.reviewed_at ? ` ${new Date(appeal.reviewed_at * 1000).toLocaleString()}` : ""} <span aria-hidden="true">·</span> Staff ID {appeal.reviewed_by || "unknown"}</small></>}</article>)}</div>}</section>}
     {activeTab === "backups" && canManageBackups && <section id="staff-backups-panel" role="tabpanel" aria-labelledby="staff-backups-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · authenticated failover</span><h2>Standby proxy instances</h2><p>Register a standby that runs in BACKUP_MODE. A one-time nonce proof checks that both its Discord bot token and Flask session secret exactly match production; neither secret is sent back or displayed. Standbys never connect to Discord.</p></div><div className="staff-guild-count"><strong>{backups.length}</strong><span>verified instances</span></div></header><form className="staff-blacklist-form" onSubmit={(event) => void saveBackup(event)}><input value={backupName} onChange={(event) => setBackupName(event.target.value)} maxLength={60} placeholder="Region / instance name" aria-label="Backup name" required /><input value={backupUrl} onChange={(event) => setBackupUrl(event.target.value)} type="url" placeholder="https://standby.example.com" aria-label="Backup HTTPS origin" required /><button type="submit" className="button button-primary" disabled={backupBusy}>{backupBusy ? "Verifying…" : "Verify & add standby"}</button></form>{backupError && <div className="notice warning" role="alert">{backupError}</div>}{backupMessage && <div className="notice" role="status">{backupMessage}</div>}<div className="staff-guild-list">{backups.map((backup) => <article className="staff-guild-card" key={backup.id}><div className="staff-guild-row"><span className="staff-guild-icon"><Icon name="shield" /></span><span className="staff-guild-title"><strong>{backup.name}</strong><small>{backup.url} · verified {new Date(backup.created_at * 1000).toLocaleString()}</small></span><button type="button" className="button button-danger button-small" disabled={backupBusy} onClick={() => void deleteBackup(backup)}>Remove</button></div></article>)}{backups.length === 0 && <div className="staff-guild-empty">No verified standby instances yet.</div>}</div></section>}
-    {activeTab === "team-recruitment" && canManageNikoApplications && <section id="staff-team-recruitment-panel" role="tabpanel" aria-labelledby="staff-team-recruitment-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · official team applications</span><h2>Team Applications</h2><p>Choose which fixed role applications are accepting submissions and review responses. Role questions and role links are managed in code.</p></div><div className="staff-guild-count"><strong>{nikoApplications.length}</strong><span>fixed role applications</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">Pending submissions appear first when reviewing an opening.</span><button type="button" className="button button-muted" onClick={() => void refreshNikoApplications()} disabled={nikoBusy}><Icon name="spark" />Refresh</button></div>{nikoError && <div className="notice warning" role="alert">{nikoError}</div>}<div className="staff-guild-list">{nikoApplications.map((application) => <article className="staff-guild-card" key={application.id}><div className="staff-guild-row"><span className="staff-guild-icon"><Icon name="users" /></span><span className="staff-guild-title"><strong>{application.title} · {application.role_name || "Role"}</strong><small>{application.submission_count} submission(s) · {application.status === "open" ? "Accepting applications" : "Closed"} · /team/apply/{application.id}</small></span><button type="button" className="button button-muted button-small" onClick={() => void toggleNikoOpening(application)} disabled={nikoBusy}>{application.status === "open" ? "Close" : "Reopen"}</button><button type="button" className="button button-primary button-small" onClick={() => void loadNikoSubmissions(application.id)} disabled={nikoBusy}>Review</button></div>{nikoSelectedApplication === application.id && <div className="team-recruitment-review-list">{nikoSubmissions.length === 0 ? <p className="staff-blacklist-empty">No submissions for this role yet.</p> : nikoSubmissions.map((submission) => <article className="team-recruitment-review-entry" key={submission.user_id}><div><strong>{submission.display_name}</strong><p>Discord ID · {submission.user_id} · {submission.review_status}</p>{submission.answers.map((answer) => <p key={answer.question_id}><strong>{answer.prompt}</strong><br />{Array.isArray(answer.answer) ? answer.answer.join(", ") : answer.answer}</p>)}</div>{submission.review_status === "pending" && <div className="team-recruitment-review-actions"><button type="button" className="button button-muted button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(application.id, submission, "denied")}>Decline</button><button type="button" className="button button-primary button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(application.id, submission, "approved")}>Approve</button></div>}</article>)}</div>}</article>)}{nikoApplications.length === 0 && <div className="staff-guild-empty">Fixed role applications will appear here when available.</div>}</div></section>}
+    {activeTab === "team-recruitment" && canManageNikoApplications && <section id="staff-team-recruitment-panel" role="tabpanel" aria-labelledby="staff-team-recruitment-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · official team applications</span><h2>Team Applications</h2><p>Manage fixed role openings and review every submission from one queue. Role questions and role links are managed in code.</p></div><div className="staff-guild-count"><strong>{nikoSubmissions.length}</strong><span>submitted applications</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">{nikoSubmissions.filter((submission) => submission.review_status === "pending").length} pending · {nikoSubmissions.filter((submission) => submission.review_status !== "pending").length} reviewed</span><button type="button" className="button button-muted" onClick={() => void refreshNikoApplications()} disabled={nikoBusy}><Icon name="spark" />{nikoBusy ? "Refreshing…" : "Refresh"}</button></div>{nikoError && <div className="notice warning" role="alert">{nikoError}</div>}<section className="team-recruitment-openings"><div className="team-recruitment-list-heading"><div><span className="panel-kicker">Opening controls</span><h3>Role openings</h3></div><span>{nikoApplications.length} fixed roles</span></div><div className="staff-guild-list">{nikoApplications.map((application) => <article className="staff-guild-card" key={application.id}><div className="staff-guild-row"><span className="staff-guild-icon"><Icon name="users" /></span><span className="staff-guild-title"><strong>{application.title} · {application.role_name || "Role"}</strong><small>{application.submission_count} {application.submission_count === 1 ? "submission" : "submissions"} · {application.status === "open" ? "Accepting applications" : "Closed"} · /team/apply/{application.id}</small></span><button type="button" className="button button-muted button-small" onClick={() => void toggleNikoOpening(application)} disabled={nikoBusy}>{application.status === "open" ? "Close" : "Reopen"}</button></div></article>)}{nikoApplications.length === 0 && <div className="staff-guild-empty">Fixed role applications will appear here when available.</div>}</div></section><section className="team-recruitment-submissions"><div className="team-recruitment-list-heading"><div><span className="panel-kicker">Review queue</span><h3>Submitted applications</h3></div><span>{nikoSubmissions.length} total</span></div>{nikoBusy && nikoSubmissions.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading submitted applications…</p></div> : nikoSubmissions.length === 0 ? <div className="staff-guild-empty">No submitted applications yet.</div> : <><div className="team-recruitment-status-group"><div className="team-recruitment-status-heading"><h4>Pending review</h4><span>{nikoSubmissions.filter((submission) => submission.review_status === "pending").length}</span></div>{nikoSubmissions.filter((submission) => submission.review_status === "pending").length === 0 ? <p className="team-recruitment-empty-group">You’re all caught up. New submissions will appear here.</p> : <div className="team-recruitment-review-list">{nikoSubmissions.filter((submission) => submission.review_status === "pending").map((submission) => <article className="team-recruitment-review-entry" key={`${submission.opening_id}-${submission.user_id}`}><header className="team-recruitment-submission-heading"><div><strong>{submission.display_name}</strong><small>Discord ID · {submission.user_id}{submission.submitted_at ? ` · ${new Date(submission.submitted_at).toLocaleString()}` : ""}</small></div><span className="team-recruitment-opening-tag">{submission.opening_title} · {submission.role_name || "Role"}</span></header><div className="team-recruitment-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || "No answer provided." : answer.answer || "No answer provided."}</p></div>)}</div><footer className="team-recruitment-review-actions"><button type="button" className="button button-muted button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "denied")}>Decline</button><button type="button" className="button button-primary button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "approved")}>Approve</button></footer></article>)}</div>}</div><div className="team-recruitment-status-group is-reviewed"><div className="team-recruitment-status-heading"><h4>Reviewed</h4><span>{nikoSubmissions.filter((submission) => submission.review_status !== "pending").length}</span></div>{nikoSubmissions.filter((submission) => submission.review_status !== "pending").length === 0 ? <p className="team-recruitment-empty-group">Reviewed applications will be kept here for reference.</p> : <div className="team-recruitment-review-list">{nikoSubmissions.filter((submission) => submission.review_status !== "pending").map((submission) => <article className="team-recruitment-review-entry" key={`${submission.opening_id}-${submission.user_id}`}><header className="team-recruitment-submission-heading"><div><strong>{submission.display_name}</strong><small>Discord ID · {submission.user_id}{submission.submitted_at ? ` · Submitted ${new Date(submission.submitted_at).toLocaleString()}` : ""}</small></div><span className={`team-recruitment-decision ${submission.review_status}`}>{submission.review_status === "approved" ? "Approved" : "Declined"}</span></header><div className="team-recruitment-opening-tag">{submission.opening_title} · {submission.role_name || "Role"}</div><div className="team-recruitment-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || "No answer provided." : answer.answer || "No answer provided."}</p></div>)}</div><small className="team-recruitment-review-meta">{submission.reviewed_at ? `Reviewed ${new Date(submission.reviewed_at).toLocaleString()}` : "Decision recorded"}{submission.reviewed_by ? ` · Staff ID ${submission.reviewed_by}` : ""}</small></article>)}</div>}</div></>}</section></section>}
     {activeTab === "reports" && <section id="staff-reports-panel" role="tabpanel" aria-labelledby="staff-reports-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Diagnostics</span><h2>Bot error reports</h2><p>Recent command and runtime failures collected by Niko. Expand a report to inspect its details and traceback; use the code to retrieve it with <code>!staff getreport CODE</code>.</p></div><div className="staff-guild-count"><strong>{errorReports.length}</strong><span>recent reports</span></div></header><div className="staff-guild-toolbar"><label className="staff-guild-search"><Icon name="search" /><input type="search" value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} placeholder="Search report code, exception, or details" aria-label="Search error reports" /></label><button type="button" className="button button-muted" onClick={() => void refreshErrorReports()} disabled={reportsLoading}><Icon name="spark" />{reportsLoading ? "Refreshing…" : "Refresh reports"}</button></div>{reportsError && <div className="notice warning" role="alert">{reportsError}</div>}{reportsLoading && errorReports.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading recent error reports…</p></div> : errorReports.filter((item) => `${item.code} ${item.report}`.toLocaleLowerCase().includes(reportSearch.trim().toLocaleLowerCase())).length === 0 ? <div className="staff-guild-empty">{errorReports.length ? "No reports match that search." : "No bot error reports have been saved."}</div> : <div className="staff-guild-list">{errorReports.filter((item) => `${item.code} ${item.report}`.toLocaleLowerCase().includes(reportSearch.trim().toLocaleLowerCase())).map((item) => { const lines = item.report.split("\n"); const exceptionIndex = lines.findIndex((line) => line === "Exception"); const exception = lines.slice(exceptionIndex + 2).find((line) => line.startsWith("Type:") || line.startsWith("Message:")) || "Unknown exception"; const detailsIndex = lines.findIndex((line) => line === "Occurred (UTC):"); const summary = lines.slice(detailsIndex + 2).find((line) => line.trim()) || "No report details"; const expanded = expandedReportCode === item.code; return <article className={`staff-guild-card${expanded ? " expanded" : ""}`} key={item.code}><button type="button" className="staff-guild-row staff-report-row" aria-expanded={expanded} onClick={() => setExpandedReportCode(expanded ? null : item.code)}><span className="staff-report-mark"><Icon name="alert" /></span><span className="staff-guild-title"><strong>{item.code} · {exception.replace(/^(Type|Message):\s*/, "")}</strong><small>{new Date(item.created_at).toLocaleString()} · {summary.slice(0, 140)}</small></span><span className="staff-guild-status is-blocked"><i />Error</span><Icon name={expanded ? "close" : "arrow"} className="staff-guild-chevron" /></button>{expanded && <div className="staff-report-details"><div className="staff-report-summary"><span className="panel-kicker">Report code</span><strong>{item.code}</strong></div><pre>{item.report}</pre><button type="button" className="button button-muted button-small" onClick={() => navigator.clipboard?.writeText(item.report)}>Copy full report</button></div>}</article>; })}</div>}</section>}
     {activeTab === "blacklist" && canManageGuilds && <section id="staff-blacklist-panel" role="tabpanel" aria-labelledby="staff-blacklist-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Trust & safety</span><h2>Blacklist management</h2><p>Manage blocked Discord users and guilds. Access follows the guild-operations roles, and every mutation is recorded with its reason.</p></div><div className="staff-guild-count"><strong>{blacklistEntries.users.length + blacklistEntries.guilds.length}</strong><span>active entries</span></div></header><div className="staff-blacklist-form"><select value={blacklistType} onChange={(event) => setBlacklistType(event.target.value as "user" | "guild")}><option value="user">User</option><option value="guild">Guild</option></select><input value={blacklistId} onChange={(event) => setBlacklistId(event.target.value)} inputMode="numeric" maxLength={22} pattern="[0-9]{1,22}" placeholder="Discord ID" aria-label="Discord ID" /><input value={blacklistReason} onChange={(event) => setBlacklistReason(event.target.value)} maxLength={1000} placeholder="Reason (required)" aria-label="Blacklist reason" /><button type="button" className="button button-danger" disabled={busyGuildAction || !blacklistId || blacklistId.length > 22 || [...blacklistId].some((digit) => digit < "0" || digit > "9") || !blacklistReason.trim()} onClick={() => void saveGuildAction(async () => { await updateStaffBlacklist(blacklistType, "add", blacklistId, blacklistReason, auth.csrf_token); setBlacklistEntries(await getStaffBlacklist()); setBlacklistId(""); }, `${blacklistType === "user" ? "User" : "Guild"} added to blacklist.`)}>Add to blacklist</button></div><label className="staff-guild-search"><Icon name="search" /><input type="search" value={blacklistSearch} onChange={(event) => setBlacklistSearch(event.target.value)} placeholder="Filter by ID or reason" aria-label="Filter blacklist" /></label><div className="staff-blacklist-columns">{(["users", "guilds"] as const).map((kind) => <section className="staff-blacklist-list" key={kind}><div className="staff-blacklist-list-heading"><span>{kind === "users" ? "Blocked users" : "Blocked guilds"}</span><strong>{blacklistEntries[kind].length}</strong></div>{blacklistEntries[kind].filter((entry) => `${entry.id} ${entry.reason || ""}`.toLocaleLowerCase().includes(blacklistSearch.trim().toLocaleLowerCase())).map((entry) => <article className="staff-blacklist-entry" key={entry.id}><div><strong>{entry.id}</strong><p>{entry.reason || "No reason recorded."}</p><small>{new Date(entry.timestamp * 1000).toLocaleString()}</small></div><div className="staff-blacklist-entry-actions"><button type="button" className="button button-muted button-small" disabled={busyGuildAction} onClick={() => { const reason = window.prompt("Update blacklist reason", entry.reason || ""); if (reason?.trim()) void saveGuildAction(async () => { await updateStaffBlacklist(kind === "users" ? "user" : "guild", "update", String(entry.id), reason, auth.csrf_token); setBlacklistEntries(await getStaffBlacklist()); }, "Blacklist reason updated."); }}>Edit reason</button><button type="button" className="button button-danger button-small" disabled={busyGuildAction} onClick={() => { if (window.confirm(`Remove ${entry.id} from the blacklist?`)) void saveGuildAction(async () => { await updateStaffBlacklist(kind === "users" ? "user" : "guild", "remove", String(entry.id), "", auth.csrf_token); setBlacklistEntries(await getStaffBlacklist()); }, "Blacklist entry removed."); }}>Remove</button></div></article>)}{blacklistEntries[kind].filter((entry) => `${entry.id} ${entry.reason || ""}`.toLocaleLowerCase().includes(blacklistSearch.trim().toLocaleLowerCase())).length === 0 && <p className="staff-blacklist-empty">{blacklistEntries[kind].length ? "No entries match that filter." : `No ${kind} are blacklisted.`}</p>}</section>)}</div>{guildActionMessage && <div className="notice" role="status">{guildActionMessage}</div>}{guildActionError && <div className="notice warning" role="alert">{guildActionError}</div>}</section>}
     {permissionGuild && <div className="modal-backdrop" role="presentation" onClick={() => setPermissionGuild(null)}><section className="modal-card staff-permissions-modal" role="dialog" aria-modal="true" aria-labelledby="guild-permissions-title" onClick={(event) => event.stopPropagation()}><div className="panel-heading"><div><span className="panel-kicker">Discord access audit</span><h3 id="guild-permissions-title">{permissionGuild.name} permissions</h3><p>{permissionGuild.bot_permissions.filter((permission) => permission.granted).length} granted · {permissionGuild.bot_permissions.filter((permission) => !permission.granted).length} missing</p></div><button type="button" className="button button-muted" onClick={() => setPermissionGuild(null)}>Close</button></div><div className="staff-permissions-list">{permissionGuild.bot_permissions.map((permission) => <div key={permission.name} className={permission.granted ? "granted" : "missing"}><span>{permission.label}</span><strong>{permission.granted ? "Granted" : "Missing"}</strong></div>)}</div></section></div>}

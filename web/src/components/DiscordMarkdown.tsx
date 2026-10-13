@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
 import type { CSSProperties, ReactNode } from "react";
 import { resolveDiscordText } from "../api";
 
@@ -138,8 +139,10 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
 
 type TranscriptProfile = {
   id: string; username: string; display_name: string; avatar_url: string | null;
-  banner_url: string | null; banner_color: string | null; bio: string | null;
+  banner_url: string | null;  banner_color: string | null; bio: string | null;
   guild_nick: string | null; guild_tag: string | null; guild_badge_url: string | null;
+  status?: string | null;
+
   avatar_decoration_url: string | null;
 };
 
@@ -326,10 +329,10 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
             ? <img className="discord-profile-banner" src={profile.banner_url} alt="" />
             : <div className="discord-profile-banner" style={{ backgroundColor: profile.banner_color || "#202225" }} />}
           <div className="discord-profile-body">
-            {profile.avatar_url && <span className="discord-profile-avatar-wrap">
+            {profile.avatar_url && <DiscordStatusAvatar status={profile.status} className="discord-profile-avatar-wrap" label={profile.status || "Offline"}>
               <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
               {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
-            </span>}
+            </DiscordStatusAvatar>}
             <h2 className="discord-profile-name">{profile.display_name}</h2>
             {profile.guild_tag && <div className="discord-profile-guild-tag">
               {profile.guild_badge_url && <img src={profile.guild_badge_url} alt="" />}

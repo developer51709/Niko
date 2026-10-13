@@ -179,6 +179,9 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         return None
 
     avatar = getattr(user, "display_avatar", None) or getattr(user, "avatar", None)
+    member_status = getattr(member, "status", None)
+    status = getattr(member_status, "name", None) or str(member_status or "offline")
+    status = status.rsplit(".", 1)[-1].lower()
     banner = getattr(user, "banner", None)
     # Some Discord API/library versions only expose banner color on the member.
     if banner is None:
@@ -203,6 +206,7 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         # The popup represents the Discord user profile, never a server-specific nickname.
         "display_name": getattr(user, "global_name", None) or getattr(user, "name", None) or getattr(user, "username", None) or f"user-{user_id}",
         "avatar_url": str(avatar.url) if avatar is not None else None,
+        "status": status,
         "banner_url": str(banner.url) if banner is not None else None,
         "banner_color": banner_color,
         "accent_color": banner_color,
@@ -222,7 +226,6 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         "badges": [],
         "nitro_badge": None,
         "booster_badge": None,
-        "status": None,
         "is_mobile": False,
         "is_streaming": False,
         "legacy_username_badge": False,

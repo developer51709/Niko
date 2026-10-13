@@ -60,8 +60,21 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-profile-banner { display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #5865f2 center / cover no-repeat; }
 .discord-profile-body { position: relative; padding: 0 16px 16px; }
 .discord-profile-avatar-wrap { position: relative; display: block; width: 76px; height: 76px; margin-top: -38px; }
+.discord-profile-avatar-wrap-status-wrap { position: relative; display: block; width: 76px; height: 76px; margin-top: -38px; }
+.discord-profile-avatar-wrap-status-wrap > .discord-profile-avatar { margin: 0; }
 .discord-profile-avatar { display: block; width: 76px; height: 76px; border: 6px solid #111214; border-radius: 50%; object-fit: cover; background: #313338; }
 .discord-profile-avatar-decoration { position: absolute; inset: -10px; width: 96px; height: 96px; object-fit: contain; pointer-events: none; }
+.discord-status-avatar { position: relative; display: inline-flex; flex: 0 0 auto; }
+.discord-status-icon { position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }
+.team-card .team-avatar-status-wrap { width: 56px; height: 56px; margin-top: -39px; }
+.team-card .team-avatar-status-wrap > .team-avatar { margin: 0; }
+.team-card .discord-status-icon { width: 19px; height: 19px; border-color: var(--surface); background: var(--surface); }
+.team-profile-card .team-profile-avatar-status-wrap { width: 100px; height: 100px; margin: -50px auto 6px; transform: translateY(-20px); }
+.team-profile-card .team-profile-avatar-status-wrap > .team-profile-avatar { margin: 0; transform: none; }
+.team-profile-card .discord-status-icon { right: 2px; bottom: 3px; width: 24px; height: 24px; border: 4px solid var(--surface); background: var(--surface); }
+.dashboard-layout .staff-profile-preview .staff-profile-preview-avatar-status-wrap { width: 48px; height: 48px; margin-top: -24px; }
+.dashboard-layout .staff-profile-preview-avatar-status-wrap > .staff-profile-preview-avatar { margin-top: 0; }
+.dashboard-layout .staff-profile-preview .discord-status-icon { width: 15px; height: 15px; border: 2px solid var(--surface-raised); background: var(--surface-raised); }
 .discord-profile-name { margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }
 .discord-profile-guild-tag { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }
 .discord-profile-guild-tag img { width: 14px; height: 14px; object-fit: contain; }
@@ -378,6 +391,28 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-panel, .dashboard-layout .staff-sidebar-card { padding: 25px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); }
 .dashboard-layout .staff-panel-heading { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 25px; }.dashboard-layout .staff-panel-heading h2 { margin: 8px 0 7px; font-size: 20px; letter-spacing: -.05em; }.dashboard-layout .staff-panel-heading p { max-width: 570px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }.dashboard-layout .staff-step { color: var(--accent-dark); font: 11px "Space Mono", monospace; }
 .dashboard-layout .staff-fields { display: grid; gap: 18px; }.dashboard-layout .staff-fields-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }.dashboard-layout .staff-bio-field textarea { min-height: 150px; }.dashboard-layout .staff-links-section { display: grid; gap: 13px; padding: 17px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }.dashboard-layout .staff-links-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.dashboard-layout .staff-links-heading .form-label, .dashboard-layout .staff-links-heading small { display: block; }.dashboard-layout .staff-links-heading small { margin-top: 4px; color: var(--dim); font-size: 10px; line-height: 1.5; }.dashboard-layout .staff-links-count { color: var(--dim); font: 10px "Space Mono", monospace; white-space: nowrap; }.dashboard-layout .staff-link-list { display: grid; gap: 9px; }.dashboard-layout .staff-link-row { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(0, 1.5fr) auto; align-items: end; gap: 9px; }.dashboard-layout .staff-link-remove { min-height: 42px; padding: 8px 11px; color: var(--accent-dark); background: transparent; border: 1px solid var(--line); border-radius: 8px; font-size: 10px; font-weight: 700; }.dashboard-layout .staff-link-remove:hover { background: var(--callout); border-color: rgba(213, 220, 229, .24); }.dashboard-layout .staff-add-link { justify-self: start; min-height: 37px; }.dashboard-layout .staff-visibility { margin-top: 22px; padding: 15px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }.dashboard-layout .staff-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 20px; color: var(--dim); font-size: 10px; }.dashboard-layout .staff-sidebar-card h3 { margin: 10px 0 9px; font-size: 17px; letter-spacing: -.04em; }.dashboard-layout .staff-sidebar-card p { margin: 0 0 22px; color: var(--muted); font-size: 11px; line-height: 1.7; }.dashboard-layout .staff-rule { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line-soft); font-size: 10px; }.dashboard-layout .staff-rule span { color: var(--dim); }.dashboard-layout .staff-rule strong { color: var(--ink); font-size: 10px; text-align: right; }.dashboard-layout .staff-global-panel { margin-top: 16px; }.dashboard-layout .staff-page > .notice { margin-top: 16px; }
+.dashboard-layout .staff-profile-sidebar { display: grid; gap: 22px; padding: 14px; }
+.dashboard-layout .staff-profile-preview { overflow: hidden; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px; }
+.dashboard-layout .staff-profile-preview-banner { position: relative; height: 95px; overflow: hidden; background: linear-gradient(135deg, var(--callout), var(--surface-muted)); background-size: cover; background-position: center; }
+.dashboard-layout .staff-profile-preview-banner img { width: 100%; height: 100%; object-fit: cover; }
+.dashboard-layout .staff-profile-preview-banner > span { position: absolute; inset: 9px 9px auto auto; padding: 4px 7px; color: var(--ink); background: rgba(13, 15, 18, .65); border: 1px solid rgba(255, 255, 255, .12); border-radius: 99px; font: 8px "Space Mono", monospace; text-transform: uppercase; }
+.dashboard-layout .staff-profile-preview-body { padding: 0 14px 15px; }
+.dashboard-layout .staff-profile-preview-avatar { display: block; width: 48px; height: 48px; margin-top: -24px; position: relative; border: 3px solid var(--surface-raised); border-radius: 50%; object-fit: cover; }
+.dashboard-layout .staff-profile-preview-identity { display: grid; gap: 4px; margin-top: 9px; }
+.dashboard-layout .staff-profile-preview-identity strong { overflow-wrap: anywhere; font-size: 13px; }
+.dashboard-layout .staff-profile-preview-identity span { color: var(--accent-dark); font: 8px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.dashboard-layout .staff-profile-preview-body > p { margin: 11px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dashboard-layout .staff-profile-preview-body > p.is-placeholder { color: var(--dim); font-style: italic; }
+.dashboard-layout .staff-profile-preview-links { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.dashboard-layout .staff-profile-preview-links span { padding: 4px 7px; color: var(--accent-dark); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; font-size: 8px; }
+.dashboard-layout .staff-profile-preview-visibility { display: flex; align-items: center; gap: 6px; margin-top: 13px; padding-top: 10px; color: var(--dim); border-top: 1px solid var(--line-soft); font-size: 8px; }
+.dashboard-layout .staff-profile-preview-visibility i { width: 6px; height: 6px; background: var(--dim); border-radius: 50%; }
+.dashboard-layout .staff-profile-preview-visibility.is-visible { color: var(--sage); }
+.dashboard-layout .staff-profile-preview-visibility.is-visible i { background: var(--sage); }
+.dashboard-layout .staff-profile-rules { padding: 0 5px; }
+.dashboard-layout .staff-profile-rules h3 { margin-top: 7px; }
+.dashboard-layout .staff-profile-rules p { margin-bottom: 12px; }
+@media (max-width: 760px) { .dashboard-layout .staff-profile-sidebar { margin-top: 16px; } }
 .dashboard-layout .staff-tabs { display: flex; gap: 8px; margin: 0 0 20px; padding: 6px; overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; }
 .dashboard-layout .staff-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; padding: 9px 14px; white-space: nowrap; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 9px; font-size: 11px; font-weight: 700; transition: background .18s ease, color .18s ease, border-color .18s ease; }
 .dashboard-layout .staff-tabs button:hover, .dashboard-layout .staff-tabs button.active { color: var(--ink); background: var(--surface-raised); border-color: var(--line); }
@@ -396,7 +431,35 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-guild-search .icon { width: 15px; height: 15px; }
 .dashboard-layout .staff-guild-search input { width: 100%; min-width: 0; color: var(--ink); background: transparent; border: 0; outline: none; font-size: 11px; }
 .dashboard-layout .staff-guild-search input::placeholder { color: var(--dim); }
-.dashboard-layout .team-recruitment-review-list{display:grid;gap:10px;padding:16px;border-top:1px solid var(--line)}.dashboard-layout .team-recruitment-review-list .team-recruitment-review-entry{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px;background:rgba(255,255,255,.025);border:1px solid var(--line-soft);border-radius:9px}.dashboard-layout .team-recruitment-review-entry > div:first-child{min-width:0}.dashboard-layout .team-recruitment-review-entry p{margin:8px 0 0;color:var(--muted);font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}.dashboard-layout .team-recruitment-review-entry p strong{color:var(--ink)}.dashboard-layout .team-recruitment-review-actions{display:flex;flex:0 0 auto;gap:7px}
+.dashboard-layout .team-recruitment-openings, .dashboard-layout .team-recruitment-submissions { display: grid; gap: 12px; }
+.dashboard-layout .team-recruitment-list-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; }
+.dashboard-layout .team-recruitment-list-heading h3 { margin: 5px 0 0; font-size: 16px; letter-spacing: -.04em; }
+.dashboard-layout .team-recruitment-list-heading > span { color: var(--dim); font: 9px "Space Mono", monospace; text-transform: uppercase; }
+.dashboard-layout .team-recruitment-status-group { display: grid; gap: 10px; padding: 15px; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid var(--line); border-radius: 14px; }
+.dashboard-layout .team-recruitment-status-group.is-reviewed { background: color-mix(in srgb, var(--surface) 48%, transparent); }
+.dashboard-layout .team-recruitment-status-heading { display: flex; align-items: center; gap: 9px; padding: 0 2px 10px; border-bottom: 1px solid var(--line-soft); }
+.dashboard-layout .team-recruitment-status-heading h4 { margin: 0; font-size: 12px; }
+.dashboard-layout .team-recruitment-status-heading > span { display: grid; min-width: 21px; height: 21px; place-items: center; padding: 0 5px; color: var(--accent-dark); background: var(--callout); border-radius: 999px; font: 9px "Space Mono", monospace; }
+.dashboard-layout .team-recruitment-status-group.is-reviewed .team-recruitment-status-heading > span { color: var(--sage); background: color-mix(in srgb, var(--sage) 12%, transparent); }
+.dashboard-layout .team-recruitment-review-list { display: grid; gap: 10px; }
+.dashboard-layout .team-recruitment-review-entry { display: grid; min-width: 0; gap: 13px; padding: 16px; background: rgba(255,255,255,.025); border: 1px solid var(--line-soft); border-radius: 11px; }
+.dashboard-layout .team-recruitment-status-group:not(.is-reviewed) .team-recruitment-review-entry { border-left: 3px solid var(--accent); }
+.dashboard-layout .team-recruitment-status-group.is-reviewed .team-recruitment-review-entry { border-left: 3px solid var(--sage); }
+.dashboard-layout .team-recruitment-submission-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dashboard-layout .team-recruitment-submission-heading > div:first-child { display: grid; min-width: 0; gap: 5px; }
+.dashboard-layout .team-recruitment-submission-heading strong { overflow-wrap: anywhere; font-size: 13px; }
+.dashboard-layout .team-recruitment-submission-heading small, .dashboard-layout .team-recruitment-review-meta { color: var(--dim); font-size: 9px; line-height: 1.5; }
+.dashboard-layout .team-recruitment-opening-tag { flex: 0 0 auto; padding: 5px 8px; color: var(--accent-dark); background: var(--callout); border: 1px solid var(--line-soft); border-radius: 7px; font-size: 9px; }
+.dashboard-layout .team-recruitment-answers { display: grid; gap: 10px; }
+.dashboard-layout .team-recruitment-answers > div { display: grid; gap: 5px; padding: 10px 12px; background: color-mix(in srgb, var(--surface) 72%, transparent); border: 1px solid var(--line-soft); border-radius: 8px; }
+.dashboard-layout .team-recruitment-answers strong { color: var(--ink); font-size: 10px; }
+.dashboard-layout .team-recruitment-answers p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dashboard-layout .team-recruitment-review-actions { display: flex; justify-content: flex-end; gap: 7px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .team-recruitment-decision { flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--line-soft); border-radius: 999px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.dashboard-layout .team-recruitment-decision.approved { color: var(--sage); background: color-mix(in srgb, var(--sage) 10%, transparent); }
+.dashboard-layout .team-recruitment-decision.denied { color: #efa19b; background: rgba(204, 76, 69, .1); }
+.dashboard-layout .team-recruitment-empty-group { margin: 0; padding: 16px 4px 5px; color: var(--dim); font-size: 10px; }
+@media (max-width: 600px) { .dashboard-layout .team-recruitment-submission-heading { flex-direction: column; }.dashboard-layout .team-recruitment-opening-tag { align-self: flex-start; }.dashboard-layout .team-recruitment-review-actions .button { flex: 1; } }
 .dashboard-layout .staff-guild-list{ display: grid; gap: 9px; }
 .dashboard-layout .staff-guild-card { overflow: hidden; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-radius: 15px; box-shadow: 0 14px 34px rgba(0, 0, 0, .14); backdrop-filter: blur(20px) saturate(145%); -webkit-backdrop-filter: blur(20px) saturate(145%); transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }.dashboard-layout .staff-guild-card:hover { transform: translateY(-1px); }
 .dashboard-layout .staff-guild-card:hover, .dashboard-layout .staff-guild-card.expanded { border-color: color-mix(in srgb, var(--accent-dark) 44%, var(--line)); box-shadow: var(--shadow-soft); }
