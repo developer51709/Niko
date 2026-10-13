@@ -14,7 +14,7 @@ sys.path.insert(0, "src")
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp import team_recruitment_routes
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _staff_channel_overwrites, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -114,6 +114,69 @@ class SupportServerStructureTests(unittest.TestCase):
                 position=3,
                 reason="Keep staff guidelines at the top of the staff category",
             )
+        asyncio.run(check())
+
+    def test_support_roles_are_reordered_by_configured_priority(self):
+        async def check():
+            configured_roles = [discord.Object(id=index) for index in range(1, len(ROLE_SPECS) + 1)]
+            for role, position in zip(configured_roles, range(len(ROLE_SPECS), 0, -1)):
+                role.position = position
+            configured_roles[0].position = 2
+            configured_roles[1].position = 8
+            configured_roles[2].position = 4
+            roles = {key: role.id for key, role in zip(ROLE_SPECS, configured_roles)}
+            guild = SimpleNamespace(
+                get_role=lambda role_id: next((role for role in configured_roles if role.id == role_id), None),
+                edit_role_positions=AsyncMock(),
+            )
+            await _reorder_support_roles(guild, roles)
+            positions = guild.edit_role_positions.await_args.args[0]
+            self.assertEqual(list(positions), configured_roles)
+            self.assertEqual(list(positions.values()), sorted((role.position for role in configured_roles), reverse=True))
+
+            guild.edit_role_positions.reset_mock()
+            for index, role in enumerate(configured_roles):
+                role.position = len(configured_roles) - index
+            guild.get_role = lambda role_id: next((role for role in configured_roles if role.id == role_id), None)
+            await _reorder_support_roles(guild, roles)
+            guild.edit_role_positions.assert_not_awaited()
+        asyncio.run(check())
+
+    def test_support_categories_are_reordered_by_first_occurrence(self):
+        async def check():
+            bulk_update = AsyncMock()
+            guild = SimpleNamespace(id=99)
+            state = SimpleNamespace(http=SimpleNamespace(bulk_channel_update=bulk_update))
+            categories = [SimpleNamespace(id=index, guild=guild, _state=state, name=name, position=position) for index, (name, position) in enumerate((("Start Here", 5), ("Community", 2), ("Updates", 8)), start=1)]
+            await _reorder_support_categories(categories)
+            payload = bulk_update.await_args.args[1]
+            self.assertEqual([(item["id"], item["position"]) for item in payload], [(1, 2), (2, 5), (3, 8)])
+            bulk_update.assert_awaited_once_with(99, payload, reason="Keep Niko support categories in configured order")
+        asyncio.run(check())
+
+    def test_support_channels_are_reordered_in_text_and_voice_buckets(self):
+        async def check():
+            bulk_update = AsyncMock()
+            guild = SimpleNamespace(id=99)
+            state = SimpleNamespace(http=SimpleNamespace(bulk_channel_update=bulk_update))
+            category = SimpleNamespace(name="Community", guild=guild, channels=[])
+            text_channels = [SimpleNamespace(id=index, position=position, _sorting_bucket=discord.ChannelType.text.value, _state=state) for index, position in enumerate((4, 2), start=1)]
+            voice_channels = [SimpleNamespace(id=3, position=8, _sorting_bucket=discord.ChannelType.voice.value, _state=state)]
+            category.channels = [*text_channels, *voice_channels]
+            ordered = [*text_channels, *voice_channels]
+            await _reorder_support_category_channels(category, ordered)
+            self.assertEqual(
+                [(item["id"], item["position"]) for item in bulk_update.await_args.args[1]],
+                [(1, 2), (2, 4)],
+            )
+            self.assertEqual(bulk_update.await_count, 1)
+
+            bulk_update.reset_mock()
+            category.channels = list(reversed(text_channels))
+            text_channels[0].position = 2
+            text_channels[1].position = 4
+            await _reorder_support_category_channels(category, text_channels)
+            bulk_update.assert_not_awaited()
         asyncio.run(check())
 
     def test_configure_support_systems_saves_distinct_log_channel_ids(self):

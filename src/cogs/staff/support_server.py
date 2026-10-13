@@ -305,6 +305,65 @@ async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, categ
         await channel.edit(position=first_position, reason="Keep staff guidelines at the top of the staff category")
 
 
+async def _reorder_support_roles(guild: discord.Guild, roles: dict[str, int]) -> None:
+    """Keep configured roles in ROLE_SPECS priority order, highest first."""
+    ordered_roles = [guild.get_role(int(roles[key])) for key in ROLE_SPECS]
+    ordered_roles = [role for role in ordered_roles if role is not None]
+    positions = [role.position for role in ordered_roles]
+    if all(previous > current for previous, current in zip(positions, positions[1:])):
+        return
+    target_positions = sorted(positions, reverse=True)
+    await guild.edit_role_positions(
+        dict(zip(ordered_roles, target_positions)),
+        reason="Keep Niko support roles in configured priority order",
+    )
+    await _pace()
+
+
+async def _reorder_support_categories(ordered_categories: list[discord.CategoryChannel]) -> None:
+    """Keep configured categories in CHANNEL_SPECS order without touching unrelated channels."""
+    positions = [category.position for category in ordered_categories]
+    if all(previous < current for previous, current in zip(positions, positions[1:])):
+        return
+    target_positions = sorted(positions)
+    payload = [
+        {"id": category.id, "position": position}
+        for category, position in zip(ordered_categories, target_positions)
+    ]
+    await ordered_categories[0]._state.http.bulk_channel_update(
+        ordered_categories[0].guild.id,
+        payload,
+        reason="Keep Niko support categories in configured order",
+    )
+    await _pace()
+
+
+async def _reorder_support_category_channels(
+    category: discord.CategoryChannel,
+    ordered_channels: list[discord.abc.GuildChannel],
+) -> None:
+    """Order text/forum and voice channels in their respective Discord buckets."""
+    voice_bucket = discord.ChannelType.voice.value
+    for channels in (
+        [channel for channel in ordered_channels if getattr(channel, "_sorting_bucket", voice_bucket if isinstance(channel, discord.VoiceChannel) else None) != voice_bucket],
+        [channel for channel in ordered_channels if getattr(channel, "_sorting_bucket", voice_bucket if isinstance(channel, discord.VoiceChannel) else None) == voice_bucket],
+    ):
+        positions = [channel.position for channel in channels]
+        if len(channels) < 2 or all(previous < current for previous, current in zip(positions, positions[1:])):
+            continue
+        target_positions = sorted(positions)
+        payload = [
+            {"id": channel.id, "position": position}
+            for channel, position in zip(channels, target_positions)
+        ]
+        await channels[0]._state.http.bulk_channel_update(
+            category.guild.id,
+            payload,
+            reason=f"Keep channels in the {category.name} category in configured order",
+        )
+        await _pace()
+
+
 async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False) -> tuple[dict, dict]:
     """Create/repair canonical roles, channels, and category-based permissions."""
     if guild.id != SUPPORT_GUILD:
@@ -339,6 +398,8 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
     roles: dict[str, int] = {}
     for key in ROLE_SPECS:
         roles[key] = (await _ensure_role(guild, key)).id
+
+    await _reorder_support_roles(guild, roles)
 
     for owner_id in OWNER_IDS:
         owner = guild.get_member(int(owner_id))
@@ -377,7 +438,11 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await _pace()
         categories[category_name] = category
 
+    ordered_categories = [categories[name] for name in dict.fromkeys(spec[0] for spec in CHANNEL_SPECS.values())]
+    await _reorder_support_categories(ordered_categories)
+
     channels: dict[str, int] = {}
+    category_channels: dict[str, list[discord.abc.GuildChannel]] = {name: [] for name in categories}
     for key, (category_name, name, kind, staff_only) in CHANNEL_SPECS.items():
         category = categories[category_name]
         channel = discord.utils.get(category.channels, name=name)
@@ -418,6 +483,10 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await channel.edit(available_tags=[*HELP_FORUM_TAGS, *custom_tags[:15]], reason="Set community help forum tags")
             await _pace()
         channels[key] = channel.id
+        category_channels[category_name].append(channel)
+
+    for category_name, ordered_channels in category_channels.items():
+        await _reorder_support_category_channels(categories[category_name], ordered_channels)
 
     staff_rules_channel = guild.get_channel(channels["staff_rules"])
     if staff_rules_channel is not None:
