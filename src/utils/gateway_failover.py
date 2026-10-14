@@ -48,10 +48,10 @@ class GatewayHandoff:
                     raise
             finally:
                 self._cycle = None
-                if not self.active.is_set() and not self.stopping:
-                    continue
-                if not self.stopping:
-                    await asyncio.sleep(1)
+            if not self.active.is_set() and not self.stopping:
+                continue
+            if not self.stopping:
+                await asyncio.sleep(1)
 
     async def activate(self) -> None:
         """Claim the gateway after the previous owner has relinquished it."""

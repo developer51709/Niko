@@ -137,10 +137,12 @@ class WebshareProxyManager:
                 await manager.enable(force_backup=True)
                 if not manager.enabled:
                     raise
-                # static_login creates a new aiohttp session each time. Close
-                # the failed session before retrying so the retry doesn't leak it.
+                # static_login creates its session with HTTPClient's shared
+                # connector. Detach before closing the failed session so its
+                # connector remains usable when static_login creates the retry.
                 failed_session = manager._current_session()
                 if failed_session is not None and not failed_session.closed:
+                    failed_session.detach()
                     await failed_session.close()
                 logging.warning(
                     "ProxyManager",

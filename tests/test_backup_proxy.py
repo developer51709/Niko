@@ -355,6 +355,62 @@ class BackupProxyTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_gateway_login_retry_detaches_failed_session_connector(self):
+        async def scenario():
+            manager = WebshareProxyManager(None)
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
+            http = type("Http", (), {
+                "_HTTPClient__session": None,
+                "proxy": None,
+                "proxy_auth": None,
+                "user_agent": "test-agent",
+                "connector": object(),
+            })()
+            manager.http = http
+            manager._current_session = lambda: getattr(http, "_HTTPClient__session", None)
+            bot = type("Bot", (), {"http": http})()
+            challenge_body = "<!doctype html><div id=\"cf-error-details\"><span>Cloudflare Ray ID: test-ray</span></div>"
+            original_error = type("HttpError", (Exception,), {})("429 Too Many Requests")
+            original_error.response = FakeAiohttpResponse(429, {}, challenge_body)
+            original_error.text = challenge_body
+            sessions = []
+
+            class Session:
+                def __init__(self, connector):
+                    self.connector = connector
+                    self.closed = False
+                    self.detached = False
+                    self._request = lambda *args, **kwargs: None
+
+                def detach(self):
+                    self.detached = True
+                    self.connector = None
+
+                async def close(self):
+                    self.closed = True
+
+            async def static_login(token):
+                session = Session(http.connector)
+                http._HTTPClient__session = session
+                sessions.append(session)
+                if len(sessions) == 1:
+                    raise original_error
+                if sessions[1].connector is None:
+                    raise RuntimeError("Session is closed")
+                return {"id": "bot-user"}
+
+            http.static_login = static_login
+            with patch.object(manager, "_probe_backup", return_value={"service": "niko-backup-proxy"}), patch.object(manager, "_ensure_verify_task"):
+                manager.attach(bot)
+                result = await http.static_login("secret-token")
+
+            self.assertEqual({"id": "bot-user"}, result)
+            self.assertTrue(sessions[0].detached)
+            self.assertTrue(sessions[0].closed)
+            self.assertIs(http.connector, sessions[1].connector)
+
+        asyncio.run(scenario())
+
     def test_gateway_login_retries_cloudflare_html_429_through_standby(self):
         async def scenario():
             manager = WebshareProxyManager(None)
@@ -362,6 +418,11 @@ class BackupProxyTests(unittest.TestCase):
             failed_response = FakeAiohttpResponse(429, {}, "")
             session = None
             close_calls = []
+            detach_calls = []
+
+            def detach_session():
+                session.detached = True
+                detach_calls.append(True)
 
             async def close_session():
                 session.closed = True
@@ -386,7 +447,8 @@ class BackupProxyTests(unittest.TestCase):
 
             async def static_login(token):
                 nonlocal session
-                session = type("Session", (), {"_request": None, "closed": False})()
+                session = type("Session", (), {"_request": None, "closed": False, "detached": False})()
+                session.detach = detach_session
                 session.close = close_session
                 http._HTTPClient__session = session
                 attempts.append((token, http.proxy))
@@ -404,6 +466,7 @@ class BackupProxyTests(unittest.TestCase):
             self.assertIsNone(attempts[0][1])
             self.assertEqual(manager._backup_proxy_urls[0], attempts[1][1])
             self.assertEqual([True], close_calls)
+            self.assertEqual([True], detach_calls)
             self.assertTrue(manager.enabled)
 
         asyncio.run(scenario())
