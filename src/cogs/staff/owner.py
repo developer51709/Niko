@@ -21,6 +21,7 @@ from utils import logging
 import time
 import json
 import datetime
+from urllib.parse import urlsplit
 
 STATUS_PANEL_INTERVAL = 30.0
 
@@ -1576,7 +1577,7 @@ def _command_counts(bot) -> tuple:
 
 
 async def _probe_http(url: str) -> bool:
-    """GET a local URL and confirm it responded healthily."""
+    """GET a URL and confirm it responded healthily."""
     try:
         timeout = aiohttp.ClientTimeout(total=4)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -1632,6 +1633,7 @@ async def _collect_status(bot) -> dict:
         "database_backend": "unknown",
         "database_ok": None,
         "website_ok": None,
+        "website_note": None,
         "api_ok": None,
         "overall_ok": None,
     }
@@ -1694,22 +1696,36 @@ async def _collect_status(bot) -> dict:
     except Exception:
         pass
 
-    # In-process checks: database pool + the Flask website/API on localhost.
+    # Check the database and local API separately from public website exposure.
     try:
         db_backend, db_ok = await _check_database(bot)
         status["database_backend"] = db_backend
         status["database_ok"] = db_ok
     except Exception:
         pass
+    port = os.environ.get("PORT", "5000")
+    local_base = f"http://127.0.0.1:{port}"
     try:
-        port = os.environ.get("PORT", "5000")
-        base = f"http://127.0.0.1:{port}"
-        api_ok = await _probe_http(f"{base}/api/health")
-        status["api_ok"] = api_ok
-        if api_ok:
-            status["website_ok"] = await _probe_http(f"{base}/")
+        status["api_ok"] = await _probe_http(f"{local_base}/api/health")
     except Exception:
-        pass
+        status["api_ok"] = False
+
+    # A local frontend response does not prove the configured domain is
+    # reachable from outside this process. Probe PUBLIC_URL directly and do
+    # not let local API health gate the public website result.
+    public_url = os.environ.get("PUBLIC_URL", "").strip().rstrip("/")
+    parsed_public_url = urlsplit(public_url)
+    if not public_url:
+        status["website_ok"] = False
+        status["website_note"] = "PUBLIC_URL not configured"
+    elif parsed_public_url.scheme not in {"http", "https"} or not parsed_public_url.netloc:
+        status["website_ok"] = False
+        status["website_note"] = "PUBLIC_URL is invalid"
+    else:
+        try:
+            status["website_ok"] = await _probe_http(f"{public_url}/")
+        except Exception:
+            status["website_ok"] = False
 
     # Overall roll-up for the summary row on the panel.
     checks = [
@@ -1849,12 +1865,16 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     view.add_item(glance)
 
     # ── System health card ────────────────────────────────────────────────────
+    website_text = state_of(website_ok)
+    if status.get("website_note"):
+        website_text = f"{website_text} · {status['website_note']}"
+
     health = discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {get_emoji('cpu')} System Health"),
         separator(),
         line(f"{state_emoji(overall_ok)} **Overall** — {overall_text}"),
         line(f"{state_emoji(db_ok)} **Database** — {db_backend} · {state_of(db_ok)}"),
-        line(f"{state_emoji(website_ok)} **Website** — {state_of(website_ok)}"),
+        line(f"{state_emoji(website_ok)} **Website** — {website_text}"),
         line(f"{state_emoji(api_ok)} **API** — {state_of(api_ok)}"),
         line(f"{state_emoji(gateway_ok)} **Gateway** — {state_of(gateway_ok)} · {latency_text}"),
         line(f"{state_emoji(music_ok)} **Music** — {state_of(music_ok)} · {music_nodes} active node{'s' if music_nodes != 1 else ''}"),

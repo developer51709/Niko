@@ -1,4 +1,4 @@
-"""Owner-controlled registration for non-gateway standby proxy instances."""
+"""Owner-controlled registration and failover controls for standby instances."""
 from . import server as _server
 
 globals().update({name: value for name, value in vars(_server).items() if not name.startswith("__")})
@@ -13,48 +13,39 @@ from urllib.parse import urlsplit
 import requests
 from utils import logging
 
-from utils.backup_proxy import backup_proxy_url, secret_key, verification_proof
+from utils.standby_failover import standby_origin, secret_key, verification_proof
+from utils.standby_manager import StandbyFailoverManager
 
-from utils.backup_registry import add_backup, init_backup_registry, list_backups, remove_backup
-
-
-def configure_backup_proxy():
-    """Defer registry loading until the bot's shared database is initialized."""
-    return None
+from utils.standby_registry import add_standby, init_standby_registry, list_standbys, remove_standby
 
 
-def _sync_backup_proxy_manager(bot, rows):
-    manager = getattr(bot, "proxy_manager", None)
+def _sync_standby_manager(bot, rows):
+    manager = getattr(bot, "standby_failover", None)
     if manager is None:
-        return
-    key = _backup_key()
-    manager.set_backup_proxies(
-        [backup_proxy_url(row["url"], key) for row in rows],
+        manager = StandbyFailoverManager()
+        bot.standby_failover = manager
+    manager.set_standbys(
+        [standby_origin(row["url"]) for row in rows],
         [row["id"] for row in rows],
     )
-    # Wrap static_login even before the Discord HTTP session exists. If a
-    # startup probe already selected standby, attach() applies it after login.
     manager.attach(bot)
 
 
-async def initialize_backup_registry(bot):
-    """Ensure the shared Mongo registry is ready and load standbys for failover."""
+async def initialize_standby_registry(bot):
+    """Ensure registry ready and load public standby origins."""
     try:
-        rows = await init_backup_registry(bot)
-        _sync_backup_proxy_manager(bot, rows)
+        rows = await init_standby_registry(bot)
+        _sync_standby_manager(bot, rows)
     except Exception as exc:
-        manager = getattr(bot, "proxy_manager", None)
-        if manager is not None:
-            manager.set_backup_proxies([])
-        logging.warning("ProxyManager", f"Standby registry unavailable: {exc}")
+        logging.warning("StandbyFailover", f"Standby registry unavailable: {exc}")
 
 
-def _refresh_backup_proxy_manager(rows):
+def _refresh_standby_manager(rows):
     if _discord_bot is not None:
-        _sync_backup_proxy_manager(_discord_bot, rows)
+        _sync_standby_manager(_discord_bot, rows)
 
 
-def _backup_key():
+def _standby_key():
     token = os.environ.get("DISCORD_BOT_TOKEN", "")
     session_secret = os.environ.get("SESSION_SECRET", "")
     if not token or not session_secret:
@@ -69,85 +60,85 @@ def _verification_matches(key, nonce, proof):
 
 def _validate_public_https_origin(raw_url):
     if not isinstance(raw_url, str) or len(raw_url) > 300:
-        raise ValueError("Enter a valid HTTPS backup origin.")
+        raise ValueError("Enter a valid HTTPS standby origin.")
     parts = urlsplit(raw_url.strip().rstrip("/"))
     try:
         parsed_port = parts.port
     except ValueError as exc:
-        raise ValueError("Backup URL has an invalid port.") from exc
+        raise ValueError("Standby URL has an invalid port.") from exc
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
-        raise ValueError("Backup URL must be HTTPS and must not contain embedded credentials.")
+        raise ValueError("Standby URL must be HTTPS and must not contain embedded credentials.")
     if parts.path or parts.query or parts.fragment:
         raise ValueError("Enter only the HTTPS origin, without a path or query string.")
     hostname = parts.hostname.rstrip(".").lower()
     if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith((".localhost", ".local", ".internal")):
-        raise ValueError("Backup URL must use a public hostname.")
+        raise ValueError("Standby URL must use a public hostname.")
     try:
         addresses = [ipaddress.ip_address(hostname)]
     except ValueError:
         try:
             addresses = [ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(hostname, parsed_port or 443, type=socket.SOCK_STREAM)]
         except (OSError, ValueError) as exc:
-            raise ValueError("Backup hostname could not be resolved.") from exc
+            raise ValueError("Standby hostname could not be resolved.") from exc
     if not addresses or any(not address.is_global for address in addresses):
-        raise ValueError("Backup URL must resolve only to public IP addresses.")
+        raise ValueError("Standby URL must resolve only to public IP addresses.")
     if parsed_port is not None and not 1 <= parsed_port <= 65535:
-        raise ValueError("Backup URL has an invalid port.")
+        raise ValueError("Standby URL has an invalid port.")
     return f"https://{parts.netloc}"
 
 
 def _owner_only():
     if _current_staff_role() != "owner":
-        return jsonify({"error": "Backup instance management is restricted to the bot owner."}), 403
+        return jsonify({"error": "Standby instance management is restricted to the bot owner."}), 403
     return None
 
 
-@app.route("/api/staff/backups", methods=["GET"])
+@app.route("/api/staff/standbys", methods=["GET"])
 @require_auth
-def api_staff_backups():
+def api_staff_standbys():
     error = _owner_only()
     if error:
         return error
     try:
-        rows = run_on_bot_loop(list_backups(_discord_bot))
+        rows = run_on_bot_loop(list_standbys(_discord_bot))
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
     except Exception:
-        return jsonify({"error": "Persistent backup registry is unavailable."}), 503
-    manager = getattr(_discord_bot, "proxy_manager", None)
+        return jsonify({"error": "Persistent standby registry is unavailable."}), 503
+    manager = getattr(_discord_bot, "standby_failover", None)
     state = manager.status() if manager is not None else {}
-    health = run_on_bot_loop(manager.probe_backups()) if manager is not None else {}
+    health = run_on_bot_loop(manager.probe_all()) if manager is not None else {}
     for row in rows:
         stats = health.get(row["id"])
         row["health"] = "online" if stats else "offline"
         row["stats"] = stats
-        row["active"] = state.get("active_backup_id") == row["id"]
-    return jsonify({"backups": rows, "failover": state})
+        row["active"] = state.get("active_standby_id") == row["id"]
+    return jsonify({"standbys": rows, "failover": state})
 
 
-@app.route("/api/staff/backups/failover", methods=["POST"])
+@app.route("/api/staff/standbys/failover", methods=["POST"])
 @require_auth
 @require_csrf
-def api_control_staff_backup_failover():
+def api_control_staff_standby_failover():
     error = _owner_only()
     if error:
         return error
-    manager = getattr(_discord_bot, "proxy_manager", None)
+    manager = getattr(_discord_bot, "standby_failover", None)
     if manager is None:
-        return jsonify({"error": "Proxy failover manager is unavailable."}), 503
+        return jsonify({"error": "Standby failover manager is unavailable."}), 503
     body = request.get_json(silent=True) or {}
     action = body.get("action")
     try:
         if action == "mode":
             mode = body.get("mode")
-            if mode not in {"auto", "off", "webshare"}:
-                return jsonify({"error": "Choose auto, off, or webshare mode."}), 400
+            if mode not in {"auto", "off"}:
+                return jsonify({"error": "Choose auto or off mode."}), 400
             changed = run_on_bot_loop(manager.select_failover(mode))
         elif action == "activate":
-            backup_id = str(body.get("backup_id", ""))
-            changed = run_on_bot_loop(manager.activate_backup_async(backup_id))
+            standby_id = str(body.get("standby_id", ""))
+            changed = run_on_bot_loop(manager.activate_standby(standby_id))
         elif action == "rotate":
-            changed = run_on_bot_loop(manager.rotate_backup())
+            changed = run_on_bot_loop(manager.rotate_standby())
         else:
             return jsonify({"error": "Unknown failover action."}), 400
     except Exception:
@@ -157,20 +148,20 @@ def api_control_staff_backup_failover():
     return jsonify({"ok": True, "failover": manager.status()})
 
 
-@app.route("/api/staff/backups", methods=["POST"])
+@app.route("/api/staff/standbys", methods=["POST"])
 @require_auth
 @require_csrf
-def api_add_staff_backup():
+def api_add_staff_standby():
     error = _owner_only()
     if error:
         return error
     body = request.get_json(silent=True) or {}
     name = str(body.get("name", "")).strip()
     if not name or len(name) > 60:
-        return jsonify({"error": "Backup name must be between 1 and 60 characters."}), 400
+        return jsonify({"error": "Standby name must be between 1 and 60 characters."}), 400
     try:
-        url = _validate_public_https_origin(body.get("url"))
-        key = _backup_key()
+        url = standby_origin(_validate_public_https_origin(body.get("url")))
+        key = _standby_key()
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
@@ -179,49 +170,49 @@ def api_add_staff_backup():
     nonce = secrets.token_urlsafe(32)
     try:
         response = requests.post(
-            f"{url}/internal/backup/verify",
+            f"{url}/internal/standby/verify",
             json={"nonce": nonce},
             timeout=8,
             allow_redirects=False,
             headers={"Content-Type": "application/json"},
         )
         if response.status_code != 200:
-            return jsonify({"error": "The backup did not pass credential verification."}), 400
+            return jsonify({"error": "The standby did not pass credential verification."}), 400
         proof = response.json().get("proof", "")
     except (requests.RequestException, ValueError, AttributeError):
-        return jsonify({"error": "Could not verify the backup. Confirm it is running in BACKUP_MODE with matching production secrets."}), 400
+        return jsonify({"error": "Could not verify the standby. Confirm it is running in STANDBY_MODE with matching production secrets."}), 400
     if not _verification_matches(key, nonce, proof):
         return jsonify({"error": "Bot token or session secret does not match production."}), 400
 
     item = {"id": secrets.token_urlsafe(12), "name": name, "url": url, "created_at": int(time.time())}
     try:
-        rows = run_on_bot_loop(add_backup(_discord_bot, item))
+        rows = run_on_bot_loop(add_standby(_discord_bot, item))
     except ValueError as exc:
-        if str(exc) == "This backup URL is already registered.":
+        if str(exc) == "This standby URL is already registered.":
             return jsonify({"error": str(exc)}), 409
-        return jsonify({"error": "The verified backup could not be persisted."}), 503
+        return jsonify({"error": "The verified standby could not be persisted."}), 503
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
     except Exception:
-        return jsonify({"error": "Persistent backup registry is unavailable."}), 503
-    _refresh_backup_proxy_manager(rows)
-    return jsonify({"ok": True, "backup": item}), 201
+        return jsonify({"error": "Persistent standby registry is unavailable."}), 503
+    _refresh_standby_manager(rows)
+    return jsonify({"ok": True, "standby": item}), 201
 
 
-@app.route("/api/staff/backups/<backup_id>", methods=["DELETE"])
+@app.route("/api/staff/standbys/<standby_id>", methods=["DELETE"])
 @require_auth
 @require_csrf
-def api_remove_staff_backup(backup_id):
+def api_remove_staff_standby(standby_id):
     error = _owner_only()
     if error:
         return error
     try:
-        rows = run_on_bot_loop(remove_backup(_discord_bot, backup_id))
+        rows = run_on_bot_loop(remove_standby(_discord_bot, standby_id))
     except KeyError:
-        return jsonify({"error": "Backup instance not found."}), 404
+        return jsonify({"error": "Standby instance not found."}), 404
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
     except Exception:
-        return jsonify({"error": "Persistent backup registry is unavailable."}), 503
-    _refresh_backup_proxy_manager(rows)
+        return jsonify({"error": "Persistent standby registry is unavailable."}), 503
+    _refresh_standby_manager(rows)
     return jsonify({"ok": True})

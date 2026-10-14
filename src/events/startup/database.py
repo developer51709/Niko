@@ -1760,8 +1760,8 @@ async def init_database(bot):
             )
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
-        from webapp.backup_routes import initialize_backup_registry
-        await initialize_backup_registry(bot)
+        from webapp.standby_routes import initialize_standby_registry
+        await initialize_standby_registry(bot)
         # Eagerly load the blacklist cache from the database so hot-path
         # sync reads (message/interaction checks) work immediately.
         try:

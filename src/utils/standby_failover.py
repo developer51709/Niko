@@ -1,30 +1,27 @@
-"""TLS CONNECT proxy service used by a standby Niko deployment.
-
-A standby logs in and preloads the production bot and cogs but holds its Discord
-gateway closed until a signed handoff command activates it. It also serves
-authenticated CONNECT tunnels for Discord hosts.
-"""
+"""HTTPS API relay and gateway-control listener for warm standby backend instances."""
 from __future__ import annotations
 
 import asyncio
 import base64
 import hashlib
 import hmac
-import ipaddress
 import json
 import os
 import ssl
 import time
 from urllib.parse import urlsplit
 
-_STATS = {"started_at": time.time(), "total_tunnels": 0, "active_tunnels": 0, "bytes_in": 0, "bytes_out": 0}
+_STATS = {"started_at": time.time(), "total_api_requests": 0, "failed_api_requests": 0}
+_RELAY_NONCES: set[str] = set()
+_MAX_RELAY_NONCES = 4096
+_MAX_RELAY_BODY = 8 * 1024 * 1024
+_MAX_RELAY_PAYLOAD = 12 * 1024 * 1024
+_DISCORD_API_ORIGIN = "https://discord.com/api/v10/"
 _CONTROL_NONCES: set[str] = set()
 _MAX_CONTROL_NONCES = 2048
 _GATEWAY_CONTROLLER = None
 _CONTROL_LOCK = asyncio.Lock()
 
-_ALLOWED_SUFFIXES = (".discord.com", ".discordapp.com", ".discord.gg", ".discord.media", ".discordapp.net")
-_ALLOWED_EXACT = {"discord.com", "discordapp.com", "discord.gg", "discord.media", "discordapp.net"}
 _MAX_HEADERS = 16 * 1024
 
 
@@ -33,43 +30,110 @@ def secret_key(bot_token: str, session_secret: str) -> bytes:
 
 
 def verification_proof(key: bytes, nonce: str) -> str:
-    return hmac.new(key, b"niko-backup-verification:" + nonce.encode(), hashlib.sha256).hexdigest()
+    return hmac.new(key, b"niko-standby-verification:" + nonce.encode(), hashlib.sha256).hexdigest()
 
 
-def proxy_password(key: bytes) -> str:
-    return hmac.new(key, b"niko-backup-proxy", hashlib.sha256).hexdigest()
+def relay_proof(key: bytes, timestamp: str, nonce: str, method: str, url: str, headers: dict, body: bytes) -> str:
+    """Authenticate the complete outbound Discord API request."""
+    canonical = json.dumps(
+        [timestamp, nonce, method.upper(), url, sorted(headers.items()), hashlib.sha256(body).hexdigest()],
+        separators=(",", ":"),
+    ).encode()
+    return hmac.new(key, b"niko-standby-api-relay:" + canonical, hashlib.sha256).hexdigest()
+
+
+async def _read_limited_body(reader: asyncio.StreamReader, headers: dict, maximum: int) -> bytes:
+    try:
+        length = int(headers.get("content-length", "0"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid content length.") from exc
+    if length < 0 or length > maximum or "transfer-encoding" in headers:
+        raise ValueError("Invalid request body size.")
+    return await asyncio.wait_for(reader.readexactly(length), timeout=10) if length else b""
+
+
+async def _relay_discord_request(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: dict, key: bytes) -> None:
+    """Validate and execute one signed REST request from the primary instance."""
+    try:
+        envelope = json.loads(await _read_limited_body(reader, headers, _MAX_RELAY_PAYLOAD))
+        method, url = envelope.get("method"), envelope.get("url")
+        request_headers, encoded_body = envelope.get("headers"), envelope.get("body", "")
+        timestamp, nonce, proof = envelope.get("timestamp"), envelope.get("nonce"), envelope.get("proof")
+        if not isinstance(method, str) or method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}:
+            raise ValueError
+        if not isinstance(url, str) or not url.startswith(_DISCORD_API_ORIGIN) or "#" in url:
+            raise ValueError
+        if not isinstance(request_headers, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in request_headers.items()):
+            raise ValueError
+        if not isinstance(encoded_body, str) or len(encoded_body) > ((_MAX_RELAY_BODY + 2) // 3) * 4:
+            raise ValueError
+        request_body = base64.b64decode(encoded_body, validate=True) if encoded_body else b""
+        if len(request_body) > _MAX_RELAY_BODY:
+            raise ValueError
+        if not isinstance(timestamp, str) or abs(int(time.time()) - int(timestamp)) > 60:
+            raise ValueError
+        if not isinstance(nonce, str) or not 32 <= len(nonce) <= 128:
+            raise ValueError
+        expected = relay_proof(key, timestamp, nonce, method, url, request_headers, request_body)
+        if not isinstance(proof, str) or not hmac.compare_digest(proof, expected):
+            await _write_response(writer, 403, {"error": "Invalid relay proof."})
+            return
+        if nonce in _RELAY_NONCES:
+            await _write_response(writer, 403, {"error": "Relay request was already used."})
+            return
+        _RELAY_NONCES.add(nonce)
+        if len(_RELAY_NONCES) > _MAX_RELAY_NONCES:
+            _RELAY_NONCES.clear()
+            _RELAY_NONCES.add(nonce)
+    except (ValueError, TypeError, json.JSONDecodeError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+        await _write_response(writer, 400, {"error": "Invalid relay request."})
+        return
+
+    def forward():
+        import requests
+        safe_headers = {
+            name: value for name, value in request_headers.items()
+            if name.lower() not in {"host", "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection"}
+        }
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.request(method.upper(), url, headers=safe_headers, data=request_body or None,
+                                       timeout=(8, 25), allow_redirects=False)
+        safe_response_headers = {
+            name: value for name, value in response.headers.items()
+            if name.lower() in {"content-type", "retry-after", "via", "date", "x-ratelimit-bucket",
+                                "x-ratelimit-remaining", "x-ratelimit-reset", "x-ratelimit-reset-after",
+                                "x-ratelimit-limit", "x-ratelimit-global", "x-ratelimit-scope", "cf-ray", "server"}
+        }
+        return {
+            "status": response.status_code,
+            "headers": safe_response_headers,
+            "body": base64.b64encode(response.content).decode("ascii"),
+        }
+
+    try:
+        result = await asyncio.to_thread(forward)
+        _STATS["total_api_requests"] += 1
+        await _write_response(writer, 200, result)
+    except Exception:
+        _STATS["failed_api_requests"] += 1
+        await _write_response(writer, 502, {"error": "Discord API request failed."})
+
 
 
 def control_proof(key: bytes, action: str, nonce: str) -> str:
     """Sign one gateway ownership command."""
-    return hmac.new(key, f"niko-backup-control:{action}:{nonce}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(key, f"niko-standby-control:{action}:{nonce}".encode(), hashlib.sha256).hexdigest()
 
 
-def backup_proxy_url(base_url: str, key: bytes) -> str:
+def standby_origin(base_url: str) -> str:
+    """Validate and return a public HTTPS origin for standby registration."""
     parts = urlsplit(base_url.rstrip("/"))
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
-        raise ValueError("Backup URL must be an HTTPS origin without embedded credentials.")
+        raise ValueError("Standby URL must be an HTTPS origin without embedded credentials.")
     if parts.path not in ("", "/") or parts.query or parts.fragment:
-        raise ValueError("Backup URL must be an HTTPS origin without a path, query, or fragment.")
-    return f"https://niko-backup:{proxy_password(key)}@{parts.netloc}"
-
-
-def _allowed_host(authority: str) -> tuple[str, int] | None:
-    host, separator, port = authority.rpartition(":")
-    if not separator or not port.isdigit():
-        return None
-    host = host.strip("[]").lower().rstrip(".")
-    try:
-        ipaddress.ip_address(host)
-        return None
-    except ValueError:
-        pass
-    if host not in _ALLOWED_EXACT and not any(host.endswith(suffix) for suffix in _ALLOWED_SUFFIXES):
-        return None
-    port_number = int(port)
-    if port_number != 443:
-        return None
-    return host, port_number
+        raise ValueError("Standby URL must be an HTTPS origin without a path, query, or fragment.")
+    return f"https://{parts.netloc}"
 
 
 async def _write_response(writer: asyncio.StreamWriter, status: int, body: dict) -> None:
@@ -81,21 +145,6 @@ async def _write_response(writer: asyncio.StreamWriter, status: int, body: dict)
         + payload
     )
     await writer.drain()
-
-
-async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, byte_counter: str) -> None:
-    try:
-        while chunk := await reader.read(64 * 1024):
-            _STATS[byte_counter] += len(chunk)
-            writer.write(chunk)
-            await writer.drain()
-    except (ConnectionError, asyncio.CancelledError):
-        pass
-    finally:
-        try:
-            writer.write_eof()
-        except (AttributeError, OSError, RuntimeError):
-            pass
 
 
 def _dispatch_web_request(web_app, method: str, target: str, headers: dict, body: bytes) -> bytes:
@@ -144,8 +193,6 @@ async def _handle_client(
     key: bytes,
     web_app=None,
 ) -> None:
-    upstream_writer = None
-
     try:
         raw = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=10)
         if len(raw) > _MAX_HEADERS:
@@ -166,16 +213,18 @@ async def _handle_client(
         if method == "GET" and target == "/health":
             await _write_response(writer, 200, {
                 "ok": True,
-                "service": "niko-backup-proxy",
+                "service": "niko-standby-backend",
                 "uptime_seconds": max(0, int(time.time() - _STATS["started_at"])),
-                "total_tunnels": _STATS["total_tunnels"],
-                "active_tunnels": _STATS["active_tunnels"],
-                "bytes_in": _STATS["bytes_in"],
-                "bytes_out": _STATS["bytes_out"],
+                "total_api_requests": _STATS["total_api_requests"],
+                "failed_api_requests": _STATS["failed_api_requests"],
             })
             return
 
-        if method == "POST" and target == "/internal/backup/control":
+        if method == "POST" and target == "/internal/standby/discord":
+            await _relay_discord_request(reader, writer, headers, key)
+            return
+
+        if method == "POST" and target == "/internal/standby/control":
             try:
                 length = int(headers.get("content-length", "0"))
                 if not 0 < length <= 1024:
@@ -216,7 +265,7 @@ async def _handle_client(
             await _write_response(writer, 200, {"ok": True, "gateway": "active" if action == "activate" else "standby"})
             return
 
-        if method == "POST" and target == "/internal/backup/verify":
+        if method == "POST" and target == "/internal/standby/verify":
             try:
                 length = int(headers.get("content-length", "0"))
                 if not 0 < length <= 512:
@@ -231,67 +280,29 @@ async def _handle_client(
             await _write_response(writer, 200, {"proof": verification_proof(key, nonce)})
             return
 
-        if method != "CONNECT":
-            if web_app is None:
-                await _write_response(writer, 404, {"error": "Not found."})
-                return
-            if not target.startswith("/") or target.startswith("//") or "transfer-encoding" in headers:
-                await _write_response(writer, 400, {"error": "Invalid HTTP request."})
-                return
-            try:
-                content_length = int(headers.get("content-length", "0"))
-                if content_length < 0 or content_length > 8 * 1024 * 1024:
-                    raise ValueError
-                body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10) if content_length else b""
-            except (ValueError, asyncio.IncompleteReadError, asyncio.TimeoutError):
-                await _write_response(writer, 400, {"error": "Invalid HTTP request body."})
-                return
-            response = await asyncio.to_thread(
-                _dispatch_web_request, web_app, method, target, headers, body
-            )
-            writer.write(response)
-            await writer.drain()
+        if method == "CONNECT":
+            await _write_response(writer, 405, {"error": "CONNECT is not supported."})
             return
-        auth = headers.get("proxy-authorization", "")
-
-        try:
-            scheme, encoded = auth.split(" ", 1)
-            credentials = base64.b64decode(encoded, validate=True).decode()
-            username, password = credentials.split(":", 1)
-        except (ValueError, UnicodeDecodeError):
-            username, password, scheme = "", "", ""
-        if scheme.lower() != "basic" or username != "niko-backup" or not hmac.compare_digest(password, proxy_password(key)):
-            writer.write(b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Niko backup\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-            await writer.drain()
+        if web_app is None:
+            await _write_response(writer, 404, {"error": "Not found."})
             return
-        destination = _allowed_host(target)
-        if destination is None:
-            await _write_response(writer, 403, {"error": "CONNECT is restricted to Discord TLS endpoints."})
+        if not target.startswith("/") or target.startswith("//") or "transfer-encoding" in headers:
+            await _write_response(writer, 400, {"error": "Invalid HTTP request."})
             return
         try:
-            upstream_reader, upstream_writer = await asyncio.wait_for(
-                asyncio.open_connection(*destination), timeout=8
-            )
-        except (OSError, asyncio.TimeoutError):
-            await _write_response(writer, 502, {"error": "Discord endpoint is unavailable."})
+            content_length = int(headers.get("content-length", "0"))
+            if content_length < 0 or content_length > 8 * 1024 * 1024:
+                raise ValueError
+            body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10) if content_length else b""
+        except (ValueError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+            await _write_response(writer, 400, {"error": "Invalid HTTP request body."})
             return
-        writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+        response = await asyncio.to_thread(_dispatch_web_request, web_app, method, target, headers, body)
+        writer.write(response)
         await writer.drain()
-        _STATS["total_tunnels"] += 1
-        _STATS["active_tunnels"] += 1
-        try:
-            await asyncio.gather(_pipe(reader, upstream_writer, "bytes_in"), _pipe(upstream_reader, writer, "bytes_out"))
-        finally:
-            _STATS["active_tunnels"] = max(0, _STATS["active_tunnels"] - 1)
     except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, UnicodeError, asyncio.TimeoutError, ConnectionError):
         pass
     finally:
-        if upstream_writer is not None:
-            upstream_writer.close()
-            try:
-                await upstream_writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
         writer.close()
         try:
             await writer.wait_closed()
@@ -299,7 +310,7 @@ async def _handle_client(
             pass
 
 
-async def serve_backup_proxy(
+async def serve_standby(
     host: str,
     port: int,
     certfile: str | None,
@@ -309,15 +320,15 @@ async def serve_backup_proxy(
     gateway_controller=None,
     web_app=None,
 ):
-    """Bind a CONNECT proxy; Render terminates TLS when no cert is configured."""
+    """Bind the standby backend HTTPS relay and shared dashboard listener."""
     if not bot_token or not session_secret:
-        raise RuntimeError("BACKUP_MODE requires the production DISCORD_BOT_TOKEN and SESSION_SECRET.")
+        raise RuntimeError("STANDBY_MODE requires the production DISCORD_BOT_TOKEN and SESSION_SECRET.")
     if bool(certfile) != bool(keyfile):
-        raise RuntimeError("Configure both BACKUP_TLS_CERT and BACKUP_TLS_KEY, or neither when Render terminates HTTPS.")
+        raise RuntimeError("Configure both STANDBY_TLS_CERT and STANDBY_TLS_KEY, or neither when the platform terminates HTTPS.")
     context = None
     if certfile and keyfile:
         if not os.path.isfile(certfile) or not os.path.isfile(keyfile):
-            raise RuntimeError("Configured BACKUP_TLS_CERT and BACKUP_TLS_KEY files must exist.")
+            raise RuntimeError("Configured STANDBY_TLS_CERT and STANDBY_TLS_KEY files must exist.")
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     key = secret_key(bot_token, session_secret)

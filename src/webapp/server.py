@@ -108,13 +108,11 @@ def configure_bot(bot) -> None:
         "webapp.dashboard_routes", "webapp.donation_routes",
         "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
         "webapp.application_routes", "webapp.team_recruitment_routes", "webapp.site_routes", "webapp.appeal_routes",
-        "webapp.backup_routes",
+        "webapp.standby_routes",
     ):
         module = sys.modules.get(module_name)
         if module is not None:
             module._discord_bot = bot
-            if module_name == "webapp.backup_routes":
-                module.configure_backup_proxy()
 
 
 def run_on_bot_loop(awaitable, timeout: float = 8):
@@ -682,21 +680,12 @@ def require_guild_access(f):
 
 
 def discord_request(method: str, url: str, **kwargs):
-    """Make Discord API calls over the active backup proxy when failover is armed."""
-    manager = getattr(_discord_bot, "proxy_manager", None) if _discord_bot is not None else None
-    if manager is not None:
-        kwargs.update(manager.requests_proxy_kwargs())
+    """Make Discord REST calls directly, then retry blocked requests via standby."""
+    manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
     response = getattr(req, method.lower())(url, **kwargs)
     if manager is not None and manager.is_cloudflare_block(response):
-        manager._http_egress_blocked = True
-        if manager._backup_proxy_urls:
-            # Requests-based OAuth refresh, code exchange, user lookup, and
-            # dashboard API calls share the same standby route as discord.py.
-            manager.use_backup_proxy()
-            if manager.enabled:
-                response.close()
-                kwargs.update(manager.requests_proxy_kwargs())
-                response = getattr(req, method.lower())(url, **kwargs)
+        response.close()
+        response = manager.request_via_standby(method, url, kwargs)
     return response
 
 

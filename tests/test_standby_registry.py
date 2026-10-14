@@ -2,7 +2,12 @@ import asyncio
 import unittest
 from types import SimpleNamespace
 
-from utils.backup_registry import add_backup, init_backup_registry, list_backups, remove_backup
+from utils.standby_registry import (
+    add_standby,
+    init_standby_registry,
+    list_standbys,
+    remove_standby,
+)
 
 
 class FakeCursor:
@@ -31,10 +36,7 @@ class FakeCollection:
         requested = (field, unique, name)
         self.created_indexes.append(requested)
         if self.existing_index is not None and self.existing_index != requested:
-            raise RuntimeError(
-                "An existing index has the same name as the requested index "
-                "with a different key specification."
-            )
+            raise RuntimeError("Conflicting index definition.")
         self.existing_index = requested
         return name
 
@@ -61,38 +63,36 @@ class FakePool:
         self._collection = collection
 
     def collection(self, name):
-        if name != "backup_instances":
+        if name != "standby_instances":
             raise AssertionError(f"Unexpected collection: {name}")
         return self._collection
 
 
-class BackupRegistryTests(unittest.TestCase):
+class StandbyRegistryTests(unittest.TestCase):
     def test_registry_refuses_ephemeral_sqlite_storage(self):
         bot = SimpleNamespace(cxn=SimpleNamespace(db_type="sqlite"))
         with self.assertRaisesRegex(RuntimeError, "requires the shared MongoDB database"):
-            asyncio.run(list_backups(bot))
+            asyncio.run(list_standbys(bot))
 
     def test_registry_uses_existing_unique_url_index(self):
-        collection = FakeCollection(
-            existing_index=("url", True, "backup_instances_url_unique")
-        )
+        collection = FakeCollection(existing_index=("url", True, "standby_instances_url_unique"))
         bot = SimpleNamespace(cxn=FakePool(collection))
 
         async def scenario():
-            await init_backup_registry(bot)
+            await init_standby_registry(bot)
             self.assertEqual(
-                [("url", True, "backup_instances_url_unique")],
+                [("url", True, "standby_instances_url_unique")],
                 collection.created_indexes,
             )
             item = {
-                "id": "backup-1",
+                "id": "standby-1",
                 "name": "east",
-                "url": "https://backup.example",
+                "url": "https://standby.example",
                 "created_at": 10,
             }
-            await add_backup(bot, item)
+            await add_standby(bot, item)
             with self.assertRaisesRegex(ValueError, "already registered"):
-                await add_backup(bot, {**item, "id": "backup-2"})
+                await add_standby(bot, {**item, "id": "standby-2"})
 
         asyncio.run(scenario())
 
@@ -100,27 +100,26 @@ class BackupRegistryTests(unittest.TestCase):
         collection = FakeCollection()
         primary = SimpleNamespace(cxn=FakePool(collection))
         restarted_primary = SimpleNamespace(cxn=FakePool(collection))
-        item = {"id": "backup-1", "name": "east", "url": "https://backup.example", "created_at": 10}
+        item = {"id": "standby-1", "name": "east", "url": "https://standby.example", "created_at": 10}
 
         async def scenario():
-            await init_backup_registry(primary)
-            rows = await add_backup(primary, item)
+            await init_standby_registry(primary)
+            rows = await add_standby(primary, item)
             self.assertEqual([item], rows)
-            self.assertEqual([item], await list_backups(restarted_primary))
-            await remove_backup(restarted_primary, "backup-1")
-            self.assertEqual([], await list_backups(primary))
+            self.assertEqual([item], await list_standbys(restarted_primary))
+            await remove_standby(restarted_primary, "standby-1")
+            self.assertEqual([], await list_standbys(primary))
 
         asyncio.run(scenario())
 
     def test_registry_duplicate_url_is_rejected(self):
-        collection = FakeCollection()
-        bot = SimpleNamespace(cxn=FakePool(collection))
-        item = {"id": "backup-1", "name": "east", "url": "https://backup.example", "created_at": 10}
+        bot = SimpleNamespace(cxn=FakePool(FakeCollection()))
+        item = {"id": "standby-1", "name": "east", "url": "https://standby.example", "created_at": 10}
 
         async def scenario():
-            await add_backup(bot, item)
+            await add_standby(bot, item)
             with self.assertRaisesRegex(ValueError, "already registered"):
-                await add_backup(bot, {**item, "id": "backup-2"})
+                await add_standby(bot, {**item, "id": "standby-2"})
 
         asyncio.run(scenario())
 

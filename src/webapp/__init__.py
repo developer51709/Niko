@@ -17,7 +17,7 @@ from . import (  # noqa: E402,F401
     team_recruitment_routes,
     site_routes,
     appeal_routes,
-    backup_routes,
+    standby_routes,
 )
 
 __all__ = ["app", "configure_bot", "public_base_url", "redirect_uri"]

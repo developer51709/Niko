@@ -46,9 +46,8 @@ bot = commands.AutoShardedBot(
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | database.MongoPool | None = None
 
-# ── Proxy failover ───────────────────────────────────────────────────────────
-# This manager can use Webshare and/or owner-registered, credential-verified
-# standby proxies. Standby mode never starts another Discord gateway client.
+# ── Webshare proxy configuration ─────────────────────────────────────────────
+# Standby backend failover is managed independently by StandbyFailoverManager.
 WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
 bot.proxy_manager: WebshareProxyManager | None = WebshareProxyManager(WEBSHARE_API_KEY)
 if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
@@ -141,24 +140,24 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
-        backup_mode = os.getenv("BACKUP_MODE", "").lower() in {"1", "true", "yes"}
+        standby_mode = os.getenv("STANDBY_MODE", "").lower() in {"1", "true", "yes"}
         from utils.gateway_failover import GatewayHandoff
-        handoff = GatewayHandoff(bot, active=not backup_mode)
+        handoff = GatewayHandoff(bot, active=not standby_mode)
         bot.gateway_handoff = handoff
 
         # Load standby endpoints before Discord login so the wrapped
-        # static_login can switch to a warm backup if egress is challenged.
-        if not backup_mode and os.getenv("MONGODB_URL"):
+        # static_login can switch to a warm standby if egress is challenged.
+        if not standby_mode and os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
-                from webapp.backup_routes import initialize_backup_registry
-                await initialize_backup_registry(bot)
+                from webapp.standby_routes import initialize_standby_registry
+                await initialize_standby_registry(bot)
             except Exception as e:
-                logging.warning("ProxyManager", f"Could not preload standby instances: {e}")
-        if not backup_mode and bot.proxy_manager is not None:
+                logging.warning("StandbyFailover", f"Could not preload standby instances: {e}")
+        if not standby_mode and bot.proxy_manager is not None:
             bot.proxy_manager.attach(bot)
 
-        if not backup_mode:
+        if not standby_mode:
             start_api_server(bot)
             logging.info("Startup", "Dashboard API started alongside the bot.")
 
@@ -186,29 +185,33 @@ if __name__ == "__main__":
             await preload_economy_cache(bot)
             bot._pre_gateway_initialized = True
             if bot.proxy_manager is not None:
-                if backup_mode:
+                if not standby_mode:
                     bot.proxy_manager.attach(bot)
                 await bot.proxy_manager.prefetch()
-            if backup_mode:
-                from utils.backup_proxy import serve_backup_proxy
+            if standby_mode:
+                from utils.standby_failover import serve_standby
+                from utils.standby_manager import StandbyFailoverManager
+                standby_manager = getattr(bot, "standby_failover", None) or StandbyFailoverManager()
+                bot.standby_failover = standby_manager
+                standby_manager.attach(bot)
                 from webapp import app as web_app, configure_bot
                 configure_bot(bot)
-                server = await serve_backup_proxy(
-                    os.getenv("BACKUP_PROXY_HOST", "0.0.0.0"),
-                    int(os.getenv("PORT", os.getenv("BACKUP_PROXY_PORT", "10000"))),
-                    os.getenv("BACKUP_TLS_CERT") or None,
-                    os.getenv("BACKUP_TLS_KEY") or None,
+                server = await serve_standby(
+                    os.getenv("STANDBY_HOST", "0.0.0.0"),
+                    int(os.getenv("PORT", os.getenv("STANDBY_PORT", "10000"))),
+                    os.getenv("STANDBY_TLS_CERT") or None,
+                    os.getenv("STANDBY_TLS_KEY") or None,
                     os.getenv("DISCORD_BOT_TOKEN", ""),
                     os.getenv("SESSION_SECRET", ""),
                     handoff,
                     web_app=web_app,
                 )
-                logging.info("Backup", "Standby bot logged in with caches/cogs loaded; gateway remains inactive.")
+                logging.info("StandbyFailover", "Standby backend is warm; gateway remains inactive until signed handoff.")
                 async with server:
                     await handoff.run()
             else:
-                if bot.proxy_manager is not None:
-                    await bot.proxy_manager.check_direct_egress()
+                if bot.standby_failover is not None:
+                    await bot.standby_failover.check_direct_egress()
                 await handoff.run()
         except Exception as e:
             logging.error("Startup", f"Error connecting to Discord: {e}")
