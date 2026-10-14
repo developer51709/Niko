@@ -16,7 +16,24 @@ _RELAY_NONCES: set[str] = set()
 _MAX_RELAY_NONCES = 4096
 _MAX_RELAY_BODY = 8 * 1024 * 1024
 _MAX_RELAY_PAYLOAD = 12 * 1024 * 1024
-_DISCORD_API_ORIGIN = "https://discord.com/api/v10/"
+_DISCORD_API_HOST = "discord.com"
+_DISCORD_API_PATH_PREFIXES = ("/api/v10/", "/api/oauth2/")
+
+
+def _is_allowed_discord_api_url(url: str) -> bool:
+    """Allow Discord REST v10 and OAuth2 endpoints, but no other origins or paths."""
+    try:
+        parts = urlsplit(url)
+    except (TypeError, ValueError):
+        return False
+    return (
+        parts.scheme == "https"
+        and parts.netloc.lower() == _DISCORD_API_HOST
+        and any(parts.path.startswith(prefix) for prefix in _DISCORD_API_PATH_PREFIXES)
+        and not parts.fragment
+    )
+
+
 _CONTROL_NONCES: set[str] = set()
 _MAX_CONTROL_NONCES = 2048
 _GATEWAY_CONTROLLER = None
@@ -61,7 +78,7 @@ async def _relay_discord_request(reader: asyncio.StreamReader, writer: asyncio.S
         timestamp, nonce, proof = envelope.get("timestamp"), envelope.get("nonce"), envelope.get("proof")
         if not isinstance(method, str) or method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}:
             raise ValueError
-        if not isinstance(url, str) or not url.startswith(_DISCORD_API_ORIGIN) or "#" in url:
+        if not isinstance(url, str) or not _is_allowed_discord_api_url(url):
             raise ValueError
         if not isinstance(request_headers, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in request_headers.items()):
             raise ValueError

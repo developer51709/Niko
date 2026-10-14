@@ -1,10 +1,12 @@
 import asyncio
+import base64
 import json
+import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from utils.proxy_manager import WebshareProxyManager
-from utils.standby_failover import _handle_client, control_proof, secret_key, verification_proof
+from utils.standby_failover import _handle_client, _is_allowed_discord_api_url, control_proof, relay_proof, secret_key, verification_proof
 from utils.standby_manager import StandbyFailoverManager
 from webapp.standby_routes import _verification_matches
 
@@ -37,6 +39,56 @@ class StandbyFailoverTests(unittest.TestCase):
         self.assertFalse(_verification_matches(secret_key("other-token", "production-session"), nonce, proof))
         self.assertFalse(_verification_matches(secret_key("production-token", "other-session"), nonce, proof))
         self.assertFalse(_verification_matches(key, nonce, None))
+
+    def test_relay_url_allowlist_includes_oauth_and_rejects_untrusted_targets(self):
+        self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/v10/users/@me"))
+        self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token"))
+        self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token?source=callback"))
+        self.assertFalse(_is_allowed_discord_api_url("http://discord.com/api/oauth2/token"))
+        self.assertFalse(_is_allowed_discord_api_url("https://discord.com.evil.example/api/oauth2/token"))
+        self.assertFalse(_is_allowed_discord_api_url("https://discord.com:443/api/oauth2/token"))
+        self.assertFalse(_is_allowed_discord_api_url("https://discord.com/api/admin"))
+        self.assertFalse(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token#fragment"))
+
+    def test_oauth_relay_endpoint_accepts_signed_discord_token_exchange(self):
+        async def scenario():
+            key = secret_key("token", "session")
+            request_body = b"client_id=id&grant_type=authorization_code"
+            request_headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            timestamp = str(int(time.time()))
+            nonce = "oauth-relay-nonce-000000000000000000"
+            url = "https://discord.com/api/oauth2/token"
+            proof = relay_proof(key, timestamp, nonce, "POST", url, request_headers, request_body)
+            envelope = {
+                "method": "POST",
+                "url": url,
+                "headers": request_headers,
+                "body": base64.b64encode(request_body).decode("ascii"),
+                "timestamp": timestamp,
+                "nonce": nonce,
+                "proof": proof,
+            }
+            encoded = json.dumps(envelope, separators=(",", ":")).encode()
+            reader = asyncio.StreamReader()
+            reader.feed_data(encoded)
+            reader.feed_eof()
+            writer = FakeWriter()
+
+            async def mock_to_thread(call, *args, **kwargs):
+                self.assertEqual("forward", call.__name__)
+                return {"status": 200, "headers": {"content-type": "application/json"}, "body": "e30="}
+
+            import utils.standby_failover as standby_failover
+            previous_stats = standby_failover._STATS.copy()
+            standby_failover._RELAY_NONCES.clear()
+            with patch("utils.standby_failover.asyncio.to_thread", side_effect=mock_to_thread):
+                await standby_failover._relay_discord_request(reader, writer, {"content-length": str(len(encoded))}, key)
+            self.assertIn(b"HTTP/1.1 200 OK", writer.data)
+            self.assertIn(b'"status":200', writer.data)
+            standby_failover._STATS.update(previous_stats)
+            standby_failover._RELAY_NONCES.clear()
+
+        asyncio.run(scenario())
 
     def test_health_identifies_standby_backend(self):
         async def scenario():
