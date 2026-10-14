@@ -18,11 +18,29 @@ from webapp.backup_routes import _verification_matches
 class FakeResponse:
     def __init__(self, status_code, headers, text):
         self.status_code = status_code
+        self.status = status_code
         self.headers = headers
         self.text = text
         self.closed = False
 
     def close(self):
+        self.closed = True
+
+    async def release(self):
+        self.closed = True
+
+
+class FakeAiohttpResponse:
+    def __init__(self, status, headers, body):
+        self.status = status
+        self.headers = headers
+        self.body = body
+        self.closed = False
+
+    async def text(self):
+        return self.body
+
+    def release(self):
         self.closed = True
 
 
@@ -143,12 +161,65 @@ class BackupProxyTests(unittest.TestCase):
             self.assertIn(b"403", writer.data)
         asyncio.run(scenario())
 
-    def test_cloudflare_denial_is_detected_only_with_explicit_challenge_signature(self):
+    def test_cloudflare_denial_is_detected_only_with_explicit_edge_signature(self):
         manager = WebshareProxyManager(None)
         blocked = FakeResponse(403, {"Server": "cloudflare", "CF-Ray": "test-ray"}, "Attention Required! Cloudflare")
+        generic_edge_429 = FakeResponse(429, {"CF-Ray": "test-ray"}, "<!doctype html>")
         ordinary_forbidden = FakeResponse(403, {"Server": "gunicorn"}, "Forbidden")
+        ordinary_rate_limit = FakeResponse(429, {"Server": "discord"}, "Too Many Requests")
         self.assertTrue(manager.is_cloudflare_block(blocked))
+        self.assertTrue(manager.is_cloudflare_block(generic_edge_429))
         self.assertFalse(manager.is_cloudflare_block(ordinary_forbidden))
+        self.assertFalse(manager.is_cloudflare_block(ordinary_rate_limit))
+
+    def test_gateway_login_retries_cloudflare_html_429_through_standby(self):
+        async def scenario():
+            manager = WebshareProxyManager(None)
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
+            failed_response = FakeAiohttpResponse(429, {"CF-Ray": "test-ray"}, "<!doctype html>")
+            session = None
+            close_calls = []
+
+            async def close_session():
+                session.closed = True
+                close_calls.append(True)
+
+            http = type("Http", (), {
+                "_HTTPClient__session": None,
+                "proxy": None,
+                "proxy_auth": None,
+                "user_agent": "test-agent",
+            })()
+            manager.http = http
+            manager._current_session = lambda: getattr(http, "_HTTPClient__session", None)
+            bot = type("Bot", (), {"http": http})()
+            original_error = type("HttpError", (Exception,), {})("429 Too Many Requests (error code: 0): <!doctype html>")
+            original_error.response = failed_response
+            attempts = []
+
+            async def static_login(token):
+                nonlocal session
+                session = type("Session", (), {"_request": None, "closed": False})()
+                session.close = close_session
+                http._HTTPClient__session = session
+                attempts.append((token, http.proxy))
+                if len(attempts) == 1:
+                    raise original_error
+                return {"id": "bot-user"}
+
+            http.static_login = static_login
+            with patch.object(manager, "_ensure_verify_task"):
+                self.assertTrue(manager.attach(bot))
+                result = await http.static_login("secret-token")
+
+            self.assertEqual({"id": "bot-user"}, result)
+            self.assertEqual(2, len(attempts))
+            self.assertIsNone(attempts[0][1])
+            self.assertEqual(manager._backup_proxy_urls[0], attempts[1][1])
+            self.assertEqual([True], close_calls)
+            self.assertTrue(manager.enabled)
+
+        asyncio.run(scenario())
 
     def test_web_discord_api_retries_cloudflare_block_through_standby(self):
         from webapp import server

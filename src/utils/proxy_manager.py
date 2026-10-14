@@ -116,7 +116,26 @@ class WebshareProxyManager:
         manager = self
 
         async def wrapped_static_login(token):
-            data = await original_static_login(token)
+            try:
+                data = await original_static_login(token)
+            except Exception as exc:
+                response = getattr(exc, "response", None)
+                if response is None or not await manager._is_cloudflare_block(response):
+                    raise
+                manager._http_egress_blocked = True
+                await manager.enable(force_backup=True)
+                if not manager.enabled:
+                    raise
+                # static_login creates a new aiohttp session each time. Close
+                # the failed session before retrying so the retry doesn't leak it.
+                failed_session = manager._current_session()
+                if failed_session is not None and not failed_session.closed:
+                    await failed_session.close()
+                logging.warning(
+                    "ProxyManager",
+                    "Discord gateway login was denied by Cloudflare; retrying through a registered standby.",
+                )
+                data = await original_static_login(token)
             try:
                 session = manager._current_session()
                 if session is not None:
@@ -193,6 +212,10 @@ class WebshareProxyManager:
         ray_id = str(headers.get("CF-Ray", ""))
         if "cloudflare" not in server and not ray_id:
             return False
+        # A Cloudflare 429 with a Ray ID/server header is an explicit edge
+        # response even when discord.py only surfaces the generic HTML shell.
+        if status == 429:
+            return True
         body = body.lower()
         return "cloudflare" in body or "attention required" in body or "access denied" in body
 
