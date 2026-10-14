@@ -233,6 +233,51 @@ class StandbyFailoverTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_aiohttp_relay_awaits_request_before_entering_response_context(self):
+        class RelayResponse:
+            status = 200
+
+            def __init__(self):
+                self.entered = False
+                self.exited = False
+
+            async def __aenter__(self):
+                self.entered = True
+                return self
+
+            async def __aexit__(self, *exc):
+                self.exited = True
+
+            async def json(self):
+                return {"status": 204, "headers": {"X-Relay": "ok"}, "body": ""}
+
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.active_origin = "https://standby.example"
+            relay_response = RelayResponse()
+            request_calls = []
+
+            async def original_request(method, url, **kwargs):
+                request_calls.append((method, url, kwargs))
+                return relay_response
+
+            with patch.object(manager, "_signed_envelope", return_value=(
+                "https://standby.example/internal/standby/discord", {"proof": "signed"}
+            )):
+                response = await manager.relay_aiohttp(
+                    original_request, "GET", "https://discord.com/api/v10/users/@me", {}
+                )
+
+            self.assertEqual(204, response.status)
+            self.assertEqual({"X-Relay": "ok"}, dict(response.headers))
+            self.assertTrue(relay_response.entered)
+            self.assertTrue(relay_response.exited)
+            self.assertEqual(1, len(request_calls))
+            self.assertEqual("POST", request_calls[0][0])
+            self.assertEqual("https://standby.example/internal/standby/discord", request_calls[0][1])
+
+        asyncio.run(scenario())
+
     def test_static_cloudflare_check_uses_requests_text_property(self):
         response = type("Response", (), {
             "status_code": 403,

@@ -308,7 +308,8 @@ class StandbyFailoverManager:
             headers.setdefault("Content-Type", "application/json")
             body = json.dumps(kwargs["json"], separators=(",", ":")).encode()
         relay_url, envelope = self._signed_envelope(method, url, headers, body)
-        async with original_request("POST", relay_url, json=envelope, timeout=35, allow_redirects=False) as relay:
+        relay = await original_request("POST", relay_url, json=envelope, timeout=35, allow_redirects=False)
+        async with relay:
             if relay.status != 200:
                 raise RuntimeError(f"Standby relay returned HTTP {relay.status}.")
             result = await relay.json()
