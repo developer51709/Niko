@@ -44,7 +44,8 @@ def auth_callback():
         return redirect("/?error=no_code")
 
     # Exchange code for access token
-    token_resp = req.post(
+    token_resp = discord_request(
+        "POST",
         "https://discord.com/api/oauth2/token",
         data={
             "client_id":     DISCORD_CLIENT_ID,
@@ -80,7 +81,8 @@ def auth_logout():
     token = session.get("access_token")
     if token:
         try:
-            req.post(
+            discord_request(
+                "POST",
                 f"{DISCORD_API}/oauth2/token/revoke",
                 data={"client_id": DISCORD_CLIENT_ID, "client_secret": DISCORD_CLIENT_SECRET, "token": token},
                 timeout=5,

@@ -135,6 +135,17 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
+        # Load registered standbys before the gateway login attempt. Waiting
+        # until on_ready is too late when the production egress IP is blocked.
+        if os.getenv("MONGODB_URL"):
+            try:
+                bot.cxn = await database.create_pool(DATABASE_PATH)
+                from webapp.backup_routes import initialize_backup_registry
+
+                await initialize_backup_registry(bot)
+            except Exception as e:
+                logging.warning("ProxyManager", f"Could not preload standby instances: {e}")
+
         start_api_server(bot)
         logging.info("Startup", "Dashboard API started alongside the bot.")
 
@@ -143,6 +154,7 @@ if __name__ == "__main__":
 
         if bot.proxy_manager is not None:
             await bot.proxy_manager.prefetch()
+            await bot.proxy_manager.check_direct_egress()
 
         loop = asyncio.get_running_loop()
 

@@ -15,6 +15,17 @@ from utils.proxy_manager import WebshareProxyManager
 from webapp.backup_routes import _verification_matches
 
 
+class FakeResponse:
+    def __init__(self, status_code, headers, text):
+        self.status_code = status_code
+        self.headers = headers
+        self.text = text
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
 class FakeWriter:
     def __init__(self):
         self.data = bytearray()
@@ -132,6 +143,38 @@ class BackupProxyTests(unittest.TestCase):
             self.assertIn(b"403", writer.data)
         asyncio.run(scenario())
 
+    def test_cloudflare_denial_is_detected_only_with_explicit_challenge_signature(self):
+        manager = WebshareProxyManager(None)
+        blocked = FakeResponse(403, {"Server": "cloudflare", "CF-Ray": "test-ray"}, "Attention Required! Cloudflare")
+        ordinary_forbidden = FakeResponse(403, {"Server": "gunicorn"}, "Forbidden")
+        self.assertTrue(manager.is_cloudflare_block(blocked))
+        self.assertFalse(manager.is_cloudflare_block(ordinary_forbidden))
+
+    def test_web_discord_api_retries_cloudflare_block_through_standby(self):
+        from webapp import server
+
+        manager = WebshareProxyManager(None)
+        manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+        manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
+        bot = type("Bot", (), {"proxy_manager": manager})()
+        responses = [
+            FakeResponse(403, {"Server": "cloudflare", "CF-Ray": "test-ray"}, "Cloudflare access denied"),
+            FakeResponse(200, {}, "ok"),
+        ]
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return responses.pop(0)
+
+        with patch.object(server, "_discord_bot", bot), patch.object(server.req, "get", side_effect=fake_get):
+            response = server.discord_request("GET", "https://discord.com/api/v10/users/@me")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(2, len(calls))
+        self.assertIn("proxies", calls[1][1])
+        self.assertEqual(manager._proxy_url, calls[1][1]["proxies"]["https"])
+
     def test_manager_falls_back_to_registered_standby(self):
         async def scenario():
             manager = WebshareProxyManager(None)
@@ -141,6 +184,8 @@ class BackupProxyTests(unittest.TestCase):
                 await manager.enable()
             self.assertEqual("https://niko-backup:pass@backup.example.org", manager.http.proxy)
             self.assertTrue(manager.enabled)
+            await manager.enable(force_backup=True)
+            self.assertEqual("https://niko-backup:pass@backup.example.org", manager.http.proxy)
             manager.disable()
             self.assertIsNone(manager.http.proxy)
         asyncio.run(scenario())

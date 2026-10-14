@@ -1750,7 +1750,8 @@ async def _migrate_blacklist_data(bot):
 async def init_database(bot):
     logging.info("DB", f"Opening database: {DATABASE_PATH}")
     try:
-        bot.cxn = await database.create_pool(DATABASE_PATH)
+        if getattr(bot, "cxn", None) is None:
+            bot.cxn = await database.create_pool(DATABASE_PATH)
         if getattr(bot.cxn, "db_type", None) == "sqlite":
             logging.warning(
                 "DB",

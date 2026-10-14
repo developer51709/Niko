@@ -29,6 +29,8 @@ def _sync_backup_proxy_manager(bot, rows):
         return
     key = _backup_key()
     manager.set_backup_proxies([backup_proxy_url(row["url"], key) for row in rows])
+    # Wrap static_login even before the Discord HTTP session exists. If a
+    # startup probe already selected standby, attach() applies it after login.
     manager.attach(bot)
 
 

@@ -583,7 +583,8 @@ def ensure_access_token() -> bool:
         session.clear()
         return False
     try:
-        response = req.post(
+        response = discord_request(
+            "POST",
             f"{DISCORD_API}/oauth2/token",
             data={
                 "client_id": DISCORD_CLIENT_ID,
@@ -680,9 +681,29 @@ def require_guild_access(f):
     return _inner
 
 
+def discord_request(method: str, url: str, **kwargs):
+    """Make Discord API calls over the active backup proxy when failover is armed."""
+    manager = getattr(_discord_bot, "proxy_manager", None) if _discord_bot is not None else None
+    if manager is not None:
+        kwargs.update(manager.requests_proxy_kwargs())
+    response = getattr(req, method.lower())(url, **kwargs)
+    if manager is not None and manager.is_cloudflare_block(response):
+        manager._http_egress_blocked = True
+        if manager._backup_proxy_urls:
+            # Requests-based OAuth refresh, code exchange, user lookup, and
+            # dashboard API calls share the same standby route as discord.py.
+            manager.use_backup_proxy()
+            if manager.enabled:
+                response.close()
+                kwargs.update(manager.requests_proxy_kwargs())
+                response = getattr(req, method.lower())(url, **kwargs)
+    return response
+
+
 def discord_get(endpoint: str, token: str):
     """GET a Discord API endpoint using a Bearer token."""
-    r = req.get(
+    r = discord_request(
+        "GET",
         f"{DISCORD_API}{endpoint}",
         headers={"Authorization": f"Bearer {token}"},
         timeout=8,
