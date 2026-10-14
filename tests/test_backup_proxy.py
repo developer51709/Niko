@@ -172,11 +172,28 @@ class BackupProxyTests(unittest.TestCase):
         self.assertFalse(manager.is_cloudflare_block(ordinary_forbidden))
         self.assertFalse(manager.is_cloudflare_block(ordinary_rate_limit))
 
+    def test_requests_style_probe_detects_cloudflare_html_429_without_status_alias(self):
+        async def scenario():
+            manager = WebshareProxyManager(None)
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
+            response = type("RequestsResponse", (), {
+                "status_code": 429,
+                "headers": {},
+                "text": "<!doctype html><div id=\"cf-error-details\">Cloudflare Ray ID: test-ray</div>",
+            })()
+            with patch("utils.proxy_manager.requests.get", return_value=response), patch.object(manager, "_ensure_verify_task"):
+                self.assertTrue(await manager.check_direct_egress())
+            self.assertTrue(manager.enabled)
+            self.assertEqual(manager._backup_proxy_urls[0], manager.http.proxy)
+
+        asyncio.run(scenario())
+
     def test_gateway_login_retries_cloudflare_html_429_through_standby(self):
         async def scenario():
             manager = WebshareProxyManager(None)
             manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
-            failed_response = FakeAiohttpResponse(429, {"CF-Ray": "test-ray"}, "<!doctype html>")
+            failed_response = FakeAiohttpResponse(429, {}, "")
             session = None
             close_calls = []
 
@@ -193,8 +210,12 @@ class BackupProxyTests(unittest.TestCase):
             manager.http = http
             manager._current_session = lambda: getattr(http, "_HTTPClient__session", None)
             bot = type("Bot", (), {"http": http})()
-            original_error = type("HttpError", (Exception,), {})("429 Too Many Requests (error code: 0): <!doctype html>")
+            challenge_body = "<!doctype html><div id=\"cf-error-details\"><span>Cloudflare Ray ID: test-ray</span><div class=\"cf-wrapper\"></div></div>"
+            original_error = type("HttpError", (Exception,), {})(
+                f"429 Too Many Requests (error code: 0): {challenge_body}"
+            )
             original_error.response = failed_response
+            original_error.text = challenge_body
             attempts = []
 
             async def static_login(token):

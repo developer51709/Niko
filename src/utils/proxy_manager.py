@@ -120,7 +120,8 @@ class WebshareProxyManager:
                 data = await original_static_login(token)
             except Exception as exc:
                 response = getattr(exc, "response", None)
-                if response is None or not await manager._is_cloudflare_block(response):
+                error_body = getattr(exc, "text", "")
+                if response is None or not await manager._is_cloudflare_block(response, error_body):
                     raise
                 manager._http_egress_blocked = True
                 await manager.enable(force_backup=True)
@@ -210,14 +211,17 @@ class WebshareProxyManager:
             return False
         server = str(headers.get("Server", "")).lower()
         ray_id = str(headers.get("CF-Ray", ""))
-        if "cloudflare" not in server and not ray_id:
-            return False
-        # A Cloudflare 429 with a Ray ID/server header is an explicit edge
-        # response even when discord.py only surfaces the generic HTML shell.
-        if status == 429:
-            return True
         body = body.lower()
-        return "cloudflare" in body or "attention required" in body or "access denied" in body
+        header_signature = "cloudflare" in server or bool(ray_id)
+        body_signature = any(
+            marker in body
+            for marker in ("cloudflare", "cf-error-details", "cf-wrapper", "attention required")
+        )
+        if status == 429:
+            # Cloudflare challenge HTML can arrive with proxy-stripped headers;
+            # require a Cloudflare header or recognizable challenge markup/body.
+            return header_signature or body_signature
+        return header_signature and body_signature
 
     @classmethod
     def is_cloudflare_block(cls, response) -> bool:
@@ -232,21 +236,23 @@ class WebshareProxyManager:
         )
 
     @classmethod
-    async def _is_cloudflare_block(cls, response) -> bool:
+    async def _is_cloudflare_block(cls, response, body_fallback: str = "") -> bool:
         """Async HTTP response variant of the Cloudflare block detector."""
-        status = getattr(response, "status", 0)
+        status = getattr(response, "status", getattr(response, "status_code", 0))
         headers = getattr(response, "headers", {})
         if status not in {403, 429, 503}:
             return False
-        server = str(headers.get("Server", "")).lower()
-        ray_id = str(headers.get("CF-Ray", ""))
-        if "cloudflare" not in server and not ray_id:
-            return False
-        try:
-            body = await response.text()
-        except (AttributeError, RuntimeError, TypeError):
-            body = ""
-        return cls._cloudflare_signature(status, headers, str(body))
+        body = getattr(response, "text", "")
+        if callable(body):
+            try:
+                body = body()
+                if hasattr(body, "__await__"):
+                    body = await body
+            except (AttributeError, RuntimeError, TypeError):
+                body = ""
+        if not isinstance(body, str) or not body:
+            body = body_fallback
+        return cls._cloudflare_signature(status, headers, body)
 
     def use_backup_proxy(self) -> bool:
         """Immediately arm the next registered standby for synchronous callers."""

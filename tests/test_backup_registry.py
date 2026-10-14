@@ -22,10 +22,20 @@ class DuplicateKeyError(Exception):
 
 
 class FakeCollection:
-    def __init__(self):
+    def __init__(self, existing_index=None):
         self.documents = {}
+        self.existing_index = existing_index
+        self.created_indexes = []
 
     async def create_index(self, field, unique=False, name=None):
+        requested = (field, unique, name)
+        self.created_indexes.append(requested)
+        if self.existing_index is not None and self.existing_index != requested:
+            raise RuntimeError(
+                "An existing index has the same name as the requested index "
+                "with a different key specification."
+            )
+        self.existing_index = requested
         return name
 
     def find(self, query, projection):
@@ -35,7 +45,7 @@ class FakeCollection:
         ])
 
     async def insert_one(self, document):
-        if any(item["url_key"] == document["url_key"] for item in self.documents.values()):
+        if any(item["url"].casefold() == document["url"].casefold() for item in self.documents.values()):
             raise DuplicateKeyError("duplicate URL")
         self.documents[document["_id"]] = dict(document)
 
@@ -61,6 +71,30 @@ class BackupRegistryTests(unittest.TestCase):
         bot = SimpleNamespace(cxn=SimpleNamespace(db_type="sqlite"))
         with self.assertRaisesRegex(RuntimeError, "requires the shared MongoDB database"):
             asyncio.run(list_backups(bot))
+
+    def test_registry_uses_existing_unique_url_index(self):
+        collection = FakeCollection(
+            existing_index=("url", True, "backup_instances_url_unique")
+        )
+        bot = SimpleNamespace(cxn=FakePool(collection))
+
+        async def scenario():
+            await init_backup_registry(bot)
+            self.assertEqual(
+                [("url", True, "backup_instances_url_unique")],
+                collection.created_indexes,
+            )
+            item = {
+                "id": "backup-1",
+                "name": "east",
+                "url": "https://backup.example",
+                "created_at": 10,
+            }
+            await add_backup(bot, item)
+            with self.assertRaisesRegex(ValueError, "already registered"):
+                await add_backup(bot, {**item, "id": "backup-2"})
+
+        asyncio.run(scenario())
 
     def test_registry_uses_durable_collection_across_bot_instances(self):
         collection = FakeCollection()

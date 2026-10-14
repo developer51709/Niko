@@ -23,7 +23,10 @@ def _collection(bot):
 async def init_backup_registry(bot):
     """Ensure unique standby URLs and return all persisted registry entries."""
     collection = _collection(bot)
-    await collection.create_index("url_key", unique=True, name="backup_instances_url_unique")
+    # Keep the established index definition. Existing deployments have this
+    # named unique index on `url`; changing its key to url_key makes MongoDB
+    # reject startup with IndexKeySpecsConflict.
+    await collection.create_index("url", unique=True, name="backup_instances_url_unique")
     return await list_backups(bot)
 
 
@@ -39,7 +42,6 @@ async def add_backup(bot, item: dict):
     collection = _collection(bot)
     document = dict(item)
     document["_id"] = document["id"]
-    document["url_key"] = document["url"].casefold()
     try:
         await collection.insert_one(document)
     except Exception as exc:
