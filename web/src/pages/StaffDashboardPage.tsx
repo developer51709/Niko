@@ -211,7 +211,7 @@ export function StaffDashboardPage() {
     catch (reason) { setGuildActionError(reason instanceof Error ? reason.message : "The guild action could not be completed."); }
     finally { setBusyGuildAction(false); }
   };
-  const refreshStandbys = async () => {
+  async function refreshStandbys() {
     try {
       const result = await getStaffStandbys();
       setStandbys(result.standbys);
@@ -219,7 +219,7 @@ export function StaffDashboardPage() {
       setStandbyRefreshedAt(Date.now());
       setStandbyError("");
     } catch (reason) { setStandbyError(reason instanceof Error ? reason.message : "Standby status unavailable."); }
-  };
+  }
   const standbyControl = async (action: { action: "mode"; mode: "auto" | "off" } | { action: "activate"; standby_id: string } | { action: "rotate" }, success: string) => {
     if (standbyBusy) return;
     setStandbyBusy(true); setStandbyError(""); setStandbyMessage("");
