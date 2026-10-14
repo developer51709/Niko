@@ -40,14 +40,15 @@ class StandbyFailoverTests(unittest.TestCase):
         self.assertFalse(_verification_matches(secret_key("production-token", "other-session"), nonce, proof))
         self.assertFalse(_verification_matches(key, nonce, None))
 
-    def test_relay_url_allowlist_includes_oauth_and_rejects_untrusted_targets(self):
+    def test_relay_url_allows_any_discord_api_path_but_rejects_untrusted_targets(self):
         self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/v10/users/@me"))
         self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token"))
         self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token?source=callback"))
+        self.assertTrue(_is_allowed_discord_api_url("https://discord.com/api/v11/new-endpoint"))
+        self.assertTrue(_is_allowed_discord_api_url("https://discord.com/experiments"))
         self.assertFalse(_is_allowed_discord_api_url("http://discord.com/api/oauth2/token"))
         self.assertFalse(_is_allowed_discord_api_url("https://discord.com.evil.example/api/oauth2/token"))
         self.assertFalse(_is_allowed_discord_api_url("https://discord.com:443/api/oauth2/token"))
-        self.assertFalse(_is_allowed_discord_api_url("https://discord.com/api/admin"))
         self.assertFalse(_is_allowed_discord_api_url("https://discord.com/api/oauth2/token#fragment"))
 
     def test_oauth_relay_endpoint_accepts_signed_discord_token_exchange(self):

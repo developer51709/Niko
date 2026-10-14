@@ -17,11 +17,10 @@ _MAX_RELAY_NONCES = 4096
 _MAX_RELAY_BODY = 8 * 1024 * 1024
 _MAX_RELAY_PAYLOAD = 12 * 1024 * 1024
 _DISCORD_API_HOST = "discord.com"
-_DISCORD_API_PATH_PREFIXES = ("/api/v10/", "/api/oauth2/")
 
 
 def _is_allowed_discord_api_url(url: str) -> bool:
-    """Allow Discord REST v10 and OAuth2 endpoints, but no other origins or paths."""
+    """Allow any HTTPS Discord API path without permitting another relay host."""
     try:
         parts = urlsplit(url)
     except (TypeError, ValueError):
@@ -29,7 +28,7 @@ def _is_allowed_discord_api_url(url: str) -> bool:
     return (
         parts.scheme == "https"
         and parts.netloc.lower() == _DISCORD_API_HOST
-        and any(parts.path.startswith(prefix) for prefix in _DISCORD_API_PATH_PREFIXES)
+        and parts.path.startswith("/")
         and not parts.fragment
     )
 
