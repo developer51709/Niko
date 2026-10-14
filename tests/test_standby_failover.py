@@ -3,11 +3,16 @@ import base64
 import json
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import requests
 
 from utils.proxy_manager import WebshareProxyManager
 from utils.standby_failover import _handle_client, _is_allowed_discord_api_url, control_proof, relay_proof, secret_key, verification_proof
 from utils.standby_manager import StandbyFailoverManager
+from webapp import app
+from webapp import server as server_routes
 from webapp.standby_routes import _verification_matches
 
 
@@ -364,6 +369,68 @@ class StandbyFailoverTests(unittest.TestCase):
             self.assertEqual("standby", manager.status()["mode"])
 
         asyncio.run(scenario())
+
+    def test_active_standby_routes_general_backend_requests(self):
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        upstream = type("Upstream", (), {
+            "status_code": 202,
+            "content": b'{"handled_by":"standby"}',
+            "headers": {"Content-Type": "application/json", "X-Backend": "standby"},
+            "close": lambda self: None,
+        })()
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request", return_value=upstream
+        ) as request_upstream:
+            with app.test_client() as client:
+                response = client.post(
+                    "/api/guild/123/config/server?view=full",
+                    json={"name": "Cafe"},
+                    headers={"Host": "production.example", "X-CSRF-Token": "csrf-token"},
+                )
+
+        self.assertEqual(202, response.status_code)
+        self.assertEqual({"handled_by": "standby"}, response.get_json())
+        self.assertEqual("standby", response.headers["X-Backend"])
+        args, kwargs = request_upstream.call_args
+        self.assertEqual("POST", args[0])
+        self.assertEqual("https://standby.example/api/guild/123/config/server?view=full", args[1])
+        forwarded_headers = {name.lower(): value for name, value in kwargs["headers"].items()}
+        self.assertEqual("application/json", forwarded_headers["content-type"])
+        self.assertEqual("csrf-token", forwarded_headers["x-csrf-token"])
+        self.assertEqual("production.example", forwarded_headers["host"])
+        self.assertEqual(b'{"name": "Cafe"}', kwargs["data"])
+        self.assertFalse(kwargs["allow_redirects"])
+
+    def test_active_standby_route_remains_available_for_control_api(self):
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request"
+        ) as request_upstream:
+            with app.test_client() as client:
+                response = client.get("/api/staff/standbys")
+
+        self.assertNotEqual(503, response.status_code)
+        request_upstream.assert_not_called()
+
+    def test_active_standby_failure_returns_503_instead_of_stale_primary_data(self):
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request", side_effect=requests.RequestException("unavailable")
+        ):
+            with app.test_client() as client:
+                response = client.get("/api/team")
+
+        self.assertEqual(503, response.status_code)
+        self.assertEqual("The active standby backend is temporarily unavailable.", response.get_json()["error"])
 
     def test_webshare_proxy_configuration_is_not_part_of_standby_control(self):
         manager = StandbyFailoverManager()

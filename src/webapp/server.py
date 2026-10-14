@@ -182,6 +182,63 @@ def get_runtime_level_config(guild_id: str) -> dict:
     return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
+_STANDBY_LOCAL_PATHS = ("/api/staff/standbys",)
+_STANDBY_HOP_BY_HOP_HEADERS = {
+    "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
+    "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
+}
+_STANDBY_REQUEST_EXCLUDED_HEADERS = {
+    "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection",
+}
+_STANDBY_ROUTED_PREFIXES = ("/api/", "/auth/")
+
+
+@app.before_request
+def route_to_active_standby():
+    """Serve application requests from the standby while it owns the gateway."""
+    manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
+    origin = getattr(manager, "active_origin", None) if manager is not None else None
+    if not origin or origin not in getattr(manager, "origins", ()):
+        return None
+    if not request.path.startswith(_STANDBY_ROUTED_PREFIXES):
+        return None
+    if any(request.path == path or request.path.startswith(path + "/") for path in _STANDBY_LOCAL_PATHS):
+        return None
+
+    target = f"{origin.rstrip('/')}{request.path}"
+    if request.query_string:
+        target += f"?{request.query_string.decode('latin-1')}"
+    headers = {
+        name: value
+        for name, value in request.headers.items()
+        if name.lower() not in _STANDBY_REQUEST_EXCLUDED_HEADERS
+    }
+    try:
+        upstream = req.request(
+            request.method,
+            target,
+            headers=headers,
+            data=request.get_data(cache=True),
+            timeout=(3, 35),
+            allow_redirects=False,
+        )
+    except req.RequestException:
+        return jsonify({"error": "The active standby backend is temporarily unavailable."}), 503
+
+    response = Response(upstream.content, status=upstream.status_code)
+    raw_headers = getattr(getattr(upstream, "raw", None), "headers", None)
+    set_cookies = raw_headers.getlist("Set-Cookie") if raw_headers is not None else []
+    for name, value in upstream.headers.items():
+        if name.lower() not in _STANDBY_HOP_BY_HOP_HEADERS:
+            response.headers[name] = value
+    for cookie in set_cookies:
+        response.headers.add("Set-Cookie", cookie)
+    close_upstream = getattr(upstream, "close", None)
+    if close_upstream is not None:
+        close_upstream()
+    return response
+
+
 @app.after_request
 def prevent_dynamic_cache(response):
     """Never let auth or dashboard API responses become stale in production."""

@@ -12,6 +12,7 @@ globals().update({
 def api_team():
     return jsonify(_load_staff_rows())
 
+
 @app.route("/api/team/<user_id>")
 def api_team_member(user_id):
     member = next((item for item in _load_staff_rows() if item["id"] == str(user_id)), None)
