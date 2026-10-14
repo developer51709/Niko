@@ -196,6 +196,10 @@ if __name__ == "__main__":
                 from utils.standby_failover import serve_standby
                 standby_manager = bot.standby_failover
                 standby_manager.attach(bot)
+                # A standby never initiates failover. It accepts signed handoff
+                # commands only, so a blocked request there can neither promote
+                # it nor hand its gateway to another registered instance.
+                standby_manager.select_failover("off")
                 from webapp import app as web_app, configure_bot
                 configure_bot(bot)
                 server = await serve_standby(

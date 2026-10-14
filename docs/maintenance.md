@@ -23,6 +23,8 @@ A standby instance is a complete, warmed copy of the production bot backend and 
 
 During a failover, the primary relays Discord REST traffic over the authenticated standby backend and transfers gateway ownership with signed control messages. Webshare proxy configuration and health remain independent; it is not selected or managed by standby failover. Keep standby service access restricted and use the same production session secret on both instances.
 
+A standby never initiates failover: a blocked request on that instance cannot promote it or move its gateway to another registered instance, because only the primary arms automatic failover. Both ends of the relay also share one allowlist of Discord REST and CDN hosts, so a failover request is never refused by the standby and silently retried over the blocked direct egress. Registering the primary's own origin is rejected, since the primary would otherwise proxy every request to itself.
+
 ## Monitoring
 - Check the console logs for errors.
 - Ensure the bot process is kept alive using a process manager like PM2 or systemd (if not on Replit).

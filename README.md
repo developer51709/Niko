@@ -22,7 +22,7 @@
 | Name | Link |
 |------|------|
 | **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1520558530472448170) |
-| **Support Server** | [discord.gg/UfDBUGcKqY](https://discord.gg/UfDBUGcKqY) |
+| **Support Server** | [niko.sryze.cc/discord](https://niko.sryze.cc/discord) — resolves the current invite |
 | **GitHub** | [developer51709/Niko](https://github.com/developer51709/Niko) |
 | **Wiki Page** | [Official Wiki](https://app.devin.ai/org/developer51709/wiki/developer51709/Niko?branch=main)
 

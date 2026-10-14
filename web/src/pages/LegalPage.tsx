@@ -1,9 +1,19 @@
+import type { ReactNode } from "react";
 import { Footer } from "../components/Footer";
 import { PublicHeader } from "../components/PublicHeader";
+import { SupportLink } from "../components/SupportLink";
 
 const EFFECTIVE_DATE = "1 October 2026";
 
-const legalCopy = {
+type LegalSection = readonly [heading: string, body: ReactNode];
+
+interface LegalDocument {
+  title: string;
+  intro: string;
+  sections: readonly LegalSection[];
+}
+
+const legalCopy: Record<"privacy" | "terms" | "community", LegalDocument> = {
   privacy: {
     title: "Privacy policy",
     intro: "Niko stores only the information needed to provide its Discord features. This page is the public, human-readable version of the policy.",
@@ -14,7 +24,7 @@ const legalCopy = {
       ["How it is used", "Data is used only to operate Niko inside Discord. We do not sell, share, or transfer it for advertising."],
       ["Storage and retention", "Data is stored by the server hosting Niko in a database (SQLite or MongoDB, depending on deployment). Economy, leveling, and configuration data remain until removed. Daily server activity totals are retained as aggregates. AI conversation history is limited and can be cleared with /clearhistory."],
       ["Third-party services", "When enabled, AI messages and limited context are sent to the configured AI provider to generate a reply. Provider privacy terms also apply. Other features may contact their respective services (social platforms for the notifier, Google Translate for translations); only the minimum data needed for the feature is shared."],
-      ["Your choices", "Request deletion of data associated with your User ID by contacting the bot owner through the support server. Material changes are announced there."],
+      ["Your choices", <>Request deletion of data associated with your User ID by contacting the bot owner through the <SupportLink />. Material changes are announced there.</>],
     ],
   },
   terms: {
@@ -26,7 +36,7 @@ const legalCopy = {
       ["Moderation", "The operator may blacklist a user or server for abuse, exploitation, or a violation of these terms."],
       ["AI content", "AI replies can be inaccurate or unexpected. Verify important information independently; the operator is not liable for harm from generated content."],
       ["Virtual items", "In-bot currency and items have no real-world value and cannot be exchanged for money or goods. Balances may be reset."],
-      ["Contact", "Questions or concerns can be sent through the Niko support server."],
+      ["Contact", <>Questions or concerns can be sent through the Niko <SupportLink />.</>],
     ],
   },
   community: {
@@ -39,10 +49,10 @@ const legalCopy = {
       ["Other prohibited conduct", "Servers must not use Niko to facilitate doxxing, targeted harassment campaigns, sextortion, trafficking, or the sexualization of minors in any form."],
       ["Enforcement and investigations", "When a server is reported or flagged for potentially violating this policy, Niko will send a warning notice to the server. The notice is followed by an investigation by Niko staff. Servers that cooperate in good faith and are found not to be breaking the policies will not receive any further action."],
       ["Obstruction of investigations", "Banning, kicking, or otherwise removing the staff member(s) sent to investigate, or hiding, deleting, or tampering with potential evidence, is treated as an admission of guilt. Doing so will result in the server — and any users who are involved — being permanently blacklisted from further use of Niko, in addition to any other action the investigation warrants."],
-      ["Reporting", "If you believe a server using Niko is violating this policy, report it through the Niko support server. Reports are reviewed by staff and handled confidentially."],
+      ["Reporting", <>If you believe a server using Niko is violating this policy, report it through the Niko <SupportLink />. Reports are reviewed by staff and handled confidentially.</>],
     ],
   },
-} as const;
+};
 
 export function LegalPage({ type }: { type: "privacy" | "terms" | "community" }) {
   const content = legalCopy[type];

@@ -41,10 +41,13 @@ ROLE_ORDER = ("head_admin", "moderator", "graphic_designer", "head_support", "su
 
 # Commands which are deliberately reserved for the bot owner, even when a
 # staff member has another role. Blacklist is relaxed below for Head Admins.
+# These are the names registered under ``.staff``: the legacy ``dev`` prefix is
+# stripped during registration, so code execution is guarded as ``exec``/``say``
+# rather than ``devexec``/``devsay``.
 OWNER_ONLY_COMMANDS = {
     "broadcast", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
-    "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "dev01",
-    "devexec", "devsay",
+    "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "exec",
+    "say", "dev01", "shardinfo", "shardstats", "shardhealth",
     "sendpanel", "supportsetup", "supportupdate",
 }
 
@@ -62,6 +65,7 @@ def _is_owner_user(user, bot) -> bool:
 
 
 async def get_staff_role(bot, user_id: int) -> str | None:
+    """Resolve a stored staff role, or ``None`` for everyone else."""
     pool = getattr(bot, "cxn", None)
     if pool is None:
         return None
@@ -157,7 +161,14 @@ class StaffRoleSelect(discord.ui.Select):
             return await interaction.response.send_message("Only the bot owner can manage staff access.", ephemeral=True)
         value = self.values[0]
         role = None if value == "revoke" else value
-        await set_staff_role(self.bot, self.target.id, role, interaction.user.id)
+        try:
+            await set_staff_role(self.bot, self.target.id, role, interaction.user.id)
+        except Exception as exc:
+            # A failed write or role sync must reach the operator rather than
+            # leaving the interaction unanswered ("This interaction failed").
+            return await interaction.response.send_message(
+                f"Staff access was not updated: `{type(exc).__name__}: {exc}`", ephemeral=True
+            )
         message = (
             f"Revoked staff access from {self.target.mention}."
             if role is None
@@ -171,7 +182,7 @@ class StaffRoleSelect(discord.ui.Select):
 class StaffManageView(discord.ui.LayoutView):
     def __init__(self, bot, target: discord.Member, owner_id: int, current_role: str | None = None):
         super().__init__(timeout=300)
-        current = "Owner" if target.id in OWNER_IDS else STAFF_ROLES.get(current_role, "No staff role assigned")
+        current = _role_label(current_role) if current_role else "No staff role assigned"
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=f"### Manage staff access\n**User:** {target.mention}\n**Current:** {current}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -230,13 +241,57 @@ def _command_names_for_role(role: str) -> set[str]:
     return set()
 
 
+_KNOWN_ROLES = frozenset({"owner", *STAFF_ROLES})
+
+
+def _role_label(role: str) -> str:
+    """Public label for a staff role key, including the owner."""
+    if role == "owner":
+        return "Owner"
+    return STAFF_ROLES.get(role, role)
+
+
+def _staff_command_name(command) -> str:
+    """Resolve the top-level ``staff`` subcommand a command belongs to.
+
+    The ``staff`` group is the top of the tree, so resolving the first command
+    below it lets direct commands (``servers``) and nested commands
+    (``blacklist info``) share one name for the role allow-lists.
+    """
+    name = getattr(command, "name", "") or ""
+    parent = getattr(command, "parent", None)
+    while parent is not None and getattr(parent, "name", None) != "staff":
+        name = getattr(parent, "name", None) or name
+        parent = getattr(parent, "parent", None)
+    return name
+
+
+def command_allowed_for_role(role: str | None, command_name: str) -> bool:
+    """Return whether ``role`` may use one top-level ``staff`` subcommand.
+
+    Deny by default: a command is available only when the role lists it, so an
+    unknown or empty role reaches nothing. Owner-reserved tooling stays reserved
+    for the owner, and Head Admin tooling (blacklist, premium, invites,
+    announcements) is never inherited by the other staff roles.
+    """
+    if command_name in OWNER_ONLY_COMMANDS:
+        return role == "owner"
+    if role == "owner":
+        return True
+    if role not in _KNOWN_ROLES:
+        return False
+    if command_name == "getreport":
+        return True
+    return command_name in _command_names_for_role(role)
+
+
 def build_staff_help(bot, ctx_or_interaction, selected_role: str = "all") -> discord.ui.LayoutView:
     role = selected_role
     if role == "all":
         role_label = "All staff"
         names = SUPPORT_COMMANDS
     else:
-        role_label = "Owner" if role == "owner" else STAFF_ROLES.get(role, role)
+        role_label = _role_label(role)
         names = _command_names_for_role(role)
 
     lines = []
@@ -414,24 +469,25 @@ class StaffCog(commands.Cog):
     async def _staff_check(self, ctx: commands.Context) -> bool:
         if not await is_staff_member(ctx):
             return False
-        command = ctx.command
-        # ``root_parent`` is the ``staff`` group itself. Resolve the first
-        # command below that group so direct commands (``servers``) and nested
-        # commands (``blacklist info``) are checked against the right role.
-        command_name = getattr(command, "name", "")
-        parent = getattr(command, "parent", None)
-        while parent is not None and getattr(parent, "name", None) != "staff":
-            command_name = parent.name
-            parent = getattr(parent, "parent", None)
         role = await _role_for(ctx)
-        if role == "owner":
-            return True
-        if command_name == "getreport":
-            return True
-        if command_name in OWNER_ONLY_COMMANDS:
-            return False
-        allowed = _command_names_for_role(role)
-        return command_name in allowed or command_name in HEAD_ADMIN_COMMANDS
+        return command_allowed_for_role(role, _staff_command_name(ctx.command))
+
+    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        """Explain a staff check failure instead of the generic check message."""
+        if isinstance(error, commands.CommandInvokeError):
+            error = error.original
+        # ``supportsetup``/``supportupdate`` are guild-only; every other
+        # failure keeps the shared handler's wording and reporting.
+        if not isinstance(error, commands.CheckFailure) or isinstance(error, commands.NoPrivateMessage):
+            ctx.bot.dispatch("command_error", ctx, error)
+            return
+        role = await _role_for(ctx)
+        if role is None:
+            return await ctx.send("This command is restricted to official Niko staff.")
+        await ctx.send(
+            f"`.staff {_staff_command_name(ctx.command)}` is not available to your "
+            f"**{_role_label(role)}** role. Run `.staff help` to see what your role can use."
+        )
 
     @staticmethod
     def _remove_owner_checks(command):

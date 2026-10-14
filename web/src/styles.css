@@ -575,6 +575,7 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-report-summary { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line-soft); border-radius: 9px; }
 .dashboard-layout .staff-report-summary strong { color: var(--accent-dark); font: 12px "Space Mono", monospace; }
 .dashboard-layout .staff-report-details pre { max-height: 520px; margin: 0; padding: 16px; overflow: auto; color: var(--ink); background: rgba(0, 0, 0, .2); border: 1px solid var(--line-soft); border-radius: 9px; font: 10px/1.65 "Space Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dashboard-layout .staff-report-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .dashboard-layout .staff-guild-empty { display: grid; justify-items: center; gap: 10px; padding: 46px 20px; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; font-size: 11px; }
 .dashboard-layout .staff-guild-empty p { margin: 0; }
 @media (max-width: 760px) { .dashboard-layout .staff-guilds-heading { align-items: flex-start; }.dashboard-layout .staff-guild-count { min-width: 95px; }.dashboard-layout .staff-guild-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }.dashboard-layout .staff-guild-actions { grid-template-columns: 1fr 1fr; }.dashboard-layout .staff-guild-reason { grid-column: 1 / -1; }.dashboard-layout .staff-guild-profile-previews { grid-template-columns: 110px minmax(0, 1fr); } }

@@ -16,21 +16,32 @@ _RELAY_NONCES: set[str] = set()
 _MAX_RELAY_NONCES = 4096
 _MAX_RELAY_BODY = 8 * 1024 * 1024
 _MAX_RELAY_PAYLOAD = 12 * 1024 * 1024
-_DISCORD_API_HOST = "discord.com"
+# Discord REST plus the CDN and subdomain siblings the primary relays. Both
+# sides of the relay share this predicate: a host one end refuses would fail the
+# relay and fall back to the direct (blocked) egress the failover exists to
+# avoid.
+_DISCORD_RELAY_HOSTS = ("discord.com", "discordapp.com")
+_DISCORD_RELAY_SUFFIXES = tuple(f".{host}" for host in _DISCORD_RELAY_HOSTS)
 
 
-def _is_allowed_discord_api_url(url: str) -> bool:
-    """Allow any HTTPS Discord API path without permitting another relay host."""
+def is_discord_relay_url(url: str) -> bool:
+    """Return True for the Discord hosts the signed API relay may forward to."""
     try:
         parts = urlsplit(url)
     except (TypeError, ValueError):
         return False
-    return (
-        parts.scheme == "https"
-        and parts.netloc.lower() == _DISCORD_API_HOST
-        and parts.path.startswith("/")
-        and not parts.fragment
-    )
+    netloc = parts.netloc.lower()
+    # An explicit port or embedded credentials is never a Discord API target.
+    if not netloc or ":" in netloc or "@" in netloc:
+        return False
+    if netloc not in _DISCORD_RELAY_HOSTS and not netloc.endswith(_DISCORD_RELAY_SUFFIXES):
+        return False
+    return parts.scheme == "https" and parts.path.startswith("/") and not parts.fragment
+
+
+def _is_allowed_discord_api_url(url: str) -> bool:
+    """Allow any HTTPS Discord path without permitting another relay host."""
+    return is_discord_relay_url(url)
 
 
 _CONTROL_NONCES: set[str] = set()

@@ -24,11 +24,41 @@ def _sync_standby_manager(bot, rows):
     if manager is None:
         manager = StandbyFailoverManager()
         bot.standby_failover = manager
-    manager.set_standbys(
-        [standby_origin(row["url"]) for row in rows],
-        [row["id"] for row in rows],
-    )
+    origins, ids = [], []
+    for row in rows:
+        try:
+            standby_id, origin = str(row["id"]), standby_origin(row["url"])
+        except (KeyError, TypeError, ValueError):
+            # One unreadable row in the shared registry must not disable every
+            # remaining instance or fail the request that triggered the sync.
+            logging.warning("StandbyFailover", "Ignoring an unreadable standby registry entry.")
+            continue
+        ids.append(standby_id)
+        origins.append(origin)
+    manager.set_standbys(origins, ids)
     manager.attach(bot)
+
+
+def _origin_key(value):
+    """Normalize a host or origin to ``host:port`` so defaults cannot differ."""
+    parts = urlsplit(value)
+    if not parts.hostname:
+        parts = urlsplit(f"https://{value}")
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return f"{(parts.hostname or '').lower()}:{port or (443 if parts.scheme != 'http' else 80)}"
+
+
+def _is_own_origin(url):
+    """Reject registering this server's own origin, which would proxy to itself."""
+    try:
+        own_origins = {_origin_key(public_base_url())}
+    except (TypeError, ValueError):
+        own_origins = set()
+    own_origins.add(_origin_key(request.host))
+    return _origin_key(url) in own_origins
 
 
 async def initialize_standby_registry(bot):
@@ -93,6 +123,11 @@ def _owner_only():
     return None
 
 
+def _standby_mode():
+    """Report whether this process runs as a standby backend."""
+    return os.environ.get("STANDBY_MODE", "").strip().lower() in {"1", "true", "yes"}
+
+
 @app.route("/api/staff/standbys", methods=["GET"])
 @require_auth
 def api_staff_standbys():
@@ -133,7 +168,14 @@ def api_control_staff_standby_failover():
             mode = body.get("mode")
             if mode not in {"auto", "off"}:
                 return jsonify({"error": "Choose auto or off mode."}), 400
-            changed = run_on_bot_loop(manager.select_failover(mode))
+            # A standby only accepts signed handoff commands, so re-arming
+            # automatic failover on it would let a blocked request promote it.
+            if mode == "auto" and _standby_mode():
+                return jsonify({"error": "A standby instance never initiates failover; manage routing from the primary."}), 403
+            # Mode selection only flips flags on the manager, so it runs on the
+            # request thread; dispatching a bool to the bot-loop coroutine
+            # runner would fail every mode change.
+            changed = manager.select_failover(mode)
         elif action == "activate":
             standby_id = str(body.get("standby_id", ""))
             changed = run_on_bot_loop(manager.activate_standby(standby_id))
@@ -166,6 +208,8 @@ def api_add_staff_standby():
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
+    if _is_own_origin(url):
+        return jsonify({"error": "A standby cannot use this server's own origin."}), 400
 
     nonce = secrets.token_urlsafe(32)
     try:

@@ -56,7 +56,7 @@ from utils.donations import (
     verify_donation_token,
 )
 from cogs.donations.oxapay import OxaPayClient
-from config.ids import OWNER_IDS, DEVELOPER_IDS
+from config.ids import OWNER_IDS
 from cogs.staff.staff import STAFF_ROLES
 from utils.ai.config import get_ai_config, set_ai_config
 
@@ -91,6 +91,7 @@ app.config["SESSION_COOKIE_SECURE"]   = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 _discord_bot = None
+_WEB_STARTED_AT = time.time()
 _member_metadata_cache: dict[str, tuple[float, dict[str, dict]]] = {}
 _staff_user_identity_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
 _STAFF_USER_IDENTITY_CACHE_TTL = 600
@@ -182,8 +183,11 @@ def get_runtime_level_config(guild_id: str) -> dict:
     return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
-_STANDBY_LOCAL_PATHS = ("/health", "/api/staff/standbys")
-_STANDBY_LOCAL_PREFIXES = ("/internal/standby/",)
+# Only the primary's own failover control plane stays local. The standby's own
+# service routes (/health and /internal/standby/*) are proxied together with the
+# rest of the application so the public production domain exposes the complete
+# active instance rather than a trimmed subset of it.
+_STANDBY_LOCAL_PATHS = ("/api/staff/standbys",)
 _STANDBY_HOP_BY_HOP_HEADERS = {
     "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
     "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
@@ -200,10 +204,7 @@ def route_to_active_standby():
     origin = getattr(manager, "active_origin", None) if manager is not None else None
     if not origin or origin not in getattr(manager, "origins", ()):
         return None
-    if (
-        any(request.path == path or request.path.startswith(path + "/") for path in _STANDBY_LOCAL_PATHS)
-        or request.path.startswith(_STANDBY_LOCAL_PREFIXES)
-    ):
+    if any(request.path == path or request.path.startswith(path + "/") for path in _STANDBY_LOCAL_PATHS):
         return None
 
     target = f"{origin.rstrip('/')}{request.path}"
@@ -238,6 +239,24 @@ def route_to_active_standby():
     if close_upstream is not None:
         close_upstream()
     return response
+
+
+@app.route("/health")
+def api_health_local():
+    """Report this instance's liveness while it owns the gateway directly."""
+    return jsonify({
+        "ok": True,
+        "service": "niko-backend",
+        "gateway": "active",
+        "active_standby": None,
+        "uptime_seconds": max(0, int(time.time() - _WEB_STARTED_AT)),
+    })
+
+
+@app.route("/internal/standby/<path:path>", methods=["GET", "POST"])
+def api_internal_standby_unavailable(path):
+    """Standby relay endpoints only answer while a standby owns the gateway."""
+    return jsonify({"error": "No active standby instance is receiving standby relay requests."}), 503
 
 
 @app.after_request
@@ -970,9 +989,9 @@ def _load_staff_rows() -> list[dict]:
 
     Staff roles live in the bot's active database pool. Do not fall back to
     SQLite only when the pool returns an empty list: a web process can have a
-    local SQLite file with only the owner/developer seed rows while the active
-    deployment stores the other roles elsewhere. We also isolate malformed
-    rows so one legacy record cannot hide the rest of the roster.
+    local SQLite file with only the owner seed row while the active deployment
+    stores the other roles elsewhere. We also isolate malformed rows so one
+    legacy record cannot hide the rest of the roster.
     """
     columns = (
         "user_id", "role", "public_name", "public_bio", "public_avatar_url",
@@ -987,9 +1006,9 @@ def _load_staff_rows() -> list[dict]:
             role = str(row.get("role", "")).strip()
             if not user_id or not role:
                 return
-            # Only configured staff roles should be public. Keep owner and
-            # developer seeds in the same roster as database-backed roles.
-            if role not in STAFF_ROLES and role not in {"owner", "developer"}:
+            # Only configured staff roles should be public. Keep the owner seed
+            # in the same roster as database-backed roles.
+            if role not in STAFF_ROLES and role != "owner":
                 return
             item = _staff_row({**row, "user_id": user_id, "role": role})
             by_id[user_id] = item
@@ -1013,7 +1032,7 @@ def _load_staff_rows() -> list[dict]:
 
     # Also read the local store and merge it instead of using it as an
     # all-or-nothing fallback. This covers web-only processes and prevents the
-    # owner/developer seed rows from masking other staff roles.
+    # owner seed row from masking other staff roles.
     conn = sqlite_connect()
     try:
         if conn:
@@ -1029,12 +1048,10 @@ def _load_staff_rows() -> list[dict]:
         if conn:
             conn.close()
 
-    for user_id, role in (
-        [(str(value), "owner") for value in OWNER_IDS]
-        + [(str(value), "developer") for value in DEVELOPER_IDS]
-    ):
+    for user_id in OWNER_IDS:
+        user_id = str(user_id)
         if user_id not in by_id:
-            add_raw({"user_id": user_id, "role": role, "public_visible": 1})
+            add_raw({"user_id": user_id, "role": "owner", "public_visible": 1})
 
     return sorted(
         (row for row in by_id.values() if row["visible"]),
@@ -1050,8 +1067,6 @@ def _current_staff_role() -> str | None:
         numeric_user_id = int(user_id)
         if numeric_user_id in OWNER_IDS:
             return "owner"
-        if numeric_user_id in DEVELOPER_IDS:
-            return "developer"
     except (TypeError, ValueError):
         return None
 
@@ -1743,10 +1758,19 @@ def serve_spa_shell():
 
 
 def _svg_wrap(body: str, width: int, height: int):
-    """Wrap SVG body markup in a complete, embeddable image response."""
+    """Wrap SVG body markup in a complete, embeddable image response.
+
+    The card markup names the Plus Jakarta Sans / Space Mono webfonts, so the
+    document imports them; wsrv.nl rasterizes the external stylesheet when it
+    converts a card to PNG for Discord.
+    """
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}">{body}</svg>'
+        f'viewBox="0 0 {width} {height}">'
+        '<style>'
+        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap");'
+        '</style>'
+        f'{body}</svg>'
     )
     return Response(svg, mimetype="image/svg+xml")
 

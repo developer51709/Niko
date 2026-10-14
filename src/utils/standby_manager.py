@@ -7,12 +7,11 @@ import base64
 import json
 import os
 import time
-from urllib.parse import urlsplit
 
 import requests
 
 from utils import logging
-from utils.standby_failover import relay_proof, secret_key, control_proof
+from utils.standby_failover import control_proof, is_discord_relay_url, relay_proof, secret_key
 
 
 class _RelayedAiohttpResponse:
@@ -191,9 +190,8 @@ class StandbyFailoverManager:
 
     @staticmethod
     def _should_relay(url: str) -> bool:
-        parts = urlsplit(url)
-        host = (parts.hostname or "").lower()
-        return parts.scheme == "https" and (host == "discord.com" or host.endswith((".discord.com", ".discordapp.com")))
+        """Relay exactly the Discord hosts the standby is willing to forward."""
+        return is_discord_relay_url(url)
 
     def set_standbys(self, origins: list[str], ids: list[str] | None = None) -> None:
         entries = [(ids[i] if ids and i < len(ids) else str(i), url) for i, url in enumerate(origins)
@@ -408,6 +406,7 @@ class StandbyFailoverManager:
                     logging.warning("StandbyFailover", "Standby could not resume gateway ownership after primary timeout.")
                     continue
                 self.active_origin = None
+                self.egress_blocked = False
                 self.last_changed_at = time.time()
                 logging.success("StandbyFailover", "Primary gateway restored; standby returned to warm-ready state.")
                 return
@@ -425,6 +424,8 @@ class StandbyFailoverManager:
         except requests.RequestException:
             return False
         if not self.is_cloudflare_block(response):
+            # Direct egress answers normally, so any earlier block is over.
+            self.egress_blocked = False
             return False
         self.egress_blocked = True
         if not self.auto_enabled:

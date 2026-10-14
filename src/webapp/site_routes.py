@@ -59,24 +59,3 @@ def nested_spa_route(path):
 @app.route("/dashboard.html")
 def legacy_dashboard_redirect():
     return redirect("/dashboard")
-
-@app.route("/<path:path>")
-
-# ── SVG Card Endpoints ──────────────────────────────────────────────────────
-# These return SVG markup that wsrv.nl converts to PNG for Discord rendering.
-# Query parameters supply card data; a timestamp param busts CDN caches.
-
-
-def _svg_wrap(body, width, height):
-    """Wrap SVG body in a proper document and return as image/svg+xml."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" '
-        'width="' + str(width) + '" height="' + str(height) + '" '
-        'viewBox="0 0 ' + str(width) + ' ' + str(height) + '">'
-        '<style>'
-        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap");'
-        '</style>'
-        + body +
-        '</svg>'
-    )
-    return Response(svg, mimetype="image/svg+xml")

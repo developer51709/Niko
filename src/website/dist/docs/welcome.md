@@ -17,5 +17,5 @@ Niko is a feature-rich Discord bot designed to help server owners and moderators
 
 - Use the `/help` command in Discord for quick command references
 - Browse this documentation for detailed guides
-- Join our support server for community help
+- Join our [support server](/discord) for community help
 - Check the GitHub repository for development info

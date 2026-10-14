@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { Footer } from "../components/Footer";
 import { PublicHeader } from "../components/PublicHeader";
 import { Icon } from "../components/Icon";
+import { SupportLink } from "../components/SupportLink";
 
-const faqItems = [
+const faqItems: { question: string; answer: ReactNode }[] = [
   {
     question: "How do I invite Niko to my server?",
     answer: "Use the Add to Discord button in the site header to start the invite flow. You’ll need permission to add apps to the server.",
@@ -15,15 +16,15 @@ const faqItems = [
   },
   {
     question: "Why isn’t a command or feature working?",
-    answer: "Check that Niko is online and has the permissions needed in the channel. If the issue continues, share the command name and a short description in the support server.",
+    answer: <>Check that Niko is online and has the permissions needed in the channel. If the issue continues, share the command name and a short description in the <SupportLink />.</>,
   },
   {
     question: "How do I report a bug or request a feature?",
-    answer: "Join the support server and post in the appropriate help or feedback channel. Include steps to reproduce bugs, and never share passwords or private tokens.",
+    answer: <>Join the <SupportLink /> and post in the appropriate help or feedback channel. Include steps to reproduce bugs, and never share passwords or private tokens.</>,
   },
   {
     question: "How can I request deletion of my data?",
-    answer: "Contact the Niko team through the support server and include your Discord user ID so staff can locate the relevant data.",
+    answer: <>Contact the Niko team through the <SupportLink /> and include your Discord user ID so staff can locate the relevant data.</>,
   },
 ];
 

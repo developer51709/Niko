@@ -12,4 +12,6 @@ The instructions are different depending on if you are trying to add a self-host
 Ensure the bot has the required permissions in your server (e.g., Manage Webhooks for `uwulock`). Also, make sure the "Message Content Intent" is enabled in the Discord Developer Portal if you are self-hosting the bot.
 
 ## 4. How do I report a bug?
-Please open an issue in the project repository or contact `@sorenthedev` on Discord and provide any possible details about the issue.
+Please open an issue in the project repository, or get help in the Niko support server: https://niko.sryze.cc/discord
+
+Include the command you ran, what you expected, and what actually happened. Never share your bot token or other private credentials.

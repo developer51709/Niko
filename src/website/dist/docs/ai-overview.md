@@ -10,7 +10,7 @@ Never post API keys in Discord, issue reports, or source code. If a credential i
 
 ## Using AI Chat
 
-When AI chat is enabled, use the bot mention or the interaction documented by `/help` in your server. Behavior and available experiments are controlled by the bot deployment and server configuration. If the feature is unavailable, ask an administrator whether it has been enabled and check the support server for current service status.
+When AI chat is enabled, use the bot mention or the interaction documented by `/help` in your server. Behavior and available experiments are controlled by the bot deployment and server configuration. If the feature is unavailable, ask an administrator whether it has been enabled and check the [support server](/discord) for current service status.
 
 ## Privacy Notes
 

@@ -13,7 +13,7 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
-from config.ids import DEVELOPER_IDS, SUPPORT_GUILD
+from config.ids import SUPPORT_GUILD
 from cogs.staff.support_server import get_support_ids
 from utils.donations import is_supporter
 
@@ -527,18 +527,14 @@ async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
     Return a list of badge emoji strings earned by user_id.
 
     Checks (in order):
-      1. DEVELOPER_IDS  → badge_developer
-      2. donors DB      → badge_supporter  (works even if not in support server)
-      3. Support server roles:
+      1. donors DB      → badge_supporter  (works even if not in support server)
+      2. Support server roles:
            BUGBOUNTY_ROLE → badge_bugbounty
            SUPPORTER_ROLE → badge_supporter (deduped)
            PARTNER_ROLE   → badge_partner
     Gracefully handles users who are not members of the support server.
     """
     badges: list[str] = []
-
-    if user_id in DEVELOPER_IDS:
-        badges.append(get_emoji("badge_developer"))
 
     try:
         if await is_supporter(bot, user_id):

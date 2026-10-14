@@ -46,13 +46,13 @@ def api_staff_error_reports():
         return jsonify({"error": "Error reports are temporarily unavailable."}), 503
 
 
-_GUILD_MANAGEMENT_ROLES = {"owner", "developer", "head_admin"}
+_GUILD_MANAGEMENT_ROLES = {"owner", "head_admin"}
 
 
 def _require_guild_management_role():
     role = _current_staff_role()
     if role not in _GUILD_MANAGEMENT_ROLES:
-        return None, (jsonify({"error": "Guild management is restricted to the owner, developers, and Head Admins."}), 403)
+        return None, (jsonify({"error": "Guild management is restricted to the owner and Head Admins."}), 403)
     if _discord_bot is None:
         return None, (jsonify({"error": "The Discord bot is not available."}), 503)
     return role, None
