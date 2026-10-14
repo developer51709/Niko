@@ -72,7 +72,29 @@ export type StaffGuild = {
 
 export type StaffBlacklistEntry = { id: string; reason: string | null; timestamp: number; added_by: string | null };
 export type StaffBlacklist = { users: StaffBlacklistEntry[]; guilds: StaffBlacklistEntry[] };
-export type BackupInstance = { id: string; name: string; url: string; created_at: number };
+export type BackupInstance = {
+  id: string;
+  name: string;
+  url: string;
+  created_at: number;
+  health?: "online" | "offline";
+  active?: boolean;
+  stats?: { uptime_seconds: number; total_tunnels: number; active_tunnels: number; bytes_in: number; bytes_out: number } | null;
+};
+export type BackupFailoverStatus = {
+  mode: "auto" | "off" | "webshare" | "standby";
+  enabled: boolean;
+  active_backup_id: string | null;
+  using_webshare: boolean;
+  webshare_available: boolean;
+  webshare_endpoint?: string | null;
+  standby_count: number;
+  last_error?: string | null;
+  last_changed_at: number;
+  failover_count: number;
+  webshare_fallback_count: number;
+  egress_blocked: boolean;
+};
 export type BlacklistAppealStatus = {
   status: "eligible" | "pending" | "approved" | "denied" | "not_blacklisted" | "not_eligible";
   can_appeal: boolean;

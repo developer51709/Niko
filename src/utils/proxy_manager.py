@@ -67,11 +67,20 @@ class WebshareProxyManager:
         self._verify_task: asyncio.Task | None = None
         self._user_agent = "DiscordBot (https://discord.com, 2.7.1)"
         self._backup_proxy_urls: list[str] = []
+        self._backup_proxy_ids: list[str] = []
         self._backup_proxy_index = 0
+        self._backup_mode = "auto"
+        self._backup_last_error: str | None = None
+        self._backup_last_changed_at = time.time()
+        self._failover_count = 0
+        self._webshare_fallback_count = 0
         self._attached_bot_http = None
         self._hooked_session = None
         self._http_egress_blocked = False
         self._loop = None
+        self._bot = None
+        self._handoff_lock = asyncio.Lock()
+        self._verify_interval = VERIFY_INTERVAL_SECONDS
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     def attach(self, bot) -> bool:
@@ -86,6 +95,7 @@ class WebshareProxyManager:
         if not self.api_key and not self._backup_proxy_urls:
             return False
         self.http = bot.http
+        self._bot = bot
         current_session = self._current_session()
         if self._attached_bot_http is bot.http:
             if current_session is not None and current_session is not self._hooked_session:
@@ -137,6 +147,7 @@ class WebshareProxyManager:
                     "Discord gateway login was denied by Cloudflare; retrying through a registered standby.",
                 )
                 data = await original_static_login(token)
+                await manager._handoff_to_standby()
             try:
                 session = manager._current_session()
                 if session is not None:
@@ -182,6 +193,7 @@ class WebshareProxyManager:
                         manager._http_egress_blocked = True
                         await manager.enable(force_backup=True)
                         if manager.enabled:
+                            await manager._handoff_to_standby()
                             # A Cloudflare denial is not retried by discord.py.
                             # Retry this request once over the already-armed standby.
                             resp.release()
@@ -254,22 +266,187 @@ class WebshareProxyManager:
             body = body_fallback
         return cls._cloudflare_signature(status, headers, body)
 
-    def use_backup_proxy(self) -> bool:
-        """Immediately arm the next registered standby for synchronous callers."""
+    def use_backup_proxy(self, backup_id: str | None = None, *, manual: bool = False) -> bool:
+        """Immediately arm a registered standby for synchronous callers."""
         if not self._backup_proxy_urls:
             return False
+        if backup_id is not None:
+            try:
+                self._backup_proxy_index = self._backup_proxy_ids.index(backup_id)
+            except ValueError:
+                return False
         url = self._backup_proxy_urls[self._backup_proxy_index % len(self._backup_proxy_urls)]
-        self._backup_proxy_index += 1
+        self._backup_proxy_index = (self._backup_proxy_index + 1) % len(self._backup_proxy_urls)
         if self.http is not None:
             self.http.proxy = url
             self.http.proxy_auth = None
         self._proxy_url = url
         self._active_proxy = None
         self.enabled = True
+        self._backup_mode = "standby"
+        self._backup_last_error = None
+        self._backup_last_changed_at = time.time()
+        self._failover_count += 1
         self._http_egress_blocked = True
         logging.warning("ProxyManager", "Discord egress is blocked — routed through a registered standby instance.")
         self._ensure_verify_task()
         return True
+
+    def status(self) -> dict:
+        """Return non-secret failover state for the owner settings page."""
+        active_backup = None
+        if self._proxy_url in self._backup_proxy_urls:
+            active_backup = self._backup_proxy_ids[self._backup_proxy_urls.index(self._proxy_url)]
+        return {
+            "mode": self._backup_mode,
+            "enabled": self.enabled,
+            "active_backup_id": active_backup,
+            "using_webshare": self.enabled and self._active_proxy is not None,
+            "webshare_available": bool(self.api_key),
+            "webshare_endpoint": (
+                f"{self._active_proxy.get('proxy_address')}:{self._active_proxy.get('port')}"
+                if self._active_proxy else None
+            ),
+            "standby_count": len(self._backup_proxy_urls),
+            "last_error": self._backup_last_error,
+            "last_changed_at": self._backup_last_changed_at,
+            "failover_count": self._failover_count,
+            "webshare_fallback_count": self._webshare_fallback_count,
+            "egress_blocked": self._http_egress_blocked,
+        }
+
+    def activate_backup(self, backup_id: str) -> bool:
+        """Manually route Discord traffic through one registered standby."""
+        self._backup_mode = "standby"
+        return self.use_backup_proxy(backup_id, manual=True)
+
+    async def select_failover(self, mode: str) -> bool:
+        """Owner control: choose automatic standby-first, direct, or Webshare."""
+        if mode not in {"auto", "off", "webshare"}:
+            raise ValueError("Unsupported failover mode.")
+        self._backup_mode = mode
+        self._backup_last_error = None
+        self._backup_last_changed_at = time.time()
+        if mode == "off":
+            self.disable()
+            self._backup_mode = "off"
+            return True
+        if mode == "auto":
+            self.disable()
+            self._backup_mode = "auto"
+            return True
+        if not self.api_key:
+            self._backup_mode = "auto"
+            return False
+        self.disable()
+        self._backup_mode = "webshare"
+        return await self._enable_webshare()
+
+    async def control_backup(self, backup_id: str, action: str) -> bool:
+        """Send an authenticated gateway ownership command to a registered standby."""
+        from utils.backup_proxy import control_proof
+
+        if action not in {"activate", "relinquish"}:
+            raise ValueError("Unsupported standby control action.")
+        try:
+            index = self._backup_proxy_ids.index(backup_id)
+        except ValueError:
+            return False
+        from urllib.parse import urlsplit
+        origin = urlsplit(self._backup_proxy_urls[index])
+        base_url = f"{origin.scheme}://{origin.netloc}"
+        # Derive control authentication from the same deployment secrets used
+        # to verify the standby; never send either raw secret over the network.
+        import os
+        from utils.backup_proxy import secret_key
+        token = os.getenv("DISCORD_BOT_TOKEN", "")
+        session_secret = os.getenv("SESSION_SECRET", "")
+        if not token or not session_secret:
+            return False
+        key = secret_key(token, session_secret)
+        nonce = os.urandom(32).hex()
+        payload = {"action": action, "nonce": nonce, "proof": control_proof(key, action, nonce)}
+        try:
+            response = await asyncio.to_thread(
+                requests.post, f"{base_url}/internal/backup/control", json=payload,
+                timeout=12, allow_redirects=False,
+            )
+            result = response.json()
+            return response.status_code == 200 and result.get("ok") is True
+        except (requests.RequestException, ValueError, AttributeError):
+            return False
+
+    async def _probe_backup(self, url: str) -> dict | None:
+        """Read live health and traffic counters from a registered standby."""
+        from urllib.parse import urlsplit
+
+        origin = urlsplit(url)
+        health_url = f"{origin.scheme}://{origin.netloc}/health"
+        try:
+            response = await asyncio.to_thread(requests.get, health_url, timeout=4, allow_redirects=False)
+            payload = response.json()
+            if response.status_code != 200 or payload.get("service") != "niko-backup-proxy":
+                return None
+            return payload
+        except (requests.RequestException, ValueError, AttributeError):
+            return None
+
+    async def _enable_webshare(self) -> bool:
+        if not self.api_key or self.http is None:
+            return False
+        proxies = self._cached_proxies()
+        if not proxies:
+            try:
+                proxies = await asyncio.wait_for(self._fetch_proxies(), timeout=_FETCH_TIMEOUT_SECONDS)
+            except Exception as exc:
+                self._backup_last_error = str(exc)[:240]
+                logging.error("ProxyManager", f"Failed to fetch Webshare proxies: {exc}")
+                return False
+        if not proxies:
+            self._backup_last_error = "No usable Webshare proxies were returned."
+            return False
+        self._apply_proxy(random.choice(proxies))
+        self._backup_mode = "webshare" if self._backup_mode != "auto" else "auto"
+        self._backup_last_error = None
+        self._webshare_fallback_count += 1
+        return True
+
+    async def activate_backup_async(self, backup_id: str) -> bool:
+        """Manually probe then activate a specific standby."""
+        try:
+            index = self._backup_proxy_ids.index(backup_id)
+        except ValueError:
+            return False
+        if not await self._probe_backup(self._backup_proxy_urls[index]):
+            self._backup_last_error = "Standby health check failed."
+            return False
+        self._backup_mode = "standby"
+        return self.use_backup_proxy(backup_id, manual=True)
+
+    async def rotate_backup(self) -> bool:
+        """Move to the next healthy standby, then use Webshare if needed."""
+        active_backup_id = self.status()["active_backup_id"]
+        active_index = self._backup_proxy_ids.index(active_backup_id) if active_backup_id in self._backup_proxy_ids else self._backup_proxy_index
+        previous_mode = self._backup_mode
+        self.disable()
+        if self._backup_proxy_urls:
+            for offset in range(1, len(self._backup_proxy_urls) + 1):
+                index = (active_index + offset) % len(self._backup_proxy_urls)
+                if await self._probe_backup(self._backup_proxy_urls[index]):
+                    self._backup_mode = "auto"
+                    self._backup_proxy_index = index
+                    return self.use_backup_proxy(self._backup_proxy_ids[index])
+        self._backup_mode = "auto"
+        if self.api_key:
+            return await self._enable_webshare()
+        self._backup_mode = previous_mode
+        self._backup_last_error = "No healthy standby or Webshare proxy is available."
+        return False
+
+    async def probe_backups(self) -> dict[str, dict | None]:
+        """Return live health and usage results for all registered standbys."""
+        results = await asyncio.gather(*(self._probe_backup(url) for url in self._backup_proxy_urls))
+        return dict(zip(self._backup_proxy_ids, results))
 
     async def prefetch(self) -> None:
         """Fetch the Webshare proxy list once at startup (best effort).
@@ -315,6 +492,21 @@ class WebshareProxyManager:
             return {}
         return {"proxies": {"http": self._proxy_url, "https": self._proxy_url}}
 
+    async def _handoff_to_standby(self) -> bool:
+        """Relinquish primary gateway before requesting standby activation."""
+        backup_id = self.status().get("active_backup_id")
+        handoff = getattr(self._bot, "gateway_handoff", None)
+        if not backup_id or handoff is None:
+            return False
+        async with self._handoff_lock:
+            if handoff.active.is_set():
+                await handoff.relinquish()
+            if await self.control_backup(backup_id, "activate"):
+                return True
+            self._backup_last_error = "Healthy standby did not accept the gateway handoff."
+            await handoff.activate()
+            return False
+
     async def check_direct_egress(self) -> bool:
         """Probe Discord before gateway login and arm standby on a Cloudflare block."""
         self._loop = asyncio.get_running_loop()
@@ -332,13 +524,21 @@ class WebshareProxyManager:
             return False
         self._http_egress_blocked = True
         await self.enable(force_backup=True)
+        if self.enabled:
+            await self._handoff_to_standby()
         return self.enabled
 
-    def set_backup_proxies(self, proxy_urls: list[str]) -> None:
+    def set_backup_proxies(self, proxy_urls: list[str], backup_ids: list[str] | None = None) -> None:
         """Set authenticated standby proxy URLs registered by the bot owner."""
-        self._backup_proxy_urls = [url for url in proxy_urls if isinstance(url, str) and url.startswith("https://")]
+        valid = [(backup_ids[index] if backup_ids and index < len(backup_ids) else str(index), url)
+                 for index, url in enumerate(proxy_urls)
+                 if isinstance(url, str) and url.startswith("https://")]
+        self._backup_proxy_ids = [item[0] for item in valid]
+        self._backup_proxy_urls = [item[1] for item in valid]
         self._backup_proxy_index = 0
         if self._proxy_url and self._proxy_url.startswith("https://") and self._proxy_url not in self._backup_proxy_urls:
+            self.disable()
+        if not self._backup_proxy_urls and self._backup_mode == "standby":
             self.disable()
 
     async def enable(self, *, force_backup: bool = False) -> None:
@@ -351,23 +551,29 @@ class WebshareProxyManager:
         async with self._lock:
             if self.enabled and self._proxy_url and not force_backup:
                 return
+            if self._backup_mode == "off":
+                return
+            if self._backup_mode == "standby" and self.enabled:
+                return
+            if self._backup_mode == "webshare":
+                if await self._enable_webshare():
+                    return
+                return
 
-            proxies = self._cached_proxies() if self.api_key and not force_backup else []
-            if self.api_key and not force_backup and not proxies:
-                try:
-                    proxies = await asyncio.wait_for(
-                        self._fetch_proxies(), timeout=_FETCH_TIMEOUT_SECONDS
-                    )
-                except Exception as exc:
-                    logging.error("ProxyManager", f"Failed to fetch Webshare proxies: {exc}")
-            if proxies:
-                self._apply_proxy(random.choice(proxies))
-                return
-            if force_backup and self.enabled:
-                self.disable()
-            if self.use_backup_proxy():
-                return
-            logging.warning("ProxyManager", "No Webshare proxy or registered standby is available — staying on the direct IP.")
+            if self._backup_mode == "auto" or force_backup:
+                start_index = self._backup_proxy_index
+                for offset in range(len(self._backup_proxy_urls)):
+                    index = (start_index + offset) % len(self._backup_proxy_urls)
+                    if await self._probe_backup(self._backup_proxy_urls[index]):
+                        self._backup_proxy_index = index
+                        if self.use_backup_proxy():
+                            return
+                self._backup_last_error = "No registered standby passed its health check."
+                self._backup_mode = "auto"
+                if await self._enable_webshare():
+                    self._backup_mode = "auto"
+                    return
+            logging.warning("ProxyManager", "No healthy standby or Webshare proxy is available — staying on the direct IP.")
 
     def disable(self) -> None:
         """Drop the proxy and go back to the direct IP immediately."""
@@ -377,14 +583,18 @@ class WebshareProxyManager:
         self.enabled = False
         self._proxy_url = None
         self._active_proxy = None
+        if self._backup_mode == "standby":
+            self._backup_mode = "auto"
 
     def rotate(self) -> None:
         """Switch to another cached proxy (used when the active one errors)."""
         proxies = self._cached_proxies()
         if self._active_proxy is None and len(self._backup_proxy_urls) > 1:
-            self._backup_proxy_index += 1
-            url = self._backup_proxy_urls[self._backup_proxy_index % len(self._backup_proxy_urls)]
+            self._backup_proxy_index = (self._backup_proxy_index + 1) % len(self._backup_proxy_urls)
+            url = self._backup_proxy_urls[self._backup_proxy_index]
             self._proxy_url = url
+            self._backup_last_changed_at = time.time()
+            self._failover_count += 1
             if self.http is not None:
                 self.http.proxy = url
                 self.http.proxy_auth = None
@@ -399,7 +609,11 @@ class WebshareProxyManager:
             f"http://{proxy['username']}:{proxy['password']}"
             f"@{proxy['proxy_address']}:{proxy['port']}"
         )
+        self._backup_last_error = None
+        self._backup_last_changed_at = time.time()
         self._active_proxy = proxy
+        if self._backup_mode == "auto":
+            self._backup_last_changed_at = time.time()
         if self.http is not None:
             self.http.proxy = self._proxy_url
             self.http.proxy_auth = None
@@ -529,17 +743,42 @@ class WebshareProxyManager:
             self._verify_task = asyncio.create_task(self._verify_loop())
 
     async def _verify_loop(self) -> None:
-        """Probe the direct IP every 10 minutes until the limit has cleared."""
+        """Probe direct egress periodically and coordinate gateway ownership return."""
         while True:
             try:
-                await asyncio.sleep(VERIFY_INTERVAL_SECONDS)
+                await asyncio.sleep(self._verify_interval)
                 if not self.enabled:
                     return
-                if await self._probe_direct():
-                    logging.success(
-                        "ProxyManager",
-                        "Direct IP confirmed no longer rate limited — proxy disabled.",
-                    )
+                handoff = getattr(self._bot, "gateway_handoff", None)
+                if handoff is not None and not handoff.active.is_set():
+                    if not await self._probe_direct():
+                        continue
+                    async with self._handoff_lock:
+                        if handoff.active.is_set():
+                            continue
+                        backup_id = self.status().get("active_backup_id")
+                        if not backup_id:
+                            continue
+                        if not await self.control_backup(backup_id, "relinquish"):
+                            continue
+                        handoff.refresh_caches_on_ready = True
+                        await handoff.activate()
+                        self.disable()
+                        try:
+                            await asyncio.wait_for(handoff.connected.wait(), timeout=45)
+                        except asyncio.TimeoutError:
+                            await handoff.relinquish()
+                            if not await self.control_backup(backup_id, "activate"):
+                                handoff.refresh_caches_on_ready = True
+                                await handoff.activate()
+                                logging.warning("ProxyManager", "Standby activation failed after primary timeout; continuing primary reconnect attempts.")
+                                continue
+                            self.use_backup_proxy(backup_id)
+                            logging.warning("ProxyManager", "Direct egress probe passed but primary gateway could not connect; standby remains active.")
+                            continue
+                        logging.success("ProxyManager", "Primary gateway restored; standby returned to ready state.")
+                        return
+                elif handoff is None and await self._probe_direct():
                     self.disable()
                     return
             except asyncio.CancelledError:

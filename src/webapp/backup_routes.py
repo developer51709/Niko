@@ -28,7 +28,10 @@ def _sync_backup_proxy_manager(bot, rows):
     if manager is None:
         return
     key = _backup_key()
-    manager.set_backup_proxies([backup_proxy_url(row["url"], key) for row in rows])
+    manager.set_backup_proxies(
+        [backup_proxy_url(row["url"], key) for row in rows],
+        [row["id"] for row in rows],
+    )
     # Wrap static_login even before the Discord HTTP session exists. If a
     # startup probe already selected standby, attach() applies it after login.
     manager.attach(bot)
@@ -111,7 +114,47 @@ def api_staff_backups():
         return jsonify({"error": str(exc)}), 503
     except Exception:
         return jsonify({"error": "Persistent backup registry is unavailable."}), 503
-    return jsonify({"backups": rows})
+    manager = getattr(_discord_bot, "proxy_manager", None)
+    state = manager.status() if manager is not None else {}
+    health = run_on_bot_loop(manager.probe_backups()) if manager is not None else {}
+    for row in rows:
+        stats = health.get(row["id"])
+        row["health"] = "online" if stats else "offline"
+        row["stats"] = stats
+        row["active"] = state.get("active_backup_id") == row["id"]
+    return jsonify({"backups": rows, "failover": state})
+
+
+@app.route("/api/staff/backups/failover", methods=["POST"])
+@require_auth
+@require_csrf
+def api_control_staff_backup_failover():
+    error = _owner_only()
+    if error:
+        return error
+    manager = getattr(_discord_bot, "proxy_manager", None)
+    if manager is None:
+        return jsonify({"error": "Proxy failover manager is unavailable."}), 503
+    body = request.get_json(silent=True) or {}
+    action = body.get("action")
+    try:
+        if action == "mode":
+            mode = body.get("mode")
+            if mode not in {"auto", "off", "webshare"}:
+                return jsonify({"error": "Choose auto, off, or webshare mode."}), 400
+            changed = run_on_bot_loop(manager.select_failover(mode))
+        elif action == "activate":
+            backup_id = str(body.get("backup_id", ""))
+            changed = run_on_bot_loop(manager.activate_backup_async(backup_id))
+        elif action == "rotate":
+            changed = run_on_bot_loop(manager.rotate_backup())
+        else:
+            return jsonify({"error": "Unknown failover action."}), 400
+    except Exception:
+        return jsonify({"error": "Failover control could not be completed."}), 503
+    if not changed:
+        return jsonify({"error": manager.status().get("last_error") or "The selected route is unavailable."}), 503
+    return jsonify({"ok": True, "failover": manager.status()})
 
 
 @app.route("/api/staff/backups", methods=["POST"])

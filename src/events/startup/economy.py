@@ -18,6 +18,9 @@ async def preload_economy_cache(bot):
         logging.warning("Economy", "EconomyCog not loaded; skipping economy cache warm-up.")
         return
     try:
+        # Drop stale rows from a standby's long-lived memory before querying
+        # the shared database again during gateway ownership transitions.
+        cog.economy_data.clear()
         await cog.prime_cache()
     except Exception as exc:
         logging.error("Economy", f"Failed to warm up economy cache: {exc}")

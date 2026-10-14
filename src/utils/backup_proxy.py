@@ -1,8 +1,8 @@
 """TLS CONNECT proxy service used by a standby Niko deployment.
 
-A backup never logs in to Discord. It only serves authenticated CONNECT tunnels
-for Discord hosts after proving it has the production bot token and Flask
-session secret.
+A standby logs in and preloads the production bot and cogs but holds its Discord
+gateway closed until a signed handoff command activates it. It also serves
+authenticated CONNECT tunnels for Discord hosts.
 """
 from __future__ import annotations
 
@@ -14,7 +14,14 @@ import ipaddress
 import json
 import os
 import ssl
+import time
 from urllib.parse import urlsplit
+
+_STATS = {"started_at": time.time(), "total_tunnels": 0, "active_tunnels": 0, "bytes_in": 0, "bytes_out": 0}
+_CONTROL_NONCES: set[str] = set()
+_MAX_CONTROL_NONCES = 2048
+_GATEWAY_CONTROLLER = None
+_CONTROL_LOCK = asyncio.Lock()
 
 _ALLOWED_SUFFIXES = (".discord.com", ".discordapp.com", ".discord.gg", ".discord.media", ".discordapp.net")
 _ALLOWED_EXACT = {"discord.com", "discordapp.com", "discord.gg", "discord.media", "discordapp.net"}
@@ -31,6 +38,11 @@ def verification_proof(key: bytes, nonce: str) -> str:
 
 def proxy_password(key: bytes) -> str:
     return hmac.new(key, b"niko-backup-proxy", hashlib.sha256).hexdigest()
+
+
+def control_proof(key: bytes, action: str, nonce: str) -> str:
+    """Sign one gateway ownership command."""
+    return hmac.new(key, f"niko-backup-control:{action}:{nonce}".encode(), hashlib.sha256).hexdigest()
 
 
 def backup_proxy_url(base_url: str, key: bytes) -> str:
@@ -71,9 +83,10 @@ async def _write_response(writer: asyncio.StreamWriter, status: int, body: dict)
     await writer.drain()
 
 
-async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, byte_counter: str) -> None:
     try:
         while chunk := await reader.read(64 * 1024):
+            _STATS[byte_counter] += len(chunk)
             writer.write(chunk)
             await writer.drain()
     except (ConnectionError, asyncio.CancelledError):
@@ -85,12 +98,54 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
             pass
 
 
+def _dispatch_web_request(web_app, method: str, target: str, headers: dict, body: bytes) -> bytes:
+    """Dispatch one ordinary HTTP request to Flask and serialize its response."""
+    from werkzeug.test import EnvironBuilder, run_wsgi_app
+
+    host = headers.get("host", "localhost")
+    scheme = "https" if headers.get("x-forwarded-proto", "").split(",", 1)[0].strip() == "https" else "http"
+    forwarded_headers = {
+        name: value for name, value in headers.items()
+        if name.lower() not in {"host", "connection", "proxy-authorization", "proxy-connection", "content-length", "transfer-encoding"}
+    }
+    builder = EnvironBuilder(
+        path=target,
+        method=method,
+        base_url=f"{scheme}://{host}",
+        headers=forwarded_headers,
+        data=body,
+    )
+    environ = builder.get_environ()
+    app_iter, status, response_headers = run_wsgi_app(web_app, environ, buffered=True)
+    payload = b"".join(app_iter)
+    builder.close()
+
+    status_code = int(status.split(" ", 1)[0])
+    reason = status.partition(" ")[2] or "Unknown"
+    serialized_headers = [
+        (name, value) for name, value in response_headers
+        if name.lower() not in {"connection", "content-length", "transfer-encoding"}
+    ]
+    serialized_headers.extend([
+        ("Content-Length", str(len(payload))),
+        ("Connection", "close"),
+    ])
+    response = bytearray(f"HTTP/1.1 {status_code} {reason}\r\n".encode("latin-1"))
+    for name, value in serialized_headers:
+        response.extend(f"{name}: {value}\r\n".encode("latin-1"))
+    response.extend(b"\r\n")
+    response.extend(payload)
+    return bytes(response)
+
+
 async def _handle_client(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     key: bytes,
+    web_app=None,
 ) -> None:
     upstream_writer = None
+
     try:
         raw = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=10)
         if len(raw) > _MAX_HEADERS:
@@ -108,8 +163,57 @@ async def _handle_client(
                 name, value = line.split(":", 1)
                 headers[name.strip().lower()] = value.strip()
 
-        if method == "GET" and target in ("/", "/health"):
-            await _write_response(writer, 200, {"ok": True, "service": "niko-backup-proxy"})
+        if method == "GET" and target == "/health":
+            await _write_response(writer, 200, {
+                "ok": True,
+                "service": "niko-backup-proxy",
+                "uptime_seconds": max(0, int(time.time() - _STATS["started_at"])),
+                "total_tunnels": _STATS["total_tunnels"],
+                "active_tunnels": _STATS["active_tunnels"],
+                "bytes_in": _STATS["bytes_in"],
+                "bytes_out": _STATS["bytes_out"],
+            })
+            return
+
+        if method == "POST" and target == "/internal/backup/control":
+            try:
+                length = int(headers.get("content-length", "0"))
+                if not 0 < length <= 1024:
+                    raise ValueError
+                body = json.loads(await asyncio.wait_for(reader.readexactly(length), timeout=3))
+                action, nonce, proof = body.get("action"), body.get("nonce"), body.get("proof")
+                if action not in {"activate", "relinquish"}:
+                    raise ValueError
+                if not isinstance(nonce, str) or not 32 <= len(nonce) <= 128:
+                    raise ValueError
+                expected = control_proof(key, action, nonce)
+                if not isinstance(proof, str) or not hmac.compare_digest(proof, expected):
+                    await _write_response(writer, 403, {"error": "Invalid control proof."})
+                    return
+            except (ValueError, TypeError, json.JSONDecodeError, asyncio.IncompleteReadError):
+                await _write_response(writer, 400, {"error": "Invalid control request."})
+                return
+            controller = _GATEWAY_CONTROLLER
+            if controller is None:
+                await _write_response(writer, 503, {"error": "Standby gateway is not ready."})
+                return
+            async with _CONTROL_LOCK:
+                if nonce in _CONTROL_NONCES:
+                    await _write_response(writer, 403, {"error": "Control request was already used."})
+                    return
+                try:
+                    if action == "activate":
+                        await controller.activate()
+                    else:
+                        await controller.relinquish()
+                except Exception:
+                    await _write_response(writer, 503, {"error": "Gateway handoff failed."})
+                    return
+                _CONTROL_NONCES.add(nonce)
+                if len(_CONTROL_NONCES) > _MAX_CONTROL_NONCES:
+                    _CONTROL_NONCES.clear()
+                    _CONTROL_NONCES.add(nonce)
+            await _write_response(writer, 200, {"ok": True, "gateway": "active" if action == "activate" else "standby"})
             return
 
         if method == "POST" and target == "/internal/backup/verify":
@@ -128,9 +232,28 @@ async def _handle_client(
             return
 
         if method != "CONNECT":
-            await _write_response(writer, 404, {"error": "Not found."})
+            if web_app is None:
+                await _write_response(writer, 404, {"error": "Not found."})
+                return
+            if not target.startswith("/") or target.startswith("//") or "transfer-encoding" in headers:
+                await _write_response(writer, 400, {"error": "Invalid HTTP request."})
+                return
+            try:
+                content_length = int(headers.get("content-length", "0"))
+                if content_length < 0 or content_length > 8 * 1024 * 1024:
+                    raise ValueError
+                body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10) if content_length else b""
+            except (ValueError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+                await _write_response(writer, 400, {"error": "Invalid HTTP request body."})
+                return
+            response = await asyncio.to_thread(
+                _dispatch_web_request, web_app, method, target, headers, body
+            )
+            writer.write(response)
+            await writer.drain()
             return
         auth = headers.get("proxy-authorization", "")
+
         try:
             scheme, encoded = auth.split(" ", 1)
             credentials = base64.b64decode(encoded, validate=True).decode()
@@ -154,7 +277,12 @@ async def _handle_client(
             return
         writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await writer.drain()
-        await asyncio.gather(_pipe(reader, upstream_writer), _pipe(upstream_reader, writer))
+        _STATS["total_tunnels"] += 1
+        _STATS["active_tunnels"] += 1
+        try:
+            await asyncio.gather(_pipe(reader, upstream_writer, "bytes_in"), _pipe(upstream_reader, writer, "bytes_out"))
+        finally:
+            _STATS["active_tunnels"] = max(0, _STATS["active_tunnels"] - 1)
     except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, UnicodeError, asyncio.TimeoutError, ConnectionError):
         pass
     finally:
@@ -178,6 +306,8 @@ async def serve_backup_proxy(
     keyfile: str | None,
     bot_token: str,
     session_secret: str,
+    gateway_controller=None,
+    web_app=None,
 ):
     """Bind a CONNECT proxy; Render terminates TLS when no cert is configured."""
     if not bot_token or not session_secret:
@@ -191,8 +321,10 @@ async def serve_backup_proxy(
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     key = secret_key(bot_token, session_secret)
+    global _GATEWAY_CONTROLLER
+    _GATEWAY_CONTROLLER = gateway_controller
     server = await asyncio.start_server(
-        lambda r, w: _handle_client(r, w, key), host, port, ssl=context,
+        lambda r, w: _handle_client(r, w, key, web_app=web_app), host, port, ssl=context,
         limit=_MAX_HEADERS + 1,
     )
     return server

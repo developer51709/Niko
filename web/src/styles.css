@@ -255,6 +255,29 @@ em { color: var(--accent); font-style: normal; }
   .support-contact-card > .button { width: 100%; }
 }
 
+/* Owner failover monitoring */
+.backup-toolbar { align-items: center; flex-wrap: wrap; }
+.backup-live-label { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+.backup-live-label i { width: 7px; height: 7px; background: var(--sage); border-radius: 50%; box-shadow: 0 0 0 3px rgba(119, 159, 128, .14); }
+.backup-mode-actions, .backup-manual-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.backup-overview, .backup-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.backup-overview > div, .backup-stats-grid > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.backup-overview strong, .backup-stats-grid strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; font-size: 12px; }
+.backup-card-toggle { width: 100%; text-align: left; border: 0; cursor: pointer; }
+.backup-active-tag { padding: 4px 7px; color: var(--sage); background: rgba(119, 159, 128, .12); border-radius: 999px; font: 9px "Space Mono", monospace; text-transform: uppercase; }
+.backup-card-details { padding: 5px 16px 16px 65px; }
+.backup-card-details .backup-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.backup-card-details .backup-stats-grid > div { padding: 11px; }
+.backup-manual-actions { padding-top: 5px; }
+@media (max-width: 700px) {
+  .backup-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .backup-card-details { padding-left: 15px; }
+}
+@media (max-width: 460px) {
+  .backup-card-details .backup-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .backup-mode-actions .button { flex: 1 1 auto; }
+}
+
 /* AI experiment dialog and aligned controls */
 .dashboard-layout .experiment-actions { align-items: center; gap: 14px; }
 .dashboard-layout .toggle-control { position: relative; display: inline-flex; align-items: center; min-height: 34px; padding: 6px 0; cursor: pointer; }

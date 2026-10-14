@@ -18,6 +18,7 @@ import type {
   StaffBlacklist,
   BlacklistAppeal,
   BlacklistAppealStatus,
+  BackupFailoverStatus,
   BackupInstance,
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
@@ -68,7 +69,8 @@ export const getTeamRecruitmentSubmissions = (openingId: string) => api<{ openin
 export const reviewTeamRecruitmentSubmission = (openingId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied" }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions/${encodeURIComponent(userId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
-export const getStaffBackups = () => api<{ backups: BackupInstance[] }>("/api/staff/backups");
+export const getStaffBackups = () => api<{ backups: BackupInstance[]; failover: BackupFailoverStatus }>("/api/staff/backups");
+export const controlStaffBackupFailover = (body: { action: "mode"; mode: "auto" | "off" | "webshare" } | { action: "activate"; backup_id: string } | { action: "rotate" }, csrfToken?: string) => api<{ ok: boolean; failover: BackupFailoverStatus }>("/api/staff/backups/failover", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const addStaffBackup = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean; backup: BackupInstance }>("/api/staff/backups", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
 export const removeStaffBackup = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/backups/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const saveStaffProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });

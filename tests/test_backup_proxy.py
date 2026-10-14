@@ -7,6 +7,7 @@ from utils.backup_proxy import (
     _allowed_host,
     _handle_client,
     backup_proxy_url,
+    control_proof,
     proxy_password,
     secret_key,
     verification_proof,
@@ -106,6 +107,28 @@ class BackupProxyTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_shared_listener_dispatches_web_api_and_preserves_proxy_handlers(self):
+        from flask import Flask, jsonify
+
+        web_app = Flask(__name__)
+
+        @web_app.get("/api/test")
+        def api_test():
+            return jsonify({"served_by": "flask"})
+
+        async def scenario():
+            key = secret_key("token", "session")
+            request = b"GET /api/test HTTP/1.1\r\nHost: standby.example\r\n\r\n"
+            reader = asyncio.StreamReader()
+            reader.feed_data(request)
+            reader.feed_eof()
+            writer = FakeWriter()
+            await _handle_client(reader, writer, key, web_app=web_app)
+            self.assertIn(b"HTTP/1.1 200 OK", writer.data)
+            self.assertIn(b'"served_by":"flask"', writer.data)
+
+        asyncio.run(scenario())
+
     def test_render_mode_starts_without_certificate_files(self):
         from utils.backup_proxy import serve_backup_proxy
 
@@ -114,6 +137,149 @@ class BackupProxyTests(unittest.TestCase):
             self.assertIsNotNone(server.sockets)
             server.close()
             await server.wait_closed()
+
+        asyncio.run(scenario())
+
+    def test_authenticated_control_endpoint_activates_standby_once(self):
+        from utils import backup_proxy
+
+        class Controller:
+            def __init__(self):
+                self.actions = []
+
+            async def activate(self):
+                self.actions.append("activate")
+
+            async def relinquish(self):
+                self.actions.append("relinquish")
+
+        async def request(key, action, nonce, proof):
+            body = __import__("json").dumps({"action": action, "nonce": nonce, "proof": proof}).encode()
+            crlf = bytes((13, 10))
+            raw = b"POST /internal/backup/control HTTP/1.1" + crlf + b"Content-Length: " + str(len(body)).encode() + crlf + crlf + body
+            reader = asyncio.StreamReader()
+            reader.feed_data(raw)
+            reader.feed_eof()
+            writer = FakeWriter()
+            await _handle_client(reader, writer, key)
+            return writer.data
+
+        async def scenario():
+            key = secret_key("token", "session")
+            controller = Controller()
+            backup_proxy._GATEWAY_CONTROLLER = controller
+            backup_proxy._CONTROL_NONCES.clear()
+            nonce = "gateway-handoff-test-nonce-00000001"
+            proof = control_proof(key, "activate", nonce)
+            response = await request(key, "activate", nonce, proof)
+            self.assertIn(b"200 OK", response)
+            self.assertEqual(["activate"], controller.actions)
+            replay = await request(key, "activate", nonce, proof)
+            self.assertIn(b"403", replay)
+            self.assertEqual(["activate"], controller.actions)
+            invalid = await request(key, "relinquish", "gateway-handoff-test-nonce-00000002", proof)
+            self.assertIn(b"403", invalid)
+            backup_proxy._GATEWAY_CONTROLLER = None
+            backup_proxy._CONTROL_NONCES.clear()
+
+        asyncio.run(scenario())
+
+    def test_gateway_handoff_disconnects_shards_without_closing_client(self):
+        from utils.gateway_failover import GatewayHandoff
+
+        class Shard:
+            def __init__(self):
+                self.closed = False
+
+            async def close(self):
+                self.closed = True
+
+        class Bot:
+            def __init__(self):
+                self._AutoShardedClient__shards = {0: Shard()}
+
+            async def connect(self, reconnect=True):
+                await asyncio.Event().wait()
+
+        async def scenario():
+            bot = Bot()
+            handoff = GatewayHandoff(bot, active=True)
+            supervisor = asyncio.create_task(handoff.run())
+            await asyncio.sleep(0)
+            shard = bot._AutoShardedClient__shards[0]
+            await handoff.relinquish()
+            self.assertTrue(shard.closed)
+            self.assertFalse(bot._AutoShardedClient__shards)
+            self.assertFalse(handoff.active.is_set())
+            self.assertFalse(handoff.stopping)
+            handoff.stopping = True
+            supervisor.cancel()
+            await asyncio.gather(supervisor, return_exceptions=True)
+
+        asyncio.run(scenario())
+
+    def test_primary_reclaims_only_after_standby_relinquishes(self):
+        from types import SimpleNamespace
+        from utils.gateway_failover import GatewayHandoff
+
+        async def scenario():
+            events = []
+
+            class Bot:
+                _AutoShardedClient__shards = {}
+
+                async def connect(self, reconnect=True):
+                    events.append("primary-connect")
+                    handoff.mark_connected()
+
+            async def control(backup_id, action):
+                events.append(f"standby-{action}")
+                return True
+
+            bot = Bot()
+            handoff = GatewayHandoff(bot)
+            bot.gateway_handoff = handoff
+            manager = WebshareProxyManager(None)
+            manager.http = type("Http", (), {"proxy": "https://backup.example", "proxy_auth": None})()
+            manager._backup_proxy_urls = ["https://niko-backup:pass@backup.example.org"]
+            manager._backup_proxy_ids = ["standby-1"]
+            manager._proxy_url = manager._backup_proxy_urls[0]
+            manager.enabled = True
+            manager._bot = bot
+            manager._probe_direct = lambda: asyncio.sleep(0, result=True)
+            manager.control_backup = control
+            manager._verify_interval = 0
+            handoff.active.clear()
+            supervisor = asyncio.create_task(handoff.run())
+            await manager._verify_loop()
+            await asyncio.sleep(0)
+            self.assertEqual(["standby-relinquish", "primary-connect"], events)
+            self.assertTrue(handoff.connected.is_set())
+            self.assertFalse(manager.enabled)
+            handoff.stopping = True
+            supervisor.cancel()
+            await asyncio.gather(supervisor, return_exceptions=True)
+
+        asyncio.run(scenario())
+
+    def test_economy_cache_refresh_discards_stale_entries(self):
+        from events.startup.economy import preload_economy_cache
+
+        class Cog:
+            def __init__(self):
+                self.economy_data = {"stale": {"balance": 100}}
+                self.primed = False
+
+            async def prime_cache(self):
+                self.primed = True
+                self.economy_data["fresh"] = {"balance": 50}
+
+        async def scenario():
+            cog = Cog()
+            await preload_economy_cache(type("Bot", (), {"get_cog": lambda self, name: cog})())
+            self.assertTrue(cog.primed)
+            self.assertNotIn("stale", cog.economy_data)
+            self.assertIn("fresh", cog.economy_data)
 
         asyncio.run(scenario())
 
@@ -182,7 +348,7 @@ class BackupProxyTests(unittest.TestCase):
                 "headers": {},
                 "text": "<!doctype html><div id=\"cf-error-details\">Cloudflare Ray ID: test-ray</div>",
             })()
-            with patch("utils.proxy_manager.requests.get", return_value=response), patch.object(manager, "_ensure_verify_task"):
+            with patch("utils.proxy_manager.requests.get", return_value=response), patch.object(manager, "_probe_backup", return_value={"service": "niko-backup-proxy"}), patch.object(manager, "_ensure_verify_task"):
                 self.assertTrue(await manager.check_direct_egress())
             self.assertTrue(manager.enabled)
             self.assertEqual(manager._backup_proxy_urls[0], manager.http.proxy)
@@ -229,7 +395,7 @@ class BackupProxyTests(unittest.TestCase):
                 return {"id": "bot-user"}
 
             http.static_login = static_login
-            with patch.object(manager, "_ensure_verify_task"):
+            with patch.object(manager, "_probe_backup", return_value={"service": "niko-backup-proxy"}), patch.object(manager, "_ensure_verify_task"):
                 self.assertTrue(manager.attach(bot))
                 result = await http.static_login("secret-token")
 
@@ -267,12 +433,100 @@ class BackupProxyTests(unittest.TestCase):
         self.assertIn("proxies", calls[1][1])
         self.assertEqual(manager._proxy_url, calls[1][1]["proxies"]["https"])
 
+    def test_manager_selects_healthy_standby_before_webshare(self):
+        async def scenario():
+            manager = WebshareProxyManager("api-key")
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+            with patch.object(manager, "_probe_backup", return_value=True), patch.object(manager, "_ensure_verify_task"), patch.object(manager, "_fetch_proxies") as fetch:
+                await manager.enable()
+            self.assertEqual("https://niko-backup:pass@backup.example.org", manager.http.proxy)
+            self.assertEqual("standby-1", manager.status()["active_backup_id"])
+            fetch.assert_not_called()
+        asyncio.run(scenario())
+
+    def test_manager_uses_webshare_when_no_standby_is_healthy(self):
+        async def scenario():
+            manager = WebshareProxyManager("api-key")
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+            proxy = {"username": "u", "password": "p", "proxy_address": "proxy.example", "port": 80}
+            with patch.object(manager, "_probe_backup", return_value=None), patch.object(manager, "_cached_proxies", return_value=[proxy]), patch.object(manager, "_ensure_verify_task"):
+                await manager.enable()
+            self.assertTrue(manager.enabled)
+            self.assertTrue(manager.status()["using_webshare"])
+            self.assertEqual("auto", manager.status()["mode"])
+            self.assertEqual(1, manager.status()["webshare_fallback_count"])
+        asyncio.run(scenario())
+
+    def test_manual_backup_activation_requires_healthy_registered_id(self):
+        async def scenario():
+            manager = WebshareProxyManager(None)
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+            with patch.object(manager, "_probe_backup", return_value={"service": "niko-backup-proxy"}), patch.object(manager, "_ensure_verify_task"):
+                self.assertTrue(await manager.activate_backup_async("standby-1"))
+                self.assertFalse(await manager.activate_backup_async("unknown"))
+            self.assertEqual("standby-1", manager.status()["active_backup_id"])
+        asyncio.run(scenario())
+
+    def test_backup_health_exposes_counters_but_not_proxy_credentials(self):
+        async def scenario():
+            from utils import backup_proxy
+            backup_proxy._STATS.update({"total_tunnels": 7, "active_tunnels": 2, "bytes_in": 1024, "bytes_out": 2048})
+            reader = asyncio.StreamReader()
+            reader.feed_data(b"GET /health HTTP/1.1\r\nHost: standby.example\r\n\r\n")
+            reader.feed_eof()
+            writer = FakeWriter()
+            await _handle_client(reader, writer, secret_key("token", "session"))
+            response = writer.data.decode()
+            self.assertIn('"total_tunnels":7', response)
+            self.assertIn('"bytes_in":1024', response)
+            self.assertNotIn("niko-backup:", response)
+        asyncio.run(scenario())
+
+    def test_manual_backup_route_can_override_direct_off_mode(self):
+        manager = WebshareProxyManager(None)
+        manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+        manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+        manager._backup_mode = "off"
+        with patch.object(manager, "_ensure_verify_task"):
+            self.assertTrue(manager.activate_backup("standby-1"))
+        self.assertEqual("standby-1", manager.status()["active_backup_id"])
+        self.assertEqual("standby", manager.status()["mode"])
+
+    def test_force_backup_respects_direct_off_mode(self):
+        async def scenario():
+            manager = WebshareProxyManager("api-key")
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager._backup_mode = "off"
+            with patch.object(manager, "_probe_backup") as probe, patch.object(manager, "_fetch_proxies") as fetch:
+                await manager.enable(force_backup=True)
+            probe.assert_not_called()
+            fetch.assert_not_called()
+            self.assertFalse(manager.enabled)
+
+        asyncio.run(scenario())
+
+    def test_manual_backup_can_activate_when_direct_off_mode(self):
+        async def scenario():
+            manager = WebshareProxyManager(None)
+            manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+            manager._backup_mode = "off"
+            with patch.object(manager, "_probe_backup", return_value={"service": "niko-backup-proxy"}), patch.object(manager, "_ensure_verify_task"):
+                self.assertTrue(await manager.activate_backup_async("standby-1"))
+            self.assertTrue(manager.enabled)
+            self.assertEqual("standby-1", manager.status()["active_backup_id"])
+
+        asyncio.run(scenario())
+
     def test_manager_falls_back_to_registered_standby(self):
         async def scenario():
             manager = WebshareProxyManager(None)
             manager.http = type("Http", (), {"proxy": None, "proxy_auth": None})()
-            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"])
-            with patch.object(manager, "_ensure_verify_task"):
+            manager.set_backup_proxies(["https://niko-backup:pass@backup.example.org"], ["standby-1"])
+            with patch.object(manager, "_probe_backup", return_value=True), patch.object(manager, "_ensure_verify_task"):
                 await manager.enable()
             self.assertEqual("https://niko-backup:pass@backup.example.org", manager.http.proxy)
             self.assertTrue(manager.enabled)

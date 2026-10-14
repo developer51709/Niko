@@ -76,10 +76,32 @@ bot.tree.interaction_check = _slash_blacklist_check
 
 
 # ── Events ───────────────────────────────────────────────────────────────────
+async def _refresh_handoff_caches(bot):
+    """Refresh database-backed caches before the bot resumes serving events."""
+    from events.startup.economy import preload_economy_cache
+    from utils.blacklist_manager import BlacklistManager
+
+    manager = BlacklistManager()
+    manager._loaded = False
+    await manager.reload()
+    await preload_economy_cache(bot)
+
+
+async def _on_gateway_ready(bot):
+    handoff = getattr(bot, "gateway_handoff", None)
+    if handoff is not None and handoff.refresh_caches_on_ready:
+        await _refresh_handoff_caches(bot)
+        handoff.refresh_caches_on_ready = False
+    await handle_ready(bot)
+
+
 @bot.event
 async def on_ready():
     try:
-        await handle_ready(bot)
+        await _on_gateway_ready(bot)
+        handoff = getattr(bot, "gateway_handoff", None)
+        if handoff is not None:
+            handoff.mark_connected()
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
 
@@ -110,22 +132,6 @@ if __name__ == "__main__":
             pass
 
     async def main():
-        if os.getenv("BACKUP_MODE", "").lower() in {"1", "true", "yes"}:
-            from utils.backup_proxy import serve_backup_proxy
-
-            server = await serve_backup_proxy(
-                os.getenv("BACKUP_PROXY_HOST", "0.0.0.0"),
-                int(os.getenv("PORT", os.getenv("BACKUP_PROXY_PORT", "10000"))),
-                os.getenv("BACKUP_TLS_CERT") or None,
-                os.getenv("BACKUP_TLS_KEY") or None,
-                os.getenv("DISCORD_BOT_TOKEN", ""),
-                os.getenv("SESSION_SECRET", ""),
-            )
-            logging.info("Backup", "Standby proxy online; this instance will not connect to Discord.")
-            async with server:
-                await server.serve_forever()
-            return
-
         if not TOKEN:
             logging.error(
                 "Startup",
@@ -135,26 +141,29 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
-        # Load registered standbys before the gateway login attempt. Waiting
-        # until on_ready is too late when the production egress IP is blocked.
-        if os.getenv("MONGODB_URL"):
+        backup_mode = os.getenv("BACKUP_MODE", "").lower() in {"1", "true", "yes"}
+        from utils.gateway_failover import GatewayHandoff
+        handoff = GatewayHandoff(bot, active=not backup_mode)
+        bot.gateway_handoff = handoff
+
+        # Load standby endpoints before Discord login so the wrapped
+        # static_login can switch to a warm backup if egress is challenged.
+        if not backup_mode and os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
                 from webapp.backup_routes import initialize_backup_registry
-
                 await initialize_backup_registry(bot)
             except Exception as e:
                 logging.warning("ProxyManager", f"Could not preload standby instances: {e}")
+        if not backup_mode and bot.proxy_manager is not None:
+            bot.proxy_manager.attach(bot)
 
-        start_api_server(bot)
-        logging.info("Startup", "Dashboard API started alongside the bot.")
+        if not backup_mode:
+            start_api_server(bot)
+            logging.info("Startup", "Dashboard API started alongside the bot.")
 
         device_choice = STATUS_DEVICE
         patch_identify(device_choice)
-
-        if bot.proxy_manager is not None:
-            await bot.proxy_manager.prefetch()
-            await bot.proxy_manager.check_direct_egress()
 
         loop = asyncio.get_running_loop()
 
@@ -166,10 +175,48 @@ if __name__ == "__main__":
                 pass
 
         try:
-            await bot.start(str(TOKEN))
+            # Login, initialize the shared database, and load all cogs before
+            # gateway ownership is enabled, so the standby is warm on demand.
+            await bot.login(str(TOKEN))
+            from events.startup.database import init_database
+            from events.startup.loader import load_cogs
+            from events.startup.economy import preload_economy_cache
+            await init_database(bot)
+            await load_cogs(bot)
+            await preload_economy_cache(bot)
+            bot._pre_gateway_initialized = True
+            if bot.proxy_manager is not None:
+                if backup_mode:
+                    bot.proxy_manager.attach(bot)
+                await bot.proxy_manager.prefetch()
+            if backup_mode:
+                from utils.backup_proxy import serve_backup_proxy
+                from webapp import app as web_app, configure_bot
+                configure_bot(bot)
+                server = await serve_backup_proxy(
+                    os.getenv("BACKUP_PROXY_HOST", "0.0.0.0"),
+                    int(os.getenv("PORT", os.getenv("BACKUP_PROXY_PORT", "10000"))),
+                    os.getenv("BACKUP_TLS_CERT") or None,
+                    os.getenv("BACKUP_TLS_KEY") or None,
+                    os.getenv("DISCORD_BOT_TOKEN", ""),
+                    os.getenv("SESSION_SECRET", ""),
+                    handoff,
+                    web_app=web_app,
+                )
+                logging.info("Backup", "Standby bot logged in with caches/cogs loaded; gateway remains inactive.")
+                async with server:
+                    await handoff.run()
+            else:
+                if bot.proxy_manager is not None:
+                    await bot.proxy_manager.check_direct_egress()
+                await handoff.run()
         except Exception as e:
             logging.error("Startup", f"Error connecting to Discord: {e}")
         finally:
+            try:
+                await handoff.shutdown()
+            except Exception:
+                pass
             try:
                 await bot.close()
             except Exception:
