@@ -247,7 +247,7 @@ class Leveling(commands.Cog):
         )
         view = discord.ui.LayoutView()
         accent_rgb = cfg.get("card_accent")
-        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(0xFFC45C)
+        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(ACCENT_BRAND)
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=embed_text),
             accent_colour=accent_colour,
@@ -312,7 +312,7 @@ class Leveling(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media="attachment://level_card.png")),
-            accent_colour=discord.Colour.from_rgb(*accent) if accent else discord.Colour(0xFFC45C),
+            accent_colour=discord.Colour.from_rgb(*accent) if accent else discord.Colour(ACCENT_BRAND),
         )
         view.add_item(container)
         await ctx.send(file=file, view=view)
@@ -519,7 +519,7 @@ class Leveling(commands.Cog):
         text = msg(ctx, "cfg_show", guild=ctx.guild.name, body=body)
 
         accent_rgb = cfg.get("card_accent")
-        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(0xFFC45C)
+        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(ACCENT_BRAND)
 
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(

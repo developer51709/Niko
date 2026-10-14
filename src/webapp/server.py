@@ -111,7 +111,7 @@ def configure_bot(bot) -> None:
         "webapp.dashboard_routes", "webapp.donation_routes",
         "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
         "webapp.application_routes", "webapp.team_recruitment_routes", "webapp.site_routes", "webapp.appeal_routes",
-        "webapp.standby_routes",
+        "webapp.standby_routes", "webapp.economy_routes",
     ):
         module = sys.modules.get(module_name)
         if module is not None:
@@ -324,9 +324,19 @@ def save_json(path: str, data):
 
 
 def bot_guild_ids() -> set:
-    """Return the set of guild IDs the bot is currently in."""
+    """Return the set of guild IDs the bot is currently in.
+
+    The live gateway cache is authoritative whenever it has entries. It is
+    empty in two real cases though: a dashboard served before the gateway has
+    finished its first READY, and a standby process, which never connects a
+    gateway at all. Trusting only the cache there reported every guild as
+    "Niko is not installed", so fall back to the guild list the bot records in
+    ``data/bot_stats.json`` at startup.
+    """
     if _discord_bot is not None:
-        return {str(guild.id) for guild in _discord_bot.guilds}
+        cached = {str(guild.id) for guild in getattr(_discord_bot, "guilds", [])}
+        if cached:
+            return cached
     stats = load_json(BOT_STATS, {})
     return {str(g) for g in stats.get("guild_ids", [])}
 
@@ -1860,10 +1870,11 @@ def _get_guild_card_colors(guild_id):
             except Exception:
                 pass
             return default
-        return (_parse(row.get("card_accent"), "FFC45C"),
-                _parse(row.get("card_bg_top"), "261A16"),
-                _parse(row.get("card_bg_bottom"), "120C0A"))
-    return ("FFC45C", "261A16", "120C0A")
+        return (_parse(row.get("card_accent"), "D5D9DF"),
+                _parse(row.get("card_bg_top"), "111316"),
+                _parse(row.get("card_bg_bottom"), "050607"))
+    # A guild without custom card colours gets the website theme palette.
+    return ("D5D9DF", "111316", "050607")
 
 
 def _get_user_economy(user_id):

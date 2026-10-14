@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
+import { AchievementsView } from "../components/dashboard/AchievementsView";
+import { EconomyView } from "../components/dashboard/EconomyView";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
 import type { PublicConfig } from "../types";
-import { dashboardPath, dashboardRoute, dashboardServersPath, navigate, type DashboardView, type DashSection } from "../router";
-import type { AuthStatus, BotStats, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, UserOverview } from "../types";
+import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
+import type { AchievementsResponse, AuthStatus, BotStats, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, User, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
@@ -57,6 +59,46 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   if (section === "applications") return <StaffApplicationsView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
+}
+
+/**
+ * The personal tabs under My overview. The economy and achievements are global
+ * per Discord account, so they load from `/api/me/*` and never need a server.
+ */
+function UserSection({ tab, user, overview, guilds, csrfToken, refreshToken, onServers, onManage }: {
+  tab: UserTab;
+  user: User;
+  overview: UserOverview | null;
+  guilds: Guild[];
+  csrfToken?: string;
+  refreshToken: number;
+  onServers: () => void;
+  onManage: (guild: Guild) => void;
+}) {
+  const [economy, setEconomy] = useState<EconomyStanding | null>(null);
+  const [achievements, setAchievements] = useState<AchievementsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (tab === "overview") { setLoading(false); setError(""); return; }
+    setLoading(true); setError("");
+    const request = tab === "economy"
+      ? getMyEconomy().then(setEconomy)
+      : getMyAchievements().then(setAchievements);
+    request.catch((reason) => setError(reason instanceof Error ? reason.message : "This page could not be loaded.")).finally(() => setLoading(false));
+  }, [tab, refreshToken]);
+
+  if (tab === "overview") return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} />;
+  if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${tab}`}>
+    <div className="skeleton-title" /><div className="skeleton-copy" />
+    <div className="skeleton-grid"><i /><i /><i /></div>
+    <span>Loading {tab}...</span>
+  </div>;
+  if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
+  if (tab === "economy" && economy) return <EconomyView standing={economy} />;
+  if (tab === "achievements" && achievements) return <AchievementsView achievements={achievements} />;
+  return null;
 }
 
 function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, embedded = false }: { scope: "user" | "guild"; reason?: string | null; guildId?: string; guildName?: string; supportUrl?: string | null; embedded?: boolean }) {
@@ -158,8 +200,9 @@ export function DashboardPage() {
     if (selectedGuild) navigate(dashboardPath(selectedGuild.id, section));
     else navigate(dashboardPath());
   };
-  const goHome = () => navigate(dashboardPath());
+  const goHome = () => navigate(dashboardUserPath("overview"));
   const goServers = () => navigate(dashboardServersPath());
+  const changeUserTab = (tab: UserTab) => navigate(dashboardUserPath(tab));
   const refreshDashboard = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -196,10 +239,10 @@ export function DashboardPage() {
         : <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
-    content = <UserOverviewView user={auth.user!} overview={userOverview} guilds={guilds} onServers={goServers} onManage={openGuild} csrfToken={auth.csrf_token} />;
+    content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={userOverview} guilds={guilds} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
   }
 
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} userTab={route.tab} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onUserTabChange={changeUserTab} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>
     {content}
   </DashboardShell>;
 }

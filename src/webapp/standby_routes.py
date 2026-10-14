@@ -13,10 +13,29 @@ from urllib.parse import urlsplit
 import requests
 from utils import logging
 
-from utils.standby_failover import standby_origin, secret_key, verification_proof
+from utils.standby_failover import configured_public_origin, standby_mode, standby_origin, secret_key, verification_proof
 from utils.standby_manager import StandbyFailoverManager
 
-from utils.standby_registry import add_standby, init_standby_registry, list_standbys, remove_standby
+from utils.standby_registry import (
+    add_standby,
+    announced_primary_origin,
+    init_standby_registry,
+    list_standbys,
+    record_primary_origin,
+    remove_standby,
+)
+
+# A forwarded management request carries this marker so a misconfigured standby
+# cannot bounce it to another standby in a loop. The marker also names the
+# header set aside from the request when it is relayed to the main instance.
+_STANDBY_FORWARD_HEADER = "X-Niko-Standby-Control"
+_STANDBY_FORWARD_REQUEST_HEADERS = {
+    "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection", "host",
+}
+_STANDBY_FORWARD_RESPONSE_HEADERS = {
+    "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
+    "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
+}
 
 
 def _sync_standby_manager(bot, rows):
@@ -24,6 +43,12 @@ def _sync_standby_manager(bot, rows):
     if manager is None:
         manager = StandbyFailoverManager()
         bot.standby_failover = manager
+    if _standby_mode():
+        # Only the main instance owns failover routing. A standby that installed
+        # these targets could relay Discord REST traffic to itself or to another
+        # standby, so its own manager stays empty.
+        manager.set_standbys([], [])
+        return
     origins, ids = [], []
     for row in rows:
         try:
@@ -66,6 +91,14 @@ async def initialize_standby_registry(bot):
     try:
         rows = await init_standby_registry(bot)
         _sync_standby_manager(bot, rows)
+        origin = configured_public_origin()
+        if origin:
+            await record_primary_origin(bot, origin)
+        else:
+            logging.warning(
+                "StandbyFailover",
+                "No public origin is configured; registered standbys must set STANDBY_PRIMARY_URL.",
+            )
     except Exception as exc:
         logging.warning("StandbyFailover", f"Standby registry unavailable: {exc}")
 
@@ -125,12 +158,127 @@ def _owner_only():
 
 def _standby_mode():
     """Report whether this process runs as a standby backend."""
-    return os.environ.get("STANDBY_MODE", "").strip().lower() in {"1", "true", "yes"}
+    return standby_mode()
+
+
+def _primary_origin():
+    """Return the main instance's public origin, or None when it is unknown.
+
+    Only the main instance owns the standby registry and the failover control
+    plane, so a standby that is asked to change either has to send the request
+    on. The origin comes from ``STANDBY_PRIMARY_URL``/``PUBLIC_URL`` or from the
+    announcement the main instance writes into the shared registry.
+
+    It is never taken from request headers: a request that arrived through the
+    main instance is still addressed by its registered origin, and trusting a
+    forwarded host here would let a crafted header make this standby ship its
+    session to an attacker-chosen origin.
+    """
+    confirmed = [_usable_origin(os.environ.get("STANDBY_PRIMARY_URL", "")),
+                 _usable_origin(os.environ.get("PUBLIC_URL", ""))]
+    for origin in confirmed:
+        if origin:
+            return origin
+
+    # The registry announcement is the only self-configuring source, so it is
+    # read after the cheap local ones and never when they already answered.
+    if _discord_bot is not None:
+        try:
+            return _usable_origin(run_on_bot_loop(announced_primary_origin(_discord_bot)))
+        except Exception:
+            return None
+    return None
+
+
+def _usable_origin(candidate):
+    """Normalize a configured or announced origin, or None when it is unusable."""
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    try:
+        origin = standby_origin(candidate.strip())
+    except (TypeError, ValueError):
+        return None
+    # This instance is never its own upstream.
+    return None if _is_own_origin(origin) else origin
+
+
+def _forward_control_to_primary():
+    """Send a standby management request to the main instance that owns it.
+
+    Returns the forwarded response, or a JSON error when the main instance
+    cannot be reached. Standby management never runs on a standby: applying it
+    there would install this instance (or another standby) as a routing target
+    and would leave the main instance's failover state stale.
+    """
+    if not _standby_mode():
+        return None
+    if request.headers.get(_STANDBY_FORWARD_HEADER):
+        return jsonify({"error": "Standby management is already being forwarded; a standby never handles it."}), 503
+    origin = _primary_origin()
+    if origin is None:
+        return jsonify({
+            "error": "This standby does not know the main instance. Set STANDBY_PRIMARY_URL to the production origin.",
+        }), 503
+
+    target = f"{origin}{request.path}"
+    if request.query_string:
+        target += f"?{request.query_string.decode('latin-1')}"
+    headers = {
+        name: value
+        for name, value in request.headers.items()
+        if name.lower() not in _STANDBY_FORWARD_REQUEST_HEADERS
+    }
+    headers[_STANDBY_FORWARD_HEADER] = "1"
+    # The browser's host names this standby, and the main instance has to see its
+    # own so registry checks resolve against the production origin.
+    headers["X-Forwarded-Host"] = urlsplit(origin).netloc
+    headers["X-Forwarded-Proto"] = "https"
+    try:
+        upstream = requests.request(
+            request.method,
+            target,
+            headers=headers,
+            data=request.get_data(cache=True),
+            timeout=(3, 20),
+            allow_redirects=False,
+        )
+    except requests.RequestException:
+        return jsonify({"error": "The main instance is unavailable; the change was not applied."}), 503
+
+    response = Response(upstream.content, status=upstream.status_code)
+    raw_headers = getattr(getattr(upstream, "raw", None), "headers", None)
+    set_cookies = raw_headers.getlist("Set-Cookie") if raw_headers is not None else []
+    for name, value in upstream.headers.items():
+        if name.lower() not in _STANDBY_FORWARD_RESPONSE_HEADERS:
+            response.headers[name] = value
+    for cookie in set_cookies:
+        response.headers.add("Set-Cookie", cookie)
+    close_upstream = getattr(upstream, "close", None)
+    if close_upstream is not None:
+        close_upstream()
+    return response
+
+
+def _announce_primary_origin():
+    """Keep the announced main-instance origin current for standby instances."""
+    if _standby_mode() or _discord_bot is None:
+        return
+    try:
+        origin = standby_origin(public_base_url())
+    except (RuntimeError, ValueError):
+        return
+    try:
+        run_on_bot_loop(record_primary_origin(_discord_bot, origin))
+    except Exception:
+        pass
 
 
 @app.route("/api/staff/standbys", methods=["GET"])
 @require_auth
 def api_staff_standbys():
+    forwarded = _forward_control_to_primary()
+    if forwarded is not None:
+        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -155,6 +303,9 @@ def api_staff_standbys():
 @require_auth
 @require_csrf
 def api_control_staff_standby_failover():
+    forwarded = _forward_control_to_primary()
+    if forwarded is not None:
+        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -168,13 +319,11 @@ def api_control_staff_standby_failover():
             mode = body.get("mode")
             if mode not in {"auto", "off"}:
                 return jsonify({"error": "Choose auto or off mode."}), 400
-            # A standby only accepts signed handoff commands, so re-arming
-            # automatic failover on it would let a blocked request promote it.
-            if mode == "auto" and _standby_mode():
-                return jsonify({"error": "A standby instance never initiates failover; manage routing from the primary."}), 403
             # Mode selection only flips flags on the manager, so it runs on the
             # request thread; dispatching a bool to the bot-loop coroutine
-            # runner would fail every mode change.
+            # runner would fail every mode change. A standby never reaches this
+            # branch: it forwards failover control to the main instance instead
+            # of letting a blocked request promote itself.
             changed = manager.select_failover(mode)
         elif action == "activate":
             standby_id = str(body.get("standby_id", ""))
@@ -194,6 +343,9 @@ def api_control_staff_standby_failover():
 @require_auth
 @require_csrf
 def api_add_staff_standby():
+    forwarded = _forward_control_to_primary()
+    if forwarded is not None:
+        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -240,6 +392,7 @@ def api_add_staff_standby():
     except Exception:
         return jsonify({"error": "Persistent standby registry is unavailable."}), 503
     _refresh_standby_manager(rows)
+    _announce_primary_origin()
     return jsonify({"ok": True, "standby": item}), 201
 
 
@@ -247,6 +400,9 @@ def api_add_staff_standby():
 @require_auth
 @require_csrf
 def api_remove_staff_standby(standby_id):
+    forwarded = _forward_control_to_primary()
+    if forwarded is not None:
+        return forwarded
     error = _owner_only()
     if error:
         return error

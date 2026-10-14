@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { PublicHeader } from "../PublicHeader";
 import { Icon } from "../Icon";
-import { navigate, type DashboardView, type DashSection } from "../../router";
+import { navigate, type DashboardView, type DashSection, type UserTab } from "../../router";
 import { displayName, formatNumber } from "../../utils/format";
 import type { BotStats, Guild, User } from "../../types";
 import { GuildIcon } from "./GuildIcon";
 import { UserAvatar } from "./UserAvatar";
 
+// Server sections only. The economy and achievements are account-wide, so they
+// live in `personalSections` under My overview instead of inside a server.
 const sections: [DashSection, string, string, string][] = [
   ["overview", "Overview", "guild_overview", "At a glance"],
   ["leveling", "Leveling", "guild_leveling", "Reward participation"],
@@ -19,17 +21,25 @@ const sections: [DashSection, string, string, string][] = [
   ["customization", "Customization", "guild_customization", "Niko’s server identity"],
 ];
 
+const personalSections: [UserTab, string, string][] = [
+  ["overview", "Overview", "grid"],
+  ["economy", "Economy", "guild_economy"],
+  ["achievements", "Achievements", "guild_achievements"],
+];
+
 type Props = {
   user: User;
   guilds: Guild[];
   selectedGuild: Guild | null;
   view: DashboardView;
   section: DashSection;
+  userTab: UserTab;
   stats: BotStats | null;
   onHome: () => void;
   onServers: () => void;
   onGuildChange: (guild: Guild) => void;
   onSectionChange: (section: DashSection) => void;
+  onUserTabChange: (tab: UserTab) => void;
   onRefresh: () => void;
   refreshing: boolean;
   staffRole?: string | null;
@@ -42,11 +52,13 @@ export function DashboardShell({
   selectedGuild,
   view,
   section,
+  userTab,
   stats,
   onHome,
   onServers,
   onGuildChange,
   onSectionChange,
+  onUserTabChange,
   onRefresh,
   refreshing,
   staffRole,
@@ -62,6 +74,21 @@ export function DashboardShell({
           className={view === "guild" && section === id ? "active" : ""}
           aria-current={view === "guild" && section === id ? "page" : undefined}
           onClick={() => { onSectionChange(id); setSidebarOpen(false); }}
+        >
+          <Icon name={icon} /><span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
+  const personalNav = (mobile = false) => (
+    <nav className={mobile ? "dash-nav dash-nav-mobile" : "dash-nav"} aria-label="Personal sections">
+      {personalSections.map(([id, label, icon]) => (
+        <button
+          key={id}
+          className={view === "overview" && userTab === id ? "active" : ""}
+          aria-current={view === "overview" && userTab === id ? "page" : undefined}
+          onClick={() => { onUserTabChange(id); setSidebarOpen(false); }}
         >
           <Icon name={icon} /><span>{label}</span>
         </button>
@@ -126,6 +153,17 @@ export function DashboardShell({
           <div className="dash-mobile-controls">{topActions()}</div>
           <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
           {primaryNav()}
+          {view === "overview" && (
+            <>
+              <div className="side-label side-label-settings">Personal</div>
+              <div className="side-guild">
+                <UserAvatar user={user} className="guild-avatar" />
+                <span><strong>{displayName(user)}</strong><small>Global economy profile</small></span>
+              </div>
+              <div className="side-settings-caption"><span>Your tabs</span><small>Not tied to a server</small></div>
+              {personalNav()}
+            </>
+          )}
           {view === "guild" && selectedGuild && (
             <>
               <div className="side-label side-label-settings">Current server</div>
@@ -148,6 +186,7 @@ export function DashboardShell({
           <div className="dash-contextbar">{topActions()}</div>
           <div className="mobile-primary-bar">{primaryNav(true)}</div>
           {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
+          {view === "overview" && <div className="mobile-section-bar">{personalNav(true)}</div>}
           <main className="dash-main">{children}</main>
         </div>
       </div>

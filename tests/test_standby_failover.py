@@ -5,7 +5,8 @@ import os
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+from urllib.parse import urlsplit
 
 import requests
 
@@ -14,6 +15,7 @@ from utils.standby_failover import _dispatch_web_request, _handle_client, _is_al
 from utils.standby_manager import StandbyFailoverManager
 from webapp import app
 from webapp import server as server_routes
+from webapp import standby_routes as standby_routes
 from webapp.standby_routes import _is_own_origin, _sync_standby_manager, _verification_matches
 
 
@@ -33,6 +35,37 @@ class FakeWriter:
 
     async def wait_closed(self):
         return None
+
+
+class FakeRawHeaders:
+    def __init__(self, cookies=()):
+        self.cookies = list(cookies)
+
+    def getlist(self, name):
+        return list(self.cookies) if name == "Set-Cookie" else []
+
+
+def fake_upstream(status_code=200, content=b"{}", headers=None, cookies=()):
+    return type("Upstream", (), {
+        "status_code": status_code,
+        "content": content,
+        "headers": dict(headers or {}),
+        "raw": SimpleNamespace(headers=FakeRawHeaders(cookies)),
+        "close": lambda self: None,
+    })()
+
+
+def owner_dashboard_client():
+    """Return a test client signed in as the bot owner with a valid CSRF token."""
+    from config.ids import OWNER_IDS
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+        session["access_token"] = "test-token"
+        session["token_exp"] = time.time() + 3600
+        session["csrf_token"] = "test-csrf"
+    return client
 
 
 class StandbyFailoverTests(unittest.TestCase):
@@ -597,10 +630,17 @@ class StandbyFailoverTests(unittest.TestCase):
             with patch("utils.standby_manager.requests.get", return_value=blocked):
                 self.assertFalse(await manager.check_direct_egress())
             self.assertTrue(manager.egress_blocked)
+            # A block is not proof the instance can serve the gateway itself.
+            self.assertFalse(manager.direct_egress_verified)
 
             with patch("utils.standby_manager.requests.get", return_value=healthy):
                 self.assertFalse(await manager.check_direct_egress())
             self.assertFalse(manager.egress_blocked)
+            self.assertTrue(manager.direct_egress_verified)
+
+            with patch("utils.standby_manager.requests.get", side_effect=requests.RequestException("offline")):
+                self.assertFalse(await manager.check_direct_egress())
+            self.assertFalse(manager.direct_egress_verified)
 
         asyncio.run(scenario())
 
@@ -698,39 +738,409 @@ class StandbyFailoverTests(unittest.TestCase):
             # A standby on the same host but another port stays allowed.
             self.assertFalse(_is_own_origin("https://niko.example:8443"))
 
-    def test_standby_instance_cannot_rearm_automatic_failover(self):
-        from config.ids import OWNER_IDS
-        from webapp import standby_routes as routes
+    def test_standby_sends_standby_management_to_the_main_instance(self):
+        """A standby never writes registry changes itself; the primary owns them."""
+        manager = StandbyFailoverManager()
+        manager.select_failover = Mock()
+        bot = SimpleNamespace(standby_failover=manager)
+        upstream = fake_upstream(
+            status_code=201,
+            content=b'{"ok":true,"standby":{"id":"east"}}',
+            headers={"Content-Type": "application/json"},
+            cookies=["session=refreshed; Path=/; Secure"],
+        )
+        client = owner_dashboard_client()
 
-        bot = SimpleNamespace(standby_failover=StandbyFailoverManager())
-        client = app.test_client()
-        with client.session_transaction() as session:
-            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
-            session["access_token"] = "test-token"
-            session["token_exp"] = time.time() + 3600
-            session["csrf_token"] = "test-csrf"
+        with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes.requests, "request", return_value=upstream
+        ) as forwarded, patch.object(standby_routes, "run_on_bot_loop") as runner:
+            response = client.post(
+                "/api/staff/standbys",
+                json={"name": "East", "url": "https://east.example"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
 
-        def control(payload, standby_mode):
-            # select_failover is synchronous, so mode changes must not be sent to
-            # the bot-loop coroutine runner (that raised and answered 503).
-            with patch.dict(os.environ, {"STANDBY_MODE": standby_mode}), patch.object(
-                server_routes, "_current_user_blacklist_entry", return_value=None
-            ), patch.object(routes, "_current_staff_role", return_value="owner"), patch.object(
-                routes, "_discord_bot", bot
-            ), patch.object(routes, "run_on_bot_loop") as runner:
-                response = client.post(
-                    "/api/staff/standbys/failover",
-                    json=payload,
-                    headers={"X-CSRF-Token": "test-csrf"},
+        self.assertEqual(201, response.status_code)
+        self.assertEqual({"ok": True, "standby": {"id": "east"}}, response.get_json())
+        self.assertEqual(["session=refreshed; Path=/; Secure"], response.headers.getlist("Set-Cookie"))
+        args, kwargs = forwarded.call_args
+        self.assertEqual("POST", args[0])
+        self.assertEqual("https://primary.example/api/staff/standbys", args[1])
+        headers = {name.lower(): value for name, value in kwargs["headers"].items()}
+        self.assertEqual("1", headers["x-niko-standby-control"])
+        self.assertEqual("test-csrf", headers["x-csrf-token"])
+        self.assertNotIn("host", headers)
+        # The main instance must resolve the change against its own origin, not
+        # against the standby origin this request arrived on.
+        self.assertEqual("primary.example", headers["x-forwarded-host"])
+        self.assertEqual("https", headers["x-forwarded-proto"])
+        self.assertEqual(b'{"name": "East", "url": "https://east.example"}', kwargs["data"])
+        # Nothing was added to the standby's own registry or failover targets.
+        runner.assert_not_called()
+        manager.select_failover.assert_not_called()
+        self.assertEqual([], manager.origins)
+
+    def test_standby_sends_failover_control_to_the_main_instance(self):
+        manager = StandbyFailoverManager()
+        manager.select_failover = Mock()
+        bot = SimpleNamespace(standby_failover=manager)
+        upstream = fake_upstream(content=b'{"ok":true}', headers={"Content-Type": "application/json"})
+        client = owner_dashboard_client()
+
+        with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes.requests, "request", return_value=upstream
+        ) as forwarded:
+            response = client.post(
+                "/api/staff/standbys/failover",
+                json={"action": "mode", "mode": "auto"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("https://primary.example/api/staff/standbys/failover", forwarded.call_args.args[1])
+        # Re-arming automatic failover belongs to the main instance; the standby
+        # must never promote itself or hand its gateway to another instance.
+        manager.select_failover.assert_not_called()
+        manager.origins = []
+
+    def test_forwarded_standby_management_authenticates_on_the_main_instance(self):
+        """The forwarded request is a valid production request, not a stripped one.
+
+        The standby forwards a browser call it received; the main instance has to
+        accept it with the same session, CSRF token, and production host, and the
+        standby has to hand that answer straight back to the browser.
+        """
+        manager = StandbyFailoverManager()
+        manager.probe_all = Mock(return_value={})
+        bot = SimpleNamespace(standby_failover=manager)
+        client = owner_dashboard_client()
+        seen = {}
+
+        def dispatch(method, url, headers=None, data=None, **kwargs):
+            forwarded_headers = {name.lower(): value for name, value in (headers or {}).items()}
+            # Replay exactly what the standby sent, as the production instance.
+            # The session cookie travels the way a browser sends it: the test
+            # client keeps cookies in a jar, so it is re-set from the header the
+            # standby forwarded.
+            replay = app.test_client()
+            for pair in forwarded_headers.get("cookie", "").split(";"):
+                name, _, value = pair.strip().partition("=")
+                if name and value:
+                    replay.set_cookie(name, value)
+            with patch.dict(os.environ, {"STANDBY_MODE": "false"}), patch.object(
+                standby_routes, "announced_primary_origin", Mock(return_value=None)
+            ), patch.object(
+                standby_routes, "list_standbys", Mock(return_value=[])
+            ), patch.object(
+                standby_routes, "_current_staff_role", return_value="owner"
+            ), patch.object(standby_routes, "run_on_bot_loop", side_effect=lambda awaitable: awaitable):
+                replayed = replay.open(
+                    urlsplit(url).path,
+                    method=method,
+                    headers={
+                        "X-CSRF-Token": forwarded_headers.get("x-csrf-token", ""),
+                        "X-Forwarded-Host": forwarded_headers.get("x-forwarded-host", ""),
+                        "X-Forwarded-Proto": forwarded_headers.get("x-forwarded-proto", ""),
+                    },
                 )
-            runner.assert_not_called()
-            return response
+            seen["status"] = replayed.status_code
+            seen["url"] = url
+            upstream = requests.Response()
+            upstream.status_code = replayed.status_code
+            upstream._content = replayed.data
+            upstream.headers.update(dict(replayed.headers))
+            upstream.raw = None
+            return upstream
 
-        refused = control({"action": "mode", "mode": "auto"}, "true")
-        self.assertEqual(403, refused.status_code)
-        self.assertIn("never initiates failover", refused.get_json()["error"])
-        self.assertEqual(200, control({"action": "mode", "mode": "off"}, "true").status_code)
-        self.assertEqual(200, control({"action": "mode", "mode": "auto"}, "").status_code)
+        with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes.requests, "request", side_effect=dispatch
+        ):
+            response = client.get("/api/staff/standbys")
+
+        self.assertEqual("https://primary.example/api/staff/standbys", seen["url"])
+        self.assertEqual(200, seen["status"])
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({"standbys": [], "failover": manager.status()}, response.get_json())
+
+    def test_standby_uses_the_announced_main_instance_origin(self):
+        manager = StandbyFailoverManager()
+        bot = SimpleNamespace(standby_failover=manager)
+        upstream = fake_upstream(headers={"Content-Type": "application/json"})
+        client = owner_dashboard_client()
+
+        with patch.dict(os.environ, {"STANDBY_MODE": "true"}, clear=False), patch.dict(
+            os.environ, {"STANDBY_PRIMARY_URL": "", "PUBLIC_URL": ""}, clear=False
+        ), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes, "announced_primary_origin", Mock(return_value=None)
+        ), patch.object(
+            standby_routes, "run_on_bot_loop", return_value="https://primary.example"
+        ), patch.object(standby_routes.requests, "request", return_value=upstream) as forwarded:
+            response = client.get("/api/staff/standbys")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("https://primary.example/api/staff/standbys", forwarded.call_args.args[1])
+
+    def test_standby_without_a_known_main_instance_refuses_management(self):
+        manager = StandbyFailoverManager()
+        bot = SimpleNamespace(standby_failover=manager)
+        client = owner_dashboard_client()
+
+        with patch.dict(os.environ, {
+            "STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "", "PUBLIC_URL": "",
+        }, clear=False), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes, "announced_primary_origin", Mock(return_value=None)
+        ), patch.object(
+            standby_routes, "run_on_bot_loop", return_value=None
+        ), patch.object(standby_routes.requests, "request") as forwarded:
+            response = client.get("/api/staff/standbys")
+
+        self.assertEqual(503, response.status_code)
+        self.assertIn("STANDBY_PRIMARY_URL", response.get_json()["error"])
+        forwarded.assert_not_called()
+
+    def test_standby_never_forwards_management_to_a_request_supplied_host(self):
+        """A crafted forwarded host must not become the forwarding target."""
+        bot = SimpleNamespace(standby_failover=StandbyFailoverManager())
+        client = owner_dashboard_client()
+
+        with patch.dict(os.environ, {
+            "STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "", "PUBLIC_URL": "",
+        }, clear=False), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes, "announced_primary_origin", Mock(return_value=None)
+        ), patch.object(
+            standby_routes, "run_on_bot_loop", return_value=None
+        ), patch.object(standby_routes.requests, "request") as forwarded:
+            response = client.get(
+                "/api/staff/standbys",
+                headers={"X-Forwarded-Host": "attacker.example", "X-Forwarded-Proto": "https"},
+            )
+
+        self.assertEqual(503, response.status_code)
+        forwarded.assert_not_called()
+
+    def test_standby_does_not_relay_an_already_forwarded_management_request(self):
+        bot = SimpleNamespace(standby_failover=StandbyFailoverManager())
+        client = owner_dashboard_client()
+
+        with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes.requests, "request"
+        ) as forwarded:
+            response = client.get("/api/staff/standbys", headers={"X-Niko-Standby-Control": "1"})
+
+        self.assertEqual(503, response.status_code)
+        self.assertIn("already being forwarded", response.get_json()["error"])
+        forwarded.assert_not_called()
+
+    def test_primary_keeps_standby_management_local(self):
+        """Without STANDBY_MODE the registry owner answers in place."""
+        manager = StandbyFailoverManager()
+        bot = SimpleNamespace(standby_failover=manager)
+        client = owner_dashboard_client()
+
+        manager.probe_all = Mock(return_value={})
+        with patch.dict(os.environ, {"STANDBY_MODE": "false", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
+            server_routes, "_current_user_blacklist_entry", return_value=None
+        ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
+            standby_routes, "_current_staff_role", return_value="owner"
+        ), patch.object(
+            standby_routes, "list_standbys", Mock(return_value=[])
+        ), patch.object(
+            standby_routes, "run_on_bot_loop", side_effect=lambda awaitable: awaitable
+        ), patch.object(standby_routes.requests, "request") as forwarded:
+            response = client.get("/api/staff/standbys")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({"standbys": [], "failover": manager.status()}, response.get_json())
+        forwarded.assert_not_called()
+
+    def test_standby_sync_never_arms_failover_targets(self):
+        http = SimpleNamespace(_HTTPClient__session=None, static_login=AsyncMock())
+        manager = StandbyFailoverManager()
+        manager.set_standbys(["https://old.example"], ["old"])
+        manager.active_origin = "https://old.example"
+        bot = SimpleNamespace(http=http, standby_failover=manager)
+
+        with patch.dict(os.environ, {"STANDBY_MODE": "true"}):
+            _sync_standby_manager(bot, [
+                {"id": "east", "name": "East", "url": "https://east.example", "created_at": 1},
+            ])
+
+        # The standby must not relay Discord REST traffic to itself or to any
+        # other standby instance.
+        self.assertEqual([], manager.origins)
+        self.assertEqual([], manager.ids)
+        self.assertIsNone(manager.active_origin)
+
+    def test_sync_still_arms_the_main_instance(self):
+        http = SimpleNamespace(_HTTPClient__session=None, static_login=AsyncMock())
+        bot = SimpleNamespace(http=http, standby_failover=StandbyFailoverManager())
+
+        with patch.dict(os.environ, {"STANDBY_MODE": "false"}):
+            _sync_standby_manager(bot, [
+                {"id": "east", "name": "East", "url": "https://east.example", "created_at": 1},
+            ])
+
+        self.assertEqual(["https://east.example"], bot.standby_failover.origins)
+        self.assertEqual(["east"], bot.standby_failover.ids)
+
+    def test_standby_health_reports_whether_it_holds_the_gateway(self):
+        async def scenario():
+            from utils import standby_failover
+
+            class Controller:
+                def __init__(self):
+                    self.active = asyncio.Event()
+
+            async def health():
+                reader = asyncio.StreamReader()
+                reader.feed_data(b"GET /health HTTP/1.1\r\nHost: standby.example\r\n\r\n")
+                reader.feed_eof()
+                writer = FakeWriter()
+                await _handle_client(reader, writer, secret_key("token", "session"))
+                return writer.data
+
+            controller = Controller()
+            previous = standby_failover._GATEWAY_CONTROLLER
+            try:
+                standby_failover._GATEWAY_CONTROLLER = controller
+                self.assertIn(b'"gateway":"standby"', await health())
+                controller.active.set()
+                self.assertIn(b'"gateway":"active"', await health())
+            finally:
+                standby_failover._GATEWAY_CONTROLLER = previous
+
+        asyncio.run(scenario())
+
+    def test_standby_gateway_state_distinguishes_warm_from_active(self):
+        async def scenario():
+            manager = StandbyFailoverManager()
+            with patch.object(manager, "probe_standby", return_value={"service": "niko-standby-backend"}):
+                self.assertEqual("warm", await manager.standby_gateway_state("https://east.example"))
+            with patch.object(manager, "probe_standby", return_value={
+                "service": "niko-standby-backend", "gateway": "active",
+            }):
+                self.assertEqual("active", await manager.standby_gateway_state("https://east.example"))
+            with patch.object(manager, "probe_standby", return_value=None):
+                self.assertEqual("unreachable", await manager.standby_gateway_state("https://east.example"))
+
+        asyncio.run(scenario())
+
+    def test_primary_rearms_a_standby_that_restarted_warm(self):
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.set_standbys(["https://east.example"], ["standby-east"])
+            manager.active_origin = "https://east.example"
+            manager._supervision_interval = 0
+            actions = []
+
+            async def state(origin):
+                manager.active_origin = None
+                return "warm"
+
+            async def control(standby_id, action):
+                actions.append((standby_id, action))
+                return True
+
+            manager.standby_gateway_state = state
+            manager.control = control
+            await asyncio.wait_for(manager._supervision_loop(), timeout=10)
+            self.assertEqual([("standby-east", "activate")], actions)
+
+        asyncio.run(scenario())
+
+    def test_primary_leaves_an_active_standby_alone(self):
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.set_standbys(["https://east.example"], ["standby-east"])
+            manager.active_origin = "https://east.example"
+            manager._supervision_interval = 0
+            control = AsyncMock(return_value=True)
+
+            async def state(origin):
+                manager.active_origin = None
+                return "active"
+
+            manager.standby_gateway_state = state
+            manager.control = control
+            await asyncio.wait_for(manager._supervision_loop(), timeout=10)
+            control.assert_not_awaited()
+
+        asyncio.run(scenario())
+
+    def test_primary_takes_the_gateway_back_when_the_standby_never_returns(self):
+        class Handoff:
+            def __init__(self):
+                self.activated = 0
+                self.refresh_caches_on_ready = False
+
+            async def activate(self):
+                self.activated += 1
+
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.set_standbys(["https://east.example"], ["standby-east"])
+            manager.active_origin = "https://east.example"
+            manager._supervision_interval = 0
+            manager._reclaim_grace_ticks = 2
+            handoff = Handoff()
+            manager.bot = SimpleNamespace(gateway_handoff=handoff)
+            manager.standby_gateway_state = AsyncMock(return_value="unreachable")
+            manager.control = AsyncMock(return_value=False)
+
+            await asyncio.wait_for(manager._supervision_loop(), timeout=10)
+
+            self.assertIsNone(manager.active_origin)
+            self.assertEqual(1, handoff.activated)
+            self.assertTrue(handoff.refresh_caches_on_ready)
+            manager.control.assert_awaited_once_with("standby-east", "relinquish")
+
+        asyncio.run(scenario())
+
+    def test_primary_stands_down_standbys_before_it_connects_itself(self):
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.set_standbys(
+                ["https://east.example", "https://west.example"], ["standby-east", "standby-west"]
+            )
+            manager.control = AsyncMock(return_value=True)
+            self.assertEqual(2, await manager.stand_down_standbys())
+            self.assertEqual(
+                [
+                    (("standby-east", "relinquish"), {}),
+                    (("standby-west", "relinquish"), {}),
+                ],
+                manager.control.await_args_list,
+            )
+
+        asyncio.run(scenario())
+
+    def test_standby_supervision_starts_with_the_failover_supervisor(self):
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.active_origin = "https://east.example"
+            manager._ensure_recovery_task()
+            for task in (manager._recovery_task, manager._supervision_task):
+                self.assertIsNotNone(task)
+                self.assertFalse(task.done())
+            for task in (manager._recovery_task, manager._supervision_task):
+                task.cancel()
+            await asyncio.gather(manager._recovery_task, manager._supervision_task, return_exceptions=True)
+
+        asyncio.run(scenario())
 
 
 if __name__ == "__main__":

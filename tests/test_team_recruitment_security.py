@@ -245,7 +245,13 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"ok": True, "review_status": "approved", "dm_sent": False})
+        body = response.get_json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["review_status"], "approved")
+        self.assertEqual(body["previous_status"], "pending")
+        self.assertFalse(body["unchanged"])
+        self.assertFalse(body["dm_sent"])
+        self.assertFalse(body["role_revoked"])
         self.assertEqual(events, ["role-added", "staff-saved", "review-saved", "dm-failed"])
         self.assertIn(role, member.roles)
 
@@ -505,6 +511,127 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(events, ["saved", "dm"])
+
+    def test_review_denial_revokes_a_previous_approval(self):
+        events = []
+
+        class FakeRole:
+            id = 123
+            name = "Moderator"
+
+        role = FakeRole()
+
+        class FakeMember:
+            roles = [role]
+
+            async def remove_roles(self, one, *, reason):
+                self.roles.remove(one)
+                events.append("role-removed")
+
+        member = FakeMember()
+
+        class FakeGuild:
+            roles = [role]
+
+            def get_role(self, role_id):
+                return role if role_id == role.id else None
+
+            def get_member(self, user_id):
+                return member
+
+        class FakeUser:
+            async def send(self, *, view):
+                events.append("dm")
+
+        class FakeBot:
+            def get_guild(self, guild_id):
+                return FakeGuild()
+
+            def get_user(self, user_id):
+                return FakeUser()
+
+        class FakePool:
+            async def fetchrow(self, query, *params):
+                return {"user_id": params[1], "review_status": "approved"}
+
+            async def execute(self, query, *params):
+                events.append((query, params))
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            routes, "_pool", return_value=FakePool()
+        ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+            routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ):
+            response = client.post(
+                "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+                json={"status": "denied"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["review_status"], "denied")
+        self.assertEqual(body["previous_status"], "approved")
+        self.assertFalse(body["unchanged"])
+        self.assertTrue(body["role_revoked"])
+        self.assertNotIn(role, member.roles)
+        self.assertEqual([event for event in events if isinstance(event, str)], ["role-removed", "dm"])
+        statements = [event[0] for event in events if isinstance(event, tuple)]
+        self.assertIn("DELETE FROM staff_members WHERE user_id = $1 AND role = $2", statements)
+        self.assertIn(
+            "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') WHERE opening_id = $3 AND user_id = $4",
+            statements,
+        )
+
+    def test_repeating_a_recorded_decision_changes_nothing(self):
+        events = []
+
+        class FakeBot:
+            def get_guild(self, guild_id):
+                raise AssertionError("A repeated decision must not touch the Discord role")
+
+            def get_user(self, user_id):
+                raise AssertionError("A repeated decision must not send another DM")
+
+        class FakePool:
+            async def fetchrow(self, query, *params):
+                return {"user_id": params[1], "review_status": "approved"}
+
+            async def execute(self, *args, **kwargs):
+                events.append("saved")
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            routes, "_pool", return_value=FakePool()
+        ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+            routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ):
+            response = client.post(
+                "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+                json={"status": "approved"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body["unchanged"])
+        self.assertEqual(body["previous_status"], "approved")
+        self.assertIsNone(body["dm_sent"])
+        self.assertFalse(body["role_revoked"])
+        self.assertEqual(events, [])
 
     def test_guild_administrator_cannot_manage_or_review_team_recruitment(self):
         endpoints = [

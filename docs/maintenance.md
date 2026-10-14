@@ -25,6 +25,20 @@ During a failover, the primary relays Discord REST traffic over the authenticate
 
 A standby never initiates failover: a blocked request on that instance cannot promote it or move its gateway to another registered instance, because only the primary arms automatic failover. Both ends of the relay also share one allowlist of Discord REST and CDN hosts, so a failover request is never refused by the standby and silently retried over the blocked direct egress. Registering the primary's own origin is rejected, since the primary would otherwise proxy every request to itself.
 
+### Where standby management runs
+
+Only the primary owns the standby registry and the failover control plane. **Staff workspace → Standby instances** therefore always answers on the primary: while a standby owns the gateway the primary relays the rest of the dashboard to it but keeps `/api/staff/standbys*` local.
+
+If that path is opened on a standby origin directly, the standby forwards the request to the primary instead of applying it locally, and answers `503` with an explicit error when it cannot reach it. The primary's origin is taken from `STANDBY_PRIMARY_URL`, then `PUBLIC_URL`, then the origin the main instance announces in the shared `standby_primary` collection (written at startup from `PUBLIC_URL`/`DONATION_SITE_URL`/`DISCORD_REDIRECT_URI` and refreshed on every successful registration). Never from request headers — a forwarded host is attacker-controlled, and trusting it would let a crafted request make a standby ship the owner's session to another origin. Set `STANDBY_PRIMARY_URL` on a standby deployment that has no other way to name production. A standby also refuses a request that already carries the `X-Niko-Standby-Control` marker, so a misconfigured standby chain cannot loop.
+
+Applying a management change on a standby is not just a stale view: `activate`/`rotate` install a routing target on the manager that answered, which would point that instance at itself or at another standby. For the same reason a standby never loads registry entries as failover targets, so it can never relay Discord REST traffic to a standby.
+
+### Restarting the instance that owns the gateway
+
+A restarted process always boots warm: it holds no gateway ownership, and a standby never promotes itself. The primary therefore supervises the standby it activated — it reads the `gateway` field of the standby's `/health` every 15 seconds and re-sends the signed activation whenever that instance answers `standby` (its normal state right after a restart), so the bot reconnects on its own within seconds of the restart finishing. An instance that is still starting answers nothing and is checked again on the next tick.
+
+If the standby never comes back, the primary waits out a short grace period (~60 seconds) and then resumes gateway ownership itself, so an unreachable or deleted standby cannot leave the bot offline. The same applies at primary startup: when this instance is about to connect directly it first tells every registered standby to release the gateway, which prevents two live gateway sessions after a primary restart.
+
 ## Monitoring
 - Check the console logs for errors.
 - Ensure the bot process is kept alive using a process manager like PM2 or systemd (if not on Replit).

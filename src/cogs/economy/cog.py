@@ -6,6 +6,7 @@ from .commands.leaderboard import LeaderboardMixin
 from .commands.shop import ShopMixin
 from .commands.bank import BankMixin
 from .commands.lottery import LotteryMixin
+from .voting import VoteMixin
 
 
 class EconomyCog(
@@ -16,9 +17,10 @@ class EconomyCog(
     ShopMixin,
     BankMixin,
     LotteryMixin,
+    VoteMixin,
     commands.Cog,
 ):
-    """Premium café economy with image cards, jobs, banking and a lottery."""
+    """Premium café economy with image cards, jobs, banking, a lottery and voting."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot

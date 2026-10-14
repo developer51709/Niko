@@ -10,7 +10,7 @@
 - [Anti-Spam Configuration](https://niko.sryze.cc/docs/automod-anti-spam.md)
 - [AutoMod Overview](https://niko.sryze.cc/docs/automod-overview.md)
 - [Customize Niko's Server Profile](https://niko.sryze.cc/docs/dashboard-customization.md)
-- [Dashboard: Economy Settings](https://niko.sryze.cc/docs/dashboard-economy.md)
+- [Dashboard: Economy & Achievements](https://niko.sryze.cc/docs/dashboard-economy.md)
 - [Dashboard: Leveling Settings](https://niko.sryze.cc/docs/dashboard-leveling.md)
 - [Dashboard Overview](https://niko.sryze.cc/docs/dashboard-overview.md)
 - [Staff Applications](https://niko.sryze.cc/docs/dashboard-staff-applications.md)
@@ -20,6 +20,7 @@
 - [Jobs and Earning Guide](https://niko.sryze.cc/docs/economy-jobs.md)
 - [Economy System Overview](https://niko.sryze.cc/docs/economy-overview.md)
 - [Shop and Items Guide](https://niko.sryze.cc/docs/economy-shop.md)
+- [Voting Rewards & Streaks](https://niko.sryze.cc/docs/economy-voting.md)
 - [Giveaway System](https://niko.sryze.cc/docs/giveaway-overview.md)
 - [Inviting Niko to Your Server](https://niko.sryze.cc/docs/invite.md)
 - [Leveling Configuration Guide](https://niko.sryze.cc/docs/leveling-configuration.md)
@@ -51,6 +52,9 @@
 
 ## Changelog
 
+- [Economy & Achievements Move to Your Profile](https://niko.sryze.cc/changelog/personal-economy-tabs.md) — The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.
+- [Economy & Leveling Cards Match the Website Theme](https://niko.sryze.cc/changelog/economy-card-theme-refresh.md) — Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.
+- [top.gg Voting Rewards & Café Achievements](https://niko.sryze.cc/changelog/topgg-voting-rewards-and-achievements.md) — Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.
 - [Global Economy Leaderboard & Privacy](https://niko.sryze.cc/changelog/global-economy-leaderboard-privacy.md) — The café rich list is now a paginated global leaderboard, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.
 - [Dashboard & Community Experience Refresh](https://niko.sryze.cc/changelog/dashboard-and-community-experience-refresh.md) — A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.
 - [Scam Image Filter (Experimental)](https://niko.sryze.cc/changelog/scam-image-filter.md) — A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.

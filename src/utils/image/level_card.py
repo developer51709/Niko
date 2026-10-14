@@ -12,7 +12,8 @@ Avatar fetching: callers should pass raw avatar bytes (already downloaded
 off-loop).  A safe placeholder is used when avatar bytes are missing.
 
 Customization: callers may pass accent / background colour tuples to tint
-cards per-guild.  Defaults match the warm café palette.
+cards per-guild.  Defaults match the website theme palette, imported from
+`economy_card.py`.
 """
 
 from __future__ import annotations
@@ -43,12 +44,14 @@ from utils.image.economy_card import (
     fetch_avatar_bytes,
     _bold,
     _reg,
-    # Default palette
-    CREAM,
-    CREAM_DIM,
-    GOLD,
-    GOLD_BRIGHT,
-    PURPLE_RANK,
+    # Theme palette (see `economy_card.py`)
+    ACCENT,
+    ACCENT_BRIGHT,
+    CANVAS_BOT,
+    CANVAS_TOP,
+    DIM,
+    INK,
+    MUTED,
 )
 
 
@@ -61,10 +64,10 @@ def _resolve_colours(
     bg_bot_rgb: tuple[int, int, int] | None = None,
 ):
     """Return (accent, bg_top, bg_bot) from optional overrides, falling back
-    to the café defaults.  Input tuples are plain RGB ints (0-255)."""
-    accent = tuple(accent_rgb) if accent_rgb else GOLD_BRIGHT
-    top    = tuple(bg_top_rgb) if bg_top_rgb else (38, 26, 22)
-    bot    = tuple(bg_bot_rgb) if bg_bot_rgb else (18, 12, 10)
+    to the theme defaults.  Input tuples are plain RGB ints (0-255)."""
+    accent = tuple(accent_rgb) if accent_rgb else ACCENT_BRIGHT
+    top    = tuple(bg_top_rgb) if bg_top_rgb else CANVAS_TOP
+    bot    = tuple(bg_bot_rgb) if bg_bot_rgb else CANVAS_BOT
     return accent, top, bot
 
 
@@ -110,8 +113,8 @@ def _render_level_sync(
     d = ImageDraw.Draw(canvas)
 
     # ── Header ──
-    d.text((36, 28), "CAFÉ LEVELING", fill=GOLD, font=_bold(16))
-    d.text((36, 52), f"Level Stats — {name}", fill=CREAM, font=_bold(28))
+    d.text((36, 28), "NIKO LEVELING", fill=ACCENT, font=_bold(16))
+    d.text((36, 52), f"Level Stats — {name}", fill=INK, font=_bold(28))
 
     # rank pill (top-right)
     pill_text = f"#{rank} in this server"
@@ -142,7 +145,7 @@ def _render_level_sync(
     d.text((badge_x, badge_y - 8), str(level), fill=ac, font=level_font)
     lvl_label_w = int(level_font.getlength(str(level)))
     lf = _reg(16)
-    d.text((badge_x + lvl_label_w + 8, badge_y + 18), "LEVEL", fill=CREAM_DIM, font=lf)
+    d.text((badge_x + lvl_label_w + 8, badge_y + 18), "LEVEL", fill=DIM, font=lf)
 
     # ── Stats columns ──
     stat_x = badge_x + lvl_label_w + 100
@@ -150,23 +153,23 @@ def _render_level_sync(
     stat_value_font = _bold(24)
 
     # XP
-    d.text((stat_x, av_y + 8), "XP", fill=CREAM_DIM, font=stat_label_font)
+    d.text((stat_x, av_y + 8), "XP", fill=DIM, font=stat_label_font)
     xp_text = f"{_format_amount(xp)} / {_format_amount(xp_for_next)}"
-    d.text((stat_x, av_y + 28), xp_text, fill=CREAM, font=stat_value_font)
+    d.text((stat_x, av_y + 28), xp_text, fill=INK, font=stat_value_font)
 
     # Rank
     rank_x = stat_x + 220
-    d.text((rank_x, av_y + 8), "RANK", fill=CREAM_DIM, font=stat_label_font)
+    d.text((rank_x, av_y + 8), "RANK", fill=DIM, font=stat_label_font)
     rank_text = f"#{rank}"
-    d.text((rank_x, av_y + 28), rank_text, fill=PURPLE_RANK, font=stat_value_font)
+    d.text((rank_x, av_y + 28), rank_text, fill=ACCENT_BRIGHT, font=stat_value_font)
 
     # ── XP progress bar ──
     bar_y = av_y + av_size + 30
     pct = 0.0 if xp_for_next <= 0 else min(1.0, xp / xp_for_next)
-    _progress_bar(canvas, 36, bar_y, RANK_W - 72, 18, pct, fill_top=ac, fill_bot=(110, 78, 50))
+    _progress_bar(canvas, 36, bar_y, RANK_W - 72, 18, pct, fill_top=ac, fill_bot=ACCENT)
     pct_text = f"{pct * 100:.0f}%"
     pw2 = int(_reg(13).getlength(pct_text))
-    d.text((RANK_W - 36 - pw2, bar_y + 2), pct_text, fill=CREAM_DIM, font=_reg(13))
+    d.text((RANK_W - 36 - pw2, bar_y + 2), pct_text, fill=DIM, font=_reg(13))
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
@@ -237,12 +240,12 @@ def _render_level_leaderboard_sync(
     d = ImageDraw.Draw(canvas)
 
     # Header
-    d.text((36, 28), "CAFÉ LEVELING", fill=GOLD, font=_bold(16))
-    render_text_with_emojis(canvas, title, _bold(28), 36, 54, 28, CREAM)
+    d.text((36, 28), "NIKO LEVELING", fill=ACCENT, font=_bold(16))
+    render_text_with_emojis(canvas, title, _bold(28), 36, 54, 28, INK)
     page_text = f"Page {page}/{pages}"
     pf = _reg(14)
     pw = int(pf.getlength(page_text))
-    d.text((LB_W - 36 - pw, 60), page_text, fill=CREAM_DIM, font=pf)
+    d.text((LB_W - 36 - pw, 60), page_text, fill=DIM, font=pf)
 
     y = 110
     medals = {1: "1st", 2: "2nd", 3: "3rd"}
@@ -254,7 +257,7 @@ def _render_level_leaderboard_sync(
         avatar = entry.get("avatar")
 
         is_top3 = rank <= 3
-        entry_accent = GOLD_BRIGHT if rank == 1 else (CREAM if rank == 2 else (ac if rank == 3 else CREAM_DIM))
+        entry_accent = ACCENT_BRIGHT if rank == 1 else (INK if rank == 2 else (ac if rank == 3 else DIM))
         _panel(canvas, 28, y, LB_W - 56, LB_ROW_H, radius=14)
 
         # rank text
@@ -270,7 +273,7 @@ def _render_level_leaderboard_sync(
         # name
         nx = 28 + 60 + (LB_ROW_H - 16) + 14
         nf = _bold(20)
-        render_text_with_emojis(canvas, name, nf, nx, y + 10, 20, CREAM)
+        render_text_with_emojis(canvas, name, nf, nx, y + 10, 20, INK)
 
         # level + xp on right
         lvl_text = f"Lv.{lvl}"
@@ -281,12 +284,12 @@ def _render_level_leaderboard_sync(
         xp_text = f"{_format_amount(xp)} XP"
         xf = _reg(13)
         xw = int(xf.getlength(xp_text))
-        d.text((LB_W - 28 - 24 - xw, y + 36), xp_text, fill=CREAM_DIM, font=xf)
+        d.text((LB_W - 28 - 24 - xw, y + 36), xp_text, fill=DIM, font=xf)
 
         y += LB_ROW_H + 8
 
     # footer
-    draw_text_with_fallback(d, (36, height - 32), "use arrows below to navigate", size=13, fill=CREAM_DIM)
+    draw_text_with_fallback(d, (36, height - 32), "use arrows below to navigate", size=13, fill=DIM)
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)

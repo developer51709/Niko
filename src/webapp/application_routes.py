@@ -329,7 +329,8 @@ def api_staff_application_submissions(guild_id, application_id):
             return jsonify({"error": "Application not found."}), 404
         rows = run_on_bot_loop(_pool().fetch(
             "SELECT user_id, answers, submitted_at, review_status, reviewed_by, reviewed_at "
-            "FROM staff_application_submissions WHERE application_id = $1 ORDER BY submitted_at DESC",
+            "FROM staff_application_submissions WHERE application_id = $1 "
+            "ORDER BY CASE WHEN review_status = 'pending' THEN 0 ELSE 1 END, submitted_at DESC",
             application_id,
         ))
         user_ids = {str(row.get("user_id")) for row in rows}
@@ -373,12 +374,22 @@ def api_review_staff_application_submission(guild_id, application_id, user_id):
         if application is None:
             return jsonify({"error": "Application not found."}), 404
         submission = run_on_bot_loop(_pool().fetchrow(
-            "SELECT user_id FROM staff_application_submissions "
+            "SELECT user_id, review_status, reviewed_by, reviewed_at FROM staff_application_submissions "
             "WHERE application_id = $1 AND user_id = $2",
             application_id, user_id,
         ))
         if submission is None:
             return jsonify({"error": "Application response not found."}), 404
+        previous_status = submission.get("review_status") or "pending"
+        if previous_status == status:
+            return jsonify({
+                "ok": True,
+                "review_status": status,
+                "previous_status": previous_status,
+                "unchanged": True,
+                "reviewed_by": submission.get("reviewed_by"),
+                "reviewed_at": submission.get("reviewed_at"),
+            })
         run_on_bot_loop(_pool().execute(
             "UPDATE staff_application_submissions SET review_status = $1, reviewed_by = $2, "
             "reviewed_at = datetime('now') WHERE application_id = $3 AND user_id = $4",
@@ -392,6 +403,8 @@ def api_review_staff_application_submission(guild_id, application_id, user_id):
         return jsonify({
             "ok": True,
             "review_status": reviewed.get("review_status") or status,
+            "previous_status": previous_status,
+            "unchanged": False,
             "reviewed_by": reviewed.get("reviewed_by"),
             "reviewed_at": reviewed.get("reviewed_at"),
         })

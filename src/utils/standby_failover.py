@@ -24,6 +24,11 @@ _DISCORD_RELAY_HOSTS = ("discord.com", "discordapp.com")
 _DISCORD_RELAY_SUFFIXES = tuple(f".{host}" for host in _DISCORD_RELAY_HOSTS)
 
 
+def standby_mode() -> bool:
+    """Report whether this process runs as a standby backend."""
+    return os.environ.get("STANDBY_MODE", "").strip().lower() in {"1", "true", "yes"}
+
+
 def is_discord_relay_url(url: str) -> bool:
     """Return True for the Discord hosts the signed API relay may forward to."""
     try:
@@ -163,6 +168,29 @@ def standby_origin(base_url: str) -> str:
     return f"https://{parts.netloc}"
 
 
+def configured_public_origin() -> str | None:
+    """Return the deployment's configured public HTTPS origin, if it names one.
+
+    ``public_base_url()`` reads the host from a live request, but the primary
+    must announce itself to standbys before any request exists, so startup uses
+    the same environment variables the web app falls back to.
+    """
+    for name in ("PUBLIC_URL", "DONATION_SITE_URL", "DISCORD_REDIRECT_URI"):
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            continue
+        parts = urlsplit(raw if "//" in raw else f"https://{raw}")
+        if parts.scheme == "https" and parts.hostname and not parts.username and not parts.password:
+            return f"https://{parts.netloc}"
+    domain = os.environ.get("REPLIT_DEV_DOMAIN", "").strip()
+    if domain:
+        try:
+            return standby_origin(f"https://{domain}")
+        except ValueError:
+            return None
+    return None
+
+
 async def _write_response(writer: asyncio.StreamWriter, status: int, body: dict) -> None:
     payload = json.dumps(body, separators=(",", ":")).encode()
     writer.write(
@@ -243,9 +271,13 @@ async def _handle_client(
                 headers[name.strip().lower()] = value.strip()
 
         if method == "GET" and target == "/health":
+            # The primary supervises this endpoint: a restarted standby answers
+            # "standby", which is how the primary learns it must re-arm it.
+            is_active = getattr(getattr(_GATEWAY_CONTROLLER, "active", None), "is_set", None)
             await _write_response(writer, 200, {
                 "ok": True,
                 "service": "niko-standby-backend",
+                "gateway": "active" if callable(is_active) and is_active() else "standby",
                 "uptime_seconds": max(0, int(time.time() - _STATS["started_at"])),
                 "total_api_requests": _STATS["total_api_requests"],
                 "failed_api_requests": _STATS["failed_api_requests"],

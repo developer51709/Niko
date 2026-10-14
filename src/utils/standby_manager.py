@@ -52,11 +52,21 @@ class StandbyFailoverManager:
         self.last_changed_at = time.time()
         self.failover_count = 0
         self.egress_blocked = False
+        # True once a direct probe reached Discord, so the instance knows it can
+        # serve the gateway itself rather than guessing from a failed request.
+        self.direct_egress_verified = False
         self._hooked_session = None
         self._attached_http = None
         self._handoff_lock = asyncio.Lock()
         self._recovery_task = None
         self._recovery_interval = 600
+        self._supervision_task = None
+        # A restarted standby comes back warm and takes no gateway ownership on
+        # its own, so the primary re-arms it on this cadence.
+        self._supervision_interval = 15
+        # How many unanswered supervision ticks a standby may miss before the
+        # primary stops waiting and owns the gateway again.
+        self._reclaim_grace_ticks = 4
 
     def attach(self, bot) -> bool:
         """Wrap static_login so the standby manager owns startup REST failover."""
@@ -220,6 +230,17 @@ class StandbyFailoverManager:
         results = await asyncio.gather(*(self.probe_standby(origin) for origin in self.origins))
         return dict(zip(self.ids, results))
 
+    async def standby_gateway_state(self, origin: str) -> str:
+        """Report an instance's gateway state: ``active``, ``warm``, or ``unreachable``.
+
+        A standby publishes this through its own ``/health`` endpoint, which is
+        how the primary notices one that restarted without gateway ownership.
+        """
+        stats = await self.probe_standby(origin)
+        if not stats:
+            return "unreachable"
+        return "active" if stats.get("gateway") == "active" else "warm"
+
     async def select_standby(self, standby_id: str | None = None) -> bool:
         if not self.origins:
             self.last_error = "No standby instances are registered."
@@ -369,9 +390,29 @@ class StandbyFailoverManager:
         self.last_error = "No healthy standby is available."
         return False
 
+    async def stand_down_standbys(self) -> int:
+        """Tell every registered standby to release the gateway.
+
+        Called once at startup, after this instance verified it can reach
+        Discord directly: a standby left over from an earlier failover is still
+        holding a gateway session, and two live sessions duplicate every event
+        the bot handles. The caller must not use it while its own egress is
+        blocked or unreachable — the standby then owns the only working gateway.
+        """
+        released = 0
+        for standby_id in list(self.ids):
+            try:
+                if await self.control(standby_id, "relinquish"):
+                    released += 1
+            except Exception as exc:
+                logging.warning("StandbyFailover", f"Standby stand-down failed: {type(exc).__name__}")
+        return released
+
     def _ensure_recovery_task(self) -> None:
         if self._recovery_task is None or self._recovery_task.done():
             self._recovery_task = asyncio.create_task(self._recovery_loop())
+        if self._supervision_task is None or self._supervision_task.done():
+            self._supervision_task = asyncio.create_task(self._supervision_loop())
 
     async def _recovery_loop(self) -> None:
         """Return gateway ownership to primary after its direct egress recovers."""
@@ -417,16 +458,78 @@ class StandbyFailoverManager:
             except Exception as exc:
                 logging.warning("StandbyFailover", f"Standby recovery handoff failed: {type(exc).__name__}")
 
+    async def _supervision_loop(self) -> None:
+        """Re-arm the active standby when it restarts without its gateway.
+
+        A restarted standby boots as a fresh warm process: it holds no gateway
+        ownership, and nothing on that side can promote itself, so without this
+        the bot stays offline after a standby restart. The primary already owns
+        the authority to activate it, so it re-sends that signed handoff and
+        leaves a standby that reports itself active untouched.
+        """
+        missed = 0
+        while self.active_origin:
+            try:
+                await asyncio.sleep(self._supervision_interval)
+                standby_id = self.status().get("active_standby_id")
+                if not standby_id or standby_id not in self.ids:
+                    continue
+                origin = self.origins[self.ids.index(standby_id)]
+                state = await self.standby_gateway_state(origin)
+                if state == "active":
+                    missed = 0
+                    continue
+                if state == "warm":
+                    missed = 0
+                    if await self.control(standby_id, "activate"):
+                        logging.success("StandbyFailover", "Active standby restarted; gateway ownership re-armed.")
+                    else:
+                        logging.warning("StandbyFailover", "Active standby is warm and did not accept gateway ownership.")
+                    continue
+                # A restarting standby is unreachable for a few ticks and comes
+                # back warm. One that never answers would leave the bot offline,
+                # so the primary waits out the grace period and then owns the
+                # gateway itself rather than staying passive forever.
+                missed += 1
+                if missed >= self._reclaim_grace_ticks:
+                    await self._reclaim_gateway("The active standby did not come back")
+                    return
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                logging.warning("StandbyFailover", f"Standby supervision failed: {type(exc).__name__}")
+
+    async def _reclaim_gateway(self, reason: str) -> bool:
+        """Take gateway ownership back from a standby that is not holding it."""
+        standby_id = self.status().get("active_standby_id")
+        if standby_id and standby_id in self.ids:
+            try:
+                await self.control(standby_id, "relinquish")
+            except Exception:
+                pass
+        self.active_origin = None
+        self.last_changed_at = time.time()
+        handoff = getattr(self.bot, "gateway_handoff", None)
+        if handoff is None:
+            return False
+        handoff.refresh_caches_on_ready = True
+        await handoff.activate()
+        logging.error("StandbyFailover", f"{reason}; this instance resumed gateway ownership.")
+        return True
+
     async def check_direct_egress(self) -> bool:
         try:
             response = await asyncio.to_thread(requests.get, "https://discord.com/api/v10/gateway",
                                                timeout=10, allow_redirects=False)
         except requests.RequestException:
+            self.direct_egress_verified = False
             return False
         if not self.is_cloudflare_block(response):
             # Direct egress answers normally, so any earlier block is over.
             self.egress_blocked = False
+            self.direct_egress_verified = True
             return False
+        self.direct_egress_verified = False
         self.egress_blocked = True
         if not self.auto_enabled:
             return False

@@ -594,11 +594,48 @@ async def _apply_team_role(user_id, role_key):
 
 async def _persist_staff_assignment(user_id, role_key, assigned_by):
     pool = _pool()
-    role = "support" if role_key == "support" else role_key
+    if role_key not in _server.STAFF_ROLES:
+        raise RuntimeError(f"{role_key} is not a staff role, so the roster cannot record it.")
     await pool.execute(
         "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
-        int(user_id), role, int(assigned_by), int(time.time()),
+        int(user_id), role_key, int(assigned_by), int(time.time()),
     )
+
+
+async def _clear_staff_assignment(user_id, role_key):
+    await _pool().execute(
+        "DELETE FROM staff_members WHERE user_id = $1 AND role = $2", int(user_id), role_key,
+    )
+
+
+async def _resolve_team_member(user_id, role_key):
+    """Return the support-guild member and role for a team role key."""
+    if _discord_bot is None:
+        raise RuntimeError("The Discord bot is not available to update the team role.")
+    guild = _discord_bot.get_guild(SUPPORT_GUILD)
+    if guild is None:
+        raise RuntimeError("The Niko support server is not available to update the team role.")
+    role_id = _support_role_id(role_key)
+    if not role_id.isdigit():
+        raise RuntimeError(f"The {TEAM_ROLE_APPLICATIONS[role_key]['title']} role is not configured in the support server.")
+    role = guild.get_role(int(role_id))
+    if role is None:
+        raise RuntimeError(f"The {TEAM_ROLE_APPLICATIONS[role_key]['title']} role could not be found in the support server.")
+    member = guild.get_member(int(user_id))
+    if member is None:
+        member = await guild.fetch_member(int(user_id))
+    return member, role
+
+
+async def _revoke_team_role(user_id, role_key):
+    """Take back the team role a reversed approval had granted."""
+    member, role = await _resolve_team_member(user_id, role_key)
+    if role not in member.roles:
+        return False
+    await member.remove_roles(
+        role, reason=f"Team application decision reversed: {TEAM_ROLE_APPLICATIONS[role_key]['title']}",
+    )
+    return True
 
 
 async def _remove_team_role(member, role, role_key):
@@ -625,15 +662,31 @@ def review_staff_team_submission(opening_id, user_id):
     if status not in {"approved", "denied"}:
         return jsonify({"error": "Review status must be approved or denied."}), 400
     found = run_on_bot_loop(_pool().fetchrow(
-        "SELECT user_id FROM staff_team_submissions WHERE opening_id = $1 AND user_id = $2",
+        "SELECT user_id, review_status FROM staff_team_submissions WHERE opening_id = $1 AND user_id = $2",
         opening_id, user_id,
     ))
     if found is None:
         return jsonify({"error": "Team application response not found."}), 404
     role_key = _role_key_for_application(opening_id)
+    previous_status = found.get("review_status") or "pending"
+    if previous_status == status:
+        # Recording the same decision twice must not repeat the role change or
+        # send the applicant a second decision DM.
+        return jsonify({
+            "ok": True,
+            "review_status": status,
+            "previous_status": previous_status,
+            "unchanged": True,
+            "dm_sent": None,
+            "role_revoked": False,
+        })
+    # Denying an application that was already approved takes the granted role
+    # back, so Discord and the staff roster agree with the recorded decision.
+    revoke_role = status == "denied" and previous_status == "approved"
     assigned_member = None
     assigned_role = None
     role_was_added = False
+    role_revoked = False
     try:
         if status == "approved":
             assigned_member, assigned_role, role_was_added = run_on_bot_loop(
@@ -642,6 +695,9 @@ def review_staff_team_submission(opening_id, user_id):
             run_on_bot_loop(_persist_staff_assignment(
                 user_id, role_key, int(session["user"].get("id", 0))
             ))
+        elif revoke_role:
+            role_revoked = bool(run_on_bot_loop(_revoke_team_role(user_id, role_key)))
+            run_on_bot_loop(_clear_staff_assignment(user_id, role_key))
         run_on_bot_loop(_pool().execute(
             "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') "
             "WHERE opening_id = $3 AND user_id = $4",
@@ -671,4 +727,11 @@ def review_staff_team_submission(opening_id, user_id):
     except Exception:
         dm_sent = False
         log.exception("Could not send %s decision DM to team applicant %s for %s", status, user_id, opening_id)
-    return jsonify({"ok": True, "review_status": status, "dm_sent": dm_sent})
+    return jsonify({
+        "ok": True,
+        "review_status": status,
+        "previous_status": previous_status,
+        "unchanged": False,
+        "dm_sent": dm_sent,
+        "role_revoked": role_revoked,
+    })

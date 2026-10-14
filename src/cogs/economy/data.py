@@ -136,6 +136,11 @@ def _default_user() -> dict:
         "effects":       {},   # e.g. {"work_cooldown_half": True, "crime_boost": 1, "rob_shield": 1, "lottery_boost": 1}
         # lottery
         "lottery_tickets": 0,
+        # top.gg voting (see cogs/economy/voting.py)
+        "votes":            0,
+        "vote_streak":      0,
+        "best_vote_streak": 0,
+        "last_vote":        0,
         # transaction log (most recent first, capped)
         "transactions":  [],
         # achievements (list of ids)
@@ -168,37 +173,187 @@ def _migrate_user(data: dict) -> dict:
 
 
 # ── Achievements ────────────────────────────────────────────────────────────
+# Every entry carries:
+#   name / emoji / description  how the badge is presented in the bot and web
+#   test(data)                  whether the badge is earned
+#   progress(data)              (current, target) for the dashboard bars
+#   reward                      coins paid ONCE, the moment the badge unlocks
+#
+# The reward is why this table is data instead of prose: the balance is
+# credited exactly when the id joins ``data["achievements"]``, and that stored
+# id list is what stops a second payout on the next save.
 ACHIEVEMENTS = {
-    "first_paycheck": {"name": "First Paycheck",   "emoji": "💼", "test": lambda d: d["times_worked"] >= 1},
-    "regular":        {"name": "Café Regular",     "emoji": "☕", "test": lambda d: d["times_worked"] >= 25},
-    "shift_lead":     {"name": "Shift Lead",       "emoji": "📋", "test": lambda d: d["times_worked"] >= 100},
-    "saver":          {"name": "Tin-Jar Saver",    "emoji": "🪙", "test": lambda d: d["bank"] >= 10_000},
-    "vault_keeper":   {"name": "Vault Keeper",     "emoji": "🏦", "test": lambda d: d["bank"] >= 100_000},
-    "millionaire":    {"name": "Millionaire",      "emoji": "💰", "test": lambda d: d["net_worth"] >= 1_000_000},
-    "streak_7":       {"name": "Week-long Habit",  "emoji": "🔥", "test": lambda d: d["daily_streak"] >= 7},
-    "streak_30":      {"name": "Café Devotee",     "emoji": "🌟", "test": lambda d: d["daily_streak"] >= 30},
-    "streak_60":      {"name": "Dedicated Regular", "emoji": "💎", "test": lambda d: d["daily_streak"] >= 60},
-    "streak_90":      {"name": "Economy Legend",    "emoji": "🏆", "test": lambda d: d["daily_streak"] >= 90},
-    "owner":          {"name": "Café Owner",       "emoji": "👑", "test": lambda d: d.get("job") == "owner"},
-    "gambler":        {"name": "High Roller",      "emoji": "🎰", "test": lambda d: int(d.get("total_spent", 0)) >= 50_000},
-    "whale":          {"name": "Casino Whale",     "emoji": "🐋", "test": lambda d: int(d.get("total_spent", 0)) >= 500_000},
-    "earner":         {"name": "Big Earner",       "emoji": "📈", "test": lambda d: int(d.get("total_earned", 0)) >= 1_000_000},
+    # ── Working ──────────────────────────────────────────────────────────
+    "first_paycheck": {
+        "name": "First Paycheck", "emoji": "💼", "reward": 250,
+        "description": "Work your very first shift at the café.",
+        "test": lambda d: d["times_worked"] >= 1,
+        "progress": lambda d: (d["times_worked"], 1),
+    },
+    "regular": {
+        "name": "Café Regular", "emoji": "☕", "reward": 1_000,
+        "description": "Clock in for 25 shifts.",
+        "test": lambda d: d["times_worked"] >= 25,
+        "progress": lambda d: (d["times_worked"], 25),
+    },
+    "shift_lead": {
+        "name": "Shift Lead", "emoji": "📋", "reward": 5_000,
+        "description": "Clock in for 100 shifts.",
+        "test": lambda d: d["times_worked"] >= 100,
+        "progress": lambda d: (d["times_worked"], 100),
+    },
+    # ── Banking ──────────────────────────────────────────────────────────
+    "saver": {
+        "name": "Tin-Jar Saver", "emoji": "🪙", "reward": 500,
+        "description": "Keep 10,000 coins in the bank.",
+        "test": lambda d: d["bank"] >= 10_000,
+        "progress": lambda d: (d["bank"], 10_000),
+    },
+    "vault_keeper": {
+        "name": "Vault Keeper", "emoji": "🏦", "reward": 5_000,
+        "description": "Keep 100,000 coins in the bank.",
+        "test": lambda d: d["bank"] >= 100_000,
+        "progress": lambda d: (d["bank"], 100_000),
+    },
+    "millionaire": {
+        "name": "Millionaire", "emoji": "💰", "reward": 50_000,
+        "description": "Reach a net worth of 1,000,000 coins.",
+        "test": lambda d: d["net_worth"] >= 1_000_000,
+        "progress": lambda d: (d["net_worth"], 1_000_000),
+    },
+    # ── Daily streak ─────────────────────────────────────────────────────
+    "streak_7": {
+        "name": "Week-long Habit", "emoji": "🔥", "reward": 1_000,
+        "description": "Claim your daily treats 7 days in a row.",
+        "test": lambda d: d["daily_streak"] >= 7,
+        "progress": lambda d: (d["daily_streak"], 7),
+    },
+    "streak_30": {
+        "name": "Café Devotee", "emoji": "🌟", "reward": 10_000,
+        "description": "Claim your daily treats 30 days in a row.",
+        "test": lambda d: d["daily_streak"] >= 30,
+        "progress": lambda d: (d["daily_streak"], 30),
+    },
+    "streak_60": {
+        "name": "Dedicated Regular", "emoji": "💎", "reward": 25_000,
+        "description": "Claim your daily treats 60 days in a row.",
+        "test": lambda d: d["daily_streak"] >= 60,
+        "progress": lambda d: (d["daily_streak"], 60),
+    },
+    "streak_90": {
+        "name": "Economy Legend", "emoji": "🏆", "reward": 100_000,
+        "description": "Claim your daily treats 90 days in a row.",
+        "test": lambda d: d["daily_streak"] >= 90,
+        "progress": lambda d: (d["daily_streak"], 90),
+    },
+    # ── Career and spending ──────────────────────────────────────────────
+    "owner": {
+        "name": "Café Owner", "emoji": "👑", "reward": 25_000,
+        "description": "Reach the top of the job ladder.",
+        "test": lambda d: d.get("job") == "owner",
+        "progress": lambda d: (1 if d.get("job") == "owner" else 0, 1),
+    },
+    "gambler": {
+        "name": "High Roller", "emoji": "🎰", "reward": 2_500,
+        "description": "Spend 50,000 coins across the café.",
+        "test": lambda d: int(d.get("total_spent", 0)) >= 50_000,
+        "progress": lambda d: (int(d.get("total_spent", 0)), 50_000),
+    },
+    "whale": {
+        "name": "Casino Whale", "emoji": "🐋", "reward": 25_000,
+        "description": "Spend 500,000 coins across the café.",
+        "test": lambda d: int(d.get("total_spent", 0)) >= 500_000,
+        "progress": lambda d: (int(d.get("total_spent", 0)), 500_000),
+    },
+    "earner": {
+        "name": "Big Earner", "emoji": "📈", "reward": 25_000,
+        "description": "Earn 1,000,000 coins in total.",
+        "test": lambda d: int(d.get("total_earned", 0)) >= 1_000_000,
+        "progress": lambda d: (int(d.get("total_earned", 0)), 1_000_000),
+    },
+    # ── top.gg voting ────────────────────────────────────────────────────
+    "voter_first": {
+        "name": "First Upvote", "emoji": "🗳️", "reward": 500,
+        "description": "Vote for Niko on top.gg once.",
+        "test": lambda d: int(d.get("votes", 0)) >= 1,
+        "progress": lambda d: (int(d.get("votes", 0)), 1),
+    },
+    "voter_regular": {
+        "name": "Vote Regular", "emoji": "📬", "reward": 2_500,
+        "description": "Vote for Niko on top.gg 10 times.",
+        "test": lambda d: int(d.get("votes", 0)) >= 10,
+        "progress": lambda d: (int(d.get("votes", 0)), 10),
+    },
+    "voter_devoted": {
+        "name": "Ballot Stuffer", "emoji": "🧾", "reward": 10_000,
+        "description": "Vote for Niko on top.gg 50 times.",
+        "test": lambda d: int(d.get("votes", 0)) >= 50,
+        "progress": lambda d: (int(d.get("votes", 0)), 50),
+    },
+    "voter_legend": {
+        "name": "Civic Legend", "emoji": "🏛️", "reward": 50_000,
+        "description": "Vote for Niko on top.gg 200 times.",
+        "test": lambda d: int(d.get("votes", 0)) >= 200,
+        "progress": lambda d: (int(d.get("votes", 0)), 200),
+    },
+    "vote_streak_7": {
+        "name": "Week of Votes", "emoji": "🗓️", "reward": 5_000,
+        "description": "Keep a 7-vote streak on top.gg.",
+        "test": lambda d: int(d.get("best_vote_streak", 0)) >= 7,
+        "progress": lambda d: (int(d.get("best_vote_streak", 0)), 7),
+    },
+    "vote_streak_30": {
+        "name": "Month of Votes", "emoji": "📅", "reward": 25_000,
+        "description": "Keep a 30-vote streak on top.gg.",
+        "test": lambda d: int(d.get("best_vote_streak", 0)) >= 30,
+        "progress": lambda d: (int(d.get("best_vote_streak", 0)), 30),
+    },
+    "vote_streak_100": {
+        "name": "Unbroken Voter", "emoji": "🛡️", "reward": 150_000,
+        "description": "Keep a 100-vote streak on top.gg.",
+        "test": lambda d: int(d.get("best_vote_streak", 0)) >= 100,
+        "progress": lambda d: (int(d.get("best_vote_streak", 0)), 100),
+    },
 }
 
 
+def achievement_progress(meta: dict, data: dict) -> tuple[int, int]:
+    """Return a clamped ``(current, target)`` pair for a badge progress bar."""
+    try:
+        current, target = meta["progress"](data)
+    except Exception:
+        return (0, 1)
+    target = max(1, int(target))
+    return (max(0, min(int(current), target)), target)
+
+
 def _check_achievements(data: dict) -> list[str]:
-    """Return a list of newly-unlocked achievement names (mutates `data`)."""
+    """Unlock newly earned badges, pay their rewards, list what changed.
+
+    Returns display strings (``"Shift Lead 📋 (+5,000 🥐)"``) so existing
+    callers keep working by joining the list into a message. Rewards are
+    credited here rather than in the command handlers so every path that
+    earns a badge — work, daily, gambling, shopping — pays it exactly once.
+    """
     earned = set(data.get("achievements", []))
     newly = []
     for aid, meta in ACHIEVEMENTS.items():
         if aid in earned:
             continue
         try:
-            if meta["test"](data):
-                earned.add(aid)
-                newly.append(meta["name"] + " " + meta["emoji"])
+            if not meta["test"](data):
+                continue
         except Exception:
             continue
+        earned.add(aid)
+        label = f"{meta['name']} {meta['emoji']}"
+        reward = int(meta.get("reward", 0))
+        if reward > 0:
+            data["balance"] = int(data.get("balance", 0)) + reward
+            data["total_earned"] = int(data.get("total_earned", 0)) + reward
+            _log_tx(data, "achievement", reward, meta["name"])
+            label += f" (+{reward:,} 🥐)"
+        newly.append(label)
     data["achievements"] = sorted(earned)
     return newly
 
@@ -297,8 +452,9 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
                 last_crime, last_rob, last_heist, last_slots, last_blackjack,
                 last_roulette, last_casino, last_gamble, last_bet, last_race,
                 last_fight, last_duel, inventory, effects, lottery_tickets,
-                transactions, achievements
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                transactions, achievements, votes, vote_streak,
+                best_vote_streak, last_vote
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             user_id,
             data.get("balance", 100),
@@ -333,7 +489,14 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
             effects_json,
             data.get("lottery_tickets", 0),
             transactions_json,
-            achievements_json
+            achievements_json,
+            # Vote state is written on every save, so it must be listed here:
+            # INSERT OR REPLACE rewrites the whole row, and an omitted column
+            # would silently reset the streak on the next economy command.
+            int(data.get("votes", 0)),
+            int(data.get("vote_streak", 0)),
+            int(data.get("best_vote_streak", 0)),
+            int(data.get("last_vote", 0))
         )
     except Exception as e:
         log.error("Economy", f"Could not save user {user_id} to database: {e}")
@@ -386,7 +549,9 @@ async def _get_all_users_from_db(bot) -> dict:
 
 
 # ── Small layout helpers ────────────────────────────────────────────────────
-ACCENT_BROWN = discord.Colour(0xC8853F)
+# The brand accent every other Niko view uses (staff, support server, nitro,
+# transcripts), so economy containers are no longer their own café colour.
+ACCENT_BROWN = discord.Colour(0xC8A882)
 
 
 def _info_view(title: str, body: str, accent: discord.Colour = ACCENT_BROWN) -> discord.ui.LayoutView:

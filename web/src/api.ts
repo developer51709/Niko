@@ -1,7 +1,9 @@
 import type {
+  AchievementsResponse,
   AuthStatus,
   BotStats,
   Command,
+  EconomyStanding,
   Guild,
   GuildConfig,
   GuildResources,
@@ -65,7 +67,7 @@ export const submitTeamRecruitmentApplication = (openingId: string, answers: Rec
 export const getTeamRecruitmentSettings = () => api<TeamRecruitmentSettings>("/api/staff/team-recruitment");
 export const setTeamRecruitmentOpeningStatus = (openingId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamRecruitmentSubmissions = (openingId: string) => api<{ opening: TeamRecruitmentOpening; submissions: TeamRecruitmentSubmission[] }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions`);
-export const reviewTeamRecruitmentSubmission = (openingId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied" }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions/${encodeURIComponent(userId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
+export const reviewTeamRecruitmentSubmission = (openingId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied"; previous_status?: "pending" | "approved" | "denied"; unchanged?: boolean; dm_sent?: boolean | null; role_revoked?: boolean }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions/${encodeURIComponent(userId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
 export const getStaffStandbys = () => api<{ standbys: StandbyInstance[]; failover: StandbyFailoverStatus }>("/api/staff/standbys");
@@ -94,6 +96,8 @@ export const getGuilds = () => api<Guild[]>("/api/guilds");
 export const getUserOverview = () => api<UserOverview>("/api/me/overview");
 export const saveEconomyPrivacy = (leaderboard_private: boolean, csrfToken?: string) => api<{ ok: boolean; leaderboard_private: boolean }>("/api/me/economy-privacy", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ leaderboard_private }) });
 export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/overview`);
+export const getMyEconomy = () => api<EconomyStanding>("/api/me/economy");
+export const getMyAchievements = () => api<AchievementsResponse>("/api/me/achievements");
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
 export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
@@ -105,7 +109,7 @@ export const updateStaffApplication = (guildId: string, applicationId: string, b
 export const setStaffApplicationStatus = (guildId: string, applicationId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/guild/${guildId}/applications/${applicationId}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const deleteStaffApplication = (guildId: string, applicationId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/guild/${guildId}/applications/${applicationId}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const getStaffSubmissions = (guildId: string, applicationId: string) => api<{ application: StaffApplication; submissions: StaffApplicationSubmission[] }>(`/api/guild/${guildId}/applications/${applicationId}/submissions`);
-export const reviewStaffSubmission = (guildId: string, applicationId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied"; reviewed_by?: string | null; reviewed_at?: string | null }>(`/api/guild/${guildId}/applications/${applicationId}/submissions/${userId}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
+export const reviewStaffSubmission = (guildId: string, applicationId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied"; previous_status?: "pending" | "approved" | "denied"; unchanged?: boolean; reviewed_by?: string | null; reviewed_at?: string | null }>(`/api/guild/${guildId}/applications/${applicationId}/submissions/${userId}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getPublicOpenings = (guildId: string) => api<{ openings: PublicStaffApplication[] }>(`/api/applications/${guildId}`);
 export const getPublicStaffApplication = (guildId: string, applicationId: string) => api<PublicStaffApplication>(`/api/applications/${guildId}/${applicationId}`);
 export const submitStaffApplication = (guildId: string, applicationId: string, answers: Record<string, string | string[]>, csrfToken?: string) => api<{ ok: boolean; message: string }>(`/api/applications/${guildId}/${applicationId}/submit`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ answers }) });

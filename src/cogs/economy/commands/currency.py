@@ -12,6 +12,7 @@ from ..data import (
     add_xp,
     ACCENT_GOLD, ACCENT_GREEN,
 )
+from ..voting import vote_earnings_multiplier
 import random
 import datetime
 
@@ -108,7 +109,10 @@ class CurrencyMixin:
             streak += 1
         multiplier = 1 + min(streak, 7) * 0.2
         base = 1000
-        reward = int(base * multiplier)
+        # Top.gg votes keep paying forward: while a vote streak is alive it also
+        # tops up every daily claim and every shift (see cogs/economy/voting.py).
+        vote_bonus = vote_earnings_multiplier(data.get("vote_streak", 0))
+        reward = int(base * multiplier * vote_bonus)
 
         # ── Streak milestone bonuses ──
         STREAK_MILESTONES = {
@@ -136,6 +140,8 @@ class CurrencyMixin:
         await self.save_user_economy_data(ctx.author.id)
 
         subtitle = f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}"
+        if vote_bonus > 1:
+            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
         footer = msg(ctx, "daily_success", reward=total_reward)
         if milestone_items:
             from ..data import get_item
@@ -192,6 +198,9 @@ class CurrencyMixin:
         reward = random.randint(int(job["min_pay"]), int(job["max_pay"]))
         if effects.pop("work_boost", 0):
             reward = int(reward * 1.10)
+        vote_bonus = vote_earnings_multiplier(data.get("vote_streak", 0))
+        if vote_bonus > 1:
+            reward = int(reward * vote_bonus)
         self._credit(data, reward, "work", f"{job['name']} shift")
         data["last_work"] = now
         data["times_worked"] = int(data.get("times_worked", 0)) + 1
@@ -203,6 +212,8 @@ class CurrencyMixin:
         await self.save_user_economy_data(ctx.author.id)
 
         subtitle = f"{job['emoji']} {job['name']} shift  •  +{job.get('xp_per_shift', 10)} XP"
+        if vote_bonus > 1:
+            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
         footer = msg(ctx, "work_success", reward=reward)
         if newly:
             footer += "  •  unlocked: " + ", ".join(newly)

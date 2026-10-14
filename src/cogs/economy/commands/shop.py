@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from ..data import (
     _info_view, _card_view, _check_achievements,
+    ACCENT_BROWN,
     SHOP_ITEMS, get_item, get_emoji,
     add_xp, bank_name, bank_cap, bank_rate, max_bank_tier,
 )
@@ -24,7 +25,7 @@ class _ShopActionView(discord.ui.LayoutView):
                 discord.ui.Button(label="Buy", style=discord.ButtonStyle.success, custom_id="economy:shop:buy"),
                 discord.ui.Button(label="Sell", style=discord.ButtonStyle.secondary, custom_id="economy:shop:sell"),
             ),
-            accent_colour=discord.Colour(0xC8853F),
+            accent_colour=ACCENT_BROWN,
         )
         action_row = container.children[2]
         action_row.children[0].callback = self._buy
@@ -164,7 +165,7 @@ class _UseItemView(discord.ui.LayoutView):
             discord.ui.TextDisplay(content="### 🧪 Use an item\n-# Pick something from your bag — it takes effect immediately."),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(self.select),
-            accent_colour=discord.Colour(0xC8853F),
+            accent_colour=ACCENT_BROWN,
         ))
 
     @classmethod
@@ -206,7 +207,7 @@ class _UseResultView(discord.ui.LayoutView):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=body),
             discord.ui.ActionRow(again, close),
-            accent_colour=discord.Colour(0xC8853F),
+            accent_colour=ACCENT_BROWN,
         ))
 
     async def _again(self, interaction: discord.Interaction):

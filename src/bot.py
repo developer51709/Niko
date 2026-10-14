@@ -144,8 +144,10 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
-        standby_mode = os.getenv("STANDBY_MODE", "").lower() in {"1", "true", "yes"}
         from utils.gateway_failover import GatewayHandoff
+        from utils.standby_failover import standby_mode as _standby_mode
+
+        standby_mode = _standby_mode()
         handoff = GatewayHandoff(bot, active=not standby_mode)
         bot.gateway_handoff = handoff
 
@@ -218,6 +220,13 @@ if __name__ == "__main__":
             else:
                 if bot.standby_failover is not None:
                     await bot.standby_failover.check_direct_egress()
+                    if bot.standby_failover.active_origin is None and bot.standby_failover.direct_egress_verified:
+                        # This instance is about to connect directly, so a
+                        # standby still holding an earlier failover must release
+                        # the gateway before two live sessions exist. This is
+                        # skipped while this instance cannot reach Discord: the
+                        # standby then owns the only working gateway.
+                        await bot.standby_failover.stand_down_standbys()
                 await handoff.run()
         except Exception as e:
             logging.error("Startup", f"Error connecting to Discord: {e}")

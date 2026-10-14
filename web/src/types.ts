@@ -139,6 +139,72 @@ export type UserOverview = {
   leaderboard_private: boolean;
 };
 
+// ── Economy standing, voting and achievements ────────────────────────────────
+
+export type EconomyTransaction = {
+  kind: string;
+  amount: number;
+  note: string;
+  ts: number;
+};
+
+export type VoteStanding = {
+  votes: number;
+  streak: number;
+  best_streak: number;
+  last_vote: number;
+  next_vote_at: number;
+  can_vote: boolean;
+  reward_multiplier: number;
+  earnings_multiplier: number;
+  vote_url: string;
+};
+
+export type EconomyStanding = {
+  user_id: string | null;
+  balance: number;
+  bank: number;
+  net_worth: number;
+  level: number;
+  job: string;
+  bank_tier: number;
+  daily_streak: number;
+  total_earned: number;
+  total_spent: number;
+  times_worked: number;
+  achievements_unlocked: number;
+  achievements_total: number;
+  achievement_coins: number;
+  global_rank: number | null;
+  account_count: number | null;
+  transactions: EconomyTransaction[];
+  vote: VoteStanding;
+};
+
+export type AchievementProgress = {
+  current: number;
+  target: number;
+  percent: number;
+};
+
+export type AchievementEntry = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  reward: number;
+  unlocked: boolean;
+  progress: AchievementProgress;
+};
+
+export type AchievementsResponse = {
+  achievements: AchievementEntry[];
+  unlocked: number;
+  total: number;
+  coins_earned: number;
+  coins_available: number;
+};
+
 export type LevelRow = {
   user_id: string;
   display_name?: string | null;

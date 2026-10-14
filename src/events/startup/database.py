@@ -449,7 +449,11 @@ async def _create_tables(bot):
             effects          TEXT    DEFAULT '{}',
             lottery_tickets  INTEGER DEFAULT 0,
             transactions     TEXT    DEFAULT '[]',
-            achievements     TEXT    DEFAULT '[]'
+            achievements     TEXT    DEFAULT '[]',
+            votes            INTEGER DEFAULT 0,
+            vote_streak      INTEGER DEFAULT 0,
+            best_vote_streak INTEGER DEFAULT 0,
+            last_vote        INTEGER DEFAULT 0
         )
     """)
 
@@ -476,6 +480,15 @@ async def _create_tables(bot):
         )
     except Exception:
         pass  # column already exists; MongoDB is schema-less
+
+    # …and the top.gg voting counters added by the vote reward system.
+    for vote_column in ("votes", "vote_streak", "best_vote_streak", "last_vote"):
+        try:
+            await bot.cxn.execute(
+                f"ALTER TABLE economy_users ADD COLUMN {vote_column} INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass  # column already exists; MongoDB is schema-less
 
     # Migrate economy data from JSON files to database
     await _migrate_economy_data(bot)

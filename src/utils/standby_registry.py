@@ -8,16 +8,20 @@ from __future__ import annotations
 
 
 _COLLECTION = "standby_instances"
+# The primary publishes its own public origin here so a standby opened directly
+# still knows which instance owns the registry and can forward changes to it.
+_PRIMARY_COLLECTION = "standby_primary"
+_PRIMARY_ID = "primary"
 
 
-def _collection(bot):
+def _collection(bot, name: str = _COLLECTION):
     pool = getattr(bot, "cxn", None)
     if pool is None or getattr(pool, "db_type", None) != "mongodb" or not hasattr(pool, "collection"):
         raise RuntimeError(
             "Standby registration requires the shared MongoDB database (MONGODB_URL); "
             "local SQLite storage is not durable on Render web services."
         )
-    return pool.collection(_COLLECTION)
+    return pool.collection(name)
 
 
 async def init_standby_registry(bot):
@@ -56,3 +60,20 @@ async def remove_standby(bot, standby_id: str):
     if result.deleted_count == 0:
         raise KeyError(standby_id)
     return await list_standbys(bot)
+
+
+async def record_primary_origin(bot, url: str) -> bool:
+    """Publish the main instance's public origin for standby instances."""
+    collection = _collection(bot, _PRIMARY_COLLECTION)
+    await collection.update_one({"_id": _PRIMARY_ID}, {"$set": {"url": url}}, upsert=True)
+    return True
+
+
+async def announced_primary_origin(bot) -> str | None:
+    """Return the origin the main instance announced, or None when unset."""
+    collection = _collection(bot, _PRIMARY_COLLECTION)
+    document = await collection.find_one({"_id": _PRIMARY_ID}, {"url": 1})
+    if not isinstance(document, dict):
+        return None
+    url = document.get("url")
+    return url if isinstance(url, str) and url.startswith("https://") else None

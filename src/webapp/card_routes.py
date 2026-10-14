@@ -1,4 +1,12 @@
-"""Flask routes for card."""
+"""Flask routes for card.
+
+Every colour below is a website theme token (`web/src/styles.css` `:root`), so
+the rendered cards match the dashboard:
+  #F4F5F7 = --ink      #B4BAC3 = --muted    #858C96 = --dim
+  #D5D9DF = --accent-dark   #AAB1BA = --accent
+  #111316 = --surface  #050607 = --canvas   #8BD5B1 = --sage
+  rgba(32,34,38,·) = --surface-raised   rgba(45,48,53,·) = --line
+"""
 
 from . import server as _server
 
@@ -60,19 +68,19 @@ def card_rank():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="50" fill="#' + accent + '" font-family="Space Mono, monospace" '
         'font-size="12" font-weight="700">LEVEL RANK</text>'
-        '<text x="36" y="90" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="90" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="28" font-weight="700">' + _safe(name[:30]) + '</text>'
-        '<text x="36" y="130" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="130" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="18">Level ' + str(level) + ' &#183; Rank #' + str(rank) + '</text>'
         '<rect x="36" y="160" width="' + str(bar_w) + '" height="24" rx="12" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.6)" stroke-width="1"/>'
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.8)" stroke-width="1"/>'
         '<rect x="36" y="160" width="' + str(int(bar_w * progress)) + '" height="24" rx="12" '
         'fill="#' + accent + '" opacity="0.8"/>'
-        '<text x="36" y="220" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="13">'
+        '<text x="36" y="220" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="13">'
         + _format_num(xp_in_level) + ' / ' + _format_num(xp_for_next) + ' XP</text>'
-        '<text x="36" y="260" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">'
+        '<text x="36" y="260" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">'
         'Total: ' + _format_num(xp) + ' XP</text>'
-        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#858C96" '
         'font-family="Space Mono, monospace" font-size="10">LEVELING</text>'
     )
     return _svg_wrap(body, W, H)
@@ -83,7 +91,7 @@ def card_leaderboard():
     guild_id = _int_param(request.args.get("guild"))
     page = _int_param(request.args.get("page"), 1)
     card_type = request.args.get("type", "level")
-    accent, bg_top, bg_bot = _get_guild_card_colors(guild_id) if card_type == "level" else ("FFC45C", "261A16", "120C0A")
+    accent, bg_top, bg_bot = _get_guild_card_colors(guild_id) if card_type == "level" else ("D5D9DF", "111316", "050607")
     per_page = 10
     offset = (page - 1) * per_page
 
@@ -131,18 +139,18 @@ def card_leaderboard():
             val = row.get("balance", 0) + row.get("bank", 0)
             subtitle = _format_num(val)
 
-        rc = "#FFDC8C" if i == 0 else ("#F5E8D2" if i == 1 else ("#" + accent if i == 2 else "#C8BBA8"))
+        rc = "#D5D9DF" if i == 0 else ("#F4F5F7" if i == 1 else ("#" + accent if i == 2 else "#B4BAC3"))
         rt = medals.get(i, f"#{i + 1}")
         fs = "22" if i < 3 else "18"
 
         rows_svg += (
             '<rect x="28" y="' + str(y) + '" width="' + str(W - 56) + '" height="' + str(ROW_H)
-            + '" rx="14" fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1"/>'
+            + '" rx="14" fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1"/>'
             '<text x="' + str(28 + 56) + '" y="' + str(y + ROW_H // 2 + 6) + '" text-anchor="middle" fill="'
             + rc + '" font-family="Plus Jakarta Sans, sans-serif" font-size="' + fs + '" font-weight="700">'
             + rt + '</text>'
             '<text x="' + str(28 + 60 + ROW_H - 16 + 14 + 28) + '" y="' + str(y + ROW_H // 2 + 2)
-            + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" font-size="18" font-weight="700">'
+            + '" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" font-size="18" font-weight="700">'
             + _safe(name[:25]) + '</text>'
             '<text x="' + str(W - 28 - 24) + '" y="' + str(y + ROW_H // 2 + 2)
             + '" text-anchor="end" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
@@ -159,13 +167,13 @@ def card_leaderboard():
         '<rect width="' + str(W) + '" height="' + str(H) + '" rx="28" fill="none" '
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="40" fill="#' + accent + '" font-family="Space Mono, monospace" '
-        'font-size="12" font-weight="700">CAFE ' + card_type.upper() + '</text>'
-        '<text x="36" y="66" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="12" font-weight="700">NIKO ' + card_type.upper() + '</text>'
+        '<text x="36" y="66" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="26" font-weight="700">' + title + '</text>'
-        '<text x="' + str(W - 36) + '" y="60" text-anchor="end" fill="#C8BBA8" '
+        '<text x="' + str(W - 36) + '" y="60" text-anchor="end" fill="#B4BAC3" '
         'font-family="Space Mono, monospace" font-size="13">Page ' + str(page) + '/' + str(pages) + '</text>'
         + rows_svg +
-        '<text x="36" y="' + str(H - 20) + '" fill="#C8BBA8" font-family="Space Mono, monospace" '
+        '<text x="36" y="' + str(H - 20) + '" fill="#B4BAC3" font-family="Space Mono, monospace" '
         'font-size="12">use arrows below to navigate</text>'
     )
     return _svg_wrap(body, W, H)
@@ -178,7 +186,7 @@ def card_shop():
     except ImportError:
         SHOP_ITEMS = {}
     category = request.args.get("cat", "all")
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
 
     items = list(SHOP_ITEMS.values())
     if category and category != "all":
@@ -197,11 +205,11 @@ def card_shop():
         name_s = _safe(str(item.get("name", "Unknown"))[:30])
         price = _int_param(item.get("price"))
         emoji = _safe(str(item.get("emoji", "\U0001f4e6"))[:8])
-        bg_fill = "rgba(50,36,30,0.9)" if i % 2 == 0 else "rgba(40,28,22,0.9)"
+        bg_fill = "rgba(32,34,38,0.92)" if i % 2 == 0 else "rgba(25,27,31,0.92)"
         rows_svg += (
             '<rect x="36" y="' + str(y) + '" width="' + str(W - 72) + '" height="' + str(row_h - 4) + '" rx="12" '
-            'fill="' + bg_fill + '" stroke="rgba(110,78,50,0.5)" stroke-width="1"/>'
-            '<text x="56" y="' + str(y + 30) + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+            'fill="' + bg_fill + '" stroke="rgba(45,48,53,0.7)" stroke-width="1"/>'
+            '<text x="56" y="' + str(y + 30) + '" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
             'font-size="15" font-weight="600">' + emoji + ' ' + name_s + '</text>'
             '<text x="' + str(W - 56) + '" y="' + str(y + 30) + '" text-anchor="end" fill="#' + accent + '" '
             'font-family="Space Mono, monospace" font-size="14" font-weight="700">' + _format_num(price) + '</text>'
@@ -210,7 +218,7 @@ def card_shop():
     # Try to get user balance if user_id provided
     balance = _int_param(request.args.get("balance"))
     bal_text = (
-        '<text x="' + str(W - 36) + '" y="48" text-anchor="end" fill="#C8BBA8" '
+        '<text x="' + str(W - 36) + '" y="48" text-anchor="end" fill="#B4BAC3" '
         'font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
         '<text x="' + str(W - 36) + '" y="72" text-anchor="end" fill="#' + accent + '" '
         'font-family="Plus Jakarta Sans, sans-serif" font-size="22" font-weight="700">'
@@ -227,12 +235,12 @@ def card_shop():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="48" fill="#' + accent + '" font-family="Space Mono, monospace" '
         'font-size="11" font-weight="700">SHOP &#8212; ' + cat_label + '</text>'
-        '<text x="36" y="78" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
-        'font-size="28" font-weight="700">Caf&#233; Boutique</text>'
+        '<text x="36" y="78" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
+        'font-size="28" font-weight="700">Niko Boutique</text>'
         + bal_text +
-        '<line x1="36" y1="96" x2="' + str(W - 36) + '" y2="96" stroke="rgba(110,78,50,0.5)" stroke-width="1"/>'
+        '<line x1="36" y1="96" x2="' + str(W - 36) + '" y2="96" stroke="rgba(45,48,53,0.7)" stroke-width="1"/>'
         + rows_svg +
-        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#8C918E" '
+        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#858C96" '
         'font-family="Space Mono, monospace" font-size="10">' + str(n) + ' ITEMS</text>'
     )
     return _svg_wrap(body, W, H)
@@ -264,7 +272,7 @@ def card_economy():
             pass
 
     net_worth = balance + bank
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
     W, H = 820, 380
 
     body = (
@@ -275,28 +283,28 @@ def card_economy():
         '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="url(#bg)"/>'
         '<rect width="' + str(W) + '" height="' + str(H) + '" rx="26" fill="none" '
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
-        '<text x="168" y="70" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="168" y="70" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="28" font-weight="700">' + _safe(name[:25]) + '</text>'
-        '<text x="168" y="94" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="168" y="94" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="14" font-weight="500">' + _safe(job) + ' &#183; Level ' + str(level) + '</text>'
         '<rect x="36" y="120" width="' + str(W - 72) + '" height="72" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="56" y="145" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">CASH</text>'
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="56" y="145" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">CASH</text>'
         '<text x="56" y="176" fill="#' + accent + '" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="24" font-weight="700">' + _format_num(balance) + '</text>'
-        '<text x="' + str(W // 3 + 26) + '" y="145" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BANK</text>'
-        '<text x="' + str(W // 3 + 26) + '" y="176" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="' + str(W // 3 + 26) + '" y="145" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">BANK</text>'
+        '<text x="' + str(W // 3 + 26) + '" y="176" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="24" font-weight="700">' + _format_num(bank) + '</text>'
-        '<text x="' + str(2 * W // 3 + 16) + '" y="145" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">NET WORTH</text>'
-        '<text x="' + str(2 * W // 3 + 16) + '" y="176" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="' + str(2 * W // 3 + 16) + '" y="145" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">NET WORTH</text>'
+        '<text x="' + str(2 * W // 3 + 16) + '" y="176" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="24" font-weight="700">' + _format_num(net_worth) + '</text>'
         '<rect x="36" y="212" width="' + str(W - 72) + '" height="52" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="56" y="237" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">DAILY STREAK</text>'
-        '<text x="56" y="256" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="56" y="237" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">DAILY STREAK</text>'
+        '<text x="56" y="256" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="20" font-weight="700">' + str(daily_streak) + ' days</text>'
-        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
-        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#858C96" '
+        'font-family="Space Mono, monospace" font-size="10">NIKO ECONOMY</text>'
     )
     return _svg_wrap(body, W, H)
 
@@ -322,7 +330,7 @@ def card_daily():
         except Exception:
             pass
 
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
     W, H = 820, 280
 
     body = (
@@ -335,22 +343,22 @@ def card_daily():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="48" fill="#' + accent + '" font-family="Space Mono, monospace" '
         'font-size="12" font-weight="700">DAILY REWARD</text>'
-        '<text x="36" y="80" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="80" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="26" font-weight="700">' + _safe(name[:25]) + '</text>'
-        '<text x="36" y="110" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="110" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="14">' + _safe(job) + ' &#183; Streak: ' + str(streak) + ' days</text>'
         '<rect x="36" y="140" width="' + str(W // 2 - 52) + '" height="80" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="56" y="170" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">REWARD</text>'
-        '<text x="56" y="210" fill="#76E29C" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="56" y="170" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">REWARD</text>'
+        '<text x="56" y="210" fill="#8BD5B1" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">+' + _format_num(reward) + '</text>'
         '<rect x="' + str(W // 2 + 16) + '" y="140" width="' + str(W // 2 - 52) + '" height="80" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="' + str(W // 2 + 36) + '" y="170" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">NEW BALANCE</text>'
-        '<text x="' + str(W // 2 + 36) + '" y="210" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="170" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">NEW BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="210" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
-        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
-        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#858C96" '
+        'font-family="Space Mono, monospace" font-size="10">NIKO ECONOMY</text>'
     )
     return _svg_wrap(body, W, H)
 
@@ -375,7 +383,7 @@ def card_work():
         except Exception:
             pass
 
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
     W, H = 820, 300
 
     body = (
@@ -388,24 +396,24 @@ def card_work():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="48" fill="#' + accent + '" font-family="Space Mono, monospace" '
         'font-size="12" font-weight="700">WORK SHIFT</text>'
-        '<text x="36" y="80" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="80" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="26" font-weight="700">' + _safe(name[:25]) + '</text>'
-        '<text x="36" y="106" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="106" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="14">' + _safe(job) + '</text>'
         '<rect x="36" y="130" width="' + str(W // 2 - 52) + '" height="80" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="56" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">EARNED</text>'
-        '<text x="56" y="200" fill="#76E29C" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="56" y="160" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">EARNED</text>'
+        '<text x="56" y="200" fill="#8BD5B1" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">+' + _format_num(reward) + '</text>'
         '<rect x="' + str(W // 2 + 16) + '" y="130" width="' + str(W // 2 - 52) + '" height="80" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">NEW BALANCE</text>'
-        '<text x="' + str(W // 2 + 36) + '" y="200" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">NEW BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="200" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
-        '<text x="36" y="240" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="240" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="13">' + _safe(message[:60]) + '</text>'
-        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
-        'font-family="Space Mono, monospace" font-size="10">CAFE ECONOMY</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#858C96" '
+        'font-family="Space Mono, monospace" font-size="10">NIKO ECONOMY</text>'
     )
     return _svg_wrap(body, W, H)
 
@@ -439,7 +447,7 @@ def card_inventory():
     except ImportError:
         def get_item(iid): return None
 
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
     W = 820
     row_h = 44
 
@@ -472,8 +480,8 @@ def card_inventory():
     letter = name[0].upper() if name else "U"
     av_elem = (
         '<clipPath id="avclip"><circle cx="48" cy="52" r="28"/></clipPath>'
-        '<circle cx="48" cy="52" r="28" fill="#6E4E32"/>'
-        '<text x="48" y="58" text-anchor="middle" fill="#F5E8D2" '
+        '<circle cx="48" cy="52" r="28" fill="#202226"/>'
+        '<text x="48" y="58" text-anchor="middle" fill="#F4F5F7" '
         'font-family="Plus Jakarta Sans, sans-serif" font-size="18" font-weight="700">' + letter + '</text>'
     )
 
@@ -481,21 +489,21 @@ def card_inventory():
     cur_y = 120
     for label, items in sections:
         sections_svg += (
-            '<text x="36" y="' + str(cur_y + 16) + '" fill="#C8BBA8" '
+            '<text x="36" y="' + str(cur_y + 16) + '" fill="#B4BAC3" '
             'font-family="Space Mono, monospace" font-size="12" font-weight="700">' + label + '</text>'
             '<line x1="36" y1="' + str(cur_y + 24) + '" x2="' + str(W - 36) + '" y2="' + str(cur_y + 24) + '" '
-            'stroke="rgba(110,78,50,0.4)" stroke-width="1"/>'
+            'stroke="rgba(45,48,53,0.6)" stroke-width="1"/>'
         )
         cur_y += 36
         for j, item in enumerate(items):
             iy = cur_y + j * row_h
-            bg_fill = "rgba(50,36,30,0.9)" if j % 2 == 0 else "rgba(40,28,22,0.9)"
+            bg_fill = "rgba(32,34,38,0.92)" if j % 2 == 0 else "rgba(25,27,31,0.92)"
             sections_svg += (
                 '<rect x="36" y="' + str(iy) + '" width="' + str(W - 72) + '" height="' + str(row_h - 4) + '" rx="10" '
                 'fill="' + bg_fill + '"/>'
-                '<text x="56" y="' + str(iy + 26) + '" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+                '<text x="56" y="' + str(iy + 26) + '" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
                 'font-size="13" font-weight="600">' + item["emoji"] + ' ' + _safe(item["name"][:25]) + '</text>'
-                '<text x="' + str(W - 56) + '" y="' + str(iy + 26) + '" text-anchor="end" fill="#C8BBA8" '
+                '<text x="' + str(W - 56) + '" y="' + str(iy + 26) + '" text-anchor="end" fill="#B4BAC3" '
                 'font-family="Space Mono, monospace" font-size="14" font-weight="700">&#215;' + str(item["count"]) + '</text>'
             )
         cur_y += len(items) * row_h + 12
@@ -510,12 +518,12 @@ def card_inventory():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         + av_elem +
         '<circle cx="48" cy="52" r="31" fill="none" stroke="#' + accent + '" stroke-width="2"/>'
-        '<text x="88" y="46" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="88" y="46" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="22" font-weight="700">' + _safe(name[:25]) + '</text>'
-        '<text x="88" y="66" fill="#C8BBA8" font-family="Space Mono, monospace" '
+        '<text x="88" y="66" fill="#B4BAC3" font-family="Space Mono, monospace" '
         'font-size="11">BALANCE: ' + _format_num(balance) + '</text>'
         + sections_svg +
-        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#8C918E" '
+        '<text x="' + str(W - 36) + '" y="' + str(H - 16) + '" text-anchor="end" fill="#858C96" '
         'font-family="Space Mono, monospace" font-size="10">' + str(total_items) + ' ITEMS</text>'
     )
     return _svg_wrap(body, W, H)
@@ -543,9 +551,9 @@ def card_coinflip():
         except Exception:
             pass
 
-    accent, bg_top, bg_bot = "FFC45C", "261A16", "120C0A"
+    accent, bg_top, bg_bot = "D5D9DF", "111316", "050607"
     W, H = 820, 300
-    rc = "76E29C" if won else "F46E7C"
+    rc = "8BD5B1" if won else "E8A2A2"
     rt = "WIN" if won else "LOSS"
 
     body = (
@@ -558,22 +566,22 @@ def card_coinflip():
         'stroke="#' + accent + '" stroke-width="2" opacity="0.6"/>'
         '<text x="36" y="40" fill="#' + rc + '" font-family="Space Mono, monospace" '
         'font-size="12" font-weight="700">COINFLIP &#8212; ' + rt + '</text>'
-        '<text x="36" y="76" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="76" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="22" font-weight="700">' + _safe(name[:25]) + '</text>'
-        '<text x="36" y="98" fill="#C8BBA8" font-family="Plus Jakarta Sans, sans-serif" '
+        '<text x="36" y="98" fill="#B4BAC3" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="13">Called ' + call + ' &#183; Got ' + result + '</text>'
         '<rect x="36" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="56" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">'
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="56" y="160" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">'
         + ("PAYOUT" if won else "BET") + '</text>'
         '<text x="56" y="202" fill="#' + rc + '" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">' + _format_num(payout if won else amount) + '</text>'
         '<rect x="' + str(W // 2 + 16) + '" y="130" width="' + str(W // 2 - 52) + '" height="90" rx="16" '
-        'fill="rgba(50,36,30,0.9)" stroke="rgba(110,78,50,0.8)" stroke-width="1.5"/>'
-        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#C8BBA8" font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
-        '<text x="' + str(W // 2 + 36) + '" y="202" fill="#F5E8D2" font-family="Plus Jakarta Sans, sans-serif" '
+        'fill="rgba(32,34,38,0.92)" stroke="rgba(45,48,53,0.9)" stroke-width="1.5"/>'
+        '<text x="' + str(W // 2 + 36) + '" y="160" fill="#B4BAC3" font-family="Space Mono, monospace" font-size="11">BALANCE</text>'
+        '<text x="' + str(W // 2 + 36) + '" y="202" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
         'font-size="32" font-weight="700">' + _format_num(balance) + '</text>'
-        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#8C918E" '
-        'font-family="Space Mono, monospace" font-size="10">CAFE CASINO</text>'
+        '<text x="' + str(W - 36) + '" y="' + str(H - 20) + '" text-anchor="end" fill="#858C96" '
+        'font-family="Space Mono, monospace" font-size="10">NIKO CASINO</text>'
     )
     return _svg_wrap(body, W, H)

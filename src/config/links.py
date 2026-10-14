@@ -1,5 +1,7 @@
 # this is where the bots links can be updated
 
+import os
+
 WEBSITE = "https://niko.sryze.cc"
 
 # Support-server references always point at the website's /discord page. That
@@ -17,3 +19,8 @@ TOS = f"{WEBSITE}/terms"
 PRIVACY = f"{WEBSITE}/privacy"
 COMMUNITY = f"{WEBSITE}/community"
 DOCS = f"{WEBSITE}/docs"
+
+# top.gg listing. The bot ID defaults to the application ID the rest of the
+# deployment uses; set TOPGG_BOT_ID when the listing belongs to a different app.
+TOPGG_BOT_ID = os.environ.get("TOPGG_BOT_ID", "1520558530472448170")
+TOPGG_VOTE_URL = f"https://top.gg/bot/{TOPGG_BOT_ID}/vote"

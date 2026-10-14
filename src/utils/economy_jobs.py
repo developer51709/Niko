@@ -336,3 +336,44 @@ COOLDOWN_DAILY  = 86400
 COOLDOWN_WORK   = 3600
 COOLDOWN_CRIME  = 3600
 COOLDOWN_ROB    = 3600
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# top.gg voting rewards
+#
+# A vote is one upvote from the listing site. top.gg allows one vote per
+# account every 12 hours, so `VOTE_COOLDOWN` is also the duplicate window: a
+# webhook delivered twice for the same vote must never pay out twice.
+#
+# Streaks count *consecutive* vote windows. A vote inside
+# `VOTE_STREAK_WINDOW` continues the streak; anything later restarts it at
+# one. The streak drives two multipliers: the payout for the vote itself, and
+# a bonus on daily/work earnings while the streak is alive.
+# ──────────────────────────────────────────────────────────────────────────
+
+VOTE_COOLDOWN           = 12 * 3600   # minimum gap between two counted votes
+VOTE_STREAK_WINDOW      = 24 * 3600   # gap that still counts as "regular"
+VOTE_BASE_REWARD        = 500         # coins for a first vote
+VOTE_WEEKEND_MULTIPLIER = 2.0         # top.gg weekend votes pay double
+VOTE_STREAK_STEPS       = 10          # streak steps that scale the bonuses
+VOTE_REWARD_STEP        = 0.10        # +10% vote payout per step (max 2.0x)
+VOTE_EARNINGS_STEP      = 0.05        # +5% daily/work bonus per step (max 1.5x)
+
+
+def vote_streak_steps(streak: int) -> int:
+    """Number of capped streak steps a vote streak has earned (0 … 10)."""
+    try:
+        value = int(streak or 0)
+    except (TypeError, ValueError):
+        value = 0
+    return max(0, min(value, VOTE_STREAK_STEPS))
+
+
+def vote_reward_multiplier(streak: int) -> float:
+    """Multiplier applied to the vote payout itself (1.0x … 2.0x)."""
+    return 1 + vote_streak_steps(streak) * VOTE_REWARD_STEP
+
+
+def vote_earnings_multiplier(streak: int) -> float:
+    """Bonus applied to daily/work earnings while a vote streak is alive."""
+    return 1 + vote_streak_steps(streak) * VOTE_EARNINGS_STEP

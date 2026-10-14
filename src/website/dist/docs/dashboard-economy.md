@@ -1,67 +1,49 @@
-# Dashboard: Economy Settings
+# Dashboard: Economy & Achievements
 
-Configure your server's economy settings through the visual dashboard.
+The economy is **global per account**, not per server: your wallet, vault, level, job, streaks and badges are the same numbers in every server Niko is in. Because of that, the dashboard keeps economy on your own profile instead of inside a server's settings.
 
-## Economy Dashboard Sections
+## Where it lives
 
-### General Settings
-- Enable/disable economy
-- Starting balance for new members
-- Currency name and symbol
+Open the dashboard, then use the **My overview** tab in the sidebar. It holds three personal tabs:
 
-### Jobs
-- Available jobs
-- Job pay rates
-- Job requirements
+| Tab | Address | What it shows |
+| --- | --- | --- |
+| Overview | `/dashboard` | Your profile snapshot and the economy privacy toggle |
+| Economy | `/dashboard/me/economy` | Wallet, vault, net worth, global rank, recent activity and the vote card |
+| Achievements | `/dashboard/me/achievements` | Every badge with its progress bar, reward and unlock state |
 
-### Banking
-- Bank tier rates
-- Interest rates
-- Tier requirements
+These tabs read `GET /api/me/economy` and `GET /api/me/achievements` for the signed-in account only — no server is selected and no Manage Server permission is needed.
 
-### Shop
-- Available items
-- Item prices
-- Item effects
+## The Economy tab
 
-### Lottery
-- Base pot amount
-- Ticket price
-- Draw interval
+- **Balance and vault** with the combined net worth for the account
+- **Level, job, bank tier and daily streak**
+- **Totals**: earned, spent and shifts worked
+- **Global rank** and how many economy profiles exist
+- **Recent ledger activity**, newest first
+- **top.gg vote streak**, current multipliers and the listing link
 
-## Configuration Options
+## The Achievements tab
 
-### Starting Balance
-Set how much money new members start with:
+- Locked badges first, closest to completion at the top
+- Unlocked badges with the coins they already paid
+- Coins still available from badges you have not reached yet
 
-```
-Default: 100 coins
-```
+## The only economy setting
 
-### Currency Display
-Customize how currency appears:
-- Currency name (coins, credits, etc.)
-- Symbol (€, $, ₲, etc.)
+There is exactly one economy option in the dashboard, and it is not per server: **leaderboard privacy**, on the personal Overview tab. It posts to `POST /api/me/economy-privacy` with `{"leaderboard_private": true}` or `{"leaderboard_private": false}`.
 
-### Job Configuration
-Adjust job details:
-- Job names and descriptions
-- Pay rates per job
-- Promotion requirements
+When it is on you stay ranked on the public leaderboard, but your avatar, username and display name are shown only to you, to official Niko staff, and to people who share a server with you.
 
-### Shop Items
-Manage shop inventory:
-- Add/remove items
-- Set prices
-- Configure effects
+## What is not here
 
-## Saving Changes
+Nothing on the Economy tab configures game balance for a server. There is no enable/disable switch, no starting balance, no currency name or symbol, no job pay rates or promotion requirements, no bank interest or tier settings, no lottery configuration and no shop management — the economy always runs the same way everywhere.
 
-Changes are saved automatically as you make them. You can also manually save.
+Servers still have plenty of their own settings; those live under the server sections of the sidebar and use `/api/guild/<id>/...` routes. Economy and Achievements are not among them.
 
 ## Tips
 
-1. **Balance settings**: Adjust starting balance for your server's economy
-2. **Job variety**: More jobs = more ways to earn
-3. **Shop appeal**: Interesting items encourage participation
-4. **Test economy**: Verify commands work with new settings
+1. **Look in the right place**: economy numbers are on your profile, not in a server tab
+2. **Pick a server only for server work**: leveling, moderation, tickets and similar settings stay per server
+3. **Hide your identity if you want**: the privacy toggle keeps your ranking without publishing your name
+4. **Vote for the best multipliers**: a live vote streak raises your vote payout and your daily and work earnings

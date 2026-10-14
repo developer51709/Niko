@@ -1,6 +1,9 @@
 export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
 export type DashSection = "overview" | "leveling" | "moderation" | "server" | "onboarding" | "tickets" | "applications" | "ai" | "customization";
+export type UserTab = "overview" | "economy" | "achievements";
 export type DashboardView = "overview" | "servers" | "guild";
+
+const USER_TABS: UserTab[] = ["overview", "economy", "achievements"];
 
 function normalizedPath(pathname: string) {
   return pathname.replace(/\/+$/, "") || "/";
@@ -35,23 +38,37 @@ export function dashboardPath(guildId?: string, section: DashSection = "overview
   return guildId ? `/dashboard/${guildId}/${section}` : "/dashboard";
 }
 
+/** Personal tabs live under `/dashboard` and never select a server. */
+export function dashboardUserPath(tab: UserTab = "overview") {
+  return tab === "overview" ? "/dashboard" : `/dashboard/me/${tab}`;
+}
+
 export function dashboardServersPath() {
   return "/dashboard/servers";
 }
 
-export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection } {
+export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection; tab: UserTab } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
   const known: DashSection[] = ["overview", "leveling", "moderation", "server", "onboarding", "tickets", "applications", "ai", "customization"];
   if (parts[1] === "servers") {
-    return { view: "servers", guildId: null, section: "overview" };
+    return { view: "servers", guildId: null, section: "overview", tab: "overview" };
   }
   if (!parts[1] || parts[1] === "staff") {
-    return { view: "overview", guildId: null, section: "overview" };
+    return { view: "overview", guildId: null, section: "overview", tab: "overview" };
+  }
+  if (parts[1] === "me") {
+    return {
+      view: "overview",
+      guildId: null,
+      section: "overview",
+      tab: USER_TABS.includes(parts[2] as UserTab) ? parts[2] as UserTab : "overview",
+    };
   }
   return {
     view: "guild",
     guildId: parts[1] || null,
     section: known.includes(parts[2] as DashSection) ? parts[2] as DashSection : "overview",
+    tab: "overview",
   };
 }
 

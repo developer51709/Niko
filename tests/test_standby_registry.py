@@ -4,8 +4,10 @@ from types import SimpleNamespace
 
 from utils.standby_registry import (
     add_standby,
+    announced_primary_origin,
     init_standby_registry,
     list_standbys,
+    record_primary_origin,
     remove_standby,
 )
 
@@ -55,17 +57,32 @@ class FakeCollection:
         deleted = self.documents.pop(query["_id"], None)
         return SimpleNamespace(deleted_count=1 if deleted else 0)
 
+    async def update_one(self, query, update, upsert=False):
+        document = self.documents.setdefault(query["_id"], {"_id": query["_id"]})
+        document.update(update.get("$set", {}))
+        return SimpleNamespace(modified_count=1, upserted_id=None)
+
+    async def find_one(self, query, projection=None):
+        document = self.documents.get(query["_id"])
+        if document is None:
+            return None
+        if projection:
+            return {key: value for key, value in document.items() if projection.get(key)}
+        return dict(document)
+
 
 class FakePool:
     db_type = "mongodb"
 
-    def __init__(self, collection):
-        self._collection = collection
+    def __init__(self, collection, primary=None):
+        self._collections = {"standby_instances": collection}
+        if primary is not None:
+            self._collections["standby_primary"] = primary
 
     def collection(self, name):
-        if name != "standby_instances":
+        if name not in self._collections:
             raise AssertionError(f"Unexpected collection: {name}")
-        return self._collection
+        return self._collections[name]
 
 
 class StandbyRegistryTests(unittest.TestCase):
@@ -109,6 +126,25 @@ class StandbyRegistryTests(unittest.TestCase):
             self.assertEqual([item], await list_standbys(restarted_primary))
             await remove_standby(restarted_primary, "standby-1")
             self.assertEqual([], await list_standbys(primary))
+
+        asyncio.run(scenario())
+
+    def test_primary_announces_its_origin_for_standby_instances(self):
+        instances = FakeCollection()
+        announced = FakeCollection()
+        bot = SimpleNamespace(cxn=FakePool(instances, announced))
+
+        async def scenario():
+            self.assertIsNone(await announced_primary_origin(bot))
+            await record_primary_origin(bot, "https://niko.example")
+            self.assertEqual("https://niko.example", await announced_primary_origin(bot))
+            await record_primary_origin(bot, "https://niko.example:8443")
+            self.assertEqual("https://niko.example:8443", await announced_primary_origin(bot))
+            # A standby only forwards management to a public HTTPS origin.
+            await record_primary_origin(bot, "http://insecure.example")
+            self.assertIsNone(await announced_primary_origin(bot))
+            # Announcing is not a standby registration.
+            self.assertEqual([], await list_standbys(bot))
 
         asyncio.run(scenario())
 

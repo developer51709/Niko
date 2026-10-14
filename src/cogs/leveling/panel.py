@@ -10,6 +10,10 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from config.emojis import get_emoji
 
+# The brand accent shared by every Niko view, used when a guild has not picked
+# custom card colours.
+ACCENT_BRAND = 0xC8A882
+
 # ───────────────────────────────────────────────────
 #  MESSAGE TABLE
 # ───────────────────────────────────────────────────
@@ -115,7 +119,7 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
     "level_up_message": None,
     "level_roles":      {},
     # Card customization
-    "card_accent":      None,   # RGB tuple or None for default gold
+    "card_accent":      None,   # RGB tuple or None for the default theme accent
     "card_bg_top":      None,   # RGB tuple or None for default espresso
     "card_bg_bottom":   None,   # RGB tuple or None for default dark
 }
@@ -731,7 +735,7 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
 
     # Card accent for the CV2 container
     accent_rgb = cfg.get("card_accent")
-    accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(0xFFC45C)
+    accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(ACCENT_BRAND)
 
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=text),

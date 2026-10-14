@@ -15,6 +15,7 @@ from . import (  # noqa: E402,F401
     card_routes,
     application_routes,
     team_recruitment_routes,
+    economy_routes,
     site_routes,
     appeal_routes,
     standby_routes,

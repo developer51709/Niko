@@ -49,6 +49,146 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "personal-economy-tabs",
+    title: "Economy & Achievements Move to Your Profile",
+    date: "2026-10-14",
+    tags: ["dashboard", "economy", "achievements", "fixed"],
+    summary:
+      "The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.",
+    highlights: [
+      {
+        title: "Tabs On Your Profile, Not a Server",
+        description:
+          "My overview now has Overview at /dashboard, Economy at /dashboard/me/economy and Achievements at /dashboard/me/achievements, all reading your global account: wallet, vault, level, job, global rank, recent ledger activity and your top.gg vote streak.",
+        icon: "grid",
+      },
+      {
+        title: "Nothing Server-Shaped Left",
+        description:
+          "The economy has no per-server settings to manage, so the only control that remains is the leaderboard privacy toggle on the personal Overview tab, and the server sidebar keeps just the sections that really do belong to a server.",
+        icon: "shield",
+      },
+      {
+        title: "My Servers Lists Your Servers",
+        description:
+          "The My servers tab showed every server as “Ready to add” whenever the dashboard process had no live gateway cache of Niko's guilds; it now also trusts the guild list Niko records at startup.",
+        icon: "users",
+      },
+    ],
+    changes: [
+      {
+        category: "improved",
+        items: [
+          "Economy and Achievements are now personal tabs under My overview instead of server sections, since the economy is global per Discord account",
+          "The Economy tab shows global rank, worth, streaks and recent ledger activity, and rewards no longer require selecting a server to read",
+          "The Achievements tab keeps every badge, its progress bar, its unlock state and the coins it paid",
+          "Server sidebars list only sections that configure that server, and economy reads through /api/me/economy and /api/me/achievements",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "My servers listed installed servers under “Add Niko to a server” because guild install state came only from the live gateway cache, which is empty on a standby instance or before the gateway's first sync; the dashboard now falls back to the guild list Niko writes at startup",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
+    slug: "economy-card-theme-refresh",
+    title: "Economy & Leveling Cards Match the Website Theme",
+    date: "2026-10-14",
+    tags: ["economy", "leveling", "theme", "cards", "dashboard"],
+    summary:
+      "Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.",
+    highlights: [
+      {
+        title: "One Palette Everywhere",
+        description:
+          "Balance, reward, leaderboard, shop, inventory, coinflip, blackjack and level cards are drawn from the website's own theme tokens, so a card finally looks like a panel of the dashboard.",
+        icon: "paint",
+      },
+      {
+        title: "The Café Look Is Gone",
+        description:
+          "The espresso gradients, gold borders, coffee-cup placeholder avatar and café banner are replaced by a near-black graphite canvas with a steel accent and sage for money earned.",
+        icon: "guild_economy",
+      },
+      {
+        title: "Discord Views Followed",
+        description:
+          "Economy and shop containers now use the same brand accent as every other Niko view instead of their own café brown, so commands and cards match again.",
+        icon: "spark",
+      },
+    ],
+    changes: [
+      {
+        category: "improved",
+        items: [
+          "Economy, gambling and leveling image cards use the website theme palette: graphite surfaces, a steel accent for numerals, sage for money earned and a muted red for losses",
+          "Card banners read “NIKO ECONOMY” and “NIKO LEVELING”, and the placeholder avatar is a neutral profile mark",
+          "Server-configured level card colours still take precedence over the defaults",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "The card palettes could drift from the site theme unnoticed; a test now pins every card colour to the stylesheet tokens",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
+    slug: "topgg-voting-rewards-and-achievements",
+    title: "top.gg Voting Rewards & Café Achievements",
+    date: "2026-10-14",
+    tags: ["economy", "voting", "achievements", "dashboard", "streaks"],
+    summary:
+      "Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.",
+    highlights: [
+      {
+        title: "Rewarded Votes",
+        description:
+          "Every counted top.gg vote credits coins and sends you a thank-you DM. Weekend votes pay double, and repeated webhook deliveries never pay out twice.",
+        icon: "guild_economy",
+      },
+      {
+        title: "Streaks That Pay Off",
+        description:
+          "Vote every 12 hours to build a streak of up to ten steps, raising your vote payout to 2.0x and your daily and work earnings to 1.5x. Missing a day restarts the streak, and the vote card in Discord and the dashboard both show where you stand.",
+        icon: "chart",
+      },
+      {
+        title: "Twenty-One Badges to Chase",
+        description:
+          "The café now tracks twenty-one achievements across work, banking, streaks, spending and voting. Each one pays its reward automatically the moment it unlocks, and the new Achievements tab shows progress bars for every badge you are still working on.",
+        icon: "guild_achievements",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "top.gg vote webhook that credits coins, tracks streaks and sends a thank-you DM",
+          "Streak multipliers for vote payouts and for daily and work earnings, with weekend vote doubling",
+          "Seven voting badges covering total votes and vote streaks, plus fourteen existing café badges shown with progress and rewards",
+          "Economy tab in the dashboard with wallet, vault, level, global and server ranks, recent ledger activity and the vote card",
+          "Achievements tab in the dashboard listing locked and unlocked badges with progress bars",
+          "`/vote` command with the listing link, streak status and current multipliers",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "Economy accounts persist their vote counters, so streaks survive restarts on both SQLite and MongoDB deployments",
+          "Existing databases gain the vote counter columns automatically on startup",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
     slug: "global-economy-leaderboard-privacy",
     title: "Global Economy Leaderboard & Privacy",
     date: "2026-10-13",
