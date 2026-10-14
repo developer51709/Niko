@@ -92,6 +92,28 @@ class StandbyFailoverTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_static_cloudflare_check_uses_requests_text_property(self):
+        response = type("Response", (), {
+            "status_code": 403,
+            "headers": {"Server": "cloudflare", "CF-Ray": "abc"},
+            "text": "Attention Required!",
+        })()
+
+        self.assertTrue(StandbyFailoverManager.is_cloudflare_block(response))
+
+    def test_async_cloudflare_check_awaits_aiohttp_text_method(self):
+        class Response:
+            status = 403
+            headers = {"Server": "cloudflare", "CF-Ray": "abc"}
+
+            async def text(self):
+                return "Attention Required!"
+
+        async def scenario():
+            self.assertTrue(await StandbyFailoverManager()._async_cloudflare_block(Response()))
+
+        asyncio.run(scenario())
+
     def test_manager_selects_healthy_full_backend(self):
         async def scenario():
             manager = StandbyFailoverManager()

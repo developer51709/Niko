@@ -74,7 +74,7 @@ class StandbyFailoverManager:
                 except Exception as exc:
                     response = getattr(exc, "response", None)
                     body = getattr(exc, "text", "")
-                    if response is None or not await manager.is_cloudflare_block(response, body):
+                    if response is None or not manager.is_cloudflare_block(response, body):
                         raise
                     manager.egress_blocked = True
                     if not manager.auto_enabled:
@@ -103,15 +103,12 @@ class StandbyFailoverManager:
         if status not in {403, 429, 503}:
             return False
         headers = getattr(response, "headers", {})
+        # requests exposes ``text`` as a string property, while aiohttp
+        # exposes it as an async method. Never invoke a callable here: doing so
+        # can create an un-awaited coroutine. The aiohttp path reads the body
+        # in _async_cloudflare_block and passes it as the fallback.
         body = getattr(response, "text", "")
-        if callable(body):
-            try:
-                body = body()
-                if hasattr(body, "__await__"):
-                    return False
-            except Exception:
-                body = ""
-        if not isinstance(body, str) or not body:
+        if callable(body) or not isinstance(body, str) or not body:
             body = body_fallback
         body = body.lower()
         header_signature = "cloudflare" in str(headers.get("Server", "")).lower() or bool(headers.get("CF-Ray"))
