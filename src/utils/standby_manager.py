@@ -54,47 +54,53 @@ class StandbyFailoverManager:
         self.failover_count = 0
         self.egress_blocked = False
         self._hooked_session = None
+        self._attached_http = None
         self._handoff_lock = asyncio.Lock()
         self._recovery_task = None
         self._recovery_interval = 600
 
     def attach(self, bot) -> bool:
+        """Wrap static_login so the standby manager owns startup REST failover."""
         self.bot = bot
         self.http = bot.http
+        if self._attached_http is self.http:
+            session = getattr(self.http, "_HTTPClient__session", None)
+            if session is not None and hasattr(session, "_request"):
+                self._install_hook(session)
+            return True
+
+        original_login = self.http.static_login
+
         session = getattr(self.http, "_HTTPClient__session", None)
         if session is not None and hasattr(session, "_request"):
             self._install_hook(session)
-        else:
-            original_login = self.http.static_login
-            manager = self
+        manager = self
 
-            async def wrapped_login(token):
-                try:
-                    data = await original_login(token)
-                except Exception as exc:
-                    response = getattr(exc, "response", None)
-                    body = getattr(exc, "text", "")
-                    if response is None or not manager.is_cloudflare_block(response, body):
-                        raise
-                    manager.egress_blocked = True
-                    if not manager.auto_enabled:
-                        raise
+        async def wrapped_static_login(token):
+            original_request = manager.http.request
 
-                    await manager.select_standby()
-                    # Preserve discord.py's connector by detaching it before
-                    # retrying the initial /users/@me call through standby.
-                    failed_session = getattr(manager.http, "_HTTPClient__session", None)
-                    if failed_session is not None and not failed_session.closed:
-                        failed_session.detach()
-                        await failed_session.close()
-                    data = await original_login(token)
-                    await manager.handoff_to_standby()
+            async def wrapped_request(*args, **kwargs):
+                # discord.py creates the aiohttp session at the start of
+                # static_login, before it issues /users/@me.
                 session = getattr(manager.http, "_HTTPClient__session", None)
-                if session is not None:
+                if session is not None and hasattr(session, "_request"):
                     manager._install_hook(session)
-                return data
+                return await original_request(*args, **kwargs)
 
-            self.http.static_login = wrapped_login
+            manager.http.request = wrapped_request
+            try:
+                data = await original_login(token)
+            finally:
+                manager.http.request = original_request
+
+            session = getattr(manager.http, "_HTTPClient__session", None)
+            if session is not None and hasattr(session, "_request"):
+                manager._install_hook(session)
+            return data
+
+        wrapped_static_login._standby_original_login = original_login
+        self.http.static_login = wrapped_static_login
+        self._attached_http = self.http
         return True
 
     @staticmethod
@@ -116,6 +122,8 @@ class StandbyFailoverManager:
         return (header_signature or body_signature) if status == 429 else (header_signature and body_signature)
 
     def _install_hook(self, session) -> None:
+        if session is self._hooked_session:
+            return
         original_request = session._request
         manager = self
 
@@ -128,18 +136,43 @@ class StandbyFailoverManager:
                     logging.warning("StandbyFailover", manager.last_error)
             response = await original_request(method, url, **kwargs)
             if manager._should_relay(str(url)) and await manager._async_cloudflare_block(response):
+                logging.warning("StandbyFailover", "Cloudflare block detected on Discord REST request.")
                 manager.egress_blocked = True
                 if not manager.auto_enabled:
                     return response
-                await manager.select_standby()
-                if manager.active_origin:
+                selected = await manager.select_standby()
+                if selected:
                     response.release()
-                    await manager.handoff_to_standby()
+                    if not await manager.handoff_to_standby():
+                        logging.error("StandbyFailover", f"Cloudflare block detected; standby gateway handoff failed: {manager.last_error}")
                     try:
                         return await manager.relay_aiohttp(original_request, method, str(url), kwargs)
                     except Exception as exc:
                         manager.last_error = f"Standby API relay failed ({type(exc).__name__})."
                         logging.warning("StandbyFailover", manager.last_error)
+                        return response
+
+                if manager.auto_enabled:
+                    logging.error("StandbyFailover", f"Cloudflare block detected; no standby is available: {manager.last_error}")
+                proxy_manager = getattr(manager.bot, "proxy_manager", None)
+                if proxy_manager is not None:
+                    try:
+                        await proxy_manager.enable()
+                    except Exception as exc:
+                        logging.warning("StandbyFailover", f"Webshare fallback failed ({type(exc).__name__}).")
+                    proxy_url = getattr(manager.http, "proxy", None)
+                    if proxy_url:
+                        kwargs["proxy"] = proxy_url
+                        proxy_auth = getattr(manager.http, "proxy_auth", None)
+                        if proxy_auth is not None:
+                            kwargs["proxy_auth"] = proxy_auth
+                        response.release()
+                        try:
+                            return await original_request(method, url, **kwargs)
+                        except Exception as exc:
+                            manager.last_error = f"Webshare startup fallback failed ({type(exc).__name__})."
+                            logging.error("StandbyFailover", manager.last_error)
+                return response
             return response
 
         session._request = hooked_request

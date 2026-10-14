@@ -1,8 +1,9 @@
 import asyncio
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+from utils.proxy_manager import WebshareProxyManager
 from utils.standby_failover import _handle_client, control_proof, secret_key, verification_proof
 from utils.standby_manager import StandbyFailoverManager
 from webapp.standby_routes import _verification_matches
@@ -89,6 +90,146 @@ class StandbyFailoverTests(unittest.TestCase):
             self.assertEqual(["activate"], controller.actions)
             standby_failover._GATEWAY_CONTROLLER = None
             standby_failover._CONTROL_NONCES.clear()
+
+        asyncio.run(scenario())
+
+    def test_standby_manager_is_the_only_static_login_wrapper(self):
+        class HTTP:
+            _HTTPClient__session = None
+
+            async def static_login(self, token):
+                return token
+
+        class Bot:
+            http = HTTP()
+
+        bot = Bot()
+        original_login = bot.http.static_login
+        standby = StandbyFailoverManager()
+        standby.attach(bot)
+        standby_login = bot.http.static_login
+
+        proxy = WebshareProxyManager("test-key")
+        proxy.attach(bot)
+
+        self.assertIs(bot.http.static_login, standby_login)
+        self.assertIsNot(bot.http.static_login, original_login)
+
+    def test_static_login_detects_initial_cloudflare_block_and_selects_standby(self):
+        class Response:
+            def __init__(self, status, headers=None, text=""):
+                self.status = status
+                self.headers = headers or {}
+                self._text = text
+                self.released = False
+
+            async def text(self):
+                return self._text
+
+            def release(self):
+                self.released = True
+
+        class Session:
+            async def _request(self, method, url, **kwargs):
+                return Response(429, {"CF-Ray": "cloudflare-ray"}, "Cloudflare error 1015")
+
+        class HTTP:
+            _HTTPClient__session = None
+
+            async def request(self, *args, **kwargs):
+                return await self._HTTPClient__session._request(*args, **kwargs)
+
+            async def static_login(self, token):
+                self._HTTPClient__session = Session()
+                response = await self.request("GET", "https://discord.com/api/v10/users/@me")
+                return response.status
+
+        class Bot:
+            def __init__(self):
+                self.http = HTTP()
+                self.proxy_manager = None
+
+        async def scenario():
+            bot = Bot()
+            manager = StandbyFailoverManager()
+            manager.attach(bot)
+            manager.select_standby = AsyncMock(return_value=True)
+            manager.handoff_to_standby = AsyncMock(return_value=True)
+            manager.relay_aiohttp = AsyncMock(return_value=Response(200))
+
+            self.assertEqual(200, await bot.http.static_login("token"))
+            manager.select_standby.assert_awaited_once_with()
+            manager.handoff_to_standby.assert_awaited_once_with()
+            manager.relay_aiohttp.assert_awaited_once()
+            self.assertTrue(manager.egress_blocked)
+
+        asyncio.run(scenario())
+
+    def test_cloudflare_hook_prefers_standby_and_uses_proxy_only_if_unavailable(self):
+        class Response:
+            def __init__(self, status, headers=None, text=""):
+                self.status = status
+                self.headers = headers or {}
+                self._text = text
+                self.released = False
+
+            async def text(self):
+                return self._text
+
+            def release(self):
+                self.released = True
+
+        class Session:
+            def __init__(self, http):
+                self.http = http
+                self.calls = []
+
+            async def _request(self, method, url, **kwargs):
+                self.calls.append(kwargs.get("proxy"))
+                if kwargs.get("proxy"):
+                    return Response(200)
+                return Response(429, {"CF-Ray": "cloudflare-ray"}, "Cloudflare error 1015")
+
+        class Proxy:
+            def __init__(self, http):
+                self.http = http
+                self.enable_calls = 0
+
+            async def enable(self):
+                self.enable_calls += 1
+                self.http.proxy = "http://proxy.example"
+
+        async def scenario():
+            http = type("HTTP", (), {"proxy": None, "proxy_auth": None})()
+            bot = type("Bot", (), {"http": http})()
+            manager = StandbyFailoverManager()
+            manager.bot = bot
+            manager.http = http
+            proxy = Proxy(http)
+            bot.proxy_manager = proxy
+            session = Session(http)
+            manager._install_hook(session)
+
+            manager.set_standbys(["https://east.example"], ["east"])
+            manager.select_standby = AsyncMock(return_value=True)
+            manager.handoff_to_standby = AsyncMock(return_value=True)
+            manager.relay_aiohttp = AsyncMock(return_value=Response(200))
+            relayed = await session._request("GET", "https://discord.com/api/v10/users/@me")
+            self.assertEqual(200, relayed.status)
+            manager.select_standby.assert_awaited_once_with()
+            manager.relay_aiohttp.assert_awaited_once()
+            self.assertEqual(0, proxy.enable_calls)
+
+            manager.active_origin = None
+            manager.select_standby = AsyncMock(return_value=False)
+            manager.relay_aiohttp = AsyncMock(return_value=Response(200))
+            session.calls.clear()
+            proxied = await session._request("GET", "https://discord.com/api/v10/users/@me")
+            self.assertEqual(200, proxied.status)
+            manager.select_standby.assert_awaited_once_with()
+            self.assertEqual(1, proxy.enable_calls)
+            self.assertEqual([None, "http://proxy.example"], session.calls)
+            manager.relay_aiohttp.assert_not_awaited()
 
         asyncio.run(scenario())
 

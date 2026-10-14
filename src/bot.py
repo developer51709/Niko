@@ -15,6 +15,7 @@ from utils.blacklist import check_interaction_blacklist
 from utils.abuse_detection import record_request, strike_notice
 from utils.gateway import patch_identify
 from utils.proxy_manager import WebshareProxyManager
+from utils.standby_manager import StandbyFailoverManager
 from utils import logging
 from events.on_ready import handle_ready
 from events.on_message import handle_message
@@ -46,10 +47,13 @@ bot = commands.AutoShardedBot(
 bot.remove_command("help")
 bot.cxn: database.SQLitePool | database.MongoPool | None = None
 
-# ── Webshare proxy configuration ─────────────────────────────────────────────
-# Standby backend failover is managed independently by StandbyFailoverManager.
+# ── REST egress failover ─────────────────────────────────────────────────────
+# Standby owns startup login interception and falls back to Webshare only if
+# no healthy standby can be selected.
 WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
 bot.proxy_manager: WebshareProxyManager | None = WebshareProxyManager(WEBSHARE_API_KEY)
+bot.standby_failover = StandbyFailoverManager()
+bot.standby_failover.attach(bot)
 if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
     logging.info("ProxyManager", "Webshare proxy failover armed.")
 
@@ -190,9 +194,7 @@ if __name__ == "__main__":
                 await bot.proxy_manager.prefetch()
             if standby_mode:
                 from utils.standby_failover import serve_standby
-                from utils.standby_manager import StandbyFailoverManager
-                standby_manager = getattr(bot, "standby_failover", None) or StandbyFailoverManager()
-                bot.standby_failover = standby_manager
+                standby_manager = bot.standby_failover
                 standby_manager.attach(bot)
                 from webapp import app as web_app, configure_bot
                 configure_bot(bot)

@@ -100,10 +100,9 @@ class WebshareProxyManager:
         """Bind to the bot's HTTP client and install the global-429 hook.
 
         Synchronous on purpose so it can run at import time in ``bot.py``.
-        discord.py creates its aiohttp session lazily inside ``static_login``
-        (i.e. during ``bot.start``), so when the session does not exist yet
-        this wraps ``static_login`` and installs the hook the moment the real
-        session is created.  Returns True when the failover is armed.
+        The standby manager exclusively wraps ``static_login`` and installs
+        this manager's request hook after the aiohttp session is created.
+        Returns True when proxy failover is armed.
         """
         if not self.api_key:
             return False
@@ -122,30 +121,10 @@ class WebshareProxyManager:
         session = self._current_session()
         if session is not None:
             self._install_hook(session)
-            self._attached_bot_http = bot.http
-            logging.info("ProxyManager", "Global rate-limit failover armed.")
-            return True
-
-        try:
-            original_static_login = bot.http.static_login
-        except AttributeError as exc:
-            logging.error(
-                "ProxyManager", f"Could not reach the Discord HTTP client: {exc}"
-            )
-            self.http = None
-            return False
-
-        manager = self
-
-        async def wrapped_static_login(token):
-            data = await original_static_login(token)
-            session = manager._current_session()
-            if session is not None:
-                manager._install_hook(session)
-                manager._attached_bot_http = bot.http
-            return data
-
-        bot.http.static_login = wrapped_static_login
+        # StandbyFailoverManager exclusively owns static_login so it can
+        # prioritize standby handoff before falling back to this proxy manager.
+        # It attaches its aiohttp hook during static_login; attach again after
+        # login to install this manager's hook for subsequent requests.
         self._attached_bot_http = bot.http
         logging.info("ProxyManager", "Global rate-limit failover armed.")
         return True
