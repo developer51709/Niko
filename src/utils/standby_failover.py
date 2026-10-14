@@ -178,7 +178,12 @@ def _dispatch_web_request(web_app, method: str, target: str, headers: dict, body
     """Dispatch one ordinary HTTP request to Flask and serialize its response."""
     from werkzeug.test import EnvironBuilder, run_wsgi_app
 
-    host = headers.get("host", "localhost")
+    # A relayed request reaches this listener on the standby's own origin, so the
+    # raw Host names the standby deployment. The production host arrives in
+    # X-Forwarded-Host and the application must see that one, so OAuth callbacks,
+    # absolute redirects, and session cookies all stay on the production URL.
+    public_host = headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    host = public_host or headers.get("host", "localhost")
     scheme = "https" if headers.get("x-forwarded-proto", "").split(",", 1)[0].strip() == "https" else "http"
     forwarded_headers = {
         name: value for name, value in headers.items()

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import requests
 
 from utils.proxy_manager import WebshareProxyManager
-from utils.standby_failover import _handle_client, _is_allowed_discord_api_url, control_proof, is_discord_relay_url, relay_proof, secret_key, verification_proof
+from utils.standby_failover import _dispatch_web_request, _handle_client, _is_allowed_discord_api_url, control_proof, is_discord_relay_url, relay_proof, secret_key, verification_proof
 from utils.standby_manager import StandbyFailoverManager
 from webapp import app
 from webapp import server as server_routes
@@ -401,7 +401,10 @@ class StandbyFailoverTests(unittest.TestCase):
         forwarded_headers = {name.lower(): value for name, value in kwargs["headers"].items()}
         self.assertEqual("application/json", forwarded_headers["content-type"])
         self.assertEqual("csrf-token", forwarded_headers["x-csrf-token"])
-        self.assertEqual("production.example", forwarded_headers["host"])
+        # The production host must not reach the standby's own edge, which owns
+        # only its registered origin; it travels in X-Forwarded-Host instead.
+        self.assertNotIn("host", forwarded_headers)
+        self.assertEqual("production.example", forwarded_headers["x-forwarded-host"])
         self.assertEqual(b'{"name": "Cafe"}', kwargs["data"])
         self.assertFalse(kwargs["allow_redirects"])
 
@@ -427,6 +430,58 @@ class StandbyFailoverTests(unittest.TestCase):
         self.assertEqual("text/javascript", response.headers["Content-Type"])
         self.assertEqual("https://standby.example/assets/app.js?v=123", request_upstream.call_args.args[1])
         self.assertFalse(request_upstream.call_args.kwargs["allow_redirects"])
+
+    def test_standby_relay_addresses_the_registered_origin_not_the_production_host(self):
+        """The production host is bound to the primary, so relaying it 404s upstream."""
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        upstream = type("Upstream", (), {
+            "status_code": 200,
+            "content": b"<html>standby frontend</html>",
+            "headers": {"Content-Type": "text/html"},
+            "close": lambda self: None,
+        })()
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request", return_value=upstream
+        ) as request_upstream:
+            with app.test_client() as client:
+                response = client.get(
+                    "/",
+                    headers={"Host": "production.example", "X-Forwarded-Proto": "https"},
+                )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(b"<html>standby frontend</html>", response.data)
+        self.assertEqual("https://standby.example/", request_upstream.call_args.args[1])
+        forwarded = {name.lower(): value for name, value in request_upstream.call_args.kwargs["headers"].items()}
+        self.assertNotIn("host", forwarded)
+        self.assertEqual("production.example", forwarded["x-forwarded-host"])
+        self.assertEqual("https", forwarded["x-forwarded-proto"])
+
+    def test_standby_listener_shows_the_production_host_to_the_application(self):
+        """A relayed request keeps the production host for OAuth callbacks and cookies."""
+        seen = {}
+
+        def application(environ, start_response):
+            seen["host"] = environ["HTTP_HOST"]
+            seen["scheme"] = environ["wsgi.url_scheme"]
+            start_response("200 OK", [("Content-Type", "text/html")])
+            return [b"ok"]
+
+        _dispatch_web_request(
+            application,
+            "GET",
+            "/",
+            {"host": "standby.example", "x-forwarded-host": "production.example", "x-forwarded-proto": "https"},
+            b"",
+        )
+        self.assertEqual("production.example", seen["host"])
+        self.assertEqual("https", seen["scheme"])
+
+        _dispatch_web_request(application, "GET", "/", {"host": "standby.example"}, b"")
+        self.assertEqual("standby.example", seen["host"])
 
     def test_standby_service_routes_are_exposed_through_the_production_url(self):
         manager = SimpleNamespace(

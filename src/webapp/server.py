@@ -192,8 +192,15 @@ _STANDBY_HOP_BY_HOP_HEADERS = {
     "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
     "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
 }
+# The browser's Host names the production deployment, not the standby. Forwarding
+# it upstream hands the standby's own edge a hostname that belongs to this
+# deployment, so that edge answers the relay itself and the production URL serves
+# nothing. The relay therefore addresses the standby by its registered origin and
+# passes the public host and scheme through X-Forwarded-*, where the standby's
+# public_base_url() already reads them.
 _STANDBY_REQUEST_EXCLUDED_HEADERS = {
     "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection",
+    "host",
 }
 
 
@@ -215,6 +222,14 @@ def route_to_active_standby():
         for name, value in request.headers.items()
         if name.lower() not in _STANDBY_REQUEST_EXCLUDED_HEADERS
     }
+    # requests derives Host from the target URL, so the standby's own edge can
+    # route the relayed request while its application still builds OAuth
+    # callbacks, redirects, and cookies for the production URL.
+    headers["X-Forwarded-Host"] = request.headers.get("X-Forwarded-Host") or request.host
+    headers["X-Forwarded-Proto"] = request.headers.get("X-Forwarded-Proto") or request.scheme
+    forwarded_for = request.headers.get("X-Forwarded-For") or request.remote_addr
+    if forwarded_for:
+        headers["X-Forwarded-For"] = forwarded_for
     try:
         upstream = req.request(
             request.method,
