@@ -92,6 +92,8 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 _discord_bot = None
 _member_metadata_cache: dict[str, tuple[float, dict[str, dict]]] = {}
+_staff_user_identity_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
+_STAFF_USER_IDENTITY_CACHE_TTL = 600
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -748,6 +750,26 @@ def _staff_identity(user_id: str) -> dict:
     )
     member = ordered_members[0][1] if ordered_members else None
     user = member or (_discord_bot.get_user(int(user_id)) if _discord_bot is not None else None)
+    cached_identity = None
+    if user is None:
+        cached_identity_entry = _staff_user_identity_cache.get(str(user_id))
+        if cached_identity_entry and time.time() - cached_identity_entry[0] < _STAFF_USER_IDENTITY_CACHE_TTL:
+            cached_identity = cached_identity_entry[1]
+        elif _discord_bot is not None:
+            try:
+                # A warm standby may have no gateway-populated user cache.
+                # Resolve identity through Discord REST without taking gateway
+                # ownership, then cache it to avoid polling Discord every 5s.
+                user = run_on_bot_loop(_discord_bot.fetch_user(int(user_id)))
+                avatar = getattr(user, "display_avatar", None)
+                cached_identity = {
+                    "name": getattr(user, "global_name", None) or getattr(user, "name", None),
+                    "username": getattr(user, "name", None),
+                    "avatar_url": str(avatar.url) if avatar is not None else None,
+                }
+                _staff_user_identity_cache[str(user_id)] = (time.time(), cached_identity)
+            except Exception:
+                user = None
     activities = []
     custom_status = None
     seen_activities = set()
@@ -830,9 +852,9 @@ def _staff_identity(user_id: str) -> dict:
         "id": str(user_id),
         # Use the global Discord display name, never a guild nickname from
         # whichever guild was checked first.
-        "name": getattr(member, "global_name", None) or getattr(getattr(member, "_user", None), "global_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or f"Staff member {user_id}",
-        "username": getattr(user, "name", None),
-        "avatar_url": str(getattr(getattr(user, "display_avatar", None), "url", "")) or None,
+        "name": getattr(member, "global_name", None) or getattr(getattr(member, "_user", None), "global_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or (cached_identity or {}).get("name") or f"Staff member {user_id}",
+        "username": getattr(user, "name", None) or (cached_identity or {}).get("username"),
+        "avatar_url": str(getattr(getattr(user, "display_avatar", None), "url", "")) or (cached_identity or {}).get("avatar_url"),
         "status": status,
         "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
         "activities": activities,

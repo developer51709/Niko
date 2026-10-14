@@ -5,6 +5,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -13,6 +14,37 @@ from config.ids import OWNER_IDS
 from webapp import app
 from webapp import server as server_routes
 from webapp import team_recruitment_routes as routes
+
+
+class StaffIdentityFallbackTests(unittest.TestCase):
+    def test_staff_identity_fetches_user_when_standby_cache_is_empty(self):
+        fetched_ids = []
+
+        class FakeBot:
+            guilds = []
+
+            def get_user(self, user_id):
+                return None
+
+            async def fetch_user(self, user_id):
+                fetched_ids.append(user_id)
+                return SimpleNamespace(
+                    global_name="Team Display Name",
+                    name="team_handle",
+                    display_avatar=SimpleNamespace(url="https://cdn.example/staff-avatar.png"),
+                )
+
+        with patch.object(server_routes, "_discord_bot", FakeBot()), patch.object(
+            server_routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ), patch.dict(server_routes._staff_user_identity_cache, {}, clear=True):
+            first_identity = server_routes._staff_identity("123456789")
+            second_identity = server_routes._staff_identity("123456789")
+
+        self.assertEqual([123456789], fetched_ids)
+        for identity in (first_identity, second_identity):
+            self.assertEqual("Team Display Name", identity["name"])
+            self.assertEqual("team_handle", identity["username"])
+            self.assertEqual("https://cdn.example/staff-avatar.png", identity["avatar_url"])
 
 
 class TeamRecruitmentAuthorizationTests(unittest.TestCase):
