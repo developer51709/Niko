@@ -182,7 +182,8 @@ def get_runtime_level_config(guild_id: str) -> dict:
     return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
-_STANDBY_LOCAL_PATHS = ("/api/staff/standbys",)
+_STANDBY_LOCAL_PATHS = ("/health", "/api/staff/standbys")
+_STANDBY_LOCAL_PREFIXES = ("/internal/standby/",)
 _STANDBY_HOP_BY_HOP_HEADERS = {
     "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
     "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
@@ -190,19 +191,19 @@ _STANDBY_HOP_BY_HOP_HEADERS = {
 _STANDBY_REQUEST_EXCLUDED_HEADERS = {
     "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection",
 }
-_STANDBY_ROUTED_PREFIXES = ("/api/", "/auth/")
 
 
 @app.before_request
 def route_to_active_standby():
-    """Serve application requests from the standby while it owns the gateway."""
+    """Serve the complete web application from the standby while it owns the gateway."""
     manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
     origin = getattr(manager, "active_origin", None) if manager is not None else None
     if not origin or origin not in getattr(manager, "origins", ()):
         return None
-    if not request.path.startswith(_STANDBY_ROUTED_PREFIXES):
-        return None
-    if any(request.path == path or request.path.startswith(path + "/") for path in _STANDBY_LOCAL_PATHS):
+    if (
+        any(request.path == path or request.path.startswith(path + "/") for path in _STANDBY_LOCAL_PATHS)
+        or request.path.startswith(_STANDBY_LOCAL_PREFIXES)
+    ):
         return None
 
     target = f"{origin.rstrip('/')}{request.path}"

@@ -404,6 +404,47 @@ class StandbyFailoverTests(unittest.TestCase):
         self.assertEqual(b'{"name": "Cafe"}', kwargs["data"])
         self.assertFalse(kwargs["allow_redirects"])
 
+    def test_active_standby_routes_frontend_and_static_assets(self):
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        upstream = type("Upstream", (), {
+            "status_code": 200,
+            "content": b"standby frontend asset",
+            "headers": {"Content-Type": "text/javascript", "Cache-Control": "public, max-age=60"},
+            "close": lambda self: None,
+        })()
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request", return_value=upstream
+        ) as request_upstream:
+            with app.test_client() as client:
+                response = client.get("/assets/app.js?v=123")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(b"standby frontend asset", response.data)
+        self.assertEqual("text/javascript", response.headers["Content-Type"])
+        self.assertEqual("https://standby.example/assets/app.js?v=123", request_upstream.call_args.args[1])
+        self.assertFalse(request_upstream.call_args.kwargs["allow_redirects"])
+
+    def test_standby_health_and_internal_control_paths_remain_local(self):
+        manager = SimpleNamespace(
+            active_origin="https://standby.example",
+            origins=["https://standby.example"],
+        )
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "request"
+        ) as request_upstream:
+            with app.test_client() as client:
+                frontend_health = client.get("/health")
+                control = client.post("/internal/standby/control")
+                staff_controls = client.get("/api/staff/standbys")
+
+        self.assertNotEqual(503, frontend_health.status_code)
+        self.assertNotEqual(503, control.status_code)
+        self.assertNotEqual(503, staff_controls.status_code)
+        request_upstream.assert_not_called()
+
     def test_active_standby_route_remains_available_for_control_api(self):
         manager = SimpleNamespace(
             active_origin="https://standby.example",
