@@ -55,6 +55,29 @@ def fake_upstream(status_code=200, content=b"{}", headers=None, cookies=()):
     })()
 
 
+def blocked_upstream():
+    """Return a Cloudflare-blocked Discord response, as the REST client sees it."""
+    response = fake_upstream(
+        status_code=403,
+        content=b"Attention Required!",
+        headers={"Server": "cloudflare", "CF-Ray": "abc"},
+    )
+    response.text = "Attention Required!"
+    return response
+
+
+def configured_manager():
+    """Return a manager whose signed relay could actually be sent."""
+    manager = StandbyFailoverManager()
+    manager.set_standbys(["https://standby.example"], ["east"])
+    manager.active_origin = "https://standby.example"
+    return manager
+
+
+def relay_secrets():
+    return patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "token", "SESSION_SECRET": "session"})
+
+
 def owner_dashboard_client():
     """Return a test client signed in as the bot owner with a valid CSRF token."""
     from config.ids import OWNER_IDS
@@ -378,6 +401,119 @@ class StandbyFailoverTests(unittest.TestCase):
         })()
 
         self.assertTrue(StandbyFailoverManager.is_cloudflare_block(response))
+
+    def test_discord_rate_limit_is_not_reported_as_a_cloudflare_block(self):
+        # Discord answers through Cloudflare, so ``CF-Ray`` is present on every
+        # response. A plain rate limit is Discord's own answer, not a block, and
+        # reporting it as one produced "Cloudflare ban" logs that never happened.
+        rate_limited = fake_upstream(
+            status_code=429,
+            content=b'{"message":"You are being rate limited."}',
+            headers={"Server": "cloudflare", "CF-Ray": "abc", "Content-Type": "application/json"},
+        )
+        rate_limited.text = '{"message":"You are being rate limited.","retry_after":2.5,"global":false}'
+        forbidden = fake_upstream(
+            status_code=403,
+            content=b'{"message":"Missing Permissions","code":50013}',
+            headers={"Server": "cloudflare", "CF-Ray": "abc"},
+        )
+        forbidden.text = '{"message":"Missing Permissions","code":50013}'
+
+        self.assertFalse(StandbyFailoverManager.is_cloudflare_block(rate_limited))
+        self.assertFalse(StandbyFailoverManager.is_cloudflare_block(forbidden))
+        # A real interstitial still is one.
+        self.assertTrue(StandbyFailoverManager.is_cloudflare_block(blocked_upstream()))
+
+    def test_discord_request_uses_the_bots_egress(self):
+        manager = StandbyFailoverManager()
+        http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
+        client = Mock(return_value=fake_upstream(status_code=200, content=b"{}"))
+
+        with patch.object(
+            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(server_routes.req, "get", client):
+            server_routes.discord_request(
+                "GET", "https://discord.com/api/v10/users/@me", headers={"Authorization": "Bearer token"}
+            )
+
+        kwargs = client.call_args.kwargs
+        self.assertEqual("DiscordBot (https://example.invalid, 2.7.1)", kwargs["headers"]["User-Agent"])
+        self.assertEqual({"http": "http://proxy.example:8080", "https": "http://proxy.example:8080"}, kwargs["proxies"])
+
+    def test_blocked_discord_request_without_a_configured_relay_stays_a_block(self):
+        # The production outage: a Cloudflare block was relayed even though no
+        # standby origin was active, and the relay misconfiguration surfaced as
+        # a 500 from every request that touched the Discord API.
+        manager = StandbyFailoverManager()
+        blocked = blocked_upstream()
+        manager.request_via_standby = Mock(side_effect=AssertionError("relay must not be attempted"))
+        self.assertFalse(manager.relay_configured())
+
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            server_routes.req, "get", return_value=blocked
+        ):
+            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+
+        self.assertIs(blocked, response)
+        manager.request_via_standby.assert_not_called()
+
+    def test_blocked_discord_request_returns_the_block_when_the_relay_fails(self):
+        manager = configured_manager()
+        blocked = blocked_upstream()
+        manager.request_via_standby = Mock(side_effect=RuntimeError("Standby API relay is not configured."))
+
+        with relay_secrets(), patch.object(
+            server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
+        ), patch.object(server_routes.req, "get", return_value=blocked):
+            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+
+        self.assertIs(blocked, response)
+        self.assertEqual("Standby API relay failed (RuntimeError).", manager.last_error)
+
+    def test_blocked_discord_request_returns_the_relayed_response_when_configured(self):
+        manager = configured_manager()
+        blocked = blocked_upstream()
+        relayed = fake_upstream(status_code=200, content=b'{"id":"1"}')
+        manager.request_via_standby = Mock(return_value=relayed)
+
+        with relay_secrets(), patch.object(
+            server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
+        ), patch.object(server_routes.req, "get", return_value=blocked):
+            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+
+        self.assertIs(relayed, response)
+        self.assertTrue(manager.relay_configured())
+
+    def test_auth_callback_redirects_a_failed_token_exchange_instead_of_returning_500(self):
+        from webapp import auth_routes
+
+        client = app.test_client()
+        # No standby origin is active, so the request stays on this instance and
+        # the callback exercises its own token-exchange error handling.
+        manager = StandbyFailoverManager()
+        manager.request_via_standby = Mock(side_effect=AssertionError("relay must not be attempted"))
+
+        def callback(post):
+            with client.session_transaction() as session:
+                session["oauth_state"] = "callback-state"
+            # The deployed instance has both relay secrets but no standby origin
+            # registered, which is exactly how the 500 was reached.
+            with relay_secrets(), patch.object(
+                server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
+            ), patch.object(auth_routes.req, "post", post):
+                return client.get("/auth/callback?code=abc&state=callback-state")
+
+        # A Cloudflare block must be answered directly, not relayed without a
+        # standby origin — that misconfiguration is what produced the 500.
+        blocked = callback(Mock(return_value=blocked_upstream()))
+        self.assertEqual(302, blocked.status_code)
+        self.assertIn("error=token_exchange_failed", blocked.headers["Location"])
+        manager.request_via_standby.assert_not_called()
+
+        # Unreachable Discord is a failed login too, not a server error.
+        unreachable = callback(Mock(side_effect=requests.RequestException("blocked")))
+        self.assertEqual(302, unreachable.status_code)
+        self.assertIn("error=token_exchange_failed", unreachable.headers["Location"])
 
     def test_async_cloudflare_check_awaits_aiohttp_text_method(self):
         class Response:

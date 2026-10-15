@@ -3,7 +3,7 @@
 - Date: 2026-10-13
 - Tags: economy, leaderboard, privacy, dashboard
 
-The café rich list is now a paginated global leaderboard, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.
+The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.
 
 ## Highlights
 
@@ -25,4 +25,4 @@ Leaderboard pages are fetched with bounded database-side pagination, keeping req
 
 ### improved
 - Leaderboard loading uses bounded database-side pagination and retains global rank numbers between pages
-- The Discord leaderboard command links directly to the public café rich list and explains its privacy behavior
+- The Discord leaderboard command links directly to the public leaderboard page and explains its privacy behavior

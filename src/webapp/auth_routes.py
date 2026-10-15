@@ -43,25 +43,30 @@ def auth_callback():
     if not code:
         return redirect("/?error=no_code")
 
-    # Exchange code for access token
-    token_resp = discord_request(
-        "POST",
-        "https://discord.com/api/oauth2/token",
-        data={
-            "client_id":     DISCORD_CLIENT_ID,
-            "client_secret": DISCORD_CLIENT_SECRET,
-            "grant_type":    "authorization_code",
-            "code":          code,
-            "redirect_uri":  redirect_uri(),
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=10,
-    )
-    if not token_resp.ok:
+    # Exchange code for access token. A blocked or unreachable Discord API is a
+    # failed login, not a server error, so it stays a clean redirect.
+    try:
+        token_resp = discord_request(
+            "POST",
+            "https://discord.com/api/oauth2/token",
+            data={
+                "client_id":     DISCORD_CLIENT_ID,
+                "client_secret": DISCORD_CLIENT_SECRET,
+                "grant_type":    "authorization_code",
+                "code":          code,
+                "redirect_uri":  redirect_uri(),
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
+        if not token_resp.ok:
+            return redirect("/?error=token_exchange_failed")
+        token_data = token_resp.json()
+        access_token = token_data["access_token"]
+    except Exception:
+        # A blocked or unreachable Discord API is a failed login, not a server
+        # error, so it degrades to a friendly redirect instead of a 500 page.
         return redirect("/?error=token_exchange_failed")
-
-    token_data   = token_resp.json()
-    access_token = token_data["access_token"]
 
     # Fetch user identity
     try:

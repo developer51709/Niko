@@ -25,6 +25,10 @@ During a failover, the primary relays Discord REST traffic over the authenticate
 
 A standby never initiates failover: a blocked request on that instance cannot promote it or move its gateway to another registered instance, because only the primary arms automatic failover. Both ends of the relay also share one allowlist of Discord REST and CDN hosts, so a failover request is never refused by the standby and silently retried over the blocked direct egress. Registering the primary's own origin is rejected, since the primary would otherwise proxy every request to itself.
 
+### Web requests share the bot's egress
+
+Login and dashboard calls to Discord go through `discord_request` in `src/webapp/server.py`, which sends the bot's own `User-Agent` and, while a Webshare proxy is active, the same proxy discord.py uses. Discord answers every request through Cloudflare, and that edge challenges plain `python-requests` traffic from a datacenter IP — so a mismatch breaks the OAuth token exchange (a POST, so it is challenged first) and dashboard reads while the bot itself keeps answering commands. A Cloudflare interstitial is only relayed when an active standby origin and the relay secrets are both present; otherwise the original response is returned to the caller, which reports the real failure instead of a `500`. A blocked response is only treated as a Cloudflare block when it carries an interstitial signature: `CF-Ray` and `Server: cloudflare` are present on every Discord response, so a plain Discord 429 or JSON API error must not be reported as a block.
+
 ### Where standby management runs
 
 Only the primary owns the standby registry and the failover control plane. **Staff workspace → Standby instances** therefore always answers on the primary: while a standby owns the gateway the primary relays the rest of the dashboard to it but keeps `/api/staff/standbys*` local.

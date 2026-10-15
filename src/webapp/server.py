@@ -783,13 +783,61 @@ def require_guild_access(f):
     return _inner
 
 
+def _discord_egress_proxies(http) -> dict | None:
+    """The proxy the bot's HTTP client egresses through, mapped for ``requests``.
+
+    discord.py applies ``HTTPClient.proxy`` to every REST call (Webshare proxy
+    failover sets it), so a request made from the web process has to use the
+    same route or it can be blocked while the bot itself stays responsive.
+    """
+    proxy = getattr(http, "proxy", None)
+    if not isinstance(proxy, str) or not proxy:
+        return None
+    return {"http": proxy, "https": proxy}
+
+
 def discord_request(method: str, url: str, **kwargs):
-    """Make Discord REST calls directly, then retry blocked requests via standby."""
+    """Make Discord REST calls over the bot's own egress, then retry via standby.
+
+    Discord answers every request through Cloudflare, and that edge challenges
+    plain ``python-requests`` traffic from a datacenter IP — the OAuth token
+    exchange is a POST, so it is challenged before any dashboard call. Sending
+    the bot's own User-Agent, and its proxy when one is active, keeps login and
+    dashboard traffic on the egress Discord already answers.
+
+    A Cloudflare block is only relayed when a signed relay can actually be sent.
+    Without an active standby origin and the relay secrets, the blocked Discord
+    response is returned untouched so the caller keeps its own error handling
+    instead of surfacing a relay misconfiguration as a server error.
+    """
+    http = getattr(_discord_bot, "http", None) if _discord_bot is not None else None
+    headers = dict(kwargs.get("headers") or {})
+    user_agent = getattr(http, "user_agent", None)
+    if isinstance(user_agent, str) and user_agent:
+        headers.setdefault("User-Agent", user_agent)
+    if headers:
+        kwargs["headers"] = headers
+    proxies = _discord_egress_proxies(http)
+    if proxies is not None and "proxies" not in kwargs:
+        kwargs["proxies"] = proxies
     manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
     response = getattr(req, method.lower())(url, **kwargs)
-    if manager is not None and manager.is_cloudflare_block(response):
-        response.close()
-        response = manager.request_via_standby(method, url, kwargs)
+    if manager is None or not manager.is_cloudflare_block(response):
+        return response
+    app.logger.warning(
+        "Discord %s %s answered HTTP %s with Cloudflare signatures (relay_configured=%s proxy=%s): %.200s",
+        method, url, getattr(response, "status_code", 0), manager.relay_configured(),
+        bool(proxies), getattr(response, "text", "") or "",
+    )
+    if manager.relay_configured():
+        try:
+            relayed = manager.request_via_standby(method, url, kwargs)
+        except Exception as exc:
+            manager.last_error = f"Standby API relay failed ({type(exc).__name__})."
+            app.logger.warning("Standby relay failed for %s %s: %s", method, url, exc)
+        else:
+            response.close()
+            return relayed
     return response
 
 

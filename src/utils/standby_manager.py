@@ -112,8 +112,34 @@ class StandbyFailoverManager:
         self._attached_http = self.http
         return True
 
+    # Markers only Cloudflare's own challenge, block, or rate-limit pages carry.
+    _CF_PAGE_MARKERS = (
+        "cloudflare", "cf-error-details", "cf-wrapper", "attention required",
+        "error code: 1015", "cf-chl", "just a moment",
+    )
+
+    @staticmethod
+    def _is_discord_api_error(body: str) -> bool:
+        """True for a Discord JSON API or rate-limit body (never a CF page)."""
+        if not body.strip().startswith("{"):
+            return False
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            return False
+        return isinstance(payload, dict) and ("message" in payload or "error" in payload)
+
     @staticmethod
     def is_cloudflare_block(response, body_fallback: str = "") -> bool:
+        """Report whether a response came from Cloudflare's edge, not Discord.
+
+        Discord serves *every* API response through Cloudflare, so
+        ``Server: cloudflare`` and ``CF-Ray`` prove nothing on their own: a
+        plain Discord 429 or JSON API error is not a block, and treating it as
+        one reports a ban that never happened and relays traffic for no reason.
+        Only an interstitial signature — an explicit ``cf-mitigated`` header or
+        Cloudflare's own page body — counts as blocked.
+        """
         status = getattr(response, "status", getattr(response, "status_code", 0))
         if status not in {403, 429, 503}:
             return False
@@ -125,10 +151,19 @@ class StandbyFailoverManager:
         body = getattr(response, "text", "")
         if callable(body) or not isinstance(body, str) or not body:
             body = body_fallback
-        body = body.lower()
+        if not isinstance(body, str):
+            body = ""
+        if StandbyFailoverManager._is_discord_api_error(body):
+            return False
+        if str(headers.get("cf-mitigated", "")).strip():
+            return True
+        lowered = body.lower()
+        if any(marker in lowered for marker in StandbyFailoverManager._CF_PAGE_MARKERS):
+            return True
+        # No body evidence: keep the previous heuristic, which only ever fires
+        # on 429 where Cloudflare's edge answers before Discord does.
         header_signature = "cloudflare" in str(headers.get("Server", "")).lower() or bool(headers.get("CF-Ray"))
-        body_signature = any(tag in body for tag in ("cloudflare", "cf-error-details", "cf-wrapper", "attention required"))
-        return (header_signature or body_signature) if status == 429 else (header_signature and body_signature)
+        return header_signature and status == 429
 
     def _install_hook(self, session) -> None:
         if session is self._hooked_session:
@@ -202,6 +237,18 @@ class StandbyFailoverManager:
     def _should_relay(url: str) -> bool:
         """Relay exactly the Discord hosts the standby is willing to forward."""
         return is_discord_relay_url(url)
+
+    def relay_configured(self) -> bool:
+        """Report whether a signed relay request could actually be sent now.
+
+        A blocked direct request is only worth relaying when a standby origin is
+        active and the relay secrets are present. Without them the original
+        response is the only honest answer to return, so callers can keep their
+        normal error handling instead of failing on a relay misconfiguration.
+        """
+        if not self.active_origin:
+            return False
+        return bool(os.getenv("DISCORD_BOT_TOKEN") and os.getenv("SESSION_SECRET"))
 
     def set_standbys(self, origins: list[str], ids: list[str] | None = None) -> None:
         entries = [(ids[i] if ids and i < len(ids) else str(i), url) for i, url in enumerate(origins)

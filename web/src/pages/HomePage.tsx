@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getStats } from "../api";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
@@ -8,9 +8,20 @@ import { useBotConfig } from "../hooks/useBotConfig";
 import type { BotStats } from "../types";
 import { formatNumber } from "../utils/format";
 
+// /auth/callback reports a failed sign-in by redirecting here with ?error=...
+// Without this the visitor lands on the home page with no explanation.
+const signInErrorMessages: Record<string, string> = {
+  oauth_denied: "Discord sign-in was cancelled before it finished.",
+  invalid_state: "That sign-in link expired before it was used.",
+  no_code: "Discord did not return a sign-in code.",
+  token_exchange_failed: "Niko could not complete the token exchange with Discord.",
+  user_fetch_failed: "Niko could not read your Discord profile.",
+};
+
 export function HomePage() {
   const config = useBotConfig();
   const [stats, setStats] = useState<BotStats | null>(null);
+  const signInError = useMemo(() => new URLSearchParams(window.location.search).get("error"), []);
   useEffect(() => {
     let cancelled = false;
     const refresh = () => getStats().then((s) => { if (!cancelled) setStats(s); }).catch(() => undefined);
@@ -29,6 +40,18 @@ export function HomePage() {
     <>
       <PublicHeader page="home" />
       <main>
+        {signInError && (
+          <section className="shell">
+            <div className="inline-error" role="alert">
+              <strong>Sign-in could not be completed.</strong>
+              <span>
+                {signInErrorMessages[signInError] ?? "Discord rejected the sign-in attempt."}{" "}
+                You are still signed out, so nothing was changed.
+              </span>
+              <a className="button button-muted" href="/auth/login?next=%2Fdashboard">Try again</a>
+            </div>
+          </section>
+        )}
         <section className="hero shell">
           <div className="hero-copy">
             <div className="eyebrow"><span className="status-dot" /> Discord companion · online</div>
