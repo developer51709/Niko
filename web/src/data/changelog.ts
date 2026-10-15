@@ -194,7 +194,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-13",
     tags: ["economy", "leaderboard", "privacy", "dashboard"],
     summary:
-      "The café rich list is now a paginated global leaderboard, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.",
+      "The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.",
     highlights: [
       {
         title: "A Live, Paginated Rich List",
@@ -228,7 +228,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         category: "improved",
         items: [
           "Leaderboard loading uses bounded database-side pagination and retains global rank numbers between pages",
-          "The Discord leaderboard command links directly to the public café rich list and explains its privacy behavior",
+          "The Discord leaderboard command links directly to the public leaderboard page and explains its privacy behavior",
         ],
       },
     ],

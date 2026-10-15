@@ -20,7 +20,7 @@ class EconomyCog(
     VoteMixin,
     commands.Cog,
 ):
-    """Premium café economy with image cards, jobs, banking, a lottery and voting."""
+    """Premium economy with image cards, jobs, banking, a lottery and voting."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -186,7 +186,7 @@ class EconomyCog(
             image_name="balance.png",
             footer_lines=[
                 f"-# Use `{prefix}deposit` / `{prefix}withdraw` to manage your vault.",
-                f"-# `{prefix}work` to earn, `{prefix}daily` for treats, `{prefix}shop` to spend.",
+                f"-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend.",
             ],
         )
         if ctx.interaction:

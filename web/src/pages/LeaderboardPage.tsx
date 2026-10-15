@@ -28,22 +28,22 @@ export function LeaderboardPage() {
     <PublicHeader page="home" />
     <main className="shell page-main economy-leaderboard-page">
       <section className="leaderboard-hero">
-        <span className="eyebrow">The Niko café · global standings</span>
-        <h1>Who’s got the <em>treats?</em></h1>
-        <p>Every coin counts. Climb the café rich list and see how your balance stacks up.</p>
+        <span className="eyebrow">Niko · global economy standings</span>
+        <h1>Global economy leaderboard</h1>
+        <p>Every coin counts. See how your earnings stack up across the whole bot.</p>
       </section>
-      <section className="leaderboard-panel" aria-label="Economy leaderboard">
+      <section className="leaderboard-panel" aria-label="Global economy leaderboard">
         <div className="leaderboard-panel-heading">
-          <div><span className="panel-kicker">🏆 Café rich list</span><h2>Top café-goers</h2><p>{data ? `${formatNumber(data.total)} profiles · ordered by net worth` : "The latest economy standings"}</p></div>
-          <span className="leaderboard-live"><span className="status-dot" /> LIVE RANKS</span>
+          <div><span className="panel-kicker">🏆 Global economy leaderboard</span><h2>Rankings</h2><p>{data ? `${formatNumber(data.total)} members ordered by net worth` : "The latest economy standings"}</p></div>
+          <span className="leaderboard-live"><span className="status-dot" /> LIVE</span>
         </div>
-        {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />Loading café standings…</div> : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error}</div> : !data?.entries.length ? <div className="leaderboard-state">The café is quiet for now — check back after a few coins are earned.</div> : <div className="leaderboard-list">
+        {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />Loading standings…</div> : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error}</div> : !data?.entries.length ? <div className="leaderboard-state">The board is quiet for now — check back after a few coins are earned.</div> : <div className="leaderboard-list">
           {data.entries.map((entry) => {
             const hidden = entry.private && !entry.display_name;
             return <article className={`leaderboard-row${entry.rank <= 3 ? ` leaderboard-rank-${entry.rank}` : ""}`} key={entry.rank}>
               <span className="leaderboard-rank">{String(entry.rank).padStart(2, "0")}</span>
               {hidden ? <span className="leaderboard-avatar leaderboard-avatar-hidden"><Icon name="lock" /></span> : <span className="leaderboard-avatar">{entry.avatar_url ? <img src={entry.avatar_url} alt="" /> : (entry.display_name || "?").slice(0, 1).toUpperCase()}</span>}
-              <span className="leaderboard-identity"><strong>{hidden ? "Private café-goer" : entry.display_name || entry.username || "Café-goer"}</strong>{hidden ? <small>Identity hidden · still in the rankings</small> : entry.username && entry.display_name ? <small>@{entry.username}</small> : null}</span>
+              <span className="leaderboard-identity"><strong>{hidden ? "Private member" : entry.display_name || entry.username || "Niko member"}</strong>{hidden ? <small>Identity hidden · still in the rankings</small> : entry.username && entry.display_name ? <small>@{entry.username}</small> : null}</span>
               <strong className="leaderboard-worth">{formatNumber(entry.net_worth)} <small>coins</small></strong>
             </article>;
           })}

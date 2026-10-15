@@ -264,6 +264,11 @@ def get_emoji(emoji_name: str):
         return "<:thumbs_up:1555276780636606556>"
     if emoji_name == "tiktok":
         return "<:tiktok:1545426286883901610>"
+    # Niko's own addition: the top.gg logo, used for the listing site's voting
+    # badges. Startup sync uploads the artwork from src/assets/emojis/topgg.png
+    # and keeps this id pointing at the live application emoji.
+    if emoji_name == "topgg":
+        return "<:topgg:1560070335863459861>"
     if emoji_name == "twitch":
         return "<:twitch:1545426287915696178>"
     if emoji_name == "twitterx":

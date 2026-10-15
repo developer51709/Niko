@@ -23,8 +23,8 @@ class CurrencyMixin:
     # ── balance / profile ────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="balance", aliases=["bal", "wallet"],
-        description="Check your premium café wallet card",
-        help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🥐✨' }"
+        description="Check your premium wallet card",
+        help="{ 'en': 'check your wallet balance 🪙✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🪙✨' }"
     )
     async def balance(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
@@ -35,20 +35,20 @@ class CurrencyMixin:
 
     @commands.hybrid_command(
         name="profile", aliases=["prof", "stats"],
-        description="Full café profile card",
-        help="{ 'en': 'view a full café profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }"
+        description="Full profile card",
+        help="{ 'en': 'view your full profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }"
     )
     async def profile(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        from ..data import ACHIEVEMENTS
+        from ..data import ACHIEVEMENTS, achievement_icon
         target = member or ctx.author
         await self._send_balance_card(ctx, target, title="Profile")
         data = await self.get_user_economy_data(target.id)
         ach = data.get("achievements", [])
         ach_line = (
-            ", ".join(f"{ACHIEVEMENTS[a]['emoji']} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
+            ", ".join(f"{achievement_icon(ACHIEVEMENTS[a])} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
             or "*no badges yet — go earn some!*"
         )
         txs = data.get("transactions", [])[:5]
@@ -72,8 +72,8 @@ class CurrencyMixin:
     # ── daily ────────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="daily",
-        description="Claim your daily treats with streak bonus",
-        help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tus golosinas diarias 🍬✨' }"
+        description="Claim your daily reward with streak bonus",
+        help="{ 'en': 'claim your daily reward 🎁✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tu recompensa diaria 🎁✨' }"
     )
     async def daily(self, ctx: commands.Context):
         if ctx.interaction:
@@ -89,12 +89,12 @@ class CurrencyMixin:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
                     "⏳ Daily on cooldown",
-                    f"Patience! Your treats are still baking.\nCome back in **{_fmt_remaining(remain)}**. ☕🍰",
+                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
                 ))
             else:
                 return await ctx.send(view=_info_view(
                     "⏳ Daily on cooldown",
-                    f"Patience! Your treats are still baking.\nCome back in **{_fmt_remaining(remain)}**. ☕🍰",
+                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
                 ))
 
         streak = int(data.get("daily_streak", 0))
@@ -152,7 +152,7 @@ class CurrencyMixin:
 
         await self._send_reward_card(
             ctx,
-            title="🍬 Daily Treats",
+            title="🎁 Daily Reward",
             subtitle=subtitle,
             amount=total_reward,
             accent=ACCENT_GOLD,
@@ -162,8 +162,8 @@ class CurrencyMixin:
     # ── work ─────────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="work",
-        description="Work a shift at your current café job",
-        help="{ 'en': 'work a shift at your current café job ☕', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno en el café ☕' }"
+        description="Work a shift at your current job",
+        help="{ 'en': 'work a shift at your current job 💼', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno 💼' }"
     )
     async def work(self, ctx: commands.Context):
         if ctx.interaction:
@@ -183,13 +183,13 @@ class CurrencyMixin:
         if elapsed < cd:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
-                    "⏳ On a coffee break",
-                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. ☕💤",
+                    "⏳ On a break",
+                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
                 ))
             else:
                 return await ctx.send(view=_info_view(
-                    "⏳ On a coffee break",
-                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. ☕💤",
+                    "⏳ On a break",
+                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
                 ))
 
         if effects.get("work_cooldown_half"):
@@ -227,7 +227,7 @@ class CurrencyMixin:
     @commands.hybrid_command(
         name="pay", aliases=["give"],
         description="Send coins to another user",
-        help="{ 'en': 'send coins to another user 💸🥐', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🥐' }"
+        help="{ 'en': 'send coins to another user 💸🪙', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🪙' }"
     )
     async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
         if ctx.interaction:
@@ -249,9 +249,9 @@ class CurrencyMixin:
         target = await self.get_user_economy_data(member.id)
         if data["balance"] < amount:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your pastry bag is too light for that."))
+                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
             else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag is too light for that."))
+                return await ctx.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
 
         self._credit(data, -amount, "pay", f"to {member.display_name}")
         self._credit(target, amount, "received", f"from {ctx.author.display_name}")
@@ -260,12 +260,12 @@ class CurrencyMixin:
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "💸 Transfer complete",
-                f"You sent **{amount:,}** 🥐 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🥐",
+                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
             ), allowed_mentions=discord.AllowedMentions.none())
         else:
             await ctx.send(view=_info_view(
                 "💸 Transfer complete",
-                f"You sent **{amount:,}** 🥐 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🥐",
+                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
             ), allowed_mentions=discord.AllowedMentions.none())
 
     # ── transactions ──────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ class CurrencyMixin:
         for t in txs[:25]:
             sign = "+" if t["amount"] >= 0 else "−"
             ts = datetime.datetime.utcfromtimestamp(int(t["ts"])).strftime("%m-%d %H:%M")
-            lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🥐  ·  {t.get('note','')}")
+            lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🪙  ·  {t.get('note','')}")
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
         else:
@@ -300,7 +300,7 @@ class CurrencyMixin:
     @commands.hybrid_command(
         name="networth", aliases=["nw"],
         description="Quick net worth summary",
-        help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🥐' }"
+        help="{ 'en': 'calculate your total fortune 📊🪙', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🪙' }"
     )
     async def networth(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
@@ -311,7 +311,7 @@ class CurrencyMixin:
         nw = int(data["balance"]) + int(data["bank"])
         rank = await self._net_rank(str(target.id))
         body = (
-            f"💼 **{target.display_name}** is worth **{nw:,}** 🥐\n"
+            f"💼 **{target.display_name}** is worth **{nw:,}** 🪙\n"
             f"• Cash: **{int(data['balance']):,}**\n"
             f"• Bank: **{int(data['bank']):,}** ({bank_name(int(data.get('bank_tier', 0)))})\n"
             f"• Rank: **#{rank}**" if rank else ""

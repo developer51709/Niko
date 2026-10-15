@@ -120,7 +120,7 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference" },
   { path: "/team", title: "Team — Niko", description: "Meet the owners, developers, moderators, support staff, and creatives behind Niko.", section: "Niko team" },
   { path: "/team/apply", title: "Join the Niko Team — Staff Applications", description: "Explore open staff roles and apply to help build a safer, friendlier Niko community.", section: "Staff applications" },
-  { path: "/leaderboard", title: "Global Economy Leaderboard — Niko", description: "See the global Niko café standings and discover who has earned the most coins.", section: "Global leaderboard" },
+  { path: "/leaderboard", title: "Global Economy Leaderboard — Niko", description: "See the global Niko economy standings and discover who has earned the most coins.", section: "Global leaderboard" },
   { path: "/support", title: "Support — Niko", description: "Find answers, browse Niko documentation, and connect with the community for help.", section: "Niko support" },
   { path: "/discord", title: "Niko support server", description: "Join the official Niko Discord support server for help, community updates, and feedback.", section: "Join the community" },
   { path: "/docs", title: "Documentation — Niko", description: "Guides, command references, and practical tips for getting the most out of Niko.", section: "Documentation center" },

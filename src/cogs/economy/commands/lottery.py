@@ -13,8 +13,8 @@ class LotteryMixin:
 
     @commands.hybrid_group(
         name="lottery", aliases=["lotto"],
-        description="Play the weekly café lottery",
-        help="{ 'en': 'play the weekly café lottery 🎰', 'de': 'spiele die wöchentliche Lotterie', 'es': 'juega la lotería semanal 🎰' }",
+        description="Play the weekly lottery",
+        help="{ 'en': 'play the weekly lottery 🎰', 'de': 'spiele die wöchentliche Lotterie', 'es': 'juega la lotería semanal 🎰' }",
         invoke_without_command=True
     )
     async def lottery(self, ctx: commands.Context):
@@ -37,17 +37,17 @@ class LotteryMixin:
         if last:
             user = self.bot.get_user(int(last)) if last.isdigit() else None
             who  = user.display_name if user else last
-            last_block = f"\n-# Last winner: **{who}** scooped **{int(self.lottery.get('last_pot', 0)):,}** 🥐"
+            last_block = f"\n-# Last winner: **{who}** scooped **{int(self.lottery.get('last_pot', 0)):,}** 🪙"
         body = (
-            f"💸 **Pot**: **{int(self.lottery['pot']):,}** 🥐\n"
+            f"💸 **Pot**: **{int(self.lottery['pot']):,}** 🪙\n"
             f"🕒 **Next draw**: in **{_fmt_remaining(remain)}**\n"
             f"🎟️ **Your tickets**: **{int(data.get('lottery_tickets', 0))}**\n\n"
-            f"Tickets cost **{LOTTERY_TICKET_PRICE:,}** 🥐 each. Buy with `lottery buy <count>`.{last_block}"
+            f"Tickets cost **{LOTTERY_TICKET_PRICE:,}** 🪙 each. Buy with `lottery buy <count>`.{last_block}"
         )
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🎰 Café Lottery", body))
+            await ctx.interaction.followup.send(view=_info_view("🎰 Lottery", body))
         else:
-            await ctx.send(view=_info_view("🎰 Café Lottery", body))
+            await ctx.send(view=_info_view("🎰 Lottery", body))
 
     @lottery.command(name="info", description="Show the current lottery pot, draw time and your tickets")
     async def lottery_info(self, ctx: commands.Context):
@@ -70,9 +70,9 @@ class LotteryMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         if data["balance"] < cost:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🥐."))
+                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🪙."))
             else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🥐."))
+                return await ctx.send(view=_info_view("💸 Not enough cash", f"That costs **{cost:,}** 🪙."))
 
         effects    = data.setdefault("effects", {})
         bonus_mult = 2 if effects.pop("lottery_boost", 0) else 1
@@ -91,15 +91,15 @@ class LotteryMixin:
             await ctx.interaction.followup.send(view=_info_view(
                 "🎟️ Tickets bought",
                 f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
-                f"• Spent **{cost:,}** 🥐\n"
-                f"• Pot is now **{int(self.lottery['pot']):,}** 🥐"
+                f"• Spent **{cost:,}** 🪙\n"
+                f"• Pot is now **{int(self.lottery['pot']):,}** 🪙"
                 + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else ""),
             ))
         else:
             await ctx.send(view=_info_view(
                 "🎟️ Tickets bought",
                 f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
-                f"• Spent **{cost:,}** 🥐\n"
-                f"• Pot is now **{int(self.lottery['pot']):,}** 🥐"
+                f"• Spent **{cost:,}** 🪙\n"
+                f"• Pot is now **{int(self.lottery['pot']):,}** 🪙"
                 + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else ""),
             ))

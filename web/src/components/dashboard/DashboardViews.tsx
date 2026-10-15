@@ -21,6 +21,14 @@ export function StatCard({ label, value, note, accent = "" }: { label: string; v
   return <div className={`dash-stat ${accent}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
 }
 
+/**
+ * The economy has a single currency, so the unit is set apart once per amount
+ * instead of being repeated in bold next to every number.
+ */
+export function CoinLabel() {
+  return <span className="economy-coin">coins</span>;
+}
+
 export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
@@ -49,7 +57,7 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
       <StatCard label="Net worth" value={formatNumber(overview?.net_worth)} note="Across your Niko profile" accent="accent-orange" />
       <StatCard label="In your wallet" value={formatNumber(overview?.balance)} note="Ready to spend" accent="accent-violet" />
       <StatCard label="In your vault" value={formatNumber(overview?.bank)} note="Saved for later" accent="accent-blue" />
-      <StatCard label="Current level" value={formatNumber(overview?.level)} note={overview?.job ? `Working as a ${overview.job}` : "Keep showing up"} accent="accent-green" />
+      <StatCard label="Current level" value={formatNumber(overview?.level)} note={overview?.job_name ? `Working as a ${overview.job_name}` : "Keep showing up"} accent="accent-green" />
     </div>
     <section className="dash-panel economy-privacy-panel">
       <div className="panel-heading"><div><span className="panel-kicker">Leaderboard privacy</span><h3>Choose who sees your identity</h3></div><span className="panel-icon"><Icon name="shield" /></span></div>

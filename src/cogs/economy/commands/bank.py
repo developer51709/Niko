@@ -14,8 +14,8 @@ class BankMixin:
 
     @commands.hybrid_group(
         name="bank",
-        description="Manage your café vault: deposit, withdraw, upgrade",
-        help="{ 'en': 'manage your café vault 🏦', 'de': 'verwalte deinen Tresor', 'es': 'gestiona tu bóveda 🏦' }",
+        description="Manage your vault: deposit, withdraw, upgrade",
+        help="{ 'en': 'manage your vault 🏦', 'de': 'verwalte deinen Tresor', 'es': 'gestiona tu bóveda 🏦' }",
         invoke_without_command=True
     )
     async def bank(self, ctx: commands.Context):
@@ -66,20 +66,20 @@ class BankMixin:
 
         if amt > data["balance"]:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your pastry bag doesn't have that much."))
+                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your wallet doesn't have that much."))
             else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag doesn't have that much."))
+                return await ctx.send(view=_info_view("💸 Not enough cash", "Your wallet doesn't have that much."))
 
         if amt > free:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
                     "🏦 Vault full",
-                    f"You can store at most **{free:,}** more 🥐 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
+                    f"You can store at most **{free:,}** more 🪙 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
                 ))
             else:
                 return await ctx.send(view=_info_view(
                     "🏦 Vault full",
-                    f"You can store at most **{free:,}** more 🥐 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
+                    f"You can store at most **{free:,}** more 🪙 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
                 ))
 
         data["balance"] -= amt
@@ -88,9 +88,9 @@ class BankMixin:
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🥐 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
+            await ctx.interaction.followup.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🪙 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
         else:
-            await ctx.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🥐 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
+            await ctx.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🪙 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
 
 
     @bank.command(name="withdraw", description="Move coins from the vault back to your wallet")
@@ -127,9 +127,9 @@ class BankMixin:
         _log_tx(data, "withdraw", amt, "vault → wallet")
         await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🥐 Withdrawn", f"Took **{amt:,}** 🥐 from your vault.\n-# Wallet: **{data['balance']:,}** 🥐"))
+            await ctx.interaction.followup.send(view=_info_view("🪙 Withdrawn", f"Took **{amt:,}** 🪙 from your vault.\n-# Wallet: **{data['balance']:,}** 🪙"))
         else:
-            await ctx.send(view=_info_view("🥐 Withdrawn", f"Took **{amt:,}** 🥐 from your vault.\n-# Wallet: **{data['balance']:,}** 🥐"))
+            await ctx.send(view=_info_view("🪙 Withdrawn", f"Took **{amt:,}** 🪙 from your vault.\n-# Wallet: **{data['balance']:,}** 🪙"))
 
 
     @bank.command(name="upgrade", description="Pay to upgrade your vault to the next tier")
@@ -151,12 +151,12 @@ class BankMixin:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
                     "💸 Not enough net worth",
-                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🥐 (paid from wallet first, then vault).",
+                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🪙 (paid from wallet first, then vault).",
                 ))
             else:
                 return await ctx.send(view=_info_view(
                     "💸 Not enough net worth",
-                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🥐 (paid from wallet first, then vault).",
+                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🪙 (paid from wallet first, then vault).",
                 ))
 
         from_wallet = min(int(data["balance"]), cost)
@@ -170,13 +170,13 @@ class BankMixin:
             await ctx.interaction.followup.send(view=_info_view(
                 "🏦 Vault upgraded",
                 f"Welcome to your shiny new **{bank_name(next_tier)}**!\n"
-                f"• New cap: **{bank_cap(next_tier):,}** 🥐\n"
+                f"• New cap: **{bank_cap(next_tier):,}** 🪙\n"
                 f"• Daily interest: **{bank_rate(next_tier)*100:.2f}%**",
             ))
         else:
             await ctx.send(view=_info_view(
                 "🏦 Vault upgraded",
                 f"Welcome to your shiny new **{bank_name(next_tier)}**!\n"
-                f"• New cap: **{bank_cap(next_tier):,}** 🥐\n"
+                f"• New cap: **{bank_cap(next_tier):,}** 🪙\n"
                 f"• Daily interest: **{bank_rate(next_tier)*100:.2f}%**",
             ))

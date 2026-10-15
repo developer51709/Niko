@@ -16,6 +16,11 @@ globals().update({
     if not name.startswith("__")
 })
 
+def _job_label(job_id) -> str:
+    """Cards print the career's display name; the stored column is an id."""
+    from utils.economy_jobs import get_job
+    return get_job(job_id)["name"]
+
 @app.route("/api/cards/rank")
 def card_rank():
     """Rank / level card (820x340). Queries levels + level_config from DB."""
@@ -157,7 +162,7 @@ def card_leaderboard():
             'font-size="20" font-weight="700">' + _format_num(val) + '</text>'
         )
 
-    title = "Leveling Leaderboard" if card_type == "level" else "\U0001f3e6 Cafe Rich List"
+    title = "Leveling Leaderboard" if card_type == "level" else "\U0001f3e6 Niko Rich List"
     body = (
         '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">'
         '<stop offset="0%" stop-color="#' + bg_top + '"/>'
@@ -259,7 +264,7 @@ def card_economy():
     if row:
         balance = int(row.get("balance", 0))
         bank = int(row.get("bank", 0))
-        job = str(row.get("job", "barista"))
+        job = _job_label(row.get("job"))
         daily_streak = int(row.get("daily_streak", 0))
         level = int(row.get("level", 0))
         # Resolve name from Discord
@@ -317,11 +322,11 @@ def card_daily():
     name = f"User {user_id}"
     balance = 0
     streak = 0
-    job = "barista"
+    job = _job_label(None)
     if row:
         balance = int(row.get("balance", 0))
         streak = int(row.get("daily_streak", 0))
-        job = str(row.get("job", "barista"))
+        job = _job_label(row.get("job"))
         try:
             if _discord_bot:
                 member = _discord_bot.get_user(user_id)
@@ -371,10 +376,10 @@ def card_work():
     row = _get_user_economy(user_id)
     name = f"User {user_id}"
     balance = 0
-    job = "barista"
+    job = _job_label(None)
     if row:
         balance = int(row.get("balance", 0))
-        job = str(row.get("job", "barista"))
+        job = _job_label(row.get("job"))
         try:
             if _discord_bot:
                 member = _discord_bot.get_user(user_id)

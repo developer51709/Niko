@@ -131,6 +131,7 @@ export type UserOverview = {
   net_worth: number;
   level: number;
   job: string;
+  job_name: string;
   daily_streak: number;
   achievements: number;
   total_earned: number;
@@ -167,6 +168,7 @@ export type EconomyStanding = {
   net_worth: number;
   level: number;
   job: string;
+  job_name: string;
   bank_tier: number;
   daily_streak: number;
   total_earned: number;
@@ -187,10 +189,22 @@ export type AchievementProgress = {
   percent: number;
 };
 
+/** An event window on a seasonal badge: the dates it opens and closes. */
+export type AchievementSeason = {
+  label: string;
+  active: boolean;
+  starts_at: number;
+  ends_at: number;
+};
+
 export type AchievementEntry = {
   id: string;
   name: string;
   emoji: string;
+  /** A logo to draw instead of the emoji, e.g. the top.gg mark on voting badges. */
+  icon_url: string | null;
+  /** ``null`` for a badge that can be earned at any time of year. */
+  season: AchievementSeason | null;
   description: string;
   reward: number;
   unlocked: boolean;

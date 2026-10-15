@@ -2,17 +2,22 @@
 
 import asyncio
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import aiosqlite
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
+from webapp import dashboard_routes
 from webapp import public_routes as routes
+from webapp import server as server_routes
 from webapp.server import get_runtime_leaderboard_page
 from cogs.economy.commands.leaderboard import LeaderboardMixin
-from database import MongoPool
+from database import MongoPool, SQLitePool
 
 
 def leaderboard_client(rows, *, viewer=None, staff=None, mutual=None, bot=None):
@@ -200,6 +205,189 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
             stop_patches(patches)
         self.assertEqual(malformed.status_code, 400)
         self.assertEqual(non_positive.status_code, 400)
+
+    def test_privacy_toggle_saves_through_the_bot_connection_pool(self):
+        """The dashboard toggle must write through ``bot.cxn`` on either backend.
+
+        Both pools renumber every ``$n`` placeholder separately, so a statement
+        that binds one value for the ``ON CONFLICT`` clause fails on SQLite
+        (binding count) and on MongoDB (missing SET argument), which is what
+        users saw as "could not be saved".
+        """
+
+        class Result:
+            def __init__(self, upserted_id):
+                self.upserted_id = upserted_id
+
+        class Collection:
+            def __init__(self):
+                self.docs = {}
+
+            async def update_one(self, filter_dict, update, upsert=False):
+                doc = self.docs.get(filter_dict["_id"])
+                if doc is None:
+                    doc = dict(update.get("$setOnInsert", {}))
+                    doc.update(update.get("$set", {}))
+                    self.docs[filter_dict["_id"]] = doc
+                    return Result(upserted_id=filter_dict["_id"])
+                doc.update(update.get("$set", {}))
+                return Result(upserted_id=None)
+
+        class Database(dict):
+            def __getitem__(self, name):
+                return self.setdefault(name, Collection())
+
+        class MongoClient:
+            def __init__(self):
+                self.db = Database()
+
+            def __getitem__(self, _name):
+                return self.db
+
+        def sqlite_backend():
+            loop = asyncio.new_event_loop()
+            connection = loop.run_until_complete(aiosqlite.connect(":memory:"))
+            pool = SQLitePool(connection)
+            loop.run_until_complete(pool.execute(
+                "CREATE TABLE IF NOT EXISTS economy_users ("
+                "user_id INTEGER PRIMARY KEY, balance INTEGER DEFAULT 100, "
+                "net_worth INTEGER DEFAULT 100, "
+                "leaderboard_private INTEGER NOT NULL DEFAULT 0)"
+            ))
+
+            def read_value():
+                rows = loop.run_until_complete(
+                    pool.fetch("SELECT user_id, leaderboard_private FROM economy_users")
+                )
+                self.assertEqual(len(rows), 1)
+                return int(rows[0]["leaderboard_private"])
+
+            def close():
+                loop.run_until_complete(connection.close())
+                loop.close()
+
+            return pool, (lambda task: loop.run_until_complete(task)), read_value, close
+
+        def mongo_backend():
+            pool = MongoPool(MongoClient(), "test")
+
+            def read_value():
+                documents = pool.collection("economy_users").docs
+                self.assertEqual(len(documents), 1)
+                return int(next(iter(documents.values()))["leaderboard_private"])
+
+            return pool, asyncio.run, read_value, lambda: None
+
+        for name, backend in (("sqlite", sqlite_backend), ("mongodb", mongo_backend)):
+            with self.subTest(backend=name):
+                pool, run_task, read_value, close = backend()
+
+                class Bot:
+                    cxn = pool
+
+                    @staticmethod
+                    def get_cog(_name):
+                        return None
+
+                client = app.test_client()
+                with client.session_transaction() as session:
+                    session["user"] = {"id": "424242"}
+                    session["access_token"] = "test-token"
+                    session["token_exp"] = time.time() + 3600
+                    session["csrf_token"] = "test-csrf"
+
+                try:
+                    with patch.object(
+                        server_routes, "_current_user_blacklist_entry", return_value=None
+                    ), patch.object(dashboard_routes, "_discord_bot", Bot()), patch.object(
+                        dashboard_routes, "run_on_bot_loop", side_effect=run_task
+                    ):
+                        hidden = client.post(
+                            "/api/me/economy-privacy",
+                            json={"leaderboard_private": True},
+                            headers={"X-CSRF-Token": "test-csrf"},
+                        )
+                        self.assertEqual(hidden.status_code, 200, hidden.get_json())
+                        self.assertEqual(
+                            hidden.get_json(), {"ok": True, "leaderboard_private": True}
+                        )
+                        self.assertEqual(read_value(), 1)
+
+                        visible = client.post(
+                            "/api/me/economy-privacy",
+                            json={"leaderboard_private": False},
+                            headers={"X-CSRF-Token": "test-csrf"},
+                        )
+                        self.assertEqual(visible.status_code, 200, visible.get_json())
+                        self.assertEqual(
+                            visible.get_json(), {"ok": True, "leaderboard_private": False}
+                        )
+                        # The second save updates the existing profile in place.
+                        self.assertEqual(read_value(), 0)
+                finally:
+                    close()
+
+    def test_privacy_toggle_is_reflected_by_the_overview_after_a_reload(self):
+        """Saving must persist: the Overview payload reloads the stored preference."""
+        loop = asyncio.new_event_loop()
+        connection = loop.run_until_complete(aiosqlite.connect(":memory:"))
+        pool = SQLitePool(connection)
+        loop.run_until_complete(pool.execute(
+            "CREATE TABLE IF NOT EXISTS economy_users ("
+            "user_id INTEGER PRIMARY KEY, balance INTEGER DEFAULT 100, "
+            "bank INTEGER DEFAULT 0, net_worth INTEGER DEFAULT 100, "
+            "leaderboard_private INTEGER NOT NULL DEFAULT 0, "
+            "total_earned INTEGER DEFAULT 100, level INTEGER DEFAULT 0, "
+            "job TEXT DEFAULT 'barista', daily_streak INTEGER DEFAULT 0, "
+            "achievements TEXT DEFAULT '[]')"
+        ))
+
+        class Bot:
+            cxn = pool
+
+            @staticmethod
+            def get_cog(_name):
+                return None
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": "424242"}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+            session["csrf_token"] = "test-csrf"
+
+        def run_task(task):
+            return loop.run_until_complete(task)
+
+        try:
+            with patch.object(
+                server_routes, "_current_user_blacklist_entry", return_value=None
+            ), patch.object(server_routes, "_discord_bot", Bot()), patch.object(
+                server_routes, "run_on_bot_loop", side_effect=run_task
+            ), patch.object(dashboard_routes, "_discord_bot", Bot()), patch.object(
+                dashboard_routes, "run_on_bot_loop", side_effect=run_task
+            ):
+                before = client.get("/api/me/overview").get_json()
+                self.assertFalse(before["leaderboard_private"])
+
+                saved = client.post(
+                    "/api/me/economy-privacy",
+                    json={"leaderboard_private": True},
+                    headers={"X-CSRF-Token": "test-csrf"},
+                )
+                self.assertEqual(saved.status_code, 200, saved.get_json())
+                self.assertTrue(client.get("/api/me/overview").get_json()["leaderboard_private"])
+
+                cleared = client.post(
+                    "/api/me/economy-privacy",
+                    json={"leaderboard_private": False},
+                    headers={"X-CSRF-Token": "test-csrf"},
+                )
+                self.assertEqual(cleared.status_code, 200, cleared.get_json())
+                self.assertFalse(client.get("/api/me/overview").get_json()["leaderboard_private"])
+        finally:
+            loop.run_until_complete(connection.close())
+            loop.close()
 
     def test_discord_leaderboard_command_links_to_public_page_with_privacy_note(self):
         class Context:

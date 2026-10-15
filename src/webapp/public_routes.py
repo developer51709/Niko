@@ -19,7 +19,12 @@ async def _current_support_invite():
 
 @app.route("/api/economy/leaderboard")
 def api_economy_leaderboard():
-    """Return one ranked page, revealing private identities only when permitted."""
+    """Return one ranked page of global economy standings.
+
+    Ranks every economy profile by net worth, keeping each profile's identity
+    private unless the viewer is the account owner, an official Niko staff
+    member, or someone who shares a mutual server with that profile.
+    """
     try:
         page = int(request.args.get("page", "1"))
         if page < 1:
@@ -30,7 +35,7 @@ def api_economy_leaderboard():
     offset = (page - 1) * page_size
     result = get_runtime_leaderboard_page(offset, page_size)
     if result is None:
-        return jsonify({"error": "The café leaderboard is temporarily unavailable."}), 503
+        return jsonify({"error": "The economy leaderboard is temporarily unavailable."}), 503
     rows, total = result
     viewer_id = str((session.get("user") or {}).get("id", ""))
     official_staff = False

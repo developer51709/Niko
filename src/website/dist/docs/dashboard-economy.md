@@ -28,6 +28,21 @@ These tabs read `GET /api/me/economy` and `GET /api/me/achievements` for the sig
 - Locked badges first, closest to completion at the top
 - Unlocked badges with the coins they already paid
 - Coins still available from badges you have not reached yet
+- Seasonal badges with their event, including the date it opens or closes — see the event window below
+
+### Seasonal events
+
+Some badges only count during a real-world event, and each one comes back every year on its own:
+
+| Event | Window |
+| --- | --- |
+| Halloween | Oct 24 – Nov 1 |
+| Winter | Dec 15 – Jan 2 |
+| New Year | Dec 31 – Jan 7 |
+| Valentine's | Feb 10 – Feb 18 |
+| Summer | Jun 20 – Sep 5 |
+
+A seasonal badge can only be collected while its own window is open, so a badge that is out of season shows what it would need and when the event returns. The bot checks them the same way on every economy action, so a qualifying account earns the badge on its next shift, daily claim, purchase or vote inside the window.
 
 ## The only economy setting
 

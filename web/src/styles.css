@@ -1221,6 +1221,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .support-faq-item,
 .support-contact-card,
 .auth-card,
+.achievement-summary,
 .dash-stat,
 .dash-panel,
 .server-card,
@@ -1361,18 +1362,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* ── Economy standing tab ─────────────────────────────────────────────────── */
 
-.dashboard-layout .economy-layout { display: grid; gap: 14px; }
-.dashboard-layout .economy-panel { padding: 18px 20px; }
-.dashboard-layout .economy-headline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
+/* Panels on these tabs keep the shared `.dash-panel` padding, radius and glass
+   treatment so they sit in the same rhythm as every other dashboard page. */
+.dashboard-layout .economy-layout,
+.dashboard-layout .achievement-layout { display: grid; gap: 12px; }
+.dashboard-layout .economy-headline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); }
 .dashboard-layout .economy-headline strong { display: block; font-size: 30px; line-height: 1.1; letter-spacing: -.02em; }
-.dashboard-layout .economy-headline small { color: var(--dim); font-size: 10px; }
-.dashboard-layout .economy-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
-.dashboard-layout .economy-stat { display: grid; gap: 4px; padding: 12px 14px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }
+.dashboard-layout .economy-headline small { display: block; margin-top: 6px; color: var(--dim); font-size: 10px; }
+/* The two headline pills reuse the achievement chips at a smaller scale — they
+   sit beside the net-worth figure rather than carrying a row of their own. */
+.dashboard-layout .economy-headline .achievement-chip { gap: 5px; padding: 4px 9px; font-size: 9px; }
+.dashboard-layout .economy-headline .achievement-chip strong { font-size: 10px; }
+.dashboard-layout .economy-headline .achievement-chip .icon { width: 12px; height: 12px; }
+.dashboard-layout .economy-coin { color: var(--dim); font-size: 10px; font-weight: 500; letter-spacing: .02em; }
+.dashboard-layout .economy-panel-note { margin: 14px 0 16px; color: var(--dim); font-size: 10px; line-height: 1.65; }
+.dashboard-layout .economy-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 10px; margin-top: 16px; }
+.dashboard-layout .economy-stat { display: grid; align-content: start; gap: 4px; padding: 12px 14px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }
 .dashboard-layout .economy-stat span { color: var(--dim); font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
 .dashboard-layout .economy-stat strong { font-size: 19px; letter-spacing: -.01em; }
 .dashboard-layout .economy-stat small { color: var(--muted); font-size: 10px; }
 .dashboard-layout .economy-stat.is-accent strong { color: var(--sage); }
-.dashboard-layout .economy-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.dashboard-layout .economy-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; align-items: start; }
 .dashboard-layout .economy-rank-list { display: grid; gap: 6px; margin-top: 12px; list-style: none; padding: 0; }
 .dashboard-layout .economy-rank-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; font-size: 11px; }
 .dashboard-layout .economy-rank-row.is-viewer { border-color: var(--filter-border); background: var(--filter-active); }
@@ -1383,39 +1393,69 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-layout .economy-rank-meta small { color: var(--dim); font-size: 9px; }
 .dashboard-layout .economy-rank-worth { font-family: "Space Mono", monospace; font-size: 11px; }
 .dashboard-layout .economy-empty { padding: 16px; color: var(--dim); font-size: 11px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
-.dashboard-layout .vote-card { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: linear-gradient(120deg, var(--surface-raised), var(--surface)); }
+.dashboard-layout .vote-card { padding: 15px 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: linear-gradient(120deg, var(--surface-raised), var(--surface)); }
 .dashboard-layout .vote-card-head { display: flex; align-items: center; gap: 10px; }
 .dashboard-layout .vote-card-head strong { font-size: 14px; }
-.dashboard-layout .vote-streak-track { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 4px; }
-.dashboard-layout .vote-streak-step { width: 18px; height: 6px; border-radius: 3px; background: var(--toggle-off); }
+.dashboard-layout .vote-card > small { display: block; margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.dashboard-layout .vote-streak-track { display: flex; gap: 4px; margin: 14px 0 0; }
+.dashboard-layout .vote-streak-step { flex: 1 1 0; min-width: 0; height: 6px; border-radius: 3px; background: var(--toggle-off); }
 .dashboard-layout .vote-streak-step.is-filled { background: var(--sage); }
 .dashboard-layout .vote-multipliers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.dashboard-layout .vote-multiplier-chip { display: grid; gap: 2px; padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; font-size: 10px; }
+.dashboard-layout .vote-multiplier-chip { display: grid; gap: 2px; min-width: 108px; padding: 9px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; font-size: 10px; }
 .dashboard-layout .vote-multiplier-chip strong { font-size: 14px; color: var(--sage); }
-.dashboard-layout .economy-transaction-list { display: grid; gap: 5px; margin-top: 12px; list-style: none; padding: 0; }
-.dashboard-layout .economy-transaction { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); font-size: 10px; }
-.dashboard-layout .economy-transaction-kind { color: var(--muted); font-family: "Space Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
-.dashboard-layout .economy-transaction-note { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-layout .economy-transaction-amount { font-family: "Space Mono", monospace; }
+.dashboard-layout .economy-transaction-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dashboard-layout .economy-transaction { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 9px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; font-size: 10px; }
+.dashboard-layout .economy-transaction-kind { grid-area: 1 / 1; color: var(--muted); font-family: "Space Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.dashboard-layout .economy-transaction-note { grid-area: 2 / 1; min-width: 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-layout .economy-transaction-amount { grid-area: 1 / 2 / span 2 / auto; align-self: center; color: var(--ink); font-family: "Space Mono", monospace; font-size: 11px; white-space: nowrap; }
+.dashboard-layout .economy-transaction time { grid-area: 3 / 1; color: var(--dim); font-size: 9px; }
 .dashboard-layout .economy-transaction-amount.is-gain { color: var(--sage); }
 .dashboard-layout .economy-transaction-amount.is-loss { color: #e8a2a2; }
 
 /* ── Achievements tab ─────────────────────────────────────────────────────── */
 
-.dashboard-layout .achievement-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); }
-.dashboard-layout .achievement-summary strong { font-size: 22px; letter-spacing: -.01em; }
+.dashboard-layout .achievement-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 18px; padding: 24px; border: 1px solid var(--line); border-radius: 14px; }
+.dashboard-layout .achievement-summary > div:first-child { display: grid; gap: 4px; }
+.dashboard-layout .achievement-summary strong { font-size: 24px; letter-spacing: -.02em; }
 .dashboard-layout .achievement-summary small { color: var(--dim); font-size: 10px; }
 .dashboard-layout .achievement-summary-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.dashboard-layout .achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 10px; margin-top: 14px; }
-.dashboard-layout .achievement-card { display: grid; gap: 8px; padding: 13px 14px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 11px; }
+.dashboard-layout .achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(255px, 100%), 1fr)); gap: 10px; }
+.dashboard-layout .achievement-card { display: grid; align-content: start; gap: 9px; padding: 14px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; }
 .dashboard-layout .achievement-card.is-unlocked { border-color: var(--filter-border); background: var(--filter-active); }
-.dashboard-layout .achievement-card-head { display: flex; align-items: center; gap: 9px; }
-.dashboard-layout .achievement-emoji { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--surface-muted); font-size: 15px; }
-.dashboard-layout .achievement-card-head strong { font-size: 12px; }
-.dashboard-layout .achievement-description { color: var(--muted); font-size: 10px; }
+.dashboard-layout .achievement-card-head { display: flex; align-items: flex-start; gap: 10px; }
+.dashboard-layout .achievement-card-head > span { display: grid; gap: 3px; min-width: 0; }
+.dashboard-layout .achievement-emoji { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; background: var(--surface-muted); font-size: 16px; }
+/* Badges that stand for a site (top.gg) draw that site's logo in place of the
+   emoji, on a tile tinted with the brand colour. */
+.dashboard-layout .achievement-emoji.is-logo { background: rgba(255, 51, 102, .14); }
+.dashboard-layout .achievement-emoji img { display: block; width: 19px; height: 19px; }
+.dashboard-layout .achievement-card-head strong { font-size: 12px; line-height: 1.35; }
+.dashboard-layout .achievement-description { display: block; color: var(--muted); font-size: 10px; line-height: 1.55; }
+/* A seasonal badge names its event and the date it opens or closes, so a badge
+   that cannot be earned today reads as scheduled rather than broken. */
+.dashboard-layout .achievement-season { display: inline-flex; align-items: center; width: fit-content; margin-top: 2px; padding: 3px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--dim); font-size: 9px; }
+.dashboard-layout .achievement-season.is-active { border: 1px solid var(--filter-border); background: var(--filter-active); color: var(--sage); }
 .dashboard-layout .achievement-bar { height: 5px; border-radius: 3px; background: var(--toggle-off); overflow: hidden; }
-.dashboard-layout .achievement-bar-fill { height: 100%; border-radius: 3px; background: var(--sage); }
-.dashboard-layout .achievement-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 9px; color: var(--dim); }
-.dashboard-layout .achievement-reward { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--sage); font-family: "Space Mono", monospace; font-size: 9px; }
-.dashboard-layout .achievement-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: var(--surface-raised); border: 1px solid var(--line-soft); font-size: 10px; }
+/* The fill is a span with an inline percentage width: without a block-level
+   display the browser drops both its width and its height, which left the bar
+   looking like a plain grey track at every progress level. */
+.dashboard-layout .achievement-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--sage); transition: width .6s ease-out; }
+.dashboard-layout .achievement-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; font-size: 9px; color: var(--dim); }
+.dashboard-layout .achievement-reward { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; background: var(--surface-muted); color: var(--sage); font-family: "Space Mono", monospace; font-size: 9px; }
+.dashboard-layout .achievement-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: var(--surface-raised); border: 1px solid var(--line-soft); font-size: 10px; line-height: 1.45; }
 .dashboard-layout .achievement-chip strong { font-size: 12px; }
+
+/* ── Economy tabs on narrow screens ───────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .dashboard-layout .economy-headline { gap: 10px; padding-bottom: 14px; }
+  .dashboard-layout .economy-headline strong { font-size: 26px; }
+  .dashboard-layout .economy-stat { padding: 11px 12px; }
+  .dashboard-layout .economy-stat strong { font-size: 17px; }
+  .dashboard-layout .economy-headline .achievement-summary-chips { width: 100%; }
+  .dashboard-layout .economy-layout .metric-list { grid-template-columns: 1fr; }
+  .dashboard-layout .economy-transaction-note { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  .dashboard-layout .achievement-summary { padding: 18px; }
+  .dashboard-layout .achievement-summary-chips { width: 100%; }
+  .dashboard-layout .achievement-chip { flex: 1 1 100%; }
+}

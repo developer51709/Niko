@@ -19,8 +19,8 @@ class GamblingMixin:
 
     @commands.hybrid_command(
         name="crime",
-        description="Try to steal some extra treats",
-        help="{ 'en': 'try to steal some extra treats 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas golosinas extra 😈' }"
+        description="Try to steal some extra coins",
+        help="{ 'en': 'try to steal some extra coins 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas monedas extra 😈' }"
     )
     async def crime(self, ctx: commands.Context):
         if ctx.interaction:
@@ -51,7 +51,7 @@ class GamblingMixin:
             if effects.pop("gambling_boost", 0):
                 reward = int(reward * 1.5)
             self._credit(data, reward, "crime", "successful heist")
-            title, subtitle, amount, accent = ("😈 Got away!", "You swiped from the tip jar.", reward, ACCENT_GOLD)
+            title, subtitle, amount, accent = ("😈 Got away!", "You swiped from the till.", reward, ACCENT_GOLD)
         else:
             loss = random.randint(100, 300)
             loss = min(loss, int(data.get("balance", 0)))
@@ -80,9 +80,9 @@ class GamblingMixin:
         import time
         if member.id == ctx.author.id:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+                return await ctx.interaction.followup.send(view=_info_view("🤨 Really?", "You can't rob yourself, silly!"))
             else:
-                return await ctx.send(view=_info_view("☕ Really?", "You can't rob yourself, silly!"))
+                return await ctx.send(view=_info_view("🤨 Really?", "You can't rob yourself, silly!"))
 
         if member.bot:
             if ctx.interaction:
@@ -121,12 +121,12 @@ class GamblingMixin:
             if ctx.interaction:
                 return await ctx.interaction.followup.send(view=_info_view(
                     "🛡️ Blocked!",
-                    f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
+                    f"{member.display_name} had a **Cash Box Lock** active. The robbery failed and they kept everything.",
                 ))
             else:
                 return await ctx.send(view=_info_view(
                     "🛡️ Blocked!",
-                    f"{member.display_name} had a **Tip Jar Lock** active. The robbery failed and they kept everything.",
+                    f"{member.display_name} had a **Cash Box Lock** active. The robbery failed and they kept everything.",
                 ))
 
         success = random.random() < 0.4
@@ -164,11 +164,11 @@ class GamblingMixin:
             await ctx.interaction.response.defer()
 
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🥐.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🪙.")
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
-            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🥐 but only have **{data['balance']:,}**.")
+            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🪙 but only have **{data['balance']:,}**.")
 
         call = call.lower().strip()
         if call not in ("heads", "h", "tails", "t"):
@@ -220,11 +220,11 @@ class GamblingMixin:
             await ctx.interaction.response.defer()
 
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🥐.")
+            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🪙.")
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
-            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🥐 but only have **{data['balance']:,}**.")
+            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🪙 but only have **{data['balance']:,}**.")
 
         if not 1 <= target <= 99:
             return await self._send_err(ctx, f"{get_emoji('cross')} Invalid target", "Target must be between **1** and **99**.")

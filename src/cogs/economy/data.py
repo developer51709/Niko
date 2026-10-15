@@ -1,4 +1,4 @@
-# economy.py — premium café economy cog
+# economy.py — premium Niko economy cog
 #
 # Adds image-card driven balance/profile/work/daily/leaderboard, a job ladder
 # with XP/levels, a tiered bank with daily interest, an expanded shop with
@@ -30,6 +30,7 @@ from utils.paginator import PaginatedView, paginate
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from config.emojis import get_emoji
+from .seasons import season_open
 from utils.economy_jobs import (
     JOBS, DEFAULT_JOB, get_job,
     SHOP_ITEMS, get_item,
@@ -175,6 +176,10 @@ def _migrate_user(data: dict) -> dict:
 # ── Achievements ────────────────────────────────────────────────────────────
 # Every entry carries:
 #   name / emoji / description  how the badge is presented in the bot and web
+#   icon                        optional logo key; a badge that carries one is
+#                               drawn with that logo instead of its emoji
+#   season                      optional event window; the badge only unlocks
+#                               while it is open (see cogs/economy/seasons.py)
 #   test(data)                  whether the badge is earned
 #   progress(data)              (current, target) for the dashboard bars
 #   reward                      coins paid ONCE, the moment the badge unlocks
@@ -182,16 +187,53 @@ def _migrate_user(data: dict) -> dict:
 # The reward is why this table is data instead of prose: the balance is
 # credited exactly when the id joins ``data["achievements"]``, and that stored
 # id list is what stops a second payout on the next save.
+
+# ── top.gg logo ─────────────────────────────────────────────────────────────
+# Voting badges show the listing site's own logo, registered as an application
+# emoji at startup (``utils/emoji_sync.py``). Until that first sync has run,
+# ``config.emojis`` still holds the placeholder id, so every renderer falls
+# back to the badge's unicode emoji rather than printing a broken mention.
+_TOPGG_PLACEHOLDER = "<:topgg:0>"
+
+
+def topgg_emoji() -> str | None:
+    """The live top.gg application emoji, or ``None`` before the first sync."""
+    emoji = get_emoji("topgg")
+    return emoji if emoji and emoji != _TOPGG_PLACEHOLDER else None
+
+
+def achievement_icon(meta: dict) -> str:
+    """The icon a badge is drawn with — a logo for voting badges, else its emoji."""
+    if meta.get("icon") == "topgg":
+        return topgg_emoji() or meta["emoji"]
+    return meta["emoji"]
+
+
+def achievement_label(meta: dict) -> str:
+    """``"Week of Votes <logo>"``, the string an unlock announcement prints."""
+    return f"{meta['name']} {achievement_icon(meta)}"
+
+
+def net_worth(data: dict) -> int:
+    """The wallet plus the vault.
+
+    ``_migrate_user`` keeps a stored total up to date, but a raw database row
+    carries only the two halves — worth badges read them directly so they can be
+    measured from either shape.
+    """
+    return int(data.get("balance", 0)) + int(data.get("bank", 0))
+
+
 ACHIEVEMENTS = {
     # ── Working ──────────────────────────────────────────────────────────
     "first_paycheck": {
         "name": "First Paycheck", "emoji": "💼", "reward": 250,
-        "description": "Work your very first shift at the café.",
+        "description": "Work your very first shift.",
         "test": lambda d: d["times_worked"] >= 1,
         "progress": lambda d: (d["times_worked"], 1),
     },
     "regular": {
-        "name": "Café Regular", "emoji": "☕", "reward": 1_000,
+        "name": "Shift Regular", "emoji": "🧾", "reward": 1_000,
         "description": "Clock in for 25 shifts.",
         "test": lambda d: d["times_worked"] >= 25,
         "progress": lambda d: (d["times_worked"], 25),
@@ -201,6 +243,30 @@ ACHIEVEMENTS = {
         "description": "Clock in for 100 shifts.",
         "test": lambda d: d["times_worked"] >= 100,
         "progress": lambda d: (d["times_worked"], 100),
+    },
+    "shift_50": {
+        "name": "Shift Veteran", "emoji": "⏰", "reward": 2_500,
+        "description": "Clock in for 50 shifts.",
+        "test": lambda d: int(d.get("times_worked", 0)) >= 50,
+        "progress": lambda d: (int(d.get("times_worked", 0)), 50),
+    },
+    "level_5": {
+        "name": "Clocking In", "emoji": "☕", "reward": 1_000,
+        "description": "Reach career level 5.",
+        "test": lambda d: int(d.get("level", 0)) >= 5,
+        "progress": lambda d: (int(d.get("level", 0)), 5),
+    },
+    "level_15": {
+        "name": "Floor Lead", "emoji": "🗂️", "reward": 5_000,
+        "description": "Reach career level 15.",
+        "test": lambda d: int(d.get("level", 0)) >= 15,
+        "progress": lambda d: (int(d.get("level", 0)), 15),
+    },
+    "level_30": {
+        "name": "Corner Office", "emoji": "🏢", "reward": 15_000,
+        "description": "Reach career level 30.",
+        "test": lambda d: int(d.get("level", 0)) >= 30,
+        "progress": lambda d: (int(d.get("level", 0)), 30),
     },
     # ── Banking ──────────────────────────────────────────────────────────
     "saver": {
@@ -215,6 +281,18 @@ ACHIEVEMENTS = {
         "test": lambda d: d["bank"] >= 100_000,
         "progress": lambda d: (d["bank"], 100_000),
     },
+    "bank_tier_2": {
+        "name": "Steel Vault", "emoji": "🔐", "reward": 2_500,
+        "description": "Upgrade your vault to the Steel Vault, tier 3.",
+        "test": lambda d: int(d.get("bank_tier", 0)) >= 2,
+        "progress": lambda d: (int(d.get("bank_tier", 0)), 2),
+    },
+    "bank_tier_top": {
+        "name": "Diamond Vault", "emoji": "💠", "reward": 50_000,
+        "description": "Reach the final vault tier, the Diamond Vault.",
+        "test": lambda d: int(d.get("bank_tier", 0)) >= max_bank_tier(),
+        "progress": lambda d: (int(d.get("bank_tier", 0)), max_bank_tier()),
+    },
     "millionaire": {
         "name": "Millionaire", "emoji": "💰", "reward": 50_000,
         "description": "Reach a net worth of 1,000,000 coins.",
@@ -224,44 +302,50 @@ ACHIEVEMENTS = {
     # ── Daily streak ─────────────────────────────────────────────────────
     "streak_7": {
         "name": "Week-long Habit", "emoji": "🔥", "reward": 1_000,
-        "description": "Claim your daily treats 7 days in a row.",
+        "description": "Claim your daily reward 7 days in a row.",
         "test": lambda d: d["daily_streak"] >= 7,
         "progress": lambda d: (d["daily_streak"], 7),
     },
+    "streak_14": {
+        "name": "Two-Week Run", "emoji": "⏳", "reward": 2_500,
+        "description": "Claim your daily reward 14 days in a row.",
+        "test": lambda d: int(d.get("daily_streak", 0)) >= 14,
+        "progress": lambda d: (int(d.get("daily_streak", 0)), 14),
+    },
     "streak_30": {
-        "name": "Café Devotee", "emoji": "🌟", "reward": 10_000,
-        "description": "Claim your daily treats 30 days in a row.",
+        "name": "Daily Devotee", "emoji": "🌟", "reward": 10_000,
+        "description": "Claim your daily reward 30 days in a row.",
         "test": lambda d: d["daily_streak"] >= 30,
         "progress": lambda d: (d["daily_streak"], 30),
     },
     "streak_60": {
         "name": "Dedicated Regular", "emoji": "💎", "reward": 25_000,
-        "description": "Claim your daily treats 60 days in a row.",
+        "description": "Claim your daily reward 60 days in a row.",
         "test": lambda d: d["daily_streak"] >= 60,
         "progress": lambda d: (d["daily_streak"], 60),
     },
     "streak_90": {
         "name": "Economy Legend", "emoji": "🏆", "reward": 100_000,
-        "description": "Claim your daily treats 90 days in a row.",
+        "description": "Claim your daily reward 90 days in a row.",
         "test": lambda d: d["daily_streak"] >= 90,
         "progress": lambda d: (d["daily_streak"], 90),
     },
     # ── Career and spending ──────────────────────────────────────────────
     "owner": {
-        "name": "Café Owner", "emoji": "👑", "reward": 25_000,
+        "name": "Business Owner", "emoji": "👑", "reward": 25_000,
         "description": "Reach the top of the job ladder.",
         "test": lambda d: d.get("job") == "owner",
         "progress": lambda d: (1 if d.get("job") == "owner" else 0, 1),
     },
     "gambler": {
         "name": "High Roller", "emoji": "🎰", "reward": 2_500,
-        "description": "Spend 50,000 coins across the café.",
+        "description": "Spend 50,000 coins across the economy.",
         "test": lambda d: int(d.get("total_spent", 0)) >= 50_000,
         "progress": lambda d: (int(d.get("total_spent", 0)), 50_000),
     },
     "whale": {
         "name": "Casino Whale", "emoji": "🐋", "reward": 25_000,
-        "description": "Spend 500,000 coins across the café.",
+        "description": "Spend 500,000 coins across the economy.",
         "test": lambda d: int(d.get("total_spent", 0)) >= 500_000,
         "progress": lambda d: (int(d.get("total_spent", 0)), 500_000),
     },
@@ -271,48 +355,128 @@ ACHIEVEMENTS = {
         "test": lambda d: int(d.get("total_earned", 0)) >= 1_000_000,
         "progress": lambda d: (int(d.get("total_earned", 0)), 1_000_000),
     },
+    "worth_1k": {
+        "name": "Four Figures", "emoji": "🧮", "reward": 250,
+        "description": "Reach a net worth of 1,000 coins.",
+        "test": lambda d: net_worth(d) >= 1_000,
+        "progress": lambda d: (net_worth(d), 1_000),
+    },
+    "worth_250k": {
+        "name": "Quarter Million", "emoji": "💵", "reward": 15_000,
+        "description": "Reach a net worth of 250,000 coins.",
+        "test": lambda d: net_worth(d) >= 250_000,
+        "progress": lambda d: (net_worth(d), 250_000),
+    },
+    "spend_10k": {
+        "name": "Treat Yourself", "emoji": "🛍️", "reward": 500,
+        "description": "Spend 10,000 coins across the economy.",
+        "test": lambda d: int(d.get("total_spent", 0)) >= 10_000,
+        "progress": lambda d: (int(d.get("total_spent", 0)), 10_000),
+    },
     # ── top.gg voting ────────────────────────────────────────────────────
+    # These carry "icon": "topgg", so they render with the listing site's logo
+    # (the unicode emoji stays as the fallback for a pre-sync boot).
     "voter_first": {
-        "name": "First Upvote", "emoji": "🗳️", "reward": 500,
+        "name": "First Upvote", "emoji": "🗳️", "icon": "topgg", "reward": 500,
         "description": "Vote for Niko on top.gg once.",
         "test": lambda d: int(d.get("votes", 0)) >= 1,
         "progress": lambda d: (int(d.get("votes", 0)), 1),
     },
     "voter_regular": {
-        "name": "Vote Regular", "emoji": "📬", "reward": 2_500,
+        "name": "Vote Regular", "emoji": "📬", "icon": "topgg", "reward": 2_500,
         "description": "Vote for Niko on top.gg 10 times.",
         "test": lambda d: int(d.get("votes", 0)) >= 10,
         "progress": lambda d: (int(d.get("votes", 0)), 10),
     },
+    "voter_25": {
+        "name": "Loyal Voter", "emoji": "🎖️", "icon": "topgg", "reward": 5_000,
+        "description": "Vote for Niko on top.gg 25 times.",
+        "test": lambda d: int(d.get("votes", 0)) >= 25,
+        "progress": lambda d: (int(d.get("votes", 0)), 25),
+    },
     "voter_devoted": {
-        "name": "Ballot Stuffer", "emoji": "🧾", "reward": 10_000,
+        "name": "Ballot Stuffer", "emoji": "🧾", "icon": "topgg", "reward": 10_000,
         "description": "Vote for Niko on top.gg 50 times.",
         "test": lambda d: int(d.get("votes", 0)) >= 50,
         "progress": lambda d: (int(d.get("votes", 0)), 50),
     },
     "voter_legend": {
-        "name": "Civic Legend", "emoji": "🏛️", "reward": 50_000,
+        "name": "Civic Legend", "emoji": "🏛️", "icon": "topgg", "reward": 50_000,
         "description": "Vote for Niko on top.gg 200 times.",
         "test": lambda d: int(d.get("votes", 0)) >= 200,
         "progress": lambda d: (int(d.get("votes", 0)), 200),
     },
     "vote_streak_7": {
-        "name": "Week of Votes", "emoji": "🗓️", "reward": 5_000,
+        "name": "Week of Votes", "emoji": "🗓️", "icon": "topgg", "reward": 5_000,
         "description": "Keep a 7-vote streak on top.gg.",
         "test": lambda d: int(d.get("best_vote_streak", 0)) >= 7,
         "progress": lambda d: (int(d.get("best_vote_streak", 0)), 7),
     },
     "vote_streak_30": {
-        "name": "Month of Votes", "emoji": "📅", "reward": 25_000,
+        "name": "Month of Votes", "emoji": "📅", "icon": "topgg", "reward": 25_000,
         "description": "Keep a 30-vote streak on top.gg.",
         "test": lambda d: int(d.get("best_vote_streak", 0)) >= 30,
         "progress": lambda d: (int(d.get("best_vote_streak", 0)), 30),
     },
     "vote_streak_100": {
-        "name": "Unbroken Voter", "emoji": "🛡️", "reward": 150_000,
+        "name": "Unbroken Voter", "emoji": "🛡️", "icon": "topgg", "reward": 150_000,
         "description": "Keep a 100-vote streak on top.gg.",
         "test": lambda d: int(d.get("best_vote_streak", 0)) >= 100,
         "progress": lambda d: (int(d.get("best_vote_streak", 0)), 100),
+    },
+    # ── Seasonal events ──────────────────────────────────────────────────
+    # Each window is an inclusive MM-DD range in local time and repeats every
+    # year. A seasonal badge is only evaluated while its window is open, so it
+    # cannot be collected off-season — the dashboard shows the condition it
+    # would need and when the event returns.
+    "spooky_vault": {
+        "name": "Pumpkin Vault", "emoji": "🎃", "reward": 2_500,
+        "description": "Hold 25,000 coins in your vault during the Halloween event (Oct 24 – Nov 1).",
+        "season": {"label": "Halloween", "start": "10-24", "end": "11-01"},
+        "test": lambda d: int(d.get("bank", 0)) >= 25_000,
+        "progress": lambda d: (int(d.get("bank", 0)), 25_000),
+    },
+    "spooky_spender": {
+        "name": "Trick or Treat", "emoji": "🍬", "reward": 1_500,
+        "description": "Spend 5,000 coins during the Halloween event (Oct 24 – Nov 1).",
+        "season": {"label": "Halloween", "start": "10-24", "end": "11-01"},
+        "test": lambda d: int(d.get("total_spent", 0)) >= 5_000,
+        "progress": lambda d: (int(d.get("total_spent", 0)), 5_000),
+    },
+    "winter_streak": {
+        "name": "Winter Warmth", "emoji": "❄️", "reward": 5_000,
+        "description": "Hold a 14-day daily streak during the winter event (Dec 15 – Jan 2).",
+        "season": {"label": "Winter", "start": "12-15", "end": "01-02"},
+        "test": lambda d: int(d.get("daily_streak", 0)) >= 14,
+        "progress": lambda d: (int(d.get("daily_streak", 0)), 14),
+    },
+    "winter_shopper": {
+        "name": "Holiday Shopper", "emoji": "🎁", "reward": 3_000,
+        "description": "Spend 25,000 coins during the winter event (Dec 15 – Jan 2).",
+        "season": {"label": "Winter", "start": "12-15", "end": "01-02"},
+        "test": lambda d: int(d.get("total_spent", 0)) >= 25_000,
+        "progress": lambda d: (int(d.get("total_spent", 0)), 25_000),
+    },
+    "new_year_level": {
+        "name": "Midnight Ambition", "emoji": "🎆", "reward": 7_500,
+        "description": "Reach career level 25 during the New Year event (Dec 31 – Jan 7).",
+        "season": {"label": "New Year", "start": "12-31", "end": "01-07"},
+        "test": lambda d: int(d.get("level", 0)) >= 25,
+        "progress": lambda d: (int(d.get("level", 0)), 25),
+    },
+    "valentine_wallet": {
+        "name": "Heart of Gold", "emoji": "💝", "reward": 5_000,
+        "description": "Keep 50,000 coins in your wallet during the Valentine's event (Feb 10 – Feb 18).",
+        "season": {"label": "Valentine's", "start": "02-10", "end": "02-18"},
+        "test": lambda d: int(d.get("balance", 0)) >= 50_000,
+        "progress": lambda d: (int(d.get("balance", 0)), 50_000),
+    },
+    "summer_streak": {
+        "name": "Summer Streak", "emoji": "🌞", "reward": 5_000,
+        "description": "Hold a 30-day daily streak during the summer event (Jun 20 – Sep 5).",
+        "season": {"label": "Summer", "start": "06-20", "end": "09-05"},
+        "test": lambda d: int(d.get("daily_streak", 0)) >= 30,
+        "progress": lambda d: (int(d.get("daily_streak", 0)), 30),
     },
 }
 
@@ -327,18 +491,24 @@ def achievement_progress(meta: dict, data: dict) -> tuple[int, int]:
     return (max(0, min(int(current), target)), target)
 
 
-def _check_achievements(data: dict) -> list[str]:
+def _check_achievements(data: dict, *, now=None) -> list[str]:
     """Unlock newly earned badges, pay their rewards, list what changed.
 
-    Returns display strings (``"Shift Lead 📋 (+5,000 🥐)"``) so existing
+    Returns display strings (``"Shift Lead 📋 (+5,000 🪙)"``) so existing
     callers keep working by joining the list into a message. Rewards are
     credited here rather than in the command handlers so every path that
     earns a badge — work, daily, gambling, shopping — pays it exactly once.
+
+    A seasonal badge is skipped while its event is closed, so it can only be
+    collected during its own window. ``now`` lets a caller that already knows
+    the moment it is acting on (a vote timestamp, a test) pin that decision.
     """
     earned = set(data.get("achievements", []))
     newly = []
     for aid, meta in ACHIEVEMENTS.items():
         if aid in earned:
+            continue
+        if not season_open(meta, now):
             continue
         try:
             if not meta["test"](data):
@@ -346,13 +516,13 @@ def _check_achievements(data: dict) -> list[str]:
         except Exception:
             continue
         earned.add(aid)
-        label = f"{meta['name']} {meta['emoji']}"
+        label = achievement_label(meta)
         reward = int(meta.get("reward", 0))
         if reward > 0:
             data["balance"] = int(data.get("balance", 0)) + reward
             data["total_earned"] = int(data.get("total_earned", 0)) + reward
             _log_tx(data, "achievement", reward, meta["name"])
-            label += f" (+{reward:,} 🥐)"
+            label += f" (+{reward:,} 🪙)"
         newly.append(label)
     data["achievements"] = sorted(earned)
     return newly
@@ -550,7 +720,7 @@ async def _get_all_users_from_db(bot) -> dict:
 
 # ── Small layout helpers ────────────────────────────────────────────────────
 # The brand accent every other Niko view uses (staff, support server, nitro,
-# transcripts), so economy containers are no longer their own café colour.
+# transcripts), so economy containers are no longer their own bespoke colour.
 ACCENT_BROWN = discord.Colour(0xC8A882)
 
 

@@ -67,12 +67,12 @@ MESSAGES = {
             "stats_title":       "☕ cozy level stats for {name}",
             "stats_level":       "vibe-level",
             "stats_xp":          "xp brewed",
-            "stats_rank":        "café rank",
-            "leaderboard_title": "☕ cozy leaderboard — {guild}",
-            "leaderboard_empty": "no one has brewed any xp in this café yet 😭",
-            "xp_disabled":       "xp tracking is off for this server ☕",
+            "stats_rank":        "rank",
+            "leaderboard_title": "Cozy leaderboard — {guild}",
+            "leaderboard_empty": "no one has earned any xp in this server yet 😭",
+            "xp_disabled":       "xp tracking is off for this server",
             "cfg_updated":       "✅ setting updated~",
-            "cfg_show":          "### ☕ cozy level config — {guild}\n{body}",
+            "cfg_show":          "### cozy level config — {guild}\n{body}",
         },
         "de": {
             "level_up":          "glückwunsch {mention}, du bist auf level **{level}** aufgestiegen! ☕✨",
@@ -80,12 +80,12 @@ MESSAGES = {
             "stats_title":       "☕ gemütliche level-statistiken für {name}",
             "stats_level":       "vibe-level",
             "stats_xp":          "aufgebrühte xp",
-            "stats_rank":        "café-rang",
-            "leaderboard_title": "☕ gemütliche bestenliste — {guild}",
-            "leaderboard_empty": "niemand hat hier bisher xp aufgebrüht 😭",
-            "xp_disabled":       "xp-tracking ist für diesen server deaktiviert ☕",
+            "stats_rank":        "rang",
+            "leaderboard_title": "Gemütliche bestenliste — {guild}",
+            "leaderboard_empty": "niemand hat hier bisher xp gesammelt 😭",
+            "xp_disabled":       "xp-tracking ist für diesen server deaktiviert",
             "cfg_updated":       "✅ einstellung aktualisiert~",
-            "cfg_show":          "### ☕ gemütliche level-config — {guild}\n{body}",
+            "cfg_show":          "### gemütliche level-config — {guild}\n{body}",
         },
         "es": {
             "level_up":          "¡felicidades {mention}, subiste al nivel **{level}**! ☕✨",
@@ -93,12 +93,12 @@ MESSAGES = {
             "stats_title":       "☕ estadísticas acogedoras de nivel para {name}",
             "stats_level":       "nivel-vibe",
             "stats_xp":          "xp preparada",
-            "stats_rank":        "rango del café",
-            "leaderboard_title": "☕ tabla acogedora — {guild}",
-            "leaderboard_empty": "nadie ha preparado xp en este café todavía 😭",
-            "xp_disabled":       "el sistema de xp está apagado en este servidor ☕",
+            "stats_rank":        "rango",
+            "leaderboard_title": "Tabla acogedora — {guild}",
+            "leaderboard_empty": "nadie ha preparado xp en este servidor todavía 😭",
+            "xp_disabled":       "el sistema de xp está apagado en este servidor",
             "cfg_updated":       "✅ configuración actualizada~",
-            "cfg_show":          "### ☕ config acogedora de niveles — {guild}\n{body}",
+            "cfg_show":          "### config acogedora de niveles — {guild}\n{body}",
         },
     },
 }
@@ -149,15 +149,15 @@ def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0]))
     ) or "  *(none)*"
     custom_msg = cfg.get("level_up_message")
-    msg_s = f"`{custom_msg}`" if custom_msg else "*(default café message)*"
+    msg_s = f"`{custom_msg}`" if custom_msg else "*(default message)*"
 
     # Card style summary
     accent = cfg.get("card_accent")
     accent_s = f"#{accent[0]:02x}{accent[1]:02x}{accent[2]:02x}" if accent else "*(default gold)*"
 
     return (
-        "### ☕ Leveling Management Panel\n"
-        "Manage all your server's leveling settings from one cozy place.\n\n"
+        "### Leveling Management Panel\n"
+        "Manage all your server's leveling settings from one place.\n\n"
         "**📊 XP Settings**\n"
         f"{_lv_icon(cfg.get('xp_enabled', True))} XP enabled  •  "
         f"Multiplier: `{cfg.get('xp_multiplier', 1.0)}x`  •  "

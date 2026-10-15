@@ -1,6 +1,8 @@
 """Flask routes for dashboard."""
 
 import binascii
+from utils.economy_jobs import get_job
+
 from . import server as _server
 
 globals().update({
@@ -57,6 +59,8 @@ def api_me_overview():
         "net_worth": profile.get("net_worth", 0),
         "level": profile.get("level", 0),
         "job": profile.get("job", "barista"),
+        # The stored job is an id; the dashboard shows the display name.
+        "job_name": get_job(profile.get("job"))["name"],
         "daily_streak": profile.get("daily_streak", 0),
         "achievements": profile.get("achievements", 0),
         "total_earned": profile.get("total_earned", 0),
@@ -80,10 +84,14 @@ def api_save_economy_privacy():
     pool = getattr(_discord_bot, "cxn", None) if _discord_bot is not None else None
     if pool is not None:
         async def save_preference():
+            # The pool renumbers every ``$n`` placeholder separately, so a
+            # value used twice in the statement must be bound twice
+            # (``excluded.col`` is a SQLite-only spelling the Mongo pool
+            # cannot evaluate, which is why the value is repeated here).
             await pool.execute(
                 "INSERT INTO economy_users (user_id, leaderboard_private) VALUES ($1, $2) "
-                "ON CONFLICT(user_id) DO UPDATE SET leaderboard_private = $2",
-                int(user_id), int(value),
+                "ON CONFLICT(user_id) DO UPDATE SET leaderboard_private = $3",
+                int(user_id), int(value), int(value),
             )
         try:
             run_on_bot_loop(save_preference())

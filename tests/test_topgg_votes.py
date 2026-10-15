@@ -139,6 +139,25 @@ class VoteRewardTests(unittest.TestCase):
         self.assertIn(f"{result['reward']:,}", text)
         self.assertIn("streak", text.lower())
 
+    def test_the_vote_card_is_headed_by_the_topgg_logo(self):
+        """The listing site's own logo heads its cards, once it is registered."""
+        data = account()
+        result = apply_vote(data, now=START)
+
+        with patch("cogs.economy.voting.topgg_emoji", lambda: "<:topgg:1234>"):
+            self.assertIn("<:topgg:1234>", self._view_text(vote_dm_view(result)))
+        # Before the first startup sync registers it, the ballot emoji holds.
+        with patch("cogs.economy.voting.topgg_emoji", lambda: None):
+            self.assertIn("🗳️", self._view_text(vote_dm_view(result)))
+
+    @staticmethod
+    def _view_text(view) -> str:
+        return "\n".join(
+            component.content
+            for component in view.walk_children()
+            if isinstance(component, discord.ui.TextDisplay)
+        )
+
 
 def _run_immediately(value):
     """Stand in for the bot's loop: run an awaitable, pass through a plain value."""

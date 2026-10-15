@@ -5,7 +5,7 @@ The dashboard needs three things this module provides:
 * ``POST /api/topgg/webhook`` — top.gg's delivery target. It is authenticated by
   the shared webhook token (``TOPGG_WEBHOOK_TOKEN``) rather than by a session,
   because the caller is the listing site and not a signed-in member.
-* ``GET /api/me/economy`` — the signed-in member's account-wide café standing.
+* ``GET /api/me/economy`` — the signed-in member's account-wide economy standing.
 * ``GET /api/me/achievements`` — every badge with progress, unlock state and the
   reward it paid.
 
@@ -14,6 +14,8 @@ Discord user, so it carries no server ranking and needs no server selected.
 """
 
 from cogs.economy.data import ACHIEVEMENTS, achievement_progress
+from cogs.economy.seasons import season_status
+from utils.economy_jobs import get_job
 from cogs.economy.voting import (
     record_vote as _record_vote,
     send_vote_thanks as _send_vote_thanks,
@@ -29,6 +31,10 @@ globals().update({
 })
 
 TOPGG_WEBHOOK_TOKEN = os.environ.get("TOPGG_WEBHOOK_TOKEN", "")
+
+#: The listing site's logo, shipped with the dashboard (``web/public/topgg.svg``)
+#: so the voting badges render it in the browser instead of as an emoji.
+TOPGG_LOGO_URL = "/topgg.svg"
 
 # Reading a raw account keeps the JSON columns (achievements, transactions) and
 # the voting counters intact; the dashboard's normalized rows report the number
@@ -158,6 +164,9 @@ def economy_summary(
         "net_worth": balance + bank,
         "level": _as_int(account.get("level")),
         "job": account.get("job") or "barista",
+        # The job column stores an id; the dashboard shows the display name so
+        # the career never renders as a raw internal value.
+        "job_name": get_job(account.get("job"))["name"],
         "bank_tier": _as_int(account.get("bank_tier")),
         "daily_streak": _as_int(account.get("daily_streak")),
         "total_earned": _as_int(account.get("total_earned")),
@@ -173,11 +182,12 @@ def economy_summary(
     }
 
 
-def achievement_entries(account: dict | None) -> list[dict]:
+def achievement_entries(account: dict | None, now=None) -> list[dict]:
     """Build the achievement list: unlock state, progress and reward.
 
     Unearned badges come first, closest to completion at the top, so the tab
-    opens on what the member can still win.
+    opens on what the member can still win. A seasonal badge also carries its
+    window, which is how the tab explains a badge that is out of reach today.
     """
     account = account or {}
     unlocked = set(_json_list(account.get("achievements")))
@@ -188,6 +198,10 @@ def achievement_entries(account: dict | None) -> list[dict]:
             "id": achievement_id,
             "name": meta["name"],
             "emoji": meta["emoji"],
+            # Voting badges carry the site logo; every other badge keeps its emoji.
+            "icon_url": TOPGG_LOGO_URL if meta.get("icon") == "topgg" else None,
+            # ``None`` for a badge that is available all year round.
+            "season": season_status(meta, now),
             "description": meta.get("description") or "",
             "reward": int(meta.get("reward", 0)),
             "unlocked": achievement_id in unlocked,
@@ -204,7 +218,7 @@ def achievement_entries(account: dict | None) -> list[dict]:
 @app.route("/api/me/economy")
 @require_auth
 def api_me_economy():
-    """The signed-in member's account-wide café standing."""
+    """The signed-in member's account-wide economy standing."""
     user_id = str(session["user"].get("id", ""))
     try:
         account = _read_account(user_id) or {}

@@ -25,24 +25,24 @@ from __future__ import annotations
 
 JOBS: dict[str, dict] = {
     "barista": {
-        "name": "Barista",
-        "emoji": "☕",
+        "name": "Cashier",
+        "emoji": "🧾",
         "min_level": 0,
         "min_pay": 80,
         "max_pay": 220,
         "xp_per_shift": 12,
         "cooldown": 3600,
-        "description": "Pour cozy lattes for the regulars and earn steady tips.",
+        "description": "Ring up customers and earn steady tips.",
     },
     "baker": {
         "name": "Baker",
-        "emoji": "🥐",
+        "emoji": "🍞",
         "min_level": 5,
         "min_pay": 180,
         "max_pay": 380,
         "xp_per_shift": 18,
         "cooldown": 3600,
-        "description": "Bake fresh croissants before sunrise. The smell sells itself.",
+        "description": "Bake fresh bread before sunrise. The smell sells itself.",
     },
     "manager": {
         "name": "Shift Manager",
@@ -55,24 +55,24 @@ JOBS: dict[str, dict] = {
         "description": "Run the floor, train the new hires, count the till.",
     },
     "trader": {
-        "name": "Café Trader",
+        "name": "Market Trader",
         "emoji": "📈",
         "min_level": 30,
         "min_pay": 450,
         "max_pay": 1100,
         "xp_per_shift": 42,
         "cooldown": 3600,
-        "description": "Trade coffee bean futures from the back office.",
+        "description": "Trade commodities from the back office.",
     },
     "owner": {
-        "name": "Café Owner",
+        "name": "Business Owner",
         "emoji": "👑",
         "min_level": 50,
         "min_pay": 800,
         "max_pay": 2200,
         "xp_per_shift": 60,
         "cooldown": 3600,
-        "description": "It's your café now. Take a cut of everything.",
+        "description": "It's your business now. Take a cut of everything.",
     },
 }
 
@@ -104,8 +104,8 @@ def get_job(job_id: str | None) -> dict:
 SHOP_ITEMS: dict[str, dict] = {
     # ── Consumables ────────────────────────────────────────────────
     "espresso_shot": {
-        "name": "Espresso Shot",
-        "emoji": "☕",
+        "name": "Energy Drink",
+        "emoji": "⚡",
         "category": "consumable",
         "price": 250,
         "sell": 90,
@@ -124,7 +124,7 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "+25% crime success on your next attempt. Don't get caught.",
     },
     "rob_shield": {
-        "name": "Tip Jar Lock",
+        "name": "Cash Box Lock",
         "emoji": "🛡️",
         "category": "consumable",
         "price": 1200,
@@ -144,7 +144,7 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "Doubles your next lottery ticket purchase.",
     },
     "xp_potion": {
-        "name": "Career Brew",
+        "name": "Career Boost",
         "emoji": "🧪",
         "category": "consumable",
         "price": 2000,
@@ -206,7 +206,7 @@ SHOP_ITEMS: dict[str, dict] = {
     },
     # ── Collectibles ───────────────────────────────────────────────
     "regular_badge": {
-        "name": "Café Regular Badge",
+        "name": "Regular Badge",
         "emoji": "🎖️",
         "category": "collectible",
         "price": 5000,
@@ -215,22 +215,22 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "Show everyone you're a regular here.",
     },
     "golden_mug": {
-        "name": "Golden Mug",
+        "name": "Golden Trophy",
         "emoji": "🏆",
         "category": "collectible",
         "price": 25000,
         "sell": 8000,
         "min_level": 10,
-        "description": "A gleaming gold-plated mug for your shelf.",
+        "description": "A gleaming gold-plated trophy for your shelf.",
     },
     "diamond_croissant": {
-        "name": "Diamond Croissant",
+        "name": "Diamond Crown",
         "emoji": "💎",
         "category": "collectible",
         "price": 100000,
         "sell": 30000,
         "min_level": 25,
-        "description": "A diamond-encrusted croissant. Pure flex, zero calories.",
+        "description": "A diamond-encrusted crown. Pure flex, zero calories.",
     },
 }
 

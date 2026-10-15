@@ -33,7 +33,17 @@ from utils.economy_jobs import (
     vote_earnings_multiplier,
     vote_reward_multiplier,
 )
-from .data import ACCENT_GOLD, _check_achievements, _info_view, _log_tx
+from .data import ACCENT_GOLD, _check_achievements, _info_view, _log_tx, topgg_emoji
+
+
+#: Heading every voting card with the listing site's own logo: the logo is an
+#: application emoji registered at startup, so a pre-sync boot keeps the ballot
+#: emoji until the real id lands in the emoji config.
+VOTE_ICON = "🗳️"
+
+
+def _vote_title(text: str) -> str:
+    return f"# {topgg_emoji() or VOTE_ICON} {text}"
 
 
 def _as_int(value) -> int:
@@ -98,7 +108,7 @@ def apply_vote(data: dict, *, now: int | None = None, weekend: bool = False) -> 
     data["balance"] = _as_int(data.get("balance")) + reward
     data["total_earned"] = _as_int(data.get("total_earned")) + reward
     _log_tx(data, "vote", reward, f"top.gg vote · streak {streak}")
-    unlocked = _check_achievements(data)
+    unlocked = _check_achievements(data, now=current)
 
     return {
         "status": "recorded",
@@ -130,9 +140,9 @@ def vote_dm_view(result: dict) -> discord.ui.LayoutView:
     """Build the thank-you DM for a recorded vote."""
     streak = _as_int(result.get("streak"))
     body = [
-        f"You voted for **Niko** on top.gg and earned **{_as_int(result.get('reward')):,}** 🥐.",
+        f"You voted for **Niko** on top.gg and earned **{_as_int(result.get('reward')):,}** 🪙.",
         f"Vote streak: **{streak}** · vote reward **x{result.get('reward_multiplier', 1)}**"
-        f" · café earnings **x{result.get('earnings_multiplier', 1)}**",
+        f" · earnings bonus **x{result.get('earnings_multiplier', 1)}**",
     ]
     if result.get("weekend"):
         body.append("-# Weekend votes pay double — thanks for the extra push!")
@@ -142,7 +152,7 @@ def vote_dm_view(result: dict) -> discord.ui.LayoutView:
     body.append(f"-# Vote again in 12 hours to keep the streak alive: {TOPGG_VOTE_URL}")
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content="# 🗳️ Thank you for voting!"),
+        discord.ui.TextDisplay(content=_vote_title("Thank you for voting!")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content="\n".join(body)),
         accent_colour=ACCENT_GOLD,
@@ -181,7 +191,7 @@ class VoteMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         standing = vote_standing(data)
         lines = [
-            f"**Rewards** — every vote pays **{VOTE_BASE_REWARD:,}** 🥐, doubled on weekends.",
+            f"**Rewards** — every vote pays **{VOTE_BASE_REWARD:,}** 🪙, doubled on weekends.",
             f"**Your streak** — **{standing['streak']}** votes in a row"
             f" (best **{standing['best_streak']}**).",
             f"**Multipliers** — vote payout **x{standing['reward_multiplier']}**,"
@@ -197,7 +207,7 @@ class VoteMixin:
             lines.append(f"Next countable vote in **{hours}h {minutes}m**.")
         lines.append(f"[Vote on top.gg]({standing['vote_url']})")
 
-        view = _info_view("🗳️ Vote for Niko", "\n".join(lines))
+        view = _info_view(f"{topgg_emoji() or VOTE_ICON} Vote for Niko", "\n".join(lines))
         if ctx.interaction:
             await ctx.interaction.followup.send(view=view)
         else:

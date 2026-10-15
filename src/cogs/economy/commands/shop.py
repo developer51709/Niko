@@ -242,11 +242,11 @@ class ShopMixin:
         if mode == "buy":
             total = int(item["price"]) * count
             if int(data.get("balance", 0)) < total:
-                return await interaction.followup.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 but only have **{data['balance']:,}**."), ephemeral=True)
+                return await interaction.followup.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🪙 but only have **{data['balance']:,}**."), ephemeral=True)
             self._credit(data, -total, "buy", f"{count}x {item['name']}")
             data.setdefault("inventory", {})[iid] = int(data["inventory"].get(iid, 0)) + count
             title = "🛍️ Purchase complete"
-            message = f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🥐.\\n-# New balance: **{data['balance']:,}** 🥐"
+            message = f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🪙.\\n-# New balance: **{data['balance']:,}** 🪙"
         else:
             have = int(data.setdefault("inventory", {}).get(iid, 0))
             if have < count:
@@ -257,15 +257,15 @@ class ShopMixin:
             if data["inventory"][iid] <= 0:
                 del data["inventory"][iid]
             title = "💰 Sold"
-            message = f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🥐.\\n-# New balance: **{data['balance']:,}** 🥐"
+            message = f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🪙.\\n-# New balance: **{data['balance']:,}** 🪙"
         _check_achievements(data)
         await self.save_user_economy_data(interaction.user.id)
         await interaction.followup.send(view=_info_view(title, message), ephemeral=True)
 
     @commands.hybrid_command(
         name="shop",
-        description="Browse the café boutique",
-        help="{ 'en': 'browse the café boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }",
+        description="Browse the boutique",
+        help="{ 'en': 'browse the boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }",
     )
     async def shop(self, ctx: commands.Context, category: str = None):
         cats = ("consumable", "upgrade", "collectible")
@@ -278,7 +278,7 @@ class ShopMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         items = [dict(item, item_id=iid) for iid, item in SHOP_ITEMS.items() if not cat_filter or item["category"] == cat_filter]
         if not items:
-            view = _info_view("☕ Empty shelves", "Nothing in stock for that category.")
+            view = _info_view("🛒 Empty shelves", "Nothing in stock for that category.")
         else:
             card = await render_shop_card(items=items, balance=int(data.get("balance", 0)), category=cat_filter)
             view = _ShopActionView(self, image_name="shop.png")
@@ -323,9 +323,9 @@ class ShopMixin:
         total = item["price"] * count
         if data["balance"] < total:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 (you have **{data['balance']:,}**)."))
+                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🪙 (you have **{data['balance']:,}**)."))
             else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🥐 (you have **{data['balance']:,}**)."))
+                return await ctx.send(view=_info_view("💸 Not enough cash", f"You need **{total:,}** 🪙 (you have **{data['balance']:,}**)."))
 
         self._credit(data, -total, "buy", f"{count}x {item['name']}")
         inv = data["inventory"]
@@ -335,14 +335,14 @@ class ShopMixin:
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "🛍️ Purchase complete",
-                f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🥐.\n"
-                f"-# New balance: **{data['balance']:,}** 🥐",
+                f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🪙.\n"
+                f"-# New balance: **{data['balance']:,}** 🪙",
             ))
         else:
             await ctx.send(view=_info_view(
                 "🛍️ Purchase complete",
-                f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🥐.\n"
-                f"-# New balance: **{data['balance']:,}** 🥐",
+                f"You bought **{count}x {item['emoji']} {item['name']}** for **{total:,}** 🪙.\n"
+                f"-# New balance: **{data['balance']:,}** 🪙",
             ))
 
     async def sell(self, ctx: commands.Context, item_id: str, count: int = 1):
@@ -385,14 +385,14 @@ class ShopMixin:
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
                 "💰 Sold",
-                f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🥐.\n"
-                f"-# New balance: **{data['balance']:,}** 🥐",
+                f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🪙.\n"
+                f"-# New balance: **{data['balance']:,}** 🪙",
             ))
         else:
             await ctx.send(view=_info_view(
                 "💰 Sold",
-                f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🥐.\n"
-                f"-# New balance: **{data['balance']:,}** 🥐",
+                f"You sold **{count}x {item['emoji']} {item['name']}** for **{gain:,}** 🪙.\n"
+                f"-# New balance: **{data['balance']:,}** 🪙",
             ))
 
     def _use_item_effect(self, data: dict, iid: str, item: dict | None) -> tuple[bool, str, str]:
@@ -415,7 +415,7 @@ class ShopMixin:
 
         if effect == "work_cooldown_half":
             effects["work_cooldown_half"] = True
-            msg_text = "Your next work cooldown will be cut in half. ☕✨"
+            msg_text = "Your next work cooldown will be cut in half. ⚡✨"
         elif effect == "crime_boost":
             effects["crime_boost"] = 1
             msg_text = "Your next crime gets +25% success. 🔓"
@@ -496,7 +496,7 @@ class ShopMixin:
     @commands.hybrid_command(
         name="inventory", aliases=["inv", "bag"],
         description="View your inventory grouped by category",
-        help="{ 'en': 'check your collection of treats 🎒✨', 'de': 'sieh dir deinen Bag an', 'es': 'revisa tu inventario 🎒✨' }"
+        help="{ 'en': 'check your collection of items 🎒✨', 'de': 'sieh dir deinen Bag an', 'es': 'revisa tu inventario 🎒✨' }"
     )
     async def inventory(self, ctx: commands.Context, member: discord.Member = None):
 

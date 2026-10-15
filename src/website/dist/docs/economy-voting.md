@@ -1,6 +1,6 @@
 # Voting Rewards & Streaks
 
-Voting for Niko on top.gg is the easiest way to top up your café balance. Every counted vote pays coins straight into your wallet, and voting regularly raises the rewards you earn across the economy.
+Voting for Niko on top.gg is the easiest way to top up your balance. Every counted vote pays coins straight into your wallet, and voting regularly raises the rewards you earn across the economy.
 
 ## How to vote
 
@@ -8,7 +8,7 @@ Voting for Niko on top.gg is the easiest way to top up your café balance. Every
 2. Vote on top.gg — you can vote once every 12 hours.
 3. Niko sends you a thank-you DM as soon as the vote is credited.
 
-Voting does not need a specific server: the café economy is global, so your balance, streak and badges follow you everywhere.
+Voting does not need a specific server: the economy is global, so your balance, streak and badges follow you everywhere.
 
 ## What a vote pays
 
@@ -33,6 +33,7 @@ Voting unlocks badges that are paid automatically when they are earned:
 
 - **First Upvote** — vote once.
 - **Vote Regular** — vote 10 times.
+- **Loyal Voter** — vote 25 times.
 - **Ballot Stuffer** — vote 50 times.
 - **Civic Legend** — vote 200 times.
 - **Week of Votes** — keep a 7-vote streak.
@@ -42,7 +43,7 @@ Voting unlocks badges that are paid automatically when they are earned:
 ## Checking your progress
 
 - **Discord:** run `/vote` for your streak and multipliers at any time.
-- **Dashboard:** open the selected server's **Economy** tab for your café standing (wallet, vault, ranks, recent activity and the vote card), and the **Achievements** tab for every badge, its progress bar and the coins it paid.
+- **Dashboard:** open **My overview → Economy** for your standing (wallet, vault, ranks, recent activity and the vote card), and **Achievements** for every badge, its progress bar and the coins it paid. Both tabs are account-wide, so no server needs to be selected.
 
 ## Self-hosting
 

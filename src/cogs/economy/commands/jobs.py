@@ -13,8 +13,8 @@ class JobsMixin:
 
     @commands.hybrid_group(
         name="job",
-        description="Browse, apply for, and manage your café job",
-        help="{ 'en': 'manage your café career 💼', 'de': 'verwalte deinen Café-Job', 'es': 'gestiona tu carrera en el café 💼' }",
+        description="Browse, apply for, and manage your job",
+        help="{ 'en': 'manage your career 💼', 'de': 'verwalte deinen Job 💼', 'es': 'gestiona tu carrera 💼' }",
         invoke_without_command=True
     )
     async def job(self, ctx: commands.Context):
@@ -37,16 +37,16 @@ class JobsMixin:
         prefix = await _resolve_prefix(self.bot, ctx)
         if ctx.interaction:
             await ctx.interaction.followup.send(view=_info_view(
-                "💼 Café Job Board",
+                "💼 Job Board",
                 "\n\n".join(lines) + f"\n\n-# Apply with `{prefix}job apply <id>` once you meet the level requirement.",
             ))
         else:
             await ctx.send(view=_info_view(
-                "💼 Café Job Board",
+                "💼 Job Board",
                 "\n\n".join(lines) + f"\n\n-# Apply with `{prefix}job apply <id>` once you meet the level requirement.",
             ))
 
-    @job.command(name="list", description="See all available café jobs")
+    @job.command(name="list", description="See all available jobs")
     async def job_list(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
@@ -114,7 +114,7 @@ class JobsMixin:
                 f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
             ))
 
-    @job.command(name="quit", description="Quit your current job and go back to barista")
+    @job.command(name="quit", description=f"Quit your current job and go back to {get_job(DEFAULT_JOB)['name']}")
     async def job_quit(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
@@ -122,12 +122,12 @@ class JobsMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         if data.get("job") == DEFAULT_JOB:
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", "You're already a barista."))
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", f"You're already a {get_job(DEFAULT_JOB)['name']}."))
             else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", "You're already a barista."))
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", f"You're already a {get_job(DEFAULT_JOB)['name']}."))
         data["job"] = DEFAULT_JOB
         await self.save_user_economy_data(ctx.author.id)
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("📤 Resigned", "You're back to **Barista** ☕."))
+            await ctx.interaction.followup.send(view=_info_view("📤 Resigned", f"You're back to **{get_job(DEFAULT_JOB)['name']}** 💼."))
         else:
-            await ctx.send(view=_info_view("📤 Resigned", "You're back to **Barista** ☕."))
+            await ctx.send(view=_info_view("📤 Resigned", f"You're back to **{get_job(DEFAULT_JOB)['name']}** 💼."))
