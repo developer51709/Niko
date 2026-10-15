@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import time
 
 import requests
@@ -112,11 +113,16 @@ class StandbyFailoverManager:
         self._attached_http = self.http
         return True
 
-    # Markers only Cloudflare's own challenge, block, or rate-limit pages carry.
+    # Markers only Cloudflare's own interstitial carries. ``Server: cloudflare``
+    # and ``CF-Ray`` are on every Discord API response, so they are evidence of
+    # nothing by themselves.
     _CF_PAGE_MARKERS = (
-        "cloudflare", "cf-error-details", "cf-wrapper", "attention required",
-        "error code: 1015", "cf-chl", "just a moment",
+        "cf-error-details", "cf-wrapper", "attention required", "just a moment",
+        "cf-chl", "cloudflare ray id", "checking your browser",
     )
+    # Cloudflare's plain-text access-denied answers ("error code: 1020") carry no
+    # HTML at all, so its numeric error codes are matched on their own.
+    _CF_ERROR_CODE = re.compile(r"(?:error code|cloudflare error)\s*:?\s*10\d\d")
 
     @staticmethod
     def _is_discord_api_error(body: str) -> bool:
@@ -130,15 +136,38 @@ class StandbyFailoverManager:
         return isinstance(payload, dict) and ("message" in payload or "error" in payload)
 
     @staticmethod
+    def _is_cloudflare_interstitial(headers, body: str) -> bool:
+        """Report whether an answer carries Cloudflare's own interstitial.
+
+        This is the only thing that separates a block from Discord answering
+        normally, because Discord proxies every request through Cloudflare: an
+        ordinary 200, a plain 429 rate limit, and a JSON API error all arrive
+        with ``Server: cloudflare`` and ``CF-Ray``. A status code plus those
+        headers is therefore not a block, and one Cloudflare puts on the page or
+        in ``cf-mitigated`` is.
+        """
+        if str(headers.get("cf-mitigated", "")).strip():
+            return True
+        lowered = body.lower()
+        if StandbyFailoverManager._CF_ERROR_CODE.search(lowered):
+            return True
+        if any(marker in lowered for marker in StandbyFailoverManager._CF_PAGE_MARKERS):
+            return True
+        # Cloudflare's block pages name it inside an HTML document. The bare word
+        # also appears in unrelated text, so the page signature is required too.
+        return "cloudflare" in lowered and ("<html" in lowered or "<!doctype html" in lowered)
+
+    @staticmethod
     def is_cloudflare_block(response, body_fallback: str = "") -> bool:
         """Report whether a response came from Cloudflare's edge, not Discord.
 
         Discord serves *every* API response through Cloudflare, so
         ``Server: cloudflare`` and ``CF-Ray`` prove nothing on their own: a
-        plain Discord 429 or JSON API error is not a block, and treating it as
-        one reports a ban that never happened and relays traffic for no reason.
-        Only an interstitial signature — an explicit ``cf-mitigated`` header or
-        Cloudflare's own page body — counts as blocked.
+        plain Discord 429 rate limit or JSON API error is not a block, and
+        treating it as one reports a ban that never happened and relays traffic
+        for no reason. Only an interstitial signature — an explicit
+        ``cf-mitigated`` header or Cloudflare's own page body — is a block, so a
+        response with neither is Discord's own answer whatever its status.
         """
         status = getattr(response, "status", getattr(response, "status_code", 0))
         if status not in {403, 429, 503}:
@@ -155,15 +184,7 @@ class StandbyFailoverManager:
             body = ""
         if StandbyFailoverManager._is_discord_api_error(body):
             return False
-        if str(headers.get("cf-mitigated", "")).strip():
-            return True
-        lowered = body.lower()
-        if any(marker in lowered for marker in StandbyFailoverManager._CF_PAGE_MARKERS):
-            return True
-        # No body evidence: keep the previous heuristic, which only ever fires
-        # on 429 where Cloudflare's edge answers before Discord does.
-        header_signature = "cloudflare" in str(headers.get("Server", "")).lower() or bool(headers.get("CF-Ray"))
-        return header_signature and status == 429
+        return StandbyFailoverManager._is_cloudflare_interstitial(headers, body)
 
     def _install_hook(self, session) -> None:
         if session is self._hooked_session:
@@ -179,8 +200,14 @@ class StandbyFailoverManager:
                     manager.last_error = f"Standby API relay failed ({type(exc).__name__})."
                     logging.warning("StandbyFailover", manager.last_error)
             response = await original_request(method, url, **kwargs)
-            if manager._should_relay(str(url)) and await manager._async_cloudflare_block(response):
-                logging.warning("StandbyFailover", "Cloudflare block detected on Discord REST request.")
+            if not manager._should_relay(str(url)):
+                return response
+            if await manager._async_cloudflare_block(response):
+                logging.warning(
+                    "StandbyFailover",
+                    f"Cloudflare interstitial on Discord REST request: {str(method).upper()} "
+                    f"{url} answered HTTP {getattr(response, 'status', 0)}.",
+                )
                 manager.egress_blocked = True
                 if not manager.auto_enabled:
                     return response
@@ -217,6 +244,10 @@ class StandbyFailoverManager:
                             manager.last_error = f"Webshare startup fallback failed ({type(exc).__name__})."
                             logging.error("StandbyFailover", manager.last_error)
                 return response
+            # Discord itself answered over this instance's own egress, which is
+            # the proof that the egress is not blocked, so the sticky state and
+            # any earlier "Cloudflare ban" report are over.
+            manager.egress_blocked = False
             return response
 
         session._request = hooked_request

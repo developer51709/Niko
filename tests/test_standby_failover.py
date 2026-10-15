@@ -424,6 +424,75 @@ class StandbyFailoverTests(unittest.TestCase):
         # A real interstitial still is one.
         self.assertTrue(StandbyFailoverManager.is_cloudflare_block(blocked_upstream()))
 
+    def test_discord_answers_without_an_interstitial_are_never_a_block(self):
+        # The production regression: every Discord response carries ``CF-Ray`` and
+        # ``Server: cloudflare``, so a 429 whose body is not a Cloudflare page was
+        # reported as a ban and tried to move traffic off a working egress. Only
+        # an interstitial makes a block.
+        def upstream(status_code, text, headers=None):
+            response = fake_upstream(status_code=status_code, content=text.encode(), headers=headers)
+            response.text = text
+            return response
+
+        cf_headers = {"Server": "cloudflare", "CF-Ray": "abc"}
+        for status_code, text in (
+            (429, ""),
+            (429, "Too Many Requests"),
+            (503, ""),
+            (403, "Forbidden"),
+            (429, "{\"message\":\"You are being rate limited.\",\"retry_after\":1.0}"),
+        ):
+            with self.subTest(status=status_code, body=text[:20]):
+                self.assertFalse(
+                    StandbyFailoverManager.is_cloudflare_block(upstream(status_code, text, cf_headers))
+                )
+
+        challenged = upstream(403, "", dict(cf_headers, **{"cf-mitigated": "challenge"}))
+        denied = upstream(403, "error code: 1020", cf_headers)
+        page = upstream(429, "<html><title>Attention Required!</title>", cf_headers)
+        for response in (challenged, denied, page):
+            self.assertTrue(StandbyFailoverManager.is_cloudflare_block(response))
+
+    def test_discord_rate_limit_keeps_the_instance_on_its_own_egress(self):
+        class Response:
+            def __init__(self, status, headers=None, text=""):
+                self.status = status
+                self.headers = headers or {}
+                self._text = text
+
+            async def text(self):
+                return self._text
+
+            def release(self):
+                return None
+
+        class Session:
+            async def _request(self, method, url, **kwargs):
+                return Response(429, {"Server": "cloudflare", "CF-Ray": "cloudflare-ray"}, "")
+
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.bot = SimpleNamespace(proxy_manager=None)
+            manager.http = SimpleNamespace(proxy=None, proxy_auth=None)
+            manager.set_standbys(["https://standby.example"], ["east"])
+            manager.egress_blocked = True
+            session = Session()
+            manager._install_hook(session)
+            manager.select_standby = AsyncMock(return_value=True)
+            manager.handoff_to_standby = AsyncMock(return_value=True)
+
+            response = await session._request("GET", "https://discord.com/api/v10/users/@me")
+
+            self.assertEqual(429, response.status)
+            manager.select_standby.assert_not_awaited()
+            manager.handoff_to_standby.assert_not_awaited()
+            self.assertIsNone(manager.active_origin)
+            # Discord answering at all proves this instance is not blocked, so a
+            # stale "Cloudflare ban" state is cleared instead of carried forward.
+            self.assertFalse(manager.egress_blocked)
+
+        asyncio.run(scenario())
+
     def test_discord_request_uses_the_bots_egress(self):
         manager = StandbyFailoverManager()
         http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
