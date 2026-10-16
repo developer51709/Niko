@@ -773,5 +773,104 @@ class NotifierRouteTests(unittest.TestCase):
         self.assertEqual(channel.sent, [])
 
 
+class BotHandoffTests(unittest.TestCase):
+    """The tab has to work through the real ``configure_bot`` hand-off.
+
+    Reported bug: while a proxy was handling Discord's global rate limits the
+    Notifications tab only ever showed "Couldn't load social notifications. The
+    Discord bot is not available." — ``webapp.notifier_routes`` snapshots the
+    shared names at import time, and ``server.configure_bot`` used to update a
+    hand-kept list of route modules that did not include it, so this module kept
+    the ``_discord_bot = None`` from before the bot existed and every notifier
+    endpoint answered 503 with exactly that message. The other notifier tests
+    patch ``routes._discord_bot`` directly, which is why none of them caught it.
+    """
+
+    def setUp(self):
+        self.previous = {
+            name: getattr(module, "_discord_bot", None)
+            for name, module in list(sys.modules.items())
+            if name.startswith("webapp.")
+        }
+
+    def tearDown(self):
+        for name, value in self.previous.items():
+            module = sys.modules.get(name)
+            if module is not None and hasattr(module, "_discord_bot"):
+                module._discord_bot = value
+
+    def test_every_route_module_that_holds_a_bot_receives_the_live_one(self):
+        bot = SimpleNamespace(cxn=None)
+
+        server_routes.configure_bot(bot)
+
+        self.assertIs(server_routes._discord_bot, bot)
+        holders = [
+            name
+            for name, module in sys.modules.items()
+            if name.startswith("webapp.")
+            and module is not None
+            and hasattr(module, "_discord_bot")
+        ]
+        self.assertIn("webapp.notifier_routes", holders)
+        self.assertIn("webapp.dashboard_routes", holders)
+        for name in holders:
+            with self.subTest(module=name):
+                self.assertIs(sys.modules[name]._discord_bot, bot)
+
+    def test_the_snapshot_loads_through_the_real_hand_off_while_proxied(self):
+        """No ``routes._discord_bot`` patch, and Discord egress is off-limits.
+
+        ``WebshareProxyManager`` writes ``bot.http.proxy`` while it rides out a
+        global rate limit, so the tab has to load without a single Discord REST
+        call. Anything Discord-facing is poisoned here to prove it.
+        """
+        pool = migrated_pool()
+        follow(pool, last_post_id="stream:1")
+        bot = SimpleNamespace(
+            cxn=pool,
+            get_guild=lambda guild_number: None,
+            http=SimpleNamespace(
+                proxy="http://webshare:secret@127.0.0.1:8080",
+                user_agent="DiscordBot (https://discord.com, 2.7.1)",
+            ),
+            standby_failover=SimpleNamespace(active_origin=None),
+        )
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user"] = {"id": "1", "username": "tester"}
+            session["access_token"] = "test-token"
+            session["token_exp"] = time.time() + 3600
+        manager = SimpleNamespace(
+            get_user_entry=lambda user_id: None,
+            get_guild_entry=lambda guild_number: None,
+        )
+
+        def offline(*args, **kwargs):
+            raise AssertionError("loading the notifications tab must not call Discord")
+
+        patches = [
+            patch.object(routes, "run_on_bot_loop", side_effect=run_awaitable),
+            patch.object(server_routes, "managed_guild_ids", return_value={str(GUILD)}),
+            patch.object(server_routes, "_load_blacklist_manager", return_value=manager),
+            patch.object(server_routes, "discord_request", side_effect=offline),
+            patch.object(server_routes, "discord_get", side_effect=offline),
+            patch.object(routes, "discord_request", side_effect=offline),
+            patch.object(routes, "discord_get", side_effect=offline),
+        ]
+        for active_patch in patches:
+            active_patch.start()
+        server_routes.configure_bot(bot)
+        try:
+            response = client.get(f"/api/guild/{GUILD}/notifier")
+        finally:
+            stop_patches(patches)
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        payload = response.get_json()
+        self.assertEqual([row["username"] for row in payload["follows"]], ["shroud"])
+        self.assertIn("twitch", [platform["id"] for platform in payload["platforms"]])
+
+
 if __name__ == "__main__":
     unittest.main()

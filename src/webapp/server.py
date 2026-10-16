@@ -103,18 +103,27 @@ def oauth_enabled() -> bool:
 
 
 def configure_bot(bot) -> None:
-    """Give the API access to the live bot for guild and runtime config sync."""
+    """Give the API access to the live bot for guild and runtime config sync.
+
+    Every route module snapshots the shared names when it is imported (see the
+    ``globals().update`` at the top of ``webapp/*_routes.py``), so each one owns
+    its own ``_discord_bot`` that the assignment above cannot reach. The bot is
+    therefore handed to each of them here.
+
+    The modules are discovered rather than listed by hand. A hand-kept list has
+    to be edited whenever a route module is added, and its failure mode is
+    silent: ``webapp.notifier_routes`` was left off it and served its imported
+    ``_discord_bot = None`` forever, so the whole Notifications tab answered
+    ``503 The Discord bot is not available.`` A module imported after this call
+    reads the bot that is already assigned above when it snapshots, so sweeping
+    the loaded modules is enough.
+    """
     global _discord_bot
     _discord_bot = bot
-    for module_name in (
-        "webapp.auth_routes", "webapp.team_routes", "webapp.public_routes",
-        "webapp.dashboard_routes", "webapp.donation_routes",
-        "webapp.discord_text_routes", "webapp.transcript_routes", "webapp.card_routes",
-        "webapp.application_routes", "webapp.team_recruitment_routes", "webapp.site_routes", "webapp.appeal_routes",
-        "webapp.standby_routes", "webapp.economy_routes",
-    ):
-        module = sys.modules.get(module_name)
-        if module is not None:
+    for module_name, module in list(sys.modules.items()):
+        if not module_name.startswith("webapp.") or module is None:
+            continue
+        if hasattr(module, "_discord_bot"):
             module._discord_bot = bot
 
 

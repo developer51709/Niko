@@ -85,7 +85,10 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     assert ctx.message.deleted, "an announcement should replace the invoking message"
     assert OwnerCog.UPDATE_DOCS_URL in view_urls(view)
     assert OwnerCog.UPDATE_CHANGELOG_URL in view_urls(view)
-    assert view_labels(view) == ["Read the docs", "What's new", "Support Server"]
+    # The update announcement carries exactly the two links it is announced
+    # with: the docs page and the changelog entry. (The Support Server button
+    # belongs to the policy notice, which ``_policy_view`` still carries.)
+    assert view_labels(view) == ["Read the docs", "What's new"]
 
     text = view_text(view)
     assert "Twitch" in text
