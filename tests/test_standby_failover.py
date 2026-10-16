@@ -46,11 +46,15 @@ class FakeRawHeaders:
 
 
 def fake_upstream(status_code=200, content=b"{}", headers=None, cookies=()):
+    """A ``requests.Response`` stand-in with the attributes the routes read."""
     return type("Upstream", (), {
         "status_code": status_code,
         "content": content,
+        "ok": 200 <= status_code < 400,
+        "text": content.decode("utf-8", "replace"),
         "headers": dict(headers or {}),
         "raw": SimpleNamespace(headers=FakeRawHeaders(cookies)),
+        "json": lambda self: json.loads(self.content.decode("utf-8") or "{}"),
         "close": lambda self: None,
     })()
 
@@ -514,7 +518,83 @@ class StandbyFailoverTests(unittest.TestCase):
 
         kwargs = client.call_args.kwargs
         self.assertEqual("DiscordBot (https://example.invalid, 2.7.1)", kwargs["headers"]["User-Agent"])
-        self.assertEqual({"http": "http://proxy.example:8080", "https": "http://proxy.example:8080"}, kwargs["proxies"])
+        # Discord answers this deployment's own egress once it carries the bot's
+        # identity, so the proxy is the fallback for a blocked attempt rather than
+        # the default route for every browser call.
+        self.assertNotIn("proxies", kwargs)
+        self.assertEqual("Bearer token", kwargs["headers"]["Authorization"])
+
+    def test_blocked_browser_request_retries_over_the_bots_proxy(self):
+        manager = StandbyFailoverManager()
+        http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
+        direct = blocked_upstream()
+        direct.close = Mock()
+        proxied = fake_upstream(status_code=200, content=b'{"id":"1"}', headers={"Content-Type": "application/json"})
+        client = Mock(side_effect=[direct, proxied])
+
+        with patch.object(
+            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(server_routes.req, "get", client):
+            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+
+        self.assertIs(proxied, response)
+        self.assertNotIn("proxies", client.call_args_list[0].kwargs)
+        self.assertEqual(
+            {"http": "http://proxy.example:8080", "https": "http://proxy.example:8080"},
+            client.call_args_list[1].kwargs["proxies"],
+        )
+        direct.close.assert_called_once_with()
+
+    def test_team_membership_check_uses_the_bots_egress_when_a_proxy_is_active(self):
+        """The production report: ``/api/team-recruitment/membership`` answered 503.
+
+        The membership lookup went out as a bare requests client from this host, so
+        Cloudflare's edge refused it exactly when the bot had already moved its own
+        traffic to Webshare — team applications then could not check support server
+        membership at all. It shares the bot's egress now.
+        """
+        from webapp import team_recruitment_routes as routes
+
+        http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
+        manager = StandbyFailoverManager()
+
+        def call(url, **kwargs):
+            if kwargs.get("proxies"):
+                return fake_upstream(status_code=200, content=b'{"user":{"id":"1"}}', headers={"Content-Type": "application/json"})
+            return blocked_upstream()
+
+        client = owner_dashboard_client()
+        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(routes, "DISCORD_BOT_TOKEN", "bot-token"), patch.object(server_routes.req, "get", side_effect=call):
+            response = client.get("/api/team-recruitment/membership")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({"member": True}, response.get_json())
+
+    def test_oauth_token_exchange_retries_over_the_bots_proxy(self):
+        """Login has no failover of its own: a blocked token exchange is retried."""
+        from webapp import auth_routes
+
+        http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
+        manager = StandbyFailoverManager()
+        token_body = b'{"access_token":"token","refresh_token":"refresh","expires_in":3600}'
+
+        def post(url, **kwargs):
+            if kwargs.get("proxies"):
+                return fake_upstream(status_code=200, content=token_body, headers={"Content-Type": "application/json"})
+            return blocked_upstream()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["oauth_state"] = "callback-state"
+        with patch.object(server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)), patch.object(
+            server_routes.req, "post", side_effect=post
+        ), patch.object(auth_routes, "discord_get", return_value={"id": "1", "username": "user"}):
+            response = client.get("/auth/callback?code=abc&state=callback-state")
+
+        self.assertEqual(302, response.status_code)
+        self.assertEqual("/dashboard", response.headers["Location"])
 
     def test_blocked_discord_request_without_a_configured_relay_stays_a_block(self):
         # The production outage: a Cloudflare block was relayed even though no

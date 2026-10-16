@@ -147,7 +147,8 @@ def api_staff_reset_guild_profile(guild_id):
         return jsonify({"error": "That guild is not currently available to the bot."}), 404
     if not DISCORD_BOT_TOKEN:
         return jsonify({"error": "The Discord bot token is not configured."}), 503
-    response = req.patch(
+    response = discord_request(
+        "PATCH",
         f"{DISCORD_API}/guilds/{int(guild_id)}/members/@me",
         headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}", "Content-Type": "application/json"},
         json={"nick": None, "bio": None, "avatar": None, "banner": None, "display_name_font_id": None, "display_name_effect_id": None, "display_name_colors": None},

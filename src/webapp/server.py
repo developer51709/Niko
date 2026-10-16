@@ -428,7 +428,8 @@ def get_discord_member_metadata(guild_id: str, user_ids: set[str]) -> dict[str, 
         if after:
             params["after"] = after
         try:
-            response = req.get(
+            response = discord_request(
+                "GET",
                 f"{DISCORD_API}/guilds/{guild_id}/members",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 params=params,
@@ -797,18 +798,24 @@ def _discord_egress_proxies(http) -> dict | None:
 
 
 def discord_request(method: str, url: str, **kwargs):
-    """Make Discord REST calls over the bot's own egress, then retry via standby.
+    """Make Discord REST calls the way the bot itself does.
 
     Discord answers every request through Cloudflare, and that edge challenges
     plain ``python-requests`` traffic from a datacenter IP — the OAuth token
-    exchange is a POST, so it is challenged before any dashboard call. Sending
-    the bot's own User-Agent, and its proxy when one is active, keeps login and
-    dashboard traffic on the egress Discord already answers.
+    exchange is a POST, so it is challenged before any dashboard call. The bot's
+    own ``User-Agent`` therefore travels with every call, and the deployment's own
+    egress is the first attempt: that is the identity Discord answers for this bot,
+    while the Webshare proxy is another datacenter IP the same edge also refuses.
+    When that first attempt comes back as a Cloudflare interstitial the call is
+    retried over the bot's active proxy and then, while a standby owns the
+    gateway, relayed to it. Every browser path that touches Discord goes through
+    here, so login, the dashboard and the membership checks all share the bot's
+    egress instead of sending a bare client from this host.
 
-    A Cloudflare interstitial is only relayed when a signed relay can actually be
-    sent. Without an active standby origin and the relay secrets, the Discord
-    response is returned untouched so the caller keeps its own error handling
-    instead of surfacing a relay misconfiguration as a server error.
+    A blocked response is only relayed when a signed relay can actually be sent.
+    Without an active standby origin and the relay secrets, the Discord response is
+    returned untouched so the caller keeps its own error handling instead of
+    surfacing a relay misconfiguration as a server error.
     """
     http = getattr(_discord_bot, "http", None) if _discord_bot is not None else None
     headers = dict(kwargs.get("headers") or {})
@@ -817,21 +824,19 @@ def discord_request(method: str, url: str, **kwargs):
         headers.setdefault("User-Agent", user_agent)
     if headers:
         kwargs["headers"] = headers
-    proxies = _discord_egress_proxies(http)
-    if proxies is not None and "proxies" not in kwargs:
-        kwargs["proxies"] = proxies
     manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
     response = getattr(req, method.lower())(url, **kwargs)
-    # Either interstitial is worth a relay here: a browser call has no Webshare
-    # fallback of its own, and the standby's egress answers both a throttle and a
-    # denied request.
     if manager is None or manager.cloudflare_interstitial(response) is None:
         return response
+
+    proxies = _discord_egress_proxies(http)
     app.logger.warning(
         "Discord %s %s answered HTTP %s with Cloudflare signatures (relay_configured=%s proxy=%s): %.200s",
         method, url, getattr(response, "status_code", 0), manager.relay_configured(),
         bool(proxies), getattr(response, "text", "") or "",
     )
+    # A standby owns this instance's egress while it holds the gateway, so the
+    # signed relay keeps its precedence.
     if manager.relay_configured():
         try:
             relayed = manager.request_via_standby(method, url, kwargs)
@@ -841,6 +846,18 @@ def discord_request(method: str, url: str, **kwargs):
         else:
             response.close()
             return relayed
+    # Browser paths have no failover of their own, so fall back to the egress
+    # discord.py itself already switched to before reporting the block.
+    if proxies is not None and "proxies" not in kwargs:
+        try:
+            proxied = getattr(req, method.lower())(url, proxies=proxies, **kwargs)
+        except req.RequestException as exc:
+            app.logger.warning("Discord %s %s failed over the Webshare egress: %s", method, url, exc)
+        else:
+            if manager.cloudflare_interstitial(proxied) is None:
+                response.close()
+                return proxied
+            proxied.close()
     return response
 
 
@@ -1497,7 +1514,8 @@ def _discord_guild_profile_assets(guild_id: str) -> dict:
     guild_int = int(guild_id)
     if DISCORD_BOT_TOKEN:
         try:
-            response = req.get(
+            response = discord_request(
+                "GET",
                 f"{DISCORD_API}/guilds/{guild_int}/members/@me",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 timeout=8,

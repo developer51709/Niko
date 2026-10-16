@@ -19,6 +19,7 @@ require_auth = _server.require_auth
 require_csrf = _server.require_csrf
 run_on_bot_loop = _server.run_on_bot_loop
 get_runtime_member_metadata = _server.get_runtime_member_metadata
+discord_request = _server.discord_request
 DISCORD_API = _server.DISCORD_API
 DISCORD_BOT_TOKEN = _server.DISCORD_BOT_TOKEN
 _discord_bot = None
@@ -304,7 +305,11 @@ def _member_exists(user_id):
     """Verify membership in the configured Niko support server, not OAuth claims."""
     if DISCORD_BOT_TOKEN:
         try:
-            response = req.get(
+            # Through the bot's own egress: a bare requests client from a
+            # datacenter IP is what Cloudflare challenges, and the membership
+            # check is the first thing team applications depend on.
+            response = discord_request(
+                "GET",
                 f"{DISCORD_API}/guilds/{SUPPORT_GUILD}/members/{user_id}",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 timeout=8,

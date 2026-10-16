@@ -82,7 +82,10 @@ def _member_role_ids(guild_id, user_id):
     """Use a bot-authenticated Discord membership lookup, never OAuth guild claims."""
     if DISCORD_BOT_TOKEN:
         try:
-            response = req.get(
+            # Through the bot's own egress, like every other Discord call the web
+            # process makes; a bare client from this host is what Cloudflare rejects.
+            response = discord_request(
+                "GET",
                 f"{DISCORD_API}/guilds/{guild_id}/members/{user_id}",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 timeout=8,

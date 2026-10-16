@@ -419,7 +419,8 @@ def api_guild_resources(guild_id):
     # their real names instead of leaving the selectors empty.
     if DISCORD_BOT_TOKEN:
         try:
-            response = req.get(
+            response = discord_request(
+                "GET",
                 f"{DISCORD_API}/guilds/{guild_id}/channels",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 timeout=8,
@@ -895,7 +896,8 @@ def api_save_profile(guild_id):
         patch_body["avatar"] = image_payload["avatar"]
     if "banner" in uploaded_assets:
         patch_body["banner"] = image_payload["banner"]
-    response = req.patch(
+    response = discord_request(
+        "PATCH",
         f"{DISCORD_API}/guilds/{numeric_guild_id}/members/@me",
         headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
         json=patch_body,
