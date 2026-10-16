@@ -395,6 +395,20 @@ export type StaffActivity = {
   application_id?: string | null;
   platform?: string | null;
   image_url?: string | null;
+  /** ISO timestamps for a Spotify track, used by the track progress bar. */
+  start?: string | null;
+  end?: string | null;
+};
+
+export type SocialProfileCardData = {
+  platform: string;
+  display_name: string;
+  handle: string;
+  url: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  stats?: { label: string; value: string }[];
+  status?: string | null;
 };
 
 export type StaffCustomStatus = {

@@ -20,6 +20,35 @@ def api_team_member(user_id):
         return jsonify({"error": "Team member not found."}), 404
     return jsonify(member)
 
+
+@app.route("/api/team/profile-card")
+def api_team_profile_card():
+    """Resolve a staff member's public social link into a profile card.
+
+    The lookup runs server-side because Twitch needs application credentials
+    and the other platforms either block browser CORS or require a specific
+    User-Agent. Only the platform's own hosts are ever contacted.
+    """
+    link_type = str(request.args.get("type") or "").strip().lower()
+    url = str(request.args.get("url") or "").strip()
+    if not link_type or not url:
+        return jsonify({"error": "A platform and profile URL are required."}), 400
+    if len(url) > 2048:
+        return jsonify({"error": "That profile URL is too long."}), 400
+    try:
+        from utils.social.profiles import ProfileLookupError, fetch_public_profile
+    except Exception:
+        return jsonify({"error": "Profile cards are temporarily unavailable."}), 503
+    try:
+        card = fetch_public_profile(link_type, url)
+    except ProfileLookupError as error:
+        return jsonify({"error": str(error)}), 400
+    except Exception:
+        return jsonify({"error": "Profile cards are temporarily unavailable."}), 503
+    if not card:
+        return jsonify({"error": "That profile could not be loaded right now."}), 404
+    return jsonify({"card": card})
+
 @app.route("/api/staff/me")
 @require_auth
 def api_staff_me():

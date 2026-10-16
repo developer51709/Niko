@@ -23,6 +23,7 @@ Create a `.env` file or set the following environment variables:
 - `NSFW_API_URL` *(optional)*: Base URL of your deployed [NSFW Image Filter API](../nsfw-api/README.md) (a Cloudflare Worker). Required to enable the AutoMod **NSFW image filter**.
 - `NSFW_API_TOKEN` *(optional)*: Bearer token if you set the `AUTH_TOKEN` secret on the worker.
 - `TOPGG_WEBHOOK_TOKEN` *(optional)*: The webhook authorization token from your top.gg listing. Required to credit vote rewards (coins, streaks and voting badges) and send the thank-you DM. Leave it unset to disable the vote webhook.
+- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` *(optional)*: Application credentials from a [Twitch developer app](https://dev.twitch.tv/console/apps). Used for the notifier's Twitch tracking and for Twitch profile cards on the team page. Leave them unset to disable Twitch support; every other notifier platform still works without credentials.
 
 ### 4. Run the Bot
 ```bash

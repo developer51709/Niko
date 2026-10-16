@@ -976,6 +976,14 @@ def _staff_identity(user_id: str) -> dict:
             seen_activities.add(activity_key)
 
             if class_name == "spotify":
+                # The track window drives the progress bar on the profile card.
+                # discord.py raises when the presence omits timestamps, so both
+                # bounds are read defensively.
+                try:
+                    track_start = getattr(activity, "start", None)
+                    track_end = getattr(activity, "end", None)
+                except KeyError:
+                    track_start = track_end = None
                 activities.append({
                     "kind": "spotify",
                     "type": "listening",
@@ -985,6 +993,8 @@ def _staff_identity(user_id: str) -> dict:
                     "url": getattr(activity, "track_url", None),
                     "platform": "Spotify",
                     "image_url": getattr(activity, "album_cover_url", None),
+                    "start": track_start.isoformat() if track_start else None,
+                    "end": track_end.isoformat() if track_end else None,
                 })
                 continue
             if class_name == "streaming":

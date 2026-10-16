@@ -3,13 +3,14 @@ Social Media Notifier
 ─────────────────────
 Tracks new posts / videos / uploads from:
   • YouTube   (RSS feed — channel ID or @handle)
-  • Twitter/X (Nitter scraping — concurrent instance check)
+  • Twitch    (Helix API — application client-credentials)
+  • Twitter/X (public syndication/oEmbed — no API key)
   • TikTok    (web scraping)
   • Bluesky   (AT Protocol public API)
   • Reddit    (Reddit JSON API — subreddits)
 
 All notifications use Discord cv2 containers.
-YouTube and Reddit notifications include a thumbnail preview.
+YouTube, Twitch and Reddit notifications include a thumbnail preview.
 """
 
 import asyncio
@@ -20,6 +21,7 @@ from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
 from utils.social.youtube import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
+from utils.social.twitch import fetch_latest_twitch, normalize_login as twitch_login, validate_twitch_login
 from utils.social.twitter import fetch_latest_tweet, validate_twitter_username
 from utils.social.tiktok import fetch_latest_tiktok, validate_tiktok_username
 from utils.social.bluesky import fetch_latest_bluesky, validate_bluesky_handle
@@ -37,6 +39,14 @@ PLATFORMS: dict[str, dict] = {
         "btn_style": discord.ButtonStyle.danger,
         "field_label": "Channel @Handle or ID",
         "field_placeholder": "@MKBHD  or  UCBcRF18a7Qf58cCRy5xuWwQ",
+    },
+    "twitch": {
+        "icon":    get_emoji("twitch"),
+        "color":   discord.Colour(0x9146FF),
+        "label":   "Twitch Channel",
+        "btn_style": discord.ButtonStyle.primary,
+        "field_label": "Channel name or URL",
+        "field_placeholder": "shroud  or  https://twitch.tv/shroud",
     },
     "twitter": {
         "icon":    get_emoji("twitterx"),
@@ -83,6 +93,10 @@ async def _fetch(platform: str, username: str) -> dict | None:
     try:
         if platform == "youtube":
             return await fetch_latest_youtube(username)
+        if platform == "twitch":
+            # Helix access is synchronous (and shared with the web profile
+            # cards), so it runs off the event loop.
+            return await asyncio.to_thread(fetch_latest_twitch, username)
         if platform == "twitter":
             return await fetch_latest_tweet(username)
         if platform == "tiktok":
@@ -108,6 +122,13 @@ async def _validate(platform: str, raw: str) -> tuple[bool, str]:
             return False, ""
         d_name, cid = result
         return True, make_stored(d_name, cid)
+
+    if platform == "twitch":
+        login = twitch_login(raw)
+        if not login:
+            return False, ""
+        ok = await asyncio.to_thread(validate_twitch_login, login)
+        return ok, login
 
     if platform == "twitter":
         ok = await validate_twitter_username(raw.lstrip("@"))
@@ -175,6 +196,13 @@ def build_notification_view(
     if platform == "youtube":
         header = f"### {icon} New YouTube Video"
         body   = f"**{dname}** just uploaded a new video!"
+    elif platform == "twitch":
+        if str(post.get("id", "")).startswith("stream:"):
+            header = f"### {icon} New Twitch Stream"
+            body   = f"**{dname}** is live right now!"
+        else:
+            header = f"### {icon} New Twitch Broadcast"
+            body   = f"**{dname}** just uploaded a new broadcast!"
     elif platform == "twitter":
         header = f"### {icon} New Tweet"
         body   = f"**{dname}** just posted on Twitter/X!"
@@ -444,6 +472,7 @@ def build_setup_view(
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
             _AddFollowBtn("youtube",  guild, channel),
+            _AddFollowBtn("twitch",   guild, channel),
             _AddFollowBtn("twitter",  guild, channel),
             _AddFollowBtn("tiktok",   guild, channel),
         ),
@@ -456,7 +485,7 @@ def build_setup_view(
         discord.ui.TextDisplay(
             content=(
                 f"-# You can also use `{prefix}follow <platform> <name> [#channel]`\n"
-                f"-# Platforms: youtube · twitter · tiktok · bluesky · reddit"
+                f"-# Platforms: youtube · twitch · twitter · tiktok · bluesky · reddit"
             )
         ),
         accent_colour=discord.Colour(0x5865F2),
@@ -640,7 +669,7 @@ class Notifier(commands.Cog):
         username: str,
         channel: discord.TextChannel = None,
     ):
-        """Follow a social media account. Platforms: youtube twitter tiktok bluesky reddit"""
+        """Follow a social media account. Platforms: youtube twitch twitter tiktok bluesky reddit"""
         platform = platform.lower()
         if platform not in PLATFORMS:
             return await ctx.reply(

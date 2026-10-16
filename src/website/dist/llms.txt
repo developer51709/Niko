@@ -52,6 +52,7 @@
 
 ## Changelog
 
+- [Team Profiles Get Platform Cards and a Spotify Progress Bar](https://niko.sryze.cc/changelog/team-profile-cards.md) — Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.
 - [Economy & Achievements Move to Your Profile](https://niko.sryze.cc/changelog/personal-economy-tabs.md) — The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.
 - [Economy & Leveling Cards Match the Website Theme](https://niko.sryze.cc/changelog/economy-card-theme-refresh.md) — Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.
 - [top.gg Voting Rewards & Café Achievements](https://niko.sryze.cc/changelog/topgg-voting-rewards-and-achievements.md) — Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.

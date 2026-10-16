@@ -18,6 +18,7 @@ import type {
   PublicStaffApplication,
   StaffGuild,
   StaffBlacklist,
+  SocialProfileCardData,
   BlacklistAppeal,
   BlacklistAppealStatus,
   StandbyFailoverStatus,
@@ -69,6 +70,8 @@ export const setTeamRecruitmentOpeningStatus = (openingId: string, status: "open
 export const getTeamRecruitmentSubmissions = (openingId: string) => api<{ opening: TeamRecruitmentOpening; submissions: TeamRecruitmentSubmission[] }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions`);
 export const reviewTeamRecruitmentSubmission = (openingId: string, userId: string, status: "approved" | "denied", csrfToken?: string) => api<{ ok: boolean; review_status: "approved" | "denied"; previous_status?: "pending" | "approved" | "denied"; unchanged?: boolean; dm_sent?: boolean | null; role_revoked?: boolean }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions/${encodeURIComponent(userId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`);
+export const getTeamProfileCard = (type: string, url: string, signal?: AbortSignal) =>
+  api<{ card: SocialProfileCardData }>(`/api/team/profile-card?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`, { signal });
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
 export const getStaffStandbys = () => api<{ standbys: StandbyInstance[]; failover: StandbyFailoverStatus }>("/api/staff/standbys");
 export const controlStaffStandbyFailover = (body: { action: "mode"; mode: "auto" | "off" } | { action: "activate"; standby_id: string } | { action: "rotate" }, csrfToken?: string) => api<{ ok: boolean; failover: StandbyFailoverStatus }>("/api/staff/standbys/failover", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });

@@ -1,16 +1,20 @@
 # Social Media Notifier
 
-The notifier system automatically tracks social media accounts and posts a notification to a Discord channel whenever new content is published. It supports YouTube, Twitter/X, TikTok, Bluesky, and Reddit.
+The notifier system automatically tracks social media accounts and posts a notification to a Discord channel whenever new content is published. It supports YouTube, Twitch, Twitter/X, TikTok, Bluesky, and Reddit.
 
 ## Supported Platforms
 
-| Platform | What it tracks | Update interval |
-|----------|---------------|-----------------|
-| **YouTube** | New videos (via RSS feed) | Every 5 minutes |
-| **Twitter/X** | New tweets | Every 5 minutes |
-| **TikTok** | New posts | Every 5 minutes |
-| **Bluesky** | New posts | Every 5 minutes |
-| **Reddit** | New posts in a subreddit | Every 5 minutes |
+| Platform | What it tracks | Credentials | Update interval |
+|----------|---------------|-------------|-----------------|
+| **YouTube** | New videos (via RSS feed) | None | Every 5 minutes |
+| **Twitch** | Streams going live and new broadcasts | App credentials | Every 5 minutes |
+| **Twitter/X** | New tweets | None | Every 5 minutes |
+| **TikTok** | New posts | None | Every 5 minutes |
+| **Bluesky** | New posts | None | Every 5 minutes |
+| **Reddit** | New posts in a subreddit | None | Every 5 minutes |
+
+> **Twitch credentials:** set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` from a [Twitch developer app](https://dev.twitch.tv/console/apps). The same application credentials power the Twitch profile cards on the team page, and Niko only reads public channel data — no user login is ever required.
+> Credentials for a platform with a paid API are never needed: X profile and post lookups use public endpoints instead.
 
 ## Opening the Setup Panel
 
@@ -33,11 +37,12 @@ For faster setup, use the shortcut command:
 .follow <platform> <username> [#channel]
 ```
 
-**Platforms:** `youtube`, `twitter`, `tiktok`, `bluesky`, `reddit`
+**Platforms:** `youtube`, `twitch`, `twitter`, `tiktok`, `bluesky`, `reddit`
 
 **Examples:**
 ```
 .follow youtube @MrBeast
+.follow twitch shroud #live-feed
 .follow twitter elonmusk #social-feed
 .follow reddit programming
 ```
@@ -73,6 +78,7 @@ This validates the account exists and shows the latest post.
 Notifications use Discord CV2 containers styled to match each platform's branding:
 
 - **YouTube** — Red accent, video thumbnail, channel name
+- **Twitch** — Purple accent, stream thumbnail, live or new-broadcast wording
 - **Twitter/X** — Blue accent, tweet text preview
 - **TikTok** — Pink accent, video link
 - **Bluesky** — Light blue accent, post text

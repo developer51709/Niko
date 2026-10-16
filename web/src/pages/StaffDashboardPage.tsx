@@ -407,7 +407,7 @@ export function StaffDashboardPage() {
         <div className="staff-fields">
           <label className="form-field"><span className="form-label">Banner URL</span><input type="url" value={form.public_banner_url} onChange={(e) => update("public_banner_url", e.target.value)} placeholder="https://…" /><small>Use a publicly reachable image. Leave blank for no banner.</small></label>
           <section className="staff-links-section" aria-labelledby="staff-links-heading">
-            <div className="staff-links-heading"><div><span className="form-label" id="staff-links-heading">Links</span><small>Add up to 10 links. They appear on your profile, not the team overview card.</small></div><span className="staff-links-count">{links.length}/10</span></div>
+            <div className="staff-links-heading"><div><span className="form-label" id="staff-links-heading">Links</span><small>Add up to 10 links. They appear on your profile, not the team overview card. GitHub, Bluesky, Twitch, YouTube, Reddit and X links become full profile cards.</small></div><span className="staff-links-count">{links.length}/10</span></div>
             <div className="staff-link-list">
               {links.map((link, index) => <div className="staff-link-row" key={`profile-link-${index}`}>
                 <label className="form-field staff-link-type"><span className="sr-only">Link {index + 1} type</span><select value={link.type} onChange={(event) => updateLink(index, "type", event.target.value)}>
