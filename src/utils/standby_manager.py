@@ -14,6 +14,13 @@ import requests
 from utils import logging
 from utils.standby_failover import control_proof, is_discord_relay_url, relay_proof, secret_key
 
+# Discord's own gateway endpoint: the cheapest URL that Cloudflare answers for this
+# application, so it doubles as the egress health check the startup path uses.
+_DISCORD_GATEWAY_PROBE = "https://discord.com/api/v10/gateway"
+# Cloudflare advertises its rate limits with ``Retry-After``. A retry inside the
+# request waits at most this long, after which the failover path takes over.
+_MAX_INTERSTITIAL_RETRY_DELAY = 5.0
+
 
 class _RelayedAiohttpResponse:
     """Minimal aiohttp response contract consumed by discord.py."""
@@ -136,55 +143,111 @@ class StandbyFailoverManager:
         return isinstance(payload, dict) and ("message" in payload or "error" in payload)
 
     @staticmethod
-    def _is_cloudflare_interstitial(headers, body: str) -> bool:
-        """Report whether an answer carries Cloudflare's own interstitial.
+    def _cloudflare_evidence(headers, body: str) -> str | None:
+        """Return the interstitial signature Cloudflare left behind, if any.
 
-        This is the only thing that separates a block from Discord answering
-        normally, because Discord proxies every request through Cloudflare: an
-        ordinary 200, a plain 429 rate limit, and a JSON API error all arrive
-        with ``Server: cloudflare`` and ``CF-Ray``. A status code plus those
-        headers is therefore not a block, and one Cloudflare puts on the page or
-        in ``cf-mitigated`` is.
+        The evidence names itself so a log line can say *why* a response was
+        treated as blocked instead of only that it was.
         """
         if str(headers.get("cf-mitigated", "")).strip():
-            return True
+            return f"cf-mitigated: {headers.get('cf-mitigated')}"
         lowered = body.lower()
-        if StandbyFailoverManager._CF_ERROR_CODE.search(lowered):
-            return True
-        if any(marker in lowered for marker in StandbyFailoverManager._CF_PAGE_MARKERS):
-            return True
+        match = StandbyFailoverManager._CF_ERROR_CODE.search(lowered)
+        if match:
+            return match.group(0)
+        for marker in StandbyFailoverManager._CF_PAGE_MARKERS:
+            if marker in lowered:
+                return marker
         # Cloudflare's block pages name it inside an HTML document. The bare word
         # also appears in unrelated text, so the page signature is required too.
-        return "cloudflare" in lowered and ("<html" in lowered or "<!doctype html" in lowered)
+        if "cloudflare" in lowered and ("<html" in lowered or "<!doctype html" in lowered):
+            return "cloudflare block page"
+        return None
 
     @staticmethod
-    def is_cloudflare_block(response, body_fallback: str = "") -> bool:
-        """Report whether a response came from Cloudflare's edge, not Discord.
+    def cloudflare_block_reason(response, body_fallback: str = "") -> str | None:
+        """Return why a response is Cloudflare's interstitial, or None.
 
         Discord serves *every* API response through Cloudflare, so
-        ``Server: cloudflare`` and ``CF-Ray`` prove nothing on their own: a
-        plain Discord 429 rate limit or JSON API error is not a block, and
-        treating it as one reports a ban that never happened and relays traffic
-        for no reason. Only an interstitial signature — an explicit
-        ``cf-mitigated`` header or Cloudflare's own page body — is a block, so a
-        response with neither is Discord's own answer whatever its status.
+        ``Server: cloudflare`` and ``CF-Ray`` prove nothing on their own: a plain
+        Discord 429 rate limit or JSON API error is not a block, and treating it
+        as one reports a ban that never happened and relays traffic for no
+        reason. Only an interstitial signature — an explicit ``cf-mitigated``
+        header or Cloudflare's own page body — is a block, so a response with
+        neither is Discord's own answer whatever its status.
         """
         status = getattr(response, "status", getattr(response, "status_code", 0))
         if status not in {403, 429, 503}:
-            return False
+            return None
         headers = getattr(response, "headers", {})
         # requests exposes ``text`` as a string property, while aiohttp
         # exposes it as an async method. Never invoke a callable here: doing so
         # can create an un-awaited coroutine. The aiohttp path reads the body
-        # in _async_cloudflare_block and passes it as the fallback.
+        # in _async_cloudflare_interstitial and passes it as the fallback.
         body = getattr(response, "text", "")
         if callable(body) or not isinstance(body, str) or not body:
             body = body_fallback
         if not isinstance(body, str):
             body = ""
         if StandbyFailoverManager._is_discord_api_error(body):
-            return False
-        return StandbyFailoverManager._is_cloudflare_interstitial(headers, body)
+            return None
+        return StandbyFailoverManager._cloudflare_evidence(headers, body)
+
+    @staticmethod
+    def is_cloudflare_block(response, body_fallback: str = "") -> bool:
+        """Report whether a response came from Cloudflare's edge, not Discord."""
+        return StandbyFailoverManager.cloudflare_block_reason(response, body_fallback) is not None
+
+    @staticmethod
+    def _interstitial_retry_delay(response) -> float:
+        """Seconds to wait before retrying a throttled response.
+
+        The wait is bounded so a long advertised delay cannot stall the client: a
+        throttle that outlasts it belongs to the failover path, not to a sleep
+        inside a request.
+        """
+        if getattr(response, "status", 0) != 429:
+            return 0.0
+        try:
+            delay = float(getattr(response, "headers", {}).get("Retry-After", ""))
+        except (TypeError, ValueError):
+            delay = 0.0
+        return min(max(delay, 0.25), _MAX_INTERSTITIAL_RETRY_DELAY)
+
+    def _egress_headers(self) -> dict:
+        """The identity discord.py itself presents to Discord."""
+        user_agent = getattr(self.http, "user_agent", None)
+        if isinstance(user_agent, str) and user_agent:
+            return {"User-Agent": user_agent}
+        return {}
+
+    def _egress_proxies(self) -> dict | None:
+        """The proxy discord.py is currently egressing through, if any."""
+        proxy = getattr(self.http, "proxy", None)
+        if not isinstance(proxy, str) or not proxy:
+            return None
+        return {"http": proxy, "https": proxy}
+
+    async def probe_egress(self):
+        """GET Discord's gateway endpoint over the egress discord.py uses.
+
+        The probe has to identify itself the way the bot does: Cloudflare
+        challenges requests that arrive as a plain ``python-requests`` client from
+        a datacenter IP, so a default User-Agent reports this instance as blocked
+        while its own REST traffic is answered normally. Returns None when the
+        request itself failed.
+        """
+        try:
+            return await asyncio.to_thread(
+                requests.get,
+                _DISCORD_GATEWAY_PROBE,
+                headers=self._egress_headers() or None,
+                proxies=self._egress_proxies(),
+                timeout=10,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            return None
 
     def _install_hook(self, session) -> None:
         if session is self._hooked_session:
@@ -202,67 +265,89 @@ class StandbyFailoverManager:
             response = await original_request(method, url, **kwargs)
             if not manager._should_relay(str(url)):
                 return response
-            if await manager._async_cloudflare_block(response):
-                logging.warning(
-                    "StandbyFailover",
-                    f"Cloudflare interstitial on Discord REST request: {str(method).upper()} "
-                    f"{url} answered HTTP {getattr(response, 'status', 0)}.",
-                )
-                manager.egress_blocked = True
-                if not manager.auto_enabled:
-                    return response
-                selected = await manager.select_standby()
-                if selected:
-                    response.release()
-                    if not await manager.handoff_to_standby():
-                        logging.error("StandbyFailover", f"Cloudflare block detected; standby gateway handoff failed: {manager.last_error}")
-                    try:
-                        return await manager.relay_aiohttp(original_request, method, str(url), kwargs)
-                    except Exception as exc:
-                        manager.last_error = f"Standby API relay failed ({type(exc).__name__})."
-                        logging.warning("StandbyFailover", manager.last_error)
-                        return response
-
-                if manager.auto_enabled:
-                    logging.error("StandbyFailover", f"Cloudflare block detected; no standby is available: {manager.last_error}")
-                proxy_manager = getattr(manager.bot, "proxy_manager", None)
-                if proxy_manager is not None:
-                    try:
-                        await proxy_manager.enable()
-                    except Exception as exc:
-                        logging.warning("StandbyFailover", f"Webshare fallback failed ({type(exc).__name__}).")
-                    proxy_url = getattr(manager.http, "proxy", None)
-                    if proxy_url:
-                        kwargs["proxy"] = proxy_url
-                        proxy_auth = getattr(manager.http, "proxy_auth", None)
-                        if proxy_auth is not None:
-                            kwargs["proxy_auth"] = proxy_auth
-                        response.release()
-                        try:
-                            return await original_request(method, url, **kwargs)
-                        except Exception as exc:
-                            manager.last_error = f"Webshare startup fallback failed ({type(exc).__name__})."
-                            logging.error("StandbyFailover", manager.last_error)
+            evidence = await manager._async_cloudflare_interstitial(response)
+            if evidence is None:
+                # Discord itself answered over this instance's own egress, which
+                # is the proof that the egress is not blocked, so the sticky state
+                # and any earlier "Cloudflare ban" report are over.
+                manager.egress_blocked = False
                 return response
-            # Discord itself answered over this instance's own egress, which is
-            # the proof that the egress is not blocked, so the sticky state and
-            # any earlier "Cloudflare ban" report are over.
-            manager.egress_blocked = False
+            # One interstitial is not proof that this instance is blocked. Discord
+            # answers every request through Cloudflare, and its edge rate limits
+            # or challenges single routes while the same instance's REST traffic
+            # is answered normally — the first REST call after a restart had
+            # exactly this shape, with a healthy session seconds later. Retry the
+            # very same request over the same egress once; only a second
+            # interstitial means the egress itself is blocked.
+            delay = manager._interstitial_retry_delay(response)
+            if delay:
+                await asyncio.sleep(delay)
+            direct = await original_request(method, url, **kwargs)
+            retry_evidence = await manager._async_cloudflare_interstitial(direct)
+            if retry_evidence is None:
+                response.release()
+                return direct
+            response.release()
+            response = direct
+            logging.warning(
+                "StandbyFailover",
+                f"Cloudflare {evidence} on {str(method).upper()} {url} answered HTTP "
+                f"{getattr(response, 'status', 0)} twice; this egress is blocked.",
+            )
+            manager.egress_blocked = True
+            if not manager.auto_enabled:
+                return response
+            selected = await manager.select_standby()
+            if selected:
+                response.release()
+                if not await manager.handoff_to_standby():
+                    logging.error("StandbyFailover", f"Cloudflare block detected; standby gateway handoff failed: {manager.last_error}")
+                try:
+                    return await manager.relay_aiohttp(original_request, method, str(url), kwargs)
+                except Exception as exc:
+                    manager.last_error = f"Standby API relay failed ({type(exc).__name__})."
+                    logging.warning("StandbyFailover", manager.last_error)
+                    return response
+
+            if manager.auto_enabled:
+                logging.error("StandbyFailover", f"Cloudflare block detected; no standby is available: {manager.last_error}")
+            proxy_manager = getattr(manager.bot, "proxy_manager", None)
+            if proxy_manager is not None:
+                try:
+                    await proxy_manager.enable()
+                except Exception as exc:
+                    logging.warning("StandbyFailover", f"Webshare fallback failed ({type(exc).__name__}).")
+                proxy_url = getattr(manager.http, "proxy", None)
+                if proxy_url:
+                    kwargs["proxy"] = proxy_url
+                    proxy_auth = getattr(manager.http, "proxy_auth", None)
+                    if proxy_auth is not None:
+                        kwargs["proxy_auth"] = proxy_auth
+                    response.release()
+                    try:
+                        return await original_request(method, url, **kwargs)
+                    except Exception as exc:
+                        manager.last_error = f"Webshare startup fallback failed ({type(exc).__name__})."
+                        logging.error("StandbyFailover", manager.last_error)
             return response
 
         session._request = hooked_request
         self._hooked_session = session
 
-    async def _async_cloudflare_block(self, response) -> bool:
+    async def _async_cloudflare_interstitial(self, response) -> str | None:
+        """Return the Cloudflare interstitial Cloudflare left on a response."""
         status = getattr(response, "status", 0)
         if status not in {403, 429, 503}:
-            return False
+            return None
         body = ""
         try:
             body = await response.text()
         except Exception:
             pass
-        return self.is_cloudflare_block(response, body)
+        return self.cloudflare_block_reason(response, body)
+
+    async def _async_cloudflare_block(self, response) -> bool:
+        return await self._async_cloudflare_interstitial(response) is not None
 
     @staticmethod
     def _should_relay(url: str) -> bool:
@@ -497,13 +582,8 @@ class StandbyFailoverManager:
         while self.active_origin:
             try:
                 await asyncio.sleep(self._recovery_interval)
-                response = await asyncio.to_thread(
-                    requests.get,
-                    "https://discord.com/api/v10/gateway",
-                    timeout=10,
-                    allow_redirects=False,
-                )
-                if self.is_cloudflare_block(response):
+                response = await self.probe_egress()
+                if response is None or self.is_cloudflare_block(response):
                     continue
                 standby_id = self.status().get("active_standby_id")
                 handoff = getattr(self.bot, "gateway_handoff", None)
@@ -596,10 +676,8 @@ class StandbyFailoverManager:
         return True
 
     async def check_direct_egress(self) -> bool:
-        try:
-            response = await asyncio.to_thread(requests.get, "https://discord.com/api/v10/gateway",
-                                               timeout=10, allow_redirects=False)
-        except requests.RequestException:
+        response = await self.probe_egress()
+        if response is None:
             self.direct_egress_verified = False
             return False
         if not self.is_cloudflare_block(response):

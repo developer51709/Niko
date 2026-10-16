@@ -343,7 +343,9 @@ class StandbyFailoverTests(unittest.TestCase):
             self.assertEqual(200, proxied.status)
             manager.select_standby.assert_awaited_once_with()
             self.assertEqual(1, proxy.enable_calls)
-            self.assertEqual([None, "http://proxy.example"], session.calls)
+            # The same request is retried once over the same egress before the
+            # interstitial is treated as a block, so the proxy retry comes third.
+            self.assertEqual([None, None, "http://proxy.example"], session.calls)
             manager.relay_aiohttp.assert_not_awaited()
 
         asyncio.run(scenario())
@@ -583,6 +585,91 @@ class StandbyFailoverTests(unittest.TestCase):
         unreachable = callback(Mock(side_effect=requests.RequestException("blocked")))
         self.assertEqual(302, unreachable.status_code)
         self.assertIn("error=token_exchange_failed", unreachable.headers["Location"])
+
+    def test_single_interstitial_is_retried_before_any_failover(self):
+        """The production report: a 429 on the first REST call after a restart.
+
+        Discord answers that same call normally on the retry, so the instance
+        keeps its own egress: no standby selection, no gateway handoff, no
+        "Cloudflare ban" state, and no error about standbys being unavailable.
+        """
+
+        class Response:
+            def __init__(self, status, headers=None, text=""):
+                self.status = status
+                self.headers = headers or {}
+                self._text = text
+                self.released = False
+
+            async def text(self):
+                return self._text
+
+            def release(self):
+                self.released = True
+
+        class Session:
+            def __init__(self):
+                self.calls = 0
+
+            async def _request(self, method, url, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    return Response(
+                        429,
+                        {"Server": "cloudflare", "CF-Ray": "abc", "Retry-After": "0"},
+                        "<html><title>Attention Required!</title>",
+                    )
+                return Response(200, {"Content-Type": "application/json"}, '{"id":"1"}')
+
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.bot = SimpleNamespace(proxy_manager=None)
+            manager.http = SimpleNamespace(proxy=None, proxy_auth=None)
+            manager.set_standbys(["https://standby.example"], ["east"])
+            session = Session()
+            manager._install_hook(session)
+            manager.select_standby = AsyncMock(return_value=False)
+            manager.handoff_to_standby = AsyncMock(return_value=True)
+
+            response = await session._request("GET", "https://discord.com/api/v10/users/@me")
+
+            self.assertEqual(200, response.status)
+            self.assertEqual(2, session.calls)
+            manager.select_standby.assert_not_awaited()
+            manager.handoff_to_standby.assert_not_awaited()
+            self.assertIsNone(manager.active_origin)
+            self.assertFalse(manager.egress_blocked)
+
+        asyncio.run(scenario())
+
+    def test_egress_probe_uses_the_bots_own_identity(self):
+        # Cloudflare challenges a plain ``python-requests`` client from a
+        # datacenter IP, so the probe must present the bot's own User-Agent and
+        # egress or it reports a block while the bot is answering normally.
+        async def scenario():
+            manager = StandbyFailoverManager()
+            manager.http = SimpleNamespace(
+                user_agent="DiscordBot (https://example.invalid, 2.7.1)",
+                proxy="http://proxy.example:8080",
+            )
+            healthy = type("Response", (), {"status_code": 200, "headers": {}, "text": "{}"})()
+            client = Mock(return_value=healthy)
+
+            with patch("utils.standby_manager.requests.get", client):
+                self.assertFalse(await manager.check_direct_egress())
+
+            self.assertEqual("https://discord.com/api/v10/gateway", client.call_args.args[0])
+            self.assertEqual(
+                "DiscordBot (https://example.invalid, 2.7.1)",
+                client.call_args.kwargs["headers"]["User-Agent"],
+            )
+            self.assertEqual(
+                {"http": "http://proxy.example:8080", "https": "http://proxy.example:8080"},
+                client.call_args.kwargs["proxies"],
+            )
+            self.assertTrue(manager.direct_egress_verified)
+
+        asyncio.run(scenario())
 
     def test_async_cloudflare_check_awaits_aiohttp_text_method(self):
         class Response:
