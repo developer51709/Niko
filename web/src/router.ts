@@ -1,4 +1,8 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "community" | "donate" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+
+// Unlisted scratch route for eyeballing Discord text and profile popup
+// rendering. It is deliberately not linked, documented, or prerendered.
+export const RENDER_LAB_PATH = "/render-lab-b7f3e91c";
 export type DashSection = "overview" | "leveling" | "moderation" | "server" | "onboarding" | "tickets" | "notifications" | "applications" | "ai" | "customization";
 export type UserTab = "overview" | "economy" | "achievements";
 export type DashboardView = "overview" | "servers" | "guild";
@@ -11,6 +15,7 @@ function normalizedPath(pathname: string) {
 
 export function pageFromPath(pathname = window.location.pathname): Page {
   const path = normalizedPath(pathname);
+  if (path === RENDER_LAB_PATH) return "render-lab";
   if (path === "/appeals/blacklist") return "appeal";
   if (path === "/commands") return "commands";
   if (path === "/leaderboard") return "leaderboard";

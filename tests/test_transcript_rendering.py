@@ -62,6 +62,149 @@ def test_transcript_html_embeds_live_mention_names_and_profile_data():
     assert "Loading Discord profile" not in html
 
 
+def test_export_popup_matches_the_discord_layout():
+    profile = {
+        "id": "456",
+        "username": "liveuser",
+        "display_name": "Live Nick",
+        "avatar_url": "https://cdn.example/avatar.png",
+        "avatar_decoration_url": "https://cdn.example/decoration.png",
+        "banner_url": None,
+        "banner_color": "#12abef",
+        "bio": "Hello",
+        "guild_tag": "MOON",
+        "guild_badge_url": "https://cdn.example/badge.png",
+        "guild_nick": "Server Nick",
+        "custom_status": {
+            "text": "Available for website and Discord bot work",
+            "emoji_name": "\U0001f4bb",
+            "emoji_id": None,
+            "emoji_animated": False,
+        },
+        "badges": ["hypesquad_bravery", "hypesquad_balance"],
+        "activities": [
+            {
+                "album_cover_url": "https://cdn.example/cover.jpg",
+                "title": "Man Down",
+                "artists": ["Eden Project"],
+                "url": "https://open.spotify.com/track/x",
+                "start": 1000,
+                "end": 1315,
+                "duration_seconds": 315,
+            }
+        ],
+    }
+    html = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": profile},
+    )
+
+    # The popup shows the Discord user, never a server-specific nickname.
+    assert "Server name:" not in html
+    # The avatar is a bare circle: no ring, decorations scaled 1.2x and centred.
+    assert "border: 6px solid #111214" not in html
+    assert "translate(-50%, -50%) scale(1.2)" in html
+    # The custom status sits beside the avatar, and the "..." menu top-right.
+    assert '<div class="discord-profile-head">' in html
+    assert "Available for website and Discord bot work" in html
+    assert 'class="discord-profile-menu-button"' in html
+    assert "data-copy-user-id" in html
+    assert ".discord-profile-menu { position: absolute; top: 8px; right: 8px" in html
+    # The tag pill rides the username row, badges follow on their own row.
+    assert '<p class="discord-profile-username"><span class="discord-profile-user-tag">' in html
+    assert 'class="discord-profile-guild-tag"' in html
+    assert "data:image/svg+xml;base64," in html
+    # The Spotify card is drawn above the profile link and can tick its progress.
+    assert "Listening to Spotify" in html
+    assert "discord-profile-spotify-track" in html
+    assert "setInterval(tick, 1000)" in html
+    assert html.index("discord-profile-spotify") < html.index("discord-profile-full-link")
+
+
+def test_export_inlines_every_profile_badge_and_sizes_them_bigger():
+    from utils.member_badges import NIKO_BADGE_ORDER
+    from utils.tickets import transcripts
+
+    art = transcripts._profile_badge_art()
+    assert set(art) == set(transcripts._PROFILE_BADGE_FILES)
+    assert all(entry["src"].startswith("data:image/svg+xml;base64,") for entry in art.values())
+    # Every badge the profile API can send has artwork behind it, including
+    # Niko's own role badges next to Discord's.
+    assert {
+        "staff", "partner", "hypesquad_events", "bug_hunter_level_1", "bug_hunter_level_2",
+        "hypesquad_bravery", "hypesquad_brilliance", "hypesquad_balance", "early_supporter",
+        "early_verified_developer", "certified_moderator", "supports_commands",
+        "active_developer", "boosting_1_months", "boosting_2_months", "boosting_3_months",
+        "boosting_6_months", "boosting_9_months", "boosting_12_months",
+        "boosting_15_months", "boosting_18_months", "boosting_24_months",
+        *NIKO_BADGE_ORDER,
+    } == set(art)
+
+    html = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {
+            "id": "456", "username": "liveuser", "display_name": "Live Nick",
+            "badges": [
+                "staff", "supports_commands", "boosting_24_months",
+                "niko_head_admin", "not_a_badge",
+            ],
+        }},
+    )
+
+    assert art["staff"]["src"] in html
+    # Niko's own role badges inline the same way Discord's do.
+    assert art["niko_head_admin"]["src"] in html
+    assert "Head Admin" in html
+    # The popup script reads the inlined art and labels, and ignores unknown keys.
+    assert "const badge = badgeArt[key];" in html
+    assert "if (!badge || !badge.src) return '';" in html
+    assert "title=\"' + escapeHtml(badge.label) + '" in html
+    assert "Boosting a server for 24 months" in html
+    assert '.discord-profile-badge { width: 20px; height: 20px;' in html
+
+
+def test_export_badge_popup_shows_the_art_name_and_description():
+    from utils.tickets import transcripts
+
+    art = transcripts._profile_badge_art()
+    html = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {
+            "id": "456", "username": "liveuser", "display_name": "Live Nick",
+            "badges": ["staff", "boosting_9_months", "niko_supporter"],
+        }},
+    )
+
+    # Every badge carries a name and a description for the popup to show.
+    assert all(entry["label"] and entry["description"] for entry in art.values())
+    # A badge is a button, and clicking it opens the badge popup.
+    assert 'class="discord-profile-badge-button" data-badge-key="' in html
+    assert "badgeArt[button.dataset.badgeKey]" in html
+    assert "badgesRow.addEventListener('click'" in html
+    assert "button.getAttribute('aria-expanded') === 'true'" in html
+    # The popup lays the badge art out on the left with the name and description
+    # on the right, exactly like the website popup.
+    assert "discord-badge-popup-art" in html
+    assert "discord-badge-popup-copy" in html
+    # The popup is appended to the page and fixed above the profile popup, so it
+    # renders on top of the card instead of stretching it: no room is reserved
+    # under the badge row for it.
+    assert '.discord-badge-popup { position: fixed; z-index: 101;' in html
+    assert "document.body.appendChild(popup);" in html
+    assert "placeBadgePopup(button);" in html
+    assert ":has(.discord-badge-popup)" not in html
+    assert '.discord-badge-popup-copy { display: grid' in html
+    assert art["staff"]["description"] in html
+    assert art["boosting_9_months"]["description"] in html
+    assert art["niko_supporter"]["description"] in html
+
+
 def test_html_export_escapes_untrusted_live_profile_data():
     html = export_html(
         [{"content": "<@456>"}],
@@ -81,3 +224,65 @@ def test_invalid_discord_timestamp_is_left_as_text():
 
     assert "&lt;t:not-a-timestamp:f&gt;" in html
     assert "&lt;t:1788800225:x&gt;" in html
+
+
+def test_export_popup_draws_the_presence_dot_from_inlined_art():
+    from utils.tickets import transcripts
+
+    art = transcripts._profile_status_art()
+    assert set(art) == {"online", "idle", "dnd", "offline", "streaming"}
+    assert [entry["label"] for entry in art.values()] == [
+        "Online", "Idle", "Do Not Disturb", "Offline", "Streaming"
+    ]
+    assert all(entry["src"].startswith("data:image/png;base64,") for entry in art.values())
+
+    page = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {
+            "id": "456", "username": "liveuser", "display_name": "Live Nick",
+            "avatar_url": "https://cdn.example/avatar.png", "status": "dnd",
+        }},
+    )
+
+    # A transcript is a single offline file, so every dot travels inline and the
+    # popup never reaches for the web app's asset folder.
+    assert "/assets/discord-status/" not in page
+    assert all(entry["src"] in page for entry in art.values())
+    assert ".discord-status-icon { position: absolute; right: 0; bottom: 0;" in page
+    # The dot rides the avatar, and its alt/title name the status in words.
+    assert '<img class="discord-status-icon" data-profile-status src="' in page
+    assert 'const label = escapeHtml(art.label || "Offline");' in page
+    # A profile Discord shares no presence for still shows the offline dot rather
+    # than a blank avatar corner.
+    assert 'return statusArt[name] ? name : "offline";' in page
+
+
+def test_export_popup_refreshes_presence_while_the_card_is_open():
+    page = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {"id": "456", "username": "liveuser", "display_name": "Live Nick", "status": "online"}},
+    )
+
+    # An open card re-reads the same public endpoint the website popup polls, on
+    # its own 5s timer and again whenever the tab comes back to the foreground.
+    assert 'fetch("/api/discord/users/" + encodeURIComponent(profileId))' in page
+    assert 'profilePollTimer = setInterval(() => { if (document.visibilityState === "visible") loadPresence(); }, 5000);' in page
+    assert 'refreshProfilePresence = () => { if (document.visibilityState === "visible") loadPresence(); };' in page
+    # Only over http(s): a transcript opened from disk keeps the embedded profile
+    # instead of firing requests at an origin that does not serve the API.
+    assert 'location.protocol.indexOf("http") === 0' in page
+    assert 'typeof window.fetch === "function"' in page
+    # A refresh replaces only the presence parts, so an open badge popup, the
+    # "..." menu and the card's position all survive it.
+    assert "head.innerHTML = profileAvatar(next) + profileStatusBubble(next);" in page
+    assert "spotifyNode.innerHTML = nextSpotify.html;" in page
+    assert "if (!next || !card.isConnected) return;" in page
+    # A failed read keeps the last known presence rather than blanking the popup.
+    assert ".catch(() => {});" in page
+    # Closing the card tears the poll and its visibility listener down.
+    assert "const closeProfile = () => { stopProfileTimer(); stopProfilePoll();" in page
+    assert 'document.removeEventListener("visibilitychange", refreshProfilePresence);' in page

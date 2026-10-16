@@ -897,18 +897,25 @@ def discord_get(endpoint: str, token: str):
 STAFF_PRIORITY = {"owner": 100, "head_admin": 90, "graphic_designer": 80, "head_support": 70, "moderator": 60, "support": 50}
 
 
-def _staff_identity(user_id: str) -> dict:
-    """Resolve a staff member's global identity and the richest live presence.
+def _presence_members(user_id: str, bot=None) -> list:
+    """Every cached member for a user, richest live presence first.
 
     Discord presence is cached on each ``Member`` and can differ by guild. The
     first guild in ``bot.guilds`` is not guaranteed to be the guild where a
-    staff member's activity was received, which previously made some roles
-    (notably Head Admins) appear without Spotify/custom status data.
+    member's activity was received, which previously made some roles (notably
+    Head Admins) appear without Spotify/custom status data. Both the staff cards
+    and the Discord profile popups read presence through this one list so the
+    two surfaces always agree. Route modules that snapshot their own bot pass it
+    explicitly.
     """
+    bot = _discord_bot if bot is None else bot
     members = []
-    if _discord_bot is not None:
-        for guild in _discord_bot.guilds:
-            candidate = guild.get_member(int(user_id))
+    if bot is not None:
+        for guild in getattr(bot, "guilds", ()) or ():
+            try:
+                candidate = guild.get_member(int(user_id))
+            except (AttributeError, TypeError, ValueError):
+                continue
             if candidate is not None:
                 members.append(candidate)
 
@@ -916,18 +923,28 @@ def _staff_identity(user_id: str) -> dict:
         raw_status = getattr(candidate, "status", "offline")
         status = getattr(raw_status, "name", None) or str(raw_status)
         status = status.rsplit(".", 1)[-1].lower()
-        activities = getattr(candidate, "activities", ()) or ()
+        try:
+            activities = getattr(candidate, "activities", ()) or ()
+        except Exception:
+            activities = ()
         has_custom = any(type(item).__name__.lower() == "customactivity" for item in activities)
-        # Prefer activity/custom-status data, then an active presence, and only
-        # use the member order as a stable tie-breaker.
+        # Prefer activity/custom-status data, then an active presence, and keep
+        # the guild order as a stable tie-breaker.
         return (int(bool(activities)), int(has_custom), int(status != "offline"))
 
-    ordered_members = sorted(
-        enumerate(members),
-        key=lambda item: (presence_score(item[1]), -item[0]),
-        reverse=True,
-    )
-    member = ordered_members[0][1] if ordered_members else None
+    return sorted(members, key=presence_score, reverse=True)
+
+
+def _presence_member(user_id: str, bot=None):
+    """The cached member carrying a user's richest live presence, or ``None``."""
+    members = _presence_members(user_id, bot)
+    return members[0] if members else None
+
+
+def _staff_identity(user_id: str) -> dict:
+    """Resolve a staff member's global identity and the richest live presence."""
+    ordered_members = _presence_members(user_id)
+    member = ordered_members[0] if ordered_members else None
     user = member or (_discord_bot.get_user(int(user_id)) if _discord_bot is not None else None)
     cached_identity = None
     if user is None:
@@ -964,7 +981,7 @@ def _staff_identity(user_id: str) -> dict:
             "animated": bool(getattr(emoji, "animated", False)),
         }
 
-    for _, presence_member in ordered_members:
+    for presence_member in ordered_members:
         for activity in getattr(presence_member, "activities", ()) or ():
             activity_type = getattr(getattr(activity, "type", None), "name", None) or str(getattr(activity, "type", "")).rsplit(".", 1)[-1].lower()
             class_name = type(activity).__name__.lower()

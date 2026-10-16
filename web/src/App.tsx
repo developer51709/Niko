@@ -12,6 +12,7 @@ import { TranscriptPage } from "./pages/TranscriptPage";
 import { ChangelogPage } from "./pages/ChangelogPage";
 import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
 import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
+import { RenderLabPage } from "./pages/RenderLabPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
 import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
@@ -51,7 +52,8 @@ export function App() {
   else if (page === "transcript") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     pageContent = <TranscriptPage transcriptId={pathParts[1] || ""} />;
-  } else if (page === "changelog") pageContent = <ChangelogPage />;
+  } else if (page === "render-lab") pageContent = <RenderLabPage />;
+  else if (page === "changelog") pageContent = <ChangelogPage />;
   else if (page === "changelog-detail") {
     const pathParts = window.location.pathname.split("/");
     pageContent = <ChangelogSlugPage slug={pathParts[pathParts.length - 1]} />;

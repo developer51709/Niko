@@ -6,6 +6,8 @@ import re
 from . import server as _server
 from flask import jsonify, request
 
+from utils.member_badges import boosting_badge_key, niko_badge_keys
+
 globals().update({
     name: value
     for name, value in vars(_server).items()
@@ -14,6 +16,125 @@ globals().update({
 
 _MAX_FETCHES_PER_TYPE = 25
 _MAX_PARALLEL_FETCHES = 5
+
+# Every profile badge a bot can read is either a public user flag or, for
+# boosting, the member's ``premium_since``. The keys are also the artwork names
+# the popups own (``web/public/assets/hypesquad`` for the HypeSquad houses and
+# ``web/public/assets/badges`` for the rest), so the API only ever sends keys
+# and never a Discord CDN URL. Discord's verified-bot tag is left out: it is
+# drawn as a pill next to the name, not as one of these square badges.
+_PROFILE_BADGES = (
+    ("staff", 1 << 0),
+    ("partner", 1 << 1),
+    ("hypesquad_events", 1 << 2),
+    ("bug_hunter_level_1", 1 << 3),
+    ("hypesquad_bravery", 1 << 6),
+    ("hypesquad_brilliance", 1 << 7),
+    ("hypesquad_balance", 1 << 8),
+    ("early_supporter", 1 << 9),
+    ("bug_hunter_level_2", 1 << 14),
+    ("early_verified_developer", 1 << 17),
+    ("certified_moderator", 1 << 18),
+    ("supports_commands", 1 << 19),
+    ("active_developer", 1 << 22),
+)
+
+def _unix_seconds(value):
+    """Convert a timestamp-like value to unix seconds, or ``None``."""
+    if value is None or not hasattr(value, "timestamp"):
+        return None
+    try:
+        return int(value.timestamp())
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _member_activities(member) -> list:
+    """The member's live activities, or nothing when presence is unavailable."""
+    if member is None:
+        return []
+    try:
+        return list(getattr(member, "activities", None) or [])
+    except Exception:
+        return []
+
+
+def _public_flags(source):
+    """A user or member's public flag value, or ``None`` when unavailable."""
+    flags = getattr(source, "public_flags", None)
+    if flags is None:
+        return None
+    try:
+        return int(getattr(flags, "value", flags) or 0)
+    except (TypeError, ValueError):
+        return None
+
+
+def _boosting_badge(member):
+    """Discord's server-boosting badge for the months a member has boosted.
+
+    Shared with the bot's profile card so both always name the same tier.
+    """
+    return boosting_badge_key(getattr(member, "premium_since", None))
+
+
+def _profile_badges(user, member) -> list:
+    """The profile badges an account carries, in the order Discord lists them."""
+    # A member object repeats its user's flags, so combining both still yields
+    # one badge per flag even when only one of the two objects was loaded.
+    value = 0
+    for source in (user, member):
+        flags = _public_flags(source)
+        if flags is not None:
+            value |= flags
+    badges = [name for name, bit in _PROFILE_BADGES if value & bit]
+    # The boosting badge follows the flag badges, the way Discord appends it.
+    boosting = _boosting_badge(member)
+    if boosting:
+        badges.append(boosting)
+    return badges
+
+
+def _custom_status(member):
+    """The member's custom status, if they set one and Discord shares it."""
+    for activity in _member_activities(member):
+        kind = getattr(activity, "type", None)
+        if str(getattr(kind, "name", kind) or "").lower() != "custom":
+            continue
+        text = getattr(activity, "state", None) or getattr(activity, "name", None)
+        emoji = getattr(activity, "emoji", None)
+        if not text and emoji is None:
+            continue
+        return {
+            "text": str(text) if text else None,
+            # A unicode emoji carries only a name; a custom one also has an id.
+            "emoji_name": getattr(emoji, "name", None),
+            "emoji_id": str(getattr(emoji, "id", "") or "") or None,
+            "emoji_animated": bool(getattr(emoji, "animated", False)),
+        }
+    return None
+
+
+def _spotify_activity(member):
+    """The member's Spotify listening activity, as its own profile card."""
+    for activity in _member_activities(member):
+        cover = getattr(activity, "album_cover_url", None)
+        if not cover:
+            continue
+        total = getattr(activity, "duration", None)
+        track_id = getattr(activity, "track_id", None)
+        return {
+            "type": "spotify",
+            "title": str(getattr(activity, "title", "") or "") or None,
+            "artists": [str(artist) for artist in (getattr(activity, "artists", None) or [])],
+            "album": str(getattr(activity, "album", "") or "") or None,
+            "album_cover_url": str(cover),
+            "url": f"https://open.spotify.com/track/{track_id}" if track_id else None,
+            "start": _unix_seconds(getattr(activity, "start", None)),
+            "end": _unix_seconds(getattr(activity, "end", None)),
+            "duration_seconds": int(total.total_seconds()) if hasattr(total, "total_seconds") else None,
+        }
+    return None
 
 
 def _empty_names():
@@ -160,8 +281,15 @@ async def _fetch_discord_user_profile(guild_id, user_id):
                     break
             except (AttributeError, TypeError, ValueError):
                 continue
-    member = None
-    if guild is not None and hasattr(guild, "fetch_member"):
+    # Presence is cached per member and can differ by guild, so the popup reads
+    # its status, custom status, and Spotify activity from the member that
+    # carries the richest live presence. This is the same lookup the staff
+    # cards use, so both surfaces always agree, and it is re-read on every
+    # request so an open popup stays live.
+    member = _server._presence_member(user_id, _discord_bot)
+    if guild is None:
+        guild = getattr(member, "guild", None)
+    if member is None and guild is not None and hasattr(guild, "fetch_member"):
         try:
             member = await guild.fetch_member(int(user_id))
         except Exception:
@@ -200,6 +328,13 @@ async def _fetch_discord_user_profile(guild_id, user_id):
     decoration = getattr(user, "avatar_decoration", None)
     if decoration is None:
         decoration = getattr(member, "avatar_decoration", None)
+    # Discord's badges first, then Niko's own role badges, the way the bot's
+    # profile card lists them.
+    badges = _profile_badges(user, member)
+    try:
+        badges.extend(await niko_badge_keys(_discord_bot, user_id))
+    except Exception:
+        pass
     return {
         "id": str(user_id),
         "username": getattr(user, "name", None) or getattr(user, "username", None) or f"user-{user_id}",
@@ -223,15 +358,15 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         "nameplate_animated_url": None,
         "guild_tag": guild_tag,
         "guild_badge_url": str(guild_badge.url) if guild_badge is not None else None,
-        "badges": [],
+        "badges": badges,
         "nitro_badge": None,
         "booster_badge": None,
         "is_mobile": False,
         "is_streaming": False,
         "legacy_username_badge": False,
         "legacy_username": None,
-        "custom_status": None,
-        "activities": [],
+        "custom_status": _custom_status(member),
+        "activities": [activity] if (activity := _spotify_activity(member)) else [],
         "avatar_decoration_url": str(decoration.url) if decoration is not None else None,
         "avatar_decoration_animated_url": (
             str(decoration.with_format("gif").url)

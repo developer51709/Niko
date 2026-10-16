@@ -13,9 +13,7 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
-from config.ids import SUPPORT_GUILD
-from cogs.staff.support_server import get_support_ids
-from utils.donations import is_supporter
+from utils.member_badges import boosting_badge_key, niko_badge_keys
 
 MESSAGES = {
     "normal": {
@@ -522,45 +520,43 @@ def cv2_image(text, image_url):
     return view
 
 
+# Niko badge key (utils.member_badges.NIKO_BADGE_ORDER) -> emoji name in
+# config/emojis.py. Both lists are checked against each other in the tests, so a
+# new role badge needs its PNG art and its emoji entry, nothing else.
+_NIKO_BADGE_EMOJIS = {
+    "niko_owner": "badge_owner",
+    "niko_staff": "badge_staff",
+    "niko_head_admin": "badge_head_admin",
+    "niko_moderator": "badge_moderator",
+    "niko_head_support": "badge_head_support",
+    "niko_support": "badge_support",
+    "niko_graphic_designer": "badge_graphic_designer",
+    "niko_event_coordinator": "badge_event_coordinator",
+    # Discord emoji names are capped at 32 characters, hence the short name.
+    "niko_partnerships_promotions_lead": "badge_partnership_lead",
+    "niko_partnership_manager": "badge_partnership_manager",
+    "niko_supporter": "badge_supporter_role",
+    "niko_bug_hunter": "badge_bug_hunter_role",
+    "niko_partner": "badge_partner_role",
+}
+
+
 async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
-    """
-    Return a list of badge emoji strings earned by user_id.
+    """Return the Niko badge emojis earned by user_id, in display order.
 
-    Checks (in order):
-      1. donors DB      → badge_supporter  (works even if not in support server)
-      2. Support server roles:
-           BUGBOUNTY_ROLE → badge_bugbounty
-           SUPPORTER_ROLE → badge_supporter (deduped)
-           PARTNER_ROLE   → badge_partner
-    Gracefully handles users who are not members of the support server.
+    Which badges an account carries is decided in utils.member_badges, so this
+    card and the website's profile popovers can never disagree. Members who are
+    not in the support server still get every badge that does not need it.
     """
-    badges: list[str] = []
-
     try:
-        if await is_supporter(bot, user_id):
-            badges.append(get_emoji("badge_supporter"))
+        keys = await niko_badge_keys(bot, user_id)
     except Exception:
-        pass
-
-    support_guild = bot.get_guild(SUPPORT_GUILD)
-    if support_guild:
-        try:
-            member = support_guild.get_member(user_id)
-            if member is None:
-                member = await support_guild.fetch_member(user_id)
-            role_ids = {r.id for r in member.roles}
-            configured_roles = (await get_support_ids(bot))["roles"]
-            if configured_roles.get("bugbounty") and int(configured_roles["bugbounty"]) in role_ids:
-                badges.append(get_emoji("badge_bugbounty"))
-            supporter_emoji = get_emoji("badge_supporter")
-            if configured_roles.get("supporter") and int(configured_roles["supporter"]) in role_ids and supporter_emoji not in badges:
-                badges.append(supporter_emoji)
-            if configured_roles.get("partner") and int(configured_roles["partner"]) in role_ids:
-                badges.append(get_emoji("badge_partner"))
-        except (discord.NotFound, discord.HTTPException):
-            pass
-
-    return badges
+        return []
+    return [
+        get_emoji(_NIKO_BADGE_EMOJIS[key])
+        for key in keys
+        if key in _NIKO_BADGE_EMOJIS
+    ]
 
 
 class AvatarButtons(discord.ui.ActionRow):
@@ -683,28 +679,38 @@ class InfoCog(commands.Cog):
             sk, status_text = _status_map.get(target.status, ("status_offline", "Offline"))
             status_emoji = get_emoji(sk)
 
-        # ── Discord public-flag badges ─────────────────────────────────────
+        # ── Discord badges ────────────────────────────────────────────────
+        # One entry per badge art in src/assets/emojis; the flag names are tried
+        # in order because discord.py renamed a few of them across versions.
         pf = target.public_flags
         _disc_flag_map = [
-            ("staff",                  None,                        "🛡️"),
-            ("partner",                "partner",             None),
-            ("bug_hunter",             "bug",                 None),
-            ("bug_hunter_level_2",     "bug",                 None),
-            ("hypesquad_bravery",      "hypesquad_bravery",        None),
-            ("hypesquad_brilliance",   "hypesquad_brilliance",     None),
-            ("hypesquad_balance",      "hypesquad_balance",        None),
-            ("early_supporter",        "premium",             None),
-            ("verified_bot_developer", "verified_developer_badge", None),
-            ("active_developer",       "active_developer_badge",   None),
+            (("staff",),                                      "staff_badge"),
+            (("partner",),                                    "partner"),
+            (("hypesquad_events",),                           "hypesquad_events"),
+            (("bug_hunter_level_1", "bug_hunter"),            "bug_hunter_badge"),
+            (("hypesquad_bravery",),                          "hypesquad_bravery"),
+            (("hypesquad_brilliance",),                       "hypesquad_briliance"),
+            (("hypesquad_balance",),                          "hypesquad_balance"),
+            (("early_supporter",),                            "early_supporter_badge"),
+            (("bug_hunter_level_2",),                         "bug_hunter_gold_badge"),
+            (("verified_bot_developer", "early_verified_developer"), "verified_developer_badge"),
+            (("certified_moderator",),                        "certified_moderator_badge"),
+            (("supports_commands",),                          "supports_commands_badge"),
+            (("active_developer",),                           "active_developer_badge"),
         ]
         disc_badges = []
         seen_disc = set()
-        for flag, ekey, fallback in _disc_flag_map:
-            if getattr(pf, flag, False):
-                token = ekey or fallback
-                if token and token not in seen_disc:
-                    seen_disc.add(token)
-                    disc_badges.append(get_emoji(ekey) if ekey else fallback)
+        for flags, ekey in _disc_flag_map:
+            if ekey in seen_disc or not any(getattr(pf, flag, False) for flag in flags):
+                continue
+            seen_disc.add(ekey)
+            disc_badges.append(get_emoji(ekey))
+        # Discord draws the boosting badge last, for any active boost streak,
+        # and every tier has its own artwork, so the streak picks the badge.
+        boosting = boosting_badge_key(getattr(target, "premium_since", None))
+        if boosting and boosting not in seen_disc:
+            seen_disc.add(boosting)
+            disc_badges.append(get_emoji(boosting))
 
         # ── Niko badges ───────────────────────────────────────────────────
         niko_badges = await _get_badges(self.bot, target.id)

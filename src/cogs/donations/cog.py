@@ -82,7 +82,7 @@ def _payment_layout(
                     f"**Track ID:** `{track_id}`\n"
                     f"**Expires in:** `{INVOICE_LIFETIME} minutes`\n\n"
                     f"Once your payment is confirmed on-chain you'll automatically receive "
-                    f"the {get_emoji('badge_supporter')} **Supporter** badge."
+                    f"the {get_emoji('badge_supporter_role')} **Supporter** badge."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -163,7 +163,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                             f"### {get_emoji('heart')} Thank you for donating!\n"
                             f"Your donation of **${amount:.2f} USD** in **{currency}** "
                             f"has been confirmed. You've been granted the "
-                            f"{get_emoji('badge_supporter')} **Supporter** badge!\n\n"
+                            f"{get_emoji('badge_supporter_role')} **Supporter** badge!\n\n"
                             f"-# Track ID: `{track_id}`"
                         )
                     )
@@ -185,7 +185,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                                 content=(
                                     f"### {get_emoji('heart')} New Supporter!\n"
                                     f"<@{user_id}> just donated **${amount:.2f} USD** in **{currency}**! "
-                                    f"Thank you for supporting Niko! {get_emoji('badge_supporter')}"
+                                    f"Thank you for supporting Niko! {get_emoji('badge_supporter_role')}"
                                 )
                             )
                         )
@@ -292,7 +292,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         f"**Amount:** `${amount:.2f} USD`\n\n"
                         f"Your donation helps cover hosting costs and keeps Niko running! "
                         f"As a thank-you you'll receive the "
-                        f"{get_emoji('badge_supporter')} **Supporter** badge "
+                        f"{get_emoji('badge_supporter_role')} **Supporter** badge "
                         f"and role in the support server.\n\n"
                         f"Select a cryptocurrency below to proceed:"
                     )
@@ -367,7 +367,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
         total = await get_total_donated(self.bot, target.id)
         supporter = await is_supporter(self.bot, target.id)
         badge_line = (
-            f"{get_emoji('badge_supporter')} Supporter" if supporter else "None"
+            f"{get_emoji('badge_supporter_role')} Supporter" if supporter else "None"
         )
         view = discord.ui.LayoutView()
         view.add_item(

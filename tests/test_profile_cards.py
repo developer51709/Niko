@@ -1,15 +1,18 @@
 """Regression checks for the team profile cards and Twitch app credentials.
 
-Covers the three pieces that make the staff profile cards work:
+Covers the pieces that make the staff profile cards and the Discord profile
+popups work:
 
 * public profile lookups only ever contact a platform's own hosts,
 * Twitch reuses one cached application (client-credentials) token,
-* a Spotify presence keeps the track window the progress bar needs.
+* a Spotify presence keeps the track window the progress bar needs,
+* an open Discord profile popup keeps polling its live presence.
 """
 
 import asyncio
 import os
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -17,6 +20,8 @@ from webapp import app
 from webapp import server as server_routes
 
 from utils.social import profiles, twitch
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _response(payload, status_code=200):
@@ -240,6 +245,40 @@ class SpotifyPresenceTests(unittest.TestCase):
         activity = identity["activities"][0]
         self.assertIsNone(activity["start"])
         self.assertIsNone(activity["end"])
+
+
+class ProfilePopupPresenceTests(unittest.TestCase):
+    """The web profile popup shows live presence, the way the staff cards do."""
+
+    def setUp(self):
+        self.source = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
+
+    def test_the_popup_reads_the_same_public_presence_endpoint(self):
+        self.assertIn("fetch(`/api/discord/users/${encodeURIComponent(userId)}`)", self.source)
+
+    def test_the_popup_refreshes_presence_while_it_is_open(self):
+        # A popup does not freeze at the moment it was opened: the open profile
+        # is re-read on a 5s timer, and again as soon as the tab is visible.
+        self.assertIn("PROFILE_REFRESH_INTERVAL = 5000", self.source)
+        self.assertIn("}, PROFILE_REFRESH_INTERVAL);", self.source)
+        self.assertIn('if (document.visibilityState === "visible") refresh();', self.source)
+        self.assertIn('document.addEventListener("visibilitychange", handleVisibility)', self.source)
+        # Closing the popup tears both the timer and its listener down.
+        self.assertIn("window.clearInterval(interval)", self.source)
+        self.assertIn('document.removeEventListener("visibilitychange", handleVisibility)', self.source)
+        # A poll that fails keeps the last known presence instead of blanking the
+        # card or flashing a loading state.
+        self.assertIn(".catch(() => {});", self.source)
+        self.assertIn("setProfile((current) => (current && current.id === next.id ? next : current))", self.source)
+
+    def test_the_popup_dot_uses_the_live_status(self):
+        self.assertIn("<DiscordStatusAvatar status={profileStatusKey(profile.status)}", self.source)
+        self.assertIn("label={profileStatusLabel(profile.status)}", self.source)
+        # Discord can report the status enum or a plain string; anything unknown
+        # reads as offline rather than as an empty dot.
+        for status, label in (("online", "Online"), ("idle", "Idle"), ("dnd", "Do Not Disturb"), ("offline", "Offline"), ("streaming", "Streaming")):
+            with self.subTest(status=status):
+                self.assertIn(f'{status}: "{label}"', self.source)
 
 
 if __name__ == "__main__":

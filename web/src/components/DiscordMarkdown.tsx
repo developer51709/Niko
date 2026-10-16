@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DiscordBadgeList } from "./DiscordBadgeList";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
+import { profileBadges } from "../data/profileBadges";
 import type { CSSProperties, ReactNode } from "react";
 import { resolveDiscordText } from "../api";
 
@@ -18,7 +20,10 @@ type Token = Node | { kind: "marker"; format: Format };
 
 const markerText: Record<Format, string> = { bold: "**", italic: "*", italicAlt: "_", underline: "__", strike: "~~", spoiler: "||" };
 const timestampStyles = new Set(["t", "T", "d", "D", "f", "F", "R"]);
-const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))|(\*\*)|(__)|(?<!\*)\*(?!\*)|(?<!_)_(?!_)|(~~)|(\|\|)/g;
+// Every marker is a capture group, because the format each one opens is chosen
+// by the group that matched: 8 bold (``**``), 9 underline (``__``), 10 italic
+// (``*``), 11 italic-alt (``_``), 12 strike (``~~``), 13 spoiler (``||``).
+const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))|(\*\*)|(__)|((?<!\*)\*(?!\*))|((?<!_)_(?!_))|(~~)|(\|\|)/g;
 
 function timestampLabel(unix: number, style: string): string | null {
   if (!Number.isSafeInteger(unix) || !timestampStyles.has(style)) return null;
@@ -108,13 +113,41 @@ function tokenize(text: string): Node[] {
   return roots;
 }
 
+/**
+ * A Discord custom emoji.
+ *
+ * Discord never draws a broken emoji: when it cannot resolve one — a deleted
+ * emoji, an emoji from another server, a stale id — it writes the name out
+ * between colons as plain text. The fallback here is the same, which also keeps
+ * a failed image from shifting the line or eating the formatting around it.
+ */
+export function DiscordEmoji({ name, id, animated = false, className }: {
+  name: string;
+  id: string;
+  animated?: boolean;
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (!id || broken) {
+    return <span className="discord-emoji-fallback" data-discord-emoji-name={name}>{`:${name}:`}</span>;
+  }
+  return <img
+    className={className}
+    data-discord-emoji-name={name}
+    src={`https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`}
+    alt={`:${name}:`}
+    title={`:${name}:`}
+    onError={() => setBroken(true)}
+  />;
+}
+
 function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "discord-md", interactiveUsers = true): ReactNode[] {
   return nodes.map((node, index) => {
     const key = `${prefix}-${index}`;
     if (node.kind === "text") return <span key={key}>{node.text}</span>;
     if (node.kind === "code") return <code key={key} className="discord-md-code">{node.text}</code>;
     if (node.kind === "link") return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">{node.text}</a>;
-    if (node.kind === "emoji") return <img key={key} className="discord-md-emoji" src={`https://cdn.discordapp.com/emojis/${node.id}.${node.animated ? "gif" : "png"}`} alt={`:${node.name}:`} title={`:${node.name}:`} onError={(event) => { event.currentTarget.alt = `:${node.name}:`; }} />;
+    if (node.kind === "emoji") return <DiscordEmoji key={key} name={node.name} id={node.id} animated={node.animated} className="discord-md-emoji" />;
     if (node.kind === "timestamp") {
       const label = timestampLabel(node.unix, node.style);
       const date = new Date(node.unix * 1000);
@@ -137,6 +170,25 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
   });
 }
 
+type DiscordCustomStatus = {
+  text: string | null;
+  emoji_name: string | null;
+  emoji_id: string | null;
+  emoji_animated: boolean;
+};
+
+type DiscordProfileActivity = {
+  type: string;
+  title: string | null;
+  artists: string[];
+  album: string | null;
+  album_cover_url: string;
+  url: string | null;
+  start: number | null;
+  end: number | null;
+  duration_seconds: number | null;
+};
+
 type TranscriptProfile = {
   id: string; username: string; display_name: string; avatar_url: string | null;
   banner_url: string | null;  banner_color: string | null; bio: string | null;
@@ -144,7 +196,133 @@ type TranscriptProfile = {
   status?: string | null;
 
   avatar_decoration_url: string | null;
+  badges?: string[] | null;
+  custom_status?: DiscordCustomStatus | null;
+  activities?: DiscordProfileActivity[] | null;
 };
+
+// Presence lives on the gateway's live member cache and can change while a popup
+// is open, so an open popup re-reads its profile on the same 5s cadence the Team
+// page uses instead of freezing at the moment it was first opened.
+const PROFILE_REFRESH_INTERVAL = 5000;
+
+const PROFILE_STATUS_LABELS: Record<string, string> = {
+  online: "Online",
+  idle: "Idle",
+  dnd: "Do Not Disturb",
+  offline: "Offline",
+  streaming: "Streaming",
+};
+
+/** Discord may report a status enum or a plain string; unknown values are offline. */
+function profileStatusKey(status?: string | null) {
+  const value = typeof status === "string" ? status.trim().toLowerCase().replace(/^status\./, "") : "";
+  return Object.prototype.hasOwnProperty.call(PROFILE_STATUS_LABELS, value) ? value : "offline";
+}
+
+function profileStatusLabel(status?: string | null) {
+  return PROFILE_STATUS_LABELS[profileStatusKey(status)];
+}
+
+async function fetchDiscordProfile(userId: string): Promise<TranscriptProfile> {
+  const response = await fetch(`/api/discord/users/${encodeURIComponent(userId)}`);
+  if (!response.ok) throw new Error("Could not load this Discord profile.");
+  return await response.json() as TranscriptProfile;
+}
+
+function statusEmoji(status: DiscordCustomStatus) {
+  if (status.emoji_id) {
+    return <DiscordEmoji name={status.emoji_name || "emoji"} id={status.emoji_id} animated={status.emoji_animated} className="discord-profile-status-emoji" />;
+  }
+  return status.emoji_name ? <span className="discord-profile-status-emoji">{status.emoji_name}</span> : null;
+}
+
+function trackClock(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** The Spotify card Discord shows at the bottom of a profile popout. */
+function ProfileSpotifyCard({ activity }: { activity: DiscordProfileActivity }) {
+  const start = activity.start;
+  const end = activity.end;
+  const hasWindow = typeof start === "number" && typeof end === "number" && end > start;
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    if (!hasWindow) return;
+    setNow(Math.floor(Date.now() / 1000));
+    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [hasWindow, start, end]);
+  const total = activity.duration_seconds || (hasWindow ? (end as number) - (start as number) : 0);
+  const elapsed = hasWindow ? Math.min(Math.max(now - (start as number), 0), total) : 0;
+  const card = <div className="discord-profile-spotify">
+    <div className="discord-profile-spotify-head"><img src="/spotify.svg" alt="" /><span>Listening to Spotify</span></div>
+    <div className="discord-profile-spotify-body">
+      <img className="discord-profile-spotify-art" src={activity.album_cover_url} alt="" />
+      <div className="discord-profile-spotify-copy">
+        <strong title={activity.title || "Spotify"}>{activity.title || "Spotify"}</strong>
+        {activity.artists.length > 0 && <small title={activity.artists.join(", ")}>{activity.artists.join(", ")}</small>}
+        {hasWindow && total > 0 && <div className="discord-profile-spotify-progress">
+          <span>{trackClock(elapsed)}</span>
+          <span className="discord-profile-spotify-track" aria-hidden="true"><i style={{ width: `${(elapsed / total) * 100}%` }} /></span>
+          <span>{trackClock(total)}</span>
+        </div>}
+      </div>
+    </div>
+  </div>;
+  return activity.url
+    ? <a className="discord-profile-spotify-link" href={activity.url} target="_blank" rel="noreferrer">{card}</a>
+    : card;
+}
+
+/** The circular "..." menu in the popup's top corner, with Copy User ID. */
+function ProfileMenu({ userId }: { userId: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const copyUserId = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(userId);
+      setCopied(true);
+    } catch {
+      // A browser without clipboard access: leave the label alone rather than
+      // claiming a copy that did not happen.
+      setCopied(false);
+    }
+  }, [userId]);
+  return <div className="discord-profile-menu" ref={menuRef}>
+    <button
+      type="button"
+      className="discord-profile-menu-button"
+      aria-label="More options"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={() => setOpen((value) => !value)}
+    >
+      <span className="discord-profile-menu-dots" aria-hidden="true"><i /><i /><i /></span>
+    </button>
+    {open && <div className="discord-profile-menu-list" role="menu">
+      <button type="button" className="discord-profile-menu-item" role="menuitem" onClick={() => void copyUserId()}>
+        {copied ? "Copied!" : "Copy User ID"}
+      </button>
+    </div>}
+  </div>;
+}
 
 export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {
   text: string;
@@ -193,6 +371,9 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   const requestRef = useRef(0);
+  const profileBadgeList = profileBadges(profile?.badges);
+  const customStatus = profile?.custom_status || null;
+  const spotifyActivity = (profile?.activities || []).find((activity) => Boolean(activity.album_cover_url)) || null;
   const closeProfile = useCallback(() => {
     requestRef.current += 1;
     profileTriggerRef.current = null;
@@ -238,9 +419,7 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     setProfileError("");
     setProfileLoading(true);
     try {
-      const response = await fetch(`/api/discord/users/${userId}`);
-      if (!response.ok) throw new Error("Could not load this Discord profile.");
-      const result = await response.json() as TranscriptProfile;
+      const result = await fetchDiscordProfile(userId);
       if (requestRef.current === requestId) setProfile(result);
     } catch (error) {
       if (requestRef.current === requestId) setProfileError(error instanceof Error ? error.message : "Could not load this Discord profile.");
@@ -248,12 +427,41 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
       if (requestRef.current === requestId) setProfileLoading(false);
     }
   }, []);
+  const openProfileId = profile?.id || "";
+  useEffect(() => {
+    if (!openProfileId) return;
+    let active = true;
+    const refresh = () => {
+      // A transient poll failure keeps the last known presence: the popup never
+      // blanks out or flashes a loading state while it refreshes.
+      fetchDiscordProfile(openProfileId)
+        .then((next) => {
+          if (active) setProfile((current) => (current && current.id === next.id ? next : current));
+        })
+        .catch(() => {});
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, PROFILE_REFRESH_INTERVAL);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [openProfileId]);
   useEffect(() => {
     if (!interactiveUsers || (!profile && !profileLoading && !profileError)) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeProfile(); };
     const onClick = (event: MouseEvent) => {
       const target = event.target;
-      if (target instanceof Element && !target.closest(".discord-profile-card") && !target.closest("[data-discord-user-id]")) closeProfile();
+      // The badge popup floats outside the card, so a click inside it keeps the
+      // profile open.
+      if (target instanceof Element && !target.closest(".discord-profile-card") && !target.closest(".discord-badge-popup") && !target.closest("[data-discord-user-id]")) closeProfile();
     };
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
@@ -328,19 +536,33 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
           {profile.banner_url
             ? <img className="discord-profile-banner" src={profile.banner_url} alt="" />
             : <div className="discord-profile-banner" style={{ backgroundColor: profile.banner_color || "#202225" }} />}
+          {/* Keyed by user so an open menu never carries over to the next popup. */}
+          <ProfileMenu key={profile.id} userId={profile.id} />
           <div className="discord-profile-body">
-            {profile.avatar_url && <DiscordStatusAvatar status={profile.status} className="discord-profile-avatar-wrap" label={profile.status || "Offline"}>
-              <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
-              {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
-            </DiscordStatusAvatar>}
+            <div className="discord-profile-head">
+              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status)}>
+                <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
+                {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
+              </DiscordStatusAvatar>}
+              {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <div className="discord-profile-status">
+                <span className="discord-profile-status-text">{statusEmoji(customStatus)}{customStatus.text}</span>
+              </div>}
+            </div>
             <h2 className="discord-profile-name">{profile.display_name}</h2>
-            {profile.guild_tag && <div className="discord-profile-guild-tag">
-              {profile.guild_badge_url && <img src={profile.guild_badge_url} alt="" />}
-              <span>{profile.guild_tag}</span>
-            </div>}
-            <p className="discord-profile-username">{profile.username}</p>
-            {profile.guild_nick && <p className="discord-profile-username">Server name: {profile.guild_nick}</p>}
+            {/* Discord puts the server tag pill on the username row and the
+                profile badges on the line directly below it. */}
+            <p className="discord-profile-username">
+              <span className="discord-profile-user-tag">{profile.username}</span>
+              {profile.guild_tag && <span className="discord-profile-guild-tag">
+                {profile.guild_badge_url && <img src={profile.guild_badge_url} alt="" />}
+                <span>{profile.guild_tag}</span>
+              </span>}
+            </p>
+            {/* Badge artwork ships with the app; clicking one opens the badge
+                popup owned by DiscordBadgeList. */}
+            <DiscordBadgeList badges={profileBadgeList} />
             {profile.bio && <section className="discord-profile-about"><h3>About Me</h3><p>{profile.bio}</p></section>}
+            {spotifyActivity && <ProfileSpotifyCard activity={spotifyActivity} />}
             <a className="discord-profile-full-link" href={`https://discord.com/users/${profile.id}`} target="_blank" rel="noopener noreferrer">Open Discord profile</a>
           </div>
         </>}

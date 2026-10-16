@@ -6,20 +6,88 @@
 def get_emoji(emoji_name: str):
     if emoji_name == "active_developer_badge":
         return "<:active_developer_badge:1526320574060560424>"
+    # Discord profile badges that Niko did not have emoji art for yet. Their
+    # artwork is generated from the badge SVGs into src/assets/emojis/ by
+    # scripts/build-badge-art.mjs, and the ids are placeholders: the startup
+    # emoji sync uploads the PNGs and rewrites them with the live ids.
+    # Discord's server-boosting badge has its own artwork per tier, so every
+    # tier gets its own emoji and the cards pick the one the streak reached.
+    if emoji_name == "boosting_1_months":
+        return "<:boosting_1_months:1560774003130499073>"
+    if emoji_name == "boosting_2_months":
+        return "<:boosting_2_months:1560774006519369738>"
+    if emoji_name == "boosting_3_months":
+        return "<:boosting_3_months:1560774009493127199>"
+    if emoji_name == "boosting_6_months":
+        return "<:boosting_6_months:1560774012756426902>"
+    if emoji_name == "boosting_9_months":
+        return "<:boosting_9_months:1560774015965200464>"
+    if emoji_name == "boosting_12_months":
+        return "<:boosting_12_months:1560774019156938872>"
+    if emoji_name == "boosting_15_months":
+        return "<:boosting_15_months:1560774022030032976>"
+    if emoji_name == "boosting_18_months":
+        return "<:boosting_18_months:1560774024936558676>"
+    if emoji_name == "boosting_24_months":
+        return "<:boosting_24_months:1560774028010987670>"
+    if emoji_name == "bug_hunter_badge":
+        return "<:bug_hunter_badge:1560768150293717052>"
+    if emoji_name == "bug_hunter_gold_badge":
+        return "<:bug_hunter_gold_badge:1560768153427124235>"
+    if emoji_name == "certified_moderator_badge":
+        return "<:certified_moderator_badge:1560768156526710957>"
+    if emoji_name == "early_supporter_badge":
+        return "<:early_supporter_badge:1560768159676366848>"
+    if emoji_name == "hypesquad_events":
+        return "<:hypesquad_events:1560768162482618401>"
+    if emoji_name == "staff_badge":
+        return "<:staff_badge:1560768165527425137>"
+    if emoji_name == "supports_commands_badge":
+        return "<:supports_commands_badge:1560768169122070598>"
     if emoji_name == "arrow_left":
         return "<:arrow_left:1555276714651942923>"
     if emoji_name == "arrow_right":
         return "<:arrow_right:1555276717487292487>"
     if emoji_name == "automod":
         return "<:Automod:1555276720146227220>"
-    if emoji_name == "badge_bugbounty":
-        return "<:badge_bugbounty:1555276722679718252>"
     if emoji_name == "badge_developer":
-        return "<:badge_developer:1555276725535907951>"
-    if emoji_name == "badge_partner":
-        return "<:badge_partner:1555276728207802539>"
-    if emoji_name == "badge_supporter":
-        return "<:badge_supporter:1555276730858471536>"
+        return "<:badge_developer:1560774031181881406>"
+    # Niko's own role badges, one per team role plus the community roles. The
+    # artwork is generated from web/public/assets/badges/niko_*.svg into
+    # src/assets/emojis/badge_*.png by scripts/build-badge-art.mjs, and these
+    # placeholder ids are replaced by the sync once it uploads them.
+    if emoji_name == "badge_event_coordinator":
+        return "<:badge_event_coordinator:1560768172280381611>"
+    if emoji_name == "badge_graphic_designer":
+        return "<:badge_graphic_designer:1560787795801542867>"
+    if emoji_name == "badge_head_admin":
+        return "<:badge_head_admin:1560768178236301405>"
+    if emoji_name == "badge_head_support":
+        return "<:badge_head_support:1560787799479812097>"
+    if emoji_name == "badge_moderator":
+        return "<:badge_moderator:1560768184989126856>"
+    if emoji_name == "badge_owner":
+        return "<:badge_owner:1560768188071944242>"
+    if emoji_name == "badge_partnership_manager":
+        return "<:badge_partnership_manager:1560768191079129312>"
+    # Discord emoji names stop at 32 characters, so the Partnerships &
+    # Promotions Lead badge uses the short name for the same artwork.
+    if emoji_name == "badge_partnership_lead":
+        return "<:badge_partnership_lead:1560770119334895790>"
+    if emoji_name == "badge_staff":
+        return "<:badge_staff:1560768194921103410>"
+    if emoji_name == "badge_support":
+        return "<:badge_support:1560768198083743754>"
+    # The community role badges, with the refreshed artwork. Their original
+    # names (badge_supporter, badge_bugbounty, badge_partner) are already live
+    # application emojis, and the sync only uploads art for names it does not
+    # find yet, so the new art needs its own names to reach Discord.
+    if emoji_name == "badge_supporter_role":
+        return "<:badge_supporter_role:1560774034382262332>"
+    if emoji_name == "badge_bug_hunter_role":
+        return "<:badge_bug_hunter_role:1560774037666267168>"
+    if emoji_name == "badge_partner_role":
+        return "<:badge_partner_role:1560787802558435370>"
     if emoji_name == "bluesky":
         return "<:bluesky:1545426285948436610>"
     if emoji_name == "bot_owner":

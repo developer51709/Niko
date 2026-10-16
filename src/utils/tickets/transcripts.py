@@ -16,6 +16,8 @@ import re
 import hashlib
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -125,6 +127,112 @@ def _image_data_url(payload: bytes, content_type: str) -> str:
     if not media_type.startswith("image/"):
         media_type = "image/png"
     return f"data:{media_type};base64,{base64.b64encode(payload).decode('ascii')}"
+
+
+# Badge artwork ships with the web app, but an exported transcript is a single
+# offline file, so the SVGs are inlined instead of linked. Each entry is the
+# path under ``web/public/assets`` plus the name and description the badge popup
+# shows, and the keys are exactly the ones the profile API sends. The same three
+# pieces live in web/src/data/profileBadges.ts for the website popups.
+_PROFILE_BADGE_FILES = {
+    # Discord's own profile badges.
+    "staff": ("badges/staff.svg", "Discord Staff", "Part of the Discord team."),
+    "partner": ("badges/partner.svg", "Partnered Server Owner", "Owns a server that is partnered with Discord."),
+    "hypesquad_events": ("hypesquad/events.svg", "HypeSquad Events", "Helped host an official HypeSquad event."),
+    "bug_hunter_level_1": ("badges/bug_hunter_level_1.svg", "Bug Hunter", "Reported a valid bug to Discord."),
+    "hypesquad_bravery": ("hypesquad/bravery.svg", "HypeSquad Bravery", "Member of House Bravery."),
+    "hypesquad_brilliance": ("hypesquad/brilliance.svg", "HypeSquad Brilliance", "Member of House Brilliance."),
+    "hypesquad_balance": ("hypesquad/balance.svg", "HypeSquad Balance", "Member of House Balance."),
+    "early_supporter": ("badges/early_supporter.svg", "Early Supporter", "Supported Discord before October 10, 2018."),
+    "bug_hunter_level_2": ("badges/bug_hunter_level_2.svg", "Bug Hunter (Gold)", "Reported several valid bugs to Discord."),
+    "early_verified_developer": (
+        "badges/early_verified_developer.svg",
+        "Early Verified Bot Developer",
+        "Verified bot developer before August 19, 2020.",
+    ),
+    "certified_moderator": (
+        "badges/certified_moderator.svg",
+        "Moderator Programs Alumni",
+        "Took part in Discord's Moderator Programs.",
+    ),
+    "supports_commands": ("badges/supports_commands.svg", "Supports Commands", "This app supports slash commands."),
+    "active_developer": ("badges/active_developer.svg", "Active Developer", "Ran a slash command in the past 30 days."),
+    # Niko's own role badges, next to Discord's the way the bot's card lists
+    # them. Every key here also exists in utils/member_badges.py.
+    "niko_owner": ("badges/niko_owner.svg", "Niko Owner", "Owns and runs Niko."),
+    "niko_staff": ("badges/niko_staff.svg", "Niko Staff", "Part of the Niko team."),
+    "niko_head_admin": ("badges/niko_head_admin.svg", "Head Admin", "Leads Niko's moderation team."),
+    "niko_moderator": ("badges/niko_moderator.svg", "Moderator", "Keeps Niko's servers in order."),
+    "niko_head_support": ("badges/niko_head_support.svg", "Head of Support", "Leads the Niko support team."),
+    "niko_support": ("badges/niko_support.svg", "Support Team", "Answers tickets and helps members."),
+    "niko_graphic_designer": ("badges/niko_graphic_designer.svg", "Graphic Designer", "Draws Niko's art and brand."),
+    "niko_event_coordinator": ("badges/niko_event_coordinator.svg", "Event Coordinator", "Runs Niko's community events."),
+    "niko_partnerships_promotions_lead": (
+        "badges/niko_partnerships_promotions_lead.svg",
+        "Partnerships & Promotions Lead",
+        "Leads partnerships and promotions.",
+    ),
+    "niko_partnership_manager": ("badges/niko_partnership_manager.svg", "Partnership Manager", "Manages Niko's partner servers."),
+    "niko_supporter": ("badges/niko_supporter.svg", "Supporter", "Donated to keep Niko's hosting running."),
+    "niko_bug_hunter": ("badges/niko_bug_hunter.svg", "Bug Bounty Hunter", "Reported a bug that made Niko better."),
+    "niko_partner": ("badges/niko_partner.svg", "Partner", "Owns a server partnered with Niko."),
+    # Discord draws a different boosting badge for every tier, so every tier has
+    # its own art, name and description here too.
+    **{
+        f"boosting_{months}_months": (
+            f"badges/boosting_{months}_months.svg",
+            f"Boosting a server for {months} month{'s' if months != 1 else ''}",
+            f"Boosted a server for {months} month{'s' if months != 1 else ''}. "
+            "The badge art upgrades at 1, 2, 3, 6, 9, 12, 15, 18 and 24 months.",
+        )
+        for months in (1, 2, 3, 6, 9, 12, 15, 18, 24)
+    },
+}
+
+
+@lru_cache(maxsize=1)
+def _profile_badge_art() -> dict:
+    """Data URLs for the badges, keyed by the keys the profile API sends."""
+    assets = Path(__file__).resolve().parents[3] / "web" / "public" / "assets"
+    art = {}
+    for key, (relative, label, description) in _PROFILE_BADGE_FILES.items():
+        try:
+            svg = (assets / relative).read_bytes()
+        except OSError:
+            continue
+        art[key] = {
+            "src": _image_data_url(svg, "image/svg+xml"),
+            "label": label,
+            "description": description,
+        }
+    return art
+
+
+# Discord's presence dots ship with the web app too, but an exported transcript
+# is a single offline file, so the PNGs are inlined exactly like the badges. The
+# keys are the status names the profile API sends, and the labels are the wording
+# the website popup and the Team page already use.
+_PROFILE_STATUS_FILES = {
+    "online": ("discord-status/status_online.png", "Online"),
+    "idle": ("discord-status/status_idle.png", "Idle"),
+    "dnd": ("discord-status/status_dnd.png", "Do Not Disturb"),
+    "offline": ("discord-status/status_offline.png", "Offline"),
+    "streaming": ("discord-status/status_streaming.png", "Streaming"),
+}
+
+
+@lru_cache(maxsize=1)
+def _profile_status_art() -> dict:
+    """Data URLs for the presence dots, keyed by the status the API sends."""
+    assets = Path(__file__).resolve().parents[3] / "web" / "public" / "assets"
+    art = {}
+    for key, (relative, label) in _PROFILE_STATUS_FILES.items():
+        try:
+            png = (assets / relative).read_bytes()
+        except OSError:
+            continue
+        art[key] = {"src": _image_data_url(png, "image/png"), "label": label}
+    return art
 
 
 async def inline_transcript_images(messages: List[dict], *, max_bytes: int = 12 * 1024 * 1024) -> int:
@@ -361,7 +469,10 @@ def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
         emoji_id = match.group(3)
         extension = "gif" if animated else "png"
         url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{extension}"
-        return f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:">'
+        return (
+            f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:" '
+            f'data-emoji-name="{name}">'
+        )
 
     value = re.sub(r"&lt;(a?):([A-Za-z0-9_~]+):(\d+)&gt;", _custom_emoji, value)
 
@@ -730,6 +841,8 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
 
     msg_block = chr(10).join(msg_rows)
     profile_json = json.dumps(user_profiles or {}, ensure_ascii=False).replace("</", "<\\/")
+    badge_art_json = json.dumps(_profile_badge_art(), ensure_ascii=False)
+    status_art_json = json.dumps(_profile_status_art(), ensure_ascii=False)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -751,21 +864,59 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .author-id {{ color: #949ba4; font-size: 11px; }}
   .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
   .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
+  .custom-emoji-fallback {{ color: inherit; }}
   .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
   .discord-md-mention {{ display: inline; padding: 1px 4px; color: #dce4ff; background: rgba(88, 101, 242, .3); border-radius: 4px; font-weight: 650; line-height: 1.5; text-decoration: none; }}
   .discord-md-mention-role {{ color: #f1d7ff; background: rgba(160, 89, 198, .24); }}
   .discord-md-mention-user {{ cursor: pointer; }}
   .discord-profile-popover {{ position: fixed; inset: 0; z-index: 100; pointer-events: none; }}
   .discord-profile-card {{ position: fixed; left: var(--profile-left); top: var(--profile-top); width: min(20rem, calc(100vw - 1.5rem)); max-height: min(35rem, calc(100dvh - 1.5rem)); overflow-y: auto; border: 1px solid rgb(255 255 255 / .08); border-radius: .85rem; background: #111214; color: #f2f3f5; box-shadow: 0 18px 52px rgb(0 0 0 / .58); pointer-events: auto; font-size: 13px; line-height: 1.45; }}
-  .discord-profile-banner {{ height: 5.5rem; background: #202225 center / cover no-repeat; }}
+  .discord-profile-banner {{ display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #202225 center / cover no-repeat; }}
+  .discord-profile-menu {{ position: absolute; top: 8px; right: 8px; z-index: 3; }}
+  .discord-profile-menu-button {{ display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: rgb(24 25 28 / .62); cursor: pointer; }}
+  .discord-profile-menu-button:hover {{ background: rgb(24 25 28 / .85); }}
+  .discord-profile-menu-dots {{ display: flex; gap: 3px; }}
+  .discord-profile-menu-dots i {{ width: 4px; height: 4px; border-radius: 50%; background: #fff; }}
+  .discord-profile-menu-list {{ position: absolute; top: calc(100% + 6px); right: 0; min-width: 148px; padding: 4px; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 6px; box-shadow: 0 10px 26px rgb(0 0 0 / .5); }}
+  .discord-profile-menu-item {{ display: block; width: 100%; padding: 7px 9px; color: #dbdee1; background: transparent; border: 0; border-radius: 4px; font: inherit; text-align: left; cursor: pointer; }}
+  .discord-profile-menu-item:hover {{ background: #35373c; }}
   .discord-profile-body {{ position: relative; padding: 0 16px 16px; }}
-  .discord-profile-avatar-wrap {{ position: relative; display: block; width: 76px; height: 76px; margin-top: -38px; }}
-  .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 6px solid #111214; border-radius: 50%; object-fit: cover; background: #313338; }}
-  .discord-profile-avatar-decoration {{ position: absolute; inset: -10px; width: 96px; height: 96px; object-fit: contain; pointer-events: none; }}
+  .discord-profile-head {{ display: flex; align-items: center; gap: 8px; margin-top: -38px; }}
+  .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; }}
+  .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 0; border-radius: 50%; object-fit: cover; background: #313338; }}
+  .discord-profile-avatar-decoration {{ position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; transform: translate(-50%, -50%) scale(1.2); pointer-events: none; }}
+  .discord-status-icon {{ position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }}
+  .discord-profile-status {{ position: relative; flex: 1 1 auto; min-width: 0; padding: 8px 11px; color: #dbdee1; background: #232428; border-radius: 12px; font-size: 12.5px; line-height: 1.4; }}
+  .discord-profile-status::before {{ position: absolute; top: 50%; left: -6px; border: 6px solid transparent; border-right-color: #232428; border-left: 0; content: ""; transform: translateY(-50%); }}
+  .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }}
+  .discord-profile-status-emoji {{ display: inline-block; width: 15px; height: 15px; margin-right: 5px; object-fit: contain; vertical-align: -.2em; }}
   .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
-  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }}
+  .discord-profile-username {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }}
+  .discord-profile-user-tag {{ min-width: 0; overflow-wrap: anywhere; }}
+  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }}
   .discord-profile-guild-tag img {{ width: 14px; height: 14px; object-fit: contain; }}
-  .discord-profile-username {{ margin: 0; color: #b5bac1; }}
+  .discord-profile-badges {{ position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }}
+  .discord-profile-badge {{ width: 20px; height: 20px; object-fit: contain; }}
+  .discord-profile-badge-button {{ display: block; padding: 2px; background: transparent; border: 0; border-radius: 5px; line-height: 0; cursor: pointer; }}
+  .discord-profile-badge-button:hover, .discord-profile-badge-button[aria-expanded="true"] {{ background: #3f4147; }}
+  /* Fixed to the page and stacked above the profile popup, so the badge popup
+     neither stretches the profile card nor gets clipped by its scroll box. */
+  .discord-badge-popup {{ position: fixed; z-index: 101; display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(18rem, calc(100vw - 1.5rem)); padding: 10px 12px; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 8px; box-shadow: 0 10px 26px rgb(0 0 0 / .5); }}
+  .discord-badge-popup-art {{ width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }}
+  .discord-badge-popup-copy {{ display: grid; gap: 2px; min-width: 0; }}
+  .discord-badge-popup-copy strong {{ color: #f2f3f5; font-size: 12.5px; font-weight: 700; }}
+  .discord-badge-popup-copy p {{ margin: 0; color: #b5bac1; font-size: 11.5px; line-height: 1.4; }}
+  .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }}
+  .discord-profile-spotify-link {{ display: block; color: inherit; text-decoration: none; }}
+  .discord-profile-spotify-head {{ color: #b5bac1; font-size: 11px; font-weight: 700; }}
+  .discord-profile-spotify-body {{ display: flex; align-items: center; gap: 10px; margin-top: 9px; }}
+  .discord-profile-spotify-art {{ width: 56px; height: 56px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; }}
+  .discord-profile-spotify-copy {{ display: grid; flex: 1 1 auto; min-width: 0; gap: 3px; }}
+  .discord-profile-spotify-copy strong {{ overflow: hidden; color: #f2f3f5; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-copy small {{ overflow: hidden; color: #b5bac1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-progress {{ display: flex; align-items: center; gap: 7px; margin-top: 4px; color: #949ba4; font-size: 10px; }}
+  .discord-profile-spotify-track {{ position: relative; display: block; height: 4px; flex: 1 1 auto; overflow: hidden; background: #4e5058; border-radius: 999px; }}
+  .discord-profile-spotify-track > i {{ position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #1db954; border-radius: 999px; transition: width .95s linear; }}
   .discord-profile-about {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid #3f4147; }}
   .discord-profile-about h3 {{ margin-bottom: 5px; color: #b5bac1; font-size: 11px; text-transform: uppercase; }}
   .discord-profile-about p {{ white-space: pre-wrap; }}
@@ -833,8 +984,91 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
 <script>
 (() => {{
   const mentionProfiles = {profile_json};
+  const badgeArt = {badge_art_json};
+  const statusArt = {status_art_json};
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "'": "&#39;" }})[char]);
-  const closeProfile = () => document.querySelector(".discord-profile-popover")?.remove();
+  // Discord never shows a broken custom emoji: an emoji it cannot resolve is
+  // written out as its name between colons. The same swap keeps a dead emoji
+  // from leaving a broken icon or eating the formatting around it.
+  const fixCustomEmoji = (img) => {{
+    const replace = () => {{
+      const fallback = document.createElement("span");
+      fallback.className = "custom-emoji-fallback";
+      fallback.textContent = ":" + (img.dataset.emojiName || "") + ":";
+      img.replaceWith(fallback);
+    }};
+    // An image that already failed has completed with no size, and its error
+    // event is gone by the time this script runs.
+    if (img.complete && img.naturalWidth === 0) {{ replace(); return; }}
+    img.addEventListener("error", replace, {{ once: true }});
+  }};
+  document.querySelectorAll("img.custom-emoji").forEach(fixCustomEmoji);
+  let profileTimer = null;
+  let profilePollTimer = null;
+  let refreshProfilePresence = null;
+  const stopProfileTimer = () => {{ if (profileTimer !== null) {{ clearInterval(profileTimer); profileTimer = null; }} }};
+  const stopProfilePoll = () => {{
+    if (profilePollTimer !== null) {{ clearInterval(profilePollTimer); profilePollTimer = null; }}
+    if (refreshProfilePresence !== null) {{ document.removeEventListener("visibilitychange", refreshProfilePresence); refreshProfilePresence = null; }}
+  }};
+  const closeProfile = () => {{ stopProfileTimer(); stopProfilePoll(); document.querySelector(".discord-profile-popover")?.remove(); document.querySelector(".discord-badge-popup")?.remove(); }};
+  // The presence dot Discord draws on the avatar. The art is inlined, so the popup
+  // shows live status without needing the web app's asset folder.
+  const statusKey = (value) => {{
+    const raw = value && typeof value === "object" ? value.name : value;
+    const name = String(raw || "").split(".").pop().trim().toLowerCase();
+    return statusArt[name] ? name : "offline";
+  }};
+  const statusDot = (profile) => {{
+    const art = statusArt[statusKey(profile.status)];
+    if (!art) return "";
+    const label = escapeHtml(art.label || "Offline");
+    return '<img class="discord-status-icon" data-profile-status src="' + art.src + '" alt="' + label + '" title="' + label + '">';
+  }};
+  const profileAvatar = (profile) => profile.avatar_url
+    ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">'
+      + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '')
+      + statusDot(profile) + '</span>'
+    : '';
+  const profileStatusBubble = (profile) => {{
+    const customStatus = profile.custom_status || {{}};
+    const statusEmoji = customStatus.emoji_id
+      ? '<img class="discord-profile-status-emoji" src="https://cdn.discordapp.com/emojis/' + encodeURIComponent(customStatus.emoji_id) + (customStatus.emoji_animated ? '.gif' : '.png') + '" alt="">'
+      : (customStatus.emoji_name ? '<span class="discord-profile-status-emoji">' + escapeHtml(customStatus.emoji_name) + '</span>' : '');
+    if (!customStatus.text && !statusEmoji) return '';
+    return '<div class="discord-profile-status"><span class="discord-profile-status-text">' + statusEmoji + escapeHtml(customStatus.text || '') + '</span></div>';
+  }};
+  const clock = (seconds) => {{ const total = Math.max(0, Math.round(Number(seconds) || 0)); return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0'); }};
+  const profileSpotify = (profile) => {{
+    const spotify = (profile.activities || []).find((activity) => activity && activity.album_cover_url);
+    if (!spotify) return {{ html: '', timing: null }};
+    const timing = Number.isFinite(spotify.start) && Number.isFinite(spotify.end) && spotify.end > spotify.start
+      ? {{ start: spotify.start, total: spotify.duration_seconds || (spotify.end - spotify.start) }}
+      : null;
+    const inner = '<div class="discord-profile-spotify">'
+      + '<div class="discord-profile-spotify-head">Listening to Spotify</div>'
+      + '<div class="discord-profile-spotify-body">'
+      + '<img class="discord-profile-spotify-art" src="' + escapeHtml(spotify.album_cover_url) + '" alt="">'
+      + '<div class="discord-profile-spotify-copy"><strong>' + escapeHtml(spotify.title || 'Spotify') + '</strong>'
+      + ((spotify.artists || []).length ? '<small>' + escapeHtml(spotify.artists.join(', ')) + '</small>' : '')
+      + (timing ? '<div class="discord-profile-spotify-progress"><span data-spotify-elapsed></span><span class="discord-profile-spotify-track" aria-hidden="true"><i data-spotify-fill></i></span><span>' + clock(timing.total) + '</span></div>' : '')
+      + '</div></div></div>';
+    return {{ html: spotify.url ? '<a class="discord-profile-spotify-link" href="' + escapeHtml(spotify.url) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>' : inner, timing: timing }};
+  }};
+  const bindSpotify = (card, timing) => {{
+    // A presence refresh rebinds the progress bar to the track it now shows.
+    stopProfileTimer();
+    if (!timing) return;
+    const fill = card.querySelector("[data-spotify-fill]");
+    const elapsedNode = card.querySelector("[data-spotify-elapsed]");
+    const tick = () => {{
+      const elapsed = Math.min(Math.max(Math.floor(Date.now() / 1000) - timing.start, 0), timing.total);
+      if (fill) fill.style.width = (timing.total > 0 ? (elapsed / timing.total) * 100 : 0) + '%';
+      if (elapsedNode) elapsedNode.textContent = clock(elapsed);
+    }};
+    tick();
+    profileTimer = setInterval(tick, 1000);
+  }};
   const openProfile = (link) => {{
     closeProfile();
     const profile = mentionProfiles[link.dataset.discordUserId];
@@ -854,16 +1088,133 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     const banner = profile.banner_url
       ? '<img class="discord-profile-banner" src="' + escapeHtml(profile.banner_url) + '" alt="">'
       : '<div class="discord-profile-banner" style="background-color:' + (/^#[0-9a-f]+$/i.test(profile.banner_color || '') && profile.banner_color.length === 7 ? profile.banner_color : '#202225') + '"></div>';
-    const avatar = profile.avatar_url
-      ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">' + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '') + '</span>'
-      : '';
+    const avatar = profileAvatar(profile);
+    const statusBubble = profileStatusBubble(profile);
     const guildTag = profile.guild_tag
-      ? '<div class="discord-profile-guild-tag">' + (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span></div>'
+      ? '<span class="discord-profile-guild-tag">' + (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span></span>'
       : '';
-    card.innerHTML = banner + '<div class="discord-profile-body">' + avatar + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>' + guildTag + '<p class="discord-profile-username">' + escapeHtml(profile.username) + '</p>' + (profile.guild_nick ? '<p>Server name: ' + escapeHtml(profile.guild_nick) + '</p>' : '') + (profile.bio ? '<section class="discord-profile-about"><h3>About Me</h3><p>' + escapeHtml(profile.bio) + '</p></section>' : '') + '<a class="discord-profile-full-link" href="https://discord.com/users/' + encodeURIComponent(profile.id) + '" target="_blank" rel="noopener noreferrer">Open Discord profile</a></div>';
+    const badges = (profile.badges || []).map((key) => {{
+      const badge = badgeArt[key];
+      if (!badge || !badge.src) return '';
+      const label = badge.label ? ' alt="" aria-label="' + escapeHtml(badge.label) + '" title="' + escapeHtml(badge.label) + '"' : ' alt=""';
+      return '<button type="button" class="discord-profile-badge-button" data-badge-key="' + escapeHtml(key) + '" aria-haspopup="dialog" aria-expanded="false"' + label + '><img class="discord-profile-badge" src="' + badge.src + '"></button>';
+    }}).join('');
+    const spotify = profileSpotify(profile);
+    const menu = '<div class="discord-profile-menu"><button type="button" class="discord-profile-menu-button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" data-profile-menu-button><span class="discord-profile-menu-dots" aria-hidden="true"><i></i><i></i><i></i></span></button><div class="discord-profile-menu-list" role="menu" hidden><button type="button" class="discord-profile-menu-item" role="menuitem" data-copy-user-id>Copy User ID</button></div></div>';
+    card.innerHTML = banner + menu + '<div class="discord-profile-body">'
+      + '<div class="discord-profile-head">' + avatar + statusBubble + '</div>'
+      + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>'
+      + '<p class="discord-profile-username"><span class="discord-profile-user-tag">' + escapeHtml(profile.username) + '</span>' + guildTag + '</p>'
+      + (badges ? '<div class="discord-profile-badges">' + badges + '</div>' : '')
+      + (profile.bio ? '<section class="discord-profile-about"><h3>About Me</h3><p>' + escapeHtml(profile.bio) + '</p></section>' : '')
+      + '<div data-profile-spotify>' + spotify.html + '</div>'
+      + '<a class="discord-profile-full-link" href="https://discord.com/users/' + encodeURIComponent(profile.id) + '" target="_blank" rel="noopener noreferrer">Open Discord profile</a>'
+      + '</div>';
     popover.appendChild(card);
     document.body.appendChild(popover);
     popover.addEventListener("click", (event) => {{ if (event.target === popover) closeProfile(); }});
+    // A badge click opens the badge popup: the badge art on the left, its name
+    // and description on the right. It is appended to the page instead of the
+    // card, so it renders on top of the profile popup rather than inside it.
+    const badgesRow = card.querySelector('.discord-profile-badges');
+    if (badgesRow) {{
+      const closeBadgePopup = () => {{
+        document.querySelector('.discord-badge-popup')?.remove();
+        badgesRow.querySelectorAll('[data-badge-key]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+      }};
+      const placeBadgePopup = (button) => {{
+        const popup = document.querySelector('.discord-badge-popup');
+        if (!popup) return;
+        const rect = button.getBoundingClientRect();
+        const margin = 12;
+        const gap = 8;
+        const width = popup.offsetWidth;
+        const height = popup.offsetHeight;
+        const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+        const below = rect.bottom + gap;
+        const top = below + height <= window.innerHeight - margin
+          ? below
+          : Math.max(margin, rect.top - height - gap);
+        popup.style.left = left + 'px';
+        popup.style.top = Math.min(top, window.innerHeight - height - margin) + 'px';
+      }};
+      const openBadgePopup = (button) => {{
+        const badge = badgeArt[button.dataset.badgeKey];
+        closeBadgePopup();
+        if (!badge || !badge.src) return;
+        const popup = document.createElement('div');
+        popup.className = 'discord-badge-popup';
+        popup.setAttribute('role', 'dialog');
+        popup.setAttribute('aria-label', escapeHtml(badge.label) + ' badge');
+        popup.innerHTML = '<img class="discord-badge-popup-art" src="' + badge.src + '" alt="">'
+          + '<div class="discord-badge-popup-copy"><strong>' + escapeHtml(badge.label) + '</strong><p>' + escapeHtml(badge.description) + '</p></div>';
+        document.body.appendChild(popup);
+        placeBadgePopup(button);
+        button.setAttribute('aria-expanded', 'true');
+      }};
+      badgesRow.addEventListener('click', (event) => {{
+        const button = event.target.closest('[data-badge-key]');
+        if (!button) return;
+        if (button.getAttribute('aria-expanded') === 'true') closeBadgePopup();
+        else openBadgePopup(button);
+      }});
+      // Keep the floating popup under its badge as the page or the card scrolls,
+      // and close it when the click lands anywhere else.
+      const followBadgePopup = () => {{
+        const button = badgesRow.querySelector('[data-badge-key][aria-expanded="true"]');
+        if (button) placeBadgePopup(button);
+      }};
+      window.addEventListener('resize', followBadgePopup);
+      window.addEventListener('scroll', followBadgePopup, true);
+      document.addEventListener('mousedown', (event) => {{
+        if (event.target instanceof Element && event.target.closest('.discord-badge-popup')) return;
+        closeBadgePopup();
+      }});
+    }}
+    const menuButton = card.querySelector("[data-profile-menu-button]");
+    const menuList = card.querySelector(".discord-profile-menu-list");
+    if (menuButton && menuList) {{
+      menuButton.addEventListener("click", () => {{
+        menuList.hidden = !menuList.hidden;
+        menuButton.setAttribute("aria-expanded", String(!menuList.hidden));
+      }});
+    }}
+    const copyButton = card.querySelector("[data-copy-user-id]");
+    if (copyButton) {{
+      copyButton.addEventListener("click", () => {{
+        const write = navigator.clipboard && navigator.clipboard.writeText
+          ? navigator.clipboard.writeText(String(profile.id))
+          : Promise.reject(new Error("clipboard unavailable"));
+        write.then(() => {{ copyButton.textContent = "Copied!"; }}, () => {{}});
+      }});
+    }}
+    bindSpotify(card, spotify.timing);
+    // Presence moves while the card is open, so an open popup re-reads the same
+    // public endpoint the website popup uses instead of freezing the presence it
+    // was opened with. The embedded snapshot stays the source when the API cannot
+    // be reached: a transcript opened from disk is a file, so the poll only runs
+    // over http(s) and a failed read keeps the last known profile.
+    const profileId = String(profile.id || '');
+    const applyPresence = (next) => {{
+      if (!next || !card.isConnected) return;
+      const head = card.querySelector('.discord-profile-head');
+      if (head) head.innerHTML = profileAvatar(next) + profileStatusBubble(next);
+      const spotifyNode = card.querySelector('[data-profile-spotify]');
+      const nextSpotify = profileSpotify(next);
+      if (spotifyNode) spotifyNode.innerHTML = nextSpotify.html;
+      bindSpotify(card, nextSpotify.timing);
+    }};
+    if (/^\d{{1,22}}$/.test(profileId) && typeof window.fetch === "function" && location.protocol.indexOf("http") === 0) {{
+      const loadPresence = () => {{
+        fetch("/api/discord/users/" + encodeURIComponent(profileId))
+          .then((response) => (response.ok ? response.json() : null))
+          .then(applyPresence)
+          .catch(() => {{}});
+      }};
+      refreshProfilePresence = () => {{ if (document.visibilityState === "visible") loadPresence(); }};
+      document.addEventListener("visibilitychange", refreshProfilePresence);
+      profilePollTimer = setInterval(() => {{ if (document.visibilityState === "visible") loadPresence(); }}, 5000);
+    }}
   }};
   document.addEventListener("click", (event) => {{
     const link = event.target.closest?.("[data-discord-user-id]");
