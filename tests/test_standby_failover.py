@@ -246,7 +246,7 @@ class StandbyFailoverTests(unittest.TestCase):
 
         class Session:
             async def _request(self, method, url, **kwargs):
-                return Response(429, {"CF-Ray": "cloudflare-ray"}, "Cloudflare error 1015")
+                return Response(403, {"Server": "cloudflare", "CF-Ray": "cloudflare-ray"}, "Attention Required!")
 
         class HTTP:
             _HTTPClient__session = None
@@ -303,7 +303,7 @@ class StandbyFailoverTests(unittest.TestCase):
                 self.calls.append(kwargs.get("proxy"))
                 if kwargs.get("proxy"):
                     return Response(200)
-                return Response(429, {"CF-Ray": "cloudflare-ray"}, "Cloudflare error 1015")
+                return Response(403, {"Server": "cloudflare", "CF-Ray": "cloudflare-ray"}, "Attention Required!")
 
         class Proxy:
             def __init__(self, http):
@@ -343,9 +343,7 @@ class StandbyFailoverTests(unittest.TestCase):
             self.assertEqual(200, proxied.status)
             manager.select_standby.assert_awaited_once_with()
             self.assertEqual(1, proxy.enable_calls)
-            # The same request is retried once over the same egress before the
-            # interstitial is treated as a block, so the proxy retry comes third.
-            self.assertEqual([None, None, "http://proxy.example"], session.calls)
+            self.assertEqual([None, "http://proxy.example"], session.calls)
             manager.relay_aiohttp.assert_not_awaited()
 
         asyncio.run(scenario())
@@ -451,9 +449,16 @@ class StandbyFailoverTests(unittest.TestCase):
 
         challenged = upstream(403, "", dict(cf_headers, **{"cf-mitigated": "challenge"}))
         denied = upstream(403, "error code: 1020", cf_headers)
-        page = upstream(429, "<html><title>Attention Required!</title>", cf_headers)
+        page = upstream(403, "<html><title>Attention Required!</title>", cf_headers)
         for response in (challenged, denied, page):
             self.assertTrue(StandbyFailoverManager.is_cloudflare_block(response))
+        # Cloudflare's edge answers a rate-limited request with the same error page,
+        # so a 429 is a throttle and must not be reported as a denied egress.
+        throttled = upstream(429, '<html><div class="cf-error-details">Error 1015</div></html>', cf_headers)
+        self.assertFalse(StandbyFailoverManager.is_cloudflare_block(throttled))
+        # It is still Cloudflare's own page, which is what the REST hook routes
+        # through the proxy egress instead of handing the gateway to a standby.
+        self.assertTrue(StandbyFailoverManager.cloudflare_interstitial(throttled) is not None)
 
     def test_discord_rate_limit_keeps_the_instance_on_its_own_egress(self):
         class Response:
@@ -586,12 +591,13 @@ class StandbyFailoverTests(unittest.TestCase):
         self.assertEqual(302, unreachable.status_code)
         self.assertIn("error=token_exchange_failed", unreachable.headers["Location"])
 
-    def test_single_interstitial_is_retried_before_any_failover(self):
+    def test_cloudflare_edge_rate_limit_keeps_the_instance_on_its_own_egress(self):
         """The production report: a 429 on the first REST call after a restart.
 
-        Discord answers that same call normally on the retry, so the instance
-        keeps its own egress: no standby selection, no gateway handoff, no
-        "Cloudflare ban" state, and no error about standbys being unavailable.
+        Cloudflare's edge throttles that call (its own ``cf-error-details`` page),
+        the Webshare egress answers the retry, and the instance keeps its own route:
+        no standby selection, no gateway handoff, no "Cloudflare ban" state, and no
+        error about standbys being unavailable.
         """
 
         class Response:
@@ -609,22 +615,36 @@ class StandbyFailoverTests(unittest.TestCase):
 
         class Session:
             def __init__(self):
-                self.calls = 0
+                self.calls = []
 
             async def _request(self, method, url, **kwargs):
-                self.calls += 1
-                if self.calls == 1:
-                    return Response(
-                        429,
-                        {"Server": "cloudflare", "CF-Ray": "abc", "Retry-After": "0"},
-                        "<html><title>Attention Required!</title>",
-                    )
-                return Response(200, {"Content-Type": "application/json"}, '{"id":"1"}')
+                self.calls.append(kwargs.get("proxy"))
+                if kwargs.get("proxy"):
+                    return Response(200, {"Content-Type": "application/json"}, '{"id":"1"}')
+                return Response(
+                    429,
+                    {"Server": "cloudflare", "CF-Ray": "abc", "Retry-After": "60"},
+                    '<html><div class="cf-error-details">Error 1015 — you are being rate limited</div></html>',
+                )
+
+        class Proxy:
+            def __init__(self, http):
+                self.http = http
+                self.enable_calls = 0
+
+            async def enable(self):
+                self.enable_calls += 1
+                self.http.proxy = "http://proxy.example"
 
         async def scenario():
+            http = SimpleNamespace(
+                proxy=None,
+                proxy_auth=None,
+                user_agent="DiscordBot (https://example.invalid, 2.7.1)",
+            )
             manager = StandbyFailoverManager()
-            manager.bot = SimpleNamespace(proxy_manager=None)
-            manager.http = SimpleNamespace(proxy=None, proxy_auth=None)
+            manager.bot = SimpleNamespace(http=http, proxy_manager=Proxy(http))
+            manager.http = http
             manager.set_standbys(["https://standby.example"], ["east"])
             session = Session()
             manager._install_hook(session)
@@ -634,10 +654,12 @@ class StandbyFailoverTests(unittest.TestCase):
             response = await session._request("GET", "https://discord.com/api/v10/users/@me")
 
             self.assertEqual(200, response.status)
-            self.assertEqual(2, session.calls)
+            self.assertEqual([None, "http://proxy.example"], session.calls)
+            self.assertEqual(1, manager.bot.proxy_manager.enable_calls)
             manager.select_standby.assert_not_awaited()
             manager.handoff_to_standby.assert_not_awaited()
             self.assertIsNone(manager.active_origin)
+            # A throttle leaves no "Cloudflare ban" state behind.
             self.assertFalse(manager.egress_blocked)
 
         asyncio.run(scenario())
@@ -985,7 +1007,7 @@ class StandbyFailoverTests(unittest.TestCase):
 
         class Session:
             async def _request(self, method, url, **kwargs):
-                return Response(429, {"CF-Ray": "cloudflare-ray"}, "Cloudflare error 1015")
+                return Response(403, {"Server": "cloudflare", "CF-Ray": "cloudflare-ray"}, "Attention Required!")
 
         async def scenario():
             manager = StandbyFailoverManager()
@@ -1002,7 +1024,7 @@ class StandbyFailoverTests(unittest.TestCase):
 
             response = await session._request("GET", "https://discord.com/api/v10/users/@me")
 
-            self.assertEqual(429, response.status)
+            self.assertEqual(403, response.status)
             manager.select_standby.assert_not_awaited()
             manager.handoff_to_standby.assert_not_awaited()
             self.assertIsNone(manager.active_origin)

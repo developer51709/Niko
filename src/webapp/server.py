@@ -805,8 +805,8 @@ def discord_request(method: str, url: str, **kwargs):
     the bot's own User-Agent, and its proxy when one is active, keeps login and
     dashboard traffic on the egress Discord already answers.
 
-    A Cloudflare block is only relayed when a signed relay can actually be sent.
-    Without an active standby origin and the relay secrets, the blocked Discord
+    A Cloudflare interstitial is only relayed when a signed relay can actually be
+    sent. Without an active standby origin and the relay secrets, the Discord
     response is returned untouched so the caller keeps its own error handling
     instead of surfacing a relay misconfiguration as a server error.
     """
@@ -822,7 +822,10 @@ def discord_request(method: str, url: str, **kwargs):
         kwargs["proxies"] = proxies
     manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
     response = getattr(req, method.lower())(url, **kwargs)
-    if manager is None or not manager.is_cloudflare_block(response):
+    # Either interstitial is worth a relay here: a browser call has no Webshare
+    # fallback of its own, and the standby's egress answers both a throttle and a
+    # denied request.
+    if manager is None or manager.cloudflare_interstitial(response) is None:
         return response
     app.logger.warning(
         "Discord %s %s answered HTTP %s with Cloudflare signatures (relay_configured=%s proxy=%s): %.200s",
