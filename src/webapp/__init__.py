@@ -9,6 +9,7 @@ from . import (  # noqa: E402,F401
     team_routes,
     public_routes,
     dashboard_routes,
+    notifier_routes,
     donation_routes,
     discord_text_routes,
     transcript_routes,

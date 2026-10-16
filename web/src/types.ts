@@ -487,6 +487,48 @@ export type PublicStaffApplication = StaffApplication & {
   already_submitted?: boolean;
 };
 
+// ── Social notifier (dashboard notifications tab) ────────────────────────────
+
+export type NotifierPlatform = {
+  id: string;
+  label: string;
+  field_label: string;
+  field_placeholder: string;
+};
+
+export type NotifierFollow = {
+  platform: string;
+  username: string;
+  display: string;
+  channel_id: string | null;
+  template: string;
+  ping_role_id: string | null;
+  enabled: boolean;
+  last_post_id: string | null;
+  failures: number;
+  last_checked_at: string | null;
+};
+
+export type NotifierConfig = {
+  enabled: boolean;
+  default_channel_id: string | null;
+  ping_role_id: string | null;
+};
+
+export type NotifierLimits = {
+  max_follows: number;
+  max_follows_per_platform: number;
+  max_template_length: number;
+  template_placeholders: string[];
+};
+
+export type NotifierResponse = {
+  config: NotifierConfig;
+  follows: NotifierFollow[];
+  platforms: NotifierPlatform[];
+  limits: NotifierLimits;
+};
+
 // ── Documentation types ──────────────────────────────────────────────────────
 
 export type DocCategory =

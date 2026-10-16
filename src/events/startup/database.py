@@ -14,6 +14,36 @@ from utils import logging
 DATABASE_PATH = "data/database.db"
 
 
+async def _migrate_follows(bot):
+    """Add the notify-management columns to an existing follows table.
+
+    MongoDB is schema-less, so the ALTERs are skipped there and the missing
+    fields simply read as their defaults through utils.social.follows.
+    """
+    for column, definition in (
+        ("enabled", "INTEGER NOT NULL DEFAULT 1"),
+        ("ping_role_id", "INTEGER"),
+        ("failures", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_checked_at", "TEXT"),
+    ):
+        try:
+            await bot.cxn.execute(f"ALTER TABLE follows ADD COLUMN {column} {definition}")
+        except Exception:
+            pass  # column already exists
+
+    # Backfill so the dashboard can show health for rows created before the
+    # migration: a paused flag of NULL would render as an unknown state.
+    try:
+        await bot.cxn.execute(
+            "UPDATE follows SET enabled = 1 WHERE enabled IS NULL"
+        )
+        await bot.cxn.execute(
+            "UPDATE follows SET failures = 0 WHERE failures IS NULL"
+        )
+    except Exception:
+        pass
+
+
 async def _create_tables(bot):
     if not bot.cxn:
         return
@@ -58,6 +88,20 @@ async def _create_tables(bot):
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS notifier_config (
+            guild_id           INTEGER PRIMARY KEY,
+            enabled            INTEGER NOT NULL DEFAULT 1,
+            default_channel_id INTEGER,
+            ping_role_id       INTEGER,
+            updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # ── Follows: pause, per-account role ping, custom template, health ──
+    # Older rows keep working: a missing `enabled` reads as paused=False and a
+    # missing `failures` reads as 0, so only new columns need to be added here.
+    await _migrate_follows(bot)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS suggestion_config (
             guild_id  INTEGER PRIMARY KEY,

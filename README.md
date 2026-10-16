@@ -85,7 +85,7 @@ Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personal
 - **Birthdays** — daily birthday announcement task
 - **Highlights** — keyword-based DM notifications
 - **Reminders** — personal scheduled DM reminders
-- **Social notifiers** — YouTube, Twitter/X, TikTok, Bluesky, Reddit feed subscriptions
+- **Social notifiers** — YouTube, Twitch, Twitter/X, TikTok, Bluesky and Reddit feed subscriptions, managed from Discord or the dashboard's per-server **Notifications** tab (pause, resume, test, custom messages and per-account channels)
 
 ### 🎰 Casino
 Blackjack, Slots, Roulette — all with PIL image cards and full economy integration

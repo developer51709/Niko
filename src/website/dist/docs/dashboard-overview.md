@@ -52,6 +52,14 @@ Select a server from **My servers** to manage that server. These sections are pe
 - AI enable/disable
 - Response configuration
 
+### Notifications
+- Follow YouTube, Twitch, Twitter/X, TikTok, Bluesky and Reddit accounts per server
+- Per-account announcement channel, ping role and custom message
+- Send a test notification, pause or resume one account, or switch the whole server off
+- Health badges show how many checks failed and when each account was last checked
+
+Learn more in the [Social Media Notifier guide](/docs/social-notifier).
+
 ## Staff applications and customization
 
 - **Staff applications:** Build role-specific application forms, share public openings with your members, and review or decide on submissions. Learn more in the [Staff Applications guide](/docs/dashboard-staff-applications).

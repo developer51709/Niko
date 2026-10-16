@@ -16,6 +16,7 @@ const sections: [DashSection, string, string, string][] = [
   ["server", "Server", "guild_server", "Manage server features"],
   ["onboarding", "Onboarding", "guild_onboarding", "Welcome and join roles"],
   ["tickets", "Tickets", "guild_tickets", "Support desk and transcripts"],
+  ["notifications", "Notifications", "guild_notifications", "Social announcements"],
   ["applications", "Applications", "guild_applications", "Staff role openings"],
   ["ai", "AI controls", "guild_ai", "Shape Niko’s voice"],
   ["customization", "Customization", "guild_customization", "Niko’s server identity"],

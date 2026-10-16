@@ -142,6 +142,7 @@ PRIMARY_KEYS: dict = {
     "poll_votes": ("message_id", "user_id"),
     "triggers": "id",
     "follows": ("guild_id", "platform", "username"),
+    "notifier_config": "guild_id",
     "youtube": "channel_id",
     "youtube_history": ("channel_id", "video_id"),
     "voicemaster_settings": "guild_id",

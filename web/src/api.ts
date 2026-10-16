@@ -23,6 +23,9 @@ import type {
   BlacklistAppealStatus,
   StandbyFailoverStatus,
   StandbyInstance,
+  NotifierConfig,
+  NotifierFollow,
+  NotifierResponse,
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
   TeamRecruitmentSubmission,
@@ -141,3 +144,26 @@ export function saveProfile(
     body: JSON.stringify(body),
   });
 }
+
+// ── Social notifier (dashboard notifications tab) ────────────────────────────
+// An empty string clears the stored channel or role; omitting a key leaves it
+// untouched, so each edit sends only the field it actually changes.
+
+export const getGuildNotifier = (id: string) => api<NotifierResponse>(`/api/guild/${id}/notifier`);
+export const saveNotifierConfig = (
+  id: string,
+  body: { enabled?: boolean; default_channel_id?: string | null; ping_role_id?: string | null },
+  csrfToken?: string,
+) => api<{ ok: boolean; config: NotifierConfig }>(`/api/guild/${id}/notifier/config`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const addNotifierFollow = (
+  id: string,
+  body: { platform: string; query: string; channel_id?: string | null; ping_role_id?: string | null; template?: string },
+  csrfToken?: string,
+) => api<{ ok: boolean; created: boolean; follow: NotifierFollow }>(`/api/guild/${id}/notifier/follows`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const updateNotifierFollow = (
+  id: string,
+  body: { platform: string; username: string; channel_id?: string | null; ping_role_id?: string | null; template?: string; enabled?: boolean },
+  csrfToken?: string,
+) => api<{ ok: boolean; follow: NotifierFollow }>(`/api/guild/${id}/notifier/follows/update`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const removeNotifierFollow = (id: string, platform: string, username: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/guild/${id}/notifier/follows/${encodeURIComponent(platform)}/${encodeURIComponent(username)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const testNotifierFollow = (id: string, platform: string, username: string, csrfToken?: string) => api<{ ok: boolean; delivered: boolean; message?: string; channel?: string }>(`/api/guild/${id}/notifier/test`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ platform, username }) });

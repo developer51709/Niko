@@ -676,10 +676,79 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Announce command
     # -------------------------------
-    @commands.command(name="announce", help="Send the community policy announcement in this channel.")
+    #: The release ``.staff announce`` announces. The docs page and the changelog
+    #: entry are named in one place, so the buttons can never point at a page that
+    #: was renamed or retired alongside the update.
+    UPDATE_TITLE = "Twitch alerts & a Notifications tab"
+    UPDATE_DOCS_URL = f"{links.DOCS}/social-notifier"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/notifier-dashboard-tab"
+
+    @commands.command(name="announce", help="Announce the latest Niko update (or `policy`) in this channel.")
     @is_owner()
-    async def announce(self, ctx):
-        """Send a predefined announcement to the current channel."""
+    async def announce(self, ctx, topic: str = ""):
+        """Announce a release, with links to its docs page and changelog entry.
+
+        ``.staff announce`` posts the current update, ``.staff announce policy``
+        posts the community policy notice.
+        """
+        topic = (topic or "update").strip().lower()
+        if topic in ("update", "updates"):
+            view = self._update_announcement_view()
+        elif topic == "policy":
+            view = self._policy_view()
+        else:
+            return await ctx.send(
+                "Usage: `.staff announce` for the latest update, or "
+                "`.staff announce policy` for the community policy."
+            )
+        # delete original message
+        await ctx.message.delete()
+        await ctx.send(view=view)
+
+    def _update_announcement_view(self) -> discord.ui.LayoutView:
+        """The current release announcement, with its docs and changelog links."""
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"## **@everyone — {self.UPDATE_TITLE}**"
+            ),
+            discord.ui.TextDisplay(
+                content=(
+                    "**Twitch is here.** Niko can now announce a channel **going live**, and falls "
+                    "back to its newest broadcast when it is offline.\n\n"
+                    "**Every server has a Notifications tab.** Add an account by pasting a profile "
+                    "link, give each one its own channel, ping role and custom message, send a test, "
+                    "and pause or resume it in one click.\n\n"
+                    "- **New:** Twitch live alerts, next to YouTube, Twitter/X, TikTok, Bluesky and Reddit\n"
+                    "- **New:** a per-server Notifications tab with test, pause and resume\n"
+                    "- **Better:** one request per creator no matter how many servers follow them, and a "
+                    "feed that stops working is paused automatically instead of failing silently"
+                )
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content="-# Manage it in the dashboard, or with `.notifier` in Discord."
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="Read the docs",
+                    style=discord.ButtonStyle.link,
+                    url=self.UPDATE_DOCS_URL,
+                    emoji=get_emoji("link")
+                ),
+                discord.ui.Button(
+                    label="What's new",
+                    style=discord.ButtonStyle.link,
+                    url=self.UPDATE_CHANGELOG_URL,
+                    emoji=get_emoji("megaphone")
+                )
+            )
+        ))
+        return view
+
+    def _policy_view(self) -> discord.ui.LayoutView:
+        """The community policy notice, kept for servers that still need it."""
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -709,9 +778,7 @@ class OwnerCog(commands.Cog):
             )
         )
         view.add_item(container)
-        # delete original message
-        await ctx.message.delete()
-        await ctx.send(view=view)
+        return view
 
     # -------------------------------
     # Dev01 command

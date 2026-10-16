@@ -4,6 +4,7 @@ import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
+import { NotifierView } from "../components/dashboard/NotifierView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { AchievementsView } from "../components/dashboard/AchievementsView";
 import { EconomyView } from "../components/dashboard/EconomyView";
@@ -56,6 +57,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "onboarding") return <OnboardingView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "tickets") return <TicketsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
+  if (section === "notifications") return <NotifierView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "applications") return <StaffApplicationsView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
