@@ -40,7 +40,13 @@ function AchievementCard({ entry }: { entry: AchievementEntry }) {
       <span className="achievement-bar-fill" style={{ width: `${percent}%` }} />
     </div>
     <div className="achievement-foot">
-      <span>{formatNumber(entry.progress.current)} / {formatNumber(entry.progress.target)}</span>
+      <span>
+        {formatNumber(entry.progress.current)} / {formatNumber(entry.progress.target)}
+        {/* A seasonal badge counts inside its window only, and the bar is the
+            in-window measure, so the number is labelled rather than left to
+            read like a lifetime total. */}
+        {entry.season?.active && !entry.unlocked ? " this event" : ""}
+      </span>
       <span className="achievement-reward">
         {entry.unlocked ? <Icon name="check" /> : <Icon name="lock" />}
         {formatNumber(entry.reward)} <CoinLabel />{entry.unlocked ? " paid" : ""}

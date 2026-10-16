@@ -653,7 +653,11 @@ async def _commands_text(
     for cog_name in cog_names:
         cog = bot.get_cog(cog_name)
         if cog:
-            commands_list.extend(cog.get_commands())
+            # Hidden commands (for example .dmpurge) are operator tooling: the
+            # help menu must not advertise them even from a listed cog.
+            commands_list.extend(
+                cmd for cmd in cog.get_commands() if not getattr(cmd, "hidden", False)
+            )
 
     if not commands_list:
         return _ui(lang, "no_commands"), 1

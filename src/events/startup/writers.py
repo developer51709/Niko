@@ -175,6 +175,11 @@ def write_commands(bot):
             return usage
 
         def add_command(cmd, command_type, name, cog_name=None, context_type=None, subcommands=None):
+            # Hidden commands are operator tooling (for example .dmpurge, which
+            # only runs in DMs). They must never reach data/commands.json, which
+            # is what the public commands page and the command counts read.
+            if getattr(cmd, "hidden", False):
+                return
             parameters = command_parameters(cmd)
             callback = getattr(cmd, "callback", None)
             commands_data.append({

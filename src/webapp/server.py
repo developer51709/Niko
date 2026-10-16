@@ -1561,6 +1561,49 @@ def _discord_guild_profile_assets(guild_id: str) -> dict:
     return {"avatar_url": str(avatar) if avatar else None, "banner_url": str(banner) if banner else None}
 
 
+def _global_profile_assets() -> dict:
+    """Resolve Niko's global (application-wide) avatar and banner.
+
+    The per-guild profile is what a server sets for itself; until a server sets
+    one, the dashboard shows Niko's global identity instead. Each image is
+    resolved independently: the live bot user is authoritative, and a REST
+    ``/users/@me`` read fills in whichever field the cached user object does not
+    carry (the gateway payload only includes a banner when one is set).
+    """
+    user = getattr(_discord_bot, "user", None) if _discord_bot is not None else None
+    avatar_url = None
+    banner_url = None
+    if user is not None:
+        avatar_url = str(getattr(getattr(user, "display_avatar", None), "url", "") or "") or None
+        banner_url = str(getattr(getattr(user, "banner", None), "url", "") or "") or None
+
+    if (avatar_url and banner_url) or not DISCORD_BOT_TOKEN:
+        return {"avatar_url": avatar_url, "banner_url": banner_url}
+
+    try:
+        response = discord_request(
+            "GET",
+            f"{DISCORD_API}/users/@me",
+            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            timeout=8,
+        )
+        if response.status_code == 200:
+            payload = response.json()
+            user_id = str(payload.get("id") or getattr(user, "id", "") or "")
+            avatar_hash = payload.get("avatar")
+            banner_hash = payload.get("banner")
+            if not avatar_url and avatar_hash and user_id:
+                extension = "gif" if str(avatar_hash).startswith("a_") else "png"
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{extension}?size=512"
+            if not banner_url and banner_hash and user_id:
+                extension = "gif" if str(banner_hash).startswith("a_") else "png"
+                banner_url = f"https://cdn.discordapp.com/banners/{user_id}/{banner_hash}.{extension}?size=1024"
+    except Exception:
+        pass
+
+    return {"avatar_url": avatar_url, "banner_url": banner_url}
+
+
 def _get_runtime_guild_profile(guild_id: str) -> dict:
     """Read profile text/style from storage and images directly from Discord."""
     assets = _discord_guild_profile_assets(guild_id)
@@ -1672,6 +1715,9 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "logging": logging_config,
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
         "profile": _get_runtime_guild_profile(guild_id),
+        # Niko's own identity, so the customization tab can show what a server
+        # inherits until it uploads its own avatar or banner.
+        "global_profile": _global_profile_assets(),
     }
 
 

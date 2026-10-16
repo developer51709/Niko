@@ -115,3 +115,17 @@ def season_open(meta: dict, now=None) -> bool:
     """Whether a badge may unlock right now. Always true without a season."""
     status = season_status(meta, now)
     return status is None or bool(status["active"])
+
+
+def season_open_key(meta: dict, now=None) -> str | None:
+    """Identify the window that is open right now, or ``None`` while it is shut.
+
+    The key is the opening date (``YYYY-MM-DD``) of the occurrence that is open.
+    Progress that has to be earned inside a window is stored against this key,
+    because the same badge comes back every year: last October's totals must not
+    seed this October's badge.
+    """
+    status = season_status(meta, now)
+    if status is None or not status["active"]:
+        return None
+    return dt.datetime.fromtimestamp(status["starts_at"]).strftime("%Y-%m-%d")

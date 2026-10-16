@@ -64,22 +64,26 @@ class EconomyCog(
             log.warning("Economy", f"Rejected non-integer user_id: {user_id!r}")
             return _migrate_user(_default_user())
         uid = str(user_id)
-        
+
         # Check cache first
         if uid in self.economy_data:
-            return _migrate_user(self.economy_data[uid])
-        
-        # Try to load from database
-        data = await _get_user_from_db(self.bot, user_id)
-        if data:
-            self.economy_data[uid] = data
-            return _migrate_user(data)
-        
-        # Create new user
-        default = _default_user()
-        self.economy_data[uid] = default
-        await _save_user_to_db(self.bot, user_id, default)
-        return _migrate_user(default)
+            data = self.economy_data[uid]
+        else:
+            # Try to load from database
+            data = await _get_user_from_db(self.bot, user_id)
+            if data:
+                self.economy_data[uid] = data
+            else:
+                # Create new user
+                data = _default_user()
+                self.economy_data[uid] = data
+                await _save_user_to_db(self.bot, user_id, data)
+
+        # The account is handed to the command now and the command is what will
+        # move the counters, so this is the last moment a seasonal badge's
+        # window baseline can still be the value the window opened with.
+        ensure_season_baselines(data)
+        return _migrate_user(data)
 
     async def save_user_economy_data(self, user_id) -> None:
         """Save a single user's data to database."""

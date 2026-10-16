@@ -41,8 +41,8 @@ TOPGG_LOGO_URL = "/topgg.svg"
 # of achievements, which is not enough to render progress bars.
 _ACCOUNT_COLUMNS = (
     "user_id, balance, bank, level, job, daily_streak, total_earned, total_spent, "
-    "times_worked, bank_tier, achievements, transactions, votes, vote_streak, "
-    "best_vote_streak, last_vote"
+    "times_worked, bank_tier, achievements, transactions, season_progress, "
+    "votes, vote_streak, best_vote_streak, last_vote"
 )
 
 
@@ -61,6 +61,16 @@ def _json_list(value) -> list:
         except (TypeError, ValueError):
             return []
     return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _json_map(value) -> dict:
+    """Accept a JSON object column as a string (SQLite) or a mapping (MongoDB)."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value or "{}")
+        except (TypeError, ValueError):
+            return {}
+    return dict(value) if isinstance(value, dict) else {}
 
 
 def _read_account(user_id: str) -> dict | None:
@@ -189,11 +199,17 @@ def achievement_entries(account: dict | None, now=None) -> list[dict]:
     opens on what the member can still win. A seasonal badge also carries its
     window, which is how the tab explains a badge that is out of reach today.
     """
-    account = account or {}
+    # A raw SQLite row keeps the JSON columns as strings, and the seasonal
+    # baselines have to be a mapping for the window measurements below.
+    account = {**(account or {}), "season_progress": _json_map((account or {}).get("season_progress"))}
     unlocked = set(_json_list(account.get("achievements")))
     entries = []
     for achievement_id, meta in ACHIEVEMENTS.items():
-        current, target = achievement_progress(meta, account)
+        # ``achievement_id`` + ``now`` keep a seasonal badge's bar measured the
+        # same way the bot measures it: inside its own window only.
+        current, target = achievement_progress(
+            meta, account, now=now, achievement_id=achievement_id
+        )
         entries.append({
             "id": achievement_id,
             "name": meta["name"],

@@ -52,6 +52,13 @@ Some badges only count during a real-world event, and each one comes back every 
 
 A seasonal badge can only be collected while its own window is open, so a badge that is out of season shows what it would need and when the event returns. The bot checks them the same way on every economy action, so a qualifying account earns the badge on its next shift, daily claim, purchase or vote inside the window.
 
+Progress is measured inside the window as well, so nothing can be prepared for an event ahead of time:
+
+- A badge that asks you to spend counts only what you spend once the event is open, never a lifetime total.
+- A milestone badge has to be reached during the event. An account that is already past the target needs one more step inside the window.
+- A badge that asks you to hold something reads that state while the event is open.
+- An out-of-season badge always shows an empty bar, and each new occurrence starts from scratch — last year's progress never counts for this year's badge.
+
 ## The only economy setting
 
 There is exactly one economy option in the dashboard, and it is not per server: **leaderboard privacy**, on the personal Overview tab. It posts to `POST /api/me/economy-privacy` with `{"leaderboard_private": true}` or `{"leaderboard_private": false}`.

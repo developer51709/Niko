@@ -100,3 +100,9 @@ purge_limiter = RateLimiter(rate=1, per=1.1)
 # member updates per second leaves headroom for Discord's role endpoint while
 # still completing normal moderation jobs in a reasonable amount of time.
 mass_role_limiter = RateLimiter(rate=2, per=1.0)
+
+# One bucket per DM channel — used by .dmpurge. A DM has no bulk-delete
+# endpoint, so every message is a single DELETE request. Discord gives that
+# route roughly five requests per five seconds per channel; we stay just below
+# it so a long purge does not flood the console with rate-limit warnings.
+dm_purge_limiter = RateLimiter(rate=4, per=5.0)

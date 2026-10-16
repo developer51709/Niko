@@ -327,12 +327,19 @@ export type GuildProfile = {
   name_colors?: number[];
 };
 
+/** Niko's application-wide avatar and banner, shown until a server sets its own. */
+export type GlobalProfile = {
+  avatar_url?: string | null;
+  banner_url?: string | null;
+};
+
 export type ServerConfig = {
   prefixes: string[];
   onboarding: OnboardingConfig;
   logging: LoggingConfig;
   tickets: TicketConfig;
   profile: GuildProfile;
+  global_profile?: GlobalProfile;
 };
 
 export type GuildConfig = {

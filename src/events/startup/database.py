@@ -494,6 +494,7 @@ async def _create_tables(bot):
             lottery_tickets  INTEGER DEFAULT 0,
             transactions     TEXT    DEFAULT '[]',
             achievements     TEXT    DEFAULT '[]',
+            season_progress  TEXT    DEFAULT '{}',
             votes            INTEGER DEFAULT 0,
             vote_streak      INTEGER DEFAULT 0,
             best_vote_streak INTEGER DEFAULT 0,
@@ -525,7 +526,16 @@ async def _create_tables(bot):
     except Exception:
         pass  # column already exists; MongoDB is schema-less
 
-    # …and the top.gg voting counters added by the vote reward system.
+    # …the per-season baselines behind the seasonal badges (a badge may only be
+    # advanced inside its own event window), and the top.gg voting counters
+    # added by the vote reward system.
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE economy_users ADD COLUMN season_progress TEXT DEFAULT '{}'"
+        )
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
+
     for vote_column in ("votes", "vote_streak", "best_vote_streak", "last_vote"):
         try:
             await bot.cxn.execute(

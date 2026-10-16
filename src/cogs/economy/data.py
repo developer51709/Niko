@@ -30,7 +30,7 @@ from utils.paginator import PaginatedView, paginate
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from config.emojis import get_emoji
-from .seasons import season_open
+from .seasons import season_open, season_open_key
 from utils.economy_jobs import (
     JOBS, DEFAULT_JOB, get_job,
     SHOP_ITEMS, get_item,
@@ -146,6 +146,9 @@ def _default_user() -> dict:
         "transactions":  [],
         # achievements (list of ids)
         "achievements":  [],
+        # per-season baselines for the seasonal badges:
+        # {achievement_id: {"window": "YYYY-MM-DD", "value": int}}
+        "season_progress": {},
     }
 
 
@@ -168,6 +171,11 @@ def _migrate_user(data: dict) -> dict:
     elif not isinstance(inv, dict):
         data["inventory"] = {}
 
+    # A stored baseline blob that is not a mapping (legacy or hand-edited row)
+    # would break the seasonal reads, so it is replaced rather than trusted.
+    if not isinstance(data.get("season_progress"), dict):
+        data["season_progress"] = {}
+
     # always recompute net worth on access
     data["net_worth"] = int(data.get("balance", 0)) + int(data.get("bank", 0))
     return data
@@ -180,6 +188,9 @@ def _migrate_user(data: dict) -> dict:
 #                               drawn with that logo instead of its emoji
 #   season                      optional event window; the badge only unlocks
 #                               while it is open (see cogs/economy/seasons.py)
+#   season_measure              how a seasonal badge is measured inside its
+#                               window ("hold" / "gain" / "reach"); see the
+#                               seasonal measurement note below
 #   test(data)                  whether the badge is earned
 #   progress(data)              (current, target) for the dashboard bars
 #   reward                      coins paid ONCE, the moment the badge unlocks
@@ -187,6 +198,25 @@ def _migrate_user(data: dict) -> dict:
 # The reward is why this table is data instead of prose: the balance is
 # credited exactly when the id joins ``data["achievements"]``, and that stored
 # id list is what stops a second payout on the next save.
+#
+# Seasonal measurement. A badge with a ``season`` carries a ``season_measure``
+# that says how its metric is allowed to reach its target:
+#
+#   "hold"   the metric is a live state ("hold 25,000 in your vault"): the badge
+#            is earned by showing that state while the event is on, because that
+#            is what the condition means. Progress reads the state itself, and
+#            the state is never read outside the window.
+#   "gain"   the metric is a lifetime accumulator ("spend 5,000 during the
+#            event"): only what accumulated after the window opened counts, so a
+#            spending spree from another month cannot buy the badge.
+#   "reach"  the metric is a monotonic milestone ("reach career level 25"): the
+#            target has to be crossed after the window opened. An account
+#            already past it has to gain one more step during the event, which
+#            keeps a long-standing member's badge reachable instead of dead.
+#
+# The two window measures read a baseline — the metric's value when the current
+# window opened — from ``ensure_season_baselines``, keyed by the window's opening
+# date so next year's event starts from zero instead of inheriting this year.
 
 # ── top.gg logo ─────────────────────────────────────────────────────────────
 # Voting badges show the listing site's own logo, registered as an application
@@ -426,13 +456,15 @@ ACHIEVEMENTS = {
     },
     # ── Seasonal events ──────────────────────────────────────────────────
     # Each window is an inclusive MM-DD range in local time and repeats every
-    # year. A seasonal badge is only evaluated while its window is open, so it
-    # cannot be collected off-season — the dashboard shows the condition it
-    # would need and when the event returns.
+    # year. A seasonal badge is only evaluated while its window is open, and
+    # everything it measures is measured *inside* that window, so it cannot be
+    # collected — or prepared — off-season. See the measurement note above
+    # the badge table for what each ``season_measure`` means.
     "spooky_vault": {
         "name": "Pumpkin Vault", "emoji": "🎃", "reward": 2_500,
         "description": "Hold 25,000 coins in your vault during the Halloween event (Oct 24 – Nov 1).",
         "season": {"label": "Halloween", "start": "10-24", "end": "11-01"},
+        "season_measure": "hold",
         "test": lambda d: int(d.get("bank", 0)) >= 25_000,
         "progress": lambda d: (int(d.get("bank", 0)), 25_000),
     },
@@ -440,6 +472,7 @@ ACHIEVEMENTS = {
         "name": "Trick or Treat", "emoji": "🍬", "reward": 1_500,
         "description": "Spend 5,000 coins during the Halloween event (Oct 24 – Nov 1).",
         "season": {"label": "Halloween", "start": "10-24", "end": "11-01"},
+        "season_measure": "gain",
         "test": lambda d: int(d.get("total_spent", 0)) >= 5_000,
         "progress": lambda d: (int(d.get("total_spent", 0)), 5_000),
     },
@@ -447,6 +480,7 @@ ACHIEVEMENTS = {
         "name": "Winter Warmth", "emoji": "❄️", "reward": 5_000,
         "description": "Hold a 14-day daily streak during the winter event (Dec 15 – Jan 2).",
         "season": {"label": "Winter", "start": "12-15", "end": "01-02"},
+        "season_measure": "hold",
         "test": lambda d: int(d.get("daily_streak", 0)) >= 14,
         "progress": lambda d: (int(d.get("daily_streak", 0)), 14),
     },
@@ -454,6 +488,7 @@ ACHIEVEMENTS = {
         "name": "Holiday Shopper", "emoji": "🎁", "reward": 3_000,
         "description": "Spend 25,000 coins during the winter event (Dec 15 – Jan 2).",
         "season": {"label": "Winter", "start": "12-15", "end": "01-02"},
+        "season_measure": "gain",
         "test": lambda d: int(d.get("total_spent", 0)) >= 25_000,
         "progress": lambda d: (int(d.get("total_spent", 0)), 25_000),
     },
@@ -461,6 +496,7 @@ ACHIEVEMENTS = {
         "name": "Midnight Ambition", "emoji": "🎆", "reward": 7_500,
         "description": "Reach career level 25 during the New Year event (Dec 31 – Jan 7).",
         "season": {"label": "New Year", "start": "12-31", "end": "01-07"},
+        "season_measure": "reach",
         "test": lambda d: int(d.get("level", 0)) >= 25,
         "progress": lambda d: (int(d.get("level", 0)), 25),
     },
@@ -468,6 +504,7 @@ ACHIEVEMENTS = {
         "name": "Heart of Gold", "emoji": "💝", "reward": 5_000,
         "description": "Keep 50,000 coins in your wallet during the Valentine's event (Feb 10 – Feb 18).",
         "season": {"label": "Valentine's", "start": "02-10", "end": "02-18"},
+        "season_measure": "hold",
         "test": lambda d: int(d.get("balance", 0)) >= 50_000,
         "progress": lambda d: (int(d.get("balance", 0)), 50_000),
     },
@@ -475,14 +512,145 @@ ACHIEVEMENTS = {
         "name": "Summer Streak", "emoji": "🌞", "reward": 5_000,
         "description": "Hold a 30-day daily streak during the summer event (Jun 20 – Sep 5).",
         "season": {"label": "Summer", "start": "06-20", "end": "09-05"},
+        "season_measure": "hold",
         "test": lambda d: int(d.get("daily_streak", 0)) >= 30,
         "progress": lambda d: (int(d.get("daily_streak", 0)), 30),
     },
 }
 
 
-def achievement_progress(meta: dict, data: dict) -> tuple[int, int]:
-    """Return a clamped ``(current, target)`` pair for a badge progress bar."""
+def _season_state(data: dict) -> dict:
+    """The stored per-season baselines, created on demand."""
+    state = data.get("season_progress")
+    if not isinstance(state, dict):
+        state = {}
+        data["season_progress"] = state
+    return state
+
+
+def _season_tracks_change(meta: dict) -> bool:
+    """Whether a seasonal badge must be earned *again* inside each window."""
+    return (meta.get("season_measure") or "hold") in ("gain", "reach")
+
+
+def _season_requirement(meta: dict, baseline: int, target: int) -> int:
+    """How much the metric has to gain inside the window."""
+    if meta.get("season_measure") == "reach":
+        # A milestone wants the remaining shortfall; an account already past it
+        # still has to take one step during the event rather than collect free.
+        return max(1, int(target) - int(baseline))
+    return max(1, int(target))
+
+
+def ensure_season_baselines(data: dict, *, now=None) -> None:
+    """Record the value each open seasonal window starts from.
+
+    Called before an economy command acts on the account, so a window's baseline
+    is the value it opened with rather than the value left over after the
+    action. A baseline is written once per window: a new occurrence gets a new
+    key, and an account that has not acted inside the window yet simply has no
+    baseline and therefore no in-window progress to claim.
+    """
+    state = _season_state(data)
+    for achievement_id, meta in ACHIEVEMENTS.items():
+        if not meta.get("season") or not _season_tracks_change(meta):
+            continue
+        key = season_open_key(meta, now)
+        if key is None:
+            continue
+        entry = state.get(achievement_id)
+        if isinstance(entry, dict) and str(entry.get("window") or "") == key:
+            continue
+        try:
+            value = int(meta["progress"](data)[0])
+        except Exception:
+            continue
+        state[achievement_id] = {"window": key, "value": value}
+
+
+def seasonal_progress(
+    meta: dict,
+    data: dict,
+    *,
+    now=None,
+    achievement_id: str | None = None,
+) -> tuple[int, int] | None:
+    """``(current, target)`` for a seasonal badge, measured inside its window.
+
+    ``None`` for a badge that carries no season, so callers can fall back to the
+    plain progress bar. A badge whose window is closed reports ``(0, target)``:
+    a seasonal badge cannot be advanced, or even prepared, off-season.
+    """
+    if not meta.get("season"):
+        return None
+    try:
+        value, target = meta["progress"](data)
+    except Exception:
+        return None
+    value, target = max(0, int(value)), max(1, int(target))
+    if season_open_key(meta, now) is None:
+        return (0, target)
+    if not _season_tracks_change(meta):
+        # "hold": the live state *is* the progress while the event is on.
+        return (min(value, target), target)
+
+    key = season_open_key(meta, now)
+    entry = _season_state(data).get(achievement_id or str(meta.get("name") or ""))
+    if not isinstance(entry, dict) or str(entry.get("window") or "") != key:
+        # No baseline for this occurrence: there is no in-window gain on record.
+        return (0, max(1, target))
+    try:
+        baseline = int(entry.get("value"))
+    except (TypeError, ValueError):
+        return (0, max(1, target))
+    required = _season_requirement(meta, baseline, target)
+    return (max(0, min(value - baseline, required)), required)
+
+
+def seasonal_earned(
+    meta: dict,
+    data: dict,
+    *,
+    now=None,
+    achievement_id: str | None = None,
+) -> bool:
+    """Whether a seasonal badge is earned inside its own window.
+
+    False while the window is closed, and false for an account that has not met
+    the window's requirement yet, which is what makes a seasonal badge
+    impossible to bank off-season.
+    """
+    if season_open_key(meta, now) is None:
+        return False
+    try:
+        if not meta["test"](data):
+            return False
+    except Exception:
+        return False
+    progress = seasonal_progress(meta, data, now=now, achievement_id=achievement_id)
+    if progress is None:
+        return False
+    current, target = progress
+    return current >= target
+
+
+def achievement_progress(
+    meta: dict,
+    data: dict,
+    *,
+    now=None,
+    achievement_id: str | None = None,
+) -> tuple[int, int]:
+    """Return a clamped ``(current, target)`` pair for a badge progress bar.
+
+    A seasonal badge is measured inside its window only (see
+    :func:`seasonal_progress`); ``now`` pins the moment for a caller that
+    already knows it, and ``achievement_id`` names the badge whose window
+    progress is being read.
+    """
+    seasonal = seasonal_progress(meta, data, now=now, achievement_id=achievement_id)
+    if seasonal is not None:
+        return seasonal
     try:
         current, target = meta["progress"](data)
     except Exception:
@@ -499,22 +667,28 @@ def _check_achievements(data: dict, *, now=None) -> list[str]:
     credited here rather than in the command handlers so every path that
     earns a badge — work, daily, gambling, shopping — pays it exactly once.
 
-    A seasonal badge is skipped while its event is closed, so it can only be
-    collected during its own window. ``now`` lets a caller that already knows
-    the moment it is acting on (a vote timestamp, a test) pin that decision.
+    A seasonal badge needs its event to be open *and* its target met inside
+    that window, so neither old progress nor an off-season state can collect
+    it. ``now`` lets a caller that already knows the moment it is acting on (a
+    vote timestamp, a test) pin that decision.
     """
+    ensure_season_baselines(data, now=now)
     earned = set(data.get("achievements", []))
     newly = []
     for aid, meta in ACHIEVEMENTS.items():
         if aid in earned:
             continue
-        if not season_open(meta, now):
-            continue
-        try:
-            if not meta["test"](data):
+        if meta.get("season"):
+            if not seasonal_earned(meta, data, now=now, achievement_id=aid):
                 continue
-        except Exception:
-            continue
+        else:
+            if not season_open(meta, now):
+                continue
+            try:
+                if not meta["test"](data):
+                    continue
+            except Exception:
+                continue
         earned.add(aid)
         label = achievement_label(meta)
         reward = int(meta.get("reward", 0))
@@ -578,20 +752,29 @@ async def _get_user_from_db(bot, user_id: int) -> dict | None:
         if row:
             data = dict(row)
             # Deserialize JSON fields (handle both string and already-deserialized forms)
-            for key in ("inventory", "effects", "transactions", "achievements"):
+            for key in ("inventory", "effects", "season_progress", "transactions", "achievements"):
                 val = data.get(key)
                 if isinstance(val, str):
                     try:
                         data[key] = json.loads(val)
                     except Exception:
-                        data[key] = {} if key in ("inventory", "effects") else []
+                        data[key] = {} if key in _JSON_DICT_FIELDS else []
                 elif val is None:
-                    data[key] = {} if key in ("inventory", "effects") else []
+                    data[key] = {} if key in _JSON_DICT_FIELDS else []
                 # else: already a dict/list (MongoDB mode), keep as-is
-            return _migrate_user(data)
+            data = _migrate_user(data)
+            # The window baseline has to be the value the account had *before*
+            # the command that is about to run, so it is recorded here — on every
+            # load — rather than when the action is already applied.
+            ensure_season_baselines(data)
+            return data
     except Exception as e:
         log.error("Economy", f"Error fetching user {user_id} from database: {e}")
     return None
+
+
+# JSON columns that hold a mapping rather than a list.
+_JSON_DICT_FIELDS = ("inventory", "effects", "season_progress")
 
 
 async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
@@ -610,6 +793,7 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
         effects_json = json.dumps(data.get("effects", {}))
         transactions_json = json.dumps(data.get("transactions", []))
         achievements_json = json.dumps(data.get("achievements", []))
+        season_progress_json = json.dumps(data.get("season_progress", {}))
         
         # Calculate net worth
         net_worth = int(data.get("balance", 0)) + int(data.get("bank", 0))
@@ -622,9 +806,9 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
                 last_crime, last_rob, last_heist, last_slots, last_blackjack,
                 last_roulette, last_casino, last_gamble, last_bet, last_race,
                 last_fight, last_duel, inventory, effects, lottery_tickets,
-                transactions, achievements, votes, vote_streak,
+                transactions, achievements, season_progress, votes, vote_streak,
                 best_vote_streak, last_vote
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             user_id,
             data.get("balance", 100),
@@ -660,6 +844,7 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
             data.get("lottery_tickets", 0),
             transactions_json,
             achievements_json,
+            season_progress_json,
             # Vote state is written on every save, so it must be listed here:
             # INSERT OR REPLACE rewrites the whole row, and an omitted column
             # would silently reset the streak on the next economy command.

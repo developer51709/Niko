@@ -519,10 +519,30 @@ def parse_hex_color(text: str) -> Optional[int]:
         return None
 
 
-def color_to_markdown(color: Optional[int]) -> str:
-    if color is None:
-        return ""
-    return f"`#{color:06X}`"
+def panel_accent_colour(color: Optional[int]) -> Optional[discord.Colour]:
+    """Translate a stored panel color into the container's accent bar.
+
+    The color is a `0xRRGGBB` integer (the dashboard converts the hex input to
+    one, the setup modal uses `parse_hex_color`); a hex string is accepted too,
+    because a config row written before that conversion can still hold one.
+    Anything missing or out of range means "no accent", which is why this
+    returns `None` rather than a fallback color or, worse, a string that would
+    end up in the panel text.
+    """
+    if color is None or isinstance(color, bool):
+        return None
+    if isinstance(color, str):
+        value = parse_hex_color(color)
+        if value is None:
+            return None
+    else:
+        try:
+            value = int(color)
+        except (TypeError, ValueError):
+            return None
+    if not 0 <= value <= 0xFFFFFF:
+        return None
+    return discord.Colour(value)
 
 
 def is_ticket_channel(ctx: commands.Context) -> Optional[dict]:
@@ -648,17 +668,16 @@ class TicketPanelView(discord.ui.LayoutView):
         # Default fallback to english panel labels — admins can override via the modal
         title = cfg.panel_title or MESSAGES["cafe"]["en"]["panel_default_title"]
         desc = cfg.panel_description or MESSAGES["cafe"]["en"]["panel_default_desc"]
-        color_md = color_to_markdown(cfg.panel_color)
 
-        header = f"### {get_emoji('ticket')} {title}"
-        if color_md:
-            header += f" {color_md}"
-
+        # The configured color is the container's accent bar. It used to be
+        # appended to the title as a literal `#RRGGBB` code, which is why an
+        # accent color saved from the dashboard showed up as text instead.
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=header),
+            discord.ui.TextDisplay(content=f"### {get_emoji('ticket')} {title}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=desc),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            accent_colour=panel_accent_colour(cfg.panel_color),
         )
         if cfg.panel_image:
             container.add_item(

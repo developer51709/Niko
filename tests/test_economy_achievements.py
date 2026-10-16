@@ -11,9 +11,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import aiosqlite
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from database import SQLitePool  # noqa: E402
+from events.startup import database as database_setup  # noqa: E402
 from webapp import app  # noqa: E402
 from webapp.economy_routes import TOPGG_LOGO_URL, achievement_entries, economy_summary  # noqa: E402
 from cogs.economy.seasons import season_status, season_window  # noqa: E402
@@ -21,9 +25,12 @@ from cogs.economy.data import (  # noqa: E402
     ACHIEVEMENTS,
     _check_achievements,
     _default_user,
+    _get_user_from_db,
     _migrate_user,
     _save_user_to_db,
     achievement_progress,
+    ensure_season_baselines,
+    seasonal_progress,
 )
 from cogs.economy.voting import apply_vote  # noqa: E402
 
@@ -474,6 +481,274 @@ class SeasonalUnlockTests(unittest.TestCase):
             [tx for tx in data["transactions"] if tx.get("note") == "Pumpkin Vault"],
             [],
         )
+
+
+class SeasonalProgressTests(unittest.TestCase):
+    """A seasonal badge cannot be advanced, or prepared, off-season.
+
+    The badge table used to measure lifetime counters (``total_spent``, ``level``)
+    and read them as-is once the window opened, so a spending spree in July or a
+    level reached in March collected the Halloween and New Year badges for free.
+    """
+
+    HALLOWEEN = dt.datetime(2026, 10, 25)
+    OFF_SEASON = dt.datetime(2026, 6, 1)
+
+    def test_every_seasonal_badge_declares_how_it_is_measured(self):
+        for achievement_id, meta in seasonal_badges().items():
+            with self.subTest(achievement=achievement_id):
+                self.assertIn(meta.get("season_measure"), ("hold", "gain", "reach"))
+        for achievement_id, meta in ACHIEVEMENTS.items():
+            if meta.get("season"):
+                continue
+            with self.subTest(achievement=achievement_id):
+                self.assertNotIn("season_measure", meta)
+
+    def test_off_season_progress_is_zero_and_nothing_unlocks(self):
+        for achievement_id, meta in seasonal_badges().items():
+            with self.subTest(achievement=achievement_id):
+                data = account(bank=10_000_000, balance=10_000_000, level=99, daily_streak=99,
+                               total_spent=10_000_000)
+                _, target = achievement_progress(meta, data, now=self.OFF_SEASON,
+                                                 achievement_id=achievement_id)
+                self.assertEqual(
+                    achievement_progress(meta, data, now=self.OFF_SEASON,
+                                         achievement_id=achievement_id),
+                    (0, target),
+                )
+                _check_achievements(data, now=self.OFF_SEASON)
+                self.assertNotIn(achievement_id, data["achievements"])
+                # Nothing is even recorded to build on when the window opens.
+                self.assertEqual(data["season_progress"], {})
+
+    def test_old_spending_cannot_bank_the_halloween_badge(self):
+        data = account(total_spent=100_000)
+
+        _check_achievements(data, now=self.HALLOWEEN)
+
+        self.assertNotIn("spooky_spender", data["achievements"])
+        self.assertEqual(
+            achievement_progress(ACHIEVEMENTS["spooky_spender"], data, now=self.HALLOWEEN,
+                                 achievement_id="spooky_spender"),
+            (0, 5_000),
+        )
+        # The baseline is the value the window opened with, not zero.
+        self.assertEqual(data["season_progress"]["spooky_spender"]["value"], 100_000)
+
+        data["total_spent"] += 5_000
+        _check_achievements(data, now=self.HALLOWEEN)
+
+        self.assertIn("spooky_spender", data["achievements"])
+
+    def test_a_milestone_must_be_crossed_inside_the_window(self):
+        # Already past the target: one more step during the event earns it, so a
+        # long-standing member's badge is never permanently dead.
+        veteran = account(level=40)
+        _check_achievements(veteran, now=dt.datetime(2027, 1, 1))
+        self.assertNotIn("new_year_level", veteran["achievements"])
+        self.assertEqual(
+            achievement_progress(ACHIEVEMENTS["new_year_level"], veteran, now=dt.datetime(2027, 1, 1),
+                                 achievement_id="new_year_level"),
+            (0, 1),
+        )
+        veteran["level"] = 41
+        _check_achievements(veteran, now=dt.datetime(2027, 1, 2))
+        self.assertIn("new_year_level", veteran["achievements"])
+
+        # Below the target: the climb to 25 has to happen inside the window.
+        climber = account(level=10)
+        _check_achievements(climber, now=dt.datetime(2027, 1, 1))
+        climber["level"] = 24
+        _check_achievements(climber, now=dt.datetime(2027, 1, 2))
+        self.assertNotIn("new_year_level", climber["achievements"])
+        self.assertEqual(
+            achievement_progress(ACHIEVEMENTS["new_year_level"], climber, now=dt.datetime(2027, 1, 2),
+                                 achievement_id="new_year_level"),
+            (14, 15),
+        )
+        climber["level"] = 25
+        _check_achievements(climber, now=dt.datetime(2027, 1, 3))
+        self.assertIn("new_year_level", climber["achievements"])
+
+    def test_a_hold_badge_reads_the_live_state_inside_the_window(self):
+        data = account(bank=30_000)
+
+        # Out of season the same account shows no progress and collects nothing.
+        self.assertEqual(
+            achievement_progress(ACHIEVEMENTS["spooky_vault"], data, now=self.OFF_SEASON,
+                                 achievement_id="spooky_vault"),
+            (0, 25_000),
+        )
+        _check_achievements(data, now=self.OFF_SEASON)
+        self.assertNotIn("spooky_vault", data["achievements"])
+
+        # Holding the state while the event is on is what the badge asks for.
+        _check_achievements(data, now=self.HALLOWEEN)
+        self.assertIn("spooky_vault", data["achievements"])
+        # A "hold" badge reads the live state, so it stores no baseline of its
+        # own — only the window measures do.
+        self.assertNotIn("spooky_vault", data["season_progress"])
+
+    def test_a_new_occurrence_starts_from_a_fresh_baseline(self):
+        data = account(total_spent=106_000)
+        data["season_progress"] = {"spooky_spender": {"window": "2026-10-24", "value": 100_000}}
+
+        _check_achievements(data, now=dt.datetime(2027, 10, 25))
+
+        # Last year's window cannot be spent again this year.
+        self.assertNotIn("spooky_spender", data["achievements"])
+        self.assertEqual(
+            data["season_progress"]["spooky_spender"],
+            {"window": "2027-10-24", "value": 106_000},
+        )
+
+    def test_a_window_with_no_baseline_claims_no_in_window_gain(self):
+        """An account that has not acted inside the window has nothing to claim."""
+        meta = ACHIEVEMENTS["spooky_spender"]
+        data = account(total_spent=500_000)
+
+        self.assertEqual(
+            seasonal_progress(meta, data, now=self.HALLOWEEN, achievement_id="spooky_spender"),
+            (0, 5_000),
+        )
+
+    def test_loading_an_account_records_its_baseline_before_the_command_acts(self):
+        """The baseline has to predate the action, or the first in-window spend
+        of a cached account would be swallowed by its own baseline."""
+
+        class FakePool:
+            async def fetchrow(self, sql, *values):
+                return {
+                    "user_id": 42,
+                    "balance": 100,
+                    "total_spent": 7_000,
+                    "achievements": "[]",
+                    "season_progress": "{}",
+                }
+
+        windows = mock.patch("cogs.economy.data.season_open_key", lambda meta, now=None: "2026-10-24")
+        with windows:
+            data = asyncio.run(_get_user_from_db(SimpleNamespace(cxn=FakePool()), 42))
+            self.assertEqual(data["season_progress"]["spooky_spender"]["value"], 7_000)
+
+            # A spend made by the command that loaded the account still counts.
+            data["total_spent"] += 5_000
+            _check_achievements(data)
+
+        self.assertIn("spooky_spender", data["achievements"])
+
+    def test_a_window_baseline_is_recorded_once_per_occurrence(self):
+        data = account(total_spent=1_000)
+        ensure_season_baselines(data, now=self.HALLOWEEN)
+        first = dict(data["season_progress"]["spooky_spender"])
+
+        data["total_spent"] = 4_000
+        ensure_season_baselines(data, now=self.HALLOWEEN)
+
+        self.assertEqual(data["season_progress"]["spooky_spender"], first)
+
+    def test_the_dashboard_measures_seasonal_bars_inside_the_window(self):
+        stored = account(
+            total_spent=100_000,
+            achievements=json.dumps([]),
+            season_progress={"spooky_spender": {"window": "2026-10-24", "value": 100_000}},
+        )
+
+        def entry(moment, value):
+            account_row = dict(stored)
+            account_row["total_spent"] = value
+            entries = {item["id"]: item for item in achievement_entries(account_row, now=moment)}
+            return entries["spooky_spender"]
+
+        out_of_season = entry(self.OFF_SEASON, 250_000)
+        self.assertFalse(out_of_season["season"]["active"])
+        self.assertEqual(out_of_season["progress"]["current"], 0)
+
+        in_season = entry(self.HALLOWEEN, 102_500)
+        self.assertTrue(in_season["season"]["active"])
+        self.assertEqual(in_season["progress"]["current"], 2_500)
+        self.assertEqual(in_season["progress"]["target"], 5_000)
+
+    def test_a_raw_sqlite_row_still_carries_the_season_baselines(self):
+        """The dashboard reads SQLite rows, where the blob is still a string."""
+        row = account(
+            total_spent=100_000,
+            achievements=json.dumps([]),
+            season_progress=json.dumps({"spooky_spender": {"window": "2026-10-24", "value": 100_000}}),
+        )
+        row["total_spent"] = 104_000
+
+        entries = {item["id"]: item for item in achievement_entries(row, now=self.HALLOWEEN)}
+
+        self.assertEqual(entries["spooky_spender"]["progress"]["current"], 4_000)
+
+    def test_saving_writes_the_season_baselines_and_still_binds_every_column(self):
+        calls = []
+
+        class FakePool:
+            async def execute(self, sql, *values):
+                calls.append((sql, values))
+
+        data = account(season_progress={"spooky_spender": {"window": "2026-10-24", "value": 12_345}})
+        asyncio.run(_save_user_to_db(SimpleNamespace(cxn=FakePool()), 42, data))
+
+        sql, values = calls[0]
+        self.assertIn("season_progress", sql)
+        self.assertIn(json.dumps({"spooky_spender": {"window": "2026-10-24", "value": 12_345}}), values)
+        columns = [column.strip() for column in sql.split("(", 1)[1].split(")", 1)[0].split(",")]
+        self.assertEqual(sql.count("?"), len(columns))
+        self.assertEqual(len(values), len(columns))
+
+
+class SeasonalPersistenceTests(unittest.TestCase):
+    """The window baselines have to survive the real schema and a real save.
+
+    ``_save_user_to_db`` logs and gives up when the statement fails, so a column
+    that the schema does not have would silently drop every baseline — the
+    badge would then look unsatisfied forever instead of reporting an error.
+    """
+
+    def test_the_season_column_exists_and_a_baseline_round_trips(self):
+        async def scenario():
+            connection = await aiosqlite.connect(":memory:")
+            try:
+                pool = SQLitePool(connection)
+                bot = SimpleNamespace(cxn=pool)
+                await database_setup._create_tables(bot)
+
+                async def columns():
+                    rows = await pool.fetch("PRAGMA table_info(economy_users)")
+                    return [str(row["name"]) for row in rows]
+
+                self.assertIn("season_progress", await columns())
+
+                # An installation that predates the column: the stored shape is
+                # the same table without it, so the migration has to add it
+                # while every other column is already present.
+                old = [name for name in await columns() if name != "season_progress"]
+                await connection.execute(
+                    "CREATE TABLE economy_users_old AS SELECT " + ", ".join(old) + " FROM economy_users"
+                )
+                await connection.execute("DROP TABLE economy_users")
+                await connection.execute("ALTER TABLE economy_users_old RENAME TO economy_users")
+                await connection.commit()
+                self.assertNotIn("season_progress", await columns())
+                await database_setup._create_tables(bot)
+                self.assertIn("season_progress", await columns())
+
+                data = account(total_spent=100_000)
+                ensure_season_baselines(data, now=dt.datetime(2026, 10, 25))
+                await _save_user_to_db(bot, 42, data)
+                return await _get_user_from_db(bot, 42)
+            finally:
+                await connection.close()
+
+        stored = asyncio.run(scenario())
+        self.assertEqual(stored["season_progress"]["spooky_spender"]["value"], 100_000)
+        # The stored baseline travels with the account, so the badge still
+        # cannot be collected from spending that happened before the window.
+        _check_achievements(stored, now=dt.datetime(2026, 10, 25))
+        self.assertNotIn("spooky_spender", stored["achievements"])
 
 
 class AchievementProgressBarStyleTests(unittest.TestCase):

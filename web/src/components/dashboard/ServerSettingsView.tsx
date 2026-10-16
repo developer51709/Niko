@@ -1,8 +1,6 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
-import { DiscordMarkdown } from "../DiscordMarkdown";
-import { RoleSelect } from "./RoleSelect";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { DashHeading } from "./DashboardViews";
@@ -11,10 +9,6 @@ import { DashHeading } from "./DashboardViews";
 // toast (see ../../utils/toast) instead of an inline line in the card footer.
 type SaveState = { saving: boolean };
 const initialSave: SaveState = { saving: false };
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
-}
 
 function StringOptionList({ label, hint, options, placeholder, onChange }: {
   label: string;
@@ -61,34 +55,6 @@ function channelLabel(resources: GuildResources | null, id: string | number | nu
   return resources?.channels.find((channel) => String(channel.id) === String(id))?.name || `Saved channel · ${id}`;
 }
 
-function previewColor(value: string) {
-  const hex = value.replace(/^#/, "");
-  return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex}` : "#5865F2";
-}
-
-function ColorPicker({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
-  const [open, setOpen] = useState(false);
-  const color = previewColor(value);
-  const update = (next: string) => onChange(next.replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0, 6));
-  return <div className="color-picker">
-    <div className="color-field-control">
-      <button type="button" className="color-preview" style={{ backgroundColor: color }} onClick={() => setOpen((current) => !current)} aria-label={`Choose ${label.toLowerCase()}`} aria-expanded={open} />
-      <input aria-label={`${label} hex value`} value={value} maxLength={6} onChange={(event) => update(event.target.value)} placeholder="5865F2" />
-    </div>
-    {open && <div className="color-picker-popover" role="dialog" aria-label={`Choose ${label.toLowerCase()}`}>
-      <div className="color-picker-header"><strong>Choose color</strong><button type="button" className="color-picker-close" onClick={() => setOpen(false)} aria-label="Close color picker">×</button></div>
-      <input className="color-picker-native" type="color" value={color} onChange={(event) => update(event.target.value)} />
-      <div className="color-picker-value"><span>#</span><input aria-label={`${label} hex value`} value={value} maxLength={6} onChange={(event) => update(event.target.value)} placeholder="5865F2" /></div>
-    </div>}
-  </div>;
-}
-
-function TicketCategories({ categories, onChange }: { categories: string[]; onChange: (value: string[]) => void }) {
-  return <div className="settings-category-editor"><div className="settings-option-list">
-    {categories.map((category, index) => <div className="settings-option-row" key={`${category}-${index}`}><input aria-label={`Ticket category ${index + 1}`} value={category} maxLength={80} onChange={(event) => onChange(categories.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`Category ${index + 1}`} /><button type="button" className="settings-option-remove" onClick={() => onChange(categories.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ticket category ${index + 1}`}>Remove</button></div>)}
-  </div><button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...categories, ""])}>＋ Add category</button><small>Add a separate option for each kind of support request.</small></div>;
-}
-
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
   const selectedId = selected ? String(selected) : "";
   const channels = resources?.channels || [];
@@ -97,27 +63,12 @@ function channelsWithSelected(resources: GuildResources | null, selected: string
 }
 
 function initialValues(server?: ServerConfig) {
-  const onboarding = server?.onboarding || {};
-  const tickets = server?.tickets || {};
   return {
     prefixes: server?.prefixes?.length ? [...server.prefixes] : ["."],
-    welcome_channel: onboarding.welcome_channel ? String(onboarding.welcome_channel) : "",
-    welcome_title: onboarding.welcome_title || "",
-    welcome_description: onboarding.welcome_description || "",
-    welcome_color: onboarding.welcome_color === null || onboarding.welcome_color === undefined ? "5865F2" : onboarding.welcome_color.toString(16).padStart(6, "0"),
-    welcome_image: onboarding.welcome_image || "",
-    rules_channel: onboarding.rules_channel ? String(onboarding.rules_channel) : "",
-    rules_text: onboarding.rules_text || "",
-    rules_role_id: onboarding.rules_role_id ? String(onboarding.rules_role_id) : "",
     logging: Object.fromEntries(
       Object.entries(server?.logging || {}).map(([key, value]) => [key, value === null || value === undefined ? "" : String(value)]),
     ),
     disabled_logging: [...(server?.logging?.disabled || [])].map(String),
-    panel_title: tickets.panel_title || "",
-    panel_description: tickets.panel_description || "",
-    panel_categories: [...(tickets.panel_categories || [])],
-    panel_channel_id: tickets.panel_channel_id ? String(tickets.panel_channel_id) : "",
-    support_roles: [...(tickets.support_roles || [])].map(String),
   };
 }
 
@@ -130,7 +81,6 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
   }, [config]);
 
   const setValue = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
-  const setWelcomeColor = (value: string) => setValue("welcome_color", value.replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0, 6));
   const setLoggingChannel = (category: string, value: string) => setValues((current) => ({ ...current, logging: { ...current.logging, [category]: value } }));
   const toggleLogging = (category: string) => setValues((current) => ({
     ...current,
@@ -144,29 +94,11 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
     setState({ saving: true });
     notifyLoading("Saving server settings…", "settings-save");
     const prefixes = values.prefixes.map((prefix) => prefix.trim()).filter(Boolean);
-    const categories = values.panel_categories.map((category) => category.trim()).filter(Boolean);
     saveConfig(guildId, "server", {
       prefixes,
-      onboarding: {
-        welcome_channel: values.welcome_channel,
-        welcome_title: values.welcome_title,
-        welcome_description: values.welcome_description,
-        welcome_color: values.welcome_color,
-        welcome_image: values.welcome_image,
-        rules_channel: values.rules_channel,
-        rules_text: values.rules_text,
-        rules_role_id: values.rules_role_id,
-      },
       logging: {
         ...values.logging,
         disabled: values.disabled_logging,
-      },
-      tickets: {
-        panel_title: values.panel_title,
-        panel_description: values.panel_description,
-        panel_categories: categories,
-        panel_channel_id: values.panel_channel_id,
-        support_roles: values.support_roles,
       },
     }, csrfToken).then((result) => {
       setValues(initialValues(result.config as ServerConfig));
@@ -178,40 +110,16 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
     });
   };
 
-  const welcomeChannel = values.welcome_channel;
-  const ticketChannel = values.panel_channel_id;
-  const welcomeChannels = channelsWithSelected(resources, values.welcome_channel);
-  const rulesChannels = channelsWithSelected(resources, values.rules_channel);
-  const ticketChannels = channelsWithSelected(resources, values.panel_channel_id);
-
   return <>
     <DashHeading eyebrow="Server settings" title="Make Niko fit your room." text="Manage the settings that shape how Niko behaves in this server. Economy balances remain global to each user and are not configured here." />
-    <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.filter((prefix) => prefix.trim()).length} command prefixes configured</strong><p>Welcome flows, log destinations, and ticket panels all live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
+    <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.filter((prefix) => prefix.trim()).length} command prefixes configured</strong><p>Command prefixes and log destinations live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
     <form onSubmit={submit} className="settings-stack server-settings-stack">
       <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" /><StringOptionList label="Command prefixes" hint="The default prefix is ." options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} /></section>
-
-      <section className="dash-panel settings-panel"><SectionTitle label="Welcome flow" title="Welcome and rules" detail="Choose where new members see your welcome message and rules." icon="users" /><div className="form-grid">
-        <Field label="Welcome channel"><select value={welcomeChannel} onChange={(event) => setValue("welcome_channel", event.target.value)}><option value="">Disabled</option>{welcomeChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
-        <Field label="Welcome title"><input value={values.welcome_title} maxLength={200} onChange={(event) => setValue("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field>
-        <Field label="Welcome message" hint="Supports {user} and {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => setValue("welcome_description", event.target.value)} placeholder="Welcome {user}!" />{values.welcome_description.trim() && <DiscordMarkdown text={values.welcome_description.replace(/\{user\}/g, "@member").replace(/\{name\}/g, "member")} className="role-select-preview" interactiveUsers={false} />}</Field>
-        <Field label="Accent color" hint="Hex color, for example 5865F2"><ColorPicker value={values.welcome_color} label="welcome accent color" onChange={setWelcomeColor} /></Field>
-        <Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => setValue("welcome_image", event.target.value)} placeholder="https://..." /></Field>
-        <Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => setValue("rules_channel", event.target.value)}><option value="">Not configured</option>{rulesChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
-        <Field label="Rules text"><textarea rows={4} maxLength={2000} value={values.rules_text} onChange={(event) => setValue("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." />{values.rules_text.trim() && <DiscordMarkdown text={values.rules_text} className="role-select-preview" interactiveUsers={false} />}</Field>
-        <Field label="Role after rules acknowledgment"><RoleSelect roles={resources?.roles || []} value={values.rules_role_id} placeholder="No role" onChange={(roleId) => setValue("rules_role_id", roleId)} /></Field>
-      </div></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
         {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><label className="setting-row compact-setting-row"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><input type="checkbox" checked={!values.disabled_logging.includes(key)} onChange={() => toggleLogging(key)} /><i aria-hidden="true" /></label></div>; })}
       </div></section>
 
-      <section className="dash-panel settings-panel"><SectionTitle label="Support desk" title="Ticket panel" detail="Configure the public panel and decide who can handle tickets." icon="users" /><div className="form-grid">
-        <Field label="Panel title"><input value={values.panel_title} maxLength={200} onChange={(event) => setValue("panel_title", event.target.value)} placeholder="Open a Ticket" /></Field>
-        <Field label="Panel channel"><select value={ticketChannel} onChange={(event) => setValue("panel_channel_id", event.target.value)}><option value="">Keep current panel channel</option>{ticketChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>
-        <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValue("panel_description", event.target.value)} placeholder="Tell members what the ticket panel is for." />{values.panel_description.trim() && <DiscordMarkdown text={values.panel_description} className="role-select-preview" interactiveUsers={false} />}</Field>
-        <div className="form-grid-wide"><Field label="Ticket categories"><TicketCategories categories={values.panel_categories} onChange={(categories) => setValue("panel_categories", categories)} /></Field></div>
-        <Field label="Support roles" hint="Select the roles that can manage ticket requests."><RoleSelect roles={resources?.roles || []} value={values.support_roles} multiple ariaLabel="Support roles" onChange={(roleIds) => setValue("support_roles", roleIds)} /></Field>
-      </div><p className="form-hint">Saving panel settings updates the existing posted panel when Niko can find its saved message.</p></section>
       <SaveFooter state={state} />
     </form>
   </>;

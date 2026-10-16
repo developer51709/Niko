@@ -4,17 +4,16 @@ The notifier system automatically tracks social media accounts and posts a notif
 
 ## Supported Platforms
 
-| Platform | What it tracks | Credentials | Update interval |
-|----------|---------------|-------------|-----------------|
-| **YouTube** | New videos (via RSS feed) | None | Every 5 minutes |
-| **Twitch** | Streams going live and new broadcasts | App credentials | Every 5 minutes |
-| **Twitter/X** | New tweets | None | Every 5 minutes |
-| **TikTok** | New posts | None | Every 5 minutes |
-| **Bluesky** | New posts | None | Every 5 minutes |
-| **Reddit** | New posts in a subreddit | None | Every 5 minutes |
+| Platform | What it tracks | Update interval |
+|----------|---------------|-----------------|
+| **YouTube** | New videos (via RSS feed) | Every 5 minutes |
+| **Twitch** | Streams going live and new broadcasts | Every 5 minutes |
+| **Twitter/X** | New tweets | Every 5 minutes |
+| **TikTok** | New posts | Every 5 minutes |
+| **Bluesky** | New posts | Every 5 minutes |
+| **Reddit** | New posts in a subreddit | Every 5 minutes |
 
-> **Twitch credentials:** set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` from a [Twitch developer app](https://dev.twitch.tv/console/apps). The same application credentials power the Twitch profile cards on the team page, and Niko only reads public channel data — no user login is ever required.
-> Credentials for a platform with a paid API are never needed: X profile and post lookups use public endpoints instead.
+> **Nothing to set up:** following an account never asks you for an API key or a sign-in. Every platform above is read through public data, and no account you follow needs to authorise Niko.
 
 ## Managing Notifications in the Dashboard
 

@@ -49,6 +49,103 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "seasonal-badges-in-season",
+    title: "Seasonal Badges Only Progress Inside Their Season",
+    date: "2026-10-16",
+    tags: ["economy", "achievements", "events", "fixed"],
+    summary:
+      "Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.",
+    highlights: [
+      {
+        title: "Nothing to Bank Off-Season",
+        description:
+          "A badge that asks you to spend counts only the coins you spend once the event is open, and a milestone badge has to be crossed during the event, so a lifetime total can no longer collect a badge the moment its window opens.",
+        icon: "spark",
+      },
+      {
+        title: "Every Event Starts Fresh",
+        description:
+          "Each window starts from your account as it was when the event opened, so last year's progress never carries into this year's badge.",
+        icon: "refresh",
+      },
+    ],
+    changes: [
+      {
+        category: "fixed",
+        items: [
+          "Seasonal badges no longer count spending or levels earned outside their event window",
+          "An out-of-season seasonal badge reports no progress instead of the account's lifetime total",
+          "Per-event progress is stored against each window, so a new occurrence always starts from zero",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
+    slug: "ticket-panel-accent-color",
+    title: "The Ticket Panel Now Wears Its Accent Color",
+    date: "2026-10-16",
+    tags: ["tickets", "dashboard", "fixed"],
+    summary:
+      "Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.",
+    highlights: [
+      {
+        title: "A Color, Not a Caption",
+        description:
+          "The accent color you save on the Tickets tab colors the panel card itself, and it applies the same way whether you post the panel from Discord or update it from the dashboard. A panel with no color saved simply has no accent.",
+        icon: "paint",
+      },
+    ],
+    changes: [
+      {
+        category: "fixed",
+        items: [
+          "The ticket panel's saved accent color is applied as the panel's accent bar instead of being appended to the title as a hex code",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
+    slug: "guild-settings-tidy-up",
+    title: "Server Settings Hand Tickets and Onboarding to Their Own Tabs",
+    date: "2026-10-16",
+    tags: ["dashboard", "tickets", "onboarding", "customization", "fixed"],
+    summary:
+      "The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.",
+    highlights: [
+      {
+        title: "One Home per Setting",
+        description:
+          "Ticket panel settings live only in the Tickets tab and the welcome, rules and captcha setup lives only in the Onboarding tab, so the Server tab is now just command prefixes and logging destinations — the same screen with the same save button, minus the duplicates.",
+        icon: "settings",
+      },
+      {
+        title: "A Preview That Shows the Real Niko",
+        description:
+          "A server that has not uploaded its own avatar or banner sees Niko's global profile picture and banner in the live preview, and is told that it is inherited. Uploading or pasting an image still gives the server its own identity, and saving never writes Niko's global image into the server's profile.",
+        icon: "paint",
+      },
+    ],
+    changes: [
+      {
+        category: "improved",
+        items: [
+          "The ticket configuration, live queue and transcript cards on the Tickets tab now share the dashboard's card spacing instead of being rendered outside the settings stack",
+          "The Server tab's own description only mentions what it still configures",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "Removed the duplicated ticket panel and welcome/rules settings from the Server tab, which could previously disagree with the values saved on their own tabs",
+          "The Customization tab no longer shows an empty placeholder for a server with no avatar or banner of its own",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
     slug: "blacklist-lockdown",
     title: "Blacklisting a Server Now Pauses Its Features Instead of Erasing Them",
     date: "2026-10-16",
