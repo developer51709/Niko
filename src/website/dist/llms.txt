@@ -9,6 +9,7 @@
 - [Anti-Raid Protection](https://niko.sryze.cc/docs/automod-anti-raid.md)
 - [Anti-Spam Configuration](https://niko.sryze.cc/docs/automod-anti-spam.md)
 - [AutoMod Overview](https://niko.sryze.cc/docs/automod-overview.md)
+- [Blacklists and Appeals](https://niko.sryze.cc/docs/blacklist-and-appeals.md)
 - [Customize Niko's Server Profile](https://niko.sryze.cc/docs/dashboard-customization.md)
 - [Dashboard: Economy & Achievements](https://niko.sryze.cc/docs/dashboard-economy.md)
 - [Dashboard: Leveling Settings](https://niko.sryze.cc/docs/dashboard-leveling.md)
@@ -52,6 +53,7 @@
 
 ## Changelog
 
+- [Blacklisting a Server Now Pauses Its Features Instead of Erasing Them](https://niko.sryze.cc/changelog/blacklist-lockdown.md) — Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.
 - [Twitch Live Alerts and a Dashboard Tab for Social Notifications](https://niko.sryze.cc/changelog/notifier-dashboard-tab.md) — Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.
 - [Team Profiles Get Platform Cards and a Spotify Progress Bar](https://niko.sryze.cc/changelog/team-profile-cards.md) — Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.
 - [Economy & Achievements Move to Your Profile](https://niko.sryze.cc/changelog/personal-economy-tabs.md) — The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.

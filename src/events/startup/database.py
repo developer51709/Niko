@@ -837,6 +837,26 @@ async def _create_tables(bot):
         except Exception:
             pass
     await bot.cxn.execute("UPDATE blacklist_guilds SET status = 'active' WHERE status IS NULL OR status = ''")
+    # What a blacklisted server had switched on, so an approved appeal can put
+    # it back exactly as it was (see utils/guild_lockdown.py).
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_feature_locks (
+            guild_id       INTEGER NOT NULL,
+            feature        TEXT NOT NULL,
+            previous_state TEXT,
+            note           TEXT,
+            locked_at      TEXT,
+            PRIMARY KEY (guild_id, feature)
+        )
+    """)
+    for statement in (
+        "ALTER TABLE polls ADD COLUMN locked INTEGER DEFAULT 0",
+        "ALTER TABLE giveaways ADD COLUMN locked INTEGER DEFAULT 0",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass
     await _migrate_blacklist_data(bot)
 
     # ── Persistent status panels (owner-owned, auto-refreshing) ──────────────────

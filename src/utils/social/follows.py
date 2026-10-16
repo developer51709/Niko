@@ -454,3 +454,25 @@ async def save_notifier_config(
         int(next_role) if next_role else None,
     )
     return await get_notifier_config(cxn, guild_id)
+
+
+async def pause_guild_notifications(cxn, guild_id) -> bool:
+    """Switch one server's social notifications off, preserving its settings.
+
+    Used when a guild is blacklisted: announcements are a Niko feature, so a
+    blocked server must stop posting. The server-wide switch is the single flag
+    the poll loop honours for every account, and the saved default channel and
+    ping role are left in place for the day the blacklist is lifted.
+
+    Returns ``True`` only when something was actually paused, so a caller can
+    tell a real change from a no-op. A server with no follows is left alone
+    rather than given a config row it never had.
+    """
+    follows = await list_follows(cxn, guild_id)
+    if not follows:
+        return False
+    config = await get_notifier_config(cxn, guild_id)
+    if config["enabled"] is False:
+        return False
+    await save_notifier_config(cxn, guild_id, enabled=False)
+    return True

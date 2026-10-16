@@ -27,8 +27,10 @@ from webapp import notifier_routes as routes
 from webapp import server as server_routes
 
 from cogs.notifier import cog as notifier
+import database
 from database import _convert_query, _make_row, _serialize_args
 from events.startup.database import _migrate_follows
+from utils.blacklist_manager import BlacklistManager
 from utils.social import follows
 
 GUILD = 555
@@ -56,6 +58,31 @@ NOTIFIER_CONFIG_DDL = """
         updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
     )
 """
+
+#: The blacklist tables, so the real manager can run against the notifier store.
+BLACKLIST_DDL = (
+    """
+    CREATE TABLE blacklist_guilds (
+        id        INTEGER PRIMARY KEY,
+        reason    TEXT,
+        timestamp REAL,
+        added_by  INTEGER,
+        status    TEXT,
+        appeal_id TEXT
+    )
+    """,
+    """
+    CREATE TABLE blacklist_users (
+        id         INTEGER PRIMARY KEY,
+        reason     TEXT,
+        timestamp  REAL,
+        added_by   INTEGER,
+        expires_at REAL,
+        status     TEXT,
+        appeal_id  TEXT
+    )
+    """,
+)
 
 
 class LocalPool:
@@ -92,6 +119,16 @@ class LocalPool:
         cursor = self.db.execute(_convert_query(query), _serialize_args(list(args)))
         row = cursor.fetchone()
         return None if row is None else row[0]
+
+
+class BlacklistPool(LocalPool):
+    """The notifier store plus the blacklist tables the real manager writes."""
+
+    def __init__(self):
+        super().__init__()
+        for statement in BLACKLIST_DDL:
+            self.db.execute(statement)
+        self.db.commit()
 
 
 def legacy_pool() -> LocalPool:
@@ -507,6 +544,106 @@ class PollLoopTests(unittest.TestCase):
 
         row = asyncio.run(follows.get_follow(pool, GUILD, "twitch", "shroud"))
         self.assertEqual(row["last_post_id"], "stream:1")
+
+
+class BlacklistedGuildNotifierTests(unittest.TestCase):
+    """A blacklisted server must stop posting, not just lose its dashboard."""
+
+    def test_blacklisting_a_guild_switches_its_notifier_off(self):
+        pool = BlacklistPool()
+        asyncio.run(_migrate_follows(SimpleNamespace(cxn=pool)))
+        follow(pool, last_post_id="stream:1")
+        asyncio.run(
+            follows.save_notifier_config(pool, GUILD, default_channel_id=20, ping_role_id=900)
+        )
+        previous_pool, previous_instance = database._shared_pool, BlacklistManager._instance
+        database._shared_pool = pool
+        BlacklistManager._instance = None
+        try:
+            manager = BlacklistManager()
+            self.assertTrue(asyncio.run(manager.add_guild(GUILD, reason="abuse", added_by=1)))
+            config = asyncio.run(follows.get_notifier_config(pool, GUILD))
+            # The server-wide switch is what pauses every account, and only that
+            # switch flips: the saved channel and ping role are kept.
+            self.assertFalse(config["enabled"])
+            self.assertEqual(config["default_channel_id"], "20")
+            self.assertEqual(config["ping_role_id"], "900")
+            # The follow rows themselves stay untouched, so lifting the blacklist
+            # later only needs the switch turned back on by the server admin.
+            rows = asyncio.run(follows.list_follows(pool, GUILD))
+            self.assertEqual([row["enabled"] for row in rows], [True])
+        finally:
+            database._shared_pool = previous_pool
+            BlacklistManager._instance = previous_instance
+
+    def test_pausing_leaves_a_server_that_never_used_the_notifier_alone(self):
+        pool = BlacklistPool()
+        asyncio.run(_migrate_follows(SimpleNamespace(cxn=pool)))
+
+        # No follows means nothing to pause, so no config row is created either.
+        self.assertFalse(asyncio.run(follows.pause_guild_notifications(pool, OTHER_GUILD)))
+        self.assertEqual(asyncio.run(pool.fetch("SELECT guild_id FROM notifier_config")), [])
+
+        follow(pool, last_post_id="stream:1")
+        self.assertTrue(asyncio.run(follows.pause_guild_notifications(pool, GUILD)))
+        # Already paused is not a change, so callers can log a real switch-off.
+        self.assertFalse(asyncio.run(follows.pause_guild_notifications(pool, GUILD)))
+
+    def test_poll_skips_a_guild_blacklisted_before_the_switch_was_flipped(self):
+        pool = migrated_pool()
+        channel = FakeChannel(10)
+        bot = FakeBot(pool, [FakeGuild(GUILD, [channel])])
+        follow(pool, last_post_id="stream:1")
+        manager = BlacklistManager()
+        previous_loaded, previous_entries = manager._loaded, manager.blacklist["guilds"]
+        manager._loaded = True
+        manager.blacklist["guilds"] = [
+            {
+                "id": GUILD,
+                "reason": "abuse",
+                "timestamp": time.time(),
+                "added_by": 1,
+                "expires_at": None,
+                "status": "active",
+            }
+        ]
+        calls = []
+
+        async def fake_fetch(platform, username):
+            calls.append((platform, username))
+            return post("stream:2")
+
+        try:
+            with patch.object(notifier, "_fetch", fake_fetch):
+                asyncio.run(cog_for(bot).poll_once())
+        finally:
+            manager._loaded = previous_loaded
+            manager.blacklist["guilds"] = previous_entries
+
+        self.assertEqual(calls, [])
+        self.assertEqual(channel.sent, [])
+        row = asyncio.run(follows.get_follow(pool, GUILD, "twitch", "shroud"))
+        self.assertEqual(row["last_post_id"], "stream:1")
+
+
+class UnblacklistedGuildResumesOnlyWhenSwitchedBackOn(unittest.TestCase):
+    def test_removing_the_blacklist_does_not_re_enable_announcements(self):
+        """Lifting a blacklist must not silently resume posting for a server."""
+        pool = BlacklistPool()
+        asyncio.run(_migrate_follows(SimpleNamespace(cxn=pool)))
+        follow(pool, last_post_id="stream:1")
+        asyncio.run(follows.pause_guild_notifications(pool, GUILD))
+        previous_pool, previous_instance = database._shared_pool, BlacklistManager._instance
+        database._shared_pool = pool
+        BlacklistManager._instance = None
+        try:
+            manager = BlacklistManager()
+            self.assertTrue(asyncio.run(manager.add_guild(GUILD, reason="abuse", added_by=1)))
+            self.assertTrue(asyncio.run(manager.remove_guild(GUILD)))
+            self.assertFalse(asyncio.run(follows.get_notifier_config(pool, GUILD))["enabled"])
+        finally:
+            database._shared_pool = previous_pool
+            BlacklistManager._instance = previous_instance
 
 
 def run_awaitable(awaitable, timeout=8):

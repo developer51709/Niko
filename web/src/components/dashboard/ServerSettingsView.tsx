@@ -3,11 +3,14 @@ import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
 import { DiscordMarkdown } from "../DiscordMarkdown";
 import { RoleSelect } from "./RoleSelect";
+import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { DashHeading } from "./DashboardViews";
 
-type SaveState = { saving: boolean; message: string; error: string };
-const initialSave: SaveState = { saving: false, message: "", error: "" };
+// Only the in-flight flag belongs in state now: every result is announced with a
+// toast (see ../../utils/toast) instead of an inline line in the card footer.
+type SaveState = { saving: boolean };
+const initialSave: SaveState = { saving: false };
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
@@ -42,7 +45,7 @@ function SectionTitle({ label, title, detail, icon }: { label: string; title: st
 
 function SaveFooter({ state }: { state: SaveState }) {
   return <div className="setting-footer">
-    {state.error ? <span className="form-error" role="alert">{state.error}</span> : <span role="status">{state.message || "Changes apply to this server."}</span>}
+    <span>Changes apply to this server.</span>
     <button className="button button-primary" type="submit" disabled={state.saving}>{state.saving ? "Saving..." : "Save server settings"}</button>
   </div>;
 }
@@ -138,7 +141,8 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setState({ saving: true, message: "", error: "" });
+    setState({ saving: true });
+    notifyLoading("Saving server settings…", "settings-save");
     const prefixes = values.prefixes.map((prefix) => prefix.trim()).filter(Boolean);
     const categories = values.panel_categories.map((category) => category.trim()).filter(Boolean);
     saveConfig(guildId, "server", {
@@ -166,8 +170,12 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       },
     }, csrfToken).then((result) => {
       setValues(initialValues(result.config as ServerConfig));
-      setState({ saving: false, message: "Server settings saved to Niko.", error: "" });
-    }).catch((error) => setState({ saving: false, message: "", error: error instanceof Error ? error.message : "Could not save server settings." }));
+      setState({ saving: false });
+      notifySuccess("Server settings saved to Niko.", "settings-save");
+    }).catch((error) => {
+      setState({ saving: false });
+      notifyError(error instanceof Error ? error.message : "Could not save server settings.", "settings-save");
+    });
   };
 
   const welcomeChannel = values.welcome_channel;

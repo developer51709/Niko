@@ -214,6 +214,9 @@ def api_review_blacklist_appeal(appeal_id):
         return jsonify({"error": "Staff notes must be 2,000 characters or fewer."}), 400
     reviewer_id = int(session["user"]["id"])
     reviewed_at = time.time()
+    #: Guild an approved appeal belongs to, so its locked features can be given
+    #: back after the review is committed.
+    decided_guild = {}
     try:
         async def review():
             pool = _appeal_pool()
@@ -228,6 +231,7 @@ def api_review_blacklist_appeal(appeal_id):
                     return False
                 if status == "approved":
                     guild_id = appeal.get("guild_id")
+                    decided_guild["id"] = int(guild_id) if guild_id is not None else None
                     if guild_id is not None:
                         await pool.execute(
                             "UPDATE blacklist_guilds SET status = 'appealed', appeal_id = $1 WHERE id = $2 AND status = 'active'",
@@ -254,7 +258,17 @@ def api_review_blacklist_appeal(appeal_id):
             return jsonify({"error": "This appeal is no longer pending."}), 409
         if status == "approved":
             from utils.blacklist_manager import BlacklistManager
-            run_on_bot_loop(BlacklistManager().reload())
+            manager = BlacklistManager()
+            run_on_bot_loop(manager.reload())
+            guild_id = decided_guild.get("id")
+            if guild_id is not None:
+                # An approved appeal is the one path that gives the server its
+                # starboard, polls and giveaways back; a failure here is logged by
+                # the lockdown module and never undoes the approval itself.
+                try:
+                    run_on_bot_loop(manager.restore(guild_id, bot=_discord_bot))
+                except Exception:
+                    pass
         return jsonify({"ok": True, "status": status})
     except Exception:
         return jsonify({"error": "The appeal review could not be saved."}), 503

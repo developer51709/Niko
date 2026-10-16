@@ -29,7 +29,9 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
+from utils.blacklist_manager import BlacklistManager
 from utils.i18n import make_msg
+from utils.guild_lockdown import paused_message as polls_paused
 
 NUMBER_EMOJIS = [
     f"{get_emoji('number_zero')}", f"{get_emoji('number_one')}", f"{get_emoji('number_two')}",
@@ -285,6 +287,11 @@ class PollVoteButton(discord.ui.Button):
         poll = await bot.cxn.fetchrow("SELECT * FROM polls WHERE message_id = $1", self.poll_id)
         if not poll or poll.get("closed"):
             return await interaction.response.send_message(msg(interaction, "ended"), ephemeral=True)
+        # Polls of a blacklisted server are locked rather than closed, so the tally
+        # survives the blacklist. The lock is checked here too: component buttons
+        # never pass through the slash-command blacklist gate.
+        if poll.get("locked") or BlacklistManager().is_guild_blacklisted(int(interaction.guild_id or 0)):
+            return await interaction.response.send_message(polls_paused(interaction), ephemeral=True)
         uid = interaction.user.id
         options = _options_from_row(poll)
         if self.idx >= len(options):
@@ -642,6 +649,12 @@ class Polls(commands.Cog):
                 PRIMARY KEY (message_id, user_id)
             )
         """)
+        # Older databases: polls locked while their server was blacklisted must
+        # stay locked after a restart, so the column is part of the schema.
+        try:
+            await self.bot.cxn.execute("ALTER TABLE polls ADD COLUMN locked INTEGER DEFAULT 0")
+        except Exception:
+            pass
         # migrate legacy JSON file if present
         await self._migrate_json()
         # re-register persistent vote views for every open poll

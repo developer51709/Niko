@@ -9,6 +9,35 @@ import asyncio
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 from utils.ai.config import get_personality
+from utils.blacklist_manager import BlacklistManager
+from utils.guild_lockdown import paused_message
+
+
+# ─────────────────────────────────────────────────────────────
+#  BLACKLIST LOCKDOWN GUARDS
+# ─────────────────────────────────────────────────────────────
+
+
+def _guild_paused(guild_id) -> bool:
+    """True while the guild is blacklisted.
+
+    Giveaway buttons are component interactions, so they never pass through the
+    slash-command blacklist gate; a blacklisted server's saved giveaway stays
+    visible but stops accepting entries and management.
+    """
+    if guild_id is None:
+        return False
+    try:
+        return BlacklistManager().is_guild_blacklisted(int(guild_id))
+    except (TypeError, ValueError):
+        return False
+
+
+def _giveaway_paused(giveaway, guild_id) -> bool:
+    """True when this giveaway row is locked or its guild is blacklisted."""
+    if giveaway is not None and giveaway.get("locked"):
+        return True
+    return _guild_paused(guild_id)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -376,13 +405,16 @@ class _GiveawayJoinBtn(discord.ui.Button):
         user_id    = interaction.user.id
 
         giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id, ended, requirements FROM giveaways WHERE message_id = $1",
+            "SELECT host_id, ended, requirements, locked FROM giveaways WHERE message_id = $1",
             message_id,
         )
         if not giveaway:
             return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'no_exist')}", ephemeral=True)
         if giveaway["ended"]:
             return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_ended')}", ephemeral=True)
+        # Blacklisted servers keep their giveaway rows but cannot take entries.
+        if _giveaway_paused(giveaway, interaction.guild_id):
+            return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
         if user_id == giveaway["host_id"]:
             return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True)
         if interaction.user.bot:
@@ -431,6 +463,8 @@ class _GiveawayManageBtn(discord.ui.Button):
             return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
         if giveaway["ended"]:
             return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+        if _giveaway_paused(None, giveaway.get("guild_id")):
+            return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
 
         is_host  = interaction.user.id == giveaway["host_id"]
         is_admin = interaction.user.guild_permissions.manage_guild

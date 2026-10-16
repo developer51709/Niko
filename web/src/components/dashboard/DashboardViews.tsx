@@ -3,6 +3,7 @@ import { saveEconomyPrivacy } from "../../api";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import { displayName } from "../../utils/format";
+import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { GuildIcon } from "./GuildIcon";
 import { MemberAvatar, UserAvatar } from "./UserAvatar";
 import type { Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
@@ -32,16 +33,17 @@ export function CoinLabel() {
 export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
-  const [privacyStatus, setPrivacyStatus] = useState("");
   useEffect(() => setPrivateLeaderboard(Boolean(overview?.leaderboard_private)), [overview?.leaderboard_private]);
+  // The toggle itself shows the pending state by staying where the user put it,
+  // so only the result is reported, as a toast like every other dashboard save.
   const updatePrivacy = (value: boolean) => {
     setPrivateLeaderboard(value);
-    setPrivacyStatus("Saving privacy setting…");
+    notifyLoading("Saving privacy setting…", "economy-privacy");
     saveEconomyPrivacy(value, csrfToken)
-      .then(() => setPrivacyStatus(value ? "Profile hidden on the public leaderboard." : "Profile visible on the public leaderboard."))
+      .then(() => notifySuccess(value ? "Profile hidden on the public leaderboard." : "Profile visible on the public leaderboard.", "economy-privacy"))
       .catch((error) => {
         setPrivateLeaderboard(!value);
-        setPrivacyStatus(error instanceof Error ? error.message : "Could not save privacy setting.");
+        notifyError(error instanceof Error ? error.message : "Could not save privacy setting.", "economy-privacy");
       });
   };
   return <>
@@ -62,7 +64,6 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
     <section className="dash-panel economy-privacy-panel">
       <div className="panel-heading"><div><span className="panel-kicker">Leaderboard privacy</span><h3>Choose who sees your identity</h3></div><span className="panel-icon"><Icon name="shield" /></span></div>
       <label className="setting-row"><span><strong>Hide my profile on the public leaderboard</strong><small>You’ll remain ranked, but your avatar, username, and display name are shown only to you, official Niko staff, and people who share a guild with you.</small></span><input type="checkbox" checked={privateLeaderboard} onChange={(event) => updatePrivacy(event.target.checked)} /><i aria-hidden="true" /></label>
-      {privacyStatus && <p className="privacy-save-status" role="status">{privacyStatus}</p>}
     </section>
     <div className="dash-columns overview-columns">
       <section className="dash-panel">

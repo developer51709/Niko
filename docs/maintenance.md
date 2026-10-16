@@ -43,6 +43,27 @@ A restarted process always boots warm: it holds no gateway ownership, and a stan
 
 If the standby never comes back, the primary waits out a short grace period (~60 seconds) and then resumes gateway ownership itself, so an unreachable or deleted standby cannot leave the bot offline. The same applies at primary startup: when this instance is about to connect directly it first tells every registered standby to release the gateway, which prevents two live gateway sessions after a primary restart.
 
+## Guild blacklist lockdown
+
+The feature switch behind a guild blacklist lives in `src/utils/guild_lockdown.py`. Blacklisting a server is a sequence of ordered, independent steps, and each one reports its own outcome to the staff dashboard:
+
+| Step | Dashboard wording | What it does |
+|------|-------------------|--------------|
+| `database` | Saving to database… | writes the blacklist entry (owned by `src/utils/blacklist_manager.py`) |
+| `social` | Pausing social notifs… | turns the server-wide notifier switch off, keeping every follow |
+| `starboard` | Disabling starboard… | clears the saved starboard channel, keeping threshold, emoji and ignored channels |
+| `polls` | Disabling polls… | marks every open poll `locked = 1` so votes are refused and the tally survives |
+| `giveaways` | Disabling giveaways… | marks every active giveaway `locked = 1`: no entries, no draw |
+| `notification` | Sending blacklist notification… | DMs the guild owner with the reason and the appeal link |
+
+What each feature looked like beforehand is written to the `guild_feature_locks` table, which is what a lifted blacklist replays. Steps never abort each other: a step that fails is reported in the dashboard summary, logged, and the blacklist entry still stands.
+
+The disabled state is held in the database — the cleared `starboard_config.channel_id`, `polls.locked`, `giveaways.locked`, `notifier_config.enabled` — so features stay off across a restart. `ensure_schema` creates the lock table and adds the `locked` columns, and the poll and giveaway cogs repeat the `ALTER TABLE` at startup so a database created before those columns existed is migrated.
+
+Removing a blacklist (or approving an appeal) restores the saved starboard channel, unlocks the polls and giveaways, and retires the lock records. The notifier is the deliberate exception: its lock record is retired without replaying it, because a server turns its own announcements back on in the dashboard's Notifications tab. Blacklisted servers are also skipped by official staff broadcasts in `src/cogs/staff/owner.py`, which reports how many were skipped.
+
+The staff API is `POST /api/staff/guilds/<guild_id>/blacklist` with `{action, reason}`, followed by `POST /api/staff/guilds/<guild_id>/blacklist/lockdown` with `{step}`, which answers `{ok, step, label, status, detail, blacklisted}`. The dashboard calls the lockdown route once per step so progress is visible per feature; the step keys and wording there are a contract with the Python list, held in `web/src/utils/guildBlacklist.ts` and covered by `tests/test_guild_lockdown.py`.
+
 ## Monitoring
 - Check the console logs for errors.
 - Ensure the bot process is kept alive using a process manager like PM2 or systemd (if not on Replit).

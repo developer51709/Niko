@@ -7,16 +7,14 @@ import {
   testNotifierFollow,
   updateNotifierFollow,
 } from "../../api";
+import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import { RoleSelect } from "./RoleSelect";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
 import { DashHeading } from "./DashboardViews";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
-type Status = { notice: string; error: string };
 type Draft = { channel_id: string; ping_role_id: string; template: string };
-
-const initialStatus: Status = { notice: "", error: "" };
 
 // Scoped to this view so a follow row reads clearly without adding global CSS.
 const notifierStyles = `
@@ -30,7 +28,7 @@ const notifierStyles = `
 .notifier-badge.is-paused{color:var(--muted)}
 .notifier-badge.is-warning{color:#c9762e}
 .notifier-follow-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
-.notifier-list{display:grid;gap:10px;margin-top:4px}
+.notifier-list{display:grid;gap:14px;padding-top:12px}
 `;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -109,7 +107,6 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [status, setStatus] = useState<Status>(initialStatus);
   const [savingConfig, setSavingConfig] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busyFollow, setBusyFollow] = useState("");
@@ -135,7 +132,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
 
   useEffect(() => {
     let active = true;
-    setLoading(true); setLoadError(""); setStatus(initialStatus);
+    setLoading(true); setLoadError(""); clearToasts();
     load()
       .catch((reason) => { if (active) setLoadError(reason instanceof Error ? reason.message : "Social notifications could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
@@ -182,7 +179,8 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
 
   const saveServerSettings = (event: FormEvent) => {
     event.preventDefault();
-    setSavingConfig(true); setStatus(initialStatus);
+    setSavingConfig(true);
+    notifyLoading("Saving notification settings…", "notifier-config");
     saveNotifierConfig(guildId, {
       enabled: configDraft.enabled,
       default_channel_id: configDraft.default_channel_id,
@@ -190,18 +188,19 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     }, csrfToken)
       .then((result) => {
         setData((current) => current && ({ ...current, config: result.config }));
-        setStatus({ notice: "Notification settings saved for this server.", error: "" });
+        notifySuccess("Notification settings saved for this server.", "notifier-config");
       })
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "Notification settings could not be saved." }))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "Notification settings could not be saved.", "notifier-config"))
       .finally(() => setSavingConfig(false));
   };
 
   const submitAdd = (event: FormEvent) => {
     event.preventDefault();
-    if (addBlocked) { setStatus({ notice: "", error: blockedReason }); return; }
-    if (!form.platform) { setStatus({ notice: "", error: "Pick the platform you want to follow." }); return; }
-    if (!form.channel_id) { setStatus({ notice: "", error: "Pick the channel announcements should go to." }); return; }
-    setAdding(true); setStatus(initialStatus);
+    if (addBlocked) { notifyError(blockedReason, "notifier-add"); return; }
+    if (!form.platform) { notifyError("Pick the platform you want to follow.", "notifier-add"); return; }
+    if (!form.channel_id) { notifyError("Pick the channel announcements should go to.", "notifier-add"); return; }
+    setAdding(true);
+    notifyLoading("Checking that account…", "notifier-add");
     addNotifierFollow(guildId, {
       platform: form.platform,
       query: form.query,
@@ -213,15 +212,16 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
         applyFollow(result.follow);
         setForm((current) => ({ ...current, query: "", template: "" }));
         setManualPlatform(false);
-        setStatus({ notice: result.created ? "Account added. New posts will be announced now." : "That account was already followed, so its settings were updated.", error: "" });
+        notifySuccess(result.created ? "Account added. New posts will be announced now." : "That account was already followed, so its settings were updated.", "notifier-add");
       })
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "That account could not be added." }))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be added.", "notifier-add"))
       .finally(() => setAdding(false));
   };
 
   const saveFollow = (follow: NotifierFollow) => {
-    const draft = drafts[followKey(follow)] || draftFor(follow);
-    if (!draft.channel_id) { setStatus({ notice: "", error: "Pick a channel for that account." }); return; }
+    const key = followKey(follow);
+    const draft = drafts[key] || draftFor(follow);
+    if (!draft.channel_id) { notifyError("Pick a channel for that account.", key); return; }
     // Only send what actually changed, so two people editing different fields
     // of the same account never overwrite each other.
     const body: { platform: string; username: string; channel_id?: string; ping_role_id?: string; template?: string } = {
@@ -232,39 +232,46 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     if (draft.ping_role_id !== (follow.ping_role_id || "")) body.ping_role_id = draft.ping_role_id;
     if (draft.template !== (follow.template || "")) body.template = draft.template;
     if (body.channel_id === undefined && body.ping_role_id === undefined && body.template === undefined) {
-      setStatus({ notice: "Nothing to save for that account.", error: "" });
+      notifySuccess("Nothing to save for that account.", key);
       return;
     }
-    setBusyFollow(followKey(follow)); setStatus(initialStatus);
+    setBusyFollow(key);
+    notifyLoading("Saving…", key);
     updateNotifierFollow(guildId, body, csrfToken)
-      .then((result) => { applyFollow(result.follow); setStatus({ notice: `${result.follow.display} updated.`, error: "" }); })
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "That account could not be updated." }))
+      .then((result) => { applyFollow(result.follow); notifySuccess(`${result.follow.display} updated.`, key); })
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be updated.", key))
       .finally(() => setBusyFollow(""));
   };
 
   const toggleFollow = (follow: NotifierFollow) => {
-    setBusyFollow(followKey(follow)); setStatus(initialStatus);
+    const key = followKey(follow);
+    setBusyFollow(key);
+    notifyLoading(follow.enabled ? "Pausing…" : "Resuming…", key);
     updateNotifierFollow(guildId, { platform: follow.platform, username: follow.username, enabled: !follow.enabled }, csrfToken)
-      .then((result) => { applyFollow(result.follow); setStatus({ notice: `${result.follow.display} is ${result.follow.enabled ? "active again" : "paused"}.`, error: "" }); })
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "That account could not be updated." }))
+      .then((result) => { applyFollow(result.follow); notifySuccess(`${result.follow.display} is ${result.follow.enabled ? "active again" : "paused"}.`, key); })
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be updated.", key))
       .finally(() => setBusyFollow(""));
   };
 
   const sendTest = (follow: NotifierFollow) => {
-    setBusyFollow(followKey(follow)); setStatus(initialStatus);
+    const key = followKey(follow);
+    setBusyFollow(key);
+    notifyLoading("Sending a test notification…", key);
     testNotifierFollow(guildId, follow.platform, follow.username, csrfToken)
-      .then((result) => setStatus({
-        notice: result.delivered ? `Test notification posted in #${result.channel}.` : result.message || "Nothing was sent.",
-        error: "",
-      }))
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "The test notification could not be sent." }))
+      .then((result) => {
+        const message = result.delivered ? `Test notification posted in #${result.channel}.` : result.message || "Nothing was sent.";
+        if (result.delivered) notifySuccess(message, key);
+        else notifyError(message, key);
+      })
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "The test notification could not be sent.", key))
       .finally(() => setBusyFollow(""));
   };
 
   const removeFollow = (follow: NotifierFollow) => {
     const key = followKey(follow);
     if (confirmRemove !== key) { setConfirmRemove(key); return; }
-    setBusyFollow(key); setConfirmRemove(""); setStatus(initialStatus);
+    setBusyFollow(key); setConfirmRemove("");
+    notifyLoading("Removing…", key);
     removeNotifierFollow(guildId, follow.platform, follow.username, csrfToken)
       .then(() => {
         setData((current) => current && ({ ...current, follows: current.follows.filter((item) => followKey(item) !== key) }));
@@ -273,9 +280,9 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
           delete next[key];
           return next;
         });
-        setStatus({ notice: `Stopped following ${follow.display}.`, error: "" });
+        notifySuccess(`Stopped following ${follow.display}.`, key);
       })
-      .catch((reason) => setStatus({ notice: "", error: reason instanceof Error ? reason.message : "That account could not be removed." }))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be removed.", key))
       .finally(() => setBusyFollow(""));
   };
 
@@ -298,10 +305,11 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
       </div>
       <span className="settings-intro-state"><span className="status-dot" /> Per server</span>
     </div>
-    {status.error && <div className="notice warning" role="alert">{status.error}</div>}
-    {status.notice && <div className="notice" role="status">{status.notice}</div>}
     {!data.config.enabled && <div className="notice warning" role="status">Announcements are switched off for this server. Every account below is paused until you re-enable them.</div>}
 
+    {/* One shared grid for every card on this tab, exactly like the other
+        feature tabs, so the panels are spaced instead of touching. */}
+    <div className="settings-stack guild-feature-settings notifier-settings-stack">
     <form className="settings-stack" onSubmit={saveServerSettings}>
       <section className="dash-panel settings-panel">
         <SectionTitle label="Per server" title="Announcement defaults" detail="Choose where new accounts post and who gets pinged when you do not set that per account." icon="settings" />
@@ -418,5 +426,6 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
           })}
         </div>}
     </section>
+    </div>
   </>;
 }

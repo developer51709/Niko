@@ -1,5 +1,6 @@
 from .views import *
 from utils import logging
+from utils.blacklist_manager import BlacklistManager
 
 
 # SQLite accepts 0 and FALSE interchangeably, while MongoDB keeps booleans
@@ -37,6 +38,12 @@ class Giveaway(commands.Cog):
         # Migrate older databases: add the requirements column if missing.
         try:
             await self.bot.cxn.execute("ALTER TABLE giveaways ADD COLUMN requirements TEXT")
+        except Exception:
+            pass
+        # Giveaways locked by a blacklist lockdown must stay locked after a
+        # restart, so the column belongs to the schema and not just to memory.
+        try:
+            await self.bot.cxn.execute("ALTER TABLE giveaways ADD COLUMN locked INTEGER DEFAULT 0")
         except Exception:
             pass
 
@@ -152,12 +159,17 @@ class Giveaway(commands.Cog):
         try:
             now  = datetime.datetime.now(datetime.timezone.utc)
             rows = await self.bot.cxn.fetch(
-                "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id "
+                "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id, locked "
                 "FROM giveaways WHERE "
                 f"{_ACTIVE_GIVEAWAY_FILTER}"
             )
+            blacklist = BlacklistManager()
             for row in rows:
                 message_id   = row["message_id"]
+                # A giveaway of a blacklisted server is frozen, not ended: it keeps
+                # its entries and end time so an approved appeal resumes it.
+                if row.get("locked") or blacklist.is_guild_blacklisted(int(row["guild_id"])):
+                    continue
                 end_time_str = row["end_time"]
                 try:
                     end_time = datetime.datetime.fromisoformat(str(end_time_str))

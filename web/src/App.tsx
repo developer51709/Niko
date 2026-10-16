@@ -17,6 +17,7 @@ import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
+import { ToastHost } from "./components/ToastHost";
 import { pageFromPath, type Page } from "./router";
 
 export function App() {
@@ -69,6 +70,7 @@ export function App() {
         )}
       </div>
       <div className="site-content">{pageContent}</div>
+      <ToastHost />
     </>
   );
 }

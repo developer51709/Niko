@@ -140,7 +140,14 @@ class BroadcastBuilder(discord.ui.LayoutView):
         rows = await self.bot.cxn.fetch("SELECT guild_id, channel_id FROM notification_channels")
         sent = 0
         failed = 0
+        skipped = 0
+        blacklist = BlacklistManager()
         for row in rows:
+            # An official announcement is a Niko feature too: a blacklisted server
+            # stops receiving broadcasts until its appeal is approved.
+            if blacklist.is_guild_blacklisted(int(row["guild_id"])):
+                skipped += 1
+                continue
             channel = self.bot.get_channel(int(row["channel_id"]))
             if channel is None:
                 failed += 1
@@ -152,7 +159,8 @@ class BroadcastBuilder(discord.ui.LayoutView):
                 failed += 1
         await interaction.followup.send(
             f"Broadcast delivered to **{sent}** configured server{'s' if sent != 1 else ''}."
-            + (f" {failed} could not be reached." if failed else ""),
+            + (f" {failed} could not be reached." if failed else "")
+            + (f" {skipped} blacklisted server{'s' if skipped != 1 else ''} were skipped." if skipped else ""),
             ephemeral=True,
         )
         try:
@@ -1194,7 +1202,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if await blacklist_manager.add_guild(guild_id, reason=reason, added_by=ctx.author.id):
+            if await blacklist_manager.add_guild(guild_id, reason=reason, added_by=ctx.author.id, bot=ctx.bot):
                 reason_line = f"\n-# Reason: {reason}" if reason else ""
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
@@ -1295,7 +1303,7 @@ class OwnerCog(commands.Cog):
                 view.add_item(container)
                 return await ctx.send(view=view)
 
-            if await blacklist_manager.remove_guild(guild_id):
+            if await blacklist_manager.remove_guild(guild_id, bot=ctx.bot):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(

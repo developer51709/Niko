@@ -169,6 +169,7 @@ PRIMARY_KEYS: dict = {
     "blacklist_users": "id",
     "blacklist_guilds": "id",
     "blacklist_appeals": "appeal_id",
+    "guild_feature_locks": ("guild_id", "feature"),
     "roleplay_actions": "message_id",
     "roleplay_blocks": ("blocker_id", "blocked_id"),
     "persistent_status_panels": ("channel_id", "guild_id"),

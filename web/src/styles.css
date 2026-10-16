@@ -560,6 +560,16 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-permissions-list > div { display:flex; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--line-soft); border-radius:8px; font-size:10px; text-transform:capitalize; }
 .dashboard-layout .staff-permissions-list .granted strong { color:var(--sage); }
 .dashboard-layout .staff-permissions-list .missing strong { color:#efa19b; }
+.dashboard-layout .staff-lockdown-summary { display:grid; gap:12px; max-height:58vh; overflow:auto; padding-right:3px; }
+.dashboard-layout .staff-lockdown-group { display:grid; gap:7px; padding:11px 12px; border:1px solid var(--line-soft); border-radius:8px; }
+.dashboard-layout .staff-lockdown-group-heading { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font:8px "Space Mono", monospace; text-transform:uppercase; letter-spacing:.08em; }
+.dashboard-layout .staff-lockdown-group article { display:grid; gap:3px; }
+.dashboard-layout .staff-lockdown-group article strong { font-size:11px; }
+.dashboard-layout .staff-lockdown-group article p { margin:0; color:var(--muted); font-size:10px; line-height:1.6; }
+.dashboard-layout .staff-lockdown-group article small { color:var(--muted); font:8px "Space Mono", monospace; text-transform:uppercase; }
+.dashboard-layout .staff-lockdown-group.is-paused article small { color:var(--sage); }
+.dashboard-layout .staff-lockdown-group.is-failed article small { color:#efa19b; }
+.dashboard-layout .staff-lockdown-empty { margin:0; color:var(--muted); font-size:10px; }
 @media (max-width: 760px) { .dashboard-layout .staff-blacklist-form { grid-template-columns: 1fr 1fr; }.dashboard-layout .staff-blacklist-columns { grid-template-columns:1fr; }.dashboard-layout .staff-guild-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.dashboard-layout .staff-guild-actions { grid-template-columns:1fr 1fr; } }
 @media (max-width: 520px) { .dashboard-layout .staff-blacklist-form { grid-template-columns:1fr; }.dashboard-layout .staff-blacklist-entry { align-items:flex-start; flex-direction:column; }.dashboard-layout .staff-permissions-list { grid-template-columns:1fr; } }
 .dashboard-layout .staff-guild-reason input, .dashboard-layout .staff-guild-notice-field textarea { width: 100%; }

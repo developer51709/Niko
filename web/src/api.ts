@@ -18,6 +18,7 @@ import type {
   PublicStaffApplication,
   StaffGuild,
   StaffBlacklist,
+  LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
   BlacklistAppealStatus,
@@ -85,6 +86,9 @@ export const saveGlobalProfile = (body: Record<string, unknown>, csrfToken?: str
 export const getStaffGuilds = () => api<{ guilds: StaffGuild[]; count: number; role: string }>("/api/staff/guilds");
 export const setStaffGuildBlacklist = (guildId: string, action: "add" | "remove", reason: string, csrfToken?: string) => api<{ ok: boolean; blacklisted: boolean }>(`/api/staff/guilds/${guildId}/blacklist`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ action, reason }) });
 export const resetStaffGuildProfile = (guildId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/guilds/${guildId}/profile/reset`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+// One lockdown step per request: the dashboard shows the progress of the feature
+// it names, and a failure is reported for that step alone.
+export const lockdownStaffGuild = (guildId: string, step: string, csrfToken?: string) => api<{ ok: boolean; blacklisted: boolean } & LockdownStepResult>(`/api/staff/guilds/${guildId}/blacklist/lockdown`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ step }) });
 export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken?: string) => api<{ ok: boolean; recipient_id: string }>(`/api/staff/guilds/${guildId}/moderation-notice`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ message }) });
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");

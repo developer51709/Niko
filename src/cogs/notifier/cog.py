@@ -29,6 +29,7 @@ from discord.ext import commands, tasks
 from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
+from utils.blacklist_manager import BlacklistManager
 from utils.social.youtube import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
 from utils.social.twitch import fetch_latest_twitch, normalize_login as twitch_login, validate_twitch_login
 from utils.social.twitter import fetch_latest_tweet, validate_twitter_username
@@ -1228,12 +1229,19 @@ class Notifier(commands.Cog):
         except Exception:
             return
 
+        # A blacklisted server is cut off from Niko, so it must not receive
+        # announcements either — its own switch may still read "on" from before
+        # the blacklist was applied.
+        blacklist = BlacklistManager()
+
         queue: list[dict] = []
         for follow in follows:
             if not follow["enabled"]:
                 continue
             # A server can switch the whole notifier off from the dashboard.
             if (configs.get(follow["guild_id"]) or {}).get("enabled") is False:
+                continue
+            if blacklist.is_guild_blacklisted(int(follow["guild_id"])):
                 continue
             guild = self.bot.get_guild(int(follow["guild_id"]))
             if guild is None:

@@ -20,6 +20,7 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.ai.config import get_personality
+from utils.blacklist_manager import BlacklistManager
 from utils.i18n import make_msg
 
 DEFAULT_THRESHOLD = 3
@@ -304,6 +305,11 @@ class Starboard(commands.Cog):
 
     async def _on_reaction(self, payload: discord.RawReactionActionEvent):
         if not payload.guild_id:
+            return
+        # Blacklisting a server clears its saved starboard channel, so the guild
+        # is already inert here; the explicit check covers the moment between the
+        # blacklist write and that step, and any guild locked before a restart.
+        if BlacklistManager().is_guild_blacklisted(int(payload.guild_id)):
             return
         g = self.data["guilds"].get(str(payload.guild_id))
         if not g or not g.get("channel_id"):

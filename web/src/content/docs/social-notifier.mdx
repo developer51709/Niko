@@ -103,6 +103,8 @@ Unknown placeholders are refused, so a typo is reported instead of being posted.
 
 The **Post new content automatically** switch at the top of the dashboard tab turns every announcement off for that server without removing any accounts. Accounts that keep failing are paused individually — see below.
 
+A server that is blacklisted from Niko has its notifications paused automatically: the server-wide switch is turned off, so nothing is announced even if it was left on, and the poll loop skips blacklisted servers whether or not their switch was ever touched. The followed accounts, channels, ping roles and messages are all kept, and lifting the blacklist does not turn announcements back on — a server admin flips the switch again in the dashboard.
+
 ## Unfollowing
 
 ```

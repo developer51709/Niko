@@ -72,6 +72,14 @@ export type StaffGuild = {
 
 export type StaffBlacklistEntry = { id: string; reason: string | null; timestamp: number; added_by: string | null };
 export type StaffBlacklist = { users: StaffBlacklistEntry[]; guilds: StaffBlacklistEntry[] };
+export type LockdownStepStatus = "done" | "skipped" | "failed";
+/** One feature a blacklist lockdown paused, skipped, or could not switch off. */
+export type LockdownStepResult = {
+  step: string;
+  label: string;
+  status: LockdownStepStatus;
+  detail: string;
+};
 export type StandbyInstance = {
   id: string;
   name: string;

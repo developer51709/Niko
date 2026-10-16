@@ -154,15 +154,62 @@ def api_staff_guild_blacklist(guild_id):
     try:
         from utils.blacklist_manager import BlacklistManager
         manager = BlacklistManager()
+        # Adding only writes the entry: the dashboard then pauses each feature one
+        # request at a time through the lockdown route below, so the person doing
+        # it sees progress and a summary. Removing gives the saved features back.
         changed = run_on_bot_loop(
-            manager.add_guild(int(guild_id), reason=reason, added_by=int(session["user"]["id"]))
-            if action == "add" else manager.remove_guild(int(guild_id))
+            manager.add_guild(
+                int(guild_id),
+                reason=reason,
+                added_by=int(session["user"]["id"]),
+                bot=_discord_bot,
+                lockdown=False,
+            )
+            if action == "add" else manager.remove_guild(int(guild_id), bot=_discord_bot)
         )
         if not changed:
             return jsonify({"error": "The guild blacklist could not be changed."}), 409
         return jsonify({"ok": True, "blacklisted": action == "add"})
     except Exception:
         return jsonify({"error": "The guild blacklist could not be changed."}), 503
+
+
+@app.route("/api/staff/guilds/<guild_id>/blacklist/lockdown", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_guild_lockdown(guild_id):
+    """Pause one feature of an already-blacklisted guild.
+
+    The dashboard calls this once per step, in the order it shows them, so each
+    request reports its own outcome. A step that fails is named in the summary
+    instead of hiding behind one opaque success, and it never removes the
+    blacklist entry: the server stays blocked either way.
+    """
+    role, error = _require_guild_management_role()
+    if error:
+        return error
+    if not guild_id.isdigit() or _discord_bot.get_guild(int(guild_id)) is None:
+        return jsonify({"error": "That guild is not currently available to the bot."}), 404
+    body = request.get_json(silent=True) or {}
+    step = str(body.get("step", "")).strip()
+    try:
+        from utils.blacklist_manager import BlacklistManager
+        from utils.guild_lockdown import FEATURE_STEPS
+        if step not in FEATURE_STEPS:
+            return jsonify({"error": "Choose a valid blacklist lockdown step."}), 400
+        manager = BlacklistManager()
+        if not manager._loaded:
+            run_on_bot_loop(manager.load())
+        if manager.get_guild_entry(int(guild_id)) is None:
+            return jsonify({"error": "Blacklist this guild before pausing its features."}), 409
+        report = run_on_bot_loop(
+            manager.lockdown(int(guild_id), steps=[step], bot=_discord_bot)
+        )
+        if not report:
+            return jsonify({"error": "That guild is not blacklisted, so nothing was paused."}), 409
+        return jsonify({"ok": True, **report[0], "blacklisted": True})
+    except Exception:
+        return jsonify({"error": "That feature could not be paused."}), 503
 
 
 @app.route("/api/staff/guilds/<guild_id>/profile/reset", methods=["POST"])
@@ -324,7 +371,9 @@ def api_staff_blacklist():
         if entry_type == "user":
             changed = run_on_bot_loop(manager.add_user(int(raw_id), reason=reason, added_by=int(session["user"]["id"]))) if action == "add" else run_on_bot_loop(manager.remove_user(int(raw_id))) if action == "remove" else run_on_bot_loop(manager.update_user_reason(int(raw_id), reason))
         else:
-            changed = run_on_bot_loop(manager.add_guild(int(raw_id), reason=reason, added_by=int(session["user"]["id"]))) if action == "add" else run_on_bot_loop(manager.remove_guild(int(raw_id))) if action == "remove" else run_on_bot_loop(manager.update_guild_reason(int(raw_id), reason))
+            # A guild added here is paused by the dashboard's lockdown steps, so
+            # the entry itself is written on its own; removing restores them.
+            changed = run_on_bot_loop(manager.add_guild(int(raw_id), reason=reason, added_by=int(session["user"]["id"]), bot=_discord_bot, lockdown=False)) if action == "add" else run_on_bot_loop(manager.remove_guild(int(raw_id), bot=_discord_bot)) if action == "remove" else run_on_bot_loop(manager.update_guild_reason(int(raw_id), reason))
         if not changed:
             return jsonify({"error": "No blacklist change was made. Check whether the entry already exists."}), 409
         return jsonify({"ok": True})

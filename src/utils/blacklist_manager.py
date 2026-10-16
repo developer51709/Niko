@@ -27,6 +27,11 @@ from typing import List, Dict, Optional, Any
 
 import database as database_module
 from utils import logging
+from utils.guild_lockdown import (
+    FEATURE_STEPS,
+    lock_guild,
+    restore_guild_features,
+)
 
 # Legacy file — only read by the startup migration now.
 BLACKLIST_FILE = "data/blacklist.json"
@@ -188,8 +193,18 @@ class BlacklistManager:
         *,
         reason: Optional[str] = None,
         added_by: Optional[int] = None,
+        bot: Any = None,
+        lockdown: bool = True,
     ) -> bool:
-        """Add a guild to the blacklist. Returns True if added (False if already there)."""
+        """Add a guild to the blacklist. Returns True if added (False if already there).
+
+        The blacklist entry is written first and on its own, because that is what
+        makes every feature stop answering. The lockdown steps that follow switch
+        the server's saved features off and notify its owner; they are reported
+        through :meth:`lockdown` and never undo the entry. Pass ``lockdown=False``
+        when the caller drives those steps itself, one dashboard request at a
+        time, so it can show progress for each of them.
+        """
         await self._ensure_loaded()
         guild_id = int(guild_id)
         async with self._write_lock:
@@ -226,7 +241,52 @@ class BlacklistManager:
                 logging.error("blacklist_manager", f"Failed to save blacklisted guild {guild_id}: {e}")
                 return False
         logging.info("blacklist_manager", f"Guild {guild_id} added to blacklist (reason: {reason}).")
+        if lockdown:
+            # A blacklisted server loses every Niko feature. Each step reports its
+            # own outcome and a failure is logged: the blacklist still stands.
+            report = await lock_guild(bot, self._pool(), guild_id, reason=reason)
+            logging.info(
+                "blacklist_manager",
+                f"Guild {guild_id} lockdown: "
+                + ", ".join(f"{item['step']}={item['status']}" for item in report),
+            )
         return True
+
+    async def lockdown(
+        self,
+        guild_id: int,
+        *,
+        steps: Optional[List[str]] = None,
+        bot: Any = None,
+        reason: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Switch the features of an already-blacklisted guild off, step by step.
+
+        Used by the dashboard, which runs one step per request so the person
+        blacklisting the server sees which feature is being paused. Defaults to
+        every feature step in the documented order (``FEATURE_STEPS``).
+        """
+        await self._ensure_loaded()
+        guild_id = int(guild_id)
+        entry = self.get_guild_entry(guild_id)
+        if entry is None:
+            return []
+        if steps is not None:
+            unknown = [step for step in steps if step not in FEATURE_STEPS]
+            if unknown:
+                raise ValueError(f"Unknown lockdown step(s): {', '.join(unknown)}")
+        return await lock_guild(
+            bot,
+            self._pool(),
+            guild_id,
+            reason=reason if reason is not None else entry.get("reason"),
+            steps=steps,
+        )
+
+    async def restore(self, guild_id: int, *, bot: Any = None) -> List[Dict[str, Any]]:
+        """Give a guild its saved features back once it is no longer blacklisted."""
+        await self._ensure_loaded()
+        return await restore_guild_features(bot, self._pool(), int(guild_id))
 
     # -----------------------------
     # Remove operations
@@ -304,7 +364,8 @@ class BlacklistManager:
                 logging.error("blacklist_manager", f"Failed to register abuse strike for user {user_id}: {e}")
                 return {"strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
 
-    async def remove_guild(self, guild_id: int) -> bool:
+    async def remove_guild(self, guild_id: int, *, bot: Any = None, restore: bool = True) -> bool:
+        """Remove a guild from the blacklist and give its saved features back."""
         await self._ensure_loaded()
         guild_id = int(guild_id)
         async with self._write_lock:
@@ -331,6 +392,16 @@ class BlacklistManager:
                 item for item in self.blacklist["guilds"] if item["id"] != guild_id
             ]
         logging.info("blacklist_manager", f"Guild {guild_id} removed from blacklist.")
+        if restore:
+            # Starboard, polls and giveaways resume as they were; the notifier and
+            # the owner notification are not re-sent (see utils/guild_lockdown.py).
+            report = await restore_guild_features(bot, self._pool(), guild_id)
+            if report:
+                logging.info(
+                    "blacklist_manager",
+                    f"Guild {guild_id} unlock: "
+                    + ", ".join(f"{item['step']}={item['status']}" for item in report),
+                )
         return True
 
     # -----------------------------

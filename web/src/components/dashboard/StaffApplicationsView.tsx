@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { createStaffApplication, deleteStaffApplication, getStaffApplications, getStaffSubmissions, reviewStaffSubmission, setStaffApplicationStatus, updateStaffApplication } from "../../api";
+import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import { DiscordMarkdown } from "../DiscordMarkdown";
 import { RoleSelect } from "./RoleSelect";
@@ -20,8 +21,6 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [selectedSubmissions, setSelectedSubmissions] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<StaffApplicationSubmission[]>([]);
   const [reviewingUserId, setReviewingUserId] = useState<string | null>(null);
@@ -30,7 +29,7 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
   const refresh = useCallback(() => getStaffApplications(guildId).then(setApplications), [guildId]);
   useEffect(() => {
     setLoading(true);
-    refresh().catch((reason) => setError(reason instanceof Error ? reason.message : "Applications could not be loaded.")).finally(() => setLoading(false));
+    refresh().catch((reason) => notifyError(reason instanceof Error ? reason.message : "Applications could not be loaded.", "applications-editor")).finally(() => setLoading(false));
   }, [refresh]);
 
   const resetEditor = () => {
@@ -45,7 +44,6 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
       id: question.id, prompt: question.prompt, required: question.required,
       type: question.type || "paragraph", options: question.options?.length ? [...question.options] : ["", ""],
     })));
-    setError(""); setNotice("");
     document.querySelector(".applications-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -53,8 +51,9 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
     event.preventDefault();
     const invalidChoices = questions.some((question) => ["single_choice", "multi_choice"].includes(question.type)
       && (question.options.filter((option) => option.trim()).length < 2 || question.options.some((option) => !option.trim())));
-    if (invalidChoices) { setError("Each choice question needs at least two non-empty options."); return; }
-    setSaving(true); setError(""); setNotice("");
+    if (invalidChoices) { notifyError("Each choice question needs at least two non-empty options.", "applications-editor"); return; }
+    setSaving(true);
+    notifyLoading("Saving opening…", "applications-editor");
     const body = {
       title, description, role_id: roleId, eligible_role_ids: eligibleRoles,
       questions: questions.map(({ id, prompt, required, type, options }) => ({ id, prompt, required, type, options: options.map((option) => option.trim()).filter(Boolean) })),
@@ -67,49 +66,51 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
         ? current.map((item) => item.id === application.id ? application : item)
         : [application, ...current]);
       resetEditor();
-      setNotice(editingId ? "Application updated. Its link and saved responses are unchanged." : "Application created. Its link is ready to share.");
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Application could not be saved.")).finally(() => setSaving(false));
+      notifySuccess(editingId ? "Application updated. Its link and saved responses are unchanged." : "Application created. Its link is ready to share.", "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application could not be saved.", "applications-editor")).finally(() => setSaving(false));
   };
 
   const deleteApplication = (application: StaffApplication) => {
     if (!window.confirm(`Delete “${application.title}” and permanently remove its ${application.submission_count} response${application.submission_count === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    notifyLoading("Deleting opening…", "applications-editor");
     deleteStaffApplication(guildId, application.id, csrfToken).then(() => {
       setApplications((current) => current.filter((item) => item.id !== application.id));
       if (selectedSubmissions === application.id) setSelectedSubmissions(null);
-      setNotice("Application and its responses deleted."); setError("");
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Application could not be deleted."));
+      notifySuccess("Application and its responses deleted.", "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application could not be deleted.", "applications-editor"));
   };
 
   const toggleStatus = (application: StaffApplication) => {
     const status = application.status === "open" ? "closed" : "open";
+    notifyLoading(status === "open" ? "Reopening…" : "Closing…", "applications-editor");
     setStaffApplicationStatus(guildId, application.id, status, csrfToken).then(() => {
       setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status } : item));
-      setNotice(status === "open" ? "Opening reopened. The same link is active again." : "Opening closed. Its link and responses are preserved.");
-      setError("");
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Application status could not be changed."));
+      notifySuccess(status === "open" ? "Opening reopened. The same link is active again." : "Opening closed. Its link and responses are preserved.", "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application status could not be changed.", "applications-editor"));
   };
 
   const openSubmissions = (application: StaffApplication) => {
     if (selectedSubmissions === application.id) { setSelectedSubmissions(null); return; }
     setSelectedSubmissions(application.id);
     setSubmissions([]);
-    getStaffSubmissions(guildId, application.id).then((result) => setSubmissions(result.submissions)).catch((reason) => setError(reason instanceof Error ? reason.message : "Responses could not be loaded."));
+    getStaffSubmissions(guildId, application.id).then((result) => setSubmissions(result.submissions)).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Responses could not be loaded.", "applications-review"));
   };
 
   const reviewSubmission = (applicationId: string, submission: StaffApplicationSubmission, status: "approved" | "denied") => {
     if (reviewingUserId) return;
     const wasReviewed = submission.review_status !== "pending";
-    setReviewingUserId(submission.user_id); setError(""); setNotice("");
+    setReviewingUserId(submission.user_id);
+    notifyLoading("Saving decision…", "applications-review");
     reviewStaffSubmission(guildId, applicationId, submission.user_id, status, csrfToken).then((result) => {
       setSubmissions((current) => current.map((item) => item.user_id === submission.user_id
         ? { ...item, review_status: result.review_status, reviewed_by: result.reviewed_by, reviewed_at: result.reviewed_at }
         : item));
-      setNotice(result.unchanged
+      notifySuccess(result.unchanged
         ? "That decision was already recorded. Nothing was changed."
         : wasReviewed
           ? `Decision revised to ${status}.`
-          : `Response ${status}.`);
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Response review could not be saved.")).finally(() => setReviewingUserId(null));
+          : `Response ${status}.`, "applications-review");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Response review could not be saved.", "applications-review")).finally(() => setReviewingUserId(null));
   };
 
   const copyLink = async (application: StaffApplication) => {
@@ -118,15 +119,13 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
       await navigator.clipboard.writeText(link);
       setCopiedId(application.id); window.setTimeout(() => setCopiedId(""), 1800);
     } catch {
-      setError("Could not copy the link. Open it in a new tab and copy the address instead.");
+      notifyError("Could not copy the link. Open it in a new tab and copy the address instead.", "applications-editor");
     }
   };
 
   return <>
     <DashHeading eyebrow="People · applications" title="Build your next team." text="Keep separate role openings active at once. Close an opening when hiring pauses, then reopen the same link next time—past responses and one-time submissions stay attached." />
     <div className="applications-intro"><span className="applications-intro-icon"><Icon name="users" /></span><div><span className="panel-kicker">Hiring desk</span><strong>{applications.filter((item) => item.status === "open").length} open · {applications.length} saved openings</strong><p>Each opening has its own stable public link and response archive.</p></div><a href={`/apply/${guildId}`} target="_blank" rel="noreferrer" className="button button-muted button-small">Preview server link <Icon name="arrow" /></a></div>
-    {error && <div className="notice warning" role="alert">{error}</div>}
-    {notice && <div className="notice applications-success" role="status">{notice}</div>}
     <section className="applications-layout">
       <form className="dash-panel applications-editor" onSubmit={submit}>
         <div className="panel-heading"><div><span className="panel-kicker">{editingId ? "Edit opening" : "New opening"}</span><h3>{editingId ? "Update role application" : "Create a role application"}</h3><p>{editingId ? "Changes apply to the existing link. Previously submitted answers remain attached." : "One saved opening per role and hiring round. Reopen it later to reuse its URL."}</p></div><span className="panel-icon"><Icon name={editingId ? "settings" : "plus"} /></span></div>
