@@ -1,0 +1,1280 @@
+"""Web transcript storage and retrieval.
+
+Transcripts are stored in the main database (MongoDB or SQLite) and served
+through the Flask web API for browser-based viewing and multi-format downloads.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import csv
+import html as _html
+import io
+import json
+import re
+import hashlib
+import time
+from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+
+# CV2 component type ids (Components v2 layout messages)
+_TYPE_ACTION_ROW = 1
+_TYPE_BUTTON = 2
+_TYPE_SECTION = 9
+_TYPE_TEXT_DISPLAY = 10
+_TYPE_THUMBNAIL = 11
+_TYPE_MEDIA_GALLERY = 12
+_TYPE_SEPARATOR = 14
+_TYPE_CONTAINER = 17
+_TYPE_LABEL = 18
+
+
+async def save_transcript(
+    cxn,
+    *,
+    transcript_id: str,
+    guild_id: int,
+    channel_id: int,
+    channel_name: str,
+    opener_id: int,
+    category: str,
+    messages: List[Dict[str, Any]],
+    claimed_by: Optional[int] = None,
+) -> str:
+    """Store a transcript and return its ID.
+
+    Parameters
+    ----------
+    cxn:
+        The bot's database pool (``bot.cxn``).
+    transcript_id:
+        A unique short ID for this transcript (e.g. first 8 chars of SHA-256).
+    guild_id, channel_id, channel_name, opener_id, category:
+        Metadata about the ticket.
+    messages:
+        List of message dicts with ``timestamp``, ``author``, ``author_id``,
+        ``content``, ``attachments``, ``embeds`` and ``components`` keys.
+    claimed_by:
+        User ID of the support member who claimed the ticket, if any.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    await cxn.execute(
+        "INSERT INTO transcripts "
+        "(transcript_id, guild_id, channel_id, channel_name, opener_id, "
+        "category, claimed_by, message_count, messages, created_at) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+        transcript_id,
+        guild_id,
+        channel_id,
+        channel_name,
+        opener_id,
+        category,
+        claimed_by,
+        len(messages),
+        json.dumps(messages),
+        now,
+    )
+    return transcript_id
+
+
+async def get_transcript(cxn, transcript_id: str) -> Optional[dict]:
+    """Fetch a transcript by its short ID."""
+    row = await cxn.fetchrow(
+        "SELECT * FROM transcripts WHERE transcript_id = $1",
+        transcript_id,
+    )
+    if row is None:
+        return None
+    result = dict(row)
+    # Parse messages JSON
+    messages = result.get("messages")
+    if isinstance(messages, str):
+        try:
+            result["messages"] = json.loads(messages)
+        except (json.JSONDecodeError, TypeError):
+            result["messages"] = []
+    return result
+
+
+async def get_guild_transcripts(
+    cxn, guild_id: int, limit: int = 50, offset: int = 0
+) -> List[dict]:
+    """Fetch recent transcripts for a guild."""
+    rows = await cxn.fetch(
+        "SELECT transcript_id, guild_id, channel_name, opener_id, "
+        "category, claimed_by, message_count, created_at "
+        "FROM transcripts WHERE guild_id = $1 "
+        "ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+        guild_id, limit, offset,
+    )
+    return [dict(row) for row in rows]
+
+
+def generate_transcript_id(guild_id: int, channel_id: int, timestamp: float) -> str:
+    """Generate a short unique transcript ID."""
+    raw = f"{guild_id}-{channel_id}-{timestamp}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:12]
+
+
+def _image_data_url(payload: bytes, content_type: str) -> str:
+    """Encode downloaded image bytes for an offline HTML transcript."""
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if not media_type.startswith("image/"):
+        media_type = "image/png"
+    return f"data:{media_type};base64,{base64.b64encode(payload).decode('ascii')}"
+
+
+# Badge artwork ships with the web app, but an exported transcript is a single
+# offline file, so the SVGs are inlined instead of linked. Each entry is the
+# path under ``web/public/assets`` plus the name and description the badge popup
+# shows, and the keys are exactly the ones the profile API sends. The same three
+# pieces live in web/src/data/profileBadges.ts for the website popups.
+_PROFILE_BADGE_FILES = {
+    # Discord's own profile badges.
+    "staff": ("badges/staff.svg", "Discord Staff", "Part of the Discord team."),
+    "partner": ("badges/partner.svg", "Partnered Server Owner", "Owns a server that is partnered with Discord."),
+    "hypesquad_events": ("hypesquad/events.svg", "HypeSquad Events", "Helped host an official HypeSquad event."),
+    "bug_hunter_level_1": ("badges/bug_hunter_level_1.svg", "Bug Hunter", "Reported a valid bug to Discord."),
+    "hypesquad_bravery": ("hypesquad/bravery.svg", "HypeSquad Bravery", "Member of House Bravery."),
+    "hypesquad_brilliance": ("hypesquad/brilliance.svg", "HypeSquad Brilliance", "Member of House Brilliance."),
+    "hypesquad_balance": ("hypesquad/balance.svg", "HypeSquad Balance", "Member of House Balance."),
+    "early_supporter": ("badges/early_supporter.svg", "Early Supporter", "Supported Discord before October 10, 2018."),
+    "bug_hunter_level_2": ("badges/bug_hunter_level_2.svg", "Bug Hunter (Gold)", "Reported several valid bugs to Discord."),
+    "early_verified_developer": (
+        "badges/early_verified_developer.svg",
+        "Early Verified Bot Developer",
+        "Verified bot developer before August 19, 2020.",
+    ),
+    "certified_moderator": (
+        "badges/certified_moderator.svg",
+        "Moderator Programs Alumni",
+        "Took part in Discord's Moderator Programs.",
+    ),
+    "supports_commands": ("badges/supports_commands.svg", "Supports Commands", "This app supports slash commands."),
+    "active_developer": ("badges/active_developer.svg", "Active Developer", "Ran a slash command in the past 30 days."),
+    # Niko's own role badges, next to Discord's the way the bot's card lists
+    # them. Every key here also exists in utils/member_badges.py.
+    "niko_owner": ("badges/niko_owner.svg", "Niko Owner", "Owns and runs Niko."),
+    "niko_staff": ("badges/niko_staff.svg", "Niko Staff", "Part of the Niko team."),
+    "niko_head_admin": ("badges/niko_head_admin.svg", "Head Admin", "Leads Niko's moderation team."),
+    "niko_moderator": ("badges/niko_moderator.svg", "Moderator", "Keeps Niko's servers in order."),
+    "niko_head_support": ("badges/niko_head_support.svg", "Head of Support", "Leads the Niko support team."),
+    "niko_support": ("badges/niko_support.svg", "Support Team", "Answers tickets and helps members."),
+    "niko_graphic_designer": ("badges/niko_graphic_designer.svg", "Graphic Designer", "Draws Niko's art and brand."),
+    "niko_event_coordinator": ("badges/niko_event_coordinator.svg", "Event Coordinator", "Runs Niko's community events."),
+    "niko_partnerships_promotions_lead": (
+        "badges/niko_partnerships_promotions_lead.svg",
+        "Partnerships & Promotions Lead",
+        "Leads partnerships and promotions.",
+    ),
+    "niko_partnership_manager": ("badges/niko_partnership_manager.svg", "Partnership Manager", "Manages Niko's partner servers."),
+    "niko_supporter": ("badges/niko_supporter.svg", "Supporter", "Donated to keep Niko's hosting running."),
+    "niko_bug_hunter": ("badges/niko_bug_hunter.svg", "Bug Bounty Hunter", "Reported a bug that made Niko better."),
+    "niko_partner": ("badges/niko_partner.svg", "Partner", "Owns a server partnered with Niko."),
+    # Discord draws a different boosting badge for every tier, so every tier has
+    # its own art, name and description here too.
+    **{
+        f"boosting_{months}_months": (
+            f"badges/boosting_{months}_months.svg",
+            f"Boosting a server for {months} month{'s' if months != 1 else ''}",
+            f"Boosted a server for {months} month{'s' if months != 1 else ''}. "
+            "The badge art upgrades at 1, 2, 3, 6, 9, 12, 15, 18 and 24 months.",
+        )
+        for months in (1, 2, 3, 6, 9, 12, 15, 18, 24)
+    },
+}
+
+
+@lru_cache(maxsize=1)
+def _profile_badge_art() -> dict:
+    """Data URLs for the badges, keyed by the keys the profile API sends."""
+    assets = Path(__file__).resolve().parents[3] / "web" / "public" / "assets"
+    art = {}
+    for key, (relative, label, description) in _PROFILE_BADGE_FILES.items():
+        try:
+            svg = (assets / relative).read_bytes()
+        except OSError:
+            continue
+        art[key] = {
+            "src": _image_data_url(svg, "image/svg+xml"),
+            "label": label,
+            "description": description,
+        }
+    return art
+
+
+# Discord's presence dots ship with the web app too, but an exported transcript
+# is a single offline file, so the PNGs are inlined exactly like the badges. The
+# keys are the status names the profile API sends, and the labels are the wording
+# the website popup and the Team page already use.
+_PROFILE_STATUS_FILES = {
+    "online": ("discord-status/status_online.png", "Online"),
+    "idle": ("discord-status/status_idle.png", "Idle"),
+    "dnd": ("discord-status/status_dnd.png", "Do Not Disturb"),
+    "offline": ("discord-status/status_offline.png", "Offline"),
+    "streaming": ("discord-status/status_streaming.png", "Streaming"),
+}
+
+
+@lru_cache(maxsize=1)
+def _profile_status_art() -> dict:
+    """Data URLs for the presence dots, keyed by the status the API sends."""
+    assets = Path(__file__).resolve().parents[3] / "web" / "public" / "assets"
+    art = {}
+    for key, (relative, label) in _PROFILE_STATUS_FILES.items():
+        try:
+            png = (assets / relative).read_bytes()
+        except OSError:
+            continue
+        art[key] = {"src": _image_data_url(png, "image/png"), "label": label}
+    return art
+
+
+async def inline_transcript_images(messages: List[dict], *, max_bytes: int = 12 * 1024 * 1024) -> int:
+    """Replace Discord-hosted transcript images with base64 data URLs.
+
+    Discord CDN URLs can stop working after a message or channel is removed.
+    Downloading these images while the ticket still exists makes HTML exports
+    self-contained and usable without an internet connection.
+    """
+    urls: set[str] = set()
+
+    def add_media(media: Any) -> None:
+        if isinstance(media, dict):
+            url = media.get("url") or media.get("proxy_url")
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                urls.add(url)
+
+    for message in messages:
+        for sticker in message.get("stickers") or []:
+            if not isinstance(sticker, dict) or not sticker.get("id"):
+                continue
+            sticker_url = sticker.get("url") or (
+                f"https://cdn.discordapp.com/stickers/{sticker['id']}."
+                f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+            )
+            if isinstance(sticker_url, str) and sticker_url.startswith(("http://", "https://")):
+                urls.add(sticker_url)
+        for url in message.get("attachments") or []:
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                urls.add(url)
+        for embed in message.get("embeds") or []:
+            if not isinstance(embed, dict):
+                continue
+            add_media(embed.get("image"))
+            add_media(embed.get("thumbnail"))
+            add_media(embed.get("author"))
+            add_media(embed.get("footer"))
+        def collect_components(components: Any) -> None:
+            for component in components or []:
+                if not isinstance(component, dict):
+                    continue
+                add_media(component.get("media"))
+                collect_components(component.get("components"))
+                if component.get("accessory"):
+                    collect_components([component["accessory"]])
+        collect_components(message.get("components"))
+
+    if not urls:
+        return 0
+
+    timeout = aiohttp.ClientTimeout(total=20)
+    semaphore = asyncio.Semaphore(6)
+    downloaded: dict[str, str] = {}
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async def fetch(url: str) -> None:
+            async with semaphore:
+                try:
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            return
+                        content_type = response.headers.get("Content-Type", "")
+                        if not content_type.lower().startswith("image/"):
+                            return
+                        payload = await response.read()
+                        if 0 < len(payload) <= max_bytes:
+                            downloaded[url] = _image_data_url(payload, content_type)
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    return
+
+        await asyncio.gather(*(fetch(url) for url in urls))
+
+    if not downloaded:
+        return 0
+
+    def replace_media(media: Any) -> None:
+        if not isinstance(media, dict):
+            return
+        original = media.get("url") or media.get("proxy_url")
+        if original in downloaded:
+            media["url"] = downloaded[original]
+            media.pop("proxy_url", None)
+
+    for message in messages:
+        attachments = message.get("attachments") or []
+        message["attachments"] = [downloaded.get(url, url) for url in attachments]
+        for sticker in message.get("stickers") or []:
+            if not isinstance(sticker, dict):
+                continue
+            original = sticker.get("url")
+            if not original and sticker.get("id"):
+                original = (
+                    f"https://cdn.discordapp.com/stickers/{sticker['id']}."
+                    f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+                )
+            if original in downloaded:
+                sticker["url"] = downloaded[original]
+        for embed in message.get("embeds") or []:
+            if not isinstance(embed, dict):
+                continue
+            for key in ("image", "thumbnail", "author", "footer"):
+                replace_media(embed.get(key))
+        def replace_components(components: Any) -> None:
+            for component in components or []:
+                if not isinstance(component, dict):
+                    continue
+                replace_media(component.get("media"))
+                replace_components(component.get("components"))
+                if component.get("accessory"):
+                    replace_components([component["accessory"]])
+        replace_components(message.get("components"))
+    return len(downloaded)
+
+
+# ── Shared render helpers ───────────────────────────────────────────────────
+
+
+def _esc(value: Any) -> str:
+    """Escape a value for safe HTML embedding."""
+    return _html.escape("" if value is None else str(value), quote=True)
+
+
+def _color_css(color) -> str:
+    """Convert an int/hex color into a CSS color string."""
+    if color is None:
+        return ""
+    try:
+        color = int(color)
+    except (TypeError, ValueError):
+        return ""
+    if not (0 <= color <= 0xFFFFFF):
+        return ""
+    return f"#{color:06x}"
+
+
+def _media_url(media: Optional[dict]) -> str:
+    """Best URL for a media payload (prefer real url over proxy)."""
+    if not isinstance(media, dict):
+        return ""
+    return media.get("url") or media.get("proxy_url") or ""
+
+
+def _is_image_url(url: str) -> bool:
+    """Heuristic image check on a URL or content type."""
+    if url.startswith("data:image/"):
+        return True
+    return bool(re.search(r"\.(?:png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)", url, re.I))
+
+
+def _is_video_url(url: str) -> bool:
+    """Heuristic video check on a URL or content type."""
+    if url.startswith("data:video/"):
+        return True
+    return bool(re.search(r"\.(?:mp4|webm|mov|m4v|ogg)(?:[?#]|$)", url, re.I))
+
+
+def _discord_timestamp_text(unix: int, style: str) -> Optional[str]:
+    """Return a readable UTC fallback for a Discord dynamic timestamp."""
+    if style not in {"t", "T", "d", "D", "f", "F", "R"}:
+        return None
+    try:
+        value = datetime.fromtimestamp(unix, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+    if style == "R":
+        seconds = unix - int(time.time())
+        absolute = abs(seconds)
+        if absolute < 60:
+            amount, unit = seconds, "second"
+        elif absolute < 3600:
+            amount, unit = round(seconds / 60), "minute"
+        elif absolute < 86400:
+            amount, unit = round(seconds / 3600), "hour"
+        elif absolute < 604800:
+            amount, unit = round(seconds / 86400), "day"
+        elif absolute < 2592000:
+            amount, unit = round(seconds / 604800), "week"
+        elif absolute < 31536000:
+            amount, unit = round(seconds / 2592000), "month"
+        else:
+            amount, unit = round(seconds / 31536000), "year"
+        suffix = "s" if abs(amount) != 1 else ""
+        return f"in {abs(amount)} {unit}{suffix}" if amount >= 0 else f"{abs(amount)} {unit}{suffix} ago"
+    if style == "t":
+        return value.strftime("%-I:%M %p UTC")
+    if style == "T":
+        return value.strftime("%-I:%M:%S %p UTC")
+    if style == "d":
+        return value.strftime("%m/%d/%Y")
+    if style == "D":
+        return value.strftime("%B %-d, %Y")
+    if style == "F":
+        return value.strftime("%A, %B %-d, %Y %-I:%M %p UTC")
+    return value.strftime("%b %-d, %Y %-I:%M %p UTC")
+
+
+def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
+    """Convert a light markdown subset into safe HTML.
+
+    Supports bold, italics, underline, strikethrough, inline code, links and
+    blockquote / small-text prefixes.  Everything is HTML-escaped first, so
+    untrusted message content can never inject markup.
+    """
+    value = _esc(text)
+    if not value:
+        return ""
+
+    code_holders: Dict[str, str] = {}
+
+    def _protect_code(match: "re.Match[str]") -> str:
+        key = f"\u0000{len(code_holders)}\u0000"
+        code_holders[key] = f"<code>{match.group(1)}</code>"
+        return key
+
+    value = re.sub(r"`([^`\n]+)`", _protect_code, value)
+
+    def _link(match: "re.Match[str]") -> str:
+        label, url = match.group(1), match.group(2)
+        if url.startswith(("http://", "https://")):
+            return f'<a href="{_esc(url)}" target="_blank" rel="noopener noreferrer">{label}</a>'
+        return label
+
+    value = re.sub(r"\[([^\[\]\n]+)\]\((https?://[^\s)\]]+)\)", _link, value)
+    value = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", value)
+    value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", value)
+    value = re.sub(r"__([^_\n]+)__", r"<u>\1</u>", value)
+    value = re.sub(r"~~([^~\n]+)~~", r"<s>\1</s>", value)
+
+    # Discord custom emoji are stored in message content as <:name:id> or
+    # <a:name:id>. Render the CDN asset instead of exposing the raw token.
+    def _custom_emoji(match: "re.Match[str]") -> str:
+        animated = match.group(1) == "a"
+        name = match.group(2)
+        emoji_id = match.group(3)
+        extension = "gif" if animated else "png"
+        url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{extension}"
+        return (
+            f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:" '
+            f'data-emoji-name="{name}">'
+        )
+
+    value = re.sub(r"&lt;(a?):([A-Za-z0-9_~]+):(\d+)&gt;", _custom_emoji, value)
+
+    def _timestamp(match: "re.Match[str]") -> str:
+        unix = int(match.group(1))
+        style = match.group(2)
+        raw = f"&lt;t:{unix}:{style}&gt;"
+        formatted = _discord_timestamp_text(unix, style)
+        if formatted is None:
+            return raw
+        return (
+            f'<time class="discord-timestamp" datetime="{unix}" '
+            f'data-discord-ts="{unix}" data-discord-style="{style}" '
+            f'title="{raw}">{_esc(formatted)}</time>'
+        )
+
+    value = re.sub(r"&lt;t:(-?\d+):([tTdDfFR])&gt;", _timestamp, value)
+
+    def _mention(match: "re.Match[str]") -> str:
+        raw_id = match.group(1) or match.group(2) or match.group(3)
+        kind = "user" if match.group(1) else "role" if match.group(2) else "channel"
+        label = (mention_names or {}).get(kind, {}).get(raw_id)
+        safe_label = _esc(label or raw_id)
+        if kind == "user":
+            return f'<a class="discord-md-mention discord-md-mention-user" href="https://discord.com/users/{raw_id}" data-discord-user-id="{raw_id}" role="button" tabindex="0">@{safe_label}</a>'
+        css_kind = "channel" if kind == "channel" else "role"
+        prefix = "#" if kind == "channel" else "@"
+        return f'<span class="discord-md-mention discord-md-mention-{css_kind}">{prefix}{safe_label}</span>'
+
+    value = re.sub(r"&lt;@!?(\d+)&gt;|&lt;@&amp;(\d+)&gt;|&lt;#(\d+)&gt;", _mention, value)
+
+    lines = value.split("\n")
+    html_lines = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("&gt; ") or stripped.startswith(">"):
+            body = stripped[4:] if stripped.startswith("&gt; ") else stripped[1:].lstrip()
+            html_lines.append(f'<span class="tq">&gt; {body}</span>')
+        elif stripped.startswith("-# "):
+            html_lines.append(f'<span class="tsm">{stripped[3:]}</span>')
+        elif re.match(r"#{1,4}\s", stripped):
+            html_lines.append(f'<span class="th">{stripped}</span>')
+        else:
+            html_lines.append(line)
+    value = "<br>".join(html_lines)
+
+    for key, replacement in code_holders.items():
+        value = value.replace(key, replacement)
+    return value
+
+
+def _embed_to_html(embed: dict, mention_names: dict | None = None) -> str:
+    """Render a single embed payload into an HTML block."""
+    color = _color_css(embed.get("color"))
+    style = f"border-left-color: {color};" if color else ""
+    parts = []
+
+    author = embed.get("author") or {}
+    if author.get("name"):
+        icon = author.get("icon_url") or author.get("proxy_icon_url")
+        icon_html = f'<img class="embed-author-icon" src="{_esc(icon)}" alt="">' if icon else ""
+        parts.append(f'<div class="embed-author">{icon_html}{_esc(author.get("name"))}</div>')
+
+    title = embed.get("title")
+    if title:
+        title_html = _esc(title)
+        embed_url = embed.get("url")
+        if embed_url and embed_url.startswith(("http://", "https://")):
+            title_html = f'<a href="{_esc(embed_url)}" target="_blank" rel="noopener noreferrer">{title_html}</a>'
+        parts.append(f'<div class="embed-title">{title_html}</div>')
+
+    desc = embed.get("description")
+    if desc:
+        parts.append(f'<div class="embed-desc">{_md_to_html(desc, mention_names)}</div>')
+
+    fields = embed.get("fields") or []
+    if fields:
+        field_html = []
+        for field in fields:
+            name = field.get("name", "")
+            value = field.get("value", "")
+            cls = "embed-field embed-field-inline" if field.get("inline") else "embed-field"
+            field_html.append(
+                f'<div class="{cls}"><div class="embed-field-name">{_md_to_html(name, mention_names)}</div>'
+                f'<div class="embed-field-value">{_md_to_html(value, mention_names)}</div></div>'
+            )
+        parts.append(f'<div class="embed-fields">{"".join(field_html)}</div>')
+
+    image = embed.get("image") or {}
+    img_url = image.get("url") or image.get("proxy_url")
+    if img_url:
+        parts.append(
+            f'<a class="embed-image-wrap" href="{_esc(img_url)}" target="_blank" rel="noopener noreferrer">'
+            f'<img class="embed-image" src="{_esc(img_url)}" alt=""></a>'
+        )
+
+    footer_html = ""
+    footer = embed.get("footer") or {}
+    if footer.get("text"):
+        icon = footer.get("icon_url") or footer.get("proxy_icon_url")
+        icon_html = f'<img class="embed-footer-icon" src="{_esc(icon)}" alt="">' if icon else ""
+        footer_html = f'<div class="embed-footer">{icon_html}{_esc(footer.get("text"))}</div>'
+
+    timestamp = embed.get("timestamp")
+    if timestamp:
+        footer_html += f'<span class="embed-ts">{_esc(str(timestamp).replace("T", " ").replace("+00:00", " UTC"))}</span>'
+
+    thumbnail = embed.get("thumbnail") or {}
+    thumb_url = thumbnail.get("url") or thumbnail.get("proxy_url")
+    thumb_html = ""
+    if thumb_url:
+        thumb_html = (
+            f'<a class="embed-thumb" href="{_esc(thumb_url)}" target="_blank" rel="noopener noreferrer">'
+            f'<img src="{_esc(thumb_url)}" alt=""></a>'
+        )
+
+    return (
+        f'<div class="embed" style="{style}">'
+        f'<div class="embed-body">{"".join(parts)}'
+        f'<div class="embed-foot">{footer_html}</div>'
+        f'</div>{thumb_html}</div>'
+    )
+
+
+def _component_children(component: dict) -> List[dict]:
+    """Child payloads of a container-like component."""
+    children = list(component.get("components") or [])
+    accessory = component.get("accessory")
+    if accessory:
+        children.append(accessory)
+    return children
+
+
+def _component_to_html(component: dict, mention_names: dict | None = None) -> str:
+    """Recursively render one CV2 component payload into HTML."""
+    ctype = component.get("type")
+    if ctype == _TYPE_CONTAINER:
+        accent = _color_css(component.get("accent_color"))
+        style = f"border-color: {accent};" if accent else ""
+        bar = f'<div class="cv2-bar" style="background:{accent};"></div>' if accent else ""
+        inner = "".join(_component_to_html(c, mention_names) for c in _component_children(component))
+        return (
+            f'<div class="cv2-card" style="{style}">{bar}'
+            f'<div class="cv2-card-inner">{inner}</div></div>'
+        )
+    if ctype == _TYPE_ACTION_ROW:
+        inner = "".join(_component_to_html(c, mention_names) for c in _component_children(component))
+        return f'<div class="cv2-row">{inner}</div>'
+    if ctype == _TYPE_BUTTON:
+        style = component.get("style")
+        url = component.get("url") or ""
+        label = component.get("label") or ""
+        emoji = component.get("emoji") or {}
+        emoji_name = emoji.get("name") or ""
+        label_html = _esc(f"{emoji_name} {label}".strip())
+        if style == 5 and url.startswith(("http://", "https://")):
+            return f'<a class="cv2-btn cv2-btn-link" href="{_esc(url)}" target="_blank" rel="noopener noreferrer">{label_html}</a>'
+        disabled = " cv2-btn-disabled" if component.get("disabled") else ""
+        return f'<span class="cv2-btn{disabled}">{label_html}</span>'
+    if ctype == _TYPE_SECTION:
+        children = [c for c in _component_children(component)]
+        main = "".join(_component_to_html(c, mention_names) for c in children)
+        return f'<div class="cv2-section">{main}</div>'
+    if ctype == _TYPE_TEXT_DISPLAY:
+        return f'<div class="cv2-text">{_md_to_html(component.get("content"), mention_names)}</div>'
+    if ctype == _TYPE_LABEL:
+        return f'<div class="cv2-label">{_md_to_html(component.get("content"), mention_names)}</div>'
+    if ctype == _TYPE_SEPARATOR:
+        if component.get("divider", True):
+            return '<div class="cv2-sep"></div>'
+        return '<div class="cv2-sep cv2-sep-spacer"></div>'
+    if ctype == _TYPE_THUMBNAIL:
+        media = component.get("media") or {}
+        url = _media_url(media)
+        if not url:
+            return ""
+        return (
+            f'<span class="cv2-thumb"><a href="{_esc(url)}" target="_blank" rel="noopener noreferrer">'
+            f'<img src="{_esc(url)}" alt=""></a></span>'
+        )
+    if ctype == _TYPE_MEDIA_GALLERY:
+        items_html = []
+        for item in component.get("items") or []:
+            media = item.get("media") or {}
+            url = _media_url(media)
+            if not url:
+                continue
+            desc = item.get("description")
+            desc_html = f'<figcaption>{_md_to_html(desc, mention_names)}</figcaption>' if desc else ""
+            content_type = media.get("content_type") or ""
+            if content_type.startswith("video/") or _is_video_url(url):
+                items_html.append(
+                    f'<figure class="cv2-media-item"><video src="{_esc(url)}" controls preload="metadata"></video>'
+                    f'{desc_html}</figure>'
+                )
+            else:
+                items_html.append(
+                    f'<figure class="cv2-media-item"><a href="{_esc(url)}" target="_blank" rel="noopener noreferrer">'
+                    f'<img src="{_esc(url)}" alt=""></a>{desc_html}</figure>'
+                )
+        if not items_html:
+            return ""
+        return f'<div class="cv2-gallery">{"".join(items_html)}</div>'
+    return ""
+
+
+def _components_to_html(components: List[dict], mention_names: dict | None = None) -> str:
+    return "".join(_component_to_html(c, mention_names) for c in components)
+
+
+def _flatten_message_text(msg: dict, indented: bool = False) -> List[str]:
+    """Human-readable lines for txt/csv export covering all message content."""
+    prefix = "  " if indented else ""
+    lines = []
+    content = msg.get("content", "")
+    if content:
+        lines.append(f"{prefix}Content: {content}")
+
+    for url in msg.get("attachments") or []:
+        lines.append(f"{prefix}Attachment: {url}")
+
+    for embed in msg.get("embeds") or []:
+        if not isinstance(embed, dict):
+            continue
+        bits = []
+        author = (embed.get("author") or {}).get("name")
+        if author:
+            bits.append(author)
+        if embed.get("title"):
+            bits.append(embed["title"])
+        if embed.get("description"):
+            bits.append(embed["description"])
+        for field in embed.get("fields") or []:
+            name = field.get("name")
+            value = field.get("value")
+            if name or value:
+                bits.append(f"{name}: {value}".strip())
+        if bits:
+            lines.append(f"{prefix}Embed: " + " | ".join(bits))
+        for key in ("image", "thumbnail"):
+            media = embed.get(key) or {}
+            url = _media_url(media)
+            if url:
+                lines.append(f"{prefix}Embed {key}: {url}")
+
+    for line in _flatten_component_text(msg.get("components") or [], prefix):
+        lines.append(line)
+    return lines
+
+
+def _flatten_component_text(components: List[dict], prefix: str = "") -> List[str]:
+    """Flatten CV2 components into readable text lines."""
+    lines = []
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        ctype = component.get("type")
+        if ctype == _TYPE_TEXT_DISPLAY:
+            content = (component.get("content") or "").strip()
+            if content:
+                lines.append(f"{prefix}{content}")
+        elif ctype == _TYPE_LABEL:
+            content = (component.get("content") or "").strip()
+            if content:
+                lines.append(f"{prefix}◈ {content}")
+        elif ctype == _TYPE_BUTTON:
+            label = component.get("label") or ""
+            url = component.get("url") or ""
+            if url:
+                lines.append(f"{prefix}▸ {label} ({url})")
+            elif label:
+                lines.append(f"{prefix}▸ {label}")
+        elif ctype == _TYPE_THUMBNAIL:
+            url = _media_url(component.get("media"))
+            if url:
+                lines.append(f"{prefix}Image: {url}")
+        elif ctype == _TYPE_MEDIA_GALLERY:
+            for item in component.get("items") or []:
+                url = _media_url(item.get("media"))
+                if not url:
+                    continue
+                desc = item.get("description")
+                lines.append(f"{prefix}Media: {url}" + (f" ({desc})" if desc else ""))
+        elif ctype in (_TYPE_CONTAINER, _TYPE_ACTION_ROW, _TYPE_SECTION):
+            lines.extend(_flatten_component_text(_component_children(component), prefix))
+    return lines
+
+
+# ── Format exporters ────────────────────────────────────────────────────────
+
+
+def export_txt(messages: List[dict]) -> str:
+    """Plain text format — one line per message."""
+    lines = []
+    for msg in messages:
+        ts = msg.get("timestamp", "")
+        author = msg.get("author", "Unknown")
+        content = msg.get("content", "")
+        lines.append(f"[{ts}] {author}: {content}".rstrip())
+        lines.extend(_flatten_message_text(msg, indented=True))
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def export_html(messages: List[dict], metadata: dict, mention_names: dict | None = None, user_profiles: dict | None = None) -> str:
+    """Styled HTML transcript page (rich: content, attachments, embeds, CV2)."""
+    title = metadata.get("channel_name", "Transcript")
+    guild = metadata.get("guild_name", "Server")
+    created = metadata.get("created_at", "")
+    msg_count = len(messages)
+
+    msg_rows = []
+    for msg in messages:
+        ts = msg.get("timestamp", "")
+        author = msg.get("author", "Unknown")
+        author_id = msg.get("author_id", "")
+        content = msg.get("content", "")
+
+        content_html = f'<div class="content">{_md_to_html(content, mention_names)}</div>' if content else ""
+
+        attachments = msg.get("attachments") or []
+        att_html = ""
+        if attachments:
+            att_html = '<div class="attachments">' + "".join(
+                f'<a href="{_esc(a)}" target="_blank" rel="noopener noreferrer">📎 Attachment</a>'
+                for a in attachments
+            ) + "</div>"
+
+        embeds_html = "".join(
+            _embed_to_html(embed, mention_names) for embed in msg.get("embeds") or []
+            if isinstance(embed, dict)
+        )
+
+        components_html = _components_to_html(msg.get("components") or [], mention_names)
+
+        stickers_html = ""
+        for sticker in msg.get("stickers") or []:
+            if not isinstance(sticker, dict):
+                continue
+            sticker_id = sticker.get("id")
+            if not sticker_id:
+                continue
+            sticker_url = sticker.get("url") or (
+                f"https://cdn.discordapp.com/stickers/{sticker_id}."
+                f"{'gif' if sticker.get('format_type') == 4 else 'png'}"
+            )
+            stickers_html += (
+                f'<a class="sticker" href="{_esc(sticker_url)}" target="_blank" rel="noopener noreferrer">'
+                f'<img src="{_esc(sticker_url)}" alt="{_esc(sticker.get("name") or "Discord sticker")}" '
+                f'title="{_esc(sticker.get("name") or "Discord sticker")}"></a>'
+            )
+        if stickers_html:
+            stickers_html = f'<div class="stickers">{stickers_html}</div>'
+
+        if not (content or attachments or embeds_html or components_html or stickers_html):
+            content_html = '<div class="content ts-muted"><em>Message content unavailable</em></div>'
+
+        msg_rows.append(
+            f'<div class="message">'
+            f'<div class="message-head"><span class="timestamp">{_esc(ts)}</span> '
+            f'<span class="author">{_esc(author)}</span> '
+            f'<span class="author-id">({_esc(author_id)})</span></div>'
+            f'{content_html}{att_html}{embeds_html}{components_html}{stickers_html}'
+            f'</div>'
+        )
+
+    msg_block = chr(10).join(msg_rows)
+    profile_json = json.dumps(user_profiles or {}, ensure_ascii=False).replace("</", "<\\/")
+    badge_art_json = json.dumps(_profile_badge_art(), ensure_ascii=False)
+    status_art_json = json.dumps(_profile_status_art(), ensure_ascii=False)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transcript — {_esc(title)}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #1e1f22; color: #dbdee1; padding: 20px; }}
+  .header {{ background: #2b2d31; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #3f4147; }}
+  .header h1 {{ font-size: 20px; color: #f2f3f5; margin-bottom: 8px; }}
+  .header .meta {{ color: #949ba4; font-size: 13px; }}
+  .message {{ padding: 10px 14px; border-bottom: 1px solid #2b2d31; line-height: 1.55; font-size: 14px; }}
+  .message:hover {{ background: #2e3035; }}
+  .message-head {{ margin-bottom: 2px; }}
+  .timestamp {{ color: #949ba4; font-size: 11px; font-family: monospace; }}
+  .author {{ color: #f2f3f5; font-weight: 600; }}
+  .author-id {{ color: #949ba4; font-size: 11px; }}
+  .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
+  .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
+  .custom-emoji-fallback {{ color: inherit; }}
+  .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
+  .discord-md-mention {{ display: inline; padding: 1px 4px; color: #dce4ff; background: rgba(88, 101, 242, .3); border-radius: 4px; font-weight: 650; line-height: 1.5; text-decoration: none; }}
+  .discord-md-mention-role {{ color: #f1d7ff; background: rgba(160, 89, 198, .24); }}
+  .discord-md-mention-user {{ cursor: pointer; }}
+  .discord-profile-popover {{ position: fixed; inset: 0; z-index: 100; pointer-events: none; }}
+  .discord-profile-card {{ position: fixed; left: var(--profile-left); top: var(--profile-top); width: min(20rem, calc(100vw - 1.5rem)); max-height: min(35rem, calc(100dvh - 1.5rem)); overflow-y: auto; border: 1px solid rgb(255 255 255 / .08); border-radius: .85rem; background: #111214; color: #f2f3f5; box-shadow: 0 18px 52px rgb(0 0 0 / .58); pointer-events: auto; font-size: 13px; line-height: 1.45; }}
+  .discord-profile-banner {{ display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #202225 center / cover no-repeat; }}
+  .discord-profile-menu {{ position: absolute; top: 8px; right: 8px; z-index: 3; }}
+  .discord-profile-menu-button {{ display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: rgb(24 25 28 / .62); cursor: pointer; }}
+  .discord-profile-menu-button:hover {{ background: rgb(24 25 28 / .85); }}
+  .discord-profile-menu-dots {{ display: flex; gap: 3px; }}
+  .discord-profile-menu-dots i {{ width: 4px; height: 4px; border-radius: 50%; background: #fff; }}
+  .discord-profile-menu-list {{ position: absolute; top: calc(100% + 6px); right: 0; min-width: 148px; padding: 4px; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 6px; box-shadow: 0 10px 26px rgb(0 0 0 / .5); }}
+  .discord-profile-menu-item {{ display: block; width: 100%; padding: 7px 9px; color: #dbdee1; background: transparent; border: 0; border-radius: 4px; font: inherit; text-align: left; cursor: pointer; }}
+  .discord-profile-menu-item:hover {{ background: #35373c; }}
+  .discord-profile-body {{ position: relative; padding: 0 16px 16px; }}
+  .discord-profile-head {{ display: flex; align-items: center; gap: 8px; margin-top: -38px; }}
+  .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; }}
+  .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 0; border-radius: 50%; object-fit: cover; background: #313338; }}
+  .discord-profile-avatar-decoration {{ position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; transform: translate(-50%, -50%) scale(1.2); pointer-events: none; }}
+  .discord-status-icon {{ position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }}
+  .discord-profile-status {{ position: relative; flex: 1 1 auto; min-width: 0; padding: 8px 11px; color: #dbdee1; background: #232428; border-radius: 12px; font-size: 12.5px; line-height: 1.4; }}
+  .discord-profile-status::before {{ position: absolute; top: 50%; left: -6px; border: 6px solid transparent; border-right-color: #232428; border-left: 0; content: ""; transform: translateY(-50%); }}
+  .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }}
+  .discord-profile-status-emoji {{ display: inline-block; width: 15px; height: 15px; margin-right: 5px; object-fit: contain; vertical-align: -.2em; }}
+  .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
+  .discord-profile-username {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }}
+  .discord-profile-user-tag {{ min-width: 0; overflow-wrap: anywhere; }}
+  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }}
+  .discord-profile-guild-tag img {{ width: 14px; height: 14px; object-fit: contain; }}
+  .discord-profile-badges {{ position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }}
+  .discord-profile-badge {{ width: 20px; height: 20px; object-fit: contain; }}
+  .discord-profile-badge-button {{ display: block; padding: 2px; background: transparent; border: 0; border-radius: 5px; line-height: 0; cursor: pointer; }}
+  .discord-profile-badge-button:hover, .discord-profile-badge-button[aria-expanded="true"] {{ background: #3f4147; }}
+  /* Fixed to the page and stacked above the profile popup, so the badge popup
+     neither stretches the profile card nor gets clipped by its scroll box. */
+  .discord-badge-popup {{ position: fixed; z-index: 101; display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(18rem, calc(100vw - 1.5rem)); padding: 10px 12px; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 8px; box-shadow: 0 10px 26px rgb(0 0 0 / .5); }}
+  .discord-badge-popup-art {{ width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }}
+  .discord-badge-popup-copy {{ display: grid; gap: 2px; min-width: 0; }}
+  .discord-badge-popup-copy strong {{ color: #f2f3f5; font-size: 12.5px; font-weight: 700; }}
+  .discord-badge-popup-copy p {{ margin: 0; color: #b5bac1; font-size: 11.5px; line-height: 1.4; }}
+  .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }}
+  .discord-profile-spotify-link {{ display: block; color: inherit; text-decoration: none; }}
+  .discord-profile-spotify-head {{ color: #b5bac1; font-size: 11px; font-weight: 700; }}
+  .discord-profile-spotify-body {{ display: flex; align-items: center; gap: 10px; margin-top: 9px; }}
+  .discord-profile-spotify-art {{ width: 56px; height: 56px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; }}
+  .discord-profile-spotify-copy {{ display: grid; flex: 1 1 auto; min-width: 0; gap: 3px; }}
+  .discord-profile-spotify-copy strong {{ overflow: hidden; color: #f2f3f5; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-copy small {{ overflow: hidden; color: #b5bac1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-progress {{ display: flex; align-items: center; gap: 7px; margin-top: 4px; color: #949ba4; font-size: 10px; }}
+  .discord-profile-spotify-track {{ position: relative; display: block; height: 4px; flex: 1 1 auto; overflow: hidden; background: #4e5058; border-radius: 999px; }}
+  .discord-profile-spotify-track > i {{ position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #1db954; border-radius: 999px; transition: width .95s linear; }}
+  .discord-profile-about {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid #3f4147; }}
+  .discord-profile-about h3 {{ margin-bottom: 5px; color: #b5bac1; font-size: 11px; text-transform: uppercase; }}
+  .discord-profile-about p {{ white-space: pre-wrap; }}
+  .discord-profile-full-link {{ display: block; margin-top: 14px; padding: 8px; border-radius: 5px; background: #5865f2; color: white; text-align: center; text-decoration: none; }}
+  .discord-profile-state {{ padding: 18px; }}
+  @media (prefers-reduced-transparency: reduce) {{
+    .discord-profile-card {{ box-shadow: none; }}
+  }}
+  .stickers {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
+  .sticker img {{ width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; display: block; }}
+  .ts-muted {{ color: #6d737a; }}
+  .tsm {{ color: #949ba4; font-size: 12px; }}
+  .th {{ font-size: 16px; font-weight: 700; color: #f2f3f5; }}
+  .tq {{ display: inline-block; color: #b5bac1; border-left: 3px solid #4e5058; padding-left: 8px; }}
+  code {{ background: #2b2d31; padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; color: #f2b8c2; }}
+  .attachments {{ margin-top: 4px; }}
+  .attachments a {{ color: #00a8fc; text-decoration: none; font-size: 12px; margin-right: 10px; }}
+  .attachments a:hover, a:hover {{ text-decoration: underline; }}
+
+  .embed {{ display: flex; max-width: 560px; margin-top: 8px; background: #2b2d31; border: 1px solid #3f4147; border-left: 4px solid #5865f2; border-radius: 6px; padding: 10px 12px; }}
+  .embed-body {{ flex: 1; min-width: 0; }}
+  .embed-author {{ color: #f2f3f5; font-weight: 600; font-size: 13px; }}
+  .embed-author-icon {{ width: 18px; height: 18px; border-radius: 50%; vertical-align: -4px; margin-right: 6px; }}
+  .embed-title {{ color: #00a8fc; font-weight: 600; margin: 4px 0; }}
+  .embed-title a {{ color: inherit; }}
+  .embed-desc {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; font-size: 13px; }}
+  .embed-fields {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }}
+  .embed-field {{ flex: 0 0 100%; font-size: 13px; }}
+  .embed-field-inline {{ flex: 0 0 50%; }}
+  .embed-field-name {{ color: #f2f3f5; font-weight: 600; margin-bottom: 2px; }}
+  .embed-field-value {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
+  .embed-image-wrap {{ margin-top: 8px; display: block; }}
+  .embed-image {{ max-width: 100%; max-height: 350px; border-radius: 4px; }}
+  .embed-foot {{ display: flex; align-items: center; gap: 6px; color: #949ba4; font-size: 11px; margin-top: 6px; }}
+  .embed-footer-icon {{ width: 16px; height: 16px; border-radius: 50%; }}
+  .embed-thumb {{ margin-left: 10px; flex: 0 0 auto; }}
+  .embed-thumb img {{ width: 80px; height: 80px; border-radius: 6px; object-fit: cover; }}
+
+  .cv2-card {{ position: relative; display: flex; overflow: hidden; max-width: 560px; margin-top: 8px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; }}
+  .cv2-bar {{ flex: 0 0 4px; }}
+  .cv2-card-inner {{ flex: 1; min-width: 0; padding: 8px 12px; }}
+  .cv2-text {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; font-size: 14px; margin: 4px 0; }}
+  .cv2-label {{ color: #f2f3f5; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 12px; margin: 4px 0; }}
+  .cv2-sep {{ border-top: 1px solid #3f4147; margin: 8px 0; }}
+  .cv2-sep-spacer {{ border-top: 0; margin: 4px 0; }}
+  .cv2-row {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }}
+  .cv2-btn {{ display: inline-block; padding: 2px 12px; background: #4e5058; border-radius: 3px; color: #f2f3f5; font-size: 13px; }}
+  .cv2-btn-link {{ background: #5865f2; color: #fff; text-decoration: none; }}
+  .cv2-btn-link:hover {{ background: #4752c4; text-decoration: none; }}
+  .cv2-btn-disabled {{ opacity: .5; }}
+  .cv2-section {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0; }}
+  .cv2-thumb img {{ width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }}
+  .cv2-gallery {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; margin: 6px 0; }}
+  .cv2-media-item {{ margin: 0; }}
+  .cv2-media-item img, .cv2-media-item video {{ width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }}
+  .cv2-media-item figcaption {{ color: #949ba4; font-size: 11px; margin-top: 2px; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>#{_esc(title)}</h1>
+  <div class="meta">{_esc(guild)} · {_esc(msg_count)} messages · Created {_esc(created)}</div>
+</div>
+{msg_block}
+<script>
+(() => {{
+  const mentionProfiles = {profile_json};
+  const badgeArt = {badge_art_json};
+  const statusArt = {status_art_json};
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "'": "&#39;" }})[char]);
+  // Discord never shows a broken custom emoji: an emoji it cannot resolve is
+  // written out as its name between colons. The same swap keeps a dead emoji
+  // from leaving a broken icon or eating the formatting around it.
+  const fixCustomEmoji = (img) => {{
+    const replace = () => {{
+      const fallback = document.createElement("span");
+      fallback.className = "custom-emoji-fallback";
+      fallback.textContent = ":" + (img.dataset.emojiName || "") + ":";
+      img.replaceWith(fallback);
+    }};
+    // An image that already failed has completed with no size, and its error
+    // event is gone by the time this script runs.
+    if (img.complete && img.naturalWidth === 0) {{ replace(); return; }}
+    img.addEventListener("error", replace, {{ once: true }});
+  }};
+  document.querySelectorAll("img.custom-emoji").forEach(fixCustomEmoji);
+  let profileTimer = null;
+  let profilePollTimer = null;
+  let refreshProfilePresence = null;
+  const stopProfileTimer = () => {{ if (profileTimer !== null) {{ clearInterval(profileTimer); profileTimer = null; }} }};
+  const stopProfilePoll = () => {{
+    if (profilePollTimer !== null) {{ clearInterval(profilePollTimer); profilePollTimer = null; }}
+    if (refreshProfilePresence !== null) {{ document.removeEventListener("visibilitychange", refreshProfilePresence); refreshProfilePresence = null; }}
+  }};
+  const closeProfile = () => {{ stopProfileTimer(); stopProfilePoll(); document.querySelector(".discord-profile-popover")?.remove(); document.querySelector(".discord-badge-popup")?.remove(); }};
+  // The presence dot Discord draws on the avatar. The art is inlined, so the popup
+  // shows live status without needing the web app's asset folder.
+  const statusKey = (value) => {{
+    const raw = value && typeof value === "object" ? value.name : value;
+    const name = String(raw || "").split(".").pop().trim().toLowerCase();
+    return statusArt[name] ? name : "offline";
+  }};
+  const statusDot = (profile) => {{
+    const art = statusArt[statusKey(profile.status)];
+    if (!art) return "";
+    const label = escapeHtml(art.label || "Offline");
+    return '<img class="discord-status-icon" data-profile-status src="' + art.src + '" alt="' + label + '" title="' + label + '">';
+  }};
+  const profileAvatar = (profile) => profile.avatar_url
+    ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">'
+      + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '')
+      + statusDot(profile) + '</span>'
+    : '';
+  const profileStatusBubble = (profile) => {{
+    const customStatus = profile.custom_status || {{}};
+    const statusEmoji = customStatus.emoji_id
+      ? '<img class="discord-profile-status-emoji" src="https://cdn.discordapp.com/emojis/' + encodeURIComponent(customStatus.emoji_id) + (customStatus.emoji_animated ? '.gif' : '.png') + '" alt="">'
+      : (customStatus.emoji_name ? '<span class="discord-profile-status-emoji">' + escapeHtml(customStatus.emoji_name) + '</span>' : '');
+    if (!customStatus.text && !statusEmoji) return '';
+    return '<div class="discord-profile-status"><span class="discord-profile-status-text">' + statusEmoji + escapeHtml(customStatus.text || '') + '</span></div>';
+  }};
+  const clock = (seconds) => {{ const total = Math.max(0, Math.round(Number(seconds) || 0)); return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0'); }};
+  const profileSpotify = (profile) => {{
+    const spotify = (profile.activities || []).find((activity) => activity && activity.album_cover_url);
+    if (!spotify) return {{ html: '', timing: null }};
+    const timing = Number.isFinite(spotify.start) && Number.isFinite(spotify.end) && spotify.end > spotify.start
+      ? {{ start: spotify.start, total: spotify.duration_seconds || (spotify.end - spotify.start) }}
+      : null;
+    const inner = '<div class="discord-profile-spotify">'
+      + '<div class="discord-profile-spotify-head">Listening to Spotify</div>'
+      + '<div class="discord-profile-spotify-body">'
+      + '<img class="discord-profile-spotify-art" src="' + escapeHtml(spotify.album_cover_url) + '" alt="">'
+      + '<div class="discord-profile-spotify-copy"><strong>' + escapeHtml(spotify.title || 'Spotify') + '</strong>'
+      + ((spotify.artists || []).length ? '<small>' + escapeHtml(spotify.artists.join(', ')) + '</small>' : '')
+      + (timing ? '<div class="discord-profile-spotify-progress"><span data-spotify-elapsed></span><span class="discord-profile-spotify-track" aria-hidden="true"><i data-spotify-fill></i></span><span>' + clock(timing.total) + '</span></div>' : '')
+      + '</div></div></div>';
+    return {{ html: spotify.url ? '<a class="discord-profile-spotify-link" href="' + escapeHtml(spotify.url) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>' : inner, timing: timing }};
+  }};
+  const bindSpotify = (card, timing) => {{
+    // A presence refresh rebinds the progress bar to the track it now shows.
+    stopProfileTimer();
+    if (!timing) return;
+    const fill = card.querySelector("[data-spotify-fill]");
+    const elapsedNode = card.querySelector("[data-spotify-elapsed]");
+    const tick = () => {{
+      const elapsed = Math.min(Math.max(Math.floor(Date.now() / 1000) - timing.start, 0), timing.total);
+      if (fill) fill.style.width = (timing.total > 0 ? (elapsed / timing.total) * 100 : 0) + '%';
+      if (elapsedNode) elapsedNode.textContent = clock(elapsed);
+    }};
+    tick();
+    profileTimer = setInterval(tick, 1000);
+  }};
+  const openProfile = (link) => {{
+    closeProfile();
+    const profile = mentionProfiles[link.dataset.discordUserId];
+    if (!profile) return;
+    const rect = link.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+    const top = Math.max(12, Math.min(rect.bottom + 8, window.innerHeight - 320));
+    const popover = document.createElement("div");
+    popover.className = "discord-profile-popover";
+    const card = document.createElement("div");
+    card.className = "discord-profile-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", escapeHtml(profile.display_name) + " Discord profile");
+    card.style.setProperty("--profile-left", left + "px");
+    card.style.setProperty("--profile-top", top + "px");
+    const banner = profile.banner_url
+      ? '<img class="discord-profile-banner" src="' + escapeHtml(profile.banner_url) + '" alt="">'
+      : '<div class="discord-profile-banner" style="background-color:' + (/^#[0-9a-f]+$/i.test(profile.banner_color || '') && profile.banner_color.length === 7 ? profile.banner_color : '#202225') + '"></div>';
+    const avatar = profileAvatar(profile);
+    const statusBubble = profileStatusBubble(profile);
+    const guildTag = profile.guild_tag
+      ? '<span class="discord-profile-guild-tag">' + (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span></span>'
+      : '';
+    const badges = (profile.badges || []).map((key) => {{
+      const badge = badgeArt[key];
+      if (!badge || !badge.src) return '';
+      const label = badge.label ? ' alt="" aria-label="' + escapeHtml(badge.label) + '" title="' + escapeHtml(badge.label) + '"' : ' alt=""';
+      return '<button type="button" class="discord-profile-badge-button" data-badge-key="' + escapeHtml(key) + '" aria-haspopup="dialog" aria-expanded="false"' + label + '><img class="discord-profile-badge" src="' + badge.src + '"></button>';
+    }}).join('');
+    const spotify = profileSpotify(profile);
+    const menu = '<div class="discord-profile-menu"><button type="button" class="discord-profile-menu-button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" data-profile-menu-button><span class="discord-profile-menu-dots" aria-hidden="true"><i></i><i></i><i></i></span></button><div class="discord-profile-menu-list" role="menu" hidden><button type="button" class="discord-profile-menu-item" role="menuitem" data-copy-user-id>Copy User ID</button></div></div>';
+    card.innerHTML = banner + menu + '<div class="discord-profile-body">'
+      + '<div class="discord-profile-head">' + avatar + statusBubble + '</div>'
+      + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>'
+      + '<p class="discord-profile-username"><span class="discord-profile-user-tag">' + escapeHtml(profile.username) + '</span>' + guildTag + '</p>'
+      + (badges ? '<div class="discord-profile-badges">' + badges + '</div>' : '')
+      + (profile.bio ? '<section class="discord-profile-about"><h3>About Me</h3><p>' + escapeHtml(profile.bio) + '</p></section>' : '')
+      + '<div data-profile-spotify>' + spotify.html + '</div>'
+      + '<a class="discord-profile-full-link" href="https://discord.com/users/' + encodeURIComponent(profile.id) + '" target="_blank" rel="noopener noreferrer">Open Discord profile</a>'
+      + '</div>';
+    popover.appendChild(card);
+    document.body.appendChild(popover);
+    popover.addEventListener("click", (event) => {{ if (event.target === popover) closeProfile(); }});
+    // A badge click opens the badge popup: the badge art on the left, its name
+    // and description on the right. It is appended to the page instead of the
+    // card, so it renders on top of the profile popup rather than inside it.
+    const badgesRow = card.querySelector('.discord-profile-badges');
+    if (badgesRow) {{
+      const closeBadgePopup = () => {{
+        document.querySelector('.discord-badge-popup')?.remove();
+        badgesRow.querySelectorAll('[data-badge-key]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+      }};
+      const placeBadgePopup = (button) => {{
+        const popup = document.querySelector('.discord-badge-popup');
+        if (!popup) return;
+        const rect = button.getBoundingClientRect();
+        const margin = 12;
+        const gap = 8;
+        const width = popup.offsetWidth;
+        const height = popup.offsetHeight;
+        const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+        const below = rect.bottom + gap;
+        const top = below + height <= window.innerHeight - margin
+          ? below
+          : Math.max(margin, rect.top - height - gap);
+        popup.style.left = left + 'px';
+        popup.style.top = Math.min(top, window.innerHeight - height - margin) + 'px';
+      }};
+      const openBadgePopup = (button) => {{
+        const badge = badgeArt[button.dataset.badgeKey];
+        closeBadgePopup();
+        if (!badge || !badge.src) return;
+        const popup = document.createElement('div');
+        popup.className = 'discord-badge-popup';
+        popup.setAttribute('role', 'dialog');
+        popup.setAttribute('aria-label', escapeHtml(badge.label) + ' badge');
+        popup.innerHTML = '<img class="discord-badge-popup-art" src="' + badge.src + '" alt="">'
+          + '<div class="discord-badge-popup-copy"><strong>' + escapeHtml(badge.label) + '</strong><p>' + escapeHtml(badge.description) + '</p></div>';
+        document.body.appendChild(popup);
+        placeBadgePopup(button);
+        button.setAttribute('aria-expanded', 'true');
+      }};
+      badgesRow.addEventListener('click', (event) => {{
+        const button = event.target.closest('[data-badge-key]');
+        if (!button) return;
+        if (button.getAttribute('aria-expanded') === 'true') closeBadgePopup();
+        else openBadgePopup(button);
+      }});
+      // Keep the floating popup under its badge as the page or the card scrolls,
+      // and close it when the click lands anywhere else.
+      const followBadgePopup = () => {{
+        const button = badgesRow.querySelector('[data-badge-key][aria-expanded="true"]');
+        if (button) placeBadgePopup(button);
+      }};
+      window.addEventListener('resize', followBadgePopup);
+      window.addEventListener('scroll', followBadgePopup, true);
+      document.addEventListener('mousedown', (event) => {{
+        if (event.target instanceof Element && event.target.closest('.discord-badge-popup')) return;
+        closeBadgePopup();
+      }});
+    }}
+    const menuButton = card.querySelector("[data-profile-menu-button]");
+    const menuList = card.querySelector(".discord-profile-menu-list");
+    if (menuButton && menuList) {{
+      menuButton.addEventListener("click", () => {{
+        menuList.hidden = !menuList.hidden;
+        menuButton.setAttribute("aria-expanded", String(!menuList.hidden));
+      }});
+    }}
+    const copyButton = card.querySelector("[data-copy-user-id]");
+    if (copyButton) {{
+      copyButton.addEventListener("click", () => {{
+        const write = navigator.clipboard && navigator.clipboard.writeText
+          ? navigator.clipboard.writeText(String(profile.id))
+          : Promise.reject(new Error("clipboard unavailable"));
+        write.then(() => {{ copyButton.textContent = "Copied!"; }}, () => {{}});
+      }});
+    }}
+    bindSpotify(card, spotify.timing);
+    // Presence moves while the card is open, so an open popup re-reads the same
+    // public endpoint the website popup uses instead of freezing the presence it
+    // was opened with. The embedded snapshot stays the source when the API cannot
+    // be reached: a transcript opened from disk is a file, so the poll only runs
+    // over http(s) and a failed read keeps the last known profile.
+    const profileId = String(profile.id || '');
+    const applyPresence = (next) => {{
+      if (!next || !card.isConnected) return;
+      const head = card.querySelector('.discord-profile-head');
+      if (head) head.innerHTML = profileAvatar(next) + profileStatusBubble(next);
+      const spotifyNode = card.querySelector('[data-profile-spotify]');
+      const nextSpotify = profileSpotify(next);
+      if (spotifyNode) spotifyNode.innerHTML = nextSpotify.html;
+      bindSpotify(card, nextSpotify.timing);
+    }};
+    if (/^\d{{1,22}}$/.test(profileId) && typeof window.fetch === "function" && location.protocol.indexOf("http") === 0) {{
+      const loadPresence = () => {{
+        fetch("/api/discord/users/" + encodeURIComponent(profileId))
+          .then((response) => (response.ok ? response.json() : null))
+          .then(applyPresence)
+          .catch(() => {{}});
+      }};
+      refreshProfilePresence = () => {{ if (document.visibilityState === "visible") loadPresence(); }};
+      document.addEventListener("visibilitychange", refreshProfilePresence);
+      profilePollTimer = setInterval(() => {{ if (document.visibilityState === "visible") loadPresence(); }}, 5000);
+    }}
+  }};
+  document.addEventListener("click", (event) => {{
+    const link = event.target.closest?.("[data-discord-user-id]");
+    if (!link) {{ if (!event.target.closest?.(".discord-profile-card")) closeProfile(); return; }}
+    event.preventDefault();
+    openProfile(link);
+  }});
+  document.addEventListener("keydown", (event) => {{
+    if (event.key === "Escape") closeProfile();
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("[data-discord-user-id]")) {{ event.preventDefault(); openProfile(event.target); }}
+  }});
+  const styles = {{
+    t: {{ hour: "numeric", minute: "2-digit" }},
+    T: {{ hour: "numeric", minute: "2-digit", second: "2-digit" }},
+    d: {{ year: "numeric", month: "2-digit", day: "2-digit" }},
+    D: {{ year: "numeric", month: "long", day: "numeric" }},
+    f: {{ year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }},
+    F: {{ weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }}
+  }};
+  document.querySelectorAll("[data-discord-ts]").forEach((node) => {{
+    const unix = Number(node.dataset.discordTs);
+    const style = node.dataset.discordStyle;
+    if (!Number.isFinite(unix)) return;
+    if (style === "R") {{
+      const seconds = unix - Math.floor(Date.now() / 1000);
+      const abs = Math.abs(seconds);
+      const unit = abs < 60 ? "second" : abs < 3600 ? "minute" : abs < 86400 ? "hour" : abs < 604800 ? "day" : abs < 2592000 ? "week" : abs < 31536000 ? "month" : "year";
+      const divisor = {{ second: 1, minute: 60, hour: 3600, day: 86400, week: 604800, month: 2592000, year: 31536000 }}[unit];
+      node.textContent = new Intl.RelativeTimeFormat(undefined, {{ numeric: "always" }}).format(Math.round(seconds / divisor), unit);
+    }} else if (styles[style]) {{
+      node.textContent = new Intl.DateTimeFormat(undefined, styles[style]).format(new Date(unix * 1000));
+    }}
+  }});
+}})();
+</script>
+</body>
+</html>"""
+
+
+def export_csv(messages: List[dict]) -> str:
+    """CSV format."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "author", "author_id", "content", "attachments", "embeds", "components"])
+    for msg in messages:
+        writer.writerow([
+            msg.get("timestamp", ""),
+            msg.get("author", ""),
+            msg.get("author_id", ""),
+            msg.get("content", ""),
+            " | ".join(msg.get("attachments", [])),
+            json.dumps(msg.get("embeds", []), ensure_ascii=False),
+            json.dumps(msg.get("components", []), ensure_ascii=False),
+        ])
+    return output.getvalue()
+
+
+def export_json(messages: List[dict], metadata: dict) -> str:
+    """JSON format with metadata wrapper."""
+    return json.dumps({
+        "metadata": metadata,
+        "messages": messages,
+    }, indent=2, ensure_ascii=False)

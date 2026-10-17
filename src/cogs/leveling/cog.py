@@ -1,9 +1,15 @@
 from .panel import *
 import asyncio
-from utils.discord_extras import burst_react
+import json
+import os
+import time
+import random
+from utils.image.level_card import render_level_card, render_level_leaderboard_card
+from utils.image.economy_card import fetch_avatar_bytes, _strip_discord_emoji
+
 
 class Leveling(commands.Cog):
-    """Cozy bilingual leveling system with guild config support."""
+    """Modern leveling system with image cards and slash commands."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -33,6 +39,13 @@ class Leveling(commands.Cog):
                 cfg["level_roles"] = json.loads(row["level_roles"] or "{}")
             except Exception:
                 cfg["level_roles"] = {}
+            # Card customization
+            for key, col in [("card_accent", "card_accent"), ("card_bg_top", "card_bg_top"), ("card_bg_bottom", "card_bg_bottom")]:
+                try:
+                    val = row[col]
+                    cfg[key] = json.loads(val) if val else None
+                except Exception:
+                    cfg[key] = None
         return cfg
 
     async def _save_guild_cfg(self, guild_id, cfg: dict):
@@ -40,8 +53,9 @@ class Leveling(commands.Cog):
         await self.bot.cxn.execute(
             "INSERT OR REPLACE INTO level_config "
             "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, "
-            " level_up_channel, level_up_message, level_roles) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            " level_up_channel, level_up_message, level_roles, "
+            " card_accent, card_bg_top, card_bg_bottom) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             gid,
             int(cfg.get("xp_enabled", True)),
             cfg.get("xp_multiplier", 1.0),
@@ -49,6 +63,9 @@ class Leveling(commands.Cog):
             cfg.get("level_up_channel"),
             cfg.get("level_up_message"),
             json.dumps(cfg.get("level_roles", {})),
+            json.dumps(cfg.get("card_accent"))    if cfg.get("card_accent")    else None,
+            json.dumps(cfg.get("card_bg_top"))    if cfg.get("card_bg_top")    else None,
+            json.dumps(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None,
         )
 
     async def _get_user_data(self, guild_id, user_id) -> dict:
@@ -189,8 +206,8 @@ class Leveling(commands.Cog):
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
                 if lu_channel:
-                    lu_msg = await lu_channel.send(view=view)
-                    asyncio.create_task(burst_react(self.bot, lu_channel.id, lu_msg.id, "🎉"))
+                    await lu_channel.send(view=view)
+                    self.bot.dispatch("sticky_feature_message", message.guild.id, lu_channel.id)
                 log.debug("Leveling", f"User {message.author} leveled up to {current_level} in {message.guild.name}")
             except discord.Forbidden:
                 pass
@@ -208,15 +225,44 @@ class Leveling(commands.Cog):
         else:
             await self._save_user_data(guild_id, user_id, current_xp, current_level)
 
-    # ── RANK COMMAND ───────────────────────────────
+    # ── LEVELING GROUP ────────────────────────────
 
-    @commands.hybrid_command(
-        name="level",
-        aliases=["rank"],
-        description="Check your cozy level stats",
-        help="{ 'en': 'Check your cozy level stats ☕', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel ☕' }"
+    @commands.hybrid_group(
+        name="leveling",
+        aliases=["levels", "lvl", "lv"],
+        invoke_without_command=True,
+        description="All leveling commands — rank, leaderboard, config, and panel",
+        help="{ 'en': 'All leveling commands.', 'de': 'Alle Leveling-Befehle.' }"
     )
-    async def level(self, ctx, member: discord.Member = None):
+    async def leveling(self, ctx):
+        """Show a quick overview or help for the leveling system."""
+        cfg = await self._guild_cfg(ctx.guild.id)
+        enabled_s = get_emoji("tick") if cfg.get("xp_enabled", True) else get_emoji("cross")
+        embed_text = (
+            f"### ☕ Leveling Commands\n"
+            f"**Status:** {enabled_s} • **Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x` • "
+            f"**Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n\n"
+            "Use `/leveling rank`, `/leveling leaderboard`, `/leveling panel`, or `/leveling config`.\n"
+            "-# Type `/leveling` to see this help, or use a subcommand."
+        )
+        view = discord.ui.LayoutView()
+        accent_rgb = cfg.get("card_accent")
+        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(ACCENT_BRAND)
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=embed_text),
+            accent_colour=accent_colour,
+        ))
+        await ctx.send(view=view)
+
+    # ── RANK SUBCOMMAND ───────────────────────────
+
+    @leveling.command(
+        name="rank",
+        aliases=["level", "profile"],
+        description="Check your level stats with a beautiful image card",
+        help="{ 'en': 'Check your level stats ☕', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel ☕' }"
+    )
+    async def leveling_rank(self, ctx, member: discord.Member = None):
         member   = member or ctx.author
         guild_id = ctx.guild.id
         user_id  = member.id
@@ -239,30 +285,47 @@ class Leveling(commands.Cog):
         next_level_xp = self.get_xp_for_level(current_level)
         rank          = await self._get_user_rank(guild_id, user_id)
 
-        text = (
-            f"### {msg(ctx, 'stats_title', name=member.display_name)}\n"
-            f"**{msg(ctx, 'stats_level')}:** {current_level}\n"
-            f"**{msg(ctx, 'stats_xp')}:** {current_xp}/{next_level_xp}\n"
-            f"**{msg(ctx, 'stats_rank')}:** #{rank}"
+        # Fetch avatar
+        avatar_url = member.display_avatar.url if member.display_avatar else None
+        avatar_bytes = await fetch_avatar_bytes(avatar_url)
+
+        # Parse card customization colours
+        accent = tuple(cfg.get("card_accent")) if cfg.get("card_accent") else None
+        bg_top = tuple(cfg.get("card_bg_top")) if cfg.get("card_bg_top") else None
+        bg_bot = tuple(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None
+
+        # Render the level card image
+        card_image = await render_level_card(
+            avatar_bytes=avatar_bytes,
+            name=member.display_name,
+            level=current_level,
+            xp=current_xp,
+            xp_for_next=next_level_xp,
+            rank=rank,
+            accent=accent,
+            bg_top=bg_top,
+            bg_bot=bg_bot,
         )
 
+        # Build CV2 LayoutView with MediaGallery
+        file = discord.File(card_image, filename="level_card.png")
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.Section(
-                discord.ui.TextDisplay(content=text),
-                accessory=discord.ui.Thumbnail(member.display_avatar.url)
-            )
-        ))
-        await ctx.send(view=view)
+        container = discord.ui.Container(
+            discord.ui.MediaGallery(discord.MediaGalleryItem(media="attachment://level_card.png")),
+            accent_colour=discord.Colour.from_rgb(*accent) if accent else discord.Colour(ACCENT_BRAND),
+        )
+        view.add_item(container)
+        await ctx.send(file=file, view=view)
 
-    # ── LEADERBOARD ────────────────────────────────
+    # ── LEADERBOARD SUBCOMMAND (with pagination) ──
 
-    @commands.command(
-        name="level-leaderboard",
-        aliases=["lvl-lb"],
-        help="{ 'en': 'View the cozy leaderboard ☕', 'de': 'Zeigt die Level-Bestenliste.' }"
+    @leveling.command(
+        name="leaderboard",
+        aliases=["lb", "top"],
+        description="View the server's leveling leaderboard with navigation buttons",
+        help="{ 'en': 'View the leaderboard 🏆', 'de': 'Zeigt die Bestenliste.' }"
     )
-    async def leaderboard(self, ctx):
+    async def leveling_leaderboard(self, ctx):
         guild_id = ctx.guild.id
 
         cfg = await self._guild_cfg(guild_id)
@@ -273,31 +336,167 @@ class Leveling(commands.Cog):
         if not rows:
             return await ctx.send(msg(ctx, "leaderboard_empty"))
 
-        lines = []
-        for i, row in enumerate(rows, start=1):
-            user  = self.bot.get_user(row["user_id"])
-            name  = user.display_name if user else f"User {row['user_id']}"
-            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"**{i}.**")
-            lines.append(f"{medal} {name} — Level {row['level']} ({row['xp']} XP)")
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
 
-        pages = paginate(lines, per_page=10)
-        view  = PaginatedView(
-            title=msg(ctx, "leaderboard_title", guild=ctx.guild.name),
-            pages=pages,
-            icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
+        # Pre-build all pages of entries
+        per_page = 10
+        total_pages = max(1, (len(rows) + per_page - 1) // per_page)
+
+        # Parse card customization
+        accent = tuple(cfg.get("card_accent")) if cfg.get("card_accent") else None
+        bg_top = tuple(cfg.get("card_bg_top")) if cfg.get("card_bg_top") else None
+        bg_bot = tuple(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None
+
+        # Build entry data for all pages
+        pages_entries = []
+        for page_idx in range(total_pages):
+            start = page_idx * per_page
+            page_rows = rows[start:start + per_page]
+            entries = []
+            for i, row in enumerate(page_rows, start=start + 1):
+                user = self.bot.get_user(row["user_id"])
+                name = user.display_name if user else f"User {row['user_id']}"
+                avatar_bytes = None
+                if user and user.display_avatar:
+                    avatar_bytes = await fetch_avatar_bytes(user.display_avatar.url)
+                entries.append({
+                    "rank": i,
+                    "name": _strip_discord_emoji(name),
+                    "level": row["level"],
+                    "xp": row["xp"],
+                    "avatar": avatar_bytes,
+                })
+            pages_entries.append(entries)
+
+        total_pages = len(pages_entries)
+        title = msg(ctx, "leaderboard_title", guild=ctx.guild.name)
+
+        # ── Interactive paginated view ─────────────
+
+        class _PrevButton(discord.ui.Button):
+            def __init__(self, disabled: bool):
+                super().__init__(label="◀", style=discord.ButtonStyle.secondary, disabled=disabled)
+
+            async def callback(self, interaction: discord.Interaction):
+                v: _LBView = self.view
+                if v.current_page == 0:
+                    return await interaction.defer()
+                v.current_page -= 1
+                await interaction.response.defer()
+                buf = await render_level_leaderboard_card(
+                    title=title, entries=v.pages[v.current_page],
+                    page=v.current_page + 1, pages=total_pages,
+                    accent=accent, bg_top=bg_top, bg_bot=bg_bot,
+                )
+                v._build()
+                await interaction.message.edit(
+                    view=v,
+                    attachments=[discord.File(buf, "leaderboard.png")],
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+
+        class _NextButton(discord.ui.Button):
+            def __init__(self, disabled: bool):
+                super().__init__(label="▶", style=discord.ButtonStyle.secondary, disabled=disabled)
+
+            async def callback(self, interaction: discord.Interaction):
+                v: _LBView = self.view
+                if v.current_page >= len(v.pages) - 1:
+                    return await interaction.defer()
+                v.current_page += 1
+                await interaction.response.defer()
+                buf = await render_level_leaderboard_card(
+                    title=title, entries=v.pages[v.current_page],
+                    page=v.current_page + 1, pages=total_pages,
+                    accent=accent, bg_top=bg_top, bg_bot=bg_bot,
+                )
+                v._build()
+                await interaction.message.edit(
+                    view=v,
+                    attachments=[discord.File(buf, "leaderboard.png")],
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+
+        class _PageLabel(discord.ui.Button):
+            def __init__(self, label: str):
+                super().__init__(label=label, style=discord.ButtonStyle.secondary, disabled=True)
+
+        class _LBView(discord.ui.LayoutView):
+            def __init__(self, pages: list[list[dict]]):
+                super().__init__(timeout=180)
+                self.pages = pages
+                self.current_page = 0
+                self._build()
+
+            def _build(self):
+                self.clear_items()
+                total = len(self.pages)
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(content=f"### 🏆 Leveling Leaderboard"),
+                    discord.ui.MediaGallery(discord.MediaGalleryItem(media="attachment://leaderboard.png")),
+                )
+                container.add_item(discord.ui.TextDisplay(
+                    content=f"-# Showing top **{min(len(rows), per_page)}** of **{len(rows)}** members."
+                ))
+
+                if total > 1:
+                    container.add_item(discord.ui.Separator(
+                        visible=True, spacing=discord.SeparatorSpacing.small,
+                    ))
+                    container.add_item(discord.ui.ActionRow(
+                        _PrevButton(disabled=self.current_page == 0),
+                        _PageLabel(label=f"{self.current_page + 1} / {total}"),
+                        _NextButton(disabled=self.current_page == total - 1),
+                    ))
+
+                self.add_item(container)
+
+        # Render first page and send
+        first_buf = await render_level_leaderboard_card(
+            title=title, entries=pages_entries[0],
+            page=1, pages=total_pages,
+            accent=accent, bg_top=bg_top, bg_bot=bg_bot,
         )
-        await ctx.send(view=view)
+        view = _LBView(pages_entries)
 
-    # ── LEVELCONFIG COMMAND GROUP ──────────────────
+        if ctx.interaction:
+            await ctx.interaction.followup.send(
+                view=view,
+                file=discord.File(first_buf, "leaderboard.png"),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        else:
+            await ctx.send(
+                view=view,
+                file=discord.File(first_buf, "leaderboard.png"),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
-    @commands.group(
-        name="levelconfig",
-        aliases=["lvlcfg"],
+    # ── PANEL SUBCOMMAND ──────────────────────────
+
+    @leveling.command(
+        name="panel",
+        aliases=["levelpanel", "settings"],
+        description="Open the interactive leveling management panel",
+        help="{ 'en': 'Open the interactive leveling management panel ☕', 'de': 'Leveling-Dashboard öffnen.' }"
+    )
+    @commands.has_permissions(manage_guild=True)
+    async def leveling_panel(self, ctx):
+        panel = await _build_level_panel(self, ctx.guild.id, "overview", ctx.guild)
+        await ctx.send(view=panel)
+
+    # ── CONFIG SUBCOMMAND GROUP ────────────────────
+
+    @leveling.group(
+        name="config",
+        aliases=["cfg"],
         invoke_without_command=True,
+        description="View or configure the leveling system",
         help="{ 'en': 'View or configure the leveling system.', 'de': 'Level-Einstellungen anzeigen / bearbeiten.' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig(self, ctx):
+    async def leveling_config(self, ctx):
         guild_id = ctx.guild.id
         cfg      = await self._guild_cfg(guild_id)
 
@@ -310,7 +509,7 @@ class Leveling(commands.Cog):
         ) or "  *(none)*"
 
         body = (
-            f"**XP Enabled:** {get_emoji('icon_tick') if cfg.get('xp_enabled', True) else get_emoji('icon_cross')}\n"
+            f"**XP Enabled:** {get_emoji('tick') if cfg.get('xp_enabled', True) else get_emoji('cross')}\n"
             f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
             f"**XP Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n"
             f"**Level-Up Channel:** {lu_ch_str}\n"
@@ -318,29 +517,38 @@ class Leveling(commands.Cog):
         )
 
         text = msg(ctx, "cfg_show", guild=ctx.guild.name, body=body)
+
+        accent_rgb = cfg.get("card_accent")
+        accent_colour = discord.Colour.from_rgb(*accent_rgb) if accent_rgb else discord.Colour(ACCENT_BRAND)
+
         view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=text),
+            accent_colour=accent_colour,
+        ))
         await ctx.send(view=view)
 
-    @levelconfig.command(
-        name="toggle", 
+    @leveling_config.command(
+        name="toggle",
+        description="Enable or disable XP for this server",
         help="{ 'en': 'Enable or disable XP for this server.', 'de': 'XP für diesen Server aktivieren/deaktivieren.' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_toggle(self, ctx):
+    async def leveling_config_toggle(self, ctx):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        state = f"{get_emoji('icon_tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('icon_cross')} disabled"
+        state = f"{get_emoji('tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('cross')} disabled"
         await ctx.send(f"XP tracking is now **{state}** for this server.")
 
-    @levelconfig.command(
-        name="multiplier", 
+    @leveling_config.command(
+        name="multiplier",
         aliases=["xpmultiplier"],
+        description="Set XP gain multiplier",
         help="{ 'en': 'Set XP gain multiplier (e.g. 2.0).', 'de': 'XP-Verstärkung einstellen (z.B. 2.0).' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_multiplier(self, ctx, value: float = None):
+    async def leveling_config_multiplier(self, ctx, value: float = None):
         if value is None or value <= 0:
             return await ctx.send("Please provide a positive multiplier (e.g. `1.5`).")
         cfg = await self._guild_cfg(ctx.guild.id)
@@ -348,12 +556,13 @@ class Leveling(commands.Cog):
         await self._save_guild_cfg(ctx.guild.id, cfg)
         await ctx.send(msg(ctx, "cfg_updated") + f" XP multiplier → `{cfg['xp_multiplier']}x`")
 
-    @levelconfig.command(
+    @leveling_config.command(
         name="cooldown",
+        description="Set XP cooldown between gains in seconds",
         help="{ 'en': 'Set XP cooldown between gains in seconds (0 = off).', 'de': 'XP-Cooldown in Sekunden einstellen (0 = aus).' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_cooldown(self, ctx, seconds: int = None):
+    async def leveling_config_cooldown(self, ctx, seconds: int = None):
         if seconds is None or seconds < 0:
             return await ctx.send("Please provide a non-negative number of seconds.")
         cfg = await self._guild_cfg(ctx.guild.id)
@@ -362,26 +571,28 @@ class Leveling(commands.Cog):
         status = f"`{seconds}s`" if seconds > 0 else "off"
         await ctx.send(msg(ctx, "cfg_updated") + f" XP cooldown → {status}")
 
-    @levelconfig.command(
-        name="levelupchannel", 
-        aliases=["luchannel"],
+    @leveling_config.command(
+        name="levelupchannel",
+        aliases=["luchannel", "channel"],
+        description="Set the level-up announcement channel",
         help="{ 'en': 'Set the level-up announcement channel.', 'de': 'Level-Up-Benachrichtigungs-Kanal einstellen.' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_channel(self, ctx, channel: discord.TextChannel = None):
+    async def leveling_config_channel(self, ctx, channel: discord.TextChannel = None):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["level_up_channel"] = channel.id if channel else None
         await self._save_guild_cfg(ctx.guild.id, cfg)
         dest = channel.mention if channel else "*(same channel)*"
         await ctx.send(msg(ctx, "cfg_updated") + f" Level-up channel → {dest}")
 
-    @levelconfig.command(
-        name="levelrole", 
+    @leveling_config.command(
+        name="levelrole",
         aliases=["role"],
+        description="Assign a role when a level is reached",
         help="{ 'en': 'Assign a role when a level is reached.', 'de': 'Rolle bei Erreichen eines Levels zuweisen.' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_levelrole(self, ctx, level: int = None, role: discord.Role = None):
+    async def leveling_config_levelrole(self, ctx, level: int = None, role: discord.Role = None):
         if level is None or level < 1:
             return await ctx.send("Please specify a valid level (e.g. `5`).")
         cfg = await self._guild_cfg(ctx.guild.id)
@@ -395,28 +606,17 @@ class Leveling(commands.Cog):
             await self._save_guild_cfg(ctx.guild.id, cfg)
             await ctx.send(msg(ctx, "cfg_updated") + f" Level {level} → {role.mention}")
 
-    @levelconfig.command(
-        name="resetuser", 
+    @leveling_config.command(
+        name="resetuser",
+        description="Reset XP and level for a member",
         help="{ 'en': 'Reset XP and level for a member.', 'de': 'XP und Level eines Mitglieds zurücksetzen.' }"
     )
     @commands.has_permissions(manage_guild=True)
-    async def levelconfig_resetuser(self, ctx, member: discord.Member = None):
+    async def leveling_config_resetuser(self, ctx, member: discord.Member = None):
         if not member:
             return await ctx.send("Please specify a member.")
         await self._save_user_data(ctx.guild.id, member.id, 0, 0)
-        await ctx.send(f"{get_emoji('icon_tick')} Reset XP and level for **{member.display_name}**.")
-
-    # ── LEVELING PANEL ─────────────────────────────
-
-    @commands.command(
-        name="levelpanel",
-        aliases=["lvlpanel", "lp"],
-        help="{ 'en': 'Open the interactive leveling management panel ☕', 'de': 'Leveling-Dashboard öffnen.' }"
-    )
-    @commands.has_permissions(manage_guild=True)
-    async def levelpanel(self, ctx):
-        panel = await _build_level_panel(self, ctx.guild.id, "overview", ctx.guild)
-        await ctx.send(view=panel)
+        await ctx.send(f"{get_emoji('tick')} Reset XP and level for **{member.display_name}**.")
 
 
 async def setup(bot):

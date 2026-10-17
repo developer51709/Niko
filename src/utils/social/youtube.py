@@ -117,11 +117,25 @@ async def resolve_youtube_channel(query: str) -> tuple[str, str] | None:
 
     channel_id = match.group(1)
 
-    # Try to get display name
-    name_match = re.search(r'"channelName"\s*:\s*"([^"]+)"', html)
-    if not name_match:
-        name_match = re.search(r'"title"\s*:\s*"([^"]+)"', html)
-    display = name_match.group(1) if name_match else query
+    # Get display name from the RSS feed (most reliable source)
+    display = query
+    try:
+        feed_url = _YT_FEED.format(channel_id=channel_id)
+        async with aiohttp.ClientSession() as feed_session:
+            async with feed_session.get(feed_url, headers=_HEADERS, timeout=_TIMEOUT) as feed_resp:
+                if feed_resp.status == 200:
+                    feed_content = await feed_resp.read()
+                    feed = feedparser.parse(feed_content)
+                    if feed.feed.get("title"):
+                        display = feed.feed["title"]
+    except Exception:
+        pass
+
+    # Fallback: try page HTML channelName
+    if display == query:
+        name_match = re.search(r'"channelName"\s*:\s*"([^"]+)"', html)
+        if name_match:
+            display = name_match.group(1)
 
     return display, channel_id
 

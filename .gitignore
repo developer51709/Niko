@@ -20,6 +20,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# The dashboard build is intentionally served by the bot and checked in for
+# previews/deploys. Edit web/ and regenerate it with `npm run build`.
+!src/website/dist/
+!src/website/dist/**
+
 # Virtual environments
 .env
 .venv
@@ -44,6 +49,12 @@ uwulock.json
 src/data/
 data/
 
+# Allow the documentation data file
+!web/src/data
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Node Modules
+node_modules

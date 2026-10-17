@@ -1,5 +1,10 @@
 """
-Premium PIL renderers for the Café economy.
+Premium PIL renderers for the Niko economy.
+
+Styling follows the website theme (`web/src/styles.css`): a near-black
+graphite canvas, neutral raised surfaces, a steel accent for numerals and
+sage for money earned.  The palette constants below are the single source of
+truth and are shared with `level_card.py`.
 
 Every public coroutine returns a `BytesIO` containing a PNG that can be
 sent as a `discord.File` and referenced from a `discord.ui.MediaGallery`
@@ -23,24 +28,51 @@ from io import BytesIO
 from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
-from utils.image._font_resolver import get_bold, get_reg, font_getlength, draw_textlength
+from utils.image._font_resolver import (
+    get_bold,
+    get_reg,
+    font_getlength,
+    draw_textlength,
+    draw_text_with_fallback,
+)
 
 
 # ── Palette ─────────────────────────────────────────────────────────────────
-BG_TOP        = (38, 26, 22)        # warm espresso
-BG_BOT        = (18, 12, 10)
-PANEL_BG      = (50, 36, 30, 230)
-PANEL_BORDER  = (110, 78, 50, 220)
+# Mirrors the website tokens in `web/src/styles.css` `:root`, so a card looks
+# like a panel of the dashboard:
+#   --surface / --canvas       → the card gradient
+#   --surface-raised / --line  → panels and their borders
+#   --ink / --muted / --dim    → text hierarchy
+#   --accent / --accent-dark   → steel accent for numerals and chrome
+#   --sage                     → money gained
+CANVAS_TOP    = (17, 19, 22)       # --surface       #111316
+CANVAS_BOT    = (5, 6, 7)           # --canvas        #050607
+PANEL_BG      = (32, 34, 38, 235)   # --surface-raised #202226
+PANEL_BORDER  = (45, 48, 53, 235)   # --line           #2d3035
 
-CREAM         = (245, 232, 210)
-CREAM_DIM     = (200, 188, 168)
-GOLD          = (255, 196, 92)
-GOLD_BRIGHT   = (255, 220, 140)
-COFFEE        = (180, 124, 72)
-GREEN_OK      = (118, 226, 156)
-RED_BAD       = (244, 110, 124)
-PURPLE_RANK   = (200, 162, 255)
+INK           = (244, 245, 247)     # --ink           #f4f5f7
+MUTED         = (180, 186, 195)     # --muted         #b4bac3
+DIM           = (133, 140, 150)     # --dim           #858c96
+ACCENT        = (170, 177, 186)     # --accent        #aab1ba
+ACCENT_BRIGHT = (213, 217, 223)     # --accent-dark   #d5d9df
+SAGE          = (139, 213, 177)     # --sage          #8bd5b1
+DANGER        = (232, 162, 162)     # loss/negative amounts
+SURFACE_MUTED = (25, 27, 31)        # --surface-muted #191b1f
+LINE_SOFT     = (34, 37, 42)        # --line-soft     #22252a
 SHADOW_RGBA   = (0, 0, 0, 130)
+
+# Backwards-compatible aliases for the pre-theme café names.  Other renderers
+# and the economy cogs import these, so they stay — pointing at theme colours.
+BG_TOP        = CANVAS_TOP
+BG_BOT        = CANVAS_BOT
+CREAM         = INK
+CREAM_DIM     = MUTED
+GOLD          = ACCENT
+GOLD_BRIGHT   = ACCENT_BRIGHT
+COFFEE        = ACCENT
+GREEN_OK      = SAGE
+RED_BAD       = DANGER
+PURPLE_RANK   = ACCENT
 
 
 # ── Font helpers (Termux/Android-safe via shared resolver) ──────────────────
@@ -80,9 +112,9 @@ def _vertical_gradient(size: tuple[int, int], top: tuple[int, int, int], bot: tu
 
 
 def _make_canvas(width: int, height: int, radius: int = 26) -> Image.Image:
-    """Base canvas with gradient background, subtle vignette, and gold border."""
+    """Base canvas with gradient background, subtle vignette, and a hairline border."""
     # gradient background
-    grad = _vertical_gradient((width, height), BG_TOP, BG_BOT).convert("RGBA")
+    grad = _vertical_gradient((width, height), CANVAS_TOP, CANVAS_BOT).convert("RGBA")
     grad.putalpha(_rounded_mask((width, height), radius))
 
     # subtle vignette
@@ -109,7 +141,7 @@ def _make_canvas(width: int, height: int, radius: int = 26) -> Image.Image:
 
 
 def _panel(canvas: Image.Image, x: int, y: int, w: int, h: int, radius: int = 16):
-    """Translucent rounded panel with thin gold border."""
+    """Translucent rounded panel with a thin theme border."""
     panel = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     pd = ImageDraw.Draw(panel)
     pd.rounded_rectangle(
@@ -123,7 +155,7 @@ def _panel(canvas: Image.Image, x: int, y: int, w: int, h: int, radius: int = 16
 
 
 def _circle_avatar(raw: bytes | None, size: int) -> Image.Image:
-    """Crop avatar bytes to a perfect circle. Falls back to a stylised coffee-cup glyph."""
+    """Crop avatar bytes to a perfect circle. Falls back to a generic profile mark."""
     av = None
     if raw:
         try:
@@ -132,28 +164,20 @@ def _circle_avatar(raw: bytes | None, size: int) -> Image.Image:
             av = None
 
     if av is None:
-        av = Image.new("RGBA", (size, size), (60, 42, 32, 255))
+        # Generic profile mark — a neutral silhouette rather than a themed
+        # character, so it reads on any guild's card colours.
+        av = Image.new("RGBA", (size, size), SURFACE_MUTED + (255,))
         d = ImageDraw.Draw(av)
-        d.ellipse([8, 8, size - 8, size - 8], fill=(110, 78, 50, 255))
-        # Stylised coffee cup glyph (no emoji font dependency)
-        cup_w = int(size * 0.45)
-        cup_h = int(size * 0.32)
-        cup_x = (size - cup_w) // 2
-        cup_y = (size - cup_h) // 2 + int(size * 0.04)
-        d.rounded_rectangle(
-            [cup_x, cup_y, cup_x + cup_w, cup_y + cup_h],
-            radius=cup_h // 4, fill=CREAM,
-        )
+        head_r = size * 0.155
+        cx = size / 2
         d.ellipse(
-            [cup_x + cup_w - 6, cup_y + 6, cup_x + cup_w + cup_h // 2, cup_y + cup_h - 6],
-            outline=CREAM, width=4,
+            [cx - head_r, size * 0.29 - head_r, cx + head_r, size * 0.29 + head_r],
+            fill=MUTED,
         )
-        for i in range(3):
-            wx = cup_x + 8 + i * (cup_w // 3)
-            d.line(
-                [(wx, cup_y - int(size * 0.08)), (wx + 4, cup_y - int(size * 0.16))],
-                fill=CREAM, width=3,
-            )
+        d.pieslice(
+            [cx - size * 0.29, size * 0.55, cx + size * 0.29, size * 0.55 + size * 0.55],
+            180, 360, fill=MUTED,
+        )
     else:
         av = av.resize((size, size), Image.LANCZOS)
 
@@ -182,11 +206,11 @@ def _format_amount(n: int) -> str:
     return f"{n:,}"
 
 
-def _truncate(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    """Truncate text to fit within max_w, adding ellipsis if needed."""
-    if font.getlength(text) <= max_w:
+def _truncate(text: str, font: ImageFont.ImageFont, max_w: int) -> str:
+    """Truncate text to fit within max_w, adding an ellipsis if needed."""
+    if font_getlength(font, text) <= max_w:
         return text
-    while text and font.getlength(text + "…") > max_w:
+    while text and font_getlength(font, text + "…") > max_w:
         text = text[:-1]
     return text + "…"
 
@@ -211,15 +235,8 @@ def _render_emoji(emoji: str, size: int) -> Image.Image:
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize text to remove font modifiers (bold, italic, script, fraktur, etc.)."""
-    # NFKD decomposes styled characters into base characters + modifiers
-    decomposed = unicodedata.normalize("NFKD", text)
-
-    # Keep only characters that are not combining marks
-    # (font modifiers become combining marks after NFKD)
-    cleaned = "".join(c for c in decomposed if not unicodedata.combining(c))
-
-    return cleaned
+    """Keep user text intact; glyph selection is handled by font fallback."""
+    return text
 
 
 import re as _re
@@ -231,7 +248,124 @@ def _strip_discord_emoji(text: str) -> str:
 
     PIL cannot render these and they would show as garbled characters.
     """
-    return _DISCORD_EMOJI_RE.sub("", text).strip()
+    return _DISCORD_EMOJI_RE.sub("", text).strip()# ── Unicode emoji detection ─────────────────────────────────────────────
+# Fast ord()-based checks: astral-plane codepoints (>= U+10000) that
+# fall in known emoji blocks are treated as emoji.  BMP emoji symbols
+# are checked against a compact sorted range table.
+
+_BMP_EMOJI_RANGES: list[tuple[int, int]] = [
+    (0x231A, 0x231B),  # watch, hourglass
+    (0x23E9, 0x23F3),  # fast-forward etc.
+    (0x23F8, 0x23FA),  # pause, record, eject
+    (0x25AA, 0x25AB),  # small squares
+    (0x25B6, 0x25C0),  # play buttons
+    (0x25FB, 0x25FE),  # medium squares
+    (0x2602, 0x2605),  # umbrella, snowman, star
+    (0x2614, 0x2615),  # umbrella + coffee
+    (0x2648, 0x2653),  # zodiac
+    (0x267F, 0x267F),  # wheelchair
+    (0x2692, 0x2697),  # hammer-and-pick etc.
+    (0x2699, 0x269C),  # gear, fleur
+    (0x26A0, 0x26A1),  # warning, high voltage
+    (0x26AA, 0x26AB),  # circles
+    (0x26BD, 0x26BE),  # soccer, baseball
+    (0x26C4, 0x26C5),  # snowman, sun behind cloud
+    (0x26CE, 0x26CE),  # ophiuchus
+    (0x26D4, 0x26D4),  # no entry
+    (0x26EA, 0x26EA),  # church
+    (0x26F2, 0x26F3),  # fountain, golf
+    (0x26F5, 0x26F5),  # sailboat
+    (0x26FA, 0x26FA),  # tent
+    (0x26FD, 0x26FD),  # fuel pump
+    (0x2702, 0x2705),  # scissors through check
+    (0x2708, 0x270D),  # airplane through pencil
+    (0x270F, 0x270F),  # pencil tip
+    (0x2712, 0x2714),  # nib, check
+    (0x2716, 0x2716),  # multiplication
+    (0x271D, 0x271D),  # latin cross
+    (0x2721, 0x2721),  # star of david
+    (0x2728, 0x2728),  # sparkles
+    (0x2733, 0x2734),  # asterisk
+    (0x2744, 0x2744),  # snowflake
+    (0x2747, 0x2747),  # sparkle
+    (0x274C, 0x274E),  # cross marks
+    (0x2753, 0x2755),  # question marks
+    (0x2757, 0x2757),  # exclamation
+    (0x2763, 0x2764),  # heart
+    (0x2795, 0x2797),  # plus/minus/divide
+    (0x27A1, 0x27A1),  # right arrow
+    (0x27B0, 0x27BF),  # curly loops
+    (0x2934, 0x2935),  # curving arrows
+    (0x2B05, 0x2B07),  # arrows
+    (0x2B1B, 0x2B1C),  # squares
+    (0x2B50, 0x2B55),  # star, circle
+    (0x3030, 0x3030),  # wavy dash
+    (0x303D, 0x303D),  # part alternation mark
+    (0x3297, 0x3299),  # circled ideographs
+]
+
+# Astral plane ranges (>= U+10000) that contain emoji.
+_ASTRAL_EMOJI_RANGES: list[tuple[int, int]] = [
+    (0x1F000, 0x1F02F),  # Mahjong tiles
+    (0x1F0A0, 0x1F0FF),  # Playing cards
+    (0x1F10D, 0x1F10F),  # circled letters
+    (0x1F12F, 0x1F169),  # circled letters / CJK compat
+    (0x1F170, 0x1F189),  # negative circled letters
+    (0x1F1E6, 0x1F1FF),  # regional indicators (flags)
+    (0x1F200, 0x1F251),  # enclosed ideographs
+    (0x1F300, 0x1F3FF),  # miscellaneous symbols & pictographs
+    (0x1F400, 0x1F4FF),  # emoticons → transport
+    (0x1F500, 0x1F5FF),  # symbols & arrows → misc
+    (0x1F600, 0x1F64F),  # emoticons → gestures
+    (0x1F680, 0x1F6FF),  # transport → mechanical
+    (0x1F900, 0x1F9FF),  # supplemental symbols
+    (0x1FA00, 0x1FA6F),  # chess symbols
+    (0x1FA70, 0x1FAFF),  # symbols extended-A
+]
+
+
+def _is_emoji_char(ch: str) -> bool:
+    """Return True if *ch* is a Unicode emoji character (BMP or astral)."""
+    cp = ord(ch)
+    # Fast path: astral plane — most emoji live here.
+    for lo, hi in _ASTRAL_EMOJI_RANGES:
+        if lo <= cp <= hi:
+            return True
+    # BMP check via sorted range table.
+    for lo, hi in _BMP_EMOJI_RANGES:
+        if lo <= cp <= hi:
+            return True
+    return False
+
+
+def _extract_emoji_seq(text: str, pos: int) -> str | None:
+    """Try to extract a full emoji sequence starting at *pos*.
+
+    Returns the emoji string (may be multi-codepoint: ZWJ sequences,
+    tag sequences, flag pairs, etc.) or ``None``.
+    """
+    ch = text[pos]
+    if not _is_emoji_char(ch):
+        return None
+
+    seq = ch
+    j = pos + 1
+    while j < len(text):
+        nxt = text[j]
+        # Variation selectors, ZWJ, tag characters, and skin-tone modifiers
+        # extend the current emoji sequence.
+        nxt_cp = ord(nxt)
+        if (
+            nxt_cp in (0xFE0E, 0xFE0F, 0x200D)           # VS15/VS16, ZWJ
+            or 0xE0020 <= nxt_cp <= 0xE007F               # tag characters
+            or 0x1F3FB <= nxt_cp <= 0x1F3FF               # Fitzpatrick modifiers
+            or _is_emoji_char(nxt)
+        ):
+            seq += nxt
+            j += 1
+        else:
+            break
+    return seq
 
 
 def render_text_with_emojis(
@@ -241,43 +375,58 @@ def render_text_with_emojis(
     start_x: int,
     start_y: int,
     emoji_size: int = 28,
-    fill="white"
+    fill="white",
+    bold: bool | None = None,
 ):
     """
     Render text with inline emojis onto a Pillow canvas.
-    Emojis are rendered exactly where they appear in the string.
+    Emojis are detected automatically and rendered as Twemoji images.
     """
-
-    EMOJI_SET = {
-        "🏆", "💰", "🎖️", "🥇", "🥈", "🥉", "🏅",
-        "💸", "💵", "💴", "💶", "💷", "✨", "🍯",
-        "☕", "👮", "😈", "🛡️", "💎", "🍬", "🔥",
-        "📋", "🪙", "🏦", "💼", "📜", "🎒", "🧪",
-        "🎟️", "🎰", "🍀", "🕒", "📊", "💸", "💳"
-    }
-
     draw = ImageDraw.Draw(canvas)
+    if bold is None:
+        bold = "bold" in str(getattr(font, "path", "")).lower()
     x = start_x
 
     i = 0
     while i < len(text):
-        char = text[i]
-
-        # Check if this character is an emoji we support
-        if char in EMOJI_SET:
-            emoji_img = _render_emoji(char, emoji_size)
-            canvas.alpha_composite(emoji_img, (int(x), int(start_y)))
-            x += emoji_img.width + 2
-            i += 1
+        # Try to extract an emoji sequence at the current position.
+        emoji_seq = _extract_emoji_seq(text, i)
+        if emoji_seq is not None:
+            try:
+                # Use the codepoint-based Twemoji URL for the first character;
+                # for ZWJ sequences use the full sequence joined by hyphens.
+                code = "-".join(f"{ord(c):x}" for c in emoji_seq)
+                url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{code}.png"
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    emoji_img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                    emoji_img = emoji_img.resize((emoji_size, emoji_size), Image.LANCZOS)
+                    canvas.alpha_composite(emoji_img, (int(x), int(start_y)))
+                    x += emoji_img.width + 2
+                    i += len(emoji_seq)
+                    continue
+            except Exception:
+                pass
+            # Fallback: render emoji sequence as text (best-effort)
+            font_size = getattr(font, "size", emoji_size)
+            for ch in emoji_seq:
+                x += draw_text_with_fallback(
+                    draw, (int(x), int(start_y)), ch,
+                    size=font_size, bold=bold, fill=fill,
+                )
+            i += len(emoji_seq)
             continue
 
-        # Normal text rendering
-        draw.text((x, start_y), char, font=font, fill=fill)
-        x += draw.textlength(char, font=font)
+        # Regular text character — use font fallback.
+        x += draw_text_with_fallback(
+            draw, (int(x), int(start_y)), text[i],
+            size=getattr(font, "size", emoji_size), bold=bold, fill=fill,
+        )
         i += 1
 
 
 # ── Stat chip ──────────────────────────────────────────────────────────────
+# (label + value panel used by the balance, shop and inventory cards)
 
 
 def _stat_chip(
@@ -288,13 +437,13 @@ def _stat_chip(
     h: int,
     label: str,
     value: str,
-    accent: tuple[int, int, int] = GOLD,
+    accent: tuple[int, int, int] = ACCENT_BRIGHT,
 ):
     _panel(canvas, x, y, w, h, radius=14)
     d = ImageDraw.Draw(canvas)
 
     label_font = _reg(13)
-    d.text((x + 16, y + 11), label.upper(), fill=CREAM_DIM, font=label_font)
+    d.text((x + 16, y + 11), label.upper(), fill=DIM, font=label_font)
 
     # Auto-shrink value font so it always fits inside the chip
     inner = w - 32
@@ -317,8 +466,8 @@ def _progress_bar(
     w: int,
     h: int,
     pct: float,
-    fill_top: tuple[int, int, int] = GOLD,
-    fill_bot: tuple[int, int, int] = COFFEE,
+    fill_top: tuple[int, int, int] = ACCENT_BRIGHT,
+    fill_bot: tuple[int, int, int] = ACCENT,
 ):
     pct = max(0.0, min(1.0, pct))
     # track
@@ -364,8 +513,8 @@ def _render_balance_sync(
     d = ImageDraw.Draw(canvas)
 
     # ── Header bar ──
-    d.text((36, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(18))
-    d.text((36, 54), title, fill=CREAM, font=_bold(34))
+    d.text((36, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(18))
+    d.text((36, 54), title, fill=INK, font=_bold(34))
 
     # rank pill (top-right)
     if rank is not None:
@@ -377,8 +526,8 @@ def _render_balance_sync(
         py = 36
         pill = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
         pd = ImageDraw.Draw(pill)
-        pd.rounded_rectangle([0, 0, pw - 1, ph - 1], radius=ph // 2, fill=(0, 0, 0, 130), outline=GOLD, width=1)
-        pd.text((14, 5), pill_text, fill=GOLD, font=pf)
+        pd.rounded_rectangle([0, 0, pw - 1, ph - 1], radius=ph // 2, fill=(0, 0, 0, 130), outline=ACCENT, width=1)
+        pd.text((14, 5), pill_text, fill=ACCENT_BRIGHT, font=pf)
         canvas.alpha_composite(pill, (px, py))
 
     # ── Avatar + name (left side) ──
@@ -392,27 +541,23 @@ def _render_balance_sync(
         avatar_x + avatar_size // 2,
         avatar_y + avatar_size // 2,
         avatar_size // 2 + 3,
-        GOLD,
+        ACCENT,
         width=3,
     )
 
     name_x = avatar_x + avatar_size + 22
     name_font = _bold(28)
     sub_font = _reg(15)
-    d.text(
-        (name_x, avatar_y + 6),
-        _truncate(_strip_discord_emoji(name), name_font, CARD_W - name_x - 40),
-        fill=CREAM,
-        font=name_font,
+    draw_text_with_fallback(
+        d, (name_x, avatar_y + 6),
+        _strip_discord_emoji(name), size=28, bold=True, fill=INK,
     )
     job_line = f"{job_name}   •   Streak {daily_streak}"
     if job_emoji:
         job_line = f"{job_emoji}  " + job_line
-    d.text(
-        (name_x, avatar_y + 44),
-        _strip_discord_emoji(job_line),
-        fill=CREAM_DIM,
-        font=sub_font,
+    draw_text_with_fallback(
+        d, (name_x, avatar_y + 44), _strip_discord_emoji(job_line),
+        size=15, fill=MUTED,
     )
 
     # Big net worth (right side)
@@ -423,8 +568,8 @@ def _render_balance_sync(
     nw_w     = int(nw_font.getlength(nw_value))
     lab_w    = int(lf.getlength(nw_label))
     right    = CARD_W - 40
-    d.text((right - lab_w, avatar_y + 12), nw_label, fill=CREAM_DIM, font=lf)
-    d.text((right - nw_w,  avatar_y + 32), nw_value, fill=GOLD_BRIGHT, font=nw_font)
+    d.text((right - lab_w, avatar_y + 12), nw_label, fill=DIM, font=lf)
+    d.text((right - nw_w,  avatar_y + 32), nw_value, fill=INK, font=nw_font)
 
     # ── Three stat chips: Cash / Bank / Bank Tier ──
     chips_y = avatar_y + avatar_size + 28
@@ -435,18 +580,18 @@ def _render_balance_sync(
     bank_pct  = 0.0 if bank_cap_v <= 0 else min(1.0, bank / bank_cap_v)
     bank_text = f"{_format_amount(bank)} / {_format_amount(bank_cap_v)}"
 
-    _stat_chip(canvas, 40,                           chips_y, chip_w, chip_h, "Cash",       _format_amount(cash),  GOLD)
-    _stat_chip(canvas, 40 + chip_w + gap,            chips_y, chip_w, chip_h, "Bank",       bank_text,             GREEN_OK)
-    _stat_chip(canvas, 40 + (chip_w + gap) * 2,      chips_y, chip_w, chip_h, "Vault Tier", bank_tier_name,        PURPLE_RANK)
+    _stat_chip(canvas, 40,                           chips_y, chip_w, chip_h, "Cash",       _format_amount(cash),  ACCENT_BRIGHT)
+    _stat_chip(canvas, 40 + chip_w + gap,            chips_y, chip_w, chip_h, "Bank",       bank_text,             SAGE)
+    _stat_chip(canvas, 40 + (chip_w + gap) * 2,      chips_y, chip_w, chip_h, "Vault Tier", bank_tier_name,        ACCENT)
 
     # ── XP bar ──
     bar_y = chips_y + chip_h + 22
     pct = 0.0 if xp_for_next <= 0 else xp_in_level / xp_for_next
-    d.text((40, bar_y - 22), f"LEVEL {level}", fill=CREAM, font=_bold(15))
+    d.text((40, bar_y - 22), f"LEVEL {level}", fill=INK, font=_bold(15))
     xp_text = f"{xp_in_level}/{xp_for_next} XP"
     xp_w = int(_reg(13).getlength(xp_text))
-    d.text((CARD_W - 40 - xp_w, bar_y - 20), xp_text, fill=CREAM_DIM, font=_reg(13))
-    _progress_bar(canvas, 40, bar_y, CARD_W - 80, 16, pct, fill_top=GOLD_BRIGHT, fill_bot=COFFEE)
+    d.text((CARD_W - 40 - xp_w, bar_y - 20), xp_text, fill=DIM, font=_reg(13))
+    _progress_bar(canvas, 40, bar_y, CARD_W - 80, 16, pct, fill_top=ACCENT_BRIGHT, fill_bot=ACCENT)
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
@@ -521,7 +666,7 @@ def _render_reward_sync(
     _draw_circle_outline(canvas, av_x + av_size // 2, av_y + av_size // 2, av_size // 2 + 3, accent, width=3)
 
     # Header
-    d.text((36, 22), "CAFÉ ECONOMY", fill=GOLD, font=_bold(16))
+    d.text((36, 22), "NIKO ECONOMY", fill=ACCENT, font=_bold(16))
 
     # Title + subtitle
     text_x = av_x + av_size + 24
@@ -529,10 +674,11 @@ def _render_reward_sync(
     sub_font   = _reg(16)
     name       = _normalize_text(name)
     title      = f"{title} — {name}"
-    title      = render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, CREAM)
+    render_text_with_emojis(canvas, title, title_font, text_x, av_y + 4, 28, INK, bold=True)
+
     subtitle = _normalize_text(subtitle)
-    render_text_with_emojis(canvas, subtitle, sub_font, text_x, av_y + 42, 16, CREAM_DIM)
-    # d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=CREAM_DIM, font=sub_font)
+    render_text_with_emojis(canvas, subtitle, sub_font, text_x, av_y + 42, 16, MUTED, bold=False)
+    # d.text((text_x, av_y + 42), _truncate(subtitle, sub_font, REWARD_W - text_x - 36), fill=MUTED, font=sub_font)
 
     # Big amount block (right side panel)
     panel_w = 280
@@ -553,12 +699,12 @@ def _render_reward_sync(
     nb_text = f"new balance: {int(new_balance):,}"
     nbw = int(label_font.getlength(nb_text))
     d.text((panel_x + (panel_w - nbw) // 2, panel_y + 60),
-           nb_text, fill=CREAM_DIM, font=label_font)
+           nb_text, fill=MUTED, font=label_font)
 
     # Footer
     if footer:
-        render_text_with_emojis(canvas, footer, _reg(14), 36, REWARD_H - 38, 14, CREAM_DIM)
-        # d.text((36, REWARD_H - 38), footer, fill=CREAM_DIM, font=_reg(14))
+        render_text_with_emojis(canvas, footer, _reg(14), 36, REWARD_H - 38, 14, DIM, bold=False)
+        # d.text((36, REWARD_H - 38), footer, fill=DIM, font=_reg(14))
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
@@ -574,7 +720,7 @@ async def render_reward_card(
     subtitle: str,
     amount: int,
     new_balance: int,
-    accent: tuple[int, int, int] = GOLD,
+    accent: tuple[int, int, int] = SAGE,
     footer: str = "",
 ) -> BytesIO:
     return await asyncio.to_thread(
@@ -590,10 +736,12 @@ async def render_reward_card(
     )
 
 
-# Convenience accents exported for cogs that don't want to import the palette
-ACCENT_GOLD  = GOLD_BRIGHT
-ACCENT_GREEN = GREEN_OK
-ACCENT_RED   = RED_BAD
+# Amount accents for cogs that don't want to import the palette whole.  On the
+# website money gained is sage and losses are a muted red, so reward cards
+# follow the same pairing.
+ACCENT_GOLD  = SAGE
+ACCENT_GREEN = SAGE
+ACCENT_RED   = DANGER
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -619,14 +767,14 @@ def _render_leaderboard_sync(
     d = ImageDraw.Draw(canvas)
 
     # Header
-    d.text((36, 28), "CAFÉ ECONOMY", fill=GOLD, font=_bold(16))
-    render_text_with_emojis(canvas, title, _bold(28), 36, 54, 28, CREAM)
-    # d.text((36, 54), title, fill=CREAM, font=_bold(28))
+    d.text((36, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(16))
+    render_text_with_emojis(canvas, title, _bold(28), 36, 54, 28, INK)
+    # d.text((36, 54), title, fill=INK, font=_bold(28))
     page_text = f"Page {page}/{pages}"
     pf = _reg(14)
     pw = int(pf.getlength(page_text))
-    render_text_with_emojis(canvas, page_text, pf, LB_W - 36 - pw, 60, 14, CREAM_DIM)
-    # d.text((LB_W - 36 - pw, 60), page_text, fill=CREAM_DIM, font=pf)
+    render_text_with_emojis(canvas, page_text, pf, LB_W - 36 - pw, 60, 14, DIM)
+    # d.text((LB_W - 36 - pw, 60), page_text, fill=DIM, font=pf)
 
     y = 110
     medals = {1: "1st", 2: "2nd", 3: "3rd"}
@@ -637,7 +785,7 @@ def _render_leaderboard_sync(
         avatar = entry.get("avatar")
 
         is_top3 = rank <= 3
-        accent = GOLD_BRIGHT if rank == 1 else (CREAM if rank == 2 else (COFFEE if rank == 3 else CREAM_DIM))
+        accent = ACCENT_BRIGHT if rank == 1 else (INK if rank == 2 else (ACCENT if rank == 3 else DIM))
         _panel(canvas, 28, y, LB_W - 56, LB_ROW_H, radius=14)
 
         # rank
@@ -655,21 +803,19 @@ def _render_leaderboard_sync(
         nf = _bold(20)
         nx = 28 + 64 + (LB_ROW_H - 16) + 14
         max_name_w = LB_W - 56 - 220 - (nx - 28)
-        # clean up any fonts in the name like 𝐭𝐡𝐢𝐬 or 𝕥𝕙𝕚𝕤 that can't be rendered by PIL
-        name = _normalize_text(name)
-        render_text_with_emojis(canvas, name, nf, nx, y + 14, 20, CREAM)
-        # d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=CREAM, font=nf)
+        render_text_with_emojis(canvas, name, nf, nx, y + 14, 20, INK)
+        # d.text((nx, y + 14), _truncate(_strip_discord_emoji(name), nf, max_name_w), fill=INK, font=nf)
 
         # total
         amt = f"{int(total):,}"
         af = _bold(22)
         aw = int(af.getlength(amt))
-        d.text((LB_W - 28 - 24 - aw, y + 14), amt, fill=accent, font=af)
+        draw_text_with_fallback(d, (LB_W - 28 - 24 - aw, y + 14), amt, size=22, bold=True, fill=accent)
 
         y += LB_ROW_H + 10
 
     # Footer
-    d.text((36, height - 36), "use ‹ › below to navigate", fill=CREAM_DIM, font=_reg(13))
+    draw_text_with_fallback(d, (36, height - 36), "use ‹ › below to navigate", size=13, fill=DIM)
 
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
@@ -686,6 +832,160 @@ async def render_leaderboard_card(
 ) -> BytesIO:
     return await asyncio.to_thread(
         _render_leaderboard_sync, title, entries, page, pages
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# SHOP CARD
+# ──────────────────────────────────────────────────────────────────────────
+
+SHOP_W = 900
+
+
+def _render_shop_sync(items: list[dict], balance: int, category: str | None = None) -> BytesIO:
+    """Render the catalog shown by the interactive shop command."""
+    row_h = 78
+    header_h = 126
+    height = header_h + max(1, len(items)) * row_h + 42
+    canvas = _make_canvas(SHOP_W, height, radius=28)
+    d = ImageDraw.Draw(canvas)
+    d.text((38, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(17))
+    d.text((38, 54), "Niko's Boutique", fill=INK, font=_bold(34))
+    balance_text = f"Balance  {int(balance):,} \U0001F950"
+    balance_font = _bold(17)
+    balance_w = int(font_getlength(balance_font, balance_text))
+    render_text_with_emojis(canvas, balance_text, balance_font, SHOP_W - 38 - balance_w, 41, emoji_size=17, fill=ACCENT_BRIGHT, bold=True)
+    subtitle = f"{category.title()} collection" if category else "Treats, upgrades, and little luxuries"
+    draw_text_with_fallback(d, (38, 94), subtitle, size=14, fill=MUTED)
+
+    y = header_h
+    for item in items:
+        _panel(canvas, 28, y, SHOP_W - 56, row_h - 8, radius=14)
+        emoji = str(item.get("emoji", "\u2022"))
+        name = str(item.get("name", "Item"))
+        description = str(item.get("description", ""))
+        price = int(item.get("price", 0))
+        sell = int(item.get("sell", price // 3))
+        # Render item name with emoji via Twemoji
+        item_name_font = _bold(20)
+        render_text_with_emojis(canvas, f"{emoji}  {name}", item_name_font, 48, y + 15, emoji_size=20, fill=INK, bold=True)
+        draw_text_with_fallback(d, (48, y + 43), description[:72], size=12, fill=MUTED)
+        # Price line with emoji
+        price_text = f"{price:,} \U0001F950"
+        sell_text = f"sell {sell:,}"
+        pf = _bold(18)
+        render_text_with_emojis(canvas, price_text, pf, SHOP_W - 190, y + 16, emoji_size=18, fill=ACCENT_BRIGHT, bold=True)
+        draw_text_with_fallback(d, (SHOP_W - 190, y + 43), sell_text, size=12, fill=SAGE)
+        y += row_h
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    out.seek(0)
+    return out
+
+
+async def render_shop_card(*, items: list[dict], balance: int, category: str | None = None) -> BytesIO:
+    return await asyncio.to_thread(_render_shop_sync, items, balance, category)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# INVENTORY CARD
+# ──────────────────────────────────────────────────────────────────────────
+
+INV_W = 900
+
+
+def _render_inventory_sync(
+    avatar_bytes: bytes | None,
+    name: str,
+    balance: int,
+    sections: list[dict],
+) -> BytesIO:
+    """Render an inventory card grouped by category.
+
+    ``sections`` is a list of dicts:
+        {"label": str, "items": [{"emoji": str, "name": str, "count": int, "desc": str}]}
+    """
+    row_h = 56
+    section_header_h = 40
+    # Compute total rows
+    total_rows = sum(len(s["items"]) for s in sections)
+    total_section_headers = len(sections)
+    height = 130 + total_section_headers * section_header_h + max(1, total_rows) * row_h + 42
+    canvas = _make_canvas(INV_W, height, radius=28)
+    d = ImageDraw.Draw(canvas)
+
+    # ── Header ──
+    d.text((38, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(17))
+    d.text((38, 54), f"{name}'s Inventory", fill=INK, font=_bold(34))
+    balance_text = f"Balance  {int(balance):,} \U0001F950"
+    balance_font = _bold(17)
+    balance_w = int(font_getlength(balance_font, balance_text))
+    render_text_with_emojis(
+        canvas, balance_text, balance_font,
+        INV_W - 38 - balance_w, 41,
+        emoji_size=17, fill=ACCENT_BRIGHT, bold=True,
+    )
+
+    # ── Sections ──
+    y = 130
+    for section in sections:
+        items = section["items"]
+        if not items:
+            continue
+        # Section header
+        render_text_with_emojis(
+            canvas, section["label"], _bold(20),
+            48, y, emoji_size=20, fill=INK, bold=True,
+        )
+        y += section_header_h
+        for item in items:
+            _panel(canvas, 28, y, INV_W - 56, row_h - 8, radius=14)
+            emoji = item.get("emoji", "\u2022")
+            item_name = item.get("name", "Unknown")
+            count = item.get("count", 0)
+            desc = item.get("desc", "")
+            # Item name with emoji
+            render_text_with_emojis(
+                canvas, f"{emoji}  {item_name}", _bold(18),
+                48, y + 10, emoji_size=18, fill=INK, bold=True,
+            )
+            # Count badge (right side)
+            count_text = f"\u00d7 {count}" if count != 1 else "\u00d7 1"
+            cf = _bold(20)
+            cw = int(cf.getlength(count_text))
+            draw_text_with_fallback(
+                d, (INV_W - 28 - 24 - cw, y + 10), count_text,
+                size=20, bold=True, fill=ACCENT_BRIGHT,
+            )
+            # Description
+            if desc:
+                draw_text_with_fallback(
+                    d, (48, y + 34), desc[:80],
+                    size=12, fill=MUTED,
+                )
+            y += row_h
+
+    # Footer
+    total_items = sum(item["count"] for s in sections for item in s["items"])
+    footer = f"{total_items} item{'s' if total_items != 1 else ''} total"
+    draw_text_with_fallback(d, (38, height - 36), footer, size=13, fill=DIM)
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    out.seek(0)
+    return out
+
+
+async def render_inventory_card(
+    *,
+    avatar_bytes: bytes | None,
+    name: str,
+    balance: int,
+    sections: list[dict],
+) -> BytesIO:
+    return await asyncio.to_thread(
+        _render_inventory_sync, avatar_bytes, name, balance, sections
     )
 
 

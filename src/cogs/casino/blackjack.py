@@ -13,14 +13,22 @@ import time
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 from utils.image.blackjack import render_table
+from utils.image.economy_card import ACCENT_BRIGHT, DANGER, SAGE
 
 SHOE_FILE   = "blackjack_shoe.json"
 IMAGE_NAME  = "blackjack.png"
 
 ACCENT_GREEN = discord.Colour(0x57F287)
 ACCENT_RED   = discord.Colour(0xED4245)
-ACCENT_GOLD  = discord.Colour(0xFEE75C)
+# The brand accent every other Niko view uses, not a casino-only yellow.
+ACCENT_BRAND = discord.Colour(0xC8A882)
 ACCENT_BLUE  = discord.Colour(0x5865F2)
+
+# Table text follows the website theme, so the rendered table matches the rest
+# of Niko's cards (sage for wins, a muted red for losses).
+STATUS_NEUTRAL = ACCENT_BRIGHT
+STATUS_WIN     = SAGE
+STATUS_LOSS    = DANGER
 
 
 # ============================
@@ -314,7 +322,7 @@ class Blackjack(commands.Cog):
             return await ctx.send("You must bet more than 0 coins.")
 
         economy = self.bot.get_cog("EconomyCog")
-        user_data = economy.get_user_economy_data(ctx.author.id)
+        user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
 
         if user_data["last_blackjack"] + int(os.getenv("BLACKJACK_COOLDOWN") or 60) > time.time():
@@ -330,7 +338,7 @@ class Blackjack(commands.Cog):
         player_has_blackjack = is_blackjack(game.hands[0]["cards"])
 
         # ── Helpers ────────────────────────────────────────────────────────
-        async def _render(reveal_dealer: bool, title: str, status: str = "", status_color=(255, 215, 0)):
+        async def _render(reveal_dealer: bool, title: str, status: str = "", status_color=STATUS_NEUTRAL):
             return await render_table(
                 game.hands,
                 game.dealer,
@@ -367,8 +375,8 @@ class Blackjack(commands.Cog):
         # ── Insurance prompt ───────────────────────────────────────────────
         if game.can_insure() and not dealer_has_blackjack:
             buf  = await _render(reveal_dealer=False, title="Insurance?",
-                                 status="Dealer is showing an Ace.", status_color=(255, 215, 0))
-            view = _build_view(with_buttons=True, game=game, accent=ACCENT_GOLD, insurance_only=True)
+                                 status="Dealer is showing an Ace.", status_color=STATUS_NEUTRAL)
+            view = _build_view(with_buttons=True, game=game, accent=ACCENT_BRAND, insurance_only=True)
             _attach_check(view)
             await _send_or_edit(buf, view)
             await view.wait()
@@ -383,10 +391,10 @@ class Blackjack(commands.Cog):
             payout -= amount
             user_data["balance"] += payout
             user_data["last_blackjack"] = time.time()
-            economy.save_economy_data()
+            await economy.save_user_economy_data(ctx.author.id)
 
             status = f"{payout:+d} coins"
-            status_color = (87, 242, 135) if payout >= 0 else (237, 90, 96)
+            status_color = STATUS_WIN if payout >= 0 else STATUS_LOSS
             buf  = await _render(reveal_dealer=True, title="Dealer Blackjack",
                                  status=status, status_color=status_color)
             view = _build_view(with_buttons=False, accent=ACCENT_RED)
@@ -397,11 +405,11 @@ class Blackjack(commands.Cog):
             winnings = game.settle_blackjack()
             user_data["balance"] += winnings
             user_data["last_blackjack"] = time.time()
-            economy.save_economy_data()
+            await economy.save_user_economy_data(ctx.author.id)
 
             buf  = await _render(reveal_dealer=True, title="Blackjack! 3:2",
-                                 status=f"+{winnings} coins", status_color=(87, 242, 135))
-            view = _build_view(with_buttons=False, accent=ACCENT_GOLD)
+                                 status=f"+{winnings} coins", status_color=STATUS_WIN)
+            view = _build_view(with_buttons=False, accent=ACCENT_BRAND)
             return await _send_or_edit(buf, view)
 
         # ── PLAYER TURN ────────────────────────────────────────────────────
@@ -446,23 +454,23 @@ class Blackjack(commands.Cog):
         total_result = sum(game.settle_hand(h) for h in game.hands)
         user_data["balance"] += total_result
         user_data["last_blackjack"] = time.time()
-        economy.save_economy_data()
+        await economy.save_user_economy_data(ctx.author.id)
 
         if total_result > 0:
             title  = "You Win"
             status = f"+{total_result} coins"
-            color  = (87, 242, 135)
+            color  = STATUS_WIN
             accent = ACCENT_GREEN
         elif total_result < 0:
             title  = "You Lose"
             status = f"{total_result} coins"
-            color  = (237, 90, 96)
+            color  = STATUS_LOSS
             accent = ACCENT_RED
         else:
             title  = "Push"
             status = "Bet returned"
-            color  = (255, 215, 0)
-            accent = ACCENT_GOLD
+            color  = STATUS_NEUTRAL
+            accent = ACCENT_BRAND
 
         # No active hand once the round is settled
         game.current_hand = -1

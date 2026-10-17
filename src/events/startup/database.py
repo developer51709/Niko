@@ -5,12 +5,43 @@ Handles connection, table creation, and legacy migrations.
 
 import os
 import sqlite3 as _sqlite3
+import time
 
 import database
 from utils import logging
 
 
 DATABASE_PATH = "data/database.db"
+
+
+async def _migrate_follows(bot):
+    """Add the notify-management columns to an existing follows table.
+
+    MongoDB is schema-less, so the ALTERs are skipped there and the missing
+    fields simply read as their defaults through utils.social.follows.
+    """
+    for column, definition in (
+        ("enabled", "INTEGER NOT NULL DEFAULT 1"),
+        ("ping_role_id", "INTEGER"),
+        ("failures", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_checked_at", "TEXT"),
+    ):
+        try:
+            await bot.cxn.execute(f"ALTER TABLE follows ADD COLUMN {column} {definition}")
+        except Exception:
+            pass  # column already exists
+
+    # Backfill so the dashboard can show health for rows created before the
+    # migration: a paused flag of NULL would render as an unknown state.
+    try:
+        await bot.cxn.execute(
+            "UPDATE follows SET enabled = 1 WHERE enabled IS NULL"
+        )
+        await bot.cxn.execute(
+            "UPDATE follows SET failures = 0 WHERE failures IS NULL"
+        )
+    except Exception:
+        pass
 
 
 async def _create_tables(bot):
@@ -51,6 +82,201 @@ async def _create_tables(bot):
         )
     """)
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS notification_channels (
+            guild_id   INTEGER PRIMARY KEY,
+            channel_id INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS notifier_config (
+            guild_id           INTEGER PRIMARY KEY,
+            enabled            INTEGER NOT NULL DEFAULT 1,
+            default_channel_id INTEGER,
+            ping_role_id       INTEGER,
+            updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # ── Follows: pause, per-account role ping, custom template, health ──
+    # Older rows keep working: a missing `enabled` reads as paused=False and a
+    # missing `failures` reads as 0, so only new columns need to be added here.
+    await _migrate_follows(bot)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS suggestion_config (
+            guild_id  INTEGER PRIMARY KEY,
+            channel_id INTEGER,
+            next_id   INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_config (
+            guild_id INTEGER PRIMARY KEY,
+            personality TEXT NOT NULL DEFAULT 'cafe',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            ai_name TEXT NOT NULL DEFAULT 'Niko',
+            ai_actions_experiment INTEGER NOT NULL DEFAULT 0,
+            better_context_experiment INTEGER NOT NULL DEFAULT 0,
+            multimodal_experiment INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    for col_name, col_def in [
+        ("ai_name", "TEXT NOT NULL DEFAULT 'Niko'"),
+        ("ai_actions_experiment", "INTEGER NOT NULL DEFAULT 0"),
+        ("better_context_experiment", "INTEGER NOT NULL DEFAULT 0"),
+        ("multimodal_experiment", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE ai_config ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_applications (
+            id                TEXT PRIMARY KEY,
+            guild_id          INTEGER NOT NULL,
+            role_id           TEXT NOT NULL,
+            title             TEXT NOT NULL,
+            description       TEXT NOT NULL DEFAULT '',
+            questions         TEXT NOT NULL DEFAULT '[]',
+            eligible_role_ids TEXT NOT NULL DEFAULT '[]',
+            status            TEXT NOT NULL DEFAULT 'open',
+            created_by        TEXT NOT NULL,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_application_submissions (
+            application_id TEXT NOT NULL,
+            user_id        TEXT NOT NULL,
+            answers        TEXT NOT NULL DEFAULT '[]',
+            receipt_id     TEXT NOT NULL,
+            submitted_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            review_status  TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by    TEXT,
+            reviewed_at    TEXT,
+            PRIMARY KEY (application_id, user_id)
+        )
+    """)
+    # Keep existing submissions intact while adding review metadata.
+    for col_name, col_def in [
+        ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
+        ("reviewed_by", "TEXT"),
+        ("reviewed_at", "TEXT"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE staff_application_submissions ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
+
+    # Niko's official team recruitment is intentionally isolated from guild
+    # staff applications: no guild administrator or guild API can manage these.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_team_openings (
+            id TEXT PRIMARY KEY,
+            role_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            questions TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'open',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_team_submissions (
+            opening_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            answers TEXT NOT NULL DEFAULT '[]',
+            receipt_id TEXT NOT NULL,
+            submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            review_status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by TEXT,
+            reviewed_at TEXT,
+            PRIMARY KEY (opening_id, user_id)
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS support_server_config (
+            guild_id INTEGER PRIMARY KEY,
+            role_ids TEXT NOT NULL DEFAULT '{}',
+            channel_ids TEXT NOT NULL DEFAULT '{}',
+            invite_url TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    try:
+        await bot.cxn.execute("ALTER TABLE support_server_config ADD COLUMN invite_url TEXT")
+    except Exception:
+        pass
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS support_server_panels (
+            guild_id INTEGER NOT NULL,
+            panel_key TEXT NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (guild_id, panel_key)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_members (
+             user_id     INTEGER PRIMARY KEY,
+            role        TEXT NOT NULL,
+            assigned_by INTEGER NOT NULL,
+            assigned_at REAL NOT NULL,
+            public_name TEXT,
+            public_bio  TEXT,
+            public_avatar_url TEXT,
+            public_banner_url TEXT,
+            public_links TEXT,
+            public_visible INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    # Keep existing installations compatible with the richer public staff profile.
+    for col_name, col_def in [
+        ("public_name", "TEXT"),
+        ("public_bio", "TEXT"),
+        ("public_avatar_url", "TEXT"),
+        ("public_banner_url", "TEXT"),
+        ("public_links", "TEXT"),
+        ("public_visible", "INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE staff_members ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS global_profile (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            avatar_url TEXT,
+            banner_url TEXT,
+            updated_by INTEGER,
+            updated_at REAL
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS suggestions (
+            message_id INTEGER PRIMARY KEY,
+            guild_id   INTEGER NOT NULL,
+            suggestion_id INTEGER NOT NULL,
+            text       TEXT NOT NULL,
+            author_id  INTEGER NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'open',
+            up         INTEGER NOT NULL DEFAULT 0,
+            down       INTEGER NOT NULL DEFAULT 0,
+            voters     TEXT NOT NULL DEFAULT '{}',
+            channel_id INTEGER NOT NULL,
+            verdict    TEXT,
+            created_at INTEGER NOT NULL
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS youtube (
             channel_id TEXT PRIMARY KEY,
             last_video TEXT
@@ -69,22 +295,38 @@ async def _create_tables(bot):
         SELECT channel_id, last_video FROM youtube WHERE last_video IS NOT NULL
     """)
 
-    try:
-        cols = await bot.cxn.fetch("PRAGMA table_info(levels)")
-        col_names = {row["name"] for row in cols}
-        if cols and "guild_id" not in col_names:
-            await bot.cxn.execute("ALTER TABLE levels RENAME TO levels_old")
-            await bot.cxn.execute("""
-                CREATE TABLE levels (
-                    guild_id INTEGER,
-                    user_id  INTEGER,
-                    xp       INTEGER DEFAULT 0,
-                    level    INTEGER DEFAULT 0,
-                    PRIMARY KEY (guild_id, user_id)
-                )
-            """)
-            await bot.cxn.execute("DROP TABLE levels_old")
-        else:
+    # Check if levels table needs migration (SQLite) or create it (MongoDB)
+    if bot.cxn.db_type == "sqlite":
+        try:
+            cols = await bot.cxn.fetch("PRAGMA table_info(levels)")
+            col_names = {row["name"] for row in cols}
+            if cols and "guild_id" not in col_names:
+                await bot.cxn.execute("ALTER TABLE levels RENAME TO levels_old")
+                await bot.cxn.execute("""
+                    CREATE TABLE levels (
+                        guild_id INTEGER,
+                        user_id  INTEGER,
+                        xp       INTEGER DEFAULT 0,
+                        level    INTEGER DEFAULT 0,
+                        PRIMARY KEY (guild_id, user_id)
+                    )
+                """)
+                await bot.cxn.execute("DROP TABLE levels_old")
+            else:
+                await bot.cxn.execute("""
+                    CREATE TABLE IF NOT EXISTS levels (
+                        guild_id INTEGER,
+                        user_id  INTEGER,
+                        xp       INTEGER DEFAULT 0,
+                        level    INTEGER DEFAULT 0,
+                        PRIMARY KEY (guild_id, user_id)
+                    )
+                """)
+        except Exception as e:
+            logging.warning("DB", f"levels table migration warning: {e}")
+    else:
+        # MongoDB: just ensure the collection exists
+        try:
             await bot.cxn.execute("""
                 CREATE TABLE IF NOT EXISTS levels (
                     guild_id INTEGER,
@@ -94,8 +336,8 @@ async def _create_tables(bot):
                     PRIMARY KEY (guild_id, user_id)
                 )
             """)
-    except Exception as e:
-        logging.warning("DB", f"levels table migration warning: {e}")
+        except Exception as e:
+            logging.warning("DB", f"levels table creation warning: {e}")
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS level_config (
@@ -105,9 +347,23 @@ async def _create_tables(bot):
             xp_cooldown      INTEGER DEFAULT 0,
             level_up_channel INTEGER,
             level_up_message TEXT,
-            level_roles      TEXT
+            level_roles      TEXT,
+            card_accent      TEXT,
+            card_bg_top      TEXT,
+            card_bg_bottom   TEXT
         )
     """)
+
+    # ── Add card customization columns to existing databases ──
+    for col_name, col_def in [
+        ("card_accent",    "TEXT"),
+        ("card_bg_top",    "TEXT"),
+        ("card_bg_bottom", "TEXT"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE level_config ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass  # column already exists
 
     old_follows = "data/follows.db"
     if os.path.exists(old_follows):
@@ -128,6 +384,21 @@ async def _create_tables(bot):
             logging.warning("DB", f"Could not migrate follows.db: {e}")
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS premium_users (
+            user_id INTEGER PRIMARY KEY
+        )
+    """)
+    await _migrate_premium_users(bot)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS prefix_config (
+            guild_id INTEGER PRIMARY KEY,
+            prefixes TEXT NOT NULL
+        )
+    """)
+    await _migrate_prefix_config(bot)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS donors (
             user_id        INTEGER PRIMARY KEY,
             total_donated  REAL    DEFAULT 0,
@@ -136,14 +407,1474 @@ async def _create_tables(bot):
         )
     """)
 
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS donation_invoices (
+            order_id       TEXT PRIMARY KEY,
+            track_id       TEXT UNIQUE,
+            user_id        INTEGER NOT NULL,
+            amount         REAL NOT NULL,
+            currency       TEXT NOT NULL DEFAULT 'USD',
+            pay_currency   TEXT,
+            pay_link       TEXT,
+            status         TEXT NOT NULL DEFAULT 'Waiting',
+            channel_id     INTEGER,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            paid_at        TEXT
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_profiles (
+            guild_id       INTEGER PRIMARY KEY,
+            display_name   TEXT,
+            bio            TEXT,
+            name_font_id   INTEGER,
+            name_effect_id INTEGER,
+            name_colors    TEXT,
+            updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    for column, definition in (
+        ("name_font_id", "INTEGER"),
+        ("name_effect_id", "INTEGER"),
+        ("name_colors", "TEXT"),
+    ):
+        try:
+            await bot.cxn.execute(f"ALTER TABLE guild_profiles ADD COLUMN {column} {definition}")
+        except Exception:
+            # Existing installations already have the column.
+            pass
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS triggers (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id   INTEGER NOT NULL,
+            trigger    TEXT    NOT NULL,
+            response   TEXT    NOT NULL,
+            match_type TEXT    NOT NULL DEFAULT 'contains',
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # Economy tables
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS economy_users (
+            user_id          INTEGER PRIMARY KEY,
+            balance          INTEGER DEFAULT 100,
+            bank             INTEGER DEFAULT 0,
+            net_worth        INTEGER DEFAULT 100,
+            leaderboard_private INTEGER NOT NULL DEFAULT 0,
+            total_earned     INTEGER DEFAULT 100,
+            total_spent      INTEGER DEFAULT 0,
+            xp               INTEGER DEFAULT 0,
+            level            INTEGER DEFAULT 0,
+            job              TEXT    DEFAULT 'barista',
+            times_worked     INTEGER DEFAULT 0,
+            bank_tier        INTEGER DEFAULT 0,
+            last_interest    INTEGER DEFAULT 0,
+            last_interest_day TEXT,
+            daily_streak     INTEGER DEFAULT 0,
+            last_daily       INTEGER DEFAULT 0,
+            last_work        INTEGER DEFAULT 0,
+            last_crime       INTEGER DEFAULT 0,
+            last_rob         INTEGER DEFAULT 0,
+            last_heist       INTEGER DEFAULT 0,
+            last_slots       INTEGER DEFAULT 0,
+            last_blackjack   INTEGER DEFAULT 0,
+            last_roulette    INTEGER DEFAULT 0,
+            last_casino      INTEGER DEFAULT 0,
+            last_gamble      INTEGER DEFAULT 0,
+            last_bet         INTEGER DEFAULT 0,
+            last_race        INTEGER DEFAULT 0,
+            last_fight       INTEGER DEFAULT 0,
+            last_duel        INTEGER DEFAULT 0,
+            inventory        TEXT    DEFAULT '{}',
+            effects          TEXT    DEFAULT '{}',
+            lottery_tickets  INTEGER DEFAULT 0,
+            transactions     TEXT    DEFAULT '[]',
+            achievements     TEXT    DEFAULT '[]',
+            season_progress  TEXT    DEFAULT '{}',
+            votes            INTEGER DEFAULT 0,
+            vote_streak      INTEGER DEFAULT 0,
+            best_vote_streak INTEGER DEFAULT 0,
+            last_vote        INTEGER DEFAULT 0
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS economy_lottery (
+            id          INTEGER PRIMARY KEY DEFAULT 1,
+            pot         INTEGER DEFAULT 1000,
+            next_draw   INTEGER DEFAULT 0,
+            last_winner INTEGER,
+            last_pot    INTEGER DEFAULT 0
+        )
+    """)
+
+    # Insert default lottery state if not exists
+    await bot.cxn.execute("""
+        INSERT OR IGNORE INTO economy_lottery (id, pot, next_draw, last_winner, last_pot)
+        VALUES (1, 1000, ?, NULL, 0)
+    """, int(time.time()) + 604800)  # 7 days from now
+
+    # Existing SQLite installations need the privacy preference column too.
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE economy_users ADD COLUMN leaderboard_private INTEGER NOT NULL DEFAULT 0"
+        )
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
+
+    # …the per-season baselines behind the seasonal badges (a badge may only be
+    # advanced inside its own event window), and the top.gg voting counters
+    # added by the vote reward system.
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE economy_users ADD COLUMN season_progress TEXT DEFAULT '{}'"
+        )
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
+
+    for vote_column in ("votes", "vote_streak", "best_vote_streak", "last_vote"):
+        try:
+            await bot.cxn.execute(
+                f"ALTER TABLE economy_users ADD COLUMN {vote_column} INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass  # column already exists; MongoDB is schema-less
+
+    # Migrate economy data from JSON files to database
+    await _migrate_economy_data(bot)
+
+    # ── New tables: onboarding, logging config, moderation config ──────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS onboarding (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS logging_config (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS logging_webhooks (
+            guild_id   INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            webhook_id INTEGER NOT NULL,
+            token      TEXT NOT NULL,
+            PRIMARY KEY (guild_id, channel_id)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS moderation_config (
+            guild_id INTEGER PRIMARY KEY,
+            data     TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mrbeast_scams (
+            image_hash    TEXT PRIMARY KEY,
+            hash_bits     TEXT NOT NULL,
+            preview_url   TEXT,
+            source_url    TEXT,
+            confirmed_by  TEXT NOT NULL,
+            confirmed_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            times_deleted INTEGER NOT NULL DEFAULT 0,
+            false_positives INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mrbeast_scam_reports (
+            report_id    TEXT PRIMARY KEY,
+            message_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            channel_id   INTEGER NOT NULL,
+            reporter_id  INTEGER NOT NULL,
+            author_id    INTEGER NOT NULL,
+              content     TEXT NOT NULL DEFAULT '',
+            attachments  TEXT NOT NULL DEFAULT '[]',
+            image_hash   TEXT,
+            status       TEXT NOT NULL DEFAULT 'pending',
+            review_message_id INTEGER,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            resolved_by  TEXT,
+            resolved_at  TEXT
+        )
+    """)
+
+    # Migrate legacy modlog / moderation JSON stores into the database
+    await _migrate_logging_config(bot)
+    await _migrate_moderation_config(bot)
+
+    await _migrate_suggestions_data(bot)
+
+    # Migrate legacy onboarding JSON files (data/onboarding/*.json)
+    from utils.onboarding.config import migrate_json_files
+    try:
+        await migrate_json_files(bot)
+    except Exception as e:
+        logging.warning("DB", f"Onboarding JSON migration failed: {e}")
+
+    # ── Ticket tables ────────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS ticket_config (
+            guild_id          INTEGER PRIMARY KEY,
+            panel_title       TEXT,
+            panel_description TEXT,
+            panel_color       INTEGER,
+            panel_image       TEXT,
+            panel_categories  TEXT DEFAULT '[]',
+            panel_channel_id  INTEGER,
+            panel_message_id  INTEGER,
+            support_roles     TEXT DEFAULT '[]',
+            open_tickets      TEXT DEFAULT '[]'
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS transcripts (
+            transcript_id  TEXT PRIMARY KEY,
+            guild_id       INTEGER NOT NULL,
+            channel_id     INTEGER NOT NULL,
+            channel_name   TEXT NOT NULL,
+            opener_id      INTEGER NOT NULL,
+            category       TEXT NOT NULL DEFAULT 'General',
+            claimed_by     INTEGER,
+            message_count  INTEGER DEFAULT 0,
+            messages       TEXT DEFAULT '[]',
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # Migrate legacy ticket JSON files to database
+    await _migrate_ticket_data(bot)
+
+    # ── Sticky messages table ──────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS sticky_messages (
+            channel_id  INTEGER PRIMARY KEY,
+            guild_id    INTEGER NOT NULL,
+            content     TEXT NOT NULL,
+            color       INTEGER DEFAULT 5865922,
+            message_id  INTEGER,
+            created_by  INTEGER,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_sticky_data(bot)
+
+    # ── AFK users table ────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS afk_users (
+            user_id INTEGER PRIMARY KEY,
+            reason  TEXT NOT NULL DEFAULT 'No reason provided.',
+            since   TEXT NOT NULL
+        )
+    """)
+
+    # ── Warns table ────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS warns (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason      TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_warns_data(bot)
+
+    # ── Mutes table ────────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mutes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            reason      TEXT,
+            until       TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    await _migrate_mutes_data(bot)
+
+    # ── Birthday tables ────────────────────────────────────────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_users (
+            user_id     INTEGER PRIMARY KEY,
+            birth_date  TEXT NOT NULL
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_guilds (
+            guild_id    INTEGER PRIMARY KEY,
+            channel_id  INTEGER,
+            role_id     INTEGER
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS birthday_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT
+        )
+    """)
+    await _migrate_birthday_data(bot)
+
+    # ── Sync state table (slash-command sync fingerprint) ──────────────
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_users (
+            id         INTEGER PRIMARY KEY,
+            reason     TEXT,
+            timestamp  REAL,
+            added_by   INTEGER,
+            expires_at REAL,
+            status     TEXT NOT NULL DEFAULT 'active',
+            appeal_id  TEXT
+        )
+    """)
+    for statement in (
+        "ALTER TABLE blacklist_users ADD COLUMN expires_at REAL",
+        "ALTER TABLE blacklist_users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE blacklist_users ADD COLUMN appeal_id TEXT",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass  # Existing database already has the column.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_appeals (
+            appeal_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            guild_id INTEGER,
+            username TEXT,
+            appeal_text TEXT NOT NULL,
+            blacklist_reason TEXT,
+            blacklist_timestamp REAL,
+            blacklist_added_by INTEGER,
+            blacklist_expires_at REAL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at REAL NOT NULL,
+            reviewed_by INTEGER,
+            reviewed_at REAL,
+            staff_note TEXT
+        )
+    """)
+    try:
+        await bot.cxn.execute("ALTER TABLE blacklist_appeals ADD COLUMN guild_id INTEGER")
+    except Exception:
+        pass  # Existing database already has the column.
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_appeals_user ON blacklist_appeals (user_id, created_at)")
+    await bot.cxn.execute("DROP INDEX IF EXISTS idx_blacklist_appeals_pending_user")
+    await bot.cxn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_blacklist_appeals_pending_user ON blacklist_appeals (user_id) WHERE status = 'pending' AND guild_id IS NULL")
+    await bot.cxn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_blacklist_appeals_pending_guild ON blacklist_appeals (guild_id) WHERE status = 'pending' AND guild_id IS NOT NULL")
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_appeals_status ON blacklist_appeals (status, created_at)")
+
+    await bot.cxn.execute("UPDATE blacklist_users SET status = 'active' WHERE status IS NULL OR status = ''")
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS abuse_strikes (
+            user_id      INTEGER PRIMARY KEY,
+            strikes      INTEGER NOT NULL DEFAULT 0,
+            updated_at   REAL NOT NULL
+        )
+    """)
+
+    try:
+        await bot.cxn.execute("DELETE FROM blacklist_users WHERE expires_at IS NOT NULL AND expires_at <= $1", time.time())
+    except Exception as e:
+        logging.warning("DB", f"Could not clean expired temporary blacklists: {e}")
+
+
+    # ── Roleplay actions (persistent "do it back" buttons) ──────────────
+    # One row per roleplay message that carries a back-button. Row state is
+    # resolved by message_id when the button is pressed, so buttons on messages
+    # sent before a restart keep working (handled via the on_interaction
+    # listener in cogs.fun.roleplay).
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS roleplay_actions (
+            message_id INTEGER PRIMARY KEY,
+            guild_id   INTEGER,
+            channel_id INTEGER NOT NULL,
+            action     TEXT    NOT NULL,
+            actor_id   INTEGER NOT NULL,
+            target_id  INTEGER NOT NULL,
+            gif        TEXT    NOT NULL,
+            title      TEXT    NOT NULL,
+            desc       TEXT    NOT NULL,
+            footer     TEXT,
+            used       INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    # ── Roleplay blocks (per-user "don't let X roleplay on me" list) ──────
+    # One row per (blocker, blocked) pair. A roleplay action from ``blocked``
+    # aimed at ``blocker`` is refused while a row exists; ``rpunblock``
+    # removes it.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS roleplay_blocks (
+            blocker_id  INTEGER NOT NULL,
+            blocked_id  INTEGER NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (blocker_id, blocked_id)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklist_guilds (
+            id         INTEGER PRIMARY KEY,
+            reason     TEXT,
+            timestamp  REAL,
+            added_by   INTEGER,
+            status     TEXT NOT NULL DEFAULT 'active',
+            appeal_id  TEXT
+        )
+    """)
+    for statement in (
+        "ALTER TABLE blacklist_guilds ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE blacklist_guilds ADD COLUMN appeal_id TEXT",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass
+    await bot.cxn.execute("UPDATE blacklist_guilds SET status = 'active' WHERE status IS NULL OR status = ''")
+    # What a blacklisted server had switched on, so an approved appeal can put
+    # it back exactly as it was (see utils/guild_lockdown.py).
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_feature_locks (
+            guild_id       INTEGER NOT NULL,
+            feature        TEXT NOT NULL,
+            previous_state TEXT,
+            note           TEXT,
+            locked_at      TEXT,
+            PRIMARY KEY (guild_id, feature)
+        )
+    """)
+    for statement in (
+        "ALTER TABLE polls ADD COLUMN locked INTEGER DEFAULT 0",
+        "ALTER TABLE giveaways ADD COLUMN locked INTEGER DEFAULT 0",
+    ):
+        try:
+            await bot.cxn.execute(statement)
+        except Exception:
+            pass
+    await _migrate_blacklist_data(bot)
+
+    # ── Persistent status panels (owner-owned, auto-refreshing) ──────────────────
+    # One row per channel where the owner posted a realtime status panel. The
+    # async refresh loop edits these messages in place every STATUS_PANEL_INTERVAL.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS persistent_status_panels (
+            channel_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            message_id   INTEGER NOT NULL,
+            last_error   TEXT,
+            proxied_endpoint TEXT,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (channel_id, guild_id)
+        )
+    """)
+    # ── Persistent rules panels (owner-owned, button-driven) ───────────────
+    # One row per channel where the owner posted the interactive rules panel.
+    # Panels are not auto-refreshed; the row only lets a re-run replace the
+    # old message instead of stacking duplicates.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS persistent_rules_panels (
+            channel_id   INTEGER NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            message_id   INTEGER NOT NULL,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (channel_id, guild_id)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS server_activity (
+            activity_id TEXT PRIMARY KEY,
+            guild_id INTEGER NOT NULL,
+            activity_date TEXT NOT NULL,
+            messages INTEGER NOT NULL DEFAULT 0,
+            joins INTEGER NOT NULL DEFAULT 0,
+            leaves INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (guild_id, activity_date)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_config (
+            guild_id         INTEGER PRIMARY KEY,
+            channel_id       INTEGER,
+            threshold        INTEGER NOT NULL DEFAULT 3,
+            emoji            TEXT NOT NULL DEFAULT '⭐',
+            ignored_channels TEXT NOT NULL DEFAULT '[]'
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_messages (
+            guild_id             INTEGER NOT NULL,
+            message_id           INTEGER NOT NULL,
+            starboard_message_id INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, message_id)
+        )
+    """)
+    await _migrate_starboard_data(bot)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS uwulock_config (
+            guild_id   INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            user_id    INTEGER NOT NULL,
+            webhook_url TEXT NOT NULL,
+            PRIMARY KEY (guild_id, channel_id, user_id)
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS uwulock_messages (
+            message_id           INTEGER PRIMARY KEY,
+            guild_id             INTEGER NOT NULL,
+            channel_id           INTEGER NOT NULL,
+            original_message_id  INTEGER NOT NULL,
+            author_id            INTEGER NOT NULL,
+            author_name          TEXT NOT NULL,
+            author_avatar_url    TEXT,
+            original_created_at  REAL NOT NULL
+        )
+    """)
+    await _migrate_uwulock_data(bot)
+
     logging.success("DB", "Database tables verified")
+
+
+async def _migrate_starboard_data(bot):
+    """Move legacy starboard settings and post IDs into the primary database."""
+    import json
+
+    path = "data/starboard.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("starboard.json must contain an object")
+
+        migrated_configs = 0
+        for raw_guild_id, config in (data.get("guilds", {}) or {}).items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(config, dict):
+                continue
+            ignored = []
+            for channel_id in config.get("ignored_channels", []):
+                try:
+                    ignored.append(int(channel_id))
+                except (TypeError, ValueError):
+                    continue
+            try:
+                threshold = max(1, min(50, int(config.get("threshold", 3))))
+            except (TypeError, ValueError):
+                threshold = 3
+            try:
+                channel_id = int(config["channel_id"]) if config.get("channel_id") else None
+            except (TypeError, ValueError):
+                channel_id = None
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO starboard_config "
+                "(guild_id, channel_id, threshold, emoji, ignored_channels) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                guild_id,
+                channel_id,
+                threshold,
+                str(config.get("emoji") or "⭐"),
+                json.dumps(ignored),
+            )
+            migrated_configs += 1
+
+        migrated_posts = 0
+        for raw_guild_id, posts in (data.get("starred", {}) or {}).items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(posts, dict):
+                continue
+            for raw_message_id, raw_starboard_id in posts.items():
+                try:
+                    message_id = int(raw_message_id)
+                    starboard_message_id = int(raw_starboard_id)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO starboard_messages "
+                    "(guild_id, message_id, starboard_message_id) VALUES ($1, $2, $3)",
+                    guild_id, message_id, starboard_message_id,
+                )
+                migrated_posts += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success(
+            "DB",
+            f"Migrated {migrated_configs} starboard configs and {migrated_posts} post mappings",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate starboard.json: {e}")
+
+
+async def _migrate_uwulock_data(bot):
+    """Import legacy UwU lock webhook settings into the primary database."""
+    import json
+
+    path = "data/uwulock.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        migrated = 0
+        if isinstance(data, dict):
+            for guild_id, channels in data.items():
+                try:
+                    guild_id = int(guild_id)
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(channels, dict):
+                    continue
+                for channel_id, users in channels.items():
+                    try:
+                        channel_id = int(channel_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(users, dict):
+                        continue
+                    for user_id, entry in users.items():
+                        try:
+                            user_id = int(user_id)
+                        except (TypeError, ValueError):
+                            continue
+                        webhook_url = entry.get("webhook") if isinstance(entry, dict) else None
+                        if not webhook_url:
+                            continue
+                        await bot.cxn.execute(
+                            "INSERT OR IGNORE INTO uwulock_config "
+                            "(guild_id, channel_id, user_id, webhook_url) "
+                            "VALUES ($1, $2, $3, $4)",
+                            guild_id, channel_id, user_id, webhook_url,
+                        )
+                        migrated += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success("DB", f"Migrated {migrated} UwU lock settings into the main database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate uwulock.json: {e}")
+
+
+async def _migrate_prefix_config(bot):
+    """Import custom guild prefixes and keep a backup of the old JSON file."""
+    import json
+
+    path = "data/prefixes.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("prefixes.json must contain a guild-to-prefixes object")
+
+        migrated = 0
+        for raw_guild_id, raw_prefixes in data.items():
+            try:
+                guild_id = int(raw_guild_id)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(raw_prefixes, list) or not all(
+                isinstance(prefix, str) for prefix in raw_prefixes
+            ):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO prefix_config (guild_id, prefixes) VALUES ($1, $2)",
+                guild_id,
+                raw_prefixes,
+            )
+            migrated += 1
+
+        backup_path = path + ".migrated"
+        if not os.path.exists(backup_path):
+            os.rename(path, backup_path)
+        logging.success("DB", f"Migrated {migrated} guild prefix configs from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate prefixes.json: {e}")
+
+
+async def _migrate_premium_users(bot):
+    """Import legacy premium grants into the primary database."""
+    import json
+
+    path = "data/premium_users.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not isinstance(data.get("users", []), list):
+            raise ValueError("premium_users.json has an invalid schema")
+
+        user_ids = set()
+        for raw_id in data.get("users", []):
+            try:
+                user_ids.add(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+
+        for user_id in user_ids:
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO premium_users (user_id) VALUES ($1)",
+                user_id,
+            )
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {len(user_ids)} premium grants from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate premium_users.json: {e}")
+
+
+async def _migrate_suggestions_data(bot):
+    """Migrate the legacy suggestions JSON store into the main database."""
+    import json
+
+    path = "data/suggestions.json"
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for gid_text, guild_data in (data.get("guilds", {}) if isinstance(data, dict) else {}).items():
+            try:
+                guild_id = int(gid_text)
+            except (TypeError, ValueError):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO suggestion_config (guild_id, channel_id, next_id) VALUES ($1, $2, $3)",
+                guild_id, guild_data.get("channel_id"), guild_data.get("next_id", 1),
+            )
+            for suggestion in (guild_data.get("items", {}) or {}).values():
+                if not suggestion.get("message_id"):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO suggestions "
+                    "(message_id, guild_id, suggestion_id, text, author_id, status, up, down, voters, channel_id, verdict, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                    suggestion["message_id"], guild_id, suggestion.get("id", 1),
+                    suggestion.get("text", ""), suggestion.get("author_id", 0),
+                    suggestion.get("status", "open"), suggestion.get("up", 0),
+                    suggestion.get("down", 0), suggestion.get("voters", {}),
+                    suggestion.get("channel_id", guild_data.get("channel_id") or 0),
+                    suggestion.get("verdict"), suggestion.get("created_at", 0),
+                )
+        os.rename(path, path + ".migrated")
+        logging.success("DB", "Migrated suggestions.json into the main database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate suggestions.json: {e}")
+
+
+async def _migrate_warns_data(bot):
+    """Migrate data/warns.json into the warns table."""
+    import json
+
+    path = "data/warns.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, users in data.items():
+            if not isinstance(users, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for uid_str, warn_list in users.items():
+                if not isinstance(warn_list, list):
+                    continue
+                try:
+                    user_id = int(uid_str)
+                except (TypeError, ValueError):
+                    continue
+                for w in warn_list:
+                    if not isinstance(w, dict):
+                        continue
+                    await bot.cxn.execute(
+                        "INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) "
+                        "VALUES ($1, $2, $3, $4, $5)",
+                        guild_id,
+                        user_id,
+                        w.get("mod", 0),
+                        w.get("reason", ""),
+                        w.get("time", ""),
+                    )
+                    migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} warnings from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate warns.json: {e}")
+
+
+async def _migrate_mutes_data(bot):
+    """Migrate data/mutes.json into the mutes table."""
+    import json
+
+    path = "data/mutes.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, users in data.items():
+            if not isinstance(users, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for uid_str, mute_data in users.items():
+                if not isinstance(mute_data, dict):
+                    continue
+                try:
+                    user_id = int(uid_str)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT INTO mutes (guild_id, user_id, reason, until) "
+                    "VALUES ($1, $2, $3, $4)",
+                    guild_id,
+                    user_id,
+                    mute_data.get("reason"),
+                    mute_data.get("until"),
+                )
+                migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} mutes from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate mutes.json: {e}")
+
+
+async def _migrate_economy_data(bot):
+    """Migrate economy data from JSON files to the database."""
+    import json
+    
+    economy_data_dir = "data/economy_data"
+    lottery_file = "data/economy_data/_lottery.json"
+    
+    # Check if economy data directory exists
+    if not os.path.exists(economy_data_dir):
+        return
+    
+    # Check if we've already migrated (create a marker file)
+    migration_marker = "data/economy_data/.migrated_to_db"
+    if os.path.exists(migration_marker):
+        return
+    
+    migrated_count = 0
+    
+    try:
+        # Migrate user data
+        for filename in os.listdir(economy_data_dir):
+            if not filename.endswith(".json") or filename.startswith("_"):
+                continue
+            
+            try:
+                file_path = os.path.join(economy_data_dir, filename)
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                
+                user_id = int(filename[:-5])
+                
+                # Check if user already exists in database
+                existing = await bot.cxn.fetchrow(
+                    "SELECT user_id FROM economy_users WHERE user_id = ?",
+                    user_id
+                )
+                
+                if existing:
+                    continue  # Skip if already migrated
+                
+                # Serialize complex fields
+                inventory_json = json.dumps(data.get("inventory", {}))
+                effects_json = json.dumps(data.get("effects", {}))
+                transactions_json = json.dumps(data.get("transactions", []))
+                achievements_json = json.dumps(data.get("achievements", []))
+                
+                await bot.cxn.execute("""
+                    INSERT INTO economy_users (
+                        user_id, balance, bank, net_worth, leaderboard_private, total_earned, total_spent,
+                        xp, level, job, times_worked, bank_tier, last_interest,
+                        last_interest_day, daily_streak, last_daily, last_work,
+                        last_crime, last_rob, last_heist, last_slots, last_blackjack,
+                        last_roulette, last_casino, last_gamble, last_bet, last_race,
+                        last_fight, last_duel, inventory, effects, lottery_tickets,
+                        transactions, achievements
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    user_id,
+                    data.get("balance", 100),
+                    data.get("bank", 0),
+                    data.get("net_worth", 100),
+                    int(bool(data.get("leaderboard_private", False))),
+                    data.get("total_earned", 100),
+                    data.get("total_spent", 0),
+                    data.get("xp", 0),
+                    data.get("level", 0),
+                    data.get("job", "barista"),
+                    data.get("times_worked", 0),
+                    data.get("bank_tier", 0),
+                    data.get("last_interest", 0),
+                    data.get("last_interest_day"),
+                    data.get("daily_streak", 0),
+                    data.get("last_daily", 0),
+                    data.get("last_work", 0),
+                    data.get("last_crime", 0),
+                    data.get("last_rob", 0),
+                    data.get("last_heist", 0),
+                    data.get("last_slots", 0),
+                    data.get("last_blackjack", 0),
+                    data.get("last_roulette", 0),
+                    data.get("last_casino", 0),
+                    data.get("last_gamble", 0),
+                    data.get("last_bet", 0),
+                    data.get("last_race", 0),
+                    data.get("last_fight", 0),
+                    data.get("last_duel", 0),
+                    inventory_json,
+                    effects_json,
+                    data.get("lottery_tickets", 0),
+                    transactions_json,
+                    achievements_json
+                )
+                
+                migrated_count += 1
+                
+            except Exception as e:
+                logging.warning("DB", f"Could not migrate {filename}: {e}")
+        
+        # Migrate lottery state
+        if os.path.exists(lottery_file):
+            try:
+                with open(lottery_file, "r") as f:
+                    lottery_data = json.load(f)
+                
+                await bot.cxn.execute("""
+                    UPDATE economy_lottery
+                    SET pot = ?, next_draw = ?, last_winner = ?, last_pot = ?
+                    WHERE id = 1
+                """,
+                    lottery_data.get("pot", 1000),
+                    lottery_data.get("next_draw", int(time.time()) + 604800),
+                    lottery_data.get("last_winner"),
+                    lottery_data.get("last_pot", 0)
+                )
+                
+                logging.info("DB", "Migrated lottery state from JSON to database")
+                
+            except Exception as e:
+                logging.warning("DB", f"Could not migrate lottery state: {e}")
+        
+        if migrated_count > 0:
+            logging.success("DB", f"Migrated {migrated_count} economy users from JSON to database")
+            
+            # Create marker file to prevent re-migration
+            try:
+                with open(migration_marker, "w") as f:
+                    f.write("Migration completed at " + str(int(time.time())))
+            except Exception:
+                pass
+    
+    except Exception as e:
+        logging.warning("DB", f"Economy migration failed: {e}")
+
+
+
+async def _migrate_logging_config(bot):
+    """Migrate data/logging_config.json (modlog channel config) → database."""
+    import json
+
+    path = "data/logging_config.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid, cfg in data.items():
+            try:
+                guild_id = int(gid)
+            except (TypeError, ValueError):
+                continue
+            await bot.cxn.execute(
+                "INSERT OR REPLACE INTO logging_config (guild_id, data) VALUES ($1, $2)",
+                guild_id, json.dumps(cfg),
+            )
+            migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} logging configs (modlog) from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate logging_config.json: {e}")
+
+
+async def _migrate_moderation_config(bot):
+    """Migrate data/modconfig.json (moderation + automod config) → database."""
+    import json
+
+    for path in ("data/modconfig.json", "data/mod_config.json"):
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or not data:
+                os.rename(path, path + ".migrated")
+                continue
+
+            migrated = 0
+            for gid, cfg in data.items():
+                try:
+                    guild_id = int(gid)
+                except (TypeError, ValueError):
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR REPLACE INTO moderation_config (guild_id, data) VALUES ($1, $2)",
+                    guild_id, json.dumps(cfg),
+                )
+                migrated += 1
+
+            os.rename(path, path + ".migrated")
+            logging.success("DB", f"Migrated {migrated} moderation configs from JSON to database")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate {path}: {e}")
+
+
+async def _migrate_ticket_data(bot):
+    """Migrate legacy ticket JSON files (data/ticket_config.json, data/tickets.json) into the database."""
+    import json
+
+    # Migrate ticket_config.json
+    config_path = "data/ticket_config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                migrated = 0
+                for gid, cfg in data.items():
+                    try:
+                        guild_id = int(gid)
+                    except (TypeError, ValueError):
+                        continue
+                    # Build a row compatible with the ticket_config table
+                    panel_categories = json.dumps(cfg.get("panel_categories", []))
+                    support_roles = json.dumps(cfg.get("support_roles", []))
+                    open_tickets = json.dumps(cfg.get("open_tickets", []))
+                    await bot.cxn.execute(
+                        "INSERT OR IGNORE INTO ticket_config "
+                        "(guild_id, panel_title, panel_description, panel_color, "
+                        "panel_image, panel_categories, panel_channel_id, "
+                        "panel_message_id, support_roles, open_tickets) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        guild_id,
+                        cfg.get("panel_title"),
+                        cfg.get("panel_description"),
+                        cfg.get("panel_color"),
+                        cfg.get("panel_image"),
+                        panel_categories,
+                        cfg.get("panel_channel_id"),
+                        cfg.get("panel_message_id"),
+                        support_roles,
+                        open_tickets,
+                    )
+                    migrated += 1
+                os.rename(config_path, config_path + ".migrated")
+                logging.success("DB", f"Migrated {migrated} ticket configs from JSON to database")
+            else:
+                os.rename(config_path, config_path + ".migrated")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate ticket_config.json: {e}")
+
+    # Migrate tickets.json (legacy open-ticket data)
+    tickets_path = "data/tickets.json"
+    if os.path.exists(tickets_path):
+        try:
+            with open(tickets_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                migrated = 0
+                for gid, tickets in data.items():
+                    try:
+                        guild_id = int(gid)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(tickets, list):
+                        continue
+                    # Merge into the existing ticket_config row's open_tickets
+                    existing = await bot.cxn.fetchrow(
+                        "SELECT open_tickets FROM ticket_config WHERE guild_id = $1",
+                        guild_id,
+                    )
+                    existing_tickets = []
+                    if existing and existing.get("open_tickets"):
+                        raw = existing["open_tickets"]
+                        if isinstance(raw, str):
+                            try:
+                                existing_tickets = json.loads(raw)
+                            except Exception:
+                                existing_tickets = []
+                        elif isinstance(raw, list):
+                            existing_tickets = raw
+                    # Merge: add tickets not already present (by channel_id)
+                    existing_ids = {t.get("channel_id") for t in existing_tickets}
+                    for t in tickets:
+                        if t.get("channel_id") not in existing_ids:
+                            existing_tickets.append(t)
+                    tickets_json = json.dumps(existing_tickets)
+                    await bot.cxn.execute(
+                        "INSERT INTO ticket_config (guild_id, open_tickets) "
+                        "VALUES ($1, $2) "
+                        "ON CONFLICT (guild_id) DO UPDATE SET open_tickets = $3",
+                        guild_id,
+                        tickets_json,
+                        tickets_json,
+                    )
+                    migrated += 1
+                os.rename(tickets_path, tickets_path + ".migrated")
+                logging.success("DB", f"Migrated {migrated} guild ticket lists from JSON to database")
+            else:
+                os.rename(tickets_path, tickets_path + ".migrated")
+        except Exception as e:
+            logging.warning("DB", f"Could not migrate tickets.json: {e}")
+
+    # Migrate transcript JSON files (data/transcripts/*.json)
+    transcript_dir = "data/transcripts"
+    if os.path.isdir(transcript_dir):
+        migrated = 0
+        try:
+            for fname in os.listdir(transcript_dir):
+                if not fname.endswith(".json"):
+                    continue
+                try:
+                    fpath = os.path.join(transcript_dir, fname)
+                    with open(fpath, "r") as f:
+                        tdata = json.load(f)
+                    tid = tdata.get("transcript_id") or fname[:-5]
+                    # Check if already in database
+                    existing = await bot.cxn.fetchrow(
+                        "SELECT transcript_id FROM transcripts WHERE transcript_id = $1",
+                        tid,
+                    )
+                    if existing:
+                        continue
+                    await bot.cxn.execute(
+                        "INSERT OR IGNORE INTO transcripts "
+                        "(transcript_id, guild_id, channel_id, channel_name, "
+                        "opener_id, category, claimed_by, message_count, "
+                        "messages, created_at) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        tid,
+                        tdata.get("guild_id", 0),
+                        tdata.get("channel_id", 0),
+                        tdata.get("channel_name", "unknown"),
+                        tdata.get("opener_id", 0),
+                        tdata.get("category", "General"),
+                        tdata.get("claimed_by"),
+                        tdata.get("message_count", 0),
+                        json.dumps(tdata.get("messages", [])),
+                        tdata.get("created_at", ""),
+                    )
+                    migrated += 1
+                except Exception as e:
+                    logging.warning("DB", f"Could not migrate transcript {fname}: {e}")
+            if migrated > 0:
+                os.rename(transcript_dir, transcript_dir + ".migrated")
+                logging.success("DB", f"Migrated {migrated} transcripts from JSON files to database")
+        except Exception as e:                logging.warning("DB", f"Could not migrate transcript directory: {e}")
+
+
+async def _migrate_sticky_data(bot):
+    """Migrate data/sticky.json into the sticky_messages table."""
+    import json as _json
+
+    path = "data/sticky.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict) or not data:
+            os.rename(path, path + ".migrated")
+            return
+
+        migrated = 0
+        for gid_str, channels in data.items():
+            if not isinstance(channels, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            for cid_str, entry in channels.items():
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    channel_id = int(cid_str)
+                except (TypeError, ValueError):
+                    continue
+                # Skip if already migrated
+                existing = await bot.cxn.fetchval(
+                    "SELECT channel_id FROM sticky_messages WHERE channel_id = $1",
+                    channel_id,
+                )
+                if existing:
+                    continue
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO sticky_messages "
+                    "(channel_id, guild_id, content, color, message_id, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    channel_id,
+                    guild_id,
+                    entry.get("content", ""),
+                    entry.get("color", 5865922),
+                    entry.get("message_id"),
+                    entry.get("created_by"),
+                )
+                migrated += 1
+
+        os.rename(path, path + ".migrated")
+        logging.success("DB", f"Migrated {migrated} sticky messages from JSON to database")
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate sticky.json: {e}")
+
+
+async def _migrate_birthday_data(bot):
+    """Migrate data/birthdays.json into the birthday_users/birthday_guilds tables."""
+    import json as _json
+
+    path = "data/birthdays.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+
+        users = data.get("users", {})
+        guilds = data.get("guilds", {})
+        last_run = data.get("last_run")
+
+        migrated_users = 0
+        migrated_guilds = 0
+
+        # Migrate user birthdays
+        for uid_str, birth_date in users.items():
+            if not isinstance(birth_date, str):
+                continue
+            try:
+                user_id = int(uid_str)
+            except (TypeError, ValueError):
+                continue
+            # Skip if already exists
+            existing = await bot.cxn.fetchval(
+                "SELECT user_id FROM birthday_users WHERE user_id = $1",
+                user_id,
+            )
+            if existing:
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO birthday_users (user_id, birth_date) VALUES ($1, $2)",
+                user_id,
+                birth_date,
+            )
+            migrated_users += 1
+
+        # Migrate guild configs
+        for gid_str, gcfg in guilds.items():
+            if not isinstance(gcfg, dict):
+                continue
+            try:
+                guild_id = int(gid_str)
+            except (TypeError, ValueError):
+                continue
+            channel_id = gcfg.get("channel_id")
+            role_id = gcfg.get("role_id")
+            existing = await bot.cxn.fetchval(
+                "SELECT guild_id FROM birthday_guilds WHERE guild_id = $1",
+                guild_id,
+            )
+            if existing:
+                continue
+            await bot.cxn.execute(
+                "INSERT OR IGNORE INTO birthday_guilds (guild_id, channel_id, role_id) VALUES ($1, $2, $3)",
+                guild_id,
+                channel_id,
+                role_id,
+            )
+            migrated_guilds += 1
+
+        # Migrate last_run state
+        if last_run:
+            existing = await bot.cxn.fetchval(
+                "SELECT key FROM birthday_state WHERE key = 'last_run'"
+            )
+            if not existing:
+                await bot.cxn.execute(
+                    "INSERT OR IGNORE INTO birthday_state (key, value) VALUES ('last_run', $1)",
+                    last_run,
+                )
+
+        os.rename(path, path + ".migrated")
+        logging.success(
+            "DB",
+            f"Migrated {migrated_users} birthdays and {migrated_guilds} guild configs from JSON to database",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate birthdays.json: {e}")
+
+
+async def _migrate_blacklist_data(bot):
+    """Migrate data/blacklist.json into the blacklist_users/blacklist_guilds tables."""
+    import json as _json
+
+    path = "data/blacklist.json"
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+
+        migrated_users = 0
+        migrated_guilds = 0
+
+        async def _entries(raw, table):
+            nonlocal migrated_users, migrated_guilds
+            count = 0
+            for item in raw:
+                if isinstance(item, int):
+                    entry = {"id": item, "reason": None, "timestamp": time.time(), "added_by": None}
+                elif isinstance(item, dict) and "id" in item:
+                    entry = {
+                        "id": int(item["id"]),
+                        "reason": item.get("reason"),
+                        "timestamp": float(item.get("timestamp", time.time())),
+                        "added_by": item.get("added_by"),
+                    }
+                else:
+                    continue
+                await bot.cxn.execute(
+                    f"INSERT OR IGNORE INTO {table} (id, reason, timestamp, added_by) VALUES ($1, $2, $3, $4)",
+                    entry["id"],
+                    entry["reason"],
+                    entry["timestamp"],
+                    entry["added_by"],
+                )
+                count += 1
+            if table == "blacklist_users":
+                migrated_users = count
+            else:
+                migrated_guilds = count
+
+        await _entries(data.get("users", []), "blacklist_users")
+        await _entries(data.get("guilds", []), "blacklist_guilds")
+
+        os.rename(path, path + ".migrated")
+        logging.success(
+            "DB",
+            f"Migrated {migrated_users} users and {migrated_guilds} guilds from blacklist.json to database",
+        )
+    except Exception as e:
+        logging.warning("DB", f"Could not migrate blacklist.json: {e}")
 
 
 async def init_database(bot):
     logging.info("DB", f"Opening database: {DATABASE_PATH}")
     try:
-        bot.cxn = await database.create_pool(DATABASE_PATH)
+        if getattr(bot, "cxn", None) is None:
+            bot.cxn = await database.create_pool(DATABASE_PATH)
+        if getattr(bot.cxn, "db_type", None) == "sqlite":
+            logging.warning(
+                "DB",
+                "SQLite database support is deprecated and scheduled for removal "
+                "between December 1 and December 10, 2026. Migrate to MongoDB before then.",
+            )
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
+        from webapp.standby_routes import initialize_standby_registry
+        await initialize_standby_registry(bot)
+        # Eagerly load the blacklist cache from the database so hot-path
+        # sync reads (message/interaction checks) work immediately.
+        try:
+            from utils.blacklist_manager import BlacklistManager
+
+            await BlacklistManager().load()
+        except Exception as e:
+            logging.warning("DB", f"Could not preload blacklist cache: {e}")
+
+        # Dedicated music database (separate file / separate MongoDB database
+        # within the same cluster) — liked songs, playlists, etc. keep load
+        # off the main database.
+        try:
+            from utils.music.database import MusicDatabase
+
+            await MusicDatabase().init(bot)
+        except Exception as e:
+            logging.warning("DB", f"Could not init music database: {e}")
+
+        # Error reports use an isolated SQLite file / MongoDB database so
+        # tracebacks and invocation context never land in the primary DB.
+        try:
+            from utils.error_reports import ErrorReportDatabase
+
+            await ErrorReportDatabase().init(bot)
+        except Exception as e:
+            logging.warning("DB", f"Could not init error report database: {e}")
     except Exception as e:
         logging.error("DB", f"Failed to open database: {e}")

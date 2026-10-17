@@ -1,0 +1,79 @@
+---
+slug: "dashboard-economy"
+title: "Dashboard: Economy & Achievements"
+category: "dashboard"
+excerpt: "Follow your global economy standing and badges on your own dashboard profile."
+tags: ["dashboard","economy","achievements","profile"]
+order: 3
+---
+# Dashboard: Economy & Achievements
+
+The economy is **global per account**, not per server: your wallet, vault, level, job, streaks and badges are the same numbers in every server Niko is in. Because of that, the dashboard keeps economy on your own profile instead of inside a server's settings.
+
+## Where it lives
+
+Open the dashboard, then use the **My overview** tab in the sidebar. It holds three personal tabs:
+
+| Tab | Address | What it shows |
+| --- | --- | --- |
+| Overview | `/dashboard` | Your profile snapshot and the economy privacy toggle |
+| Economy | `/dashboard/me/economy` | Wallet, vault, net worth, global rank, recent activity and the vote card |
+| Achievements | `/dashboard/me/achievements` | Every badge with its progress bar, reward and unlock state |
+
+These tabs read `GET /api/me/economy` and `GET /api/me/achievements` for the signed-in account only — no server is selected and no Manage Server permission is needed.
+
+## The Economy tab
+
+- **Balance and vault** with the combined net worth for the account
+- **Level, job, bank tier and daily streak**
+- **Totals**: earned, spent and shifts worked
+- **Global rank** and how many economy profiles exist
+- **Recent ledger activity**, newest first
+- **top.gg vote streak**, current multipliers and the listing link
+
+## The Achievements tab
+
+- Locked badges first, closest to completion at the top
+- Unlocked badges with the coins they already paid
+- Coins still available from badges you have not reached yet
+- Seasonal badges with their event, including the date it opens or closes — see the event window below
+
+### Seasonal events
+
+Some badges only count during a real-world event, and each one comes back every year on its own:
+
+| Event | Window |
+| --- | --- |
+| Halloween | Oct 24 – Nov 1 |
+| Winter | Dec 15 – Jan 2 |
+| New Year | Dec 31 – Jan 7 |
+| Valentine's | Feb 10 – Feb 18 |
+| Summer | Jun 20 – Sep 5 |
+
+A seasonal badge can only be collected while its own window is open, so a badge that is out of season shows what it would need and when the event returns. The bot checks them the same way on every economy action, so a qualifying account earns the badge on its next shift, daily claim, purchase or vote inside the window.
+
+Progress is measured inside the window as well, so nothing can be prepared for an event ahead of time:
+
+- A badge that asks you to spend counts only what you spend once the event is open, never a lifetime total.
+- A milestone badge has to be reached during the event. An account that is already past the target needs one more step inside the window.
+- A badge that asks you to hold something reads that state while the event is open.
+- An out-of-season badge always shows an empty bar, and each new occurrence starts from scratch — last year's progress never counts for this year's badge.
+
+## The only economy setting
+
+There is exactly one economy option in the dashboard, and it is not per server: **leaderboard privacy**, on the personal Overview tab. It posts to `POST /api/me/economy-privacy` with `{"leaderboard_private": true}` or `{"leaderboard_private": false}`.
+
+When it is on you stay ranked on the public leaderboard, but your avatar, username and display name are shown only to you, to official Niko staff, and to people who share a server with you.
+
+## What is not here
+
+Nothing on the Economy tab configures game balance for a server. There is no enable/disable switch, no starting balance, no currency name or symbol, no job pay rates or promotion requirements, no bank interest or tier settings, no lottery configuration and no shop management — the economy always runs the same way everywhere.
+
+Servers still have plenty of their own settings; those live under the server sections of the sidebar and use `/api/guild/<id>/...` routes. Economy and Achievements are not among them.
+
+## Tips
+
+1. **Look in the right place**: economy numbers are on your profile, not in a server tab
+2. **Pick a server only for server work**: leveling, moderation, tickets and similar settings stay per server
+3. **Hide your identity if you want**: the privacy toggle keeps your ranking without publishing your name
+4. **Vote for the best multipliers**: a live vote streak raises your vote payout and your daily and work earnings

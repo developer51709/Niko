@@ -1,0 +1,32 @@
+---
+slug: "dashboard-staff-applications"
+title: "Staff Applications"
+category: "dashboard"
+excerpt: "Create role-specific staff application forms, share an applicant link, and review responses from your server dashboard."
+tags: ["dashboard", "staff applications", "hiring", "forms"]
+order: 5
+---
+# Staff Applications
+
+Use the **Applications** section of your server dashboard to recruit moderators, helpers, or other team members with a custom application form. Sign in with Discord, choose a server where you can manage Niko, and open **Applications** in that server's settings.
+
+## Create an opening
+
+1. Enter an opening title and choose the Discord role associated with the opening. This describes the position; recording an approval in the dashboard does not automatically assign that Discord role.
+2. Optionally add eligibility role gates. Applicants must currently have at least one selected role; leave this empty to accept any server member.
+3. Add a description and up to 12 questions. Choose short text, a long answer, single choice, multiple choice, yes/no, or date, and mark questions required as needed. Choice questions need at least two options.
+4. Select **Create opening**. Niko creates a separate public link for this role; use **Copy link** to share it.
+
+You can create multiple openings with different roles and questions. Editing an opening keeps its link and previously submitted responses. Closing an opening stops new applications without removing its link or response history; reopening it makes the same link usable again.
+
+## What applicants see
+
+Applicants sign in with Discord. Niko verifies their membership in your server and, when role gates are configured, checks their current roles before allowing submission. Each Discord account can submit once per opening. Required questions must be completed; answers are kept with that opening for staff review. Application approval or denial records a review decision; it does not automatically grant or remove a Discord role.
+
+## Review responses
+
+In the opening list, select **Responses** to read submissions and mark each one approved or denied. Reviews are recorded in the dashboard with the reviewer and the time, and responses that are still awaiting a decision are listed first. A recorded decision can be revised at any time: approving a previously denied response, or denying an approved one, replaces the stored decision and updates the reviewer and timestamp. Approving or denying never assigns or removes the Discord role — the selected role describes the position only. Deleting an opening permanently deletes its responses too, so use **Close opening** instead if you want to keep the record and possibly hire again later.
+
+## Access and troubleshooting
+
+Only users authorized to manage the selected server can configure its applications and review responses. If you cannot see a server, confirm Niko is installed and your Discord account has **Manage Server** permission. Applicants must be members of the server and satisfy any configured role gate; they cannot submit again to an opening they have already applied to.

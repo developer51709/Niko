@@ -1,75 +1,51 @@
-"""
-PremiumManager — flat JSON store for bot-wide premium users.
-
-File: data/premium_users.json
-Schema: {"users": [<user_id_int>, ...]}
-
-All methods are synchronous and safe to call from any coroutine
-via asyncio.to_thread if needed, but the file is tiny so blocking
-I/O is negligible.
-"""
+"""Async database-backed storage for bot-wide premium users."""
 from __future__ import annotations
-
-import json
-import os
-
-_FILE = "data/premium_users.json"
-
-
-def _load() -> dict:
-    if not os.path.exists(_FILE):
-        return {"users": []}
-    try:
-        with open(_FILE) as f:
-            data = json.load(f)
-        if "users" not in data:
-            data["users"] = []
-        return data
-    except Exception:
-        return {"users": []}
-
-
-def _save(data: dict) -> None:
-    os.makedirs("data", exist_ok=True)
-    with open(_FILE, "w") as f:
-        json.dump(data, f, indent=2)
 
 
 class PremiumManager:
+    """Read and update premium grants in the bot's primary database."""
 
     @staticmethod
-    def is_premium(user_id: int) -> bool:
-        """Return True if *user_id* has been granted premium."""
-        return user_id in _load()["users"]
+    def _require_pool(pool):
+        if pool is None:
+            raise RuntimeError("The primary database is not available")
+        return pool
 
-    @staticmethod
-    def add(user_id: int) -> bool:
-        """
-        Grant premium to *user_id*.
-        Returns True if the user was newly added, False if already present.
-        """
-        data = _load()
-        if user_id in data["users"]:
+    @classmethod
+    async def is_premium(cls, pool, user_id: int) -> bool:
+        """Return whether *user_id* has been granted premium."""
+        pool = cls._require_pool(pool)
+        return await pool.fetchval(
+            "SELECT user_id FROM premium_users WHERE user_id = $1", int(user_id)
+        ) is not None
+
+    @classmethod
+    async def add(cls, pool, user_id: int) -> bool:
+        """Grant premium; return False when the user already has it."""
+        pool = cls._require_pool(pool)
+        user_id = int(user_id)
+        if await cls.is_premium(pool, user_id):
             return False
-        data["users"].append(user_id)
-        _save(data)
+        await pool.execute(
+            "INSERT OR IGNORE INTO premium_users (user_id) VALUES ($1)", user_id
+        )
         return True
 
-    @staticmethod
-    def remove(user_id: int) -> bool:
-        """
-        Revoke premium from *user_id*.
-        Returns True if removed, False if they were not in the list.
-        """
-        data = _load()
-        if user_id not in data["users"]:
+    @classmethod
+    async def remove(cls, pool, user_id: int) -> bool:
+        """Revoke premium; return False when the user had no grant."""
+        pool = cls._require_pool(pool)
+        user_id = int(user_id)
+        if not await cls.is_premium(pool, user_id):
             return False
-        data["users"].remove(user_id)
-        _save(data)
+        await pool.execute(
+            "DELETE FROM premium_users WHERE user_id = $1", user_id
+        )
         return True
 
-    @staticmethod
-    def list_users() -> list[int]:
-        """Return a list of all premium user IDs."""
-        return list(_load()["users"])
-
+    @classmethod
+    async def list_users(cls, pool) -> list[int]:
+        """Return all premium user IDs."""
+        pool = cls._require_pool(pool)
+        rows = await pool.fetch("SELECT user_id FROM premium_users ORDER BY user_id")
+        return [int(row["user_id"]) for row in rows]

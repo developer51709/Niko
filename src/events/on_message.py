@@ -10,6 +10,7 @@ import discord
 
 from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_message_blacklist
+from utils.abuse_detection import record_request, strike_notice
 from utils.ai.config import get_ai_config
 from utils.ai.reply import generate_reply, ANSWER_REPLYS
 from utils import logging
@@ -26,11 +27,12 @@ async def handle_message(bot, msg: discord.Message):
     guild   = msg.guild
 
     # ── 1. Load prefixes for this guild ──────────────────────────────────────
-    prefixes       = dynamic_prefix(bot, msg)
+    prefixes       = await dynamic_prefix(bot, msg)
     is_ai_command  = False
     used_prefix    = None
 
     # ── 2. Detect prefix usage ────────────────────────────────────────────────
+    is_command_request = any(content.startswith(p.lower()) for p in prefixes)
     for p in prefixes:
         if content.startswith(p.lower()):
             used_prefix = p
@@ -39,19 +41,71 @@ async def handle_message(bot, msg: discord.Message):
             if content.startswith(f"{p.lower()}ai "):
                 is_ai_command = True
             else:
+                abuse = await record_request(msg.author.id, reason="spamming commands")
+                if abuse.get("abuse"):
+                    await msg.channel.send(strike_notice(abuse))
+                    return
+                if abuse.get("blacklisted"):
+                    await check_message_blacklist(msg)
+                    return
                 return await bot.process_commands(msg)
             break
 
-    # ── 3. Detect name / ping triggers ────────────────────────────────────────
-    called_by_name = "niko" in content
+    # ── 3. UwU lock transformation ───────────────────────────────────────────
+    # Run locked-message handling before AI triggers so a locked user's
+    # message is reposted/deleted rather than also generating an AI reply.
+    if not is_ai_command:
+        uwulock = bot.get_cog("UwULock")
+        if uwulock is not None and await uwulock.process_message(msg):
+            return
+
+    # ── 4. Detect name / ping/media triggers ──────────────────────────────────
+    multimodal_enabled = bool(
+        guild and get_ai_config(guild.id, "multimodal_experiment") == "True"
+    )
+    image_attachments = []
+    voice_attachments = []
+    if multimodal_enabled:
+        for attachment in msg.attachments:
+            content_type = (attachment.content_type or "").lower()
+            filename = (attachment.filename or "").lower()
+            if content_type.startswith("image/"):
+                image_attachments.append(attachment)
+            elif content_type.startswith("audio/") or filename.endswith((".ogg", ".opus", ".wav", ".mp3", ".m4a", ".webm")):
+                voice_attachments.append(attachment)
+        if getattr(getattr(msg, "flags", None), "voice", False) and msg.attachments:
+            voice_attachments = [msg.attachments[0]]
+
+    ai_name = str(get_ai_config(guild.id, "ai_name") or "Niko").strip() if guild else "Niko"
+    called_by_name = ai_name.lower() in content
 
     if ANSWER_REPLYS:
         called_by_ping = bot.user in msg.mentions
     else:
         called_by_ping = bot.user in msg.mentions and not msg.reference
 
-    # ── 4. Nothing triggered AI → stop ────────────────────────────────────────
+    # ── 5. Nothing triggered AI → stop ────────────────────────────────────────
+    # Attachments alone never start a conversation — they only carry extra
+    # context when the AI was already triggered by name, ping, or command.
+    # Otherwise every image posted in the server would wake the AI.
     if not (called_by_name or called_by_ping or is_ai_command):
+        return
+
+    if not is_ai_command and is_command_request:
+        return
+
+    if await check_message_blacklist(msg):
+        return
+
+    abuse = await record_request(
+        msg.author.id,
+        reason="spamming AI requests",
+    )
+    if abuse.get("abuse"):
+        await msg.channel.send(strike_notice(abuse))
+        return
+    if abuse.get("blacklisted"):
+        await check_message_blacklist(msg)
         return
 
     # ── 5. Extract user input ─────────────────────────────────────────────────
@@ -63,14 +117,12 @@ async def handle_message(bot, msg: discord.Message):
     if not user_input:
         user_input = "Someone called your name or pinged you. Respond naturally."
 
-    # ── 6. Blacklist gate (second check for non-prefix AI triggers) ───────────
-    if await check_message_blacklist(msg):
-        return
-
-    # ── 7. Collect optional better-context payload ────────────────────────────
+    # ── 6. Collect optional context and multimodal payload ────────────────────
     replied_content    = None
     context_messages   = None
     ai_actions_enabled = False
+    image_urls         = [attachment.url for attachment in image_attachments[:3]]
+    transcribed_audio  = None
 
     if guild:
         if get_ai_config(guild.id, "better_context_experiment") == "True":
@@ -98,9 +150,26 @@ async def handle_message(bot, msg: discord.Message):
 
         ai_actions_enabled = get_ai_config(guild.id, "ai_actions_experiment") == "True"
 
-    # ── 8. Generate AI reply ──────────────────────────────────────────────────
     loop = asyncio.get_running_loop()
 
+    # Voice messages are downloaded only for the opt-in experiment. A failed
+    # transcription never blocks the normal text/image conversation path.
+    if voice_attachments:
+        try:
+            audio = await voice_attachments[0].read()
+            from utils.ai.openai_client import transcribe_audio
+            transcribed_audio = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    transcribe_audio,
+                    audio,
+                    voice_attachments[0].filename,
+                ),
+            )
+        except Exception as exc:
+            logging.warning("AI", f"Voice transcription failed: {exc}")
+
+    # ── 8. Generate AI reply ──────────────────────────────────────────────────
     async with msg.channel.typing():
         reply = await loop.run_in_executor(
             None,
@@ -114,6 +183,8 @@ async def handle_message(bot, msg: discord.Message):
                 context_messages=context_messages,
                 replied_content=replied_content,
                 ai_actions_enabled=ai_actions_enabled,
+                image_urls=image_urls,
+                transcribed_audio=transcribed_audio,
             ),
         )
 

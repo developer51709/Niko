@@ -59,6 +59,13 @@ MESSAGES = {
         "badwords_desc":     "**Bad Words** — deletes blocked words (manage with `!badwords`)",
         "massmention_desc":  "**Mass Mention** — mutes members who mass-mention",
         "massmention_max":   "  Max mentions: `{max}`",
+        "scamimg_desc":      "**Scam Image Filter** — deletes known MrBeast scam images",
+        "scamimg_note":      "-# ⚠️ Experimental — still in early testing and may have some reliability issues.",
+        "images_title":      "Image Filtering Settings",
+        "images_desc":       "Automatic moderation for images posted in your server.",
+        "nsfwimg_desc":      "**NSFW Filter** — deletes images classified as NSFW via AI (external API)",
+        "nsfwimg_note":      "-# ⚠️ **Note:** This feature is still in testing and might not work properly.",
+        "section_images":    "**🖼️ Image Filtering**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke Settings",
         "nuke_desc":         "Protects your server against rogue moderators performing mass destructive actions.",
@@ -158,6 +165,13 @@ MESSAGES = {
         "badwords_desc":     "**Verbotene Wörter** — löscht gesperrte Wörter (verwalten mit `!badwords`)",
         "massmention_desc":  "**Massen-Erwähnung** — stummt Mitglieder bei Massen-Mentions",
         "massmention_max":   "  Max. Erwähnungen: `{max}`",
+        "scamimg_desc":      "**Scam-Bildfilter** — löscht bekannte MrBeast-Betrugsbilder",
+        "scamimg_note":      "-# ⚠️ Experimentell — befindet sich noch in frühen Tests und kann Zuverlässigkeitsprobleme haben.",
+        "images_title":      "Bildfilter-Einstellungen",
+        "images_desc":       "Automatische Moderation für in deinem Server gepostete Bilder.",
+        "nsfwimg_desc":      "**NSFW-Filter** — löscht per KI als NSFW eingestufte Bilder (externe API)",
+        "nsfwimg_note":      "-# ⚠️ **Hinweis:** Diese Funktion befindet sich noch in der Testphase und funktioniert möglicherweise nicht richtig.",
+        "section_images":    "**🖼️ Bildfilter**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
         "nuke_desc":         "Schützt deinen Server vor böswilligen Moderatoren, die Massenaktionen durchführen.",
@@ -256,6 +270,13 @@ MESSAGES = {
         "badwords_desc":     "**Palabras Prohibidas** — borra palabras bloqueadas (gestiona con `!badwords`)",
         "massmention_desc":  "**Menciones Masivas** — silencia a quien hace menciones masivas",
         "massmention_max":   "  Máx menciones: `{max}`",
+        "scamimg_desc":      "**Filtro de Imágenes de Estafa** — borra imágenes de estafa de MrBeast conocidas",
+        "scamimg_note":      "-# ⚠️ Experimental — todavía en pruebas tempranas y puede tener problemas de fiabilidad.",
+        "images_title":      "Configuración del Filtrado de Imágenes",
+        "images_desc":       "Moderación automática para imágenes publicadas en tu servidor.",
+        "nsfwimg_desc":      "**Filtro NSFW** — borra imágenes clasificadas como NSFW por IA (API externa)",
+        "nsfwimg_note":      "-# ⚠️ **Nota:** Esta función todavía está en pruebas y puede que no funcione correctamente.",
+        "section_images":    "**🖼️ Filtrado de Imágenes**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Configuración Anti-Nuke",
         "nuke_desc":         "Protege tu servidor contra moderadores corruptos que realizan acciones destructivas masivas.",
@@ -353,10 +374,33 @@ def get_lang(ctx_or_guild=None) -> str:
     return "en"
 
 
+# Mapping of plain-emoji placeholders used in MESSAGES strings to Niko's
+# custom server emojis, applied uniformly by _t() across every language.
+_CUSTOM_EMOJI_MAP = {
+    "💣": get_emoji("danger"),
+    "🌊": get_emoji("warning"),
+    "🖼️": get_emoji("image"),
+    "🖼": get_emoji("image"),
+    "⚠️": get_emoji("warning"),
+    "⚠": get_emoji("warning"),
+    "🚨": get_emoji("danger"),
+    "☕": get_emoji("heart"),
+}
+
+
+def _custom_emojis(text: str) -> str:
+    """Replace stock emojis in a panel string with Niko's custom emojis."""
+    for stock, custom in _CUSTOM_EMOJI_MAP.items():
+        if stock in text:
+            text = text.replace(stock, custom)
+    return text
+
+
 def _t(lang: str, key: str, **kwargs) -> str:
-    """Look up a localised string and apply format kwargs."""
+    """Look up a localised string, apply format kwargs and custom emojis."""
     text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
-    return text.format(**kwargs) if kwargs else text
+    text = text.format(**kwargs) if kwargs else text
+    return _custom_emojis(text)
 
 
 # ──────────────────────────────────────────────────
@@ -364,7 +408,7 @@ def _t(lang: str, key: str, **kwargs) -> str:
 # ──────────────────────────────────────────────────
 
 def _icon(enabled: bool) -> str:
-    return get_emoji("icon_tick") if enabled else get_emoji("icon_cross")
+    return get_emoji("tick") if enabled else get_emoji("cross")
 
 
 def _build_overview_text(cfg: dict, lang: str = "en") -> str:
@@ -377,11 +421,14 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
     return (
         f"{_t(lang, 'overview_title', emoji=get_emoji('automod'))}\n"
         f"{_t(lang, 'overview_desc')}\n\n"
-        f"{get_emoji('icon_message')} {_t(lang, 'section_msgfilter')}\n"
+        f"{get_emoji('message')} {_t(lang, 'section_msgfilter')}\n"
         f"{_icon(am.get('antispam'))} Anti-Spam  •  "
         f"{_icon(am.get('antilink'))} Anti-Link\n"
         f"{_icon(am.get('badwords'))} Bad Words  •  "
         f"{_icon(am.get('massmention'))} Mass Mention\n\n"
+        f"{_t(lang, 'section_images')}\n"
+        f"{_icon(am.get('nsfw_image_filter'))} NSFW  •  "
+        f"{_icon(am.get('scam_image_filter'))} Scam Images\n\n"
         f"{_t(lang, 'section_antinuke')}\n"
         f"{_icon(am.get('antinuke'))} Enabled  •  "
         f"Action: `{an.get('action', 'strip')}`  •  "
@@ -390,13 +437,13 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antiraid'))} Enabled  •  "
         f"Action: `{ar.get('action', 'kick')}`\n"
         f"Threshold: `{ar.get('join_threshold', 10)}` joins / `{ar.get('join_interval', 10)}s`\n\n"
-        f"{get_emoji('icon_bot')} {_t(lang, 'section_extraid')}\n"
+        f"{get_emoji('bot')} {_t(lang, 'section_extraid')}\n"
         f"{_icon(am.get('antiraid_ext'))} Interaction flood  •  "
         f"{_icon(are.get('ext_app_detection', True))} User-installed apps\n"
         f"Raider: `{are.get('raider_action', 'kick')}`  •  "
         f"Operator: `{are.get('operator_action', 'notify')}`  •  "
         f"App abuse: `{are.get('ext_app_action', 'kick')}`\n\n"
-        f"{get_emoji('vm_unlock')} {_t(lang, 'section_whitelist')}\n"
+        f"{get_emoji('unlock')} {_t(lang, 'section_whitelist')}\n"
         f"{_t(lang, 'wl_summary', wu=wu, wr=wr)}\n\n"
         f"{_t(lang, 'nav_hint')}"
     )
@@ -405,7 +452,7 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
 def _build_filter_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     return (
-        f"### {get_emoji('icon_message')} {_t(lang, 'filter_title')}\n"
+        f"### {get_emoji('message')} {_t(lang, 'filter_title')}\n"
         f"{_t(lang, 'filter_desc')}\n\n"
         f"{_icon(am.get('antispam'))} {_t(lang, 'antispam_desc')}\n"
         f"{_t(lang, 'antispam_thresh', msgs=cfg.get('spam_threshold', 6), secs=cfg.get('spam_interval', 7))}\n\n"
@@ -413,6 +460,18 @@ def _build_filter_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n\n"
         f"{_icon(am.get('massmention'))} {_t(lang, 'massmention_desc')}\n"
         f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}"
+    )
+
+
+def _build_image_filter_text(cfg: dict, lang: str = "en") -> str:
+    am = cfg["automod"]
+    return (
+        f"### {get_emoji('message')} {_t(lang, 'images_title')}\n"
+        f"{_t(lang, 'images_desc')}\n\n"
+        f"{_icon(am.get('nsfw_image_filter'))} {_t(lang, 'nsfwimg_desc')}\n"
+        f"{_t(lang, 'nsfwimg_note')}\n\n"
+        f"{_icon(am.get('scam_image_filter'))} {_t(lang, 'scamimg_desc')}\n"
+        f"{_t(lang, 'scamimg_note')}"
     )
 
 
@@ -425,12 +484,12 @@ def _build_antinuke_text(cfg: dict, lang: str = "en") -> str:
         f"{_t(lang, 'nuke_desc')}\n\n"
         f"{_icon(am.get('antinuke'))} **Anti-Nuke** — currently {status}\n\n"
         f"{_t(lang, 'nuke_thresholds')}\n"
-        f"{get_emoji('icon_ban')} {_t(lang, 'nuke_bans',      t=an.get('ban_threshold', 3))}\n"
-        f"{get_emoji('icon_cross')} {_t(lang, 'nuke_kicks',     t=an.get('kick_threshold', 3))}\n"
-        f"{get_emoji('icon_trash')} {_t(lang, 'nuke_chandel',   t=an.get('channel_delete_threshold', 3))}\n"
-        f"{get_emoji('icon_trash')} {_t(lang, 'nuke_roledel',   t=an.get('role_delete_threshold', 3))}\n"
-        f"{get_emoji('icon_plus')} {_t(lang, 'nuke_chancreate',t=an.get('channel_create_threshold', 5))}\n"
-        f"{get_emoji('icon_link')} {_t(lang, 'nuke_webhookdel',t=an.get('webhook_delete_threshold', 3))}\n\n"
+        f"{get_emoji('ban')} {_t(lang, 'nuke_bans',      t=an.get('ban_threshold', 3))}\n"
+        f"{get_emoji('cross')} {_t(lang, 'nuke_kicks',     t=an.get('kick_threshold', 3))}\n"
+        f"{get_emoji('trash')} {_t(lang, 'nuke_chandel',   t=an.get('channel_delete_threshold', 3))}\n"
+        f"{get_emoji('trash')} {_t(lang, 'nuke_roledel',   t=an.get('role_delete_threshold', 3))}\n"
+        f"{get_emoji('plus')} {_t(lang, 'nuke_chancreate',t=an.get('channel_create_threshold', 5))}\n"
+        f"{get_emoji('link')} {_t(lang, 'nuke_webhookdel',t=an.get('webhook_delete_threshold', 3))}\n\n"
         f"{_t(lang, 'nuke_interval',  t=an.get('interval', 10))}\n"
         f"{_t(lang, 'nuke_action',    action=an.get('action', 'strip'))}\n"
         f"{_t(lang, 'nuke_actions_hint')}"
@@ -462,7 +521,7 @@ def _build_ext_raid_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     are = cfg["antiraid_ext"]
     return (
-        f"### {get_emoji('icon_bot')} {_t(lang, 'ext_title')}\n\n"
+        f"### {get_emoji('bot')} {_t(lang, 'ext_title')}\n\n"
         f"{_t(lang, 'ext_mode1')}\n"
         f"{_t(lang, 'ext_mode1_desc')}\n\n"
         f"{_icon(am.get('antiraid_ext'))} **Enabled**\n"
@@ -492,7 +551,7 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> 
     ]
 
     return (
-        f"### {get_emoji('vm_unlock')} {_t(lang, 'wl_title')}\n"
+        f"### {get_emoji('unlock')} {_t(lang, 'wl_title')}\n"
         f"{_t(lang, 'wl_desc')}\n\n"
         f"{_t(lang, 'wl_users_hdr')}\n"
         f"{chr(10).join(user_lines) or '*None*'}\n\n"
@@ -505,6 +564,8 @@ def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> 
 def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: str = "en") -> str:
     if section == "filter":
         return _build_filter_text(cfg, lang)
+    if section == "image_filter":
+        return _build_image_filter_text(cfg, lang)
     if section == "antinuke":
         return _build_antinuke_text(cfg, lang)
     if section == "antiraid":
@@ -521,28 +582,28 @@ def _section_text(cfg: dict, section: str, guild: discord.Guild = None, lang: st
 # ──────────────────────────────────────────────────────────────────────────────
 
 _NUKE_ACTION_LABELS = {
-    "ban":            f"{get_emoji('icon_ban')} Mass Bans",
-    "kick":           f"{get_emoji('icon_cross')} Mass Kicks",
-    "channel_delete": f"{get_emoji('icon_trash')} Mass Channel Deletes",
-    "role_delete":    f"{get_emoji('icon_trash')} Mass Role Deletes",
-    "channel_create": f"{get_emoji('icon_plus')} Mass Channel Creates",
-    "webhook_delete": f"{get_emoji('icon_link')} Mass Webhook Deletes",
+    "ban":            f"{get_emoji('ban')} Mass Bans",
+    "kick":           f"{get_emoji('cross')} Mass Kicks",
+    "channel_delete": f"{get_emoji('trash')} Mass Channel Deletes",
+    "role_delete":    f"{get_emoji('trash')} Mass Role Deletes",
+    "channel_create": f"{get_emoji('plus')} Mass Channel Creates",
+    "webhook_delete": f"{get_emoji('link')} Mass Webhook Deletes",
 }
 _NUKE_ACTION_LABELS_DE = {
-    "ban":            f"{get_emoji('icon_ban')} Massen-Bans",
-    "kick":           f"{get_emoji('icon_cross')} Massen-Kicks",
-    "channel_delete": f"{get_emoji('icon_trash')} Massen-Kanal-Löschungen",
-    "role_delete":    f"{get_emoji('icon_trash')} Massen-Rollen-Löschungen",
-    "channel_create": f"{get_emoji('icon_plus')} Massen-Kanal-Erstellungen",
-    "webhook_delete": f"{get_emoji('icon_link')} Massen-Webhook-Löschungen",
+    "ban":            f"{get_emoji('ban')} Massen-Bans",
+    "kick":           f"{get_emoji('cross')} Massen-Kicks",
+    "channel_delete": f"{get_emoji('trash')} Massen-Kanal-Löschungen",
+    "role_delete":    f"{get_emoji('trash')} Massen-Rollen-Löschungen",
+    "channel_create": f"{get_emoji('plus')} Massen-Kanal-Erstellungen",
+    "webhook_delete": f"{get_emoji('link')} Massen-Webhook-Löschungen",
 }
 _NUKE_ACTION_LABELS_ES = {
-    "ban":            f"{get_emoji('icon_ban')} Baneos Masivos",
-    "kick":           f"{get_emoji('icon_cross')} Expulsiones Masivas",
-    "channel_delete": f"{get_emoji('icon_trash')} Borrado Masivo de Canales",
-    "role_delete":    f"{get_emoji('icon_trash')} Borrado Masivo de Roles",
-    "channel_create": f"{get_emoji('icon_plus')} Creación Masiva de Canales",
-    "webhook_delete": f"{get_emoji('icon_link')} Borrado Masivo de Webhooks",
+    "ban":            f"{get_emoji('ban')} Baneos Masivos",
+    "kick":           f"{get_emoji('cross')} Expulsiones Masivas",
+    "channel_delete": f"{get_emoji('trash')} Borrado Masivo de Canales",
+    "role_delete":    f"{get_emoji('trash')} Borrado Masivo de Roles",
+    "channel_create": f"{get_emoji('plus')} Creación Masiva de Canales",
+    "webhook_delete": f"{get_emoji('link')} Borrado Masivo de Webhooks",
 }
 _NUKE_TAKEN_EN = {"strip": "Dangerous roles stripped", "kick": "Offender kicked",  "ban": "Offender banned"}
 _NUKE_TAKEN_DE = {"strip": "Gefährliche Rollen entfernt", "kick": "Täter gekickt", "ban": "Täter gebannt"}
@@ -567,7 +628,7 @@ def _build_nuke_dm_view(
     if lang == "de":
         labels  = _NUKE_ACTION_LABELS_DE
         taken   = _NUKE_TAKEN_DE
-        title   = "### 🚨 Anti-Nuke ausgelöst"
+        title   = f"### {get_emoji('danger')} Anti-Nuke ausgelöst"
         lines   = [
             f"**Server:** {guild.name}",
             f"**Täter:** {offender} (`{offender.id}`)",
@@ -579,7 +640,7 @@ def _build_nuke_dm_view(
     elif lang == "es":
         labels  = _NUKE_ACTION_LABELS_ES
         taken   = _NUKE_TAKEN_ES
-        title   = "### 🚨 Anti-Nuke Activado"
+        title   = f"### {get_emoji('danger')} Anti-Nuke Activado"
         lines   = [
             f"**Servidor:** {guild.name}",
             f"**Infractor:** {offender} (`{offender.id}`)",
@@ -591,7 +652,7 @@ def _build_nuke_dm_view(
     else:
         labels  = _NUKE_ACTION_LABELS
         taken   = _NUKE_TAKEN_EN
-        title   = "### 🚨 Anti-Nuke Triggered"
+        title   = f"### {get_emoji('danger')} Anti-Nuke Triggered"
         lines   = [
             f"**Server:** {guild.name}",
             f"**Offender:** {offender} (`{offender.id}`)",
@@ -634,35 +695,42 @@ class SectionSelect(discord.ui.Select):
             discord.SelectOption(
                 label="Message Filter", 
                 value="filter", 
-                emoji=get_emoji("icon_message"),
+                emoji=get_emoji("message"),
                 description="Spam, links, bad words, mass mention",
                 default=(current_section == "filter")
             ),
             discord.SelectOption(
+                label="Image Filtering", 
+                value="image_filter", 
+                emoji=get_emoji("image"),
+                description="NSFW detection & MrBeast scam images",
+                default=(current_section == "image_filter")
+            ),
+            discord.SelectOption(
                 label="Anti-Nuke", 
                 value="antinuke", 
-                emoji="💣",
+                emoji=get_emoji("danger"),
                 description="Stop rogue mods from mass-deleting",
                 default=(current_section == "antinuke")
             ),
             discord.SelectOption(
                 label="Anti-Raid", 
                 value="antiraid", 
-                emoji="🌊",
+                emoji=get_emoji("warning"),
                 description="Stop mass member join attacks",
                 default=(current_section == "antiraid")
             ),
             discord.SelectOption(
                 label="Ext. App Raid", 
                 value="ext_raid", 
-                emoji=get_emoji("icon_bot"),
+                emoji=get_emoji("bot"),
                 description="User-installed app abuse & interaction floods",
                 default=(current_section == "ext_raid")
             ),
             discord.SelectOption(
                 label="Whitelist", 
                 value="whitelist", 
-                emoji=get_emoji("vm_unlock"),
+                emoji=get_emoji("unlock"),
                 description="Users and roles exempt from automod",
                 default=(current_section == "whitelist")
             ),
@@ -674,7 +742,7 @@ class SectionSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -705,7 +773,7 @@ class ToggleButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -740,7 +808,7 @@ class SubToggleButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -759,14 +827,14 @@ class EditThresholdsButton(discord.ui.Button):
         self._cog = automod_cog
         self._guild_id = guild_id
         self._section = section
-        super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("icon_settings"))
+        super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("settings"))
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -786,7 +854,7 @@ class EditExtAppButton(discord.ui.Button):
         super().__init__(
             label="Edit App Detection", 
             style=discord.ButtonStyle.blurple,
-            emoji=get_emoji("icon_settings")
+            emoji=get_emoji("settings")
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -794,7 +862,7 @@ class EditExtAppButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -827,7 +895,7 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -870,7 +938,7 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -906,7 +974,7 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -955,7 +1023,7 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1004,7 +1072,7 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1053,7 +1121,7 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1104,7 +1172,7 @@ class AntiNukeExtThresholdModal(discord.ui.Modal, title="Anti-Nuke — Extended 
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1127,7 +1195,7 @@ class _NukeExtThresholdButton(discord.ui.Button):
     """Opens extended nuke threshold modal (channel_create, webhook_delete)."""
     def __init__(self, automod_cog, guild_id: int):
         super().__init__(label="Extended Thresholds", style=discord.ButtonStyle.gray,
-                         emoji=get_emoji("icon_settings"))
+                         emoji=get_emoji("settings"))
         self._cog = automod_cog
         self._guild_id = guild_id
 
@@ -1136,7 +1204,7 @@ class _NukeExtThresholdButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1166,7 +1234,7 @@ class _WLUserSelect(discord.ui.UserSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1181,7 +1249,7 @@ class _WLUserSelect(discord.ui.UserSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=_t(lang, "wl_added_users", emoji=get_emoji("icon_tick"), names=names)
+                content=_t(lang, "wl_added_users", emoji=get_emoji("tick"), names=names)
             )
         )
         view.add_item(container)
@@ -1209,7 +1277,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1224,7 +1292,7 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=_t(lang, "wl_added_roles", emoji=get_emoji("icon_tick"), names=names)
+                content=_t(lang, "wl_added_roles", emoji=get_emoji("tick"), names=names)
             )
         )
         view.add_item(container)
@@ -1253,7 +1321,7 @@ class _WLUserRemoveSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1267,7 +1335,7 @@ class _WLUserRemoveSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=_t(lang, "wl_removed_users", emoji=get_emoji("icon_tick"), count=len(self.values))
+                content=_t(lang, "wl_removed_users", emoji=get_emoji("tick"), count=len(self.values))
             )
         )
         view.add_item(container)
@@ -1294,7 +1362,7 @@ class _WLRoleRemoveSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1308,7 +1376,7 @@ class _WLRoleRemoveSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=_t(lang, "wl_removed_roles", emoji=get_emoji("icon_tick"), count=len(self.values))
+                content=_t(lang, "wl_removed_roles", emoji=get_emoji("tick"), count=len(self.values))
             )
         )
         view.add_item(container)
@@ -1323,7 +1391,7 @@ class _WLAddUserBtn(discord.ui.Button):
         super().__init__(
             label="Add User", 
             style=discord.ButtonStyle.green,
-            emoji=get_emoji("icon_plus")
+            emoji=get_emoji("plus")
         )
         self._cog = automod_cog
         self._guild_id = guild_id
@@ -1333,7 +1401,7 @@ class _WLAddUserBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1362,7 +1430,7 @@ class _WLAddRoleBtn(discord.ui.Button):
         super().__init__(
             label="Add Role", 
             style=discord.ButtonStyle.green,
-            emoji=get_emoji("icon_plus")
+            emoji=get_emoji("plus")
         )
         self._cog = automod_cog
         self._guild_id = guild_id
@@ -1372,7 +1440,7 @@ class _WLAddRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1411,7 +1479,7 @@ class _WLRemoveUserBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1465,7 +1533,7 @@ class _WLRemoveRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1532,6 +1600,12 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         ))
         container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(self, guild_id, section),
+        ))
+
+    elif section == "image_filter":
+        container.add_item(discord.ui.ActionRow(
+            ToggleButton("NSFW Filter", "nsfw_image_filter", self, guild_id, section),
+            ToggleButton("Scam Images", "scam_image_filter", self, guild_id, section),
         ))
 
     elif section == "antinuke":
@@ -1610,7 +1684,7 @@ class AntiNukeActionSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1629,7 +1703,7 @@ class AntiNukeActionSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('icon_tick')} Anti-Nuke action set to **{val}**"
+                content=f"{get_emoji('tick')} Anti-Nuke action set to **{val}**"
             ),
             accent_colour=discord.Color.green()
         )
@@ -1644,7 +1718,7 @@ class _NukeActionButton(discord.ui.Button):
         super().__init__(
             label="Set Action", 
             style=discord.ButtonStyle.gray,
-            emoji=get_emoji("icon_utility")
+            emoji=get_emoji("utility")
         )
         self._cog = automod_cog
         self._guild_id = guild_id
@@ -1654,7 +1728,7 @@ class _NukeActionButton(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('icon_cross')} You need **Administrator** permissions to do that."
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
                 ),
                 accent_colour=discord.Color.red()
             )

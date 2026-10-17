@@ -1,0 +1,148 @@
+# Social Media Notifier
+
+The notifier system automatically tracks social media accounts and posts a notification to a Discord channel whenever new content is published. It supports YouTube, Twitch, Twitter/X, TikTok, Bluesky, and Reddit.
+
+## Supported Platforms
+
+| Platform | What it tracks | Update interval |
+|----------|---------------|-----------------|
+| **YouTube** | New videos (via RSS feed) | Every 5 minutes |
+| **Twitch** | Streams going live and new broadcasts | Every 5 minutes |
+| **Twitter/X** | New tweets | Every 5 minutes |
+| **TikTok** | New posts | Every 5 minutes |
+| **Bluesky** | New posts | Every 5 minutes |
+| **Reddit** | New posts in a subreddit | Every 5 minutes |
+
+> **Nothing to set up:** following an account never asks you for an API key or a sign-in. Every platform above is read through public data, and no account you follow needs to authorise Niko.
+
+## Managing Notifications in the Dashboard
+
+Everything the Discord commands can do is also available per server under **Dashboard → your server → Notifications** (`/dashboard/<server>/notifications`). You need **Manage Server** on that server.
+
+The tab has three parts:
+
+- **Announcement defaults** — the server-wide switch that pauses every announcement at once, plus a default channel and a default ping role used by accounts that do not set their own.
+- **Add an account** — paste a profile link (the platform is detected for you) or type the handle, pick a channel, and optionally set a ping role and a custom message. Niko validates the account against the platform before saving, and the newest post is recorded silently so following a creator never dumps their back catalogue into your channel.
+- **Followed accounts** — every tracked account as its own card with its channel, ping role and message, a paused/active badge, how many checks have failed, when it was last checked, plus **Send test**, **Pause**/**Resume**, **Remove** and **Save changes**.
+
+Adding an account that is already followed updates that card instead of creating a duplicate, and each card only sends the fields you actually changed.
+
+## Opening the Setup Panel
+
+```
+.notifier
+```
+
+This opens an interactive panel with buttons for each platform. Click a platform button to open a modal where you enter:
+
+- **Account/Channel Name** — The username, handle, or channel ID
+- **Notification Channel** — Where to post notifications (defaults to the current channel)
+
+> **Note:** You need **Manage Server** permission to use the notifier.
+
+## Quick Follow Command
+
+For faster setup, use the shortcut command:
+
+```
+.follow <platform> <username> [#channel]
+```
+
+**Platforms:** `youtube`, `twitch`, `twitter`, `tiktok`, `bluesky`, `reddit`
+
+**Examples:**
+```
+.follow youtube @MrBeast
+.follow twitch shroud #live-feed
+.follow twitter elonmusk #social-feed
+.follow reddit programming
+```
+
+## Viewing Followed Accounts
+
+```
+.notifier list
+```
+
+Shows all tracked accounts with their platform, channel, and notification target, including whether each account is active or paused.
+
+Each line also reports account health: how many checks have failed in a row and when the account was last checked, so a feed that has gone quiet is visible instead of silent.
+
+## Pausing and Resuming
+
+```
+.notifier pause <platform> <account>
+.notifier resume <platform> <account>
+```
+
+Pausing keeps the account, its channel, its ping role and its message — it just stops announcing. Resume it whenever you like; nothing back-dated is posted.
+
+## Custom Messages
+
+Both the dashboard cards and the server default support a custom message that is sent above the announcement:
+
+| Placeholder | Replaced with |
+|-------------|---------------|
+| `{account}` | the followed account, e.g. `@shroud` |
+| `{platform}` | the platform name, e.g. `Twitch` |
+| `{title}` | the post or video title |
+| `{url}` | a link to the post |
+
+Unknown placeholders are refused, so a typo is reported instead of being posted. Mentions are always restricted to the ping role you configure, so neither a template nor a creator's post text can ping `@everyone`.
+
+## Pausing a Whole Server
+
+The **Post new content automatically** switch at the top of the dashboard tab turns every announcement off for that server without removing any accounts. Accounts that keep failing are paused individually — see below.
+
+A server that is blacklisted from Niko has its notifications paused automatically: the server-wide switch is turned off, so nothing is announced even if it was left on, and the poll loop skips blacklisted servers whether or not their switch was ever touched. The followed accounts, channels, ping roles and messages are all kept, and lifting the blacklist does not turn announcements back on — a server admin flips the switch again in the dashboard.
+
+## Unfollowing
+
+```
+.unfollow <platform> <username>
+```
+
+Stops tracking an account. You can also remove follows through the "View Follows" button in the setup panel.
+
+## Testing a Follow
+
+Before following an account, you can verify it works:
+
+```
+.notifier test <platform> <query>
+```
+
+This validates the account exists and shows the latest post.
+
+## Notification Format
+
+Notifications use Discord CV2 containers styled to match each platform's branding:
+
+- **YouTube** — Red accent, video thumbnail, channel name
+- **Twitch** — Purple accent, stream thumbnail, live or new-broadcast wording
+- **Twitter/X** — Blue accent, tweet text preview
+- **TikTok** — Pink accent, video link
+- **Bluesky** — Light blue accent, post text
+- **Reddit** — Orange accent, subreddit name and post title
+
+Each notification includes a link to view the original post.
+
+## How It Works
+
+1. A background task runs every 5 minutes
+2. Accounts are grouped by platform and handle first, so when several servers follow the same creator the platform is asked exactly once per cycle, with a handful of requests in flight at a time
+3. For each followed account, the newest post is compared with the last-seen post ID
+4. If the post ID differs, the notification is sent and the last-seen ID is updated to prevent duplicates
+5. On first follow — from Discord or from the dashboard — the current latest post is recorded without sending a notification
+6. Accounts that keep failing are paused automatically instead of being retried forever, and the channel is told once, with the command to resume them
+
+## Limits and Health
+
+| Limit | Value |
+|-------|-------|
+| Accounts per server | 25 |
+| Accounts per platform per server | 10 |
+| Custom message length | 300 characters |
+| Failed checks before auto-pause | 5 |
+
+A paused account keeps its history, so **Resume** in the dashboard (or `.notifier resume`) puts it straight back to work once the platform is reachable again.

@@ -1,0 +1,80 @@
+---
+slug: "moderation-warnings"
+title: "Warning System Guide"
+category: "moderation"
+excerpt: "Learn how to use and manage the warning system for tracking member infractions."
+tags: ["warns","warnings","moderation"]
+order: 2
+---
+# Warning System Guide
+
+The warning system helps track member infractions and establish patterns of behavior.
+
+## Issuing Warnings
+
+### Basic Warning
+Warn a member with a reason:
+
+```
+.warn <user> [reason]
+```
+
+Example:
+```
+.warn @User Spamming in general chat
+```
+
+### Warnings with Evidence
+It's helpful to include specific details:
+- What rule was broken
+- When it happened
+- Any relevant context
+
+## Viewing Warnings
+
+### Check a User's Warnings
+```
+.warnings <user>
+```
+
+This shows:
+- Total warning count
+- Each warning with moderator and reason
+- When each warning was issued
+
+### Check Your Own Warnings
+Members can check their own warnings:
+
+```
+.warnings
+```
+
+## Clearing Warnings
+
+### Clear All Warnings
+Remove all warnings from a member:
+
+```
+.clearwarnings <user>
+```
+
+### Clear Specific Warnings
+Some configurations allow clearing specific warnings by ID.
+
+## Warning Actions
+
+### Automatic Actions
+Configure automatic actions based on warning count:
+- 3 warnings → Kick
+- 5 warnings → Ban
+
+### Manual Actions
+Moderators can manually decide consequences based on warnings.
+
+## Warning Best Practices
+
+1. **Be specific**: Clear reasons help members understand what to fix
+2. **Track patterns**: Multiple warnings show escalating issues
+3. **Escalate appropriately**: Start with warnings, then mutes, then kicks/bans
+4. **Document everything**: Warnings provide evidence if needed later
+5. **Give second chances**: Warnings are a tool for correction, not just punishment

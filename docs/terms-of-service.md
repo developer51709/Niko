@@ -1,6 +1,6 @@
 ### Terms of Service
 
-**Effective date:** 2025-01-01
+**Effective date:** 2026-10-01
 
 **1. Acceptance**
 By using Niko in any Discord server you agree to these Terms and Discord's own Terms of Service (https://discord.com/terms) and Community Guidelines (https://discord.com/guidelines).
@@ -24,6 +24,6 @@ All in-bot currency and virtual items have no real-world value and cannot be exc
 Niko and its operator are not liable for any direct, indirect, or consequential damages arising from the use or inability to use Niko.
 
 **8. Contact**
-For questions or concerns: https://discord.gg/UfDBUGcKqY
+For questions or concerns, use the Niko support server: https://niko.sryze.cc/discord
 
 -# By interacting with Niko you confirm you have read and agreed to these Terms.

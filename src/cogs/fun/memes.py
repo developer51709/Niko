@@ -2,7 +2,8 @@ import discord
 from discord.ext import commands
 import aiohttp
 import random
-from utils.i18n import make_msg
+from utils.ai.config import get_personality
+from utils.i18n import get_lang, make_msg
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -84,6 +85,10 @@ class Meme(commands.Cog):
             return await ctx.send(msg(ctx, "no_safe_memes"))
 
         meme = random.choice(memes)
+
+        # personality-aware embed styling
+        personality = get_personality(ctx)
+        lang = get_lang(ctx)
 
         title_prefix = msg(ctx, "meme_title_prefix")
         title = f"{title_prefix}{meme['title']}"

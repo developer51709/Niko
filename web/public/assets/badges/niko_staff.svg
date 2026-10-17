@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Niko Staff</title>
+  <rect x="1.25" y="1.25" width="21.5" height="21.5" rx="6.75" fill="#d96545"/>
+  <rect x="2" y="2" width="20" height="20" rx="6" fill="none" stroke="#fff" stroke-opacity="0.22" stroke-width="1.5"/>
+  <path fill="#fff" d="M12 6.6l1.47 3.58 3.85.29-2.94 2.5.91 3.76L12 14.7l-3.29 2.03.91-3.76-2.94-2.5 3.85-.29Z"/>
+</svg>

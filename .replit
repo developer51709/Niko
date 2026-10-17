@@ -1,0 +1,35 @@
+modules = ["nodejs-24", "python-base-3.13"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib", "python313Packages.flask", "python313Packages.requests"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "nix-shell -p python313Packages.flask python313Packages.requests --run 'python src/website.py'"
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80

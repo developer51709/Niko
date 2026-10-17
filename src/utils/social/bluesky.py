@@ -1,13 +1,33 @@
 import aiohttp
 
-_API  = "https://public.api.bsky.app/xrpc"
+_API = "https://public.api.bsky.app/xrpc"
 _TOUT = aiohttp.ClientTimeout(total=10)
+
+
+async def _resolve_handle(handle: str) -> str | None:
+    """Resolve a Bluesky handle to a DID. Returns DID or None."""
+    handle = handle.lstrip("@")
+    url = f"{_API}/com.atproto.identity.resolveHandle?handle={handle}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=_TOUT) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                return data.get("did")
+    except Exception:
+        return None
 
 
 async def fetch_latest_bluesky(handle: str) -> dict | None:
     """Fetch the most recent post from a Bluesky account (no auth required)."""
     handle = handle.lstrip("@")
-    url = f"{_API}/app.bsky.feed.getAuthorFeed?actor={handle}&limit=1&filter=posts_no_replies"
+
+    # Resolve handle to DID for reliable API calls
+    did = await _resolve_handle(handle)
+    actor = did or handle
+
+    url = f"{_API}/app.bsky.feed.getAuthorFeed?actor={actor}&limit=1&filter=posts_no_replies"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=_TOUT) as resp:
@@ -19,13 +39,13 @@ async def fetch_latest_bluesky(handle: str) -> dict | None:
         if not feed:
             return None
 
-        item   = feed[0]
-        post   = item.get("post", {})
+        item = feed[0]
+        post = item.get("post", {})
         record = post.get("record", {})
 
-        uri     = post.get("uri", "")
+        uri = post.get("uri", "")
         post_id = uri.split("/")[-1] if uri else ""
-        text    = record.get("text", "")
+        text = record.get("text", "")
         profile_url = f"https://bsky.app/profile/{handle}/post/{post_id}"
 
         # Image from the post embed view
@@ -40,9 +60,9 @@ async def fetch_latest_bluesky(handle: str) -> dict | None:
             thumbnail = view_embed.get("external", {}).get("thumb")
 
         return {
-            "id":        post_id,
-            "url":       profile_url,
-            "text":      text,
+            "id": post_id,
+            "url": profile_url,
+            "text": text,
             "thumbnail": thumbnail,
         }
     except Exception:
@@ -52,7 +72,12 @@ async def fetch_latest_bluesky(handle: str) -> dict | None:
 async def validate_bluesky_handle(handle: str) -> bool:
     """Return True if the Bluesky handle resolves to a real account."""
     handle = handle.lstrip("@")
-    url = f"{_API}/app.bsky.actor.getProfile?actor={handle}"
+    did = await _resolve_handle(handle)
+    if not did:
+        return False
+
+    # Verify the account exists and is active
+    url = f"{_API}/app.bsky.actor.getProfile?actor={did}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=_TOUT) as resp:

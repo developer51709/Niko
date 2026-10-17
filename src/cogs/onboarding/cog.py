@@ -1,4 +1,6 @@
 from .views import *
+from config.ids import SUPPORT_GUILD
+from utils import logging
 
 class Onboarding(commands.Cog):
     def __init__(self, bot):
@@ -44,19 +46,19 @@ class Onboarding(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
         """Create, edit, and manage role menus for the server."""
-        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="autoroles")
     @commands.has_permissions(administrator=True)
     async def onboarding_autoroles(self, ctx: commands.Context):
         """Configure which roles are automatically given to new members on join."""
-        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @onboarding.command(name="captcha")
     @commands.has_permissions(administrator=True)
     async def onboarding_captcha(self, ctx: commands.Context):
         """Configure captcha verification for the server."""
-        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -77,13 +79,13 @@ class Onboarding(commands.Cog):
             _pending_verifications.pop(user_id, None)
             guild_id = pending["guild_id"]
             guild = self.bot.get_guild(guild_id)
-            cfg = get_config(guild_id)
+            cfg = await get_config(guild_id)
 
             if guild is None:
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find the server to apply roles."
+                        content=f"{get_emoji('tick')} Verification passed! However, I could not find the server to apply roles."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -95,7 +97,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('icon_tick')} Verification passed! However, I could not find you in the server."
+                        content=f"{get_emoji('tick')} Verification passed! However, I could not find you in the server."
                     ),
                     accent_colour=discord.Color.green()
                 )
@@ -128,7 +130,7 @@ class Onboarding(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_tick')} Verification complete!"
+                    content=f"### {get_emoji('tick')} Verification complete!"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -165,12 +167,12 @@ class Onboarding(commands.Cog):
                 _pending_verifications.pop(user_id, None)
                 guild_id = pending["guild_id"]
                 guild = self.bot.get_guild(guild_id)
-                cfg = get_config(guild_id) if guild else None
+                cfg = await get_config(guild_id) if guild else None
 
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### {get_emoji('icon_cross')} Verification failed!"
+                        content=f"### {get_emoji('cross')} Verification failed!"
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(
@@ -213,7 +215,7 @@ class Onboarding(commands.Cog):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"### {get_emoji('icon_cross')} Incorrect."
+                        content=f"### {get_emoji('cross')} Incorrect."
                     ),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(
@@ -230,13 +232,21 @@ class Onboarding(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        cfg = get_config(member.guild.id)
+        cfg = await get_config(member.guild.id)
+        if member.guild.id == SUPPORT_GUILD:
+            try:
+                from cogs.staff.support_server import get_support_ids, assign_join_roles
+                support_ids = await get_support_ids(self.bot)
+                await assign_join_roles(self.bot, member, support_ids["roles"])
+            except Exception as exc:
+                logging.warning("Onboarding", f"Support role synchronization failed for {member.id}: {exc}")
 
         # ── Autoroles ─────────────────────────────
-        if cfg.autorole_ids:
+        configured_role_ids = cfg.bot_autorole_ids if member.bot else cfg.autorole_ids
+        if configured_role_ids:
             roles_to_add = [
                 member.guild.get_role(rid)
-                for rid in cfg.autorole_ids
+                for rid in configured_role_ids
                 if member.guild.get_role(rid)
             ]
             if roles_to_add:
@@ -244,7 +254,7 @@ class Onboarding(commands.Cog):
                 # blow through Discord's role-edit rate limit.
                 await role_assign_limiter.acquire(member.guild.id)
                 try:
-                    await member.add_roles(*roles_to_add, reason="Onboarding autoroles")
+                    await member.add_roles(*roles_to_add, reason="Onboarding bot autoroles" if member.bot else "Onboarding member autoroles")
                 except discord.Forbidden:
                     pass  # bot lacks permission — silently skip
                 except discord.HTTPException:
@@ -271,9 +281,12 @@ class Onboarding(commands.Cog):
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
 
-    for guild_id, cfg in load_all_configs():
+    # One-time migration of legacy data/onboarding/*.json into the database.
+    await migrate_json_files(bot)
+
+    for guild_id, cfg in await load_all_configs():
         if cfg.rules_channel and cfg.rules_message_id:
-            bot.add_view(RulesAcknowledgeView(guild_id), message_id=cfg.rules_message_id)
+            bot.add_view(RulesAcknowledgeView(guild_id, cfg=cfg), message_id=cfg.rules_message_id)
 
         for menu_id, menu in (cfg.role_menus or {}).items():
             if menu.get("channel_id") and menu.get("message_id"):

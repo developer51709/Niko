@@ -5,33 +5,43 @@ Handles blacklist management for users and guilds.
 This feature was added to prevent abuse of the AI features and to ensure that
 the bot is not used for malicious purposes.
 
-The blacklist is stored in a JSON file and loaded once on first instantiation.
-A singleton pattern is used so callers can call `BlacklistManager()` cheaply
-without re-reading disk on every check.
+The blacklist is stored in the main database (`blacklist_users` /
+`blacklist_guilds` tables). A singleton pattern is used so callers can call
+`BlacklistManager()` cheaply. Hot-path reads (message/interaction checks) stay
+synchronous against an in-memory cache that is loaded from the database once
+at startup and kept in sync by the async write methods.
 
 Each entry is stored as a dict:
-    { "id": int, "reason": str | None, "timestamp": float, "added_by": int | None }
+    { "id": int, "reason": str | None, "timestamp": float, "added_by": int | None, "expires_at": float | None }
 
-The legacy "list of plain ints" format is auto-migrated on first load.
+Legacy data in `data/blacklist.json` is migrated to the database by
+`events/startup/database.py` on first boot.
 
 This file only handles the storing and retrieving of blacklisted users and
 guilds. The actual blacklist enforcement is in `bot.py` and `error_handler.py`.
 """
 
-import json
-import os
+import asyncio
 import time
 from typing import List, Dict, Optional, Any
 
+import database as database_module
 from utils import logging
+from utils.guild_lockdown import (
+    FEATURE_STEPS,
+    lock_guild,
+    restore_guild_features,
+)
 
+# Legacy file — only read by the startup migration now.
 BLACKLIST_FILE = "data/blacklist.json"
 
 
 class BlacklistManager:
     """
-    Singleton blacklist manager. The first call loads from disk; every
-    subsequent `BlacklistManager()` returns the same cached instance.
+    Singleton blacklist manager. Reads hit an in-memory cache (loaded from the
+    database via `await BlacklistManager().load()`), writes go through to the
+    database and update the cache.
     """
 
     _instance: "Optional[BlacklistManager]" = None
@@ -47,177 +57,428 @@ class BlacklistManager:
             return
         self._initialized = True
 
-        # entry shape: {"id": int, "reason": str|None, "timestamp": float, "added_by": int|None}
+        # entry shape includes expires_at (None for permanent entries).
+        self._write_lock = asyncio.Lock()
         self.blacklist: Dict[str, List[Dict[str, Any]]] = {
             "users":  [],
             "guilds": [],
         }
-        self._load()
+        self._loaded = False
 
     # -----------------------------
     # Persistence
     # -----------------------------
-    def _load(self) -> None:
+    @staticmethod
+    def _pool():
+        return getattr(database_module, "_shared_pool", None)
+
+    @staticmethod
+    def _entry_to_row(entry: Dict[str, Any]) -> tuple:
+        return (int(entry["id"]), entry.get("reason"), entry.get("timestamp"), entry.get("added_by"))
+
+    @staticmethod
+    def _row_to_entry(row) -> Dict[str, Any]:
+        return {
+            "id":        int(row["id"]),
+            "reason":    row.get("reason"),
+            "timestamp": float(row["timestamp"]) if row.get("timestamp") is not None else time.time(),
+            "added_by":  row.get("added_by"),
+            "expires_at": float(row["expires_at"]) if row.get("expires_at") is not None else None,
+            "status": row.get("status"),
+        }
+
+    async def load(self) -> None:
+        """Load all blacklist entries from the database into the cache."""
+        pool = self._pool()
+        if pool is None:
+            logging.warning("blacklist_manager", "Database pool not available; blacklist cache stays empty.")
+            self._loaded = True
+            return
+
         try:
-            with open(BLACKLIST_FILE, "r") as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            self._save()
-            logging.info("blacklist_manager", "Blacklist file created because it did not exist.")
+            await pool.execute("ALTER TABLE blacklist_users ADD COLUMN expires_at REAL")
+        except Exception:
+            pass  # Column already exists on the current schema.
+
+        try:
+            now = time.time()
+            await pool.execute(
+                "DELETE FROM blacklist_users WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= $1",
+                now,
+            )
+            await pool.execute("CREATE TABLE IF NOT EXISTS abuse_strikes (user_id INTEGER PRIMARY KEY, strikes INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)")
+            user_rows = await pool.fetch(
+                "SELECT id, reason, timestamp, added_by, expires_at, status FROM blacklist_users WHERE status = 'active' OR status IS NULL"
+            )
+            guild_rows = await pool.fetch(
+                "SELECT id, reason, timestamp, added_by, status FROM blacklist_guilds WHERE status = 'active' OR status IS NULL"
+            )
+        except Exception as e:
+            logging.error("blacklist_manager", f"Failed to load blacklist from database: {e}")
+            self._loaded = True
             return
-        except json.JSONDecodeError:
-            logging.error("blacklist_manager", "Blacklist file is corrupted. Recreating a clean one.")
-            self._save()
-            return
 
-        self.blacklist["users"]  = self._migrate(data.get("users",  []))
-        self.blacklist["guilds"] = self._migrate(data.get("guilds", []))
+        self.blacklist["users"]  = [self._row_to_entry(r) for r in user_rows]
+        self.blacklist["guilds"] = [self._row_to_entry(r) for r in guild_rows]
+        self._loaded = True
+        logging.debug(
+            "blacklist_manager",
+            f"Loaded {len(self.blacklist['users'])} users and {len(self.blacklist['guilds'])} guilds from database.",
+        )
 
-        # If anything was migrated from legacy plain-int format, persist now
-        if any(isinstance(x, int) for x in data.get("users", [])) or \
-           any(isinstance(x, int) for x in data.get("guilds", [])):
-            self._save()
-            logging.info("blacklist_manager", "Migrated legacy blacklist entries to new format.")
+    async def _ensure_loaded(self) -> None:
+        if not self._loaded:
+            await self.load()
 
-    def _migrate(self, raw: list) -> List[Dict[str, Any]]:
-        """Accept either plain ints or full dicts and return the dict form."""
-        out: List[Dict[str, Any]] = []
-        seen: set = set()
-        for item in raw:
-            if isinstance(item, int):
-                if item in seen:
-                    continue
-                seen.add(item)
-                out.append({
-                    "id":        item,
-                    "reason":    None,
-                    "timestamp": time.time(),
-                    "added_by":  None,
-                })
-            elif isinstance(item, dict) and "id" in item:
-                if item["id"] in seen:
-                    continue
-                seen.add(item["id"])
-                out.append({
-                    "id":        int(item["id"]),
-                    "reason":    item.get("reason"),
-                    "timestamp": float(item.get("timestamp", time.time())),
-                    "added_by":  item.get("added_by"),
-                })
-        return out
-
-    def _save(self) -> None:
-        os.makedirs(os.path.dirname(BLACKLIST_FILE), exist_ok=True)
-        with open(BLACKLIST_FILE, "w") as f:
-            json.dump(self.blacklist, f, indent=4)
-        logging.debug("blacklist_manager", "Blacklist saved to disk.")
-
-    def reload(self) -> None:
-        """Force a re-read from disk (useful after manual edits)."""
-        self._load()
+    async def reload(self) -> None:
+        """Force a re-read from the database (useful after manual edits)."""
+        await self.load()
 
     # -----------------------------
     # Add operations
     # -----------------------------
-    def add_user(
+    async def add_user(
         self,
         user_id: int,
         *,
         reason: Optional[str] = None,
         added_by: Optional[int] = None,
+        expires_at: Optional[float] = None,
     ) -> bool:
         """Add a user to the blacklist. Returns True if added (False if already there)."""
+        await self._ensure_loaded()
+        async with self._write_lock:
+            return await self._add_user_locked(user_id, reason=reason, added_by=added_by, expires_at=expires_at)
+
+    async def _add_user_locked(
+        self,
+        user_id: int,
+        *,
+        reason: Optional[str],
+        added_by: Optional[int],
+        expires_at: Optional[float],
+    ) -> bool:
         if self.is_user_blacklisted(user_id):
             return False
-        self.blacklist["users"].append({
+        entry = {
             "id":        int(user_id),
             "reason":    reason,
             "timestamp": time.time(),
             "added_by":  added_by,
-        })
-        self._save()
+            "expires_at": expires_at,
+        }
+        pool = self._pool()
+        if pool is None:
+            logging.error("blacklist_manager", "Cannot add user to blacklist without a database pool.")
+            return False
+        try:
+            await pool.execute(
+                "DELETE FROM blacklist_users WHERE id = $1 AND status = 'active' AND expires_at IS NOT NULL AND expires_at <= $2",
+                int(user_id), time.time(),
+            )
+            await pool.execute(
+                "INSERT INTO blacklist_users (id, reason, timestamp, added_by, expires_at, status, appeal_id) VALUES ($1, $2, $3, $4, $5, 'active', NULL) ON CONFLICT(id) DO UPDATE SET reason = excluded.reason, timestamp = excluded.timestamp, added_by = excluded.added_by, expires_at = excluded.expires_at, status = 'active', appeal_id = NULL",
+                int(user_id), reason, entry["timestamp"], added_by, expires_at,
+            )
+        except Exception as e:
+            logging.error("blacklist_manager", f"Failed to save blacklisted user {user_id}: {e}")
+            return False
+        self.blacklist["users"].append(entry)
         logging.info("blacklist_manager", f"User {user_id} added to blacklist (reason: {reason}).")
         return True
 
-    def add_guild(
+    async def add_guild(
         self,
         guild_id: int,
         *,
         reason: Optional[str] = None,
         added_by: Optional[int] = None,
+        bot: Any = None,
+        lockdown: bool = True,
     ) -> bool:
-        """Add a guild to the blacklist. Returns True if added (False if already there)."""
-        if self.is_guild_blacklisted(guild_id):
-            return False
-        self.blacklist["guilds"].append({
-            "id":        int(guild_id),
-            "reason":    reason,
-            "timestamp": time.time(),
-            "added_by":  added_by,
-        })
-        self._save()
+        """Add a guild to the blacklist. Returns True if added (False if already there).
+
+        The blacklist entry is written first and on its own, because that is what
+        makes every feature stop answering. The lockdown steps that follow switch
+        the server's saved features off and notify its owner; they are reported
+        through :meth:`lockdown` and never undo the entry. Pass ``lockdown=False``
+        when the caller drives those steps itself, one dashboard request at a
+        time, so it can show progress for each of them.
+        """
+        await self._ensure_loaded()
+        guild_id = int(guild_id)
+        async with self._write_lock:
+            if self.is_guild_blacklisted(guild_id):
+                return False
+            pool = self._pool()
+            if pool is None:
+                logging.error("blacklist_manager", "Cannot add guild to blacklist without a database pool.")
+                return False
+            entry = {
+                "id": guild_id,
+                "reason": reason,
+                "timestamp": time.time(),
+                "added_by": added_by,
+            }
+            try:
+                await pool.execute(
+                    "INSERT OR REPLACE INTO blacklist_guilds (id, reason, timestamp, added_by, status, appeal_id) VALUES ($1, $2, $3, $4, 'active', NULL)",
+                    *self._entry_to_row(entry),
+                )
+                saved = await pool.fetchrow(
+                    "SELECT id, reason, timestamp, added_by, status FROM blacklist_guilds WHERE id = $1",
+                    guild_id,
+                )
+                if not saved:
+                    logging.error("blacklist_manager", f"Guild {guild_id} blacklist write did not persist.")
+                    return False
+                if int(saved["id"]) != guild_id:
+                    return False
+                if self.is_guild_blacklisted(guild_id):
+                    return False
+                self.blacklist["guilds"].append(self._row_to_entry(saved))
+            except Exception as e:
+                logging.error("blacklist_manager", f"Failed to save blacklisted guild {guild_id}: {e}")
+                return False
         logging.info("blacklist_manager", f"Guild {guild_id} added to blacklist (reason: {reason}).")
+        if lockdown:
+            # A blacklisted server loses every Niko feature. Each step reports its
+            # own outcome and a failure is logged: the blacklist still stands.
+            report = await lock_guild(bot, self._pool(), guild_id, reason=reason)
+            logging.info(
+                "blacklist_manager",
+                f"Guild {guild_id} lockdown: "
+                + ", ".join(f"{item['step']}={item['status']}" for item in report),
+            )
         return True
+
+    async def lockdown(
+        self,
+        guild_id: int,
+        *,
+        steps: Optional[List[str]] = None,
+        bot: Any = None,
+        reason: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Switch the features of an already-blacklisted guild off, step by step.
+
+        Used by the dashboard, which runs one step per request so the person
+        blacklisting the server sees which feature is being paused. Defaults to
+        every feature step in the documented order (``FEATURE_STEPS``).
+        """
+        await self._ensure_loaded()
+        guild_id = int(guild_id)
+        entry = self.get_guild_entry(guild_id)
+        if entry is None:
+            return []
+        if steps is not None:
+            unknown = [step for step in steps if step not in FEATURE_STEPS]
+            if unknown:
+                raise ValueError(f"Unknown lockdown step(s): {', '.join(unknown)}")
+        return await lock_guild(
+            bot,
+            self._pool(),
+            guild_id,
+            reason=reason if reason is not None else entry.get("reason"),
+            steps=steps,
+        )
+
+    async def restore(self, guild_id: int, *, bot: Any = None) -> List[Dict[str, Any]]:
+        """Give a guild its saved features back once it is no longer blacklisted."""
+        await self._ensure_loaded()
+        return await restore_guild_features(bot, self._pool(), int(guild_id))
 
     # -----------------------------
     # Remove operations
     # -----------------------------
-    def remove_user(self, user_id: int) -> bool:
-        before = len(self.blacklist["users"])
-        self.blacklist["users"] = [e for e in self.blacklist["users"] if e["id"] != user_id]
-        if len(self.blacklist["users"]) == before:
-            return False
-        self._save()
+    async def remove_user(self, user_id: int) -> bool:
+        await self._ensure_loaded()
+        async with self._write_lock:
+            before = len(self.blacklist["users"])
+            updated = [e for e in self.blacklist["users"] if e["id"] != user_id]
+            pool = self._pool()
+            if pool is not None:
+                try:
+                    await pool.execute("DELETE FROM blacklist_users WHERE id = $1", int(user_id))
+                except Exception as e:
+                    logging.error("blacklist_manager", f"Failed to remove blacklisted user {user_id}: {e}")
+                    return False
+            elif len(updated) == before:
+                return False
+            self.blacklist["users"] = updated
         logging.info("blacklist_manager", f"User {user_id} removed from blacklist.")
         return True
 
-    def remove_guild(self, guild_id: int) -> bool:
-        before = len(self.blacklist["guilds"])
-        self.blacklist["guilds"] = [e for e in self.blacklist["guilds"] if e["id"] != guild_id]
-        if len(self.blacklist["guilds"]) == before:
-            return False
-        self._save()
+    async def register_abuse_strike(self, user_id: int, *, reason: str) -> Dict[str, Any]:
+        """Persist a strike and apply an escalating blacklist, permanently on strike three."""
+        await self._ensure_loaded()
+        async with self._write_lock:
+            pool = self._pool()
+            if pool is None:
+                logging.error("blacklist_manager", "Cannot persist abuse strike without a database pool.")
+                return {"strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
+
+            now = time.time()
+            try:
+                row = await pool.fetchrow("SELECT strikes FROM abuse_strikes WHERE user_id = $1", int(user_id))
+                strikes = min(3, int(row["strikes"] if row else 0) + 1)
+                await pool.execute(
+                    "INSERT OR REPLACE INTO abuse_strikes (user_id, strikes, updated_at) VALUES ($1, $2, $3)",
+                    int(user_id), strikes, now,
+                )
+                permanent = strikes >= 3
+                duration_seconds = (60 * 60, 24 * 60 * 60)[strikes - 1] if strikes < 3 else None
+                expires_at = now + duration_seconds if duration_seconds is not None else None
+                blacklist_reason = f"Automated anti-abuse: {reason} (strike {strikes}/3)."
+                await pool.execute(
+                    "DELETE FROM blacklist_users WHERE id = $1 AND status = 'active' AND expires_at IS NOT NULL AND expires_at <= $2",
+                    int(user_id), now,
+                )
+                existing = self.get_user_entry(user_id)
+                if existing:
+                    if existing.get("expires_at") is None:
+                        return {"strikes": strikes, "blacklisted": False, "permanent": True, "expires_at": None}
+                if existing:
+                    await pool.execute(
+                        "UPDATE blacklist_users SET reason = $1, timestamp = $2, added_by = NULL, expires_at = $3, status = 'active', appeal_id = NULL WHERE id = $4",
+                        blacklist_reason, now, expires_at, int(user_id),
+                    )
+                    entry = {
+                        "id": int(user_id),
+                        "reason": blacklist_reason,
+                        "timestamp": now,
+                        "added_by": None,
+                        "expires_at": expires_at,
+                    }
+                    self.blacklist["users"].append(entry)
+                    added = True
+                else:
+                    added = await self._add_user_locked(
+                        user_id,
+                        reason=blacklist_reason,
+                        added_by=None,
+                        expires_at=expires_at,
+                    )
+                return {"strikes": strikes, "blacklisted": added, "permanent": permanent, "expires_at": expires_at}
+            except Exception as e:
+                logging.error("blacklist_manager", f"Failed to register abuse strike for user {user_id}: {e}")
+                return {"strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
+
+    async def remove_guild(self, guild_id: int, *, bot: Any = None, restore: bool = True) -> bool:
+        """Remove a guild from the blacklist and give its saved features back."""
+        await self._ensure_loaded()
+        guild_id = int(guild_id)
+        async with self._write_lock:
+            entry = self.get_guild_entry(guild_id)
+            if entry is None:
+                return False
+            pool = self._pool()
+            if pool is None:
+                logging.error("blacklist_manager", "Cannot remove guild from blacklist without a database pool.")
+                return False
+            try:
+                await pool.execute("DELETE FROM blacklist_guilds WHERE id = $1", guild_id)
+                remaining = await pool.fetchrow(
+                    "SELECT id FROM blacklist_guilds WHERE id = $1",
+                    guild_id,
+                )
+                if remaining:
+                    logging.error("blacklist_manager", f"Guild {guild_id} blacklist removal did not persist.")
+                    return False
+            except Exception as e:
+                logging.error("blacklist_manager", f"Failed to remove blacklisted guild {guild_id}: {e}")
+                return False
+            self.blacklist["guilds"] = [
+                item for item in self.blacklist["guilds"] if item["id"] != guild_id
+            ]
         logging.info("blacklist_manager", f"Guild {guild_id} removed from blacklist.")
+        if restore:
+            # Starboard, polls and giveaways resume as they were; the notifier and
+            # the owner notification are not re-sent (see utils/guild_lockdown.py).
+            report = await restore_guild_features(bot, self._pool(), guild_id)
+            if report:
+                logging.info(
+                    "blacklist_manager",
+                    f"Guild {guild_id} unlock: "
+                    + ", ".join(f"{item['step']}={item['status']}" for item in report),
+                )
         return True
 
     # -----------------------------
     # Update reason
     # -----------------------------
-    def update_user_reason(self, user_id: int, reason: Optional[str]) -> bool:
-        for e in self.blacklist["users"]:
-            if e["id"] == user_id:
-                e["reason"] = reason
-                self._save()
-                return True
-        return False
+    async def update_user_reason(self, user_id: int, reason: Optional[str]) -> bool:
+        await self._ensure_loaded()
+        entry = self.get_user_entry(user_id)
+        if entry is None:
+            return False
+        pool = self._pool()
+        if pool is not None:
+            try:
+                await pool.execute(
+                    "UPDATE blacklist_users SET reason = $1 WHERE id = $2",
+                    reason,
+                    int(user_id),
+                )
+            except Exception as e:
+                logging.error("blacklist_manager", f"Failed to update reason for user {user_id}: {e}")
+                return False
+        entry["reason"] = reason
+        return True
 
-    def update_guild_reason(self, guild_id: int, reason: Optional[str]) -> bool:
-        for e in self.blacklist["guilds"]:
-            if e["id"] == guild_id:
-                e["reason"] = reason
-                self._save()
-                return True
-        return False
+    async def update_guild_reason(self, guild_id: int, reason: Optional[str]) -> bool:
+        await self._ensure_loaded()
+        entry = self.get_guild_entry(guild_id)
+        if entry is None:
+            return False
+        pool = self._pool()
+        if pool is None:
+            logging.error("blacklist_manager", "Cannot update guild blacklist without a database pool.")
+            return False
+        try:
+            await pool.execute(
+                "UPDATE blacklist_guilds SET reason = $1 WHERE id = $2",
+                reason,
+                int(guild_id),
+            )
+            saved = await pool.fetchrow(
+                "SELECT reason FROM blacklist_guilds WHERE id = $1",
+                int(guild_id),
+            )
+            if not saved or saved["reason"] != reason:
+                logging.error("blacklist_manager", f"Guild {guild_id} blacklist reason update did not persist.")
+                return False
+        except Exception as e:
+            logging.error("blacklist_manager", f"Failed to update reason for guild {guild_id}: {e}")
+            return False
+        entry["reason"] = reason
+        return True
 
     # -----------------------------
-    # Check operations
+    # Check operations (sync — hot path)
     # -----------------------------
     def is_user_blacklisted(self, user_id: int) -> bool:
-        return any(e["id"] == user_id for e in self.blacklist["users"])
+        return self.get_user_entry(user_id) is not None
 
     def is_guild_blacklisted(self, guild_id: int) -> bool:
-        return any(e["id"] == guild_id for e in self.blacklist["guilds"])
+        return self.get_guild_entry(guild_id) is not None
 
     # -----------------------------
     # Lookup
     # -----------------------------
     def get_user_entry(self, user_id: int) -> Optional[Dict[str, Any]]:
+        now = time.time()
         for e in self.blacklist["users"]:
             if e["id"] == user_id:
+                expires_at = e.get("expires_at")
+                if expires_at is not None and expires_at <= now:
+                    self.blacklist["users"].remove(e)
+                    return None
                 return e
         return None
 
     def get_guild_entry(self, guild_id: int) -> Optional[Dict[str, Any]]:
+        guild_id = int(guild_id)
         for e in self.blacklist["guilds"]:
             if e["id"] == guild_id:
                 return e
@@ -227,14 +488,22 @@ class BlacklistManager:
     # Retrieval — backward-compatible plain-int lists
     # -----------------------------
     def get_blacklisted_users(self) -> List[int]:
-        return [e["id"] for e in self.blacklist["users"]]
+        active_entries = self.get_user_entries()
+        return [e["id"] for e in active_entries]
 
     def get_blacklisted_guilds(self) -> List[int]:
-        return [e["id"] for e in self.blacklist["guilds"]]
+        return [e["id"] for e in self.get_guild_entries()]
 
     # New: full entries
     def get_user_entries(self) -> List[Dict[str, Any]]:
-        return list(self.blacklist["users"])
+        now = time.time()
+        active = []
+        for entry in self.blacklist["users"]:
+            expires_at = entry.get("expires_at")
+            if expires_at is None or expires_at > now:
+                active.append(entry)
+        self.blacklist["users"] = active
+        return list(active)
 
     def get_guild_entries(self) -> List[Dict[str, Any]]:
         return list(self.blacklist["guilds"])

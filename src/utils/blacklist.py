@@ -4,7 +4,10 @@ Both return True / False (blocked or not).
 """
 import discord
 from config.emojis import get_emoji
+from config.links import WEBSITE
 from utils.blacklist_manager import BlacklistManager
+
+BLACKLIST_APPEAL_URL = f"{WEBSITE}/appeals/blacklist"
 
 
 async def check_message_blacklist(msg: discord.Message) -> bool:
@@ -13,17 +16,18 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
     guild is blacklisted.  Call this before processing any command.
     """
     bm = BlacklistManager()
+    await bm._ensure_loaded()
 
     user_entry = bm.get_user_entry(msg.author.id)
     if user_entry:
         reason = user_entry.get("reason") or "No reason provided."
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                        "If you believe this is a mistake, please open a ticket in the support server."
+                        f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
             ),
             accent_colour=discord.Color.red(),
         ))
@@ -36,11 +40,11 @@ async def check_message_blacklist(msg: discord.Message) -> bool:
             reason = guild_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                            "If you believe this is a mistake, please open a ticket in the support server."
+                            f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
                 ),
                 accent_colour=discord.Color.red(),
             ))
@@ -56,17 +60,20 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
     blacklisted.  Attach to bot.tree.interaction_check.
     """
     bm = BlacklistManager()
+    # Slash interactions can arrive before any command has touched the
+    # manager. Load the shared database cache before checking either scope.
+    await bm._ensure_loaded()
 
     user_entry = bm.get_user_entry(interaction.user.id)
     if user_entry:
         reason = user_entry.get("reason") or "No reason provided."
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"You are blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                        "If you believe this is a mistake, please open a ticket in the support server."
+                        f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
             ),
             accent_colour=discord.Color.red(),
         ))
@@ -82,11 +89,11 @@ async def check_interaction_blacklist(interaction: discord.Interaction) -> bool:
             reason = guild_entry.get("reason") or "No reason provided."
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('icon_danger')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=f"This server is blacklisted from using this bot.\n**Reason:** {reason}\n\n"
-                            "If you believe this is a mistake, please open a ticket in the support server."
+                            f"If you believe this is a mistake, submit a blacklist appeal here: {BLACKLIST_APPEAL_URL}."
                 ),
                 accent_colour=discord.Color.red(),
             ))

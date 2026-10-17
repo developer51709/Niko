@@ -1,7 +1,12 @@
+import asyncio
 import aiohttp
+import feedparser
+import re
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 DiscordBot/1.0"}
-_TOUT    = aiohttp.ClientTimeout(total=10)
+_HEADERS = {"User-Agent": "nikobot/1.0 (Discord bot; +https://nikobot.dev)"}
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_MAX_RETRIES = 3
+_RETRY_DELAY = 5  # seconds
 
 
 def _clean_sub(subreddit: str) -> str:
@@ -10,65 +15,94 @@ def _clean_sub(subreddit: str) -> str:
 
 
 async def fetch_latest_reddit(subreddit: str) -> dict | None:
-    """Fetch the most recent post from a subreddit using Reddit's JSON API."""
+    """Fetch the most recent post from a subreddit using Reddit's RSS feed."""
     sub = _clean_sub(subreddit)
-    url = f"https://www.reddit.com/r/{sub}/new.json?limit=1"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=_HEADERS, timeout=_TOUT) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
+    url = f"https://www.reddit.com/r/{sub}/new/.rss?limit=1"
 
-        posts = data.get("data", {}).get("children", [])
-        if not posts:
+    for attempt in range(_MAX_RETRIES):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=_HEADERS, timeout=_TIMEOUT) as resp:
+                    if resp.status == 429:
+                        # Rate limited — wait and retry
+                        if attempt < _MAX_RETRIES - 1:
+                            await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
+                            continue
+                        return None
+
+                    if resp.status != 200:
+                        return None
+
+                    content = await resp.text()
+                    feed = feedparser.parse(content)
+
+                    if not feed.entries:
+                        return None
+
+                    entry = feed.entries[0]
+                    # Reddit RSS ID format: https://reddit.com/r/sub/comments/id/title/
+                    entry_id = entry.get("id", "")
+                    post_id = entry_id.split("/")[-2] if "/" in entry_id else entry_id
+                    title = entry.get("title", "")
+                    link = entry.get("link", "")
+
+                    # Extract text content
+                    text = ""
+                    if "content" in entry:
+                        raw = entry.content[0].get("value", "")
+                        text = re.sub(r"<[^>]+>", " ", raw).strip()
+                    if len(text) > 280:
+                        text = text[:280] + "…"
+
+                    # Extract thumbnail
+                    thumbnail = None
+                    if "media_thumbnail" in entry:
+                        thumbnail = entry.media_thumbnail[0].get("url")
+                    elif "media_content" in entry:
+                        for media in entry.media_content:
+                            if media.get("medium") == "image":
+                                thumbnail = media.get("url")
+                                break
+
+                    return {
+                        "id": post_id or title,
+                        "url": link,
+                        "title": title,
+                        "text": text or title,
+                        "thumbnail": thumbnail,
+                    }
+        except Exception:
+            if attempt < _MAX_RETRIES - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+                continue
             return None
 
-        pd      = posts[0].get("data", {})
-        post_id = pd.get("id", "")
-        title   = pd.get("title", "")
-        text    = pd.get("selftext", "")
-        if len(text) > 280:
-            text = text[:280] + "…"
-        link    = f"https://reddit.com{pd.get('permalink', '')}"
-
-        # Use post thumbnail if it's a real image URL
-        thumb = pd.get("thumbnail", "")
-        if thumb and thumb.startswith("http"):
-            thumbnail = thumb
-        else:
-            thumbnail = None
-
-        # Prefer the preview image (higher resolution)
-        try:
-            preview_url = pd["preview"]["images"][0]["source"]["url"]
-            # Reddit HTML-escapes the URL
-            thumbnail = preview_url.replace("&amp;", "&")
-        except (KeyError, IndexError):
-            pass
-
-        return {
-            "id":        post_id,
-            "url":       link,
-            "title":     title,
-            "text":      text or title,
-            "thumbnail": thumbnail,
-        }
-    except Exception:
-        return None
+    return None
 
 
 async def validate_reddit(subreddit: str) -> bool:
-    """Return True if the subreddit exists and is accessible."""
+    """Return True if the subreddit exists and has recent posts."""
     sub = _clean_sub(subreddit)
-    url = f"https://www.reddit.com/r/{sub}/about.json"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=_HEADERS, timeout=_TOUT) as resp:
-                if resp.status != 200:
-                    return False
-                data = await resp.json()
-                # Make sure it's an actual subreddit, not a quarantined/banned one
-                return data.get("data", {}).get("subscribers", 0) > 0
-    except Exception:
-        return False
+    url = f"https://www.reddit.com/r/{sub}/new/.rss?limit=1"
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=_HEADERS, timeout=_TIMEOUT) as resp:
+                    if resp.status == 429:
+                        if attempt < _MAX_RETRIES - 1:
+                            await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
+                            continue
+                        return False
+                    if resp.status != 200:
+                        return False
+                    content = await resp.text()
+                    feed = feedparser.parse(content)
+                    return len(feed.entries) > 0
+        except Exception:
+            if attempt < _MAX_RETRIES - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+                continue
+            return False
+
+    return False

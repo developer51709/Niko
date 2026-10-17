@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Niko Owner</title>
+  <rect x="1.25" y="1.25" width="21.5" height="21.5" rx="6.75" fill="#c8a882"/>
+  <rect x="2" y="2" width="20" height="20" rx="6" fill="none" stroke="#fff" stroke-opacity="0.22" stroke-width="1.5"/>
+  <path fill="#fff" d="M6.9 9.2 9.4 11.5 12 8.2l2.6 3.3 2.5-2.3v6.4H6.9Z"/>
+</svg>

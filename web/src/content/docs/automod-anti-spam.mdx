@@ -1,0 +1,71 @@
+---
+slug: "automod-anti-spam"
+title: "Anti-Spam Configuration"
+category: "automod"
+excerpt: "Configure Niko's anti-spam features to keep your chat clean."
+tags: ["anti-spam","spam","automod"]
+order: 2
+---
+# Anti-Spam Configuration
+
+Niko's anti-spam system detects and handles various types of spam behavior.
+
+## What Counts as Spam
+
+### Message Spam
+- Sending many messages quickly
+- Repeated identical messages
+- Rapid content posting
+
+### Mention Spam
+- Mass mentioning users
+- @everyone or @here abuse
+- Role mention spam
+
+### Content Spam
+- Duplicate messages
+- Copied content across channels
+- Excessive emoji use
+
+## Configuration Options
+
+Thresholds are set from the AutoMod panel (`.automod`) or the web dashboard:
+
+- **Spam messages** — how many messages trigger spam detection (default: 6)
+- **Spam interval** — the time window for counting messages in seconds (default: 7)
+- **Maximum mentions** — mentions allowed per message (default: 5)
+
+## Actions
+
+When AutoMod detects an issue, it can:
+- **Warn**: Send a warning to the member
+- **Delete**: Remove the offending message
+- **Mute**: Temporarily mute the member
+
+## Mass Mention Protection
+
+Enable mass mention detection from the AutoMod panel and set the threshold there. Every mention above the threshold triggers the configured response.
+
+## Exemptions
+
+### Whitelist Users
+Specific users can be exempt:
+
+```
+.whitelist add user <user>
+```
+
+### Whitelist Roles
+Members with a whitelisted role are exempt:
+
+```
+.whitelist add role <role>
+```
+
+## Testing Anti-Spam
+
+After configuration, test with:
+1. Send messages rapidly (don't overdo it)
+2. Try mass mentioning
+3. Verify the correct action is taken
+4. Adjust thresholds if needed

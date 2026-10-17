@@ -1,6 +1,3 @@
-from utils.ai.config import get_personality
-
-
 def get_lang(ctx) -> str:
     """Return 'de', 'es', or 'en' based on the guild's preferred locale."""
     if ctx and getattr(ctx, "guild", None) and getattr(ctx.guild, "preferred_locale", None):
@@ -14,32 +11,15 @@ def get_lang(ctx) -> str:
 
 def resolve_msg(ctx, messages: dict, key: str, **kwargs) -> str:
     """
-    Resolve a translated string from a personality-aware MESSAGES dict.
+    Resolve a translated string from the normal command-message dictionary.
 
-    messages layout:
-        {
-            "normal": {"en": {key: str, ...}, "de": {key: str, ...}, "es": {...}},
-            "cafe":   {"en": {key: str, ...}, "de": {key: str, ...}, "es": {...}},
-        }
-
-    Falls back: personality+lang → normal+lang → normal+en → key itself.
+    Falls back: language → normal English → key itself.
     """
-    personality = "normal"
-    try:
-        if ctx:
-            personality = get_personality(ctx)
-    except Exception:
-        pass
-
     lang = get_lang(ctx) if ctx else "en"
-
-    text = messages.get(personality, {}).get(lang, {}).get(key)
+    normal_messages = messages.get("normal", messages)
+    text = normal_messages.get(lang, {}).get(key)
     if text is None:
-        text = messages.get(personality, {}).get("en", {}).get(key)
-    if text is None:
-        text = messages.get("normal", {}).get(lang, {}).get(key)
-    if text is None:
-        text = messages.get("normal", {}).get("en", {}).get(key, key)
+        text = normal_messages.get("en", {}).get(key, key)
 
     return text.format(**kwargs) if kwargs else text
 
@@ -47,12 +27,12 @@ def resolve_msg(ctx, messages: dict, key: str, **kwargs) -> str:
 def make_msg(messages: dict):
     """
     Return a ``msg(ctx, key, **kwargs)`` function bound to a personality-aware
-    *messages* dict (nested: personality → lang → key).
+    *messages* dict (lang → key → value).
 
     Usage in a cog module::
 
         from utils.i18n import make_msg
-        MESSAGES = {"normal": {"en": {...}, "de": {...}}, "cafe": {...}}
+        MESSAGES = {"normal": {"en": {...}, "de": {...}, "es": {...}}}
         msg = make_msg(MESSAGES)
     """
     def msg(ctx, key, **kwargs):
@@ -63,7 +43,7 @@ def make_msg(messages: dict):
 def make_flat_msg(messages: dict):
     """
     Return a ``msg(ctx, key, **kwargs)`` function bound to a flat
-    *messages* dict (lang → key → value).
+    language dictionary (lang → key → value).
 
     Falls back: lang → en → key itself.
 

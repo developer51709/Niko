@@ -164,7 +164,7 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
         if msg is None:
             return "!"
 
-        prefixes = raw(bot, msg)
+        prefixes = await raw(bot, msg)
         if isinstance(prefixes, (list, tuple)) and prefixes:
             return prefixes[0]
     except Exception:
