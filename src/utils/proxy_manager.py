@@ -1,12 +1,24 @@
 """
 Automated Webshare proxy failover for Discord global rate limits.
 
-When Discord globally rate limits the bot's IP (429 with the
-``X-RateLimit-Global`` header), the manager immediately fetches a proxy from
-the Webshare API and routes the bot's HTTP client through it.  Both REST
-requests and gateway websocket reconnects pick the proxy up through
+When Discord globally rate limits the bot's IP the manager immediately fetches a
+proxy from the Webshare API and routes the bot's HTTP client through it.  Both
+REST requests and gateway websocket reconnects pick the proxy up through
 ``client.http.proxy`` — discord.py already applies that attribute on every
 request and websocket connect.
+
+A global limit is recognised from every signal Discord leaves behind, because
+relying on one of them is what let the limit pass unnoticed: the
+``X-RateLimit-Scope: global`` header, the older ``X-RateLimit-Global`` header,
+and the ``"global": true`` field of the 429 body (which is the only signal
+discord.py itself reads).  A Cloudflare ``Error 1015`` throttle is the same
+recovery — Discord answers it over a different egress IP — so the manager arms
+the proxy for that too.  While a proxy is already active, another global limit
+rotates to a different proxy instead of reusing the IP that is being limited.
+
+Interaction callbacks are deliberately *not* this manager's problem: Discord
+never counts them against the global limit, and
+``utils.interaction_priority`` keeps them from queueing behind it.
 
 While the proxy is active a background task performs exactly one tiny
 *unproxied* request to Discord's gateway endpoint every 10 minutes.  The
@@ -46,6 +58,7 @@ _BACKBONE_PORT_FALLBACK = 80
 
 VERIFY_INTERVAL_SECONDS = 600      # probe the direct IP every 10 minutes
 PROXY_CACHE_TTL_SECONDS = 3600     # refetch the Webshare list after 1 hour
+ROTATE_COOLDOWN_SECONDS = 20       # at most one rotation per limit burst
 _FETCH_TIMEOUT_SECONDS = 10
 _PAGE_SIZE = 100
 
@@ -73,6 +86,76 @@ class _RelayedAiohttpResponse:
         self.release()
 
 
+def _header_is_true(value) -> bool:
+    """Whether a rate-limit flag header is set.
+
+    Discord sends ``true`` and discord.py reads the same fact from the body, so a
+    present-but-false flag has to stay false rather than counting as a limit.
+    """
+    if value is None:
+        return False
+    return str(value).strip().lower() not in {"", "0", "false", "none"}
+
+
+async def _read_response_text(response) -> str:
+    """Read a response body without consuming it for the caller.
+
+    aiohttp caches what it reads, so discord.py's own ``json_or_text`` still sees
+    the full body afterwards.  A response object without an async ``text`` (or one
+    that fails to read) simply yields no body rather than raising.
+    """
+    text = getattr(response, "text", None)
+    if not callable(text):
+        return ""
+    try:
+        return await text()
+    except Exception:
+        return ""
+
+
+async def is_global_rate_limit(response) -> bool:
+    """Whether a 429 hit the application-wide limit rather than one bucket.
+
+    ``X-RateLimit-Scope: global`` is the current header, ``X-RateLimit-Global``
+    the older one, and a 429 body carrying ``"global": true`` is what discord.py
+    itself treats as global.  Any of the three counts, so a limit that only shows
+    up in one of them still arms the proxy.
+    """
+    if getattr(response, "status", None) != 429:
+        return False
+    headers = getattr(response, "headers", None) or {}
+    if str(headers.get("X-RateLimit-Scope", "")).strip().lower() == "global":
+        return True
+    if _header_is_true(headers.get("X-RateLimit-Global")):
+        return True
+    body = (await _read_response_text(response)).strip()
+    if not body.startswith("{"):
+        return False
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and bool(payload.get("global"))
+
+
+async def cloudflare_throttle(response) -> str | None:
+    """Cloudflare's own interstitial signature on a 429, or None.
+
+    Discord serves every response through Cloudflare, so ``Server: cloudflare``
+    and ``CF-Ray`` prove nothing on their own.  Only Cloudflare's block/challenge
+    page — or its ``cf-mitigated`` header, or a numeric ``error code: 10xx`` — is a
+    throttle, and that is the event a different egress IP clears.  A 429 is a
+    throttle rather than a denied egress, which is why the standby manager leaves
+    its recovery to this proxy failover.
+    """
+    if getattr(response, "status", None) != 429:
+        return None
+    from utils.standby_manager import StandbyFailoverManager
+
+    body = await _read_response_text(response)
+    return StandbyFailoverManager.cloudflare_interstitial(response, body)
+
+
 class WebshareProxyManager:
     """Applies/removes a Webshare proxy in reaction to global rate limits."""
 
@@ -94,6 +177,7 @@ class WebshareProxyManager:
         self._hooked_session = None
         self._loop = None
         self._verify_interval = VERIFY_INTERVAL_SECONDS
+        self._rotated_at = 0.0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     def attach(self, bot) -> bool:
@@ -159,13 +243,57 @@ class WebshareProxyManager:
         manager = self
 
         async def hooked_request(method, url, **kwargs):
-            resp = await original_request(method, url, **kwargs)
-            if manager._should_monitor(str(url)) and resp.status == 429 and resp.headers.get("X-RateLimit-Global"):
-                await manager.enable()
+            try:
+                resp = await original_request(method, url, **kwargs)
+            except Exception as exc:
+                # A proxy that cannot be reached would otherwise keep every
+                # request failing until the 10-minute recovery probe runs.
+                if manager.enabled and kwargs.get("proxy") and isinstance(exc, (aiohttp.ClientError, OSError)):
+                    try:
+                        manager.rotate(reason="The active Webshare proxy refused the connection", immediate=True)
+                    except Exception:
+                        # The caller has to see the connection error it actually hit.
+                        pass
+                raise
+            if manager._should_monitor(str(url)):
+                try:
+                    await manager.handle_rate_limit(resp)
+                except Exception as exc:
+                    # Monitoring must never turn a Discord response into a bot
+                    # error: the caller still gets the response it asked for.
+                    manager._last_error = str(exc)[:240]
+                    logging.warning("ProxyManager", f"Rate-limit handling failed: {exc}")
             return resp
 
         session._request = hooked_request
         self._hooked_session = session
+
+    async def handle_rate_limit(self, response) -> None:
+        """Move egress to Webshare when Discord or Cloudflare limits this IP.
+
+        Called for every Discord response, so the two checks are cheap: they only
+        read a body on a 429, and an ordinary 200 returns immediately.
+        """
+        if await is_global_rate_limit(response):
+            await self._arm_for_limit("Discord global rate limit")
+            return
+        throttle = await cloudflare_throttle(response)
+        if throttle:
+            await self._arm_for_limit(f"Cloudflare throttle ({throttle})")
+
+    async def _arm_for_limit(self, reason: str) -> None:
+        """Use a proxy for a limited direct IP, or a fresh one while proxied.
+
+        The limit follows the egress IP, so a limit that arrives while a proxy is
+        already active means that proxy's IP is the limited one: rotating keeps
+        the bot off it without ever falling back to the direct IP.
+        """
+        if not self.api_key or self.http is None:
+            return
+        if self.enabled and self._active_proxy is not None:
+            self.rotate(reason=reason)
+            return
+        await self.enable(reason=reason)
 
     def _should_monitor(self, url: str) -> bool:
         from urllib.parse import urlsplit
@@ -173,7 +301,7 @@ class WebshareProxyManager:
         hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
         return hostname == "discord.com" or hostname.endswith((".discord.com", ".discordapp.com"))
 
-    async def _enable_webshare(self) -> bool:
+    async def _enable_webshare(self, reason: str | None = None) -> bool:
         if not self.api_key or self.http is None:
             return False
         proxies = self._cached_proxies()
@@ -187,7 +315,8 @@ class WebshareProxyManager:
         if not proxies:
             self._last_error = "No usable Webshare proxies were returned."
             return False
-        self._apply_proxy(random.choice(proxies))
+        self._apply_proxy(random.choice(proxies), reason=reason or "Discord global rate limit")
+        self._rotated_at = time.monotonic()
         self._last_error = None
         return True
 
@@ -229,7 +358,7 @@ class WebshareProxyManager:
             self._session = None
 
     # ── Webshare proxy controls ────────────────────────────────────────────────
-    async def enable(self) -> None:
+    async def enable(self, reason: str | None = None) -> None:
         """Fetch and activate a Webshare proxy after a Discord global rate limit."""
         self._loop = asyncio.get_running_loop()
         if self.http is None:
@@ -239,7 +368,7 @@ class WebshareProxyManager:
         async with self._lock:
             if self.enabled and self._active_proxy is not None:
                 return
-            if await self._enable_webshare():
+            if await self._enable_webshare(reason):
                 return
             logging.warning("ProxyManager", "No Webshare proxy is available — staying on the direct IP.")
 
@@ -252,15 +381,33 @@ class WebshareProxyManager:
         self._proxy_url = None
         self._active_proxy = None
 
-    def rotate(self) -> None:
-        """Switch to another cached proxy (used when the active one errors)."""
-        proxies = self._cached_proxies()
-        if len(proxies) > 1 and self._active_proxy is not None:
-            candidates = [p for p in proxies if p is not self._active_proxy]
-            if candidates:
-                self._apply_proxy(random.choice(candidates))
+    def rotate(self, reason: str = "The active Webshare proxy is limited", immediate: bool = False) -> None:
+        """Switch to another cached proxy (one that is limited, blocked or down).
 
-    def _apply_proxy(self, proxy: dict) -> None:
+        Rate-limited egress arrives in bursts, so rotations are spaced out: one
+        fresh IP per limit event is the recovery, and rotating on every 429 in the
+        same burst would only burn through the proxy list.  A proxy that cannot be
+        connected to is the exception — it is retried immediately, because the
+        request that found it has already failed.
+        """
+        if self._active_proxy is None:
+            return
+        if not immediate and time.monotonic() - self._rotated_at < ROTATE_COOLDOWN_SECONDS:
+            return
+        # Compare endpoints rather than object identity: a refreshed Webshare list
+        # holds new dicts for the same proxies, and rotating onto the IP that is
+        # being limited would recover nothing.
+        active = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
+        candidates = [
+            proxy for proxy in self._cached_proxies()
+            if (proxy.get("proxy_address"), proxy.get("port")) != active
+        ]
+        if not candidates:
+            return
+        self._apply_proxy(random.choice(candidates), reason=reason)
+        self._rotated_at = time.monotonic()
+
+    def _apply_proxy(self, proxy: dict, reason: str = "Discord global rate limit") -> None:
         self._proxy_url = (
             f"http://{proxy['username']}:{proxy['password']}"
             f"@{proxy['proxy_address']}:{proxy['port']}"
@@ -273,7 +420,7 @@ class WebshareProxyManager:
         self.enabled = True
         logging.warning(
             "ProxyManager",
-            f"Global rate limit detected — routed through Webshare proxy "
+            f"{reason} — routed through Webshare proxy "
             f"{proxy['proxy_address']}:{proxy['port']}.",
         )
         self._ensure_verify_task()

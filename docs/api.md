@@ -27,6 +27,13 @@ but admin login intentionally remains unavailable.
 | GET | `/api/health` | Process and build health check |
 | GET | `/api/botstats` | Public server, member, command, and uptime stats |
 | GET | `/api/commands` | Live command registry; accepts `?category=` |
+| POST | `/api/discord/interactions` | Discord's interactions endpoint; the callback is returned in the response body |
+
+The interactions endpoint is public for the same reason it exists: Discord has
+no session. The Ed25519 signature over the raw body is what proves the caller is
+Discord, and a request without it is answered `401`. It is the *Interactions
+Endpoint URL* of the Developer Portal (`docs/maintenance.md`), so an interaction
+never has to be answered by an outbound request to Discord's API.
 
 ### Authentication
 

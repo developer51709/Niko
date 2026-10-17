@@ -14,6 +14,8 @@ from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_interaction_blacklist
 from utils.abuse_detection import record_request, strike_notice
 from utils.gateway import patch_identify
+from utils.interaction_endpoint import install_interaction_endpoint
+from utils.interaction_priority import install_interaction_priority
 from utils.proxy_manager import WebshareProxyManager
 from utils.standby_manager import StandbyFailoverManager
 from utils import logging
@@ -183,6 +185,17 @@ if __name__ == "__main__":
             # Login, initialize the shared database, and load all cogs before
             # gateway ownership is enabled, so the standby is warm on demand.
             await bot.login(str(TOKEN))
+            # Slash commands, buttons, selects and modals answer through the
+            # interaction callback, which Discord never counts against the global
+            # rate limit. Installing this before the gateway connects keeps those
+            # callbacks from queueing behind a global limit hit elsewhere.
+            install_interaction_priority(bot)
+            # Discord can deliver interactions to our own HTTP endpoint instead of
+            # the gateway and take the callback in that response, which needs no
+            # working egress. Resolving the application's public key here arms
+            # the endpoint (POST /api/discord/interactions) before the first
+            # interaction can arrive.
+            await install_interaction_endpoint(bot)
             from events.startup.database import init_database
             from events.startup.loader import load_cogs
             from events.startup.economy import preload_economy_cache

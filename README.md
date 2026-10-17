@@ -181,6 +181,7 @@ src/
 3. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
 4. Run `npm run build` when changing the frontend; the **Run the bot** workflow serves it
 5. In your server, use `/leveling panel` and `/automod` to configure per-guild settings interactively
+6. *Optional:* set `DISCORD_PUBLIC_KEY` and point the portal's **Interactions Endpoint URL** at `https://<your host>/api/discord/interactions` so slash commands and buttons are answered inside Discord's own request instead of an outbound one — see `docs/maintenance.md`
 
 **Requirements:** Python 3.10+, Node.js 20+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
 
