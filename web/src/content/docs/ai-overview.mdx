@@ -1,0 +1,25 @@
+---
+slug: "ai-overview"
+title: "AI Features and Configuration"
+category: "ai"
+excerpt: "Learn how Niko's AI chat and multimodal features are configured, what providers are supported, and how to keep API credentials private."
+tags: ["ai", "chat", "providers", "privacy"]
+order: 1
+---
+# AI Features and Configuration
+
+Niko includes AI-powered chat and other optional AI features. Availability depends on the bot owner's deployment configuration and the features enabled for your server; AI is not required for standard moderation, leveling, or community commands.
+
+## Provider Configuration
+
+Self-hosted deployments configure provider credentials through private environment settings. The active provider and defaults can change over time. See the repository's [AI provider guide](https://github.com/developer51709/Niko/blob/main/docs/ai-providers.md) for the current variables and model settings; do not rely on old model names copied from an earlier guide.
+
+Never post API keys in Discord, issue reports, or source code. If a credential is exposed, revoke it with the provider and replace it in the hosting environment.
+
+## Using AI Chat
+
+When AI chat is enabled, use the bot mention or the interaction documented by `/help` in your server. Behavior and available experiments are controlled by the bot deployment and server configuration. If the feature is unavailable, ask an administrator whether it has been enabled and check the [support server](/discord) for current service status.
+
+## Privacy Notes
+
+AI requests may send the message and relevant context to the configured AI provider for generation. Review Niko's current [privacy policy](/privacy) and the provider's policy before enabling AI features. Do not submit passwords, payment details, private keys, or sensitive personal information to a bot chat.

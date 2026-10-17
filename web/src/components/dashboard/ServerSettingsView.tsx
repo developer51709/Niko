@@ -1,0 +1,126 @@
+import { type FormEvent, useEffect, useState } from "react";
+import { saveConfig } from "../../api";
+import { Icon } from "../Icon";
+import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
+import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
+import { DashHeading } from "./DashboardViews";
+
+// Only the in-flight flag belongs in state now: every result is announced with a
+// toast (see ../../utils/toast) instead of an inline line in the card footer.
+type SaveState = { saving: boolean };
+const initialSave: SaveState = { saving: false };
+
+function StringOptionList({ label, hint, options, placeholder, onChange }: {
+  label: string;
+  hint: string;
+  options: string[];
+  placeholder: string;
+  onChange: (options: string[]) => void;
+}) {
+  return <div className="form-field">
+    <span className="form-label">{label}</span>
+    <div className="settings-option-list">
+      {options.map((option, index) => <div className="settings-option-row" key={`${label}-${index}`}>
+        <input aria-label={`${label} ${index + 1}`} value={option} maxLength={100} onChange={(event) => onChange(options.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`${placeholder} ${index + 1}`} />
+        <button type="button" className="settings-option-remove" onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}>Remove</button>
+      </div>)}
+    </div>
+    <button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...options, ""])}>＋ Add option</button>
+    <small>{hint}</small>
+  </div>;
+}
+
+function SectionTitle({ label, title, detail, icon }: { label: string; title: string; detail: string; icon: string }) {
+  return <div className="panel-heading settings-section-title">
+    <div><span className="panel-kicker">{label}</span><h3>{title}</h3><p>{detail}</p></div>
+    <span className="panel-icon"><Icon name={icon} /></span>
+  </div>;
+}
+
+function SaveFooter({ state }: { state: SaveState }) {
+  return <div className="setting-footer">
+    <span>Changes apply to this server.</span>
+    <button className="button button-primary" type="submit" disabled={state.saving}>{state.saving ? "Saving..." : "Save server settings"}</button>
+  </div>;
+}
+
+const loggingCategories = [
+  ["moderation", "Moderation"], ["automod", "AutoMod"], ["messages", "Messages"],
+  ["channels", "Channels"], ["members", "Members"], ["captcha", "Captcha"],
+  ["invites", "Invites"], ["roles", "Roles"], ["server", "Server"], ["voice", "Voice"],
+] as const;
+
+function channelLabel(resources: GuildResources | null, id: string | number | null | undefined) {
+  if (!id) return "Not set";
+  return resources?.channels.find((channel) => String(channel.id) === String(id))?.name || `Saved channel · ${id}`;
+}
+
+function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
+  const selectedId = selected ? String(selected) : "";
+  const channels = resources?.channels || [];
+  if (!selectedId || channels.some((channel) => String(channel.id) === selectedId)) return channels;
+  return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
+}
+
+function initialValues(server?: ServerConfig) {
+  return {
+    prefixes: server?.prefixes?.length ? [...server.prefixes] : ["."],
+    logging: Object.fromEntries(
+      Object.entries(server?.logging || {}).map(([key, value]) => [key, value === null || value === undefined ? "" : String(value)]),
+    ),
+    disabled_logging: [...(server?.logging?.disabled || [])].map(String),
+  };
+}
+
+export function ServerSettingsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
+  const [values, setValues] = useState(() => initialValues(config?.server));
+  const [state, setState] = useState(initialSave);
+
+  useEffect(() => {
+    if (config?.server) setValues(initialValues(config.server));
+  }, [config]);
+
+  const setValue = (key: string, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
+  const setLoggingChannel = (category: string, value: string) => setValues((current) => ({ ...current, logging: { ...current.logging, [category]: value } }));
+  const toggleLogging = (category: string) => setValues((current) => ({
+    ...current,
+    disabled_logging: current.disabled_logging.includes(category)
+      ? current.disabled_logging.filter((item) => item !== category)
+      : [...current.disabled_logging, category],
+  }));
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setState({ saving: true });
+    notifyLoading("Saving server settings…", "settings-save");
+    const prefixes = values.prefixes.map((prefix) => prefix.trim()).filter(Boolean);
+    saveConfig(guildId, "server", {
+      prefixes,
+      logging: {
+        ...values.logging,
+        disabled: values.disabled_logging,
+      },
+    }, csrfToken).then((result) => {
+      setValues(initialValues(result.config as ServerConfig));
+      setState({ saving: false });
+      notifySuccess("Server settings saved to Niko.", "settings-save");
+    }).catch((error) => {
+      setState({ saving: false });
+      notifyError(error instanceof Error ? error.message : "Could not save server settings.", "settings-save");
+    });
+  };
+
+  return <>
+    <DashHeading eyebrow="Server settings" title="Make Niko fit your room." text="Manage the settings that shape how Niko behaves in this server. Economy balances remain global to each user and are not configured here." />
+    <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.filter((prefix) => prefix.trim()).length} command prefixes configured</strong><p>Command prefixes and log destinations live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
+    <form onSubmit={submit} className="settings-stack server-settings-stack">
+      <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" /><StringOptionList label="Command prefixes" hint="The default prefix is ." options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} /></section>
+
+      <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
+        {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><label className="setting-row compact-setting-row"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><input type="checkbox" checked={!values.disabled_logging.includes(key)} onChange={() => toggleLogging(key)} /><i aria-hidden="true" /></label></div>; })}
+      </div></section>
+
+      <SaveFooter state={state} />
+    </form>
+  </>;
+}

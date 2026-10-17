@@ -1,0 +1,85 @@
+# Niko API
+
+The API is served by the bot process on the same origin as the React dashboard.
+`src/api_server.py` starts the Flask server in a daemon thread before Discord
+connects. This means the preview, dashboard, and bot cannot drift into separate
+services or require a second workflow.
+
+## Run and build
+
+```bash
+npm run build
+python3 src/bot.py
+```
+
+The bot serves port `5000` (or the `PORT` environment value). The React source
+is in `web/`; the generated browser files are in `src/website/dist/`.
+Set `DISCORD_CLIENT_SECRET` in the environment to enable the OAuth-protected
+dashboard routes. Without it, public pages and public API endpoints still work,
+but admin login intentionally remains unavailable.
+
+## Endpoints
+
+### Public
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | Process and build health check |
+| GET | `/api/botstats` | Public server, member, command, and uptime stats |
+| GET | `/api/commands` | Live command registry; accepts `?category=` |
+| POST | `/api/discord/interactions` | Discord's interactions endpoint; the callback is returned in the response body |
+
+The interactions endpoint is public for the same reason it exists: Discord has
+no session. The Ed25519 signature over the raw body is what proves the caller is
+Discord, and a request without it is answered `401`. It is the *Interactions
+Endpoint URL* of the Developer Portal (`docs/maintenance.md`), so an interaction
+never has to be answered by an outbound request to Discord's API.
+
+### Authentication
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/auth/login` | Starts Discord OAuth |
+| GET | `/auth/callback` | Completes OAuth and creates the session |
+| GET | `/auth/status` | Returns login state |
+| GET | `/auth/logout` | Clears the session |
+
+### Authenticated server data
+
+All `/api/guild/<guild_id>/*` endpoints require a Discord session, Manage Server
+permission for that guild, and the bot being present in the guild. This check is
+performed server-side; the frontend must not be treated as the security boundary. The overview activity series contains daily aggregate message, join, and leave totals; it does not include message content or member identifiers.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/guilds` | Mutual manageable guilds |
+| GET | `/api/guild/<id>/overview` | Moderation, leveling, server totals, and 14-day activity summary |
+| GET | `/api/guild/<id>/levels` | XP leaderboard |
+| GET | `/api/guild/<id>/config` | Moderation, AI, leveling, and server config |
+| GET | `/api/guild/<id>/resources` | Available text channels and roles for dashboard selectors |
+| GET/POST | `/api/guild/<id>/applications` | List or create staff role openings |
+| POST | `/api/guild/<id>/applications/<application_id>/status` | Close or reopen an opening without changing its link or submissions |
+| GET | `/api/guild/<id>/applications/<application_id>/submissions` | Review applicant responses |
+| GET | `/api/applications/<guild_id>` | List open roles for a verified server member |
+| GET | `/api/applications/<guild_id>/<application_id>` | Load an eligible application form |
+| POST | `/api/applications/<guild_id>/<application_id>/submit` | Submit one application per Discord user and opening |
+| POST | `/api/guild/<id>/config/automod` | Update allowed AutoMod flags |
+| POST | `/api/guild/<id>/config/ai` | Update AI enabled state and personality |
+| POST | `/api/guild/<id>/config/leveling` | Update leveling controls |
+| POST | `/api/guild/<id>/config/server` | Update prefixes, onboarding, logging, and ticket settings |
+
+POST requests use JSON and return `{ "ok": true }` on success. The API only
+accepts the documented configuration keys and converts booleans/numbers before
+persisting them. Staff application submissions require a Discord-authenticated
+session and are checked against current guild membership using the bot; each
+application/user pair is unique in the database.
+
+## Adding an endpoint
+
+The Flask app entrypoint is `src/webapp/__init__.py`; shared setup and helpers
+live in `src/webapp/server.py`, and routes are grouped in focused modules such
+as `dashboard_routes.py`, `auth_routes.py`, and `card_routes.py`. Add new routes
+to the relevant module, keep static fallback routing last, use `@require_auth`
+and `@require_guild_access` for private guild data, validate request JSON, and
+return explicit error responses. Update `web/src/api.ts`, `web/src/types.ts`,
+and this file together.

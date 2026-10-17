@@ -117,7 +117,7 @@ class ConnectFour:
             return _t(
                 lang, "turn",
                 name=self.turn.display_name,
-                emoji1=get_emoji("icon_play"),
+                emoji1=get_emoji("play"),
                 emoji2=self._piece[self.turn],
             )
         if self.winner:
@@ -233,7 +233,7 @@ class ConnectFourButton(discord.ui.Button):
 def _error_view(text: str) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} {text}"),
+        discord.ui.TextDisplay(content=f"### {get_emoji('cross')} {text}"),
         accent_colour=discord.Colour(0xED4245),
     ))
     return view
@@ -272,7 +272,7 @@ class ConnectFourView(discord.ui.LayoutView):
         )
 
         items: list = [
-            discord.ui.TextDisplay(content=f"### {get_emoji('icon_games')} {_t(lang, 'title')}"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('games')} {_t(lang, 'title')}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=players_line),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),

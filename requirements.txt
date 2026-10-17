@@ -7,7 +7,9 @@ deep-translator
 discord.py>=2.7.1
 feedparser
 flask
+fonttools
 langdetect
+motor
 openai
 pillow
 psutil

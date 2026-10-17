@@ -1,0 +1,59 @@
+# Dashboard: Leveling Settings
+
+Configure your server's leveling system through the visual dashboard.
+
+## Leveling Dashboard Sections
+
+### General
+- Enable/disable leveling
+- XP multiplier
+- Message cooldown
+
+### Channels
+- Channels that give XP
+- Channel-specific multipliers
+
+### Announcements
+- Level-up channel
+- Custom level-up messages
+- Announcement toggle
+
+### Roles
+- Level-based roles
+- Role assignment levels
+- Role rewards
+
+## Configuration Options
+
+### XP Multiplier
+Adjust the rate of XP gain:
+
+Default: 1.0 (normal speed)
+
+### Cooldown
+Set time between XP from messages:
+
+Default: 0 seconds (no cooldown)
+
+### Level-Up Messages
+Customize level-up announcements with placeholders:
+- `{user}` - Member name
+- `{level}` - New level
+- `{guild}` - Server name
+
+### Level Roles
+Assign roles at specific levels:
+- Choose the level threshold
+- Select the role to assign
+- Multiple level roles supported
+
+## Saving Changes
+
+All changes are saved automatically to your server's configuration.
+
+## Tips
+
+1. **Set appropriate multipliers**: Match your server's activity level
+2. **Use cooldowns**: Prevent XP abuse
+3. **Celebrate levels**: Level-up announcements encourage participation
+4. **Reward progression**: Level roles give members goals to work toward

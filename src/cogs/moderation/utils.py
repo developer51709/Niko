@@ -6,19 +6,87 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 DATA_DIR = "data"
-WARN_FILE = os.path.join(DATA_DIR, "warns.json")
-MUTE_FILE = os.path.join(DATA_DIR, "mutes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
+
+# Moderation/automod config is stored in the main database (moderation_config),
+# migrated at startup from the legacy modconfig.json by events.startup.database.
+_MOD_COLLECTION = "moderation_config"
+
+
+def _pool():
+    import database as database_module
+    return getattr(database_module, "_shared_pool", None)
+
+
+async def _load_all_moderation_configs() -> dict:
+    """Load every guild's moderation config from the database."""
+    pool = _pool()
+    configs: dict = {}
+    if pool is None:
+        return configs
+    try:
+        if pool.db_type == "mongodb":
+            async for doc in pool.collection(_MOD_COLLECTION).find({}):
+                gid = doc.get("guild_id")
+                if gid is None:
+                    try:
+                        gid = int(str(doc.get("_id")))
+                    except (TypeError, ValueError):
+                        continue
+                raw = {k: v for k, v in doc.items() if k not in ("_id", "guild_id")}
+                if isinstance(raw, str):
+                    try:
+                        raw = json.loads(raw)
+                    except Exception:
+                        raw = {}
+                if isinstance(raw, dict) and raw:
+                    configs[str(gid)] = raw
+        else:
+            rows = await pool.fetch("SELECT guild_id, data FROM moderation_config")
+            for row in rows:
+                try:
+                    raw = row["data"]
+                    if isinstance(raw, str):
+                        raw = json.loads(raw)
+                    if isinstance(raw, dict) and raw:
+                        configs[str(row["guild_id"])] = raw
+                except Exception:
+                    continue
+    except Exception as e:
+        from utils import logging
+        logging.warning("Moderation", f"Failed to load moderation configs: {e}")
+    return configs
+
+
+async def _save_guild_moderation_config(guild_id: int, cfg: dict):
+    """Persist one guild's moderation config to the database."""
+    pool = _pool()
+    if pool is None:
+        raise RuntimeError("Database pool is not available.")
+    payload = json.dumps(cfg)
+    if pool.db_type == "mongodb":
+        await pool.collection(_MOD_COLLECTION).replace_one(
+            {"_id": str(guild_id)},
+            {"_id": str(guild_id), "guild_id": int(guild_id), **json.loads(payload)},
+            upsert=True,
+        )
+    else:
+        await pool.execute(
+            "INSERT OR REPLACE INTO moderation_config (guild_id, data) VALUES ($1, $2)",
+            int(guild_id), payload,
+        )
 
 DEFAULT_GUILD_CONFIG = {
     "automod": {
-        "antispam":     False,
-        "antilink":     False,
-        "badwords":     True,
-        "massmention":  False,
-        "antinuke":     False,
-        "antiraid":     False,
-        "antiraid_ext": False,
+        "antispam":          False,
+        "antilink":          False,
+        "badwords":          True,
+        "massmention":       False,
+        "scam_image_filter": False,
+        "nsfw_image_filter": False,
+        "antinuke":          False,
+        "antiraid":          False,
+        "antiraid_ext":      False,
     },
     "spam_threshold": 6,
     "spam_interval": 7,
@@ -55,14 +123,9 @@ DEFAULT_GUILD_CONFIG = {
 
 def ensure_files():
     os.makedirs(DATA_DIR, exist_ok=True)
-    for path, default in [
-        (WARN_FILE, {}),
-        (MUTE_FILE, {}),
-        (CONFIG_FILE, {}),
-    ]:
-        if not os.path.exists(path):
-            with open(path, "w") as f:
-                json.dump(default, f, indent=4)
+    # if not os.path.exists(CONFIG_FILE):
+    #     with open(CONFIG_FILE, "w") as f:
+    #         json.dump({}, f, indent=4)
 
 
 def load_json(path, default):
@@ -109,10 +172,44 @@ class ModerationUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         ensure_files()
-        self.warns = load_json(WARN_FILE, {})
-        self.mutes = load_json(MUTE_FILE, {})
-        self.config = load_json(CONFIG_FILE, {})
+        self.config: dict = {}
+        # Guild IDs whose config was created in-memory before the initial
+        # database load finished; reconciled once the load completes.
+        self._stale_entries: set = set()
+        # Gate for the initial database load. Until it completes, new guild
+        # entries must NOT be persisted — otherwise a message arriving before
+        # the load finishes would write DEFAULT_GUILD_CONFIG over the real
+        # stored config and every toggle would "reset" on next restart.
+        self._initial_load_done = asyncio.Event()
+        self.bot.loop.create_task(self._load_config_task())
         self.bot.loop.create_task(self.mute_watcher())
+
+    async def _load_config_task(self):
+        """Populate the moderation config from the database once ready."""
+        try:
+            loaded = await _load_all_moderation_configs()
+            # Merge instead of replace: guilds created in the meantime keep
+            # their in-memory state, everything else comes from the database.
+            for gid, cfg in loaded.items():
+                self.config.setdefault(gid, cfg)
+            # Reconcile entries created before the load finished: replace the
+            # placeholder defaults with the real stored config when one exists.
+            for gid in list(self._stale_entries):
+                stored = loaded.get(gid)
+                if isinstance(stored, dict) and stored:
+                    self.config[gid] = stored
+                _migrate_guild_config(self.config[gid])
+            self._stale_entries.clear()
+        finally:
+            self._initial_load_done.set()
+
+    def _mark_stale_entry(self, gid: str):
+        """Track cache entries created before the initial DB load finished.
+
+        Their DB-backed state is unknown, so they are re-merged from the
+        database once the load completes instead of being trusted as-is.
+        """
+        self._stale_entries.add(gid)
 
     # ---------- CONFIG HELPERS ----------
 
@@ -121,9 +218,15 @@ class ModerationUtils(commands.Cog):
         if gid not in self.config:
             import copy
             self.config[gid] = copy.deepcopy(DEFAULT_GUILD_CONFIG)
-            self.save_config()
+            if not self._initial_load_done.is_set():
+                # The database may still contain real settings for this guild
+                # that haven't been read yet — do NOT persist defaults now.
+                self._mark_stale_entry(gid)
+            else:
+                self.save_config(guild_id)
         else:
             _migrate_guild_config(self.config[gid])
+
         return self.config[gid]
 
     def get_mod_config(self, guild_id: int) -> dict:
@@ -132,8 +235,43 @@ class ModerationUtils(commands.Cog):
     def save_mod_config(self):
         self.save_config()
 
-    def save_config(self):
-        save_json(CONFIG_FILE, self.config)
+    def save_config(self, guild_id: int | None = None):
+        """Write the config cache through to the database (fire-and-forget).
+
+        Pass guild_id to persist one guild, or omit to persist every cached
+        guild. Safe to call from the bot loop or from Flask worker threads.
+        """
+        targets = [guild_id] if guild_id is not None else [
+            int(gid) for gid in self.config
+            if str(gid).isdigit() and str(gid) not in self._stale_entries
+        ]
+        if not targets:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        for gid in targets:
+            coro = self._persist_config(gid)
+            if loop is not None and not loop.is_closed():
+                loop.create_task(coro)
+            else:
+                bot_loop = self.bot.loop
+                if bot_loop is not None and not bot_loop.is_closed():
+                    asyncio.run_coroutine_threadsafe(coro, bot_loop)
+                else:
+                    coro.close()
+
+    async def _persist_config(self, guild_id: int):
+        cfg = self.config.get(str(guild_id))
+        if cfg is None:
+            return
+        try:
+            await _save_guild_moderation_config(guild_id, cfg)
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to persist moderation config: {e}")
 
     # ---------- MODLOG ----------
 
@@ -150,30 +288,86 @@ class ModerationUtils(commands.Cog):
         if logger:
             await logger.log_action(guild, title, description, target=target, moderator=moderator)
 
-    # ---------- WARN SYSTEM ----------
+    # ---------- WARN SYSTEM (DATABASE) ----------
 
-    def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str):
-        gid = str(guild_id)
-        uid = str(user_id)
-        self.warns.setdefault(gid, {}).setdefault(uid, [])
-        self.warns[gid][uid].append({
-            "mod": moderator_id,
-            "reason": reason,
-            "time": datetime.now(timezone.utc).isoformat(),
-        })
-        save_json(WARN_FILE, self.warns)
+    async def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str):
+        """Insert a warning into the database."""
+        pool = _pool()
+        if pool is None:
+            return
+        try:
+            if pool.db_type == "mongodb":
+                await pool.collection("warns").insert_one({
+                    "guild_id": guild_id,
+                    "user_id": user_id,
+                    "moderator_id": moderator_id,
+                    "reason": reason,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                await pool.execute(
+                    "INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5)",
+                    guild_id, user_id, moderator_id, reason,
+                    datetime.now(timezone.utc).isoformat(),
+                )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to add warn for {user_id} in {guild_id}: {e}")
 
-    def get_warnings(self, guild_id: int, user_id: int):
-        return self.warns.get(str(guild_id), {}).get(str(user_id), [])
+    async def get_warnings(self, guild_id: int, user_id: int) -> list:
+        """Fetch all warnings for a user in a guild from the database."""
+        pool = _pool()
+        if pool is None:
+            return []
+        try:
+            if pool.db_type == "mongodb":
+                results = []
+                async for doc in pool.collection("warns").find(
+                    {"guild_id": guild_id, "user_id": user_id}
+                ):
+                    results.append({
+                        "mod": doc.get("moderator_id", 0),
+                        "reason": doc.get("reason", ""),
+                        "time": doc.get("created_at", ""),
+                    })
+                return results
+            else:
+                rows = await pool.fetch(
+                    "SELECT moderator_id, reason, created_at FROM warns "
+                    "WHERE guild_id = $1 AND user_id = $2 "
+                    "ORDER BY id ASC",
+                    guild_id, user_id,
+                )
+                return [
+                    {"mod": row["moderator_id"], "reason": row["reason"], "time": row["created_at"]}
+                    for row in rows
+                ]
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to get warnings for {user_id} in {guild_id}: {e}")
+            return []
 
-    def clear_warnings(self, guild_id: int, user_id: int):
-        gid = str(guild_id)
-        uid = str(user_id)
-        if gid in self.warns and uid in self.warns[gid]:
-            self.warns[gid][uid] = []
-            save_json(WARN_FILE, self.warns)
+    async def clear_warnings(self, guild_id: int, user_id: int):
+        """Delete all warnings for a user in a guild from the database."""
+        pool = _pool()
+        if pool is None:
+            return
+        try:
+            if pool.db_type == "mongodb":
+                await pool.collection("warns").delete_many(
+                    {"guild_id": guild_id, "user_id": user_id}
+                )
+            else:
+                await pool.execute(
+                    "DELETE FROM warns WHERE guild_id = $1 AND user_id = $2",
+                    guild_id, user_id,
+                )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to clear warnings for {user_id} in {guild_id}: {e}")
 
-    # ---------- MUTE SYSTEM ----------
+    # ---------- MUTE SYSTEM (DATABASE) ----------
 
     async def ensure_mute_role(self, guild: discord.Guild, *, verify_perms: bool = False) -> discord.Role:
         role = discord.utils.get(guild.roles, name="Muted")
@@ -182,9 +376,6 @@ class ModerationUtils(commands.Cog):
             perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
             role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
             created = True
-        # Only walk every channel when the role was just created, or
-        # when the caller explicitly asks to verify (avoids slash-interaction
-        # timeouts caused by N HTTP calls on every mute/unmute).
         if created or verify_perms:
             for channel in guild.channels:
                 try:
@@ -211,49 +402,104 @@ class ModerationUtils(commands.Cog):
                 await member.add_roles(role, reason=reason or "Muted")
             except Exception:
                 pass
-        gid = str(guild.id)
-        uid = str(member.id)
+
         until = None
         if duration:
             until = (datetime.now(timezone.utc) + timedelta(seconds=duration)).isoformat()
-        self.mutes.setdefault(gid, {})[uid] = {"until": until, "reason": reason}
-        save_json(MUTE_FILE, self.mutes)
+
+        pool = _pool()
+        if pool is not None:
+            try:
+                if pool.db_type == "mongodb":
+                    await pool.collection("mutes").insert_one({
+                        "guild_id": guild.id,
+                        "user_id": member.id,
+                        "reason": reason,
+                        "until": until,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                else:
+                    await pool.execute(
+                        "INSERT INTO mutes (guild_id, user_id, reason, until) "
+                        "VALUES ($1, $2, $3, $4)",
+                        guild.id, member.id, reason, until,
+                    )
+            except Exception as e:
+                from utils import logging
+                logging.error("Moderation", f"Failed to save mute for {member.id}: {e}")
 
     async def unmute_member(self, member: discord.Member, reason=None):
         role = await self.ensure_mute_role(member.guild)
         await member.remove_roles(role, reason=reason or "Unmuted")
-        gid = str(member.guild.id)
-        uid = str(member.id)
-        if gid in self.mutes and uid in self.mutes[gid]:
-            del self.mutes[gid][uid]
-            save_json(MUTE_FILE, self.mutes)
+
+        pool = _pool()
+        if pool is not None:
+            try:
+                if pool.db_type == "mongodb":
+                    await pool.collection("mutes").delete_many({
+                        "guild_id": member.guild.id,
+                        "user_id": member.id,
+                    })
+                else:
+                    await pool.execute(
+                        "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
+                        member.guild.id, member.id,
+                    )
+            except Exception as e:
+                from utils import logging
+                logging.error("Moderation", f"Failed to remove mute for {member.id}: {e}")
 
     async def mute_watcher(self):
+        """Periodically check for expired mutes and unmute users."""
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
             now = datetime.now(timezone.utc)
-            changed = False
-            for gid, users in list(self.mutes.items()):
-                guild = self.bot.get_guild(int(gid))
-                if not guild:
-                    continue
-                for uid, data in list(users.items()):
-                    until = data.get("until")
-                    if until:
-                        try:
-                            until_dt = datetime.fromisoformat(until)
-                        except Exception:
-                            continue
-                        if now >= until_dt:
-                            member = guild.get_member(int(uid))
+            pool = _pool()
+            if pool is not None:
+                try:
+                    if pool.db_type == "mongodb":
+                        expired = []
+                        async for doc in pool.collection("mutes").find({"until": {"$ne": None}}):
+                            until_str = doc.get("until")
+                            if until_str:
+                                try:
+                                    until_dt = datetime.fromisoformat(until_str)
+                                except Exception:
+                                    continue
+                                if now >= until_dt:
+                                    expired.append(doc)
+                        for doc in expired:
+                            guild = self.bot.get_guild(int(doc["guild_id"]))
+                            if not guild:
+                                continue
+                            member = guild.get_member(int(doc["user_id"]))
                             if member:
                                 try:
                                     await self.unmute_member(member, reason="Mute expired")
                                 except Exception:
                                     pass
-                            changed = True
-            if changed:
-                save_json(MUTE_FILE, self.mutes)
+                    else:
+                        rows = await pool.fetch(
+                            "SELECT id, guild_id, user_id, until FROM mutes WHERE until IS NOT NULL"
+                        )
+                        for row in rows:
+                            try:
+                                until_dt = datetime.fromisoformat(row["until"])
+                            except Exception:
+                                continue
+                            if now >= until_dt:
+                                guild = self.bot.get_guild(int(row["guild_id"]))
+                                if not guild:
+                                    continue
+                                member = guild.get_member(int(row["user_id"]))
+                                if member:
+                                    try:
+                                        await self.unmute_member(member, reason="Mute expired")
+                                    except Exception:
+                                        pass
+                except Exception as e:
+                    from utils import logging
+                    logging.error("Moderation", f"Mute watcher error: {e}")
             await asyncio.sleep(15)
 
     # ---------- BLOCKED WORDS ----------
@@ -292,7 +538,6 @@ class ModerationUtils(commands.Cog):
         cfg = self.get_guild_config(guild_id)
         if member.id in cfg.get("whitelist_users", []):
             return True
-        # discord.User (DM context) has no .roles — skip role check safely
         roles = getattr(member, "roles", [])
         member_role_ids = {r.id for r in roles}
         for rid in cfg.get("whitelist_roles", []):

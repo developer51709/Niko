@@ -1,0 +1,38 @@
+# Setting Up Prefix Commands
+
+Niko supports both slash commands and traditional prefix commands. Here's how to set up and use them.
+
+## Slash Commands (Recommended)
+
+Slash commands are the modern way to interact with Discord bots:
+
+- Type `/` in any channel to see available commands
+- Search for commands by name
+- Get instant parameter hints
+- Commands work across all channels where Niko is present
+
+## Prefix Commands
+
+If you prefer traditional commands, Niko also supports prefix commands:
+
+- Default prefix: `.` (dot) — or your server's custom prefix
+- Use `.help` to see available commands
+- Use `.prefix` to change prefixes with an interactive panel
+
+## Setting a Custom Prefix
+
+To set a custom prefix for your server:
+
+```
+.prefix
+```
+
+This opens an interactive panel where you can add or remove prefixes. Or use the dashboard to configure it visually.
+
+## Command Types
+
+- **Slash Commands** (`/`): Modern, contextual commands
+- **Prefix Commands** (`.`): Traditional text commands
+- **Hybrid Commands**: Both slash and prefix versions available
+
+Most features are available through both command types.

@@ -1,0 +1,119 @@
+---
+slug: "automod-overview"
+title: "AutoMod Overview"
+category: "automod"
+excerpt: "Learn about Niko's automated moderation features including anti-spam and content filtering."
+tags: ["automod","anti-spam","filtering","automated"]
+order: 1
+---
+# AutoMod Overview
+
+Niko's AutoMod system provides automated protection against common moderation issues.
+
+## AutoMod Features
+
+### Anti-Spam
+Detects and handles spam behavior:
+- Rapid message sending
+- Repeated content
+- Mass mentions
+
+### Anti-Link
+Controls link posting:
+- Block all links
+- Allow specific domains
+- Warn on first link post
+
+### Bad Word Filter
+Filters inappropriate content:
+- Built-in word lists
+- Custom word additions
+- Actions on detection (warn, mute, kick, ban)
+
+### Mass Mention
+Prevents mention spam:
+- Limits mentions per message
+- Blocks @everyone and @here
+- Custom thresholds
+
+### Anti-Nuke
+Detects destructive actions:
+- Mass channel deletion
+- Mass role deletion
+- Mass permission changes
+- Automated responses
+
+### Anti-Raid
+Protects against raid attacks:
+- Join flood detection
+- New account filtering
+- Automated countermeasures
+
+## Configuring AutoMod
+
+### Access AutoMod Settings
+Open the interactive AutoMod settings panel:
+
+```
+.automod
+```
+
+The panel lets admins toggle each protection module and tune thresholds with buttons and menus. You can also use the dashboard for visual configuration.
+
+### Module Toggles
+Each AutoMod feature can be toggled on/off independently from the panel:
+
+- **Anti-spam** — detect repeated messages
+- **Anti-link** — remove Discord invite links
+- **Blocked words** — filter words from the server list
+- **Mass mentions** — limit mention floods
+- **Anti-nuke** — protect channels and roles
+- **Anti-raid** — react to sudden join waves
+- **External app protection** — detect user-installed app abuse
+
+## Actions
+
+When AutoMod detects an issue, it can:
+- **Warn**: Send a warning to the member
+- **Delete**: Remove the offending message
+- **Mute**: Temporarily mute the member
+- **Kick**: Remove the member
+- **Ban**: Permanently ban the member
+- **Notify**: Alert moderators
+
+## Whitelisting
+
+Exclude trusted users and roles from AutoMod checks:
+
+### User Whitelist
+```
+.whitelist add user <user>
+```
+
+### Role Whitelist
+```
+.whitelist add role <role>
+```
+
+### Removing Entries
+```
+.whitelist remove user <user>
+.whitelist remove role <role>
+```
+
+### Blocked Words
+Manage the custom blocked word list:
+
+```
+.badwords add <word>
+.badwords remove <word>
+.badwords clear
+```
+
+## AutoMod Best Practices
+
+1. **Start conservative**: Enable features one at a time
+2. **Set appropriate thresholds**: Don't be too strict or too lenient
+3. **Whitelist appropriately**: Staff and bots should be whitelisted
+4. **Monitor initially**: Watch how AutoMod behaves before full deployment
+5. **Adjust based on feedback**: Tweak settings based on what you observe

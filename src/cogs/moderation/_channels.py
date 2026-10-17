@@ -12,7 +12,7 @@ class ChannelsMixin:
     @commands.hybrid_command(description="Set slowmode in this channel (seconds)",
                              help="{ 'en': 'Set slowmode in this channel (seconds).', 'de': 'Langsammodus setzen.', 'es': 'Establece el modo lento en este canal (segundos).' }")
     @commands.has_permissions(manage_channels=True)
-    async def slowmode(self, ctx, seconds: int = 0):
+    async def slowmode(self, ctx, seconds: int = commands.parameter(default=0, description="Delay between messages in seconds; use 0 to disable slowmode.")):
         await ctx.channel.edit(slowmode_delay=seconds)
         await ctx.send(msg(ctx, "slowmode_set", seconds=seconds))
 

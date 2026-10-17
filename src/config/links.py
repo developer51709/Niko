@@ -1,9 +1,26 @@
 # this is where the bots links can be updated
 
+import os
+
+WEBSITE = "https://niko.sryze.cc"
+
+# Support-server references always point at the website's /discord page. That
+# page resolves the current invite from the live bot config, so it keeps working
+# when an invite is rotated, expired, or recreated. Never hardcode a raw
+# discord.gg invite here again.
+SUPPORT_SERVER = f"{WEBSITE}/discord"
+
+# Legacy community-server invite. No surface references this any more; keep it
+# only so older imports resolve. Use SUPPORT_SERVER for anything user-facing.
 COMMUNITY_SERVER = "https://discord.gg/3sAKtw3dMa"
-SUPPORT_SERVER = "https://discord.gg/3JFbm2wfNk"
+
 GITHUB = "https://github.com/developer51709/Niko"
-WEBSITE = "https://developer51709.github.io/Niko"
-TOS = "https://developer51709.github.io/Niko/tos.html"
-PRIVACY = "https://developer51709.github.io/Niko/privacy.html"
-DOCS = "https://developer51709.github.io/Niko/docs"
+TOS = f"{WEBSITE}/terms"
+PRIVACY = f"{WEBSITE}/privacy"
+COMMUNITY = f"{WEBSITE}/community"
+DOCS = f"{WEBSITE}/docs"
+
+# top.gg listing. The bot ID defaults to the application ID the rest of the
+# deployment uses; set TOPGG_BOT_ID when the listing belongs to a different app.
+TOPGG_BOT_ID = os.environ.get("TOPGG_BOT_ID", "1520558530472448170")
+TOPGG_VOTE_URL = f"https://top.gg/bot/{TOPGG_BOT_ID}/vote"

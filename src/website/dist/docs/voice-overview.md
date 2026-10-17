@@ -1,0 +1,69 @@
+# Voice Features Overview
+
+Niko includes voice features for music playback and voice channel management.
+
+## Music Features
+
+### Playing Music
+Use the `/play` slash command or `.play` with a prefix:
+
+```
+.play <song name or URL>
+```
+
+Supports:
+- YouTube videos
+- Spotify links
+- Direct URLs
+- Search queries
+
+### Music Controls
+- `/pause` - Pause playback
+- `/resume` - Resume playback
+- `/stop` - Stop playback
+- `/skip` - Skip to next song
+- `/queue` - View play queue
+- `/nowplaying` - See current song
+- `/loop` - Cycle loop modes (off / track / queue)
+- `/volume` - Set playback volume
+- `/autoplay` - Toggle Last.fm autoplay
+
+### Liked Songs
+- `/like` - Like the currently playing song
+- `/liked` - Browse your liked songs
+- `/unlike` - Remove a song from your likes
+
+### Other Music Features
+- Ghost queue for Last.fm autoplay (keeps playing when the queue runs dry)
+- Music persistence across restarts
+- Now-playing panel with interactive controls
+
+## Voice Channel Management
+
+### Join Voice
+Niko joins automatically when you use `/play` — no separate join command needed.
+
+### Leave Voice
+```
+/disconnect
+```
+
+Or use `.disconnect` with a prefix. You can also use the disconnect button on the now-playing panel.
+
+### Voice Settings
+- `/volume` - Adjust playback volume (0-100)
+- `/musicstatus` - Show or hide the listening status
+
+## Permissions
+
+Niko needs these permissions for voice:
+- Connect to voice channels
+- Speak in voice channels
+- Use voice activity (if needed)
+
+## Tips
+
+1. **Set up voice channels**: Dedicated music channels work best
+2. **Configure volume**: Use `/volume` to set a comfortable level
+3. **Enable autoplay**: Turn on `/autoplay` with a Last.fm username for endless music
+4. **Save favorites**: Use `/like` on songs you enjoy and find them later with `/liked`

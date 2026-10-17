@@ -368,7 +368,7 @@ class Roulette(commands.Cog):
         """Play interactive European roulette."""
 
         economy = self.bot.get_cog("EconomyCog")
-        user_data = economy.get_user_economy_data(ctx.author.id)
+        user_data = await economy.get_user_economy_data(ctx.author.id)
 
         if user_data["last_roulette"] + ROULETTE_COOLDOWN > time.time():
             return await ctx.send(f"You can only play roulette once every {ROULETTE_COOLDOWN} seconds.")
@@ -505,7 +505,7 @@ class Roulette(commands.Cog):
             user_data["balance"] -= amount
 
         user_data["last_roulette"] = time.time()
-        economy.save_economy_data()
+        await economy.save_user_economy_data(ctx.author.id)
 
         # STEP 7 — RESULT
         view = build_result_view(ctx, win, result, color_str, bet_type, amount, payout)

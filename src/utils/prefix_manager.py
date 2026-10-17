@@ -1,78 +1,73 @@
-import json
-import os
-from utils import logging
+"""Database-backed guild prefix configuration."""
 
-PREFIX_FILE = "data/prefixes.json"
+import json
+
+import database
+
 DEFAULT_PREFIXES = ["."]
 
 
-def _load_all() -> dict:
-    if not os.path.exists(PREFIX_FILE):
-        os.makedirs(os.path.dirname(PREFIX_FILE), exist_ok=True)
-        with open(PREFIX_FILE, "w") as f:
-            json.dump({}, f, indent=4)
-        return {}
-
-    try:
-        with open(PREFIX_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error("prefix_manager", f"Failed to load prefix file: {e}")
-        return {}
+def _pool(pool=None):
+    return pool or database._shared_pool
 
 
-def _save_all(data: dict):
-    try:
-        with open(PREFIX_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        logging.error("prefix_manager", f"Failed to save prefix file: {e}")
+def _decode_prefixes(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return DEFAULT_PREFIXES.copy()
+    if isinstance(value, list) and all(isinstance(prefix, str) for prefix in value):
+        return value
+    return DEFAULT_PREFIXES.copy()
 
 
-def get_prefixes(guild_id: int):
-    data = _load_all()
-    gid = str(guild_id)
-
-    if gid not in data:
-        data[gid] = DEFAULT_PREFIXES.copy()
-        _save_all(data)
-
-    return data[gid]
-
-
-def add_prefix(guild_id: int, prefix: str):
-    data = _load_all()
-    gid = str(guild_id)
-
-    if gid not in data:
-        data[gid] = DEFAULT_PREFIXES.copy()
-
-    if prefix not in data[gid]:
-        data[gid].append(prefix)
-
-    _save_all(data)
+async def get_prefixes(guild_id: int, pool=None) -> list[str]:
+    """Return configured prefixes, falling back to the default prefix."""
+    pool = _pool(pool)
+    if pool is None:
+        return DEFAULT_PREFIXES.copy()
+    row = await pool.fetchrow(
+        "SELECT prefixes FROM prefix_config WHERE guild_id = $1",
+        int(guild_id),
+    )
+    return _decode_prefixes(row.get("prefixes")) if row else DEFAULT_PREFIXES.copy()
 
 
-def remove_prefix(guild_id: int, prefix: str):
-    data = _load_all()
-    gid = str(guild_id)
-
-    if gid in data and prefix in data[gid]:
-        data[gid].remove(prefix)
-
-    _save_all(data)
-
-
-def reset_prefixes(guild_id: int):
-    data = _load_all()
-    gid = str(guild_id)
-
-    data[gid] = DEFAULT_PREFIXES.copy()
-    _save_all(data)
+async def set_prefixes(guild_id: int, prefixes: list[str], pool=None) -> list[str]:
+    """Replace a guild's configured prefixes and return the stored list."""
+    pool = _pool(pool)
+    cleaned = list(dict.fromkeys(prefix for prefix in prefixes if isinstance(prefix, str)))
+    if pool is None:
+        raise RuntimeError("The primary database is unavailable.")
+    await pool.execute(
+        "INSERT OR REPLACE INTO prefix_config (guild_id, prefixes) VALUES ($1, $2)",
+        int(guild_id),
+        cleaned,
+    )
+    return cleaned
 
 
-def dynamic_prefix(bot, message):
-    """Command-prefix callable for discord.py — returns list of prefixes for the guild."""
+async def add_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
+    prefixes = await get_prefixes(guild_id, pool)
+    if prefix not in prefixes:
+        prefixes.append(prefix)
+    return await set_prefixes(guild_id, prefixes, pool)
+
+
+async def remove_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
+    prefixes = await get_prefixes(guild_id, pool)
+    if prefix in prefixes:
+        prefixes.remove(prefix)
+    return await set_prefixes(guild_id, prefixes, pool)
+
+
+async def reset_prefixes(guild_id: int, pool=None) -> list[str]:
+    return await set_prefixes(guild_id, DEFAULT_PREFIXES.copy(), pool)
+
+
+async def dynamic_prefix(bot, message):
+    """Async command-prefix callable used by discord.py."""
     if not message.guild:
-        return ["."]
-    return get_prefixes(message.guild.id)
+        return DEFAULT_PREFIXES.copy()
+    return await get_prefixes(message.guild.id, getattr(bot, "cxn", None))

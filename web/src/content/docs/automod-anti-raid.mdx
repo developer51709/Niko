@@ -1,0 +1,90 @@
+---
+slug: "automod-anti-raid"
+title: "Anti-Raid Protection"
+category: "automod"
+excerpt: "Configure anti-raid features to protect your server from coordinated attacks."
+tags: ["anti-raid","raid","security","automod"]
+order: 4
+---
+# Anti-Raid Protection
+
+Anti-raid protection helps defend your server from coordinated mass-join attacks.
+
+## What is a Raid?
+
+A raid is when many accounts join your server simultaneously, often to:
+- Spam messages
+- Harass members
+- Destroy channels and roles
+- Mass report content
+
+## Detection Methods
+
+### Join Flood Detection
+Detects when many members join in a short period. Configure the join threshold and join interval from the AutoMod panel or dashboard:
+
+- **Join threshold** — how many joins trigger detection (default: 10)
+- **Join interval** — the time window for counting joins in seconds (default: 10)
+
+### New Account Detection
+Filter out accounts younger than a set number of days. For example, a limit of 7 days blocks accounts less than a week old.
+
+## Actions
+
+When a raid is detected:
+
+### Kick
+Kick the raiding members.
+
+### Ban
+Ban the raiding members.
+
+### Slowmode
+Apply slowmode to all channels.
+
+### Lockdown
+Lock all text channels.
+
+Set the response action from the AutoMod panel or dashboard:
+
+- **Kick** — kick the raiding members
+- **Ban** — ban the raiding members
+- **Slowmode** — apply slowmode to all channels
+- **Lockdown** — lock all text channels
+
+## External App Detection
+
+Detect members abusing user-installed apps. Enable it from the AutoMod panel; configuration includes:
+
+- Interaction threshold: How many interactions trigger detection
+- Interaction window: Time window for counting
+- Join age limit: Minimum account age
+- Action: What to do with detected accounts
+
+## Configuration
+
+### Enable Anti-Raid
+Toggle anti-raid from the AutoMod panel:
+
+```
+.automod
+```
+
+Set the join threshold, join interval, and response action there or in the dashboard's moderation settings.
+
+## Response
+
+When anti-raid triggers:
+1. Incoming members are checked against criteria
+2. Matching members are actioned (kicked/banned)
+3. Channels can be slowed or locked
+4. Server owner is notified
+5. Moderation logs record the event
+
+## Best Practices
+
+1. **Enable join flood detection**: Most raids start with mass joins
+2. **Set new account limits**: Many raid accounts are freshly created
+3. **Use kick for initial response**: Less permanent than ban, allows investigation
+4. **Combine with anti-nuke**: Defense in depth
+5. **Have a response plan**: Know what to do if a raid happens

@@ -1,0 +1,45 @@
+---
+slug: "setup-and-permissions"
+title: "Setup and Permissions"
+category: "setup"
+excerpt: "Invite Niko with the current Discord OAuth flow, grant only the permissions your enabled features need, and verify role hierarchy before configuring the bot."
+tags: ["invite", "permissions", "setup", "security"]
+order: 6
+---
+# Setup and Permissions
+
+## Invite Niko
+
+Use the **Add to Discord** link on the [Niko website](https://niko.sryze.cc/) and select the server where you have permission to manage integrations. Review the requested permissions on Discord's authorization screen before confirming. Slash commands are registered as Discord application commands; prefix commands also require the **Message Content Intent** to be enabled for a self-hosted bot.
+
+For self-hosting, create an application in the [Discord Developer Portal](https://discord.com/developers/applications), add a bot user, and keep its token in your hosting provider's secret store. Never commit a bot token or paste it into a public channel.
+
+## Start with the Permissions You Use
+
+Niko's commands depend on Discord permissions and channel overrides. Grant the permissions needed by your enabled features rather than assuming every feature requires administrator access. Common permissions include:
+
+- **View Channels** and **Send Messages** for bot responses
+- **Embed Links** and **Attach Files** for rich layouts, images, and generated cards
+- **Read Message History** for context-dependent features and ticket transcripts
+- **Manage Messages** for moderation, AutoMod, and message cleanup
+- **Manage Roles** for role rewards and role configuration
+- **Manage Channels** for tickets and channel-management features
+- **Kick Members**, **Ban Members**, or **Moderate Members** for the corresponding moderation actions
+
+A missing permission can also come from a channel-specific override. Check the bot's effective permissions in the channel where the command runs.
+
+## Check Role Hierarchy
+
+Discord only lets a bot manage roles and members below its highest role. Place Niko's role above roles it needs to assign or moderate, but do not grant it higher roles or permissions than your server's security policy allows. The bot cannot bypass Discord's role hierarchy.
+
+## Configure the Server
+
+After inviting Niko, use `/dashboard` or open the [web dashboard](https://niko.sryze.cc/dashboard) to choose a server and review its available settings. You can also use each feature's Discord setup command (for example, `/automod`, `/leveling panel`, or `/ticket setup`). Exact options depend on the current command configuration, so Discord's slash-command picker and Niko's `/help` output are the authoritative references.
+
+## Troubleshooting
+
+1. Confirm Niko is online and still installed in the server.
+2. Check the user's permission to run the command and Niko's effective channel permissions.
+3. Confirm Niko's highest role is above any roles it needs to assign or manage.
+4. For prefix commands, verify the configured prefix and Message Content Intent.
+5. Reopen the slash-command picker after command sync, or check `/help` for the current command surface.

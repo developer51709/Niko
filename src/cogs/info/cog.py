@@ -13,8 +13,7 @@ from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
-from config.ids import DEVELOPER_IDS, SUPPORT_GUILD, BUGBOUNTY_ROLE, SUPPORTER_ROLE, PARTNER_ROLE
-from utils.donations import is_supporter
+from utils.member_badges import boosting_badge_key, niko_badge_keys
 
 MESSAGES = {
     "normal": {
@@ -521,48 +520,96 @@ def cv2_image(text, image_url):
     return view
 
 
+# Niko badge key (utils.member_badges.NIKO_BADGE_ORDER) -> emoji name in
+# config/emojis.py. Both lists are checked against each other in the tests, so a
+# new role badge needs its PNG art and its emoji entry, nothing else.
+_NIKO_BADGE_EMOJIS = {
+    "niko_owner": "badge_owner",
+    "niko_staff": "badge_staff",
+    "niko_head_admin": "badge_head_admin",
+    "niko_moderator": "badge_moderator",
+    "niko_head_support": "badge_head_support",
+    "niko_support": "badge_support",
+    "niko_graphic_designer": "badge_graphic_designer",
+    "niko_event_coordinator": "badge_event_coordinator",
+    # Discord emoji names are capped at 32 characters, hence the short name.
+    "niko_partnerships_promotions_lead": "badge_partnership_lead",
+    "niko_partnership_manager": "badge_partnership_manager",
+    "niko_supporter": "badge_supporter_role",
+    "niko_bug_hunter": "badge_bug_hunter_role",
+    "niko_partner": "badge_partner_role",
+}
+
+
 async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
+    """Return the Niko badge emojis earned by user_id, in display order.
+
+    Which badges an account carries is decided in utils.member_badges, so this
+    card and the website's profile popovers can never disagree. Members who are
+    not in the support server still get every badge that does not need it.
     """
-    Return a list of badge emoji strings earned by user_id.
-
-    Checks (in order):
-      1. DEVELOPER_IDS  → badge_developer
-      2. donors DB      → badge_supporter  (works even if not in support server)
-      3. Support server roles:
-           BUGBOUNTY_ROLE → badge_bugbounty
-           SUPPORTER_ROLE → badge_supporter (deduped)
-           PARTNER_ROLE   → badge_partner
-    Gracefully handles users who are not members of the support server.
-    """
-    badges: list[str] = []
-
-    if user_id in DEVELOPER_IDS:
-        badges.append(get_emoji("badge_developer"))
-
     try:
-        if await is_supporter(bot, user_id):
-            badges.append(get_emoji("badge_supporter"))
+        keys = await niko_badge_keys(bot, user_id)
     except Exception:
-        pass
+        return []
+    return [
+        get_emoji(_NIKO_BADGE_EMOJIS[key])
+        for key in keys
+        if key in _NIKO_BADGE_EMOJIS
+    ]
 
-    support_guild = bot.get_guild(SUPPORT_GUILD)
-    if support_guild:
-        try:
-            member = support_guild.get_member(user_id)
-            if member is None:
-                member = await support_guild.fetch_member(user_id)
-            role_ids = {r.id for r in member.roles}
-            if BUGBOUNTY_ROLE and BUGBOUNTY_ROLE in role_ids:
-                badges.append(get_emoji("badge_bugbounty"))
-            supporter_emoji = get_emoji("badge_supporter")
-            if SUPPORTER_ROLE and SUPPORTER_ROLE in role_ids and supporter_emoji not in badges:
-                badges.append(supporter_emoji)
-            if PARTNER_ROLE and PARTNER_ROLE in role_ids:
-                badges.append(get_emoji("badge_partner"))
-        except (discord.NotFound, discord.HTTPException):
-            pass
 
-    return badges
+class AvatarButtons(discord.ui.ActionRow):
+    def __init__(self, user, member, author_id, banner_url):
+        super().__init__()
+        self.user = user
+        self.member = member
+        self.author_id = author_id
+        self.banner_url = banner_url
+
+    @discord.ui.button(label='Server Avatar', style=discord.ButtonStyle.success, custom_id='server_avatar_button')
+    async def server_avatar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.member.guild_avatar:
+            await interaction.response.send_message(
+                "This user doesn't have a different server avatar.",
+                ephemeral=True
+            )
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### Server Avatar"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=self.member.guild_avatar.url
+                    )
+                )
+            )
+            view.add_item(container)
+            await interaction.response.send(view=view, ephemeral=True)
+
+    @discord.ui.button(label='User Banner', style=discord.ButtonStyle.success, custom_id='banner_button')
+    async def banner(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.banner_url:
+            await interaction.response.send_message(
+                "This user doesn't have a banner.",
+                ephemeral=True
+            )
+        else:
+            view = discord.ui.LayoutView()
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="### User Banner"
+                ),
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(
+                        media=self.banner_url
+                    )
+                )
+            )
+            view.add_item(container)
+            await interaction.response.send(view=view, ephemeral=True)
 
 
 class InfoCog(commands.Cog):
@@ -632,28 +679,38 @@ class InfoCog(commands.Cog):
             sk, status_text = _status_map.get(target.status, ("status_offline", "Offline"))
             status_emoji = get_emoji(sk)
 
-        # ── Discord public-flag badges ─────────────────────────────────────
+        # ── Discord badges ────────────────────────────────────────────────
+        # One entry per badge art in src/assets/emojis; the flag names are tried
+        # in order because discord.py renamed a few of them across versions.
         pf = target.public_flags
         _disc_flag_map = [
-            ("staff",                  None,                        "🛡️"),
-            ("partner",                "icon_partner",             None),
-            ("bug_hunter",             "icon_bug",                 None),
-            ("bug_hunter_level_2",     "icon_bug",                 None),
-            ("hypesquad_bravery",      "hypesquad_bravery",        None),
-            ("hypesquad_brilliance",   "hypesquad_brilliance",     None),
-            ("hypesquad_balance",      "hypesquad_balance",        None),
-            ("early_supporter",        "icon_premium",             None),
-            ("verified_bot_developer", "verified_developer_badge", None),
-            ("active_developer",       "active_developer_badge",   None),
+            (("staff",),                                      "staff_badge"),
+            (("partner",),                                    "partner"),
+            (("hypesquad_events",),                           "hypesquad_events"),
+            (("bug_hunter_level_1", "bug_hunter"),            "bug_hunter_badge"),
+            (("hypesquad_bravery",),                          "hypesquad_bravery"),
+            (("hypesquad_brilliance",),                       "hypesquad_briliance"),
+            (("hypesquad_balance",),                          "hypesquad_balance"),
+            (("early_supporter",),                            "early_supporter_badge"),
+            (("bug_hunter_level_2",),                         "bug_hunter_gold_badge"),
+            (("verified_bot_developer", "early_verified_developer"), "verified_developer_badge"),
+            (("certified_moderator",),                        "certified_moderator_badge"),
+            (("supports_commands",),                          "supports_commands_badge"),
+            (("active_developer",),                           "active_developer_badge"),
         ]
         disc_badges = []
         seen_disc = set()
-        for flag, ekey, fallback in _disc_flag_map:
-            if getattr(pf, flag, False):
-                token = ekey or fallback
-                if token and token not in seen_disc:
-                    seen_disc.add(token)
-                    disc_badges.append(get_emoji(ekey) if ekey else fallback)
+        for flags, ekey in _disc_flag_map:
+            if ekey in seen_disc or not any(getattr(pf, flag, False) for flag in flags):
+                continue
+            seen_disc.add(ekey)
+            disc_badges.append(get_emoji(ekey))
+        # Discord draws the boosting badge last, for any active boost streak,
+        # and every tier has its own artwork, so the streak picks the badge.
+        boosting = boosting_badge_key(getattr(target, "premium_since", None))
+        if boosting and boosting not in seen_disc:
+            seen_disc.add(boosting)
+            disc_badges.append(get_emoji(boosting))
 
         # ── Niko badges ───────────────────────────────────────────────────
         niko_badges = await _get_badges(self.bot, target.id)
@@ -693,7 +750,7 @@ class InfoCog(commands.Cog):
                 f"<t:{int(target.premium_since.timestamp())}:R>"
             )
 
-        bot_tag = f" {get_emoji('icon_bot')}" if target.bot else ""
+        bot_tag = f" {get_emoji('bot')}" if target.bot else ""
 
         text = (
             f"## {target.display_name}{bot_tag}\n"
@@ -722,9 +779,21 @@ class InfoCog(commands.Cog):
     )
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
-        avatar_url = target.avatar.url if target.avatar else None
-        text = f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
-        await ctx.send(view=cv2_image(text, image_url=avatar_url))
+        avatar_url = target.avatar.url if target.avatar else "https://cdn.discordapp.com/embed/avatars/0.png"
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(
+                    media=avatar_url
+                )
+            ),
+            AvatarButtons(ctx.author, target, ctx.author.id, target.banner.url if target.banner else None)
+        )
+        view.add_item(container)
+        await ctx.send(view=view)
 
     # -------------------------------
     # BANNER
@@ -789,7 +858,8 @@ class InfoCog(commands.Cog):
                     label="Website",
                     style=discord.ButtonStyle.link,
                     emoji=get_emoji("website"),
-                    url=links.WEBSITE),
+                    url=links.WEBSITE
+                ),
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
@@ -816,7 +886,7 @@ class InfoCog(commands.Cog):
         help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko ☕' }"
     )
     async def creator(self, ctx):
-        creator = await self.bot.fetch_user(1479968201319125013)
+        creator = await self.bot.fetch_user(1052690741874401360)
         bot_user = self.bot.user
         avatar_url = creator.avatar.url if creator.avatar else None
 
@@ -837,22 +907,22 @@ class InfoCog(commands.Cog):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Discord Profile", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("discord"), 
+                    label="Discord Profile",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("discord"),
                     url=f"https://discord.com/users/{creator.id}"
                 ),
                 discord.ui.Button(
-                    label="GitHub", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("github"), 
+                    label="GitHub",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("github"),
                     url="https://github.com/developer51709"
                 ),
                 discord.ui.Button(
-                    label="Website", 
-                    style=discord.ButtonStyle.link, 
-                    emoji=get_emoji("website"), 
-                    url="https://nyxen.is-a.dev"),
+                    label="Website",
+                    style=discord.ButtonStyle.link,
+                    emoji=get_emoji("website"),
+                    url="https://soren.is-a.dev"),
             )
         )
         view.add_item(container)
@@ -920,7 +990,7 @@ class InfoCog(commands.Cog):
     async def booststats(self, ctx):
         server = ctx.guild
         text = (
-            f"### {get_emoji('icon_boost')} {msg(ctx, 'booststats_title')}\n"
+            f"### {get_emoji('boost')} {msg(ctx, 'booststats_title')}\n"
             f"**{msg(ctx, 'booststats_count')}:** `{server.premium_subscription_count}`\n"
             f"**{msg(ctx, 'booststats_tier')}:** `{server.premium_tier}`\n"
             f"**{msg(ctx, 'booststats_boosters')}:** `{len(server.premium_subscribers)}`"
@@ -1061,7 +1131,7 @@ class InfoCog(commands.Cog):
     async def shards_command(self, ctx):
         """Display current shard information."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('icon_cross')} Bot is not sharded.")
+            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
 
         shard_guilds = {}
         shard_members = {}
@@ -1092,7 +1162,7 @@ class InfoCog(commands.Cog):
 
         pages = paginate(lines, per_page=8)
         view = PaginatedView(
-            title=f"{get_emoji('icon_host')} {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
+            title=f"{get_emoji('host')} {msg(ctx, 'shardinfo_title')}\n-# {msg(ctx, 'shardinfo_total')}: {self.bot.shard_count}",
             pages=pages
         )
         await ctx.send(view=view)
@@ -1111,7 +1181,7 @@ class InfoCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
+                content=f"### {get_emoji('invite')} {msg(ctx, 'invite_title')}\n[{msg(ctx, 'invite_link')}]({invite_link})"
             )
         )
         view.add_item(container)

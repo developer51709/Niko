@@ -1,0 +1,59 @@
+---
+slug: "roles-and-permissions"
+title: "Roles and Permissions Guide"
+category: "setup"
+excerpt: "Understand how Niko interacts with Discord roles and permissions."
+tags: ["roles","permissions","admin"]
+order: 3
+---
+# Roles and Permissions Guide
+
+Understanding how Niko works with Discord's role system is crucial for proper setup.
+
+## How Niko Uses Roles
+
+Niko uses Discord's permission system to determine what actions it can take:
+
+1. **Bot Role**: The role assigned to Niko itself determines its capabilities
+2. **Command Permissions**: Some commands require specific user permissions
+3. **Role Management**: Niko can add/remove roles based on configuration
+
+## Recommended Role Setup
+
+### Bot Role Position
+Place Niko's role:
+- **Above** roles it needs to assign (for autoroles, verification)
+- **Below** roles with administrative permissions (security best practice)
+- **Above** the @everyone role
+
+### Permission Hierarchy
+Niko needs these permissions in its role:
+- View Channel (all channels)
+- Send Messages (text channels)
+- Embed Links (for rich responses)
+- Attach Files (for images)
+- Add Reactions (for buttons)
+
+Additional permissions for specific features:
+- Manage Messages (moderation)
+- Manage Roles (role management)
+- Kick/Ban Members (moderation commands)
+- Manage Channels (channel operations)
+
+## User Permissions
+
+Some commands require specific permissions from the user:
+
+- **Manage Server** permission for configuration commands
+- **Kick Members** for kick commands
+- **Ban Members** for ban commands
+- **Manage Messages** for message management
+
+## Troubleshooting Permission Issues
+
+If a command fails:
+
+1. Check Niko's role position
+2. Verify Niko has the required channel permissions
+3. Check if the channel has overwrite permissions blocking Niko
+4. Ensure the user has the required permissions for the command

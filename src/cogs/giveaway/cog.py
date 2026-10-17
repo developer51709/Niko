@@ -1,5 +1,13 @@
 from .views import *
-from utils.discord_extras import burst_react
+from utils import logging
+from utils.blacklist_manager import BlacklistManager
+
+
+# SQLite accepts 0 and FALSE interchangeably, while MongoDB keeps booleans
+# distinct from numbers. Query both representations so old and new rows are
+# discovered regardless of which backend wrote them.
+_ACTIVE_GIVEAWAY_FILTER = "(ended = 0 OR ended = FALSE)"
+
 
 class Giveaway(commands.Cog):
     def __init__(self, bot):
@@ -32,21 +40,45 @@ class Giveaway(commands.Cog):
             await self.bot.cxn.execute("ALTER TABLE giveaways ADD COLUMN requirements TEXT")
         except Exception:
             pass
+        # Giveaways locked by a blacklist lockdown must stay locked after a
+        # restart, so the column belongs to the schema and not just to memory.
+        try:
+            await self.bot.cxn.execute("ALTER TABLE giveaways ADD COLUMN locked INTEGER DEFAULT 0")
+        except Exception:
+            pass
 
         # Sanitise rows with unparseable end_time
         await self.bot.cxn.execute(
-            "UPDATE giveaways SET ended = 1 WHERE ended = 0 AND end_time NOT LIKE '____-%'"
+            "UPDATE giveaways SET ended = 1 WHERE "
+            f"{_ACTIVE_GIVEAWAY_FILTER} AND end_time NOT LIKE '____-%'"
         )
 
-        # Re-register a unique persistent view for every active giveaway so that
-        # button interactions survive restarts and never bleed between messages.
+        await self.register_persistent_views()
+
+    async def register_persistent_views(self) -> int:
+        """Register the buttons for every active stored giveaway at startup."""
         active = await self.bot.cxn.fetch(
-            "SELECT message_id FROM giveaways WHERE ended = 0"
+            "SELECT message_id FROM giveaways WHERE "
+            f"{_ACTIVE_GIVEAWAY_FILTER}"
         )
+        registered = 0
         for row in active:
-            mid  = row["message_id"]
-            view = _make_persistent_view(self.bot, mid)
-            self.bot.add_view(view, message_id=mid)
+            message_id = row["message_id"]
+            try:
+                view = _make_persistent_view(self.bot, message_id)
+                self.bot.add_view(view, message_id=message_id)
+                registered += 1
+            except Exception as exc:
+                logging.error(
+                    "Giveaway",
+                    f"Could not register persistent buttons for giveaway {message_id}: {exc}",
+                )
+
+        logging.info(
+            "Giveaway",
+            f"Registered persistent buttons for {registered}/{len(active)} active giveaway(s)",
+        )
+        return registered
 
     async def cog_unload(self):
         self.check_giveaways.cancel()
@@ -72,7 +104,7 @@ class Giveaway(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('icon_giveaway')} Giveaway Commands"
+                content=f"### {get_emoji('giveaway')} Giveaway Commands"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
@@ -127,11 +159,17 @@ class Giveaway(commands.Cog):
         try:
             now  = datetime.datetime.now(datetime.timezone.utc)
             rows = await self.bot.cxn.fetch(
-                "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id "
-                "FROM giveaways WHERE ended = 0"
+                "SELECT message_id, channel_id, guild_id, prize, winners_count, end_time, host_id, locked "
+                "FROM giveaways WHERE "
+                f"{_ACTIVE_GIVEAWAY_FILTER}"
             )
+            blacklist = BlacklistManager()
             for row in rows:
                 message_id   = row["message_id"]
+                # A giveaway of a blacklisted server is frozen, not ended: it keeps
+                # its entries and end time so an approved appeal resumes it.
+                if row.get("locked") or blacklist.is_guild_blacklisted(int(row["guild_id"])):
+                    continue
                 end_time_str = row["end_time"]
                 try:
                     end_time = datetime.datetime.fromisoformat(str(end_time_str))
@@ -200,13 +238,9 @@ class Giveaway(commands.Cog):
             except Exception:
                 pass
 
-        win_msg = await channel.send(
+        await channel.send(
             _guild_msg(guild, "winner_announce", mentions=winner_mentions, prize=prize, url=msg_url)
         )
-        # Burst-react on both the original giveaway message and the winner announcement
-        if giveaway_msg:
-            asyncio.create_task(burst_react(self.bot, channel_id, giveaway_msg.id, f"{get_emoji('icon_star')}"))
-        asyncio.create_task(burst_react(self.bot, channel_id, win_msg.id, f"{get_emoji('icon_giveaway')}"))
 
     @check_giveaways.before_loop
     async def before_check_giveaways(self):

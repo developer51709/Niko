@@ -1,3 +1,5 @@
+from utils.nsfw_api import check_message_images
+
 from .views import *
 
 class AutoMod(commands.Cog):
@@ -174,6 +176,22 @@ class AutoMod(commands.Cog):
                     pass
                 return
 
+        # ── NSFW image filter ────────────────────────
+        # Runs after the text filters and fails open when the NSFW API is
+        # unreachable or not configured (see utils.nsfw_api).
+        if cfg["automod"].get("nsfw_image_filter", False):
+            hit, score, filename = await check_message_images(message)
+            if hit:
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+                await utils.log_action(
+                    message.guild, "NSFW Filter",
+                    f"{message.author.mention} posted a flagged image in {message.channel.mention}.\n\n"
+                    f"**File:** `{filename or 'unknown'}`  •  Confidence: `{score:.0%}`")
+                return
+
     # ─── USER-INSTALLED APP ABUSE ─────────────────
 
     async def _check_user_installed_app(self, message: discord.Message, cfg: dict, utils):
@@ -276,7 +294,7 @@ class AutoMod(commands.Cog):
                     elif action == "kick":
                         await member.kick(reason="AutoMod: user-installed app raid abuse")
                     elif action == "warn":
-                        utils.add_warn(
+                        await utils.add_warn(
                             message.guild.id, member.id, self.bot.user.id,
                             "AutoMod: user-installed app raid abuse"
                         )
@@ -382,7 +400,7 @@ class AutoMod(commands.Cog):
         lang = get_lang(guild)
         try:
             await guild.owner.send(
-                f"{get_emoji('icon_danger')} "
+                f"{get_emoji('danger')} "
                 + _t(lang, "extraid_dm",
                      guild=guild.name, count=len(raider_ids),
                      operator=str(operator) if operator else "unknown",
@@ -438,76 +456,79 @@ class AutoMod(commands.Cog):
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
-        guild = entry.guild
-        if not guild:
-            return
+        try:
+            guild = entry.guild
+            if not guild:
+                return
 
-        cfg = self.get_cfg(guild.id)
-        if not cfg["automod"].get("antinuke", False):
-            return
-        if entry.user is None:
-            return
-        if entry.user == self.bot.user or entry.user == guild.owner:
-            return
-        if self.utils().is_whitelisted(guild.id, entry.user):
-            return
+            cfg = self.get_cfg(guild.id)
+            if not cfg["automod"].get("antinuke", False):
+                return
+            if entry.user is None:
+                return
+            if entry.user == self.bot.user or entry.user == guild.owner:
+                return
+            if self.utils().is_whitelisted(guild.id, entry.user):
+                return
 
-        an         = cfg.get("antinuke", {})
-        interval   = an.get("interval", 10)
-        uid        = entry.user.id
-        now        = time.time()
+            an         = cfg.get("antinuke", {})
+            interval   = an.get("interval", 10)
+            uid        = entry.user.id
+            now        = time.time()
 
-        # ── Dedup guard — if this user was already actioned, suppress entirely ──
-        # This ensures exactly ONE enforcement action and ONE DM no matter how
-        # many audit log events the nuke bot generates.
-        guild_actioned = self._nuke_actioned.setdefault(guild.id, {})
-        if now < guild_actioned.get(uid, 0):
-            return
+            # ── Dedup guard — if this user was already actioned, suppress entirely ──
+            # This ensures exactly ONE enforcement action and ONE DM no matter how
+            # many audit log events the nuke bot generates.
+            guild_actioned = self._nuke_actioned.setdefault(guild.id, {})
+            if now < guild_actioned.get(uid, 0):
+                return
 
-        action_map = {
-            discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
-            discord.AuditLogAction.kick:           ("kick",           an.get("kick_threshold", 3)),
-            discord.AuditLogAction.channel_delete: ("channel_delete", an.get("channel_delete_threshold", 3)),
-            discord.AuditLogAction.role_delete:    ("role_delete",    an.get("role_delete_threshold", 3)),
-            discord.AuditLogAction.channel_create: ("channel_create", an.get("channel_create_threshold", 5)),
-            discord.AuditLogAction.webhook_delete: ("webhook_delete", an.get("webhook_delete_threshold", 3)),
-        }
-        if entry.action not in action_map:
-            return
+            action_map = {
+                discord.AuditLogAction.ban:            ("ban",            an.get("ban_threshold", 3)),
+                discord.AuditLogAction.kick:           ("kick",           an.get("kick_threshold", 3)),
+                discord.AuditLogAction.channel_delete: ("channel_delete", an.get("channel_delete_threshold", 3)),
+                discord.AuditLogAction.role_delete:    ("role_delete",    an.get("role_delete_threshold", 3)),
+                discord.AuditLogAction.channel_create: ("channel_create", an.get("channel_create_threshold", 5)),
+                discord.AuditLogAction.webhook_delete: ("webhook_delete", an.get("webhook_delete_threshold", 3)),
+            }
+            if entry.action not in action_map:
+                return
 
-        action_key, threshold = action_map[entry.action]
-        cutoff      = now - interval
-        user_history = self._nuke_history.setdefault(guild.id, {}).setdefault(uid, {})
-        bucket       = user_history.setdefault(action_key, [])
-        bucket.append(now)
-        user_history[action_key] = [t for t in bucket if t >= cutoff]
+            action_key, threshold = action_map[entry.action]
+            cutoff      = now - interval
+            user_history = self._nuke_history.setdefault(guild.id, {}).setdefault(uid, {})
+            bucket       = user_history.setdefault(action_key, [])
+            bucket.append(now)
+            user_history[action_key] = [t for t in bucket if t >= cutoff]
 
-        if len(user_history[action_key]) < threshold:
-            return  # threshold not yet reached
+            if len(user_history[action_key]) < threshold:
+                return  # threshold not yet reached
 
-        # ── Threshold reached ────────────────────────────────────────────────
-        # Mark actioned IMMEDIATELY (synchronously, no await) so any concurrent
-        # audit events for this user are dropped before we even start the task.
-        guild_actioned[uid] = now + max(interval, 60)
-        user_history[action_key] = []
+            # ── Threshold reached ────────────────────────────────────────────────
+            # Mark actioned IMMEDIATELY (synchronously, no await) so any concurrent
+            # audit events for this user are dropped before we even start the task.
+            guild_actioned[uid] = now + max(interval, 60)
+            user_history[action_key] = []
 
-        nuke_action = an.get("action", "strip")
-        offender    = entry.user
-        lang        = get_lang(guild)
+            nuke_action = an.get("action", "strip")
+            offender    = entry.user
+            lang        = get_lang(guild)
 
-        log.warning(
-            "Anti-Nuke",
-            f"Nuke by {offender} in {guild.name} — "
-            f"{threshold}x {action_key} — action: {nuke_action}",
-        )
-
-        # Dispatch enforcement as an independent task so it starts on the very
-        # next event-loop tick without blocking further audit-log processing.
-        asyncio.create_task(
-            self._execute_nuke_action(
-                guild, offender, action_key, threshold, interval, nuke_action, lang
+            log.warning(
+                "Anti-Nuke",
+                f"Nuke by {offender} in {guild.name} — "
+                f"{threshold}x {action_key} — action: {nuke_action}",
             )
-        )
+
+            # Dispatch enforcement as an independent task so it starts on the very
+            # next event-loop tick without blocking further audit-log processing.
+            asyncio.create_task(
+                self._execute_nuke_action(
+                    guild, offender, action_key, threshold, interval, nuke_action, lang
+                )
+            )
+        except Exception as e:
+            log.error("Anti-Nuke", f"Error in on_audit_log_entry_create: {e}")
 
     async def _execute_nuke_action(
         self,
@@ -635,7 +656,7 @@ class AutoMod(commands.Cog):
 
         async def _do_dm():
             await guild.owner.send(
-                f"{get_emoji('icon_danger')} "
+                f"{get_emoji('danger')} "
                 + _t(lang, "raid_dm",
                      guild=guild.name, count=join_count,
                      interval=interval, action=action)

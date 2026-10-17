@@ -1,0 +1,76 @@
+# Reminders Guide
+
+Niko's reminder system helps you remember important events and tasks.
+
+## Setting Reminders
+
+### Basic Reminder
+Set a reminder for yourself:
+
+```
+.reminder set <time> <message>
+```
+
+Examples:
+```
+.reminder set 1h Check the server
+.reminder set 30m Meeting starts
+.reminder set 1d Birthday tomorrow!
+.reminder set 1w Project deadline
+```
+
+## Viewing Reminders
+
+### Your Reminders
+```
+.reminder list
+```
+
+Shows all your active reminders with:
+- Reminder ID
+- Time remaining
+- Message content
+
+### Delete a Reminder
+```
+.reminder delete <id>
+```
+
+### Clear All Reminders
+```
+.reminder clear
+```
+
+## Time Formats
+
+Niko accepts various time formats:
+- `m` - minutes (10m, 30m, 60m)
+- `h` - hours (1h, 2h, 12h)
+- `d` - days (1d, 2d, 30d)
+- `w` - weeks (1w, 2w)
+
+Combined: `1h30m`, `2d12h`, etc.
+
+## How Reminders Work
+
+1. When you set a reminder, it's stored in the database
+2. Niko checks for due reminders regularly
+3. When a reminder is due, Niko sends it to you
+4. Reminders are automatically deleted after being sent
+
+## Reminder Tips
+
+1. **Be specific**: Clear messages help you remember context
+2. **Set multiple reminders**: Break tasks into reminders
+3. **Use for recurring things**: Daily checks, weekly tasks
+4. **Delete completed reminders**: Keep your list clean
+5. **Set timezone-aware reminders**: Be aware of time zones if needed
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `reminder set` | Set a reminder |
+| `reminder list` | View your reminders |
+| `reminder delete` | Delete a reminder |
+| `reminder clear` | Clear all reminders |

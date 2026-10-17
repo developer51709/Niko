@@ -56,23 +56,7 @@ await bot.http.send_soundboard_sound(channel_id, sound_id=sound_id, source_guild
 
 ---
 
-## ✅ 4. Burst / Super Reactions
-**Raw HTTP via `discord.http.Route`**
-**File:** `src/utils/discord_extras.py` → `burst_react()`
-**Wired into:** Giveaway winners (`⭐` on giveaway msg, `🎉` on announcement), Level-ups (`🎉`)
-**Command:** `/burst <message_id> <emoji>` (in `src/cogs/system/nitro.py`)
-
-Bot accounts can send burst/super reactions without Nitro. Animated burst effect across screen.
-
-```python
-route = Route("PUT", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me",
-              channel_id=..., message_id=..., emoji=url_encoded_emoji)
-await bot.http.request(route, params={"burst": "true"})
-```
-
----
-
-## ✅ 5. Components v2 — Section + Thumbnail (Nitro aesthetic)
+## ✅ 4. Components v2 — Section + Thumbnail (Nitro aesthetic)
 **`discord.ui.Section` · `discord.ui.Thumbnail` · `discord.ui.UnfurledMediaItem`**
 **File:** `src/cogs/system/nitro.py` → `_user_profile_ctx()` context menu
 
@@ -90,7 +74,7 @@ view.add_item(discord.ui.Container(section, accent_colour=discord.Colour(0xc8a88
 
 ---
 
-## ✅ 6. Message Forwarding (Discord 2024 feature)
+## ✅ 5. Message Forwarding (Discord 2024 feature)
 **Raw HTTP via `Route` — `message_reference.type = 1`**
 **File:** `src/utils/discord_extras.py` → `forward_message()`
 **Command:** `/forward <message_id> <destination>` (in `src/cogs/system/nitro.py`)
@@ -105,7 +89,7 @@ await bot.http.request(Route("POST", "/channels/{channel_id}/messages", channel_
 
 ---
 
-## ✅ 7. Context Menus (Nitro-tier discoverability)
+## ✅ 6. Context Menus (Nitro-tier discoverability)
 **`discord.app_commands.ContextMenu` — registered via `bot.tree.add_command()`**
 **File:** `src/cogs/system/nitro.py` — `☕ Ask Niko` (message), `📊 User Profile` (user)
 
@@ -120,7 +104,7 @@ self.bot.tree.remove_command(self._ctx_ask.name, type=self._ctx_ask.type)
 
 ---
 
-## ✅ 8. Sticker Management (Nitro-adjacent)
+## ✅ 7. Sticker Management (Nitro-adjacent)
 **`bot.http.get_all_guild_stickers(guild_id)` — `guild.fetch_sticker(id)` — `channel.send(stickers=[sticker])`**
 **Commands:** `/sticker list`, `/sticker send` with autocomplete (in `src/cogs/system/nitro.py`)
 
@@ -128,7 +112,7 @@ Bots can list, send, and upload guild stickers. Sending requires a `discord.Stic
 
 ---
 
-## ✅ 9. Stage Channel Speaker
+## ✅ 8. Stage Channel Speaker
 **`bot.http.edit_my_voice_state(guild_id, channel_id=..., suppress=False, request_to_speak_timestamp=...)`**
 **File:** `src/utils/discord_extras.py` → `stage_become_speaker()`
 **Command:** `/stage speak` (in `src/cogs/system/nitro.py`)
@@ -137,14 +121,14 @@ Makes the bot a speaker on a Stage channel. Must already be in the Stage. Sends 
 
 ---
 
-## ✅ 10. Voice Status Command
+## ✅ 9. Voice Status Command
 **`/vcstatus <text>` (in `src/cogs/system/nitro.py`)**
 
 Manual override for the voice channel status. Useful for VoiceMaster channels. Wraps `set_voice_status()` from `discord_extras.py`.
 
 ---
 
-## 📋 11. Poll Vote Gateway Events (not yet wired)
+## 📋 10. Poll Vote Gateway Events (not yet wired)
 ```python
 @bot.event
 async def on_poll_vote_add(payload: discord.RawPollVoteActionEvent):
@@ -154,7 +138,7 @@ async def on_poll_vote_add(payload: discord.RawPollVoteActionEvent):
 
 ---
 
-## 📋 12. Forum Thread Tags + Search (not yet wired)
+## 📋 11. Forum Thread Tags + Search (not yet wired)
 **`bot.http.start_thread_in_forum(channel_id, ..., applied_tags=[tag_id])`**
 **Thread search (undocumented):**
 ```python
@@ -165,7 +149,7 @@ results = await bot.http.request(route, params={"query": "café", "limit": 25})
 
 ---
 
-## 📋 13. GUILD_SYNC Gateway Opcode (undocumented — op 12)
+## 📋 12. GUILD_SYNC Gateway Opcode (undocumented — op 12)
 Not part of discord.py's public API. Forces member presence sync for specific guilds.
 ```python
 await ws.send_as_json({"op": 12, "d": [str(guild_id)]})
@@ -174,7 +158,7 @@ await ws.send_as_json({"op": 12, "d": [str(guild_id)]})
 
 ---
 
-## 📋 14. Role Connections / Linked Roles
+## 📋 13. Role Connections / Linked Roles
 Push XP level / economy rank to Discord so admins can gate roles on it natively.
 ```python
 # Requires user OAuth token (not bot token):
@@ -184,7 +168,7 @@ PUT /users/@me/applications/{app_id}/role-connection
 
 ---
 
-## 📋 15. SKUs & Entitlements (monetization)
+## 📋 14. SKUs & Entitlements (monetization)
 **`bot.http.get_skus(app_id)` · `bot.http.get_entitlements(app_id, ...)` · `bot.http.consume_entitlement(app_id, id)`**
 Gate premium features behind Discord's native subscription system — no Stripe needed.
 ```python
@@ -198,7 +182,6 @@ has_premium = any(e["sku_id"] == PREMIUM_SKU_ID for e in entitlements)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Burst/super reactions | ✅ Implemented | No Nitro needed for bots |
 | Soundboard playback | ✅ Implemented | Guild + default sounds |
 | Voice channel status | ✅ Implemented | Music auto-sets it |
 | Animated emoji | ✅ Always available | `<a:name:id>` format |

@@ -1,23 +1,15 @@
 # Optional: Add your owner IDs here if you want multiple owners
 OWNER_IDS = {
-    1435978243160145981,
-    1485732377958416565,
-    1492310425348608170,
-    1495618222488162439
-}
-
-# Developer user IDs
-DEVELOPER_IDS = {
-    1479968201319125013, # n.y.x.e.n
-    1435978243160145981, # nyxen_alt2
-    1485732377958416565,
-    1495618222488162439  # nyxenwastaken
+    1052690741874401360
 }
 
 # support server guild id
-SUPPORT_GUILD = 1497250915034337330
+SUPPORT_GUILD  = 1497250915034337330
 
-# role ids for the badges in the userinfo command
-BUGBOUNTY_ROLE = 1526272293368496128
-SUPPORTER_ROLE = 1523451924018364569
-PARTNER_ROLE = 1526302927684239482
+# MrBeast scam experiment — private staff-only review server where reported
+# scam images are sent for confirmation before joining the detection database.
+SCAM_REVIEW_GUILD   = 1497250915034337330
+SCAM_REVIEW_CHANNEL = 1555030193133981777  # set to a channel ID in the review server to enable
+
+# Support-server role IDs are provisioned by `.staff supportsetup` and stored
+# in support_server_config; do not hardcode role IDs here.

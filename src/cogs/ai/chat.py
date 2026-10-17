@@ -28,29 +28,6 @@ MESSAGES = {
             "history_empty":   "Aún no tienes historial de conversación con Niko.",
         }
     },
-    "cafe": {
-        "en": {
-            "favor_score":     "{name} and i have a vibe score of **{score}**! ☕✨",
-            "no_memory":       "i don't have any notes on {name} yet... we should chat more! ☕📝",
-            "memory_title":    "☕ café notes on {name}",
-            "history_cleared": "☕ poof! i've forgotten everything — fresh start, like a new cup~ ✨",
-            "history_empty":   "we haven't really chatted yet... come say hi! ☕",
-        },
-        "de": {
-            "favor_score":     "{name} und ich haben einen Vibe-Wert von **{score}**! ☕✨",
-            "no_memory":       "ich habe noch keine Notizen über {name}... wir sollten mehr plaudern! ☕📝",
-            "memory_title":    "☕ Café-Notizen über {name}",
-            "history_cleared": "☕ puff! alles vergessen — frischer Start, wie ein neuer Kaffee~ ✨",
-            "history_empty":   "wir haben noch nicht wirklich geplaudert... sag hallo! ☕",
-        },
-        "es": {
-            "favor_score":     "{name} y yo tenemos una puntuación de vibras de **{score}**! ☕✨",
-            "no_memory":       "aún no tengo apuntes sobre {name}… ¡deberíamos charlar más! ☕📝",
-            "memory_title":    "☕ apuntes del café sobre {name}",
-            "history_cleared": "☕ ¡puf! lo olvidé todo — empezamos de cero, como una taza nueva~ ✨",
-            "history_empty":   "todavía no hemos charlado… ¡ven a saludar! ☕",
-        }
-    }
 }
 
 msg = make_msg(MESSAGES)
@@ -89,7 +66,7 @@ class AICog(commands.Cog):
             except Exception as e:
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"### {get_emoji('icon_cross')} Error\nFailed to display memory:\n```\n{e}\n```")
+                    discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Error\nFailed to display memory:\n```\n{e}\n```")
                 ))
                 await ctx.send(view=view)
 

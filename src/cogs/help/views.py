@@ -153,34 +153,30 @@ _UI_STRINGS: dict[str, dict] = {
 
 # (label, emoji) — descriptions are pulled from CATEGORY_DESCS per lang
 _CATEGORY_LIST: List[Tuple[str, str]] = [
-    ("General",        f"{get_emoji('icon_general')}"),
-    ("Fun",            f"{get_emoji('icon_games')}"),
-    ("Gambling",       f"{get_emoji('icon_gambling')}"),
-    ("Economy",        f"{get_emoji('icon_economy')}"),
-    ("Roleplay",       f"{get_emoji('icon_roleplay')}"),
-    ("Info",           f"{get_emoji('icon_stats')}"),
-    ("Utility",        f"{get_emoji('icon_utility')}"),
-    ("AI",             f"{get_emoji('icon_ai')}"),
-    ("Moderation",     f"{get_emoji('icon_moderation')}"),
-    ("AutoMod",        f"{get_emoji('icon_automod')}"),
-    ("EmojiManager",   f"{get_emoji('icon_paint')}"),
-    ("Onboarding",     f"{get_emoji('icon_welcome')}"),
-    ("NSFW",           f"{get_emoji('warning')}"),
+    ("General",        f"{get_emoji('general')}"),
+    ("Fun",            f"{get_emoji('games')}"),
+    ("Gambling",       f"{get_emoji('gambling')}"),
+    ("Economy",        f"{get_emoji('economy')}"),
+    ("Roleplay",       f"{get_emoji('roleplay')}"),
+    ("Info",           f"{get_emoji('stats')}"),
+    ("Utility",        f"{get_emoji('utility')}"),
+    ("AI",             f"{get_emoji('ai')}"),
+    ("Moderation",     f"{get_emoji('moderation')}"),
+    ("AutoMod",        f"{get_emoji('automod')}"),
+    ("EmojiManager",   f"{get_emoji('paint')}"),
+    ("Onboarding",     f"{get_emoji('welcome')}"),
     ("Music",          f"{get_emoji('music')}"),
-    ("Leveling",       f"{get_emoji('icon_leveling')}"),
-    ("Notifier",       f"{get_emoji('icon_megaphone')}"),
-    ("VoiceMaster",    f"{get_emoji('icon_voicemaster')}"),
-    ("Ticket",         f"{get_emoji('icon_ticket')}"),
-    ("Image Tools",    f"{get_emoji('icon_image')}"),
-    ("Giveaway",       f"{get_emoji('icon_giveaway')}"),
-    ("Reminders",      f"{get_emoji('icon_reminder')}"),
-    ("Tags",           f"{get_emoji('icon_message')}"),
-    ("Birthdays",      f"{get_emoji('icon_heart')}"),
-    ("Highlights",     f"{get_emoji('notepad')}"),
-    ("Polls",          f"{get_emoji('icon_question')}"),
-    ("Suggestions",    f"{get_emoji('icon_lightbulb')}"),
+    ("Leveling",       f"{get_emoji('leveling')}"),
+    ("Notifier",       f"{get_emoji('megaphone')}"),
+    ("VoiceMaster",    f"{get_emoji('voicemaster')}"),
+    ("Ticket",         f"{get_emoji('ticket')}"),
+    ("Image Tools",    f"{get_emoji('image')}"),
+    ("Giveaway",       f"{get_emoji('giveaway')}"),
+    ("Birthdays",      f"{get_emoji('heart')}"),
+    ("Polls",          f"{get_emoji('question')}"),
+    ("Suggestions",    f"{get_emoji('lightbulb')}"),
     ("Starboard",      f"{get_emoji('star')}"),
-    ("Customization",  f"{get_emoji('icon_edit')}"),
+    ("Customization",  f"{get_emoji('edit')}"),
 ]
 
 CATEGORY_DESCS: dict[str, dict[str, str]] = {
@@ -197,7 +193,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "AutoMod commands",
         "EmojiManager":  "Emoji manager commands",
         "Onboarding":    "Onboarding commands",
-        "NSFW":          "NSFW commands",
         "Music":         "Music commands",
         "Leveling":      "Leveling commands",
         "Notifier":      "Social media notifier",
@@ -205,10 +200,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket commands",
         "Image Tools":   "Image manipulation commands",
         "Giveaway":      "Giveaway commands",
-        "Reminders":     "Personal reminder system",
-        "Tags":          "Custom server tags",
         "Birthdays":     "Server birthdays",
-        "Highlights":    "Keyword DM notifications",
         "Polls":         "Multi-option polls",
         "Suggestions":   "Server suggestions",
         "Starboard":     "Highlight wall for popular messages",
@@ -227,7 +219,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "Automatische Moderation",
         "EmojiManager":  "Emoji-Verwaltung",
         "Onboarding":    "Willkommens-Einrichtung",
-        "NSFW":          "NSFW-Befehle",
         "Music":         "Musikbefehle",
         "Leveling":      "Leveling-Befehle",
         "Notifier":      "Social-Media-Benachrichtigungen",
@@ -235,10 +226,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Ticket-Befehle",
         "Image Tools":   "Bildbearbeitungsbefehle",
         "Giveaway":      "Gewinnspiel-Befehle",
-        "Reminders":     "Persönliche Erinnerungen",
-        "Tags":          "Benutzerdefinierte Server-Tags",
         "Birthdays":     "Server-Geburtstage",
-        "Highlights":    "Schlüsselwort-DM-Benachrichtigungen",
         "Polls":         "Mehrfach-Umfragen",
         "Suggestions":   "Server-Vorschläge",
         "Starboard":     "Highlight-Wand für beliebte Nachrichten",
@@ -257,7 +245,6 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "AutoMod":       "Comandos de automoderación",
         "EmojiManager":  "Gestión de emojis",
         "Onboarding":    "Bienvenida a nuevos miembros",
-        "NSFW":          "Comandos NSFW",
         "Music":         "Comandos de música",
         "Leveling":      "Comandos de niveles",
         "Notifier":      "Notificaciones de redes sociales",
@@ -265,10 +252,7 @@ CATEGORY_DESCS: dict[str, dict[str, str]] = {
         "Ticket":        "Comandos de tickets",
         "Image Tools":   "Manipulación de imágenes",
         "Giveaway":      "Comandos de sorteos",
-        "Reminders":     "Sistema de recordatorios personales",
-        "Tags":          "Tags personalizados del servidor",
         "Birthdays":     "Cumpleaños del servidor",
-        "Highlights":    "Notificaciones DM por palabras clave",
         "Polls":         "Encuestas multi-opción",
         "Suggestions":   "Sugerencias del servidor",
         "Starboard":     "Muro de mensajes populares",
@@ -282,103 +266,87 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
     "en": {
         "General": "",
         "Fun": (
-            f"{get_emoji('icon_games')} **Fun Commands**\n"
+            f"{get_emoji('games')} **Fun Commands**\n"
             "> Commands for fun and games!"
         ),
         "Gambling": (
-            f"{get_emoji('icon_gambling')} **Casino Commands**\n"
+            f"{get_emoji('gambling')} **Casino Commands**\n"
             "> Play games of chance!"
         ),
         "Economy": (
-            f"{get_emoji('icon_economy')} **Economy Commands**\n"
+            f"{get_emoji('economy')} **Economy Commands**\n"
             "> Earn and spend virtual currency!"
         ),
         "Roleplay": (
-            f"{get_emoji('icon_roleplay')} **Roleplay Commands**\n"
+            f"{get_emoji('roleplay')} **Roleplay Commands**\n"
             "> Fun roleplay commands!"
         ),
         "Info": (
-            f"{get_emoji('icon_stats')} **Information Commands**\n"
+            f"{get_emoji('stats')} **Information Commands**\n"
             "> Get info about users, servers, and more!"
         ),
         "Utility": (
-            f"{get_emoji('icon_utility')} **Utility Commands**\n"
+            f"{get_emoji('utility')} **Utility Commands**\n"
             "> Useful tools and utilities."
         ),
         "AI": (
-            f"{get_emoji('icon_ai')} **AI Commands**\n"
+            f"{get_emoji('ai')} **AI Commands**\n"
             "> Interact with Niko's AI features!"
         ),
         "Moderation": (
-            f"{get_emoji('icon_moderation')} **Moderation Commands**\n"
+            f"{get_emoji('moderation')} **Moderation Commands**\n"
             "> Moderation tools for server management."
         ),
         "AutoMod": (
-            f"{get_emoji('icon_automod')} **AutoMod Commands**\n"
+            f"{get_emoji('automod')} **AutoMod Commands**\n"
             "> Automated moderation to keep your server safe."
         ),
         "EmojiManager": (
-            f"{get_emoji('icon_paint')} **Emoji Manager Commands**\n"
+            f"{get_emoji('paint')} **Emoji Manager Commands**\n"
             "> Manage custom emojis in your server."
         ),
         "Onboarding": (
-            f"{get_emoji('icon_welcome')} **Onboarding Commands**\n"
+            f"{get_emoji('welcome')} **Onboarding Commands**\n"
             "> Set up welcome messages and roles for new members."
-        ),
-        "NSFW": (
-            f"{get_emoji('warning')} **NSFW Commands**\n"
-            "> These commands only work in NSFW-marked channels."
         ),
         "Music": (
             f"{get_emoji('music')} **Music Commands**\n"
             "> Play music in your voice channel!"
         ),
         "Leveling": (
-            f"{get_emoji('icon_leveling')} **Leveling Commands**\n"
+            f"{get_emoji('leveling')} **Leveling Commands**\n"
             "> Level up by chatting and earning XP!"
         ),
         "Notifier": (
-            f"{get_emoji('icon_megaphone')} **Notifier Commands**\n"
+            f"{get_emoji('megaphone')} **Notifier Commands**\n"
             "> Get notified about new posts from your favourite creators!"
         ),
         "VoiceMaster": (
-            f"{get_emoji('icon_voicemaster')} **VoiceMaster Commands**\n"
+            f"{get_emoji('voicemaster')} **VoiceMaster Commands**\n"
             "> Create and manage temporary voice channels!"
         ),
         "Ticket": (
-            f"{get_emoji('icon_ticket')} **Ticket Commands**\n"
+            f"{get_emoji('ticket')} **Ticket Commands**\n"
             "> Create and manage support tickets."
         ),
         "Image Tools": (
-            f"{get_emoji('icon_image')} **Image Tools**\n"
+            f"{get_emoji('image')} **Image Tools**\n"
             "> Manipulate images with these commands!"
         ),
         "Giveaway": (
-            f"{get_emoji('icon_giveaway')} **Giveaway Commands**\n"
+            f"{get_emoji('giveaway')} **Giveaway Commands**\n"
             "> Host and manage giveaways in your server!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Reminder Commands**\n"
-            "> Schedule personal reminders, list and manage them."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Tag Commands**\n"
-            "> Create custom server tags — quick text snippets keyed by name."
-        ),
         "Birthdays": (
-            f"{get_emoji('icon_heart')} **Birthday Commands**\n"
+            f"{get_emoji('heart')} **Birthday Commands**\n"
             "> Set and announce server member birthdays."
         ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Highlight Commands**\n"
-            "> Get DMed when keywords you care about are mentioned."
-        ),
         "Polls": (
-            f"{get_emoji('icon_question')} **Poll Commands**\n"
+            f"{get_emoji('question')} **Poll Commands**\n"
             "> Multi-option polls with live vote buttons."
         ),
         "Suggestions": (
-            f"{get_emoji('icon_lightbulb')} **Suggestion Commands**\n"
+            f"{get_emoji('lightbulb')} **Suggestion Commands**\n"
             "> Submit and vote on server suggestions; admins can approve or deny."
         ),
         "Starboard": (
@@ -386,110 +354,94 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Auto-mirror popular messages (⭐) to a starboard channel."
         ),
         "Customization": (
-            f"{get_emoji('icon_edit')} **Customization Commands**\n"
+            f"{get_emoji('edit')} **Customization Commands**\n"
             "> Customize Niko's pfp, banner, and more!"
         ),
     },
     "de": {
         "General": "",
         "Fun": (
-            f"{get_emoji('icon_games')} **Spaßbefehle**\n"
+            f"{get_emoji('games')} **Spaßbefehle**\n"
             "> Befehle für Spaß und Spiele!"
         ),
         "Gambling": (
-            f"{get_emoji('icon_gambling')} **Casino-Befehle**\n"
+            f"{get_emoji('gambling')} **Casino-Befehle**\n"
             "> Spiele Glücksspiele!"
         ),
         "Economy": (
-            f"{get_emoji('icon_economy')} **Wirtschaftsbefehle**\n"
+            f"{get_emoji('economy')} **Wirtschaftsbefehle**\n"
             "> Verdiene und gib virtuelle Währung aus!"
         ),
         "Roleplay": (
-            f"{get_emoji('icon_roleplay')} **Rollenspiel-Befehle**\n"
+            f"{get_emoji('roleplay')} **Rollenspiel-Befehle**\n"
             "> Spaßige Rollenspiel-Befehle!"
         ),
         "Info": (
-            f"{get_emoji('icon_stats')} **Informationsbefehle**\n"
+            f"{get_emoji('stats')} **Informationsbefehle**\n"
             "> Informationen zu Nutzern, Servern und mehr!"
         ),
         "Utility": (
-            f"{get_emoji('icon_utility')} **Hilfswerkzeuge**\n"
+            f"{get_emoji('utility')} **Hilfswerkzeuge**\n"
             "> Nützliche Tools und Dienstprogramme."
         ),
         "AI": (
-            f"{get_emoji('icon_ai')} **KI-Befehle**\n"
+            f"{get_emoji('ai')} **KI-Befehle**\n"
             "> Interagiere mit Nikos KI-Funktionen!"
         ),
         "Moderation": (
-            f"{get_emoji('icon_moderation')} **Moderationsbefehle**\n"
+            f"{get_emoji('moderation')} **Moderationsbefehle**\n"
             "> Moderationstools für die Serververwaltung."
         ),
         "AutoMod": (
-            f"{get_emoji('icon_automod')} **AutoMod-Befehle**\n"
+            f"{get_emoji('automod')} **AutoMod-Befehle**\n"
             "> Automatische Moderation für deinen Server."
         ),
         "EmojiManager": (
-            f"{get_emoji('icon_paint')} **Emoji-Manager-Befehle**\n"
+            f"{get_emoji('paint')} **Emoji-Manager-Befehle**\n"
             "> Verwalte benutzerdefinierte Emojis auf deinem Server."
         ),
         "Onboarding": (
-            f"{get_emoji('icon_welcome')} **Onboarding-Befehle**\n"
+            f"{get_emoji('welcome')} **Onboarding-Befehle**\n"
             "> Richte Willkommensnachrichten und Rollen für neue Mitglieder ein."
-        ),
-        "NSFW": (
-            f"{get_emoji('icon_nsfw')} **NSFW-Befehle**\n"
-            "> Diese Befehle funktionieren nur in als NSFW markierten Kanälen."
         ),
         "Music": (
             f"{get_emoji('music')} **Musikbefehle**\n"
             "> Musik in deinem Sprachkanal abspielen!"
         ),
         "Leveling": (
-            f"{get_emoji('icon_leveling')} **Leveling-Befehle**\n"
+            f"{get_emoji('leveling')} **Leveling-Befehle**\n"
             "> Steige durch Chatten und XP-Sammeln auf!"
         ),
         "Notifier": (
-            f"{get_emoji('icon_megaphone')} **Benachrichtigungs-Befehle**\n"
+            f"{get_emoji('megaphone')} **Benachrichtigungs-Befehle**\n"
             "> Werde über neue Beiträge deiner Lieblings-Ersteller benachrichtigt!"
         ),
         "VoiceMaster": (
-            f"{get_emoji('icon_voicemaster')} **VoiceMaster-Befehle**\n"
+            f"{get_emoji('voicemaster')} **VoiceMaster-Befehle**\n"
             "> Temporäre Sprachkanäle erstellen und verwalten!"
         ),
         "Ticket": (
-            f"{get_emoji('icon_ticket')} **Ticket-Befehle**\n"
+            f"{get_emoji('ticket')} **Ticket-Befehle**\n"
             "> Support-Tickets erstellen und verwalten."
         ),
         "Image Tools": (
-            f"{get_emoji('icon_image')} **Bildbearbeitungs-Befehle**\n"
+            f"{get_emoji('image')} **Bildbearbeitungs-Befehle**\n"
             "> Bilder mit diesen Befehlen bearbeiten!"
         ),
         "Giveaway": (
-            f"{get_emoji('icon_giveaway')} **Gewinnspiel-Befehle**\n"
+            f"{get_emoji('giveaway')} **Gewinnspiel-Befehle**\n"
             "> Gewinnspiele auf deinem Server veranstalten und verwalten!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Erinnerungs-Befehle**\n"
-            "> Persönliche Erinnerungen planen, anzeigen und verwalten."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Tag-Befehle**\n"
-            "> Benutzerdefinierte Server-Tags — schnelle Textbausteine per Name."
-        ),
         "Birthdays": (
-            f"{get_emoji('icon_heart')} **Geburtstags-Befehle**\n"
+            f"{get_emoji('heart')} **Geburtstags-Befehle**\n"
             "> Geburtstage von Mitgliedern setzen und ankündigen."
         ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Highlight-Befehle**\n"
-            "> Lass dir per DM Bescheid geben, wenn deine Schlüsselwörter genannt werden."
-        ),
         "Polls": (
-            f"{get_emoji('icon_question')} **Umfrage-Befehle**\n"
+            f"{get_emoji('question')} **Umfrage-Befehle**\n"
             "> Mehrfach-Umfragen mit Live-Vote-Buttons."
         ),
         "Suggestions": (
-            f"{get_emoji('icon_lightbulb')} **Vorschlags-Befehle**\n"
+            f"{get_emoji('lightbulb')} **Vorschlags-Befehle**\n"
             "> Vorschläge einreichen und abstimmen; Admins können annehmen oder ablehnen."
         ),
         "Starboard": (
@@ -497,110 +449,94 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Beliebte Nachrichten (⭐) automatisch in einen Starboard-Kanal spiegeln."
         ),
         "Customization": (
-            f"{get_emoji('icon_edit')} **Anpassungsbefehle**\n"
+            f"{get_emoji('edit')} **Anpassungsbefehle**\n"
             "> Nikos Profilbild, Banner und mehr anpassen!"
         ),
     },
     "es": {
         "General": "",
         "Fun": (
-            f"{get_emoji('icon_games')} **Comandos Divertidos**\n"
+            f"{get_emoji('games')} **Comandos Divertidos**\n"
             "> ¡Comandos para diversión y juegos!"
         ),
         "Gambling": (
-            f"{get_emoji('icon_gambling')} **Comandos del Casino**\n"
+            f"{get_emoji('gambling')} **Comandos del Casino**\n"
             "> ¡Juega juegos de azar!"
         ),
         "Economy": (
-            f"{get_emoji('icon_economy')} **Comandos de Economía**\n"
+            f"{get_emoji('economy')} **Comandos de Economía**\n"
             "> ¡Gana y gasta moneda virtual!"
         ),
         "Roleplay": (
-            f"{get_emoji('icon_roleplay')} **Comandos de Rol**\n"
+            f"{get_emoji('roleplay')} **Comandos de Rol**\n"
             "> ¡Comandos divertidos de rol!"
         ),
         "Info": (
-            f"{get_emoji('icon_stats')} **Comandos de Información**\n"
+            f"{get_emoji('stats')} **Comandos de Información**\n"
             "> ¡Obtén info sobre usuarios, servidores y más!"
         ),
         "Utility": (
-            f"{get_emoji('icon_utility')} **Comandos de Utilidad**\n"
+            f"{get_emoji('utility')} **Comandos de Utilidad**\n"
             "> Herramientas útiles y utilidades."
         ),
         "AI": (
-            f"{get_emoji('icon_ai')} **Comandos de IA**\n"
+            f"{get_emoji('ai')} **Comandos de IA**\n"
             "> ¡Interactúa con las funciones de IA de Niko!"
         ),
         "Moderation": (
-            f"{get_emoji('icon_moderation')} **Comandos de Moderación**\n"
+            f"{get_emoji('moderation')} **Comandos de Moderación**\n"
             "> Herramientas de moderación para gestionar el servidor."
         ),
         "AutoMod": (
-            f"{get_emoji('icon_automod')} **Comandos de AutoMod**\n"
+            f"{get_emoji('automod')} **Comandos de AutoMod**\n"
             "> Moderación automática para mantener tu servidor seguro."
         ),
         "EmojiManager": (
-            f"{get_emoji('icon_paint')} **Comandos del Gestor de Emojis**\n"
+            f"{get_emoji('paint')} **Comandos del Gestor de Emojis**\n"
             "> Gestiona emojis personalizados en tu servidor."
         ),
         "Onboarding": (
-            f"{get_emoji('icon_welcome')} **Comandos de Bienvenida**\n"
+            f"{get_emoji('welcome')} **Comandos de Bienvenida**\n"
             "> Configura mensajes de bienvenida y roles para nuevos miembros."
-        ),
-        "NSFW": (
-            f"{get_emoji('icon_nsfw')} **Comandos NSFW**\n"
-            "> Estos comandos solo funcionan en canales marcados como NSFW."
         ),
         "Music": (
             f"{get_emoji('music')} **Comandos de Música**\n"
             "> ¡Reproduce música en tu canal de voz!"
         ),
         "Leveling": (
-            f"{get_emoji('icon_leveling')} **Comandos de Niveles**\n"
+            f"{get_emoji('leveling')} **Comandos de Niveles**\n"
             "> ¡Sube de nivel chateando y ganando XP!"
         ),
         "Notifier": (
-            f"{get_emoji('icon_megaphone')} **Comandos de Notificaciones**\n"
+            f"{get_emoji('megaphone')} **Comandos de Notificaciones**\n"
             "> ¡Recibe notificaciones sobre nuevas publicaciones de tus creadores favoritos!"
         ),
         "VoiceMaster": (
-            f"{get_emoji('icon_voicemaster')} **Comandos de VoiceMaster**\n"
+            f"{get_emoji('voicemaster')} **Comandos de VoiceMaster**\n"
             "> ¡Crea y gestiona canales de voz temporales!"
         ),
         "Ticket": (
-            f"{get_emoji('icon_ticket')} **Comandos de Tickets**\n"
+            f"{get_emoji('ticket')} **Comandos de Tickets**\n"
             "> Crea y gestiona tickets de soporte."
         ),
         "Image Tools": (
-            f"{get_emoji('icon_image')} **Herramientas de Imagen**\n"
+            f"{get_emoji('image')} **Herramientas de Imagen**\n"
             "> ¡Manipula imágenes con estos comandos!"
         ),
         "Giveaway": (
-            f"{get_emoji('icon_giveaway')} **Comandos de Sorteos**\n"
+            f"{get_emoji('giveaway')} **Comandos de Sorteos**\n"
             "> ¡Organiza y gestiona sorteos en tu servidor!"
         ),
-        "Reminders": (
-            f"{get_emoji('icon_reminder')} **Comandos de Recordatorios**\n"
-            "> Programa recordatorios personales, lístalos y gestiónalos."
-        ),
-        "Tags": (
-            f"{get_emoji('icon_message')} **Comandos de Tags**\n"
-            "> Crea tags personalizados — fragmentos de texto rápidos por nombre."
-        ),
         "Birthdays": (
-            f"{get_emoji('icon_heart')} **Comandos de Cumpleaños**\n"
+            f"{get_emoji('heart')} **Comandos de Cumpleaños**\n"
             "> Establece y anuncia cumpleaños de los miembros del servidor."
         ),
-        "Highlights": (
-            f"{get_emoji('notepad')} **Comandos de Highlights**\n"
-            "> Recibe DMs cuando se mencionan tus palabras clave."
-        ),
         "Polls": (
-            f"{get_emoji('icon_question')} **Comandos de Encuestas**\n"
+            f"{get_emoji('question')} **Comandos de Encuestas**\n"
             "> Encuestas multi-opción con botones de voto en vivo."
         ),
         "Suggestions": (
-            f"{get_emoji('icon_lightbulb')} **Comandos de Sugerencias**\n"
+            f"{get_emoji('lightbulb')} **Comandos de Sugerencias**\n"
             "> Envía y vota sugerencias; los admins pueden aprobar o denegar."
         ),
         "Starboard": (
@@ -608,7 +544,7 @@ CATEGORY_HEADERS: dict[str, dict[str, str]] = {
             "> Refleja automáticamente mensajes populares (⭐) a un canal starboard."
         ),
         "Customization": (
-            f"{get_emoji('icon_edit')} **Comandos de Personalización**\n"
+            f"{get_emoji('edit')} **Comandos de Personalización**\n"
             "> ¡Personaliza la foto de perfil, banner y más de Niko!"
         ),
     },
@@ -622,13 +558,12 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Economy":       ["EconomyCog"],
     "Roleplay":      ["RolePlayCog"],
     "Info":          ["InfoCog", "LegalCog"],
-    "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog"],
+    "Utility":       ["UtilityCog", "Snipe", "Define", "AFKCog", "Tags", "Highlights", "Reminders"],
     "AI":            ["AICog", "AIConfig"],
     "Moderation":    ["Moderation"],
     "AutoMod":       ["AutoMod"],
     "EmojiManager":  ["EmojiManagerCog"],
     "Onboarding":    ["Onboarding"],
-    "NSFW":          ["NSFW"],
     "Music":         ["MusicSystem"],
     "Leveling":      ["Leveling"],
     "Notifier":      ["Notifier", "YouTube"],
@@ -636,10 +571,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Ticket":        ["Tickets"],
     "Image Tools":   ["ImageTools", "AiImageTools"],
     "Giveaway":      ["Giveaway"],
-    "Reminders":     ["Reminders"],
-    "Tags":          ["Tags"],
     "Birthdays":     ["Birthdays"],
-    "Highlights":    ["Highlights"],
     "Polls":         ["Polls"],
     "Suggestions":   ["Suggestions"],
     "Starboard":     ["Starboard"],
@@ -696,12 +628,11 @@ def _general_text(bot: commands.Bot, lang: str) -> str:
         f"{_ui(lang, 'general_intro')}\n\n"
         f"{_ui(lang, 'general_about_title')}\n"
         f"{_ui(lang, 'general_about_body')}\n\n"
-        f"{_ui(lang, 'general_links_title', icon=get_emoji('icon_link'))}\n"
+        f"{_ui(lang, 'general_links_title', icon=get_emoji('link'))}\n"
         f"-# [GitHub](https://github.com/developer51709/Niko) • "
         f"[Invite]({invite}) • "
         f"[Website]({links.WEBSITE}) • "
-        f"[Support Server]({links.SUPPORT_SERVER}) • "
-        f"[Community Server]({links.COMMUNITY_SERVER})"
+        f"[Support Server]({links.SUPPORT_SERVER})"
     )
 
 
@@ -722,7 +653,11 @@ async def _commands_text(
     for cog_name in cog_names:
         cog = bot.get_cog(cog_name)
         if cog:
-            commands_list.extend(cog.get_commands())
+            # Hidden commands (for example .dmpurge) are operator tooling: the
+            # help menu must not advertise them even from a listed cog.
+            commands_list.extend(
+                cmd for cmd in cog.get_commands() if not getattr(cmd, "hidden", False)
+            )
 
     if not commands_list:
         return _ui(lang, "no_commands"), 1
@@ -760,7 +695,7 @@ async def _command_detail_text(
 
     no_desc = _ui(lang, "no_desc")
     lines   = [
-        f"### {get_emoji('icon_question')} `{cmd.name}`",
+        f"### {get_emoji('question')} `{cmd.name}`",
         "",
         f"**{_ui(lang, 'detail_description')}**\n"
         f"{get_command_help(ctx_or_interaction, cmd) or no_desc}",

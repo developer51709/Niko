@@ -6,6 +6,7 @@ from .commands.leaderboard import LeaderboardMixin
 from .commands.shop import ShopMixin
 from .commands.bank import BankMixin
 from .commands.lottery import LotteryMixin
+from .voting import VoteMixin
 
 
 class EconomyCog(
@@ -16,9 +17,10 @@ class EconomyCog(
     ShopMixin,
     BankMixin,
     LotteryMixin,
+    VoteMixin,
     commands.Cog,
 ):
-    """Premium café economy with image cards, jobs, banking and a lottery."""
+    """Premium economy with image cards, jobs, banking, a lottery and voting."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -28,9 +30,10 @@ class EconomyCog(
             os.makedirs("data/economy_data")
             log.success("Economy", "economy_data directory created. Continuing…")
 
-        self.economy_data: dict[str, dict] = self._load_all()
-        self.lottery: dict = _load_lottery()
-
+        # Use database instead of JSON files
+        self.economy_data: dict[str, dict] = {}  # Cache for performance
+        self.lottery: dict = {}  # Will be loaded from database in setup
+        
         self._tick_task.start()
 
     def cog_unload(self):
@@ -41,41 +44,88 @@ class EconomyCog(
 
     # ── Persistence ──────────────────────────────────────────────────────────
     def _load_all(self) -> dict[str, dict]:
-        out: dict[str, dict] = {}
-        if not os.path.exists("data/economy_data"):
-            return out
-        for filename in os.listdir("data/economy_data"):
-            if not filename.endswith(".json") or filename.startswith("_"):
-                continue
-            try:
-                with open(os.path.join("data/economy_data", filename), "r") as f:
-                    uid = filename[:-5]
-                    raw = json.load(f)
-                    out[uid] = _migrate_user(raw)
-            except Exception as e:
-                log.error("Economy", f"Error loading {filename}: {e}")
-        return out
+        """Legacy method - now uses database."""
+        return {}
 
     def load_economy_data(self) -> dict[str, dict]:
         """Alias kept for backward-compat with other cogs."""
-        return self._load_all()
+        return {}
 
     def save_economy_data(self) -> None:
-        if not os.path.exists("data/economy_data"):
-            os.makedirs("data/economy_data")
-        for uid, data in self.economy_data.items():
-            try:
-                _migrate_user(data)
-                with open(os.path.join("data/economy_data", f"{uid}.json"), "w") as f:
-                    json.dump(data, f, indent=2)
-            except Exception as exc:
-                log.error("Economy", f"Could not save {uid}: {exc}")
+        """Now uses database - this is a no-op for compatibility."""
+        pass
 
-    def get_user_economy_data(self, user_id) -> dict:
+    async def get_user_economy_data(self, user_id) -> dict:
+        """Get user economy data from database with caching."""
+        # Guard against non-integer user IDs
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            log.warning("Economy", f"Rejected non-integer user_id: {user_id!r}")
+            return _migrate_user(_default_user())
         uid = str(user_id)
-        if uid not in self.economy_data:
-            self.economy_data[uid] = _default_user()
-        return _migrate_user(self.economy_data[uid])
+
+        # Check cache first
+        if uid in self.economy_data:
+            data = self.economy_data[uid]
+        else:
+            # Try to load from database
+            data = await _get_user_from_db(self.bot, user_id)
+            if data:
+                self.economy_data[uid] = data
+            else:
+                # Create new user
+                data = _default_user()
+                self.economy_data[uid] = data
+                await _save_user_to_db(self.bot, user_id, data)
+
+        # The account is handed to the command now and the command is what will
+        # move the counters, so this is the last moment a seasonal badge's
+        # window baseline can still be the value the window opened with.
+        ensure_season_baselines(data)
+        return _migrate_user(data)
+
+    async def save_user_economy_data(self, user_id) -> None:
+        """Save a single user's data to database."""
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return
+        uid = str(user_id)
+        if uid in self.economy_data:
+            await _save_user_to_db(self.bot, user_id, self.economy_data[uid])
+
+    async def prime_cache(self) -> None:
+        """Load every economy user from the database into the in-memory cache.
+
+        ``self.economy_data`` is normally populated lazily as members interact
+        with economy commands, so the leaderboard would only reflect users who
+        have been active since the last restart. Warming the cache at startup
+        means every member with saved data — including those who have not used
+        an economy command since the last restart — is ranked immediately.
+        """
+        cxn = getattr(self.bot, "cxn", None)
+        if cxn is None:
+            log.warning("Economy", "Database not ready; skipping economy cache warm-up.")
+            return
+        try:
+            rows = await cxn.fetch("SELECT user_id FROM economy_users")
+        except Exception as exc:
+            log.error("Economy", f"Could not query economy users for cache warm-up: {exc}")
+            return
+
+        loaded = 0
+        for row in rows:
+            uid = str(row["user_id"])
+            if uid in self.economy_data:
+                continue
+            data = await _get_user_from_db(self.bot, int(row["user_id"]))
+            if data:
+                self.economy_data[uid] = data
+                loaded += 1
+
+        if loaded:
+            log.info("Economy", f"Warmed up cache with {loaded} economy users.")
 
     # ── Internal helpers ─────────────────────────────────────────────────────
     def _credit(self, data: dict, amount: int, kind: str, note: str = ""):
@@ -87,9 +137,17 @@ class EconomyCog(
             data["total_spent"] = int(data.get("total_spent", 0)) + abs(amount)
         _log_tx(data, kind, amount, note)
 
-    def _net_rank(self, uid: str) -> int | None:
+    async def _net_rank(self, uid: str) -> int | None:
+        # Get all users from database for ranking
+        all_users = await _get_all_users_from_db(self.bot)
+        
+        # Include current user from cache if not in database yet
+        if uid in self.economy_data and uid not in all_users:
+            data = self.economy_data[uid]
+            all_users[uid] = {"balance": data.get("balance", 0), "bank": data.get("bank", 0)}
+        
         sorted_users = sorted(
-            ((u, d.get("balance", 0) + d.get("bank", 0)) for u, d in self.economy_data.items()),
+            ((u, d.get("balance", 0) + d.get("bank", 0)) for u, d in all_users.items()),
             key=lambda x: x[1], reverse=True,
         )
         for i, (u, _) in enumerate(sorted_users, start=1):
@@ -98,7 +156,7 @@ class EconomyCog(
         return None
 
     async def _send_balance_card(self, ctx, target: discord.Member, *, title: str = "Wallet"):
-        data = self.get_user_economy_data(target.id)
+        data = await self.get_user_economy_data(target.id)
         avatar_bytes = await fetch_avatar_bytes(str(target.display_avatar.replace(size=256, format="png")), size=256)
 
         lvl      = int(data.get("level", 0))
@@ -107,7 +165,7 @@ class EconomyCog(
         job      = get_job(data.get("job"))
         cap      = bank_cap(int(data.get("bank_tier", 0)))
         tier_name = bank_name(int(data.get("bank_tier", 0)))
-        rank     = self._net_rank(str(target.id))
+        rank     = await self._net_rank(str(target.id))
 
         buf = await render_balance_card(
             avatar_bytes=avatar_bytes,
@@ -132,10 +190,13 @@ class EconomyCog(
             image_name="balance.png",
             footer_lines=[
                 f"-# Use `{prefix}deposit` / `{prefix}withdraw` to manage your vault.",
-                f"-# `{prefix}work` to earn, `{prefix}daily` for treats, `{prefix}shop` to spend.",
+                f"-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend.",
             ],
         )
-        await ctx.send(view=view, file=discord.File(buf, "balance.png"))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "balance.png"))
+        else:
+            await ctx.send(view=view, file=discord.File(buf, "balance.png"))
 
     async def _send_reward_card(
         self,
@@ -148,7 +209,7 @@ class EconomyCog(
         footer: str = "",
         announce: str | None = None,
     ):
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         avatar_bytes = await fetch_avatar_bytes(
             str(ctx.author.display_avatar.replace(size=256, format="png")), size=256
         )
@@ -168,7 +229,10 @@ class EconomyCog(
             image_name="reward.png",
             footer_lines=[announce] if announce else [],
         )
-        await ctx.send(view=view, file=discord.File(buf, "reward.png"))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "reward.png"))
+        else:
+            await ctx.send(view=view, file=discord.File(buf, "reward.png"))
 
     # ── Background tick: bank interest + lottery draw ────────────────────────
     @tasks.loop(minutes=30)
@@ -188,38 +252,98 @@ class EconomyCog(
         now = int(time.time())
         today_utc = datetime.datetime.utcfromtimestamp(now).strftime("%Y-%m-%d")
         changed = 0
-        for uid, data in self.economy_data.items():
-            if data.get("last_interest_day") == today_utc:
+        
+        # Get all users from database
+        rows = await self.bot.cxn.fetch("SELECT user_id, bank, bank_tier, total_earned, last_interest_day FROM economy_users")
+        
+        for row in rows:
+            user_id = row["user_id"]
+            
+            # ── Skip fake / malformed records (non-integer user IDs) ──────
+            try:
+                uid_int = int(user_id)
+            except (TypeError, ValueError):
+                log.warning("Economy", f"Skipping malformed economy record with non-integer user_id: {user_id!r}")
+                await self.bot.cxn.execute(
+                    "DELETE FROM economy_users WHERE user_id = ?",
+                    user_id
+                )
                 continue
-            tier = int(data.get("bank_tier", 0))
+            
+            # ── Compare last_interest_day safely ──────────────────────
+            # MongoDB stores dates as datetime objects; convert to string
+            # before comparing with the YYYY-MM-DD string.
+            last_day = row.get("last_interest_day")
+            if last_day is not None:
+                last_day_str = str(last_day)[:10]  # handles datetime → "2026-09-02 ..."
+            else:
+                last_day_str = None
+            
+            if last_day_str == today_utc:
+                continue
+            
+            tier = int(row.get("bank_tier", 0))
             cap  = bank_cap(tier)
             rate = bank_rate(tier)
-            bank = int(data.get("bank", 0))
+            bank = int(row.get("bank", 0))
+            
             if bank <= 0:
-                data["last_interest_day"] = today_utc
+                await self.bot.cxn.execute(
+                    "UPDATE economy_users SET last_interest_day = ? WHERE user_id = ?",
+                    today_utc, uid_int
+                )
                 continue
+            
             principal = min(bank, cap)
             interest  = int(principal * rate)
+            
             if interest <= 0:
-                data["last_interest_day"] = today_utc
+                await self.bot.cxn.execute(
+                    "UPDATE economy_users SET last_interest_day = ? WHERE user_id = ?",
+                    today_utc, uid_int
+                )
                 continue
-            data["bank"]         = bank + interest
-            data["total_earned"] = int(data.get("total_earned", 0)) + interest
-            data["last_interest_day"] = today_utc
-            _log_tx(data, "interest", interest, f"daily {bank_name(tier)} interest")
+            
+            new_bank = bank + interest
+            new_total_earned = int(row.get("total_earned", 0)) + interest
+            
+            await self.bot.cxn.execute(
+                "UPDATE economy_users SET bank = ?, total_earned = ?, last_interest_day = ? WHERE user_id = ?",
+                new_bank, new_total_earned, today_utc, uid_int
+            )
+            
+            # Update cache if user is in memory
+            uid = str(uid_int)
+            if uid in self.economy_data:
+                self.economy_data[uid]["bank"] = new_bank
+                self.economy_data[uid]["total_earned"] = new_total_earned
+                self.economy_data[uid]["last_interest_day"] = today_utc
+                _log_tx(self.economy_data[uid], "interest", interest, f"daily {bank_name(tier)} interest")
+            
             changed += 1
+        
         if changed:
-            self.save_economy_data()
             log.info("Economy", f"Applied bank interest to {changed} accounts.")
 
     async def _maybe_draw_lottery(self):
         now = int(time.time())
+        
+        # Load lottery state from database
+        lottery_state = await _get_lottery_from_db(self.bot)
+        self.lottery = lottery_state
+        
         if now < int(self.lottery.get("next_draw", 0)):
             return
+        
         entrants: list[tuple[str, int]] = []
         total_tickets = 0
-        for uid, data in self.economy_data.items():
-            tix = int(data.get("lottery_tickets", 0))
+        
+        # Get all users with lottery tickets from database
+        rows = await self.bot.cxn.fetch("SELECT user_id, lottery_tickets FROM economy_users WHERE lottery_tickets > 0")
+        
+        for row in rows:
+            uid = str(row["user_id"])
+            tix = int(row["lottery_tickets"])
             if tix > 0:
                 entrants.append((uid, tix))
                 total_tickets += tix
@@ -227,7 +351,7 @@ class EconomyCog(
         pot = int(self.lottery.get("pot", LOTTERY_BASE_POT))
         if not entrants or total_tickets <= 0 or pot <= 0:
             self.lottery["next_draw"] = now + LOTTERY_DRAW_INTERVAL
-            _save_lottery(self.lottery)
+            await _save_lottery_to_db(self.bot, self.lottery)
             return
 
         roll = random.randint(1, total_tickets)
@@ -242,13 +366,19 @@ class EconomyCog(
         rake   = int(pot * LOTTERY_HOUSE_RAKE)
         payout = pot - rake
 
-        winner_data = self.get_user_economy_data(winner_id)
+        winner_data = await self.get_user_economy_data(int(winner_id))
         self._credit(winner_data, payout, "lottery", f"weekly draw winner ({total_tickets} tickets)")
+        await self.save_user_economy_data(int(winner_id))
 
+        # Reset lottery tickets for all entrants
         for uid, _ in entrants:
-            d = self.economy_data.get(uid)
-            if d is not None:
-                d["lottery_tickets"] = 0
+            await self.bot.cxn.execute(
+                "UPDATE economy_users SET lottery_tickets = 0 WHERE user_id = ?",
+                int(uid)
+            )
+            # Update cache if user is in memory
+            if uid in self.economy_data:
+                self.economy_data[uid]["lottery_tickets"] = 0
 
         self.lottery = {
             "pot":         max(LOTTERY_BASE_POT, rake),
@@ -256,8 +386,7 @@ class EconomyCog(
             "last_winner": winner_id,
             "last_pot":    payout,
         }
-        _save_lottery(self.lottery)
-        self.save_economy_data()
+        await _save_lottery_to_db(self.bot, self.lottery)
         log.info("Economy", f"Lottery: paid {payout:,} coins to {winner_id} (next pot starts at {self.lottery['pot']:,}).")
 
 

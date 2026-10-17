@@ -20,12 +20,37 @@ _FALLBACK_REPLIES = [
 ]
 _fallback_idx = 0
 
+# Groq exposes an OpenAI-compatible API, so the existing client and tool-call
+# pipeline can stay unchanged while requests are routed through Groq.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_VISION_MODEL = "qwen/qwen3.8-27b"
+GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo"
+
+
+def _model_setting(name: str, default: str) -> str:
+    return os.environ.get(name, default).strip() or default
+
+
 # ── Rate-limit guard ───────────────────────────────────────────────────────────
 # Maps user_id → unix timestamp when the cooldown expires.
 # When the API returns 429, we stop accepting that user's requests for a while
 # to avoid hammering the endpoint and making the rate limit worse.
 _rl_cooldown: dict[int, float] = {}
 _RL_COOLDOWN_SECS = 30  # seconds to pause per user after a 429
+
+
+def transcribe_audio(audio_bytes: bytes, filename: str = "voice_message.ogg") -> str:
+    """Transcribe a Discord voice attachment using the configured AI client."""
+    import io
+
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename or "voice_message.ogg"
+    result = _get_client().audio.transcriptions.create(
+        model=_model_setting("GROQ_TRANSCRIPTION_MODEL", GROQ_TRANSCRIPTION_MODEL),
+        file=audio_file,
+    )
+    return (getattr(result, "text", "") or "").strip()
 
 # ── Token budget constants ─────────────────────────────────────────────────────
 _CONV_HISTORY_TURNS   = 3    # recent turns kept for short-term context
@@ -38,18 +63,15 @@ _REPLIED_CONTENT_MAX  = 200  # chars for replied-message snippet
 def _get_client():
     global client
     if client is None:
-        direct_key      = os.environ.get("OPENAI_API_KEY")
-        integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-        integration_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+        groq_key = os.environ.get("GROQ_API_KEY")
 
         # max_retries=0 — we handle retries ourselves so the SDK never
         # silently resends a request that already hit a rate limit.
-        if direct_key:
-            client = OpenAI(api_key=direct_key, max_retries=0)
-        elif integration_key and integration_url:
-            client = OpenAI(api_key=integration_key, base_url=integration_url, max_retries=0)
-        else:
-            client = OpenAI(api_key=integration_key, max_retries=0)
+        client = OpenAI(
+            api_key=groq_key,
+            base_url=os.environ.get("GROQ_BASE_URL", GROQ_BASE_URL),
+            max_retries=0,
+        )
     return client
 
 
@@ -400,6 +422,8 @@ def generate_reply_openai(
     context_messages: str = None,
     replied_content: str = None,
     ai_actions_enabled: bool = False,
+    image_urls: list[str] | None = None,
+    transcribed_audio: str | None = None,
 ):
     import json as _json
 
@@ -451,9 +475,17 @@ def generate_reply_openai(
     if conv_history:
         user_parts.append(f"History:\n{conv_history}")
 
+    if transcribed_audio:
+        user_parts.append(f"Voice message transcription: {transcribed_audio[:2000]}")
+
     user_parts.append(f"\n{username}: {message}")
 
     user_content = "\n".join(user_parts)
+    if image_urls:
+        user_content = [
+            {"type": "text", "text": user_content},
+            *({"type": "image_url", "image_url": {"url": url}} for url in image_urls[:3]),
+        ]
 
     global _fallback_idx
 
@@ -466,7 +498,11 @@ def generate_reply_openai(
 
     try:
         create_kwargs = dict(
-            model="llama-3.1-8b-instant",
+            model=(
+                _model_setting("GROQ_VISION_MODEL", GROQ_VISION_MODEL)
+                if image_urls
+                else _model_setting("GROQ_MODEL", GROQ_MODEL)
+            ),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": user_content},

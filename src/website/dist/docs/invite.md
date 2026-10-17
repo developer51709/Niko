@@ -1,0 +1,45 @@
+# Inviting Niko to Your Server
+
+Getting Niko started in your server is simple. Follow these steps to add the bot and configure it properly.
+
+## Step 1: Invite the Bot
+
+1. Click the "Add to Discord" button on our website
+2. Select the server you want to add Niko to
+3. Review the permissions requested
+4. Authorize the bot
+
+> **Note**: You need the "Manage Server" permission to invite bots to a server.
+
+## Step 2: Essential Permissions
+
+For Niko to work properly, ensure it has these permissions:
+
+- **Send Messages** - For responding to commands
+- **Embed Links** - For rich command responses
+- **Attach Files** - For image cards and embeds
+- **Manage Messages** - For moderation features
+- **Manage Roles** - For role management features
+- **Manage Channels** - For channel management
+- **Kick Members** - For kick moderation
+- **Ban Members** - For ban moderation
+- **Manage Nicknames** - For nickname changes
+- **Add Reactions** - For interactive buttons
+- **Use Application Commands** - For slash commands
+
+## Step 3: Position the Bot
+
+In your server settings, make sure Niko's role is positioned appropriately:
+
+- Above the roles it needs to manage
+- Below roles with dangerous permissions (for security)
+- In a position where it can add/remove roles as needed
+
+## Troubleshooting
+
+If Niko isn't responding:
+
+1. Check that the bot has the correct permissions
+2. Verify Niko's role is positioned correctly
+3. Try using the bot's username directly in a command
+4. Check if the bot is online in your server

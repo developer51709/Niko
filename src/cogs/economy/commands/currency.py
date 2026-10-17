@@ -12,6 +12,7 @@ from ..data import (
     add_xp,
     ACCENT_GOLD, ACCENT_GREEN,
 )
+from ..voting import vote_earnings_multiplier
 import random
 import datetime
 
@@ -20,24 +21,34 @@ class CurrencyMixin:
     """balance, profile, daily, work, pay, transactions, networth."""
 
     # ── balance / profile ────────────────────────────────────────────────────
-    @commands.hybrid_command(name="balance", aliases=["bal", "wallet"],
-                             description="Check your premium café wallet card",
-                             help="{ 'en': 'check your pastry bag balance 🥐✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🥐✨' }")
+    @commands.hybrid_command(
+        name="balance", aliases=["bal", "wallet"],
+        description="Check your premium wallet card",
+        help="{ 'en': 'check your wallet balance 🪙✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🪙✨' }"
+    )
     async def balance(self, ctx: commands.Context, member: discord.Member = None):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         target = member or ctx.author
         await self._send_balance_card(ctx, target, title="Wallet")
 
-    @commands.hybrid_command(name="profile", aliases=["prof", "stats"],
-                             description="Full café profile card",
-                             help="{ 'en': 'view a full café profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }")
+    @commands.hybrid_command(
+        name="profile", aliases=["prof", "stats"],
+        description="Full profile card",
+        help="{ 'en': 'view your full profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }"
+    )
     async def profile(self, ctx: commands.Context, member: discord.Member = None):
-        from ..data import ACHIEVEMENTS
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
+        from ..data import ACHIEVEMENTS, achievement_icon
         target = member or ctx.author
         await self._send_balance_card(ctx, target, title="Profile")
-        data = self.get_user_economy_data(target.id)
+        data = await self.get_user_economy_data(target.id)
         ach = data.get("achievements", [])
         ach_line = (
-            ", ".join(f"{ACHIEVEMENTS[a]['emoji']} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
+            ", ".join(f"{achievement_icon(ACHIEVEMENTS[a])} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
             or "*no badges yet — go earn some!*"
         )
         txs = data.get("transactions", [])[:5]
@@ -53,56 +64,113 @@ class CurrencyMixin:
             f"📜 {target.display_name}'s Extras",
             f"**Badges**\n{ach_line}\n\n**Recent activity**\n{tx_block}",
         )
-        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # ── daily ────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(name="daily",
-                             description="Claim your daily treats with streak bonus",
-                             help="{ 'en': 'claim your daily treats 🍬✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tus golosinas diarias 🍬✨' }")
+    @commands.hybrid_command(
+        name="daily",
+        description="Claim your daily reward with streak bonus",
+        help="{ 'en': 'claim your daily reward 🎁✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tu recompensa diaria 🎁✨' }"
+    )
     async def daily(self, ctx: commands.Context):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         elapsed = now - int(data.get("last_daily", 0))
 
         if elapsed < COOLDOWN_DAILY:
             remain = COOLDOWN_DAILY - elapsed
-            return await ctx.send(view=_info_view(
-                "⏳ Daily on cooldown",
-                f"Patience! Your treats are still baking.\nCome back in **{_fmt_remaining(remain)}**. ☕🍰",
-            ))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(
+                    "⏳ Daily on cooldown",
+                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
+                ))
+            else:
+                return await ctx.send(view=_info_view(
+                    "⏳ Daily on cooldown",
+                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
+                ))
 
         streak = int(data.get("daily_streak", 0))
+        effects = data.setdefault("effects", {})
         if elapsed > 2 * COOLDOWN_DAILY:
-            streak = 1
+            # Streak insurance: if user missed exactly one day, protect the streak
+            if streak >= 3 and effects.pop("streak_insurance", 0):
+                streak += 1  # streak preserved, just count as consecutive
+            else:
+                streak = 1
         else:
             streak += 1
         multiplier = 1 + min(streak, 7) * 0.2
         base = 1000
-        reward = int(base * multiplier)
+        # Top.gg votes keep paying forward: while a vote streak is alive it also
+        # tops up every daily claim and every shift (see cogs/economy/voting.py).
+        vote_bonus = vote_earnings_multiplier(data.get("vote_streak", 0))
+        reward = int(base * multiplier * vote_bonus)
 
-        self._credit(data, reward, "daily", f"day {streak} • x{multiplier:.1f}")
+        # ── Streak milestone bonuses ──
+        STREAK_MILESTONES = {
+            7:  (500,   ["xp_potion"]),
+            14: (1500,  ["lucky_charm"]),
+            30: (5000,  ["espresso_shot", "lockpick"]),
+            60: (15000, ["rob_shield", "lucky_charm"]),
+            90: (50000, ["espresso_shot", "lockpick", "rob_shield", "lucky_charm", "xp_potion"]),
+        }
+        milestone_bonus = 0
+        milestone_items = []
+        if streak in STREAK_MILESTONES:
+            ms_bonus, ms_items = STREAK_MILESTONES[streak]
+            milestone_bonus = ms_bonus
+            milestone_items = ms_items
+            inv = data.setdefault("inventory", {})
+            for item_id in ms_items:
+                inv[item_id] = int(inv.get(item_id, 0)) + 1
+
+        total_reward = reward + milestone_bonus
+        self._credit(data, total_reward, "daily", f"day {streak} • x{multiplier:.1f}")
         data["daily_streak"] = streak
         data["last_daily"] = now
         _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
+
+        subtitle = f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}"
+        if vote_bonus > 1:
+            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
+        footer = msg(ctx, "daily_success", reward=total_reward)
+        if milestone_items:
+            from ..data import get_item
+            item_names = ", ".join(
+                get_item(iid)["name"] for iid in milestone_items if get_item(iid)
+            )
+            footer += f"  •  🎁 Streak milestone: **{item_names}** + **{milestone_bonus:,}** bonus!"
 
         await self._send_reward_card(
             ctx,
-            title="🍬 Daily Treats",
-            subtitle=f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}",
-            amount=reward,
+            title="🎁 Daily Reward",
+            subtitle=subtitle,
+            amount=total_reward,
             accent=ACCENT_GOLD,
-            footer=msg(ctx, "daily_success", reward=reward),
+            footer=footer,
         )
 
     # ── work ─────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(name="work",
-                             description="Work a shift at your current café job",
-                             help="{ 'en': 'work a shift at your current café job ☕', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno en el café ☕' }")
+    @commands.hybrid_command(
+        name="work",
+        description="Work a shift at your current job",
+        help="{ 'en': 'work a shift at your current job 💼', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno 💼' }"
+    )
     async def work(self, ctx: commands.Context):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         import time
-        data = self.get_user_economy_data(ctx.author.id)
+        data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         job = get_job(data.get("job"))
         cd = int(job.get("cooldown", COOLDOWN_WORK))
@@ -113,15 +181,26 @@ class CurrencyMixin:
 
         elapsed = now - int(data.get("last_work", 0))
         if elapsed < cd:
-            return await ctx.send(view=_info_view(
-                "⏳ On a coffee break",
-                f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. ☕💤",
-            ))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(
+                    "⏳ On a break",
+                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
+                ))
+            else:
+                return await ctx.send(view=_info_view(
+                    "⏳ On a break",
+                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
+                ))
 
         if effects.get("work_cooldown_half"):
             effects.pop("work_cooldown_half", None)
 
         reward = random.randint(int(job["min_pay"]), int(job["max_pay"]))
+        if effects.pop("work_boost", 0):
+            reward = int(reward * 1.10)
+        vote_bonus = vote_earnings_multiplier(data.get("vote_streak", 0))
+        if vote_bonus > 1:
+            reward = int(reward * vote_bonus)
         self._credit(data, reward, "work", f"{job['name']} shift")
         data["last_work"] = now
         data["times_worked"] = int(data.get("times_worked", 0)) + 1
@@ -130,67 +209,114 @@ class CurrencyMixin:
         announce = msg(ctx, "level_up", level=new_lvl) if leveled else None
 
         newly = _check_achievements(data)
-        self.save_economy_data()
+        await self.save_user_economy_data(ctx.author.id)
 
         subtitle = f"{job['emoji']} {job['name']} shift  •  +{job.get('xp_per_shift', 10)} XP"
+        if vote_bonus > 1:
+            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
         footer = msg(ctx, "work_success", reward=reward)
         if newly:
             footer += "  •  unlocked: " + ", ".join(newly)
+
         await self._send_reward_card(
             ctx, title="🍯 Shift complete", subtitle=subtitle, amount=reward,
             accent=ACCENT_GREEN, footer=footer, announce=announce,
         )
 
     # ── pay ───────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(name="pay", aliases=["give"],
-                             description="Send coins to another user",
-                             help="{ 'en': 'send coins to another user 💸🥐', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🥐' }")
+    @commands.hybrid_command(
+        name="pay", aliases=["give"],
+        description="Send coins to another user",
+        help="{ 'en': 'send coins to another user 💸🪙', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🪙' }"
+    )
     async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         if not member or member.bot or member.id == ctx.author.id:
-            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad target", "Pick a real person other than yourself."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
+            else:
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
+
         if amount <= 0:
-            return await ctx.send(view=_info_view(f"{get_emoji('icon_cross')} Bad amount", "Amount must be positive."))
-        data   = self.get_user_economy_data(ctx.author.id)
-        target = self.get_user_economy_data(member.id)
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
+            else:
+                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
+
+        data   = await self.get_user_economy_data(ctx.author.id)
+        target = await self.get_user_economy_data(member.id)
         if data["balance"] < amount:
-            return await ctx.send(view=_info_view("💸 Not enough cash", "Your pastry bag is too light for that."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
+            else:
+                return await ctx.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
+
         self._credit(data, -amount, "pay", f"to {member.display_name}")
         self._credit(target, amount, "received", f"from {ctx.author.display_name}")
-        self.save_economy_data()
-        await ctx.send(view=_info_view(
-            "💸 Transfer complete",
-            f"You sent **{amount:,}** 🥐 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🥐",
-        ), allowed_mentions=discord.AllowedMentions.none())
+        await self.save_user_economy_data(ctx.author.id)
+        await self.save_user_economy_data(member.id)
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=_info_view(
+                "💸 Transfer complete",
+                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
+            ), allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await ctx.send(view=_info_view(
+                "💸 Transfer complete",
+                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
+            ), allowed_mentions=discord.AllowedMentions.none())
 
     # ── transactions ──────────────────────────────────────────────────────────
-    @commands.hybrid_command(name="transactions", aliases=["tx", "history"],
-                             description="See your recent transactions",
-                             help="{ 'en': 'see your last transactions 📜', 'de': 'sieh deine letzten Transaktionen', 'es': 'mira tus últimas transacciones 📜' }")
+    @commands.hybrid_command(
+        name="transactions", aliases=["tx", "history"],
+        description="See your recent transactions",
+        help="{ 'en': 'see your last transactions 📜', 'de': 'sieh deine letzten Transaktionen', 'es': 'mira tus últimas transacciones 📜' }"
+    )
     async def transactions(self, ctx: commands.Context):
-        data = self.get_user_economy_data(ctx.author.id)
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
+        data = await self.get_user_economy_data(ctx.author.id)
         txs = data.get("transactions", [])
         if not txs:
-            return await ctx.send(view=_info_view("📜 No history", "No transactions yet."))
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=_info_view("📜 No history", "No transactions yet."))
+            else:
+                return await ctx.send(view=_info_view("📜 No history", "No transactions yet."))
+
         lines = []
         for t in txs[:25]:
             sign = "+" if t["amount"] >= 0 else "−"
             ts = datetime.datetime.utcfromtimestamp(int(t["ts"])).strftime("%m-%d %H:%M")
-            lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🥐  ·  {t.get('note','')}")
-        await ctx.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
+            lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🪙  ·  {t.get('note','')}")
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
+        else:
+            await ctx.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
 
     # ── networth ──────────────────────────────────────────────────────────────
-    @commands.hybrid_command(name="networth", aliases=["nw"],
-                             description="Quick net worth summary",
-                             help="{ 'en': 'calculate your total café fortune 📊🥐', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🥐' }")
+    @commands.hybrid_command(
+        name="networth", aliases=["nw"],
+        description="Quick net worth summary",
+        help="{ 'en': 'calculate your total fortune 📊🪙', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🪙' }"
+    )
     async def networth(self, ctx: commands.Context, member: discord.Member = None):
+        if ctx.interaction:
+            await ctx.interaction.response.defer()
+
         target = member or ctx.author
-        data = self.get_user_economy_data(target.id)
+        data = await self.get_user_economy_data(target.id)
         nw = int(data["balance"]) + int(data["bank"])
-        rank = self._net_rank(str(target.id))
+        rank = await self._net_rank(str(target.id))
         body = (
-            f"💼 **{target.display_name}** is worth **{nw:,}** 🥐\n"
+            f"💼 **{target.display_name}** is worth **{nw:,}** 🪙\n"
             f"• Cash: **{int(data['balance']):,}**\n"
             f"• Bank: **{int(data['bank']):,}** ({bank_name(int(data.get('bank_tier', 0)))})\n"
             f"• Rank: **#{rank}**" if rank else ""
         )
-        await ctx.send(view=_info_view("📊 Net Worth", body))
+        if ctx.interaction:
+            await ctx.interaction.followup.send(view=_info_view("📊 Net Worth", body))
+        else:
+            await ctx.send(view=_info_view("📊 Net Worth", body))

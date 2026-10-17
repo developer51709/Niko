@@ -16,7 +16,8 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from config.ids import SUPPORT_GUILD, SUPPORTER_ROLE
+from config.ids import SUPPORT_GUILD
+from cogs.staff.support_server import support_role, get_support_ids
 from utils import logging
 from utils.donations import add_donor, get_total_donated, is_supporter
 from .oxapay import OxaPayClient
@@ -42,7 +43,7 @@ CURRENCIES = [
 
 def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord.ui.ActionRow:
     """Return a View containing a currency Select for `amount` USD."""
-    view = discord.ui.ActionRow()
+    row = discord.ui.ActionRow()
     options = [
         discord.SelectOption(
             label=f"{label} ({code})",
@@ -55,17 +56,16 @@ def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord
     sel = discord.ui.Select(placeholder="Choose a cryptocurrency…", options=options)
 
     async def _cb(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         if interaction.user.id != user_id:
-            return await interaction.response.send_message(
+            return await interaction.followup.send_message(
                 "This isn't your donation menu!", ephemeral=True
             )
-        sel.disabled = True
-        # await interaction.message.edit(view=view)
         await cog._handle_currency_choice(interaction, amount, user_id, sel.values[0])
 
     sel.callback = _cb
-    view.add_item(sel)
-    return view
+    row.add_item(sel)
+    return row
 
 
 def _payment_layout(
@@ -77,12 +77,12 @@ def _payment_layout(
         discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('icon_heart')} Donation Invoice Created\n"
+                    f"### {get_emoji('heart')} Donation Invoice Created\n"
                     f"**Amount:** `${amount:.2f} USD` in **{currency}**\n"
                     f"**Track ID:** `{track_id}`\n"
                     f"**Expires in:** `{INVOICE_LIFETIME} minutes`\n\n"
                     f"Once your payment is confirmed on-chain you'll automatically receive "
-                    f"the {get_emoji('badge_supporter')} **Supporter** badge."
+                    f"the {get_emoji('badge_supporter_role')} **Supporter** badge."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -160,10 +160,10 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=(
-                            f"### {get_emoji('icon_heart')} Thank you for donating!\n"
+                            f"### {get_emoji('heart')} Thank you for donating!\n"
                             f"Your donation of **${amount:.2f} USD** in **{currency}** "
                             f"has been confirmed. You've been granted the "
-                            f"{get_emoji('badge_supporter')} **Supporter** badge!\n\n"
+                            f"{get_emoji('badge_supporter_role')} **Supporter** badge!\n\n"
                             f"-# Track ID: `{track_id}`"
                         )
                     )
@@ -183,9 +183,9 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         discord.ui.Container(
                             discord.ui.TextDisplay(
                                 content=(
-                                    f"### {get_emoji('icon_heart')} New Supporter!\n"
+                                    f"### {get_emoji('heart')} New Supporter!\n"
                                     f"<@{user_id}> just donated **${amount:.2f} USD** in **{currency}**! "
-                                    f"Thank you for supporting Niko! {get_emoji('badge_supporter')}"
+                                    f"Thank you for supporting Niko! {get_emoji('badge_supporter_role')}"
                                 )
                             )
                         )
@@ -197,15 +197,13 @@ class DonationCog(commands.Cog, name="DonationCog"):
     # ── Role helpers ──────────────────────────────
 
     async def _grant_supporter_role(self, user_id: int):
-        """Grant SUPPORTER_ROLE in the support server, silently if user isn't there."""
-        if not SUPPORTER_ROLE:
-            return
+        """Grant the database-configured supporter role in the support server."""
         support_guild = self.bot.get_guild(SUPPORT_GUILD)
         if not support_guild:
             return
         try:
             member = support_guild.get_member(user_id) or await support_guild.fetch_member(user_id)
-            role = support_guild.get_role(SUPPORTER_ROLE)
+            role = await support_role(self.bot, "supporter")
             if role and role not in member.roles:
                 await member.add_roles(role, reason="Crypto donation confirmed via OxaPay")
                 logging.success("Donations", f"Granted supporter role to {member} ({user_id})")
@@ -223,11 +221,9 @@ class DonationCog(commands.Cog, name="DonationCog"):
         user_id: int,
         currency: str,
     ):
-        await interaction.response.defer(ephemeral=True)
-
         if not OXAPAY_KEY:
             return await interaction.followup.send(
-                f"{get_emoji('icon_danger')} Donations are not configured yet. "
+                f"{get_emoji('danger')} Donations are not configured yet. "
                 "Please try again later.",
                 ephemeral=True,
             )
@@ -244,7 +240,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if not result["success"]:
             return await interaction.followup.send(
-                f"{get_emoji('icon_danger')} Could not create invoice: "
+                f"{get_emoji('danger')} Could not create invoice: "
                 f"{result.get('message', 'Unknown error')}",
                 ephemeral=True,
             )
@@ -278,12 +274,12 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if amount < 1.0:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Minimum donation is `$1.00 USD`.",
+                f"{get_emoji('danger')} Minimum donation is `$1.00 USD`.",
                 ephemeral=bool(ctx.interaction),
             )
         if amount > 10_000.0:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Maximum single donation is `$10,000.00 USD`.",
+                f"{get_emoji('danger')} Maximum single donation is `$10,000.00 USD`.",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -292,11 +288,11 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donate to Niko\n"
+                        f"### {get_emoji('heart')} Donate to Niko\n"
                         f"**Amount:** `${amount:.2f} USD`\n\n"
                         f"Your donation helps cover hosting costs and keeps Niko running! "
                         f"As a thank-you you'll receive the "
-                        f"{get_emoji('badge_supporter')} **Supporter** badge "
+                        f"{get_emoji('badge_supporter_role')} **Supporter** badge "
                         f"and role in the support server.\n\n"
                         f"Select a cryptocurrency below to proceed:"
                     )
@@ -329,7 +325,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
         if not OXAPAY_KEY:
             return await ctx.send(
-                f"{get_emoji('icon_danger')} Donations are not configured.",
+                f"{get_emoji('danger')} Donations are not configured.",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -338,10 +334,10 @@ class DonationCog(commands.Cog, name="DonationCog"):
         status = result.get("status", "Unknown")
 
         icons = {
-            "Paid":    get_emoji("icon_tick"),
-            "Waiting": get_emoji("icon_loading"),
-            "Expired": get_emoji("icon_cross"),
-            "Failed":  get_emoji("icon_danger"),
+            "Paid":    get_emoji("tick"),
+            "Waiting": get_emoji("loading"),
+            "Expired": get_emoji("cross"),
+            "Failed":  get_emoji("danger"),
         }
         icon = icons.get(status, "❓")
 
@@ -350,7 +346,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donation Status\n"
+                        f"### {get_emoji('heart')} Donation Status\n"
                         f"**Track ID:** `{track_id}`\n"
                         f"**Status:** {icon} `{status}`"
                     )
@@ -371,14 +367,14 @@ class DonationCog(commands.Cog, name="DonationCog"):
         total = await get_total_donated(self.bot, target.id)
         supporter = await is_supporter(self.bot, target.id)
         badge_line = (
-            f"{get_emoji('badge_supporter')} Supporter" if supporter else "None"
+            f"{get_emoji('badge_supporter_role')} Supporter" if supporter else "None"
         )
         view = discord.ui.LayoutView()
         view.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('icon_heart')} Donor Info — {target.display_name}\n"
+                        f"### {get_emoji('heart')} Donor Info — {target.display_name}\n"
                         f"**Total Donated:** `${total:.2f} USD`\n"
                         f"**Badge:** {badge_line}"
                     )
@@ -392,11 +388,11 @@ class DonationCog(commands.Cog, name="DonationCog"):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Auto-grant supporter role when a known donor joins the support server."""
-        if member.guild.id != SUPPORT_GUILD or not SUPPORTER_ROLE:
+        if member.guild.id != SUPPORT_GUILD:
             return
         try:
             if await is_supporter(self.bot, member.id):
-                role = member.guild.get_role(SUPPORTER_ROLE)
+                role = await support_role(self.bot, "supporter")
                 if role and role not in member.roles:
                     await member.add_roles(
                         role, reason="Auto-granted: existing donor joining support server"

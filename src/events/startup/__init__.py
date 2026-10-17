@@ -9,6 +9,7 @@ from .status import set_status
 from .banner import print_banner
 from .sync import run_slash_sync, run_emoji_sync
 from .writers import write_bot_stats, write_commands
+from .economy import preload_economy_cache
 
 __all__ = [
     "init_database",
@@ -19,4 +20,5 @@ __all__ = [
     "run_emoji_sync",
     "write_bot_stats",
     "write_commands",
+    "preload_economy_cache",
 ]

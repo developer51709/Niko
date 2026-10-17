@@ -8,6 +8,10 @@ shapes so rendering is font-independent for the icons themselves.
 The synchronous renderer never touches asyncio.  The public `render_table`
 coroutine offloads the work to a thread executor via `asyncio.to_thread`
 so the bot's event loop stays fully responsive even for complex tables.
+
+The table chrome follows the website theme (`web/src/styles.css`): a graphite
+canvas with steel accents and sage for positive states.  Playing-card faces
+keep their classic colours.
 """
 
 from io import BytesIO
@@ -22,26 +26,26 @@ CARD_W, CARD_H   = 110, 158
 CARD_RADIUS      = 12
 CARD_STEP        = 60   # x-distance between successive cards in a hand
 
-TABLE_BG_TOP     = (22, 70, 44)
-TABLE_BG_BOT     = (8, 36, 22)
+TABLE_BG_TOP     = (25, 27, 31)      # --surface-muted #191b1f
+TABLE_BG_BOT     = (5, 6, 7)         # --canvas        #050607
 TABLE_PADDING    = 28
 TABLE_RADIUS     = 24
 
 CARD_FACE_BG     = (250, 250, 248)
-CARD_BACK_BG     = (24, 50, 110)
-CARD_BACK_LINE   = (60, 92, 168)
+CARD_BACK_BG     = (32, 34, 38)      # --surface-raised #202226
+CARD_BACK_LINE   = (45, 48, 53)      # --line           #2d3035
 CARD_BORDER      = (40, 40, 40)
 CARD_SHADOW_RGBA = (0, 0, 0, 110)
 
 SUIT_RED         = (200, 30, 30)
 SUIT_BLK         = (15, 15, 15)
 
-ACTIVE_HALO      = (255, 215, 0)
-TEXT_WHITE       = (245, 245, 245)
-TEXT_DIM         = (190, 190, 190)
-TEXT_GOLD        = (255, 215, 0)
-TEXT_GREEN       = (87, 242, 135)
-TEXT_RED         = (237, 90, 96)
+ACTIVE_HALO      = (213, 217, 223)   # --accent-dark #d5d9df
+TEXT_WHITE       = (244, 245, 247)   # --ink         #f4f5f7
+TEXT_DIM         = (133, 140, 150)   # --dim         #858c96
+TEXT_GOLD        = (139, 213, 177)   # --sage        #8bd5b1
+TEXT_GREEN       = (139, 213, 177)   # --sage        #8bd5b1
+TEXT_RED         = (232, 162, 162)   # loss amounts
 
 
 # ── Font helper (Termux/Android-safe via shared resolver) ───────────────────
@@ -173,7 +177,7 @@ def _make_card_back() -> Image.Image:
     draw.rounded_rectangle(
         [6, 6, CARD_W - 7, CARD_H - 7],
         radius=CARD_RADIUS - 4,
-        outline=(255, 215, 0),
+        outline=ACTIVE_HALO,
         width=2,
     )
 

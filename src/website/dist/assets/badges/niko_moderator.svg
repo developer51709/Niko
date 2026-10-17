@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Moderator</title>
+  <rect x="1.25" y="1.25" width="21.5" height="21.5" rx="6.75" fill="#e67e22"/>
+  <rect x="2" y="2" width="20" height="20" rx="6" fill="none" stroke="#fff" stroke-opacity="0.22" stroke-width="1.5"/>
+  <g transform="translate(0.44 -0.07) translate(12 12) scale(1.15) translate(-12 -12)"><g fill="#fff" transform="rotate(-38 12 12)"><rect x="8.3" y="8.1" width="7.4" height="3.8" rx="1.2"/><rect x="11.1" y="11.9" width="1.8" height="6.4" rx="0.9"/></g></g>
+</svg>

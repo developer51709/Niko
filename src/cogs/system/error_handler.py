@@ -7,9 +7,13 @@ import sys
 import json
 import datetime
 import asyncio
+import platform
+from contextvars import ContextVar
 from colorama import Fore, Style, init as colorama_init
+from utils.error_reports import save_error_report
 from config.emojis import get_emoji
 from config.ids import OWNER_IDS
+from config.links import WEBSITE
 from utils import logging
 from utils.ai.debugging import send_debug_report
 from utils.blacklist_manager import BlacklistManager
@@ -57,6 +61,7 @@ from discord.app_commands import (
 from discord.errors import Forbidden, HTTPException
 
 colorama_init(autoreset=True)
+_ERROR_REPORT_CODE: ContextVar[str | None] = ContextVar("error_report_code", default=None)
 
 
 def is_owner():
@@ -71,7 +76,7 @@ def under_development(feature = None):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('icon_settings')} Under Development"
+                    content=f"### {get_emoji('settings')} Under Development"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
@@ -88,7 +93,7 @@ def is_premium():
     """Check whether the invoking user has been granted premium by an owner."""
     async def predicate(ctx):
         from utils.premium_manager import PremiumManager
-        if PremiumManager.is_premium(ctx.author.id):
+        if await PremiumManager.is_premium(ctx.bot.cxn, ctx.author.id):
             return True
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -115,7 +120,7 @@ def is_blacklisted():
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+                discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, submit a blacklist appeal at {WEBSITE}/appeals/blacklist."),
                 accent_colour=discord.Color.red()
             ))
             await ctx.send(view=view)
@@ -128,7 +133,7 @@ def is_blacklisted():
                 view.add_item(discord.ui.Container(
                     discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, please open a ticket in the support server."),
+                    discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, contact Niko support at {WEBSITE}/support."),
                     accent_colour=discord.Color.red()
                 ))
                 await ctx.send(view=view)
@@ -142,7 +147,10 @@ class ErrorHandler(commands.Cog):
 
 
     # Utility: embed generator
-    def error_embed(self, title, description):
+    def error_embed(self, title, description, report_code: str | None = None):
+        report_code = report_code or _ERROR_REPORT_CODE.get()
+        if report_code:
+            description = f"{description}\n\n-# Error report code: `{report_code}`"
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -156,18 +164,81 @@ class ErrorHandler(commands.Cog):
         view.add_item(container)
         return view
 
+    @staticmethod
+    def _prefix_report_details(ctx: commands.Context) -> str:
+        command = ctx.command
+        guild = ctx.guild
+        channel = ctx.channel
+        message = ctx.message
+        args = getattr(ctx, "args", ())
+        kwargs = getattr(ctx, "kwargs", {})
+        arg_offset = 2 if command and command.cog else 1
+        parsed_args = args[arg_offset:] if len(args) >= arg_offset else args
+        return (
+            "Invocation context\n"
+            "------------------\n"
+            f"Source: Prefix command\n"
+            f"Command: {command.qualified_name if command else '(unknown)'}\n"
+            f"Signature: {command.signature if command else '(unknown)'}\n"
+            f"Exact invocation: {getattr(message, 'content', '(unavailable)')}\n"
+            f"Parsed positional args: {parsed_args!r}\n"
+            f"Parsed keyword args: {kwargs!r}\n"
+            f"User: {ctx.author} (ID {ctx.author.id})\n"
+            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
+            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
+            f"Message ID: {getattr(message, 'id', 'n/a')}\n"
+            f"Message created at: {getattr(message, 'created_at', 'n/a')}\n"
+            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
+            f"Bot user: {ctx.bot.user} (ID {getattr(ctx.bot.user, 'id', 'n/a')})\n"
+            f"Python: {platform.python_version()}\n"
+        )
+
+    @staticmethod
+    def _slash_report_details(interaction: discord.Interaction) -> str:
+        command = interaction.command
+        guild = interaction.guild
+        channel = interaction.channel
+        try:
+            arguments = json.dumps(interaction.data, ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            arguments = repr(getattr(interaction, 'data', None))
+        return (
+            "Invocation context\n"
+            "------------------\n"
+            f"Source: Slash command\n"
+            f"Command: {command.qualified_name if command else '(unknown)'}\n"
+            f"Interaction ID: {interaction.id}\n"
+            f"Interaction created at: {interaction.created_at}\n"
+            f"Exact command arguments (interaction payload):\n{arguments}\n"
+            f"User: {interaction.user} (ID {interaction.user.id})\n"
+            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
+            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
+            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
+            f"Bot user: {interaction.client.user} (ID {getattr(interaction.client.user, 'id', 'n/a')})\n"
+            f"Python: {platform.python_version()}\n"
+        )
+
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
-
-        # Ignore errors already handled locally by the command
-        if hasattr(ctx.command, "on_error"):
-            return
 
         # Unwrap CommandInvokeError to get the original exception
         error = getattr(error, "original", error)
 
+        # ── Automated anti-abuse strike ────────────────────────────────────
+        from utils.abuse_detection import AbuseRateLimit, strike_notice
+        if isinstance(error, AbuseRateLimit):
+            await ctx.send(strike_notice(error.result))
+            return
+
         # ── Silent / ignored ───────────────────────────────────────────────
         if isinstance(error, PfxCommandNotFound):
+            return
+
+        report_code, _ = await save_error_report(error, self._prefix_report_details(ctx), self.bot)
+        _ERROR_REPORT_CODE.set(report_code)
+        if ctx.command and hasattr(ctx.command, "on_error"):
+            # A command-local handler may use error_embed and include the same
+            # report code; do not produce a second response here.
             return
 
         # ── Permission errors ──────────────────────────────────────────────
@@ -237,12 +308,35 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, BadArgument):
+            # Build a helpful message: what went wrong + how to call it right.
+            cmd = ctx.command
+            if isinstance(error, MemberNotFound):
+                reason = f"I couldn't find a member matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+            elif isinstance(error, UserNotFound):
+                reason = f"I couldn't find a user matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+            elif isinstance(error, ChannelNotFound):
+                reason = f"I couldn't find a channel matching `{error.argument}`. Try mentioning it (e.g. `#channel`) or using its exact ID."
+            elif isinstance(error, RoleNotFound):
+                reason = f"I couldn't find a role matching `{error.argument}`. Try mentioning it (e.g. `@role`) or using its exact ID."
+            elif isinstance(error, BadBoolArgument):
+                reason = f"`{error.argument}` isn't a valid yes/no value. Try `true`, `false`, `yes`, `no`, `on`, or `off`."
+            elif isinstance(error, BadColourArgument):
+                reason = f"`{error.argument}` isn't a valid colour. Try a hex code like `#5865F2`."
+            elif isinstance(error, BadInviteArgument):
+                reason = f"`{error.argument}` isn't a valid invite link or code."
+            else:
+                reason = f"One of the arguments couldn't be understood: {error}"
+
+            usage = cmd.qualified_name if cmd else None
+            sig = cmd.signature if cmd else None
+            usage_line = f"**Usage:** `.{usage} {sig}`" if sig else f"**Usage:** `.{usage}`"
+
             view = self.error_embed(
                 "Invalid Argument",
-                "One or more arguments were invalid. Check your input and try again."
+                f"{reason}\n{usage_line}"
             )
             await ctx.reply(view=view)
-            logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}")
+            logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}: {error}")
             return
 
         # ── Channel restrictions ───────────────────────────────────────────
@@ -335,7 +429,7 @@ class ErrorHandler(commands.Cog):
             return
 
         # ── Unexpected / critical errors ───────────────────────────────────
-        logging.error("error_handler", f"Unexpected error in command {ctx.command}: {error}")
+        logging.error("error_handler", f"Unexpected error in command {ctx.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
         view = self.error_embed(
@@ -354,10 +448,16 @@ class ErrorHandler(commands.Cog):
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
-
+        _ERROR_REPORT_CODE.set(None)
 
     # ── Slash command error handler ────────────────────────────────────────
-    @commands.Cog.listener()
+    # ── Slash command / context menu error handler ──────────────────────────
+    # NOTE: discord.py does NOT dispatch an "on_app_command_error" gateway
+    # event, so this cannot be a @commands.Cog.listener(). App-command errors
+    # flow through CommandTree.on_error, whose default implementation only
+    # logs "Ignoring exception in command" and never tells the user. We bind
+    # it in setup() below so every slash/context-menu error reaches the
+    # interaction.response / interaction.followup replies here.
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         error = getattr(error, "original", error)
 
@@ -369,8 +469,15 @@ class ErrorHandler(commands.Cog):
                     await interaction.response.send_message(view=view, ephemeral=True)
             except discord.HTTPException:
                 pass
+            finally:
+                _ERROR_REPORT_CODE.set(None)
 
         if isinstance(error, (SlashCommandNotFound, CommandSignatureMismatch)):
+            return
+
+        report_code, _ = await save_error_report(error, self._slash_report_details(interaction), self.bot)
+        _ERROR_REPORT_CODE.set(report_code)
+        if interaction.command and interaction.command.on_error:
             return
 
         if isinstance(error, Forbidden):
@@ -424,28 +531,51 @@ class ErrorHandler(commands.Cog):
             return
 
         # ── Unexpected critical ────────────────────────────────────────────
-        logging.error("error_handler", f"Unexpected error in slash {interaction.command}: {error}")
+        logging.error("error_handler", f"Unexpected error in slash {interaction.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         await _reply(self.error_embed("Unexpected Error", "An unexpected error occurred. The developers have been notified."))
 
-        cog_name = interaction.command.cog.__class__.__name__.lower() if interaction.command and interaction.command.cog else None
-        if cog_name:
+        cog_name = None
+        command = interaction.command
+        cog = getattr(command, "cog", None)
+        if cog is None and command is not None:
+            # Context menus have no .cog attribute; fall back to the bound
+            # callback's class (cog methods carry a __self__).
+            binding = getattr(getattr(command, "callback", None), "__self__", None)
+            cog = binding if isinstance(binding, commands.Cog) else None
+        if cog is not None:
+            cog_name = cog.__class__.__name__.lower()
             import os as _os
             cog_files = [f[:-3] for f in _os.listdir("src/cogs") if f.endswith(".py")]
             if cog_name not in cog_files:
                 cog_name = None
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=cog_name))
-
+        _ERROR_REPORT_CODE.set(None)
 
     @commands.Cog.listener()
     async def on_error(self, event, *args, **kwargs):
         error = sys.exc_info()[1]
         if error is None:
             return
-        logging.error("error_handler", f"Unexpected error in event {event}: {error}")
+        report_code, _ = await save_error_report(
+            error,
+            f"Invocation context\n------------------\nSource: Gateway event\nEvent: {event}\nArguments: {args!r}\nKeyword arguments: {kwargs!r}\nBot user: {self.bot.user} (ID {getattr(self.bot.user, 'id', 'n/a')})\nPython: {platform.python_version()}",
+            self.bot,
+        )
+        logging.error("error_handler", f"Unexpected error in event {event} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
         asyncio.create_task(send_debug_report(self.bot, error, cog_name=None))
 
 
 async def setup(bot):
     await bot.add_cog(ErrorHandler(bot))
+
+    # Route every application-command error through the cog handler above.
+    # Tree.error registers a CommandTree.on_error override — the only hook
+    # discord.py actually calls for slash / context menu errors.
+    handler_cog = bot.get_cog("ErrorHandler")
+    if handler_cog is not None:
+
+        @bot.tree.error
+        async def _tree_on_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+            await handler_cog.on_app_command_error(interaction, error)

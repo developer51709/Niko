@@ -25,24 +25,24 @@ from __future__ import annotations
 
 JOBS: dict[str, dict] = {
     "barista": {
-        "name": "Barista",
-        "emoji": "☕",
+        "name": "Cashier",
+        "emoji": "🧾",
         "min_level": 0,
         "min_pay": 80,
         "max_pay": 220,
         "xp_per_shift": 12,
         "cooldown": 3600,
-        "description": "Pour cozy lattes for the regulars and earn steady tips.",
+        "description": "Ring up customers and earn steady tips.",
     },
     "baker": {
         "name": "Baker",
-        "emoji": "🥐",
+        "emoji": "🍞",
         "min_level": 5,
         "min_pay": 180,
         "max_pay": 380,
         "xp_per_shift": 18,
         "cooldown": 3600,
-        "description": "Bake fresh croissants before sunrise. The smell sells itself.",
+        "description": "Bake fresh bread before sunrise. The smell sells itself.",
     },
     "manager": {
         "name": "Shift Manager",
@@ -55,24 +55,24 @@ JOBS: dict[str, dict] = {
         "description": "Run the floor, train the new hires, count the till.",
     },
     "trader": {
-        "name": "Café Trader",
+        "name": "Market Trader",
         "emoji": "📈",
         "min_level": 30,
         "min_pay": 450,
         "max_pay": 1100,
         "xp_per_shift": 42,
         "cooldown": 3600,
-        "description": "Trade coffee bean futures from the back office.",
+        "description": "Trade commodities from the back office.",
     },
     "owner": {
-        "name": "Café Owner",
+        "name": "Business Owner",
         "emoji": "👑",
         "min_level": 50,
         "min_pay": 800,
         "max_pay": 2200,
         "xp_per_shift": 60,
         "cooldown": 3600,
-        "description": "It's your café now. Take a cut of everything.",
+        "description": "It's your business now. Take a cut of everything.",
     },
 }
 
@@ -104,8 +104,8 @@ def get_job(job_id: str | None) -> dict:
 SHOP_ITEMS: dict[str, dict] = {
     # ── Consumables ────────────────────────────────────────────────
     "espresso_shot": {
-        "name": "Espresso Shot",
-        "emoji": "☕",
+        "name": "Energy Drink",
+        "emoji": "⚡",
         "category": "consumable",
         "price": 250,
         "sell": 90,
@@ -124,7 +124,7 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "+25% crime success on your next attempt. Don't get caught.",
     },
     "rob_shield": {
-        "name": "Tip Jar Lock",
+        "name": "Cash Box Lock",
         "emoji": "🛡️",
         "category": "consumable",
         "price": 1200,
@@ -144,7 +144,7 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "Doubles your next lottery ticket purchase.",
     },
     "xp_potion": {
-        "name": "Career Brew",
+        "name": "Career Boost",
         "emoji": "🧪",
         "category": "consumable",
         "price": 2000,
@@ -152,6 +152,46 @@ SHOP_ITEMS: dict[str, dict] = {
         "min_level": 2,
         "effect": "xp_potion",
         "description": "Instantly gain 75 career XP.",
+    },
+    "coin_booster": {
+        "name": "Rigged Coin",
+        "emoji": "🪙",
+        "category": "consumable",
+        "price": 3000,
+        "sell": 1000,
+        "min_level": 5,
+        "effect": "coin_booster",
+        "description": "Next coinflip gets 60/40 odds in your favor.",
+    },
+    "streak_insurance": {
+        "name": "Streak Insurance",
+        "emoji": "🛡️",
+        "category": "consumable",
+        "price": 4000,
+        "sell": 1200,
+        "min_level": 10,
+        "effect": "streak_insurance",
+        "description": "Protects your daily streak if you miss one day.",
+    },
+    "double_down_token": {
+        "name": "Double Down Token",
+        "emoji": "🎰",
+        "category": "consumable",
+        "price": 5000,
+        "sell": 1800,
+        "min_level": 15,
+        "effect": "gambling_boost",
+        "description": "Your next gambling win pays 1.5x the normal amount.",
+    },
+    "lucky_horseshoe": {
+        "name": "Lucky Horseshoe",
+        "emoji": "🧲",
+        "category": "consumable",
+        "price": 2500,
+        "sell": 800,
+        "min_level": 3,
+        "effect": "work_boost",
+        "description": "+10% on your next work reward.",
     },
     # ── Upgrades ───────────────────────────────────────────────────
     "vault_upgrade": {
@@ -166,7 +206,7 @@ SHOP_ITEMS: dict[str, dict] = {
     },
     # ── Collectibles ───────────────────────────────────────────────
     "regular_badge": {
-        "name": "Café Regular Badge",
+        "name": "Regular Badge",
         "emoji": "🎖️",
         "category": "collectible",
         "price": 5000,
@@ -175,22 +215,22 @@ SHOP_ITEMS: dict[str, dict] = {
         "description": "Show everyone you're a regular here.",
     },
     "golden_mug": {
-        "name": "Golden Mug",
+        "name": "Golden Trophy",
         "emoji": "🏆",
         "category": "collectible",
         "price": 25000,
         "sell": 8000,
         "min_level": 10,
-        "description": "A gleaming gold-plated mug for your shelf.",
+        "description": "A gleaming gold-plated trophy for your shelf.",
     },
     "diamond_croissant": {
-        "name": "Diamond Croissant",
+        "name": "Diamond Crown",
         "emoji": "💎",
         "category": "collectible",
         "price": 100000,
         "sell": 30000,
         "min_level": 25,
-        "description": "A diamond-encrusted croissant. Pure flex, zero calories.",
+        "description": "A diamond-encrusted crown. Pure flex, zero calories.",
     },
 }
 
@@ -296,3 +336,44 @@ COOLDOWN_DAILY  = 86400
 COOLDOWN_WORK   = 3600
 COOLDOWN_CRIME  = 3600
 COOLDOWN_ROB    = 3600
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# top.gg voting rewards
+#
+# A vote is one upvote from the listing site. top.gg allows one vote per
+# account every 12 hours, so `VOTE_COOLDOWN` is also the duplicate window: a
+# webhook delivered twice for the same vote must never pay out twice.
+#
+# Streaks count *consecutive* vote windows. A vote inside
+# `VOTE_STREAK_WINDOW` continues the streak; anything later restarts it at
+# one. The streak drives two multipliers: the payout for the vote itself, and
+# a bonus on daily/work earnings while the streak is alive.
+# ──────────────────────────────────────────────────────────────────────────
+
+VOTE_COOLDOWN           = 12 * 3600   # minimum gap between two counted votes
+VOTE_STREAK_WINDOW      = 24 * 3600   # gap that still counts as "regular"
+VOTE_BASE_REWARD        = 500         # coins for a first vote
+VOTE_WEEKEND_MULTIPLIER = 2.0         # top.gg weekend votes pay double
+VOTE_STREAK_STEPS       = 10          # streak steps that scale the bonuses
+VOTE_REWARD_STEP        = 0.10        # +10% vote payout per step (max 2.0x)
+VOTE_EARNINGS_STEP      = 0.05        # +5% daily/work bonus per step (max 1.5x)
+
+
+def vote_streak_steps(streak: int) -> int:
+    """Number of capped streak steps a vote streak has earned (0 … 10)."""
+    try:
+        value = int(streak or 0)
+    except (TypeError, ValueError):
+        value = 0
+    return max(0, min(value, VOTE_STREAK_STEPS))
+
+
+def vote_reward_multiplier(streak: int) -> float:
+    """Multiplier applied to the vote payout itself (1.0x … 2.0x)."""
+    return 1 + vote_streak_steps(streak) * VOTE_REWARD_STEP
+
+
+def vote_earnings_multiplier(streak: int) -> float:
+    """Bonus applied to daily/work earnings while a vote streak is alive."""
+    return 1 + vote_streak_steps(streak) * VOTE_EARNINGS_STEP

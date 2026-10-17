@@ -1,0 +1,79 @@
+# Niko
+
+> Niko is a Discord bot and companion for community servers. This index links to its complete public documentation and release notes in Markdown format.
+
+## Documentation
+
+- [AI Features and Configuration](https://niko.sryze.cc/docs/ai-overview.md)
+- [Anti-Nuke Protection](https://niko.sryze.cc/docs/automod-anti-nuke.md)
+- [Anti-Raid Protection](https://niko.sryze.cc/docs/automod-anti-raid.md)
+- [Anti-Spam Configuration](https://niko.sryze.cc/docs/automod-anti-spam.md)
+- [AutoMod Overview](https://niko.sryze.cc/docs/automod-overview.md)
+- [Blacklists and Appeals](https://niko.sryze.cc/docs/blacklist-and-appeals.md)
+- [Customize Niko's Server Profile](https://niko.sryze.cc/docs/dashboard-customization.md)
+- [Dashboard: Economy & Achievements](https://niko.sryze.cc/docs/dashboard-economy.md)
+- [Dashboard: Leveling Settings](https://niko.sryze.cc/docs/dashboard-leveling.md)
+- [Dashboard Overview](https://niko.sryze.cc/docs/dashboard-overview.md)
+- [Staff Applications](https://niko.sryze.cc/docs/dashboard-staff-applications.md)
+- [Using the Web Dashboard](https://niko.sryze.cc/docs/dashboard.md)
+- [Banking and Interest](https://niko.sryze.cc/docs/economy-banking.md)
+- [Gambling and Mini-Games](https://niko.sryze.cc/docs/economy-gambling.md)
+- [Jobs and Earning Guide](https://niko.sryze.cc/docs/economy-jobs.md)
+- [Economy System Overview](https://niko.sryze.cc/docs/economy-overview.md)
+- [Shop and Items Guide](https://niko.sryze.cc/docs/economy-shop.md)
+- [Voting Rewards & Streaks](https://niko.sryze.cc/docs/economy-voting.md)
+- [Giveaway System](https://niko.sryze.cc/docs/giveaway-overview.md)
+- [Inviting Niko to Your Server](https://niko.sryze.cc/docs/invite.md)
+- [Leveling Configuration Guide](https://niko.sryze.cc/docs/leveling-configuration.md)
+- [Leveling System Overview](https://niko.sryze.cc/docs/leveling-overview.md)
+- [Logging System](https://niko.sryze.cc/docs/logging-overview.md)
+- [Mute System Guide](https://niko.sryze.cc/docs/moderation-mutes.md)
+- [Moderation Tools Overview](https://niko.sryze.cc/docs/moderation-overview.md)
+- [Warning System Guide](https://niko.sryze.cc/docs/moderation-warnings.md)
+- [Setting Up Prefix Commands](https://niko.sryze.cc/docs/prefix-setup.md)
+- [Roles and Permissions Guide](https://niko.sryze.cc/docs/roles-and-permissions.md)
+- [Server Configuration Basics](https://niko.sryze.cc/docs/server-configuration.md)
+- [Setup and Permissions](https://niko.sryze.cc/docs/setup-and-permissions.md)
+- [Birthday System Guide](https://niko.sryze.cc/docs/social-birthdays.md)
+- [Social Media Notifier](https://niko.sryze.cc/docs/social-notifier.md)
+- [Social Features Overview](https://niko.sryze.cc/docs/social-overview.md)
+- [Poll System Guide](https://niko.sryze.cc/docs/social-polls.md)
+- [Roleplay Blocking (rpblock & rpunblock)](https://niko.sryze.cc/docs/social-roleplay-blocks.md)
+- [Starboard](https://niko.sryze.cc/docs/social-starboard.md)
+- [Suggestions](https://niko.sryze.cc/docs/social-suggestions.md)
+- [Ticket System Guide](https://niko.sryze.cc/docs/tickets-guide.md)
+- [Ticket Web Transcripts](https://niko.sryze.cc/docs/tickets-transcripts.md)
+- [Practical Community Setup Tips](https://niko.sryze.cc/docs/tips-community-management.md)
+- [Quick Start Guide](https://niko.sryze.cc/docs/tips-getting-started.md)
+- [Utility Features Overview](https://niko.sryze.cc/docs/utility-overview.md)
+- [Reminders Guide](https://niko.sryze.cc/docs/utility-reminders.md)
+- [Tags System Guide](https://niko.sryze.cc/docs/utility-tags.md)
+- [Voice Features Overview](https://niko.sryze.cc/docs/voice-overview.md)
+- [Welcome to Niko](https://niko.sryze.cc/docs/welcome.md)
+
+## Changelog
+
+- [Seasonal Badges Only Progress Inside Their Season](https://niko.sryze.cc/changelog/seasonal-badges-in-season.md) — Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.
+- [The Ticket Panel Now Wears Its Accent Color](https://niko.sryze.cc/changelog/ticket-panel-accent-color.md) — Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.
+- [Server Settings Hand Tickets and Onboarding to Their Own Tabs](https://niko.sryze.cc/changelog/guild-settings-tidy-up.md) — The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.
+- [Blacklisting a Server Now Pauses Its Features Instead of Erasing Them](https://niko.sryze.cc/changelog/blacklist-lockdown.md) — Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.
+- [Twitch Live Alerts and a Dashboard Tab for Social Notifications](https://niko.sryze.cc/changelog/notifier-dashboard-tab.md) — Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.
+- [Team Profiles Get Platform Cards and a Spotify Progress Bar](https://niko.sryze.cc/changelog/team-profile-cards.md) — Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.
+- [Economy & Achievements Move to Your Profile](https://niko.sryze.cc/changelog/personal-economy-tabs.md) — The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.
+- [Economy & Leveling Cards Match the Website Theme](https://niko.sryze.cc/changelog/economy-card-theme-refresh.md) — Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.
+- [top.gg Voting Rewards & Café Achievements](https://niko.sryze.cc/changelog/topgg-voting-rewards-and-achievements.md) — Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.
+- [Global Economy Leaderboard & Privacy](https://niko.sryze.cc/changelog/global-economy-leaderboard-privacy.md) — The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.
+- [Dashboard & Community Experience Refresh](https://niko.sryze.cc/changelog/dashboard-and-community-experience-refresh.md) — A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.
+- [Scam Image Filter (Experimental)](https://niko.sryze.cc/changelog/scam-image-filter.md) — A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.
+- [Staff Applications](https://niko.sryze.cc/changelog/staff-applications.md) — Guild dashboards can now manage multiple staff role openings with shareable web forms, Discord membership and eligibility checks, and reusable application links.
+- [Logging Reliability & Onboarding Rules](https://niko.sryze.cc/changelog/server-logging-onboarding-updates.md) — Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.
+- [UwU Lock Rebuilt & Starboard Persistence](https://niko.sryze.cc/changelog/uwulock-starboard-overhaul.md) — The UwU Lock command has been completely rebuilt around the main database with immediate webhook reposts, reliable message transforms, and full Starboard integration — with proper author attribution that persists cleanly across restarts.
+- [Guild Server Pulse Stats](https://niko.sryze.cc/changelog/guild-server-pulse-stats.md) — Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.
+- [Team Profiles & Custom AI Names](https://niko.sryze.cc/changelog/team-page-ai-name-config.md) — Niko's public website now introduces the people behind the bot, while server owners can give their AI a custom name and manage its experimental capabilities from the dashboard.
+- [September Platform Updates](https://niko.sryze.cc/changelog/september-platform-updates.md) — A broad set of public improvements landed across Niko: richer ticket transcripts, a multimodal AI experiment, more reliable music playback, a redesigned dashboard experience, persistent giveaways and suggestions, and a refreshed public website with dynamic social previews.
+- [Economy Items, Leveling Cards & Subcommands](https://niko.sryze.cc/changelog/economy-leveling-overhaul.md) — The economy shop expanded with four new consumable items that affect gameplay — Rigged Coin, Streak Insurance, Double Down Token, and Lucky Horseshoe — plus daily streak milestone bonuses at 7, 14, 30, 60, and 90 days. The leveling system now renders rank cards and leaderboards as customizable image cards, and all leveling commands live under a single `/leveling` group with subcommands.
+- [Database Migration to MongoDB](https://niko.sryze.cc/changelog/database-migration.md) — Every major system has been migrated from SQLite to MongoDB. The migration covered economy, leveling, moderation, tickets, birthdays, AFK, sticky messages, warns, mutes, and the blacklist — with a custom interpreter that translates SQLite-style writes to MongoDB operations.
+- [Ticket Transcripts & VoiceMaster](https://niko.sryze.cc/changelog/ticket-system-transcripts.md) — The ticket system gained a web-based transcript viewer that renders ticket conversations as styled HTML pages. The VoiceMaster was also improved with better reliability and database usage. Ticket transcripts can now be downloaded as HTML or viewed online.
+- [Roleplay, Music & Status Rotation](https://niko.sryze.cc/changelog/roleplay-music-status.md) — The roleplay cog was completely rewritten to use nekos.best API GIFs with CV2 layout messages and a persistent 'hug back' button. The music cog was restructured with a ghost queue feature and fixed autoplay/Spotify playback. A status message rotation system was added with a configurable timer.
+- [Logging, Moderation & Documentation](https://niko.sryze.cc/changelog/moderation-logging-dashboard.md) — Logging got two major improvements: deleted message logs now show image attachments in a MediaGallery component, and the Member category now tracks avatar changes using a Section with Thumbnail accessory. The documentation page was fully rebuilt with search, filters, and a card-based layout.
+- [Website, Donation System & API](https://niko.sryze.cc/changelog/website-launch-donation.md) — The public website and documentation portal launched with a React + Vite frontend, documentation center with search, and a commands reference page. The donation system gained a dashboard customization page, and the Flask API backend was fixed to use proper database calls.

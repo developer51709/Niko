@@ -12,9 +12,9 @@ This document contains every piece of information needed to complete Discord's
 | **Bot name** | Niko |
 | **Purpose** | Multi-feature Discord companion — AI chat, economy, leveling, moderation, music, and community tools |
 | **Audience** | General Discord communities (any server that invites the bot) |
-| **Support server** | https://discord.gg/3JFbm2wfNk |
-| **Privacy Policy URL** | Use `/legal privacy` in-bot, or link to your hosted copy of `docs/privacy-policy.md` |
-| **Terms of Service URL** | Use `/legal terms` in-bot, or link to your hosted copy of `docs/terms-of-service.md` |
+| **Support server** | https://niko.sryze.cc/discord — the site resolves the current invite, so this link never goes stale |
+| **Privacy Policy URL** | https://niko.sryze.cc/privacy (also `/legal privacy` in-bot and `docs/privacy-policy.md`) |
+| **Terms of Service URL** | https://niko.sryze.cc/terms (also `/legal terms` in-bot and `docs/terms-of-service.md`) |
 
 ---
 
@@ -111,6 +111,8 @@ This table covers every file or database where user/server data is persisted.
 | `data/ticket_config.json` | Per-guild ticket settings (no user data) | Server admin |
 | `data/database.db` | Giveaway entries: prize, end time, host User ID; participant User IDs | Bot owner manually |
 
+Deployments configured with `MONGODB_URL` keep the same records in MongoDB instead of, or alongside, the files above. The stores that live in the database include premium grants (`premium_users`), stored error reports (`error_reports`), and standby backend registrations (`standby_instances`).
+
 ---
 
 ## Third-Party Services
@@ -125,14 +127,21 @@ This table covers every file or database where user/server data is persisted.
 
 ## Privacy Policy & Terms of Service (in-bot)
 
-Niko ships `/legal privacy` and `/legal terms` slash commands that display the
-full Privacy Policy and Terms of Service directly in Discord (ephemeral, visible
-only to the requesting user). These are trilingual (EN / DE / ES).
+Niko ships `/legal privacy`, `/legal terms` and `/legal community` slash commands
+that display the full Privacy Policy, Terms of Service and Community Policy
+directly in Discord (ephemeral, visible only to the requesting user). These are
+trilingual (EN / DE / ES).
 
-If Discord's verification form requires a **public URL**, host the text from
-`src/cogs/legal/cog.py` (the `privacy_body` and `terms_body` strings for the
-`"en"` locale) on any public page (GitHub Gist, a simple website, etc.) and
-submit that URL.
+The same documents are published on the website, and those are the URLs to submit
+with a verification or monetization application:
+
+- Privacy Policy: https://niko.sryze.cc/privacy
+- Terms of Service: https://niko.sryze.cc/terms
+- Community Policy: https://niko.sryze.cc/community
+- Support server: https://niko.sryze.cc/discord
+
+The website pages are the source of truth for wording; `src/cogs/legal/cog.py`
+and the `docs/*.md` copies must be kept in sync with them.
 
 ---
 
@@ -177,6 +186,6 @@ submit that URL.
 - [ ] Terms of Service URL is publicly accessible
 - [ ] `/legal privacy` and `/legal terms` commands work in your test server
 - [ ] Bot description on the Discord Developer Portal accurately describes all features
-- [ ] Support server link is valid and the bot is present there
+- [ ] Support server link is https://niko.sryze.cc/discord and resolves to a live invite
 - [ ] All three privileged intents are enabled in the Developer Portal → Bot settings
 - [ ] Bot does not use message content for any purpose not listed above

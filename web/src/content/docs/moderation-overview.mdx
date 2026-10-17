@@ -1,0 +1,107 @@
+---
+slug: "moderation-overview"
+title: "Moderation Tools Overview"
+category: "moderation"
+excerpt: "Comprehensive guide to Niko's moderation features including warns, mutes, and moderation commands."
+tags: ["moderation","warns","mutes","kicks","bans"]
+order: 1
+---
+# Moderation Tools Overview
+
+Niko provides a complete set of moderation tools to help you manage your server.
+
+## Moderation Commands
+
+### Warning System
+Issue warnings to members:
+
+```
+.warn <user> [reason]
+```
+
+Warnings are tracked per user and can be viewed or cleared.
+
+### Muting
+Temporarily prevent a member from speaking:
+
+```
+.mute <user> [reason]
+```
+
+### Unmuting
+Remove a mute:
+
+```
+.unmute <user>
+```
+
+### Kicking
+Remove a member from the server:
+
+```
+.kick <user> [reason]
+```
+
+### Banning
+Ban a member from the server:
+
+```
+.ban <user> [reason]
+```
+
+### Unbanning
+Unban a user by their ID:
+
+```
+.unban <user id>
+```
+
+### Temporary Mutes
+Mute a member for a specific number of seconds:
+
+```
+.tempmute <user> <seconds> [reason]
+```
+
+### Nickname Changes
+Change a member's nickname:
+
+```
+.nick <user> <nickname>
+```
+
+## Moderation Logging
+
+All moderation actions are logged to your configured log channel. Logs include:
+- Who performed the action
+- Who was affected
+- When it happened
+- The reason given
+
+## Moderation Commands List
+
+| Command | Description |
+|---------|-------------|
+| `warn` | Warn a member |
+| `warnings` | View a member's warnings |
+| `clearwarnings` | Clear a member's warnings |
+| `mute` | Mute a member |
+| `unmute` | Unmute a member |
+| `tempmute` | Temporarily mute a member |
+| `kick` | Kick a member |
+| `ban` | Ban a member |
+| `unban` | Unban a user by ID |
+| `clear` | Clear recent messages in a channel |
+| `purge` | Purge a member's messages |
+| `slowmode` | Set channel slowmode (seconds) |
+| `lock` / `unlock` | Lock or unlock a channel |
+| `nick` | Change a member's nickname |
+| `setmodlog` | Open the mod-log settings panel |
+
+## Moderation Best Practices
+
+1. **Use reasons**: Always provide a reason for actions
+2. **Document actions**: Logs help track patterns
+3. **Be consistent**: Apply rules fairly
+4. **Use timeouts**: Mutes are better than immediate bans for minor issues
+5. **Warn first**: Give warnings before escalating to kicks/bans

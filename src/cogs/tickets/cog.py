@@ -1,3 +1,5 @@
+import os
+import time
 from .views import *
 
 class Tickets(commands.Cog):
@@ -45,7 +47,7 @@ class Tickets(commands.Cog):
         sent = await ctx.channel.send(view=view)
         cfg.panel_message_id = sent.id
         cfg.panel_channel_id = ctx.channel.id
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "panel_posted", channel=ctx.channel.mention), ephemeral=True if ctx.interaction else False)
 
     # ───── admin: category management ─────────────
@@ -71,7 +73,7 @@ class Tickets(commands.Cog):
         if name in cfg.panel_categories:
             return await ctx.send(view=_cv2_text(ctx, "category_exists", name=name))
         cfg.panel_categories.append(name)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
         await ctx.send(view=_cv2_text(ctx, "category_added", name=name))
 
@@ -85,7 +87,7 @@ class Tickets(commands.Cog):
         if name not in cfg.panel_categories:
             return await ctx.send(view=_cv2_text(ctx, "category_missing", name=name))
         cfg.panel_categories.remove(name)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await self._refresh_panel(ctx.guild, cfg)
         await ctx.send(view=_cv2_text(ctx, "category_removed", name=name))
 
@@ -124,7 +126,7 @@ class Tickets(commands.Cog):
         if role.id in cfg.support_roles:
             return await ctx.send(view=_cv2_text(ctx, "support_exists", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.append(role.id)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "support_added", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
@@ -137,7 +139,7 @@ class Tickets(commands.Cog):
         if role.id not in cfg.support_roles:
             return await ctx.send(view=_cv2_text(ctx, "support_missing", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
         cfg.support_roles.remove(role.id)
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
         await ctx.send(view=_cv2_text(ctx, "support_removed", role=role.mention), allowed_mentions=discord.AllowedMentions.none())
 
     @ticket_support.command(
@@ -240,15 +242,16 @@ class Tickets(commands.Cog):
             who = other.mention if other else f"<@{existing}>"
             return await ctx.send(view=_cv2_text(ctx, "already_claimed", user=who))
         ticket["claimed_by"] = ctx.author.id
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
+        await refresh_ticket_header(ctx, ctx.guild, ctx.channel, ticket, cfg)
         await ctx.send(view=_cv2_text(ctx, "claimed", user=ctx.author.mention))
 
     # ───── in-ticket: transcript ──────────────────
 
     @ticket.command(
         name="transcript",
-        description="Generate a transcript of this ticket.",
-        help="{ 'en': 'Generate a text transcript of this ticket (in-ticket).', 'de': 'Ein Textprotokoll dieses Tickets erstellen (im Ticket).', 'es': 'Genera una transcripción de texto de este ticket (dentro del ticket).' }",
+        description="Generate a web transcript of this ticket.",
+        help="{ 'en': 'Generate a web transcript of this ticket with download options (in-ticket).', 'de': 'Ein Web-Protokoll dieses Tickets erstellen (im Ticket).', 'es': 'Genera una transcripción web de este ticket (dentro del ticket).' }",
     )
     @commands.guild_only()
     async def ticket_transcript(self, ctx: commands.Context):
@@ -259,17 +262,140 @@ class Tickets(commands.Cog):
             return await ctx.send(view=_cv2_text(ctx, "no_perm_manage"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        lines = []
+
+        # Collect messages
+        messages = []
         async for m in ctx.channel.history(limit=2000, oldest_first=True):
-            ts = m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-            content = m.content or ""
-            if m.attachments:
-                content += " [attachments: " + ", ".join(a.url for a in m.attachments) + "]"
-            lines.append(f"[{ts}] {m.author} ({m.author.id}): {content}")
-        body = "\n".join(lines).encode("utf-8")
-        file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
-        view = _cv2(_local_msg(ctx, "transcript_built"))
-        await ctx.send(view=view, file=file)
+            attachments = [a.url for a in m.attachments] if m.attachments else []
+
+            # Serialize embeds into JSON-safe payloads
+            embeds = []
+            for embed in m.embeds:
+                try:
+                    embeds.append(embed.to_dict())
+                except Exception:
+                    continue
+
+            # Serialize CV2 layout components (containers, text displays,
+            # media galleries, thumbnails, buttons, ...) into JSON-safe payloads
+            components = []
+            for comp in m.components:
+                try:
+                    components.append(comp.to_dict())
+                except Exception:
+                    continue
+
+            stickers = []
+            for sticker in m.stickers:
+                try:
+                    payload = sticker.to_dict()
+                except Exception:
+                    payload = {
+                        "id": sticker.id,
+                        "name": sticker.name,
+                        "format_type": getattr(getattr(sticker, "format", None), "value", getattr(sticker, "format", None)),
+                    }
+                # discord.py may omit the CDN URL from to_dict(); keep it when
+                # available so stored transcripts can render stickers later.
+                if not payload.get("url") and getattr(sticker, "url", None):
+                    payload["url"] = str(sticker.url)
+                stickers.append(payload)
+
+            messages.append({
+                "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "author": str(m.author),
+                "author_id": m.author.id,
+                "content": m.content or "",
+                "attachments": attachments,
+                "embeds": embeds,
+                "components": components,
+                "stickers": stickers,
+            })
+
+        # Find ticket info for metadata
+        ticket_info = is_ticket_channel(ctx)
+        opener_id = ticket_info.get("opener_id", 0) if ticket_info else 0
+        category = ticket_info.get("category", "General") if ticket_info else "General"
+        claimed_by = ticket_info.get("claimed_by") if ticket_info else None
+
+        # Generate transcript ID and save to database
+        from utils.tickets.transcripts import (
+            generate_transcript_id, save_transcript, export_txt,
+            inline_transcript_images,
+        )
+        from config import links as _links
+
+        transcript_id = generate_transcript_id(ctx.guild.id, ctx.channel.id, time.time())
+        # Inline image bytes before persistence so HTML downloads remain
+        # self-contained even if Discord later removes the source message.
+        await inline_transcript_images(messages)
+        try:
+            await save_transcript(
+                self.bot.cxn,
+                transcript_id=transcript_id,
+                guild_id=ctx.guild.id,
+                channel_id=ctx.channel.id,
+                channel_name=ctx.channel.name,
+                opener_id=opener_id,
+                category=category,
+                messages=messages,
+                claimed_by=claimed_by,
+            )
+        except Exception:
+            # Fallback to .txt file if DB save fails
+            body = export_txt(messages).encode("utf-8")
+            file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
+            view = _cv2(_local_msg(ctx, "transcript_built"))
+            await ctx.send(view=view, file=file)
+            return
+
+        # Build the web transcript URL
+        from utils.tickets.transcripts import export_txt
+        base_url = os.environ.get("DONATION_SITE_URL") or os.environ.get("PUBLIC_URL") or ""
+        if not base_url:
+            try:
+                from website import public_base_url as _pbu
+                base_url = _pbu()
+            except Exception:
+                base_url = ""
+
+        web_url = f"{base_url}/transcript/{transcript_id}" if base_url else None
+
+        # Build response with web link and download options
+        download_formats = ["txt", "html", "csv", "json"]
+        format_links = "\n".join(
+            f"• [{fmt.upper()}]({base_url}/api/transcript/{transcript_id}/download?format={fmt})"
+            for fmt in download_formats
+        ) if base_url else ""
+
+        content = f"📝 **Transcript generated!**\n\n"
+        content += f"**Messages:** {len(messages)}\n"
+        content += f"**Category:** {category}\n"
+        if web_url:
+            content += f"\n🔗 **View online:** {web_url}\n\n"
+            content += f"**Download:**\n{format_links}"
+        else:
+            # Fallback to .txt file if no base URL
+            body = export_txt(messages).encode("utf-8")
+            file = discord.File(io.BytesIO(body), filename=f"transcript-{ctx.channel.name}.txt")
+            await ctx.send(content=content, file=file)
+            return
+
+        # Add view button
+        view_obj = discord.ui.LayoutView()
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content=content),
+        )
+        if web_url:
+            container.add_item(discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="View Transcript",
+                    style=discord.ButtonStyle.link,
+                    url=web_url,
+                ),
+            ))
+        view_obj.add_item(container)
+        await ctx.send(view=view_obj)
 
     # ───── in-ticket: close (lock) ────────────────
 
@@ -308,7 +434,8 @@ class Tickets(commands.Cog):
             pass
 
         ticket["status"] = "closed"
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
+        await refresh_ticket_header(ctx, ctx.guild, ctx.channel, ticket, cfg)
 
         await ctx.send(view=_cv2_text(ctx, "closed", user=ctx.author.mention))
 
@@ -334,7 +461,7 @@ class Tickets(commands.Cog):
 
         # remove from open tickets list
         cfg.open_tickets = [t for t in cfg.open_tickets if t.get("channel_id") != ctx.channel.id]
-        update_ticket_config(ctx.guild.id, cfg)
+        await async_update_ticket_config(ctx.guild.id, cfg)
 
         try:
             await ctx.channel.delete(reason=f"Ticket deleted by {ctx.author}")
@@ -395,7 +522,7 @@ class _PostPanelBtn(discord.ui.Button):
         sent = await interaction.channel.send(view=view)
         cfg.panel_message_id = sent.id
         cfg.panel_channel_id = interaction.channel.id
-        update_ticket_config(self.guild_id, cfg)
+        await async_update_ticket_config(self.guild_id, cfg)
         await interaction.response.send_message(
             msg(interaction, "panel_posted", channel=interaction.channel.mention),
             ephemeral=True,
@@ -410,7 +537,7 @@ class TicketSetupView(discord.ui.LayoutView):
         desc = MESSAGES.get(personality, MESSAGES["normal"]).get(lang, {}).get("setup_desc") \
                 or MESSAGES["normal"]["en"]["setup_desc"]
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=title.format(icon=get_emoji("icon_ticket"))),
+            discord.ui.TextDisplay(content=title.format(icon=get_emoji("ticket"))),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=desc),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -429,6 +556,10 @@ class TicketSetupView(discord.ui.LayoutView):
 async def setup(bot):
     await bot.add_cog(Tickets(bot))
 
+    # Load all ticket configs from database into cache
+    from utils.tickets.utils import load_all_tickets
+    await load_all_tickets()
+
     # reattach persistent ticket panels
     for cfg in get_all_ticket_configs():
         if cfg.panel_message_id:
@@ -436,3 +567,6 @@ async def setup(bot):
                 TicketPanelView(cfg.guild_id, cfg),
                 message_id=cfg.panel_message_id,
             )
+
+    # persistent staff-panel buttons on ticket headers stay live across restarts
+    register_ticket_persistent_views(bot)

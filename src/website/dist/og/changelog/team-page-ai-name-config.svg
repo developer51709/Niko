@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#050607"/><stop offset=".58" stop-color="#0a0b0e"/><stop offset="1" stop-color="#111317"/></linearGradient><pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M42 0H0V42" fill="none" stroke="#dce1e8" stroke-opacity=".045"/></pattern></defs>
+  <rect width="1200" height="630" fill="url(#bg)"/><rect width="1200" height="630" fill="url(#grid)"/><circle cx="1080" cy="40" r="280" fill="#aab1ba" fill-opacity=".065"/><circle cx="1080" cy="40" r="190" fill="#d5d9df" fill-opacity=".035"/><path d="M72 470H1128" stroke="#dce1e8" stroke-opacity=".12"/>
+  <rect x="72" y="72" width="58" height="58" rx="17" fill="#15171b" stroke="#dce1e8" stroke-opacity=".2"/><text x="101" y="112" text-anchor="middle" fill="#f4f5f7" font-family="Inter,sans-serif" font-size="32" font-weight="700">N</text>
+  <text x="72" y="190" fill="#c2c8d0" font-family="Inter,sans-serif" font-size="20" font-weight="700" letter-spacing="4">CHANGELOG · V2.10.0</text>
+  <text x="72" y="285" fill="#f4f5f7" font-family="Inter,sans-serif" font-size="58" font-weight="700">Team Profiles &amp; Custom AI Names</text>
+  <text x="72" y="360" fill="#b4bac3" font-family="Inter,sans-serif" font-size="24">Niko&#39;s public website now introduces the people behind the</text><text x="72" y="394" fill="#b4bac3" font-family="Inter,sans-serif" font-size="24">bot, while server owners can give their AI a custom name</text><text x="72" y="428" fill="#b4bac3" font-family="Inter,sans-serif" font-size="24">and manage its experimental capabilities fro</text>
+  <text x="72" y="555" fill="#828994" font-family="Inter,sans-serif" font-size="18">NIKO.SRYZE.CC</text><text x="1128" y="555" text-anchor="end" fill="#aab1ba" font-family="Inter,sans-serif" font-size="18">NIKO</text>
+</svg>
