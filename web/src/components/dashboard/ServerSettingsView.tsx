@@ -69,6 +69,7 @@ function initialValues(server?: ServerConfig) {
       Object.entries(server?.logging || {}).map(([key, value]) => [key, value === null || value === undefined ? "" : String(value)]),
     ),
     disabled_logging: [...(server?.logging?.disabled || [])].map(String),
+    private_server: Boolean(server?.privacy?.private),
   };
 }
 
@@ -100,6 +101,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         ...values.logging,
         disabled: values.disabled_logging,
       },
+      privacy: { private: values.private_server },
     }, csrfToken).then((result) => {
       setValues(initialValues(result.config as ServerConfig));
       setState({ saving: false });
@@ -119,6 +121,8 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
         {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><label className="setting-row compact-setting-row"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><input type="checkbox" checked={!values.disabled_logging.includes(key)} onChange={() => toggleLogging(key)} /><i aria-hidden="true" /></label></div>; })}
       </div></section>
+
+      <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><label className="setting-row"><span><strong>Private server</strong><small>Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible.</small></span><input type="checkbox" checked={values.private_server} onChange={(event) => setValue("private_server", event.target.checked)} /><i aria-hidden="true" /></label></section>
 
       <SaveFooter state={state} />
     </form>

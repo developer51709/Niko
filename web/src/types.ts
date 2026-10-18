@@ -339,6 +339,7 @@ export type ServerConfig = {
   logging: LoggingConfig;
   tickets: TicketConfig;
   profile: GuildProfile;
+  privacy?: { private: boolean };
   global_profile?: GlobalProfile;
 };
 

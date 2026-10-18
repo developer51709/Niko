@@ -74,6 +74,21 @@ def test_export_popup_matches_the_discord_layout():
         "bio": "Hello",
         "guild_tag": "MOON",
         "guild_badge_url": "https://cdn.example/badge.png",
+        "server_tag": {
+            "id": "999",
+            "tag": "MOON",
+            "badge_url": "https://cdn.example/badge.png",
+            "available": True,
+            "private": False,
+            "name": "The Gamer Nation",
+            "icon_url": "https://cdn.example/icon.png",
+            "banner_url": None,
+            "description": "Roleplay and gaming",
+            "online_count": 33,
+            "member_count": 72,
+            "created_at": 1760000000,
+            "invite_url": "https://discord.gg/gamernation",
+        },
         "guild_nick": "Server Nick",
         "custom_status": {
             "text": "Available for website and Discord bot work",
@@ -115,7 +130,14 @@ def test_export_popup_matches_the_discord_layout():
     # The tag pill rides the username row, badges follow on their own row.
     assert '<p class="discord-profile-username"><span class="discord-profile-user-tag">' in html
     assert 'class="discord-profile-guild-tag"' in html
+    assert "data-server-tag" in html
     assert "data:image/svg+xml;base64," in html
+    # The tag opens Discord's server popup, which owns all three states.
+    assert "discord-server-tag-popup" in html
+    assert "The server has limited who can see this profile." in html
+    assert "Unknown Server" in html
+    assert "discord-server-tag-invite is-disabled" in html
+    assert "Go to Server" in html
     # The Spotify card is drawn above the profile link and can tick its progress.
     assert "Listening to Spotify" in html
     assert "discord-profile-spotify-track" in html

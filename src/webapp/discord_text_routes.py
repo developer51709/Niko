@@ -101,7 +101,10 @@ def _custom_status(member):
         kind = getattr(activity, "type", None)
         if str(getattr(kind, "name", kind) or "").lower() != "custom":
             continue
-        text = getattr(activity, "state", None) or getattr(activity, "name", None)
+        # The status text is always ``state``. discord.py fills ``name`` with the
+        # placeholder "Custom Status" when a member sets only an emoji, so
+        # reading ``name`` as a fallback wrote that placeholder into the popup.
+        text = getattr(activity, "state", None)
         emoji = getattr(activity, "emoji", None)
         if not text and emoji is None:
             continue
@@ -113,6 +116,116 @@ def _custom_status(member):
             "emoji_animated": bool(getattr(emoji, "animated", False)),
         }
     return None
+
+
+def _asset_url(asset):
+    """A Discord asset's CDN URL, or ``None`` when there is no artwork."""
+    return str(asset.url) if asset is not None else None
+
+
+async def _guild_privacy(guild_id):
+    """Read a guild's server-tag privacy, defaulting to public."""
+    from utils.guild_privacy import get_guild_privacy
+
+    try:
+        return await get_guild_privacy(int(guild_id), getattr(_discord_bot, "cxn", None))
+    except Exception:
+        return {"private": False}
+
+
+async def _guild_invite_url(guild):
+    """The invite Discord's "Go to Server" button opens.
+
+    Vanity URLs are the only invite a bot can read without extra permissions, so
+    an existing invite is used next and a link that opens the guild in Discord
+    is the last resort. Niko never creates an invite just to render a popup.
+    """
+    vanity = getattr(guild, "vanity_url", None)
+    if vanity:
+        return str(vanity)
+    invites = getattr(guild, "invites", None)
+    if invites is not None:
+        try:
+            for invite in await invites():
+                code = getattr(invite, "code", None)
+                if code:
+                    return f"https://discord.gg/{code}"
+        except Exception:
+            pass
+    guild_id = getattr(guild, "id", None)
+    return f"https://discord.com/channels/{guild_id}" if guild_id is not None else None
+
+
+async def _guild_tag_server(primary_guild):
+    """Resolve the guild behind a member's primary server tag.
+
+    The payload always carries the states Discord's own popup can show: public
+    (the server's details), private (a server that opted out of the popup), and
+    unknown (a server Niko is not in, so nothing can be read).
+    """
+    if primary_guild is None:
+        return None
+    guild_id = getattr(primary_guild, "id", None)
+    tag = getattr(primary_guild, "tag", None)
+    badge = getattr(primary_guild, "badge", None)
+    if guild_id is None and not tag:
+        return None
+
+    payload = {
+        "id": str(guild_id) if guild_id is not None else None,
+        "tag": tag,
+        "badge_url": _asset_url(badge),
+        "available": False,
+        "private": False,
+    }
+    if guild_id is None:
+        return payload
+
+    guild = None
+    try:
+        guild = _discord_bot.get_guild(int(guild_id))
+    except (AttributeError, TypeError, ValueError):
+        guild = None
+    if guild is None and hasattr(_discord_bot, "fetch_guild"):
+        try:
+            guild = await _discord_bot.fetch_guild(int(guild_id))
+        except Exception:
+            guild = None
+    if guild is None:
+        return payload
+
+    payload["available"] = True
+    privacy = await _guild_privacy(guild_id)
+    if privacy.get("private"):
+        # A private server keeps its tag, but Discord hides the profile itself.
+        payload["private"] = True
+        return payload
+
+    online = getattr(guild, "approximate_presence_count", None)
+    if online is None:
+        try:
+            members = list(guild.members)
+        except Exception:
+            members = []
+        # An empty cache means the gateway has not sent presence yet; reporting
+        # "0 Online" would be wrong, so the count is simply left out.
+        if members:
+            online = sum(
+                1
+                for member in members
+                if str(getattr(getattr(member, "status", None), "name", "offline")).lower() != "offline"
+            )
+    payload.update({
+        "name": getattr(guild, "name", None),
+        "icon_url": _asset_url(getattr(guild, "icon", None)),
+        "banner_url": _asset_url(getattr(guild, "banner", None)),
+        "description": getattr(guild, "description", None),
+        "online_count": online,
+        "member_count": getattr(guild, "member_count", None),
+        "created_at": _unix_seconds(getattr(guild, "created_at", None)),
+        "invite_url": await _guild_invite_url(guild),
+    })
+    return payload
 
 
 def _spotify_activity(member):
@@ -358,6 +471,10 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         "nameplate_animated_url": None,
         "guild_tag": guild_tag,
         "guild_badge_url": str(guild_badge.url) if guild_badge is not None else None,
+        # The server-tag popup needs the guild behind the tag. It is a separate
+        # object because the tag pill keeps its text and badge even when the
+        # server is private or no longer available to Niko.
+        "server_tag": await _guild_tag_server(primary_guild),
         "badges": badges,
         "nitro_badge": None,
         "booster_badge": None,

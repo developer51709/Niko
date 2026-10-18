@@ -893,7 +893,9 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
   .discord-profile-username {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }}
   .discord-profile-user-tag {{ min-width: 0; overflow-wrap: anywhere; }}
-  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }}
+  .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border: 1px solid transparent; border-radius: 4px; font: inherit; font-size: 10px; font-weight: 700; line-height: 1.2; }}
+  button.discord-profile-guild-tag {{ cursor: pointer; }}
+  button.discord-profile-guild-tag:hover, button.discord-profile-guild-tag[aria-expanded="true"] {{ background: #35373c; border-color: rgb(255 255 255 / .12); }}
   .discord-profile-guild-tag img {{ width: 14px; height: 14px; object-fit: contain; }}
   .discord-profile-badges {{ position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }}
   .discord-profile-badge {{ width: 20px; height: 20px; object-fit: contain; }}
@@ -906,6 +908,32 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-badge-popup-copy {{ display: grid; gap: 2px; min-width: 0; }}
   .discord-badge-popup-copy strong {{ color: #f2f3f5; font-size: 12.5px; font-weight: 700; }}
   .discord-badge-popup-copy p {{ margin: 0; color: #b5bac1; font-size: 11.5px; line-height: 1.4; }}
+  /* Discord's server-tag popup: banner, overlapping icon, name and tag pill,
+     member counts, description, then the green join button. Fixed above the
+     profile popup so the card is neither stretched nor clipped by it. */
+  .discord-server-tag-popup {{ position: fixed; z-index: 102; width: min(20rem, calc(100vw - 1.5rem)); overflow: hidden; color: #f2f3f5; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 12px; box-shadow: 0 18px 46px rgb(0 0 0 / .6); font-size: 12.5px; line-height: 1.4; }}
+  .discord-server-tag-banner {{ display: block; width: 100%; height: 5.25rem; object-fit: cover; background: linear-gradient(135deg, #5865f2, #3b3f8f); }}
+  .discord-server-tag-popup.is-private .discord-server-tag-banner,
+  .discord-server-tag-popup.is-unknown .discord-server-tag-banner {{ background: linear-gradient(135deg, #4e5058, #2b2d31); }}
+  .discord-server-tag-body {{ padding: 0 16px 16px; }}
+  .discord-server-tag-icon-shell {{ display: grid; place-items: center; width: 80px; height: 80px; margin-top: -40px; overflow: hidden; background: #1e1f22; border: 6px solid #232428; border-radius: 18px; }}
+  .discord-server-tag-icon {{ width: 100%; height: 100%; object-fit: cover; }}
+  .discord-server-tag-icon.is-placeholder {{ color: #dbdee1; font-size: 30px; font-weight: 700; }}
+  .discord-server-tag-title-row {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }}
+  .discord-server-tag-name {{ margin: 0; color: #f2f3f5; font-size: 18px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }}
+  .discord-server-tag-pill {{ display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; color: #e3e5e8; background: #35373c; border-radius: 5px; font-size: 11px; font-weight: 700; line-height: 1.3; }}
+  .discord-server-tag-pill img {{ width: 14px; height: 14px; object-fit: contain; }}
+  .discord-server-tag-stats {{ display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 6px 0 0; color: #dbdee1; font-size: 12.5px; }}
+  .discord-server-tag-stats span {{ display: inline-flex; align-items: center; gap: 5px; }}
+  .discord-server-tag-stats i {{ width: 8px; height: 8px; border-radius: 50%; background: #80848e; }}
+  .discord-server-tag-online i {{ background: #23a55a; }}
+  .discord-server-tag-created {{ margin: 3px 0 0; color: #b5bac1; font-size: 12.5px; }}
+  .discord-server-tag-description {{ display: -webkit-box; overflow: hidden; margin: 10px 0 0; color: #dbdee1; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }}
+  .discord-server-tag-popup.is-private .discord-server-tag-description,
+  .discord-server-tag-popup.is-unknown .discord-server-tag-description {{ color: #b5bac1; }}
+  .discord-server-tag-invite {{ display: block; margin-top: 14px; padding: 11px 10px; color: #fff; background: #248046; border-radius: 8px; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; }}
+  .discord-server-tag-invite:hover {{ background: #1a6334; text-decoration: none; }}
+  .discord-server-tag-invite.is-disabled {{ color: #a3a6ad; background: #3f4147; cursor: not-allowed; }}
   .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }}
   .discord-profile-spotify-link {{ display: block; color: inherit; text-decoration: none; }}
   .discord-profile-spotify-head {{ color: #b5bac1; font-size: 11px; font-weight: 700; }}
@@ -1011,7 +1039,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     if (profilePollTimer !== null) {{ clearInterval(profilePollTimer); profilePollTimer = null; }}
     if (refreshProfilePresence !== null) {{ document.removeEventListener("visibilitychange", refreshProfilePresence); refreshProfilePresence = null; }}
   }};
-  const closeProfile = () => {{ stopProfileTimer(); stopProfilePoll(); document.querySelector(".discord-profile-popover")?.remove(); document.querySelector(".discord-badge-popup")?.remove(); }};
+  const closeProfile = () => {{ stopProfileTimer(); stopProfilePoll(); document.querySelector(".discord-profile-popover")?.remove(); document.querySelector(".discord-badge-popup")?.remove(); document.querySelector(".discord-server-tag-popup")?.remove(); }};
   // The presence dot Discord draws on the avatar. The art is inlined, so the popup
   // shows live status without needing the web app's asset folder.
   const statusKey = (value) => {{
@@ -1037,6 +1065,79 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       : (customStatus.emoji_name ? '<span class="discord-profile-status-emoji">' + escapeHtml(customStatus.emoji_name) + '</span>' : '');
     if (!customStatus.text && !statusEmoji) return '';
     return '<div class="discord-profile-status"><span class="discord-profile-status-text">' + statusEmoji + escapeHtml(customStatus.text || '') + '</span></div>';
+  }};
+  const closeServerTagPopup = () => {{
+    document.querySelector(".discord-server-tag-popup")?.remove();
+    document.querySelectorAll("[data-server-tag][aria-expanded='true']").forEach((button) => button.setAttribute("aria-expanded", "false"));
+  }};
+  const placeServerTagPopup = (button) => {{
+    const popup = document.querySelector(".discord-server-tag-popup");
+    if (!popup) return;
+    const rect = button.getBoundingClientRect();
+    const margin = 12;
+    const gap = 8;
+    const width = popup.offsetWidth;
+    const height = popup.offsetHeight;
+    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+    const below = rect.bottom + gap;
+    const top = below + height <= window.innerHeight - margin
+      ? below
+      : Math.max(margin, rect.top - height - gap);
+    popup.style.left = left + "px";
+    popup.style.top = Math.min(top, window.innerHeight - height - margin) + "px";
+  }};
+  const formatCount = (value) => Number.isFinite(value) && value >= 0
+    ? new Intl.NumberFormat().format(Math.round(value))
+    : "";
+  const monthYear = (unix) => {{
+    if (!Number.isFinite(unix)) return "";
+    const date = new Date(unix * 1000);
+    return Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat(undefined, {{ month: "short", year: "numeric" }}).format(date)
+      : "";
+  }};
+  // Discord's server-tag popup has three states: a public server with its
+  // identity, a private server that has limited who can see it, and a server
+  // Niko is not in so nothing about it could be read.
+  const serverTagPopup = (server, tag, badgeUrl) => {{
+    const isPrivate = Boolean(server && server.private);
+    const isUnknown = !isPrivate && !(server && server.available);
+    const showDetails = !isPrivate && !isUnknown;
+    const name = isPrivate ? "Private Server" : isUnknown ? "Unknown Server" : ((server && server.name) || tag || "Server");
+    const description = isPrivate
+      ? "The server has limited who can see this profile."
+      : isUnknown
+        ? "This server is unavailable, or Niko is not a member of it."
+        : ((server && server.description) || "");
+    const banner = showDetails && server && server.banner_url
+      ? '<img class="discord-server-tag-banner" src="' + escapeHtml(server.banner_url) + '" alt="">'
+      : '<div class="discord-server-tag-banner" aria-hidden="true"></div>';
+    const icon = showDetails && server && server.icon_url
+      ? '<img class="discord-server-tag-icon" src="' + escapeHtml(server.icon_url) + '" alt="">'
+      : '<span class="discord-server-tag-icon is-placeholder" aria-hidden="true">?</span>';
+    const stats = [];
+    if (showDetails && server) {{
+      const online = formatCount(server.online_count);
+      const members = formatCount(server.member_count);
+      if (online) stats.push('<span class="discord-server-tag-online"><i aria-hidden="true"></i>' + escapeHtml(online) + ' Online</span>');
+      if (members) stats.push('<span class="discord-server-tag-members"><i aria-hidden="true"></i>' + escapeHtml(members) + ' Members</span>');
+    }}
+    const established = showDetails && server ? monthYear(server.created_at) : "";
+    const badge = badgeUrl ? '<img src="' + escapeHtml(badgeUrl) + '" alt="">' : "";
+    const button = showDetails && server && server.invite_url
+      ? '<a class="discord-server-tag-invite" href="' + escapeHtml(server.invite_url) + '" target="_blank" rel="noopener noreferrer">Go to Server</a>'
+      : '<span class="discord-server-tag-invite is-disabled" aria-disabled="true">Go to Server</span>';
+    return '<div class="discord-server-tag-popup' + (isPrivate ? ' is-private' : '') + (isUnknown ? ' is-unknown' : '') + '" role="dialog" aria-label="' + escapeHtml(name) + ' server tag">'
+      + banner
+      + '<div class="discord-server-tag-body">'
+      + '<div class="discord-server-tag-icon-shell">' + icon + '</div>'
+      + '<div class="discord-server-tag-title-row"><h3 class="discord-server-tag-name">' + escapeHtml(name) + '</h3>'
+      + (tag && !isPrivate ? '<span class="discord-server-tag-pill">' + badge + '<span>' + escapeHtml(tag) + '</span></span>' : '')
+      + '</div>'
+      + (stats.length ? '<p class="discord-server-tag-stats">' + stats.join('') + '</p>' : '')
+      + (established ? '<p class="discord-server-tag-created">Est. ' + escapeHtml(established) + '</p>' : '')
+      + (description ? '<p class="discord-server-tag-description">' + escapeHtml(description) + '</p>' : '')
+      + button + '</div></div>';
   }};
   const clock = (seconds) => {{ const total = Math.max(0, Math.round(Number(seconds) || 0)); return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0'); }};
   const profileSpotify = (profile) => {{
@@ -1090,8 +1191,11 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       : '<div class="discord-profile-banner" style="background-color:' + (/^#[0-9a-f]+$/i.test(profile.banner_color || '') && profile.banner_color.length === 7 ? profile.banner_color : '#202225') + '"></div>';
     const avatar = profileAvatar(profile);
     const statusBubble = profileStatusBubble(profile);
+    const guildTagInner = (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span>';
     const guildTag = profile.guild_tag
-      ? '<span class="discord-profile-guild-tag">' + (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span></span>'
+      ? (profile.server_tag
+        ? '<button type="button" class="discord-profile-guild-tag" data-server-tag aria-haspopup="dialog" aria-expanded="false" title="' + escapeHtml(profile.guild_tag) + ' server tag">' + guildTagInner + '</button>'
+        : '<span class="discord-profile-guild-tag">' + guildTagInner + '</span>')
       : '';
     const badges = (profile.badges || []).map((key) => {{
       const badge = badgeArt[key];
@@ -1171,6 +1275,20 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
         closeBadgePopup();
       }});
     }}
+    const serverTagButton = card.querySelector("[data-server-tag]");
+    if (serverTagButton) {{
+      serverTagButton.addEventListener("click", () => {{
+        if (serverTagButton.getAttribute("aria-expanded") === "true") {{ closeServerTagPopup(); return; }}
+        closeServerTagPopup();
+        const holder = document.createElement("div");
+        holder.innerHTML = serverTagPopup(profile.server_tag, profile.guild_tag, profile.guild_badge_url);
+        const popup = holder.firstElementChild;
+        if (!popup) return;
+        document.body.appendChild(popup);
+        placeServerTagPopup(serverTagButton);
+        serverTagButton.setAttribute("aria-expanded", "true");
+      }});
+    }}
     const menuButton = card.querySelector("[data-profile-menu-button]");
     const menuList = card.querySelector(".discord-profile-menu-list");
     if (menuButton && menuList) {{
@@ -1218,13 +1336,32 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   }};
   document.addEventListener("click", (event) => {{
     const link = event.target.closest?.("[data-discord-user-id]");
-    if (!link) {{ if (!event.target.closest?.(".discord-profile-card")) closeProfile(); return; }}
+    if (!link) {{
+      // The badge and server popups float outside the card on purpose; a click
+      // inside either one does not dismiss the profile it belongs to.
+      if (!event.target.closest?.(".discord-profile-card") && !event.target.closest?.(".discord-badge-popup") && !event.target.closest?.(".discord-server-tag-popup")) closeProfile();
+      return;
+    }}
     event.preventDefault();
     openProfile(link);
   }});
   document.addEventListener("keydown", (event) => {{
+    // A floating server-tag popup is the topmost layer, so Escape closes it
+    // and leaves the profile underneath open for the next Escape.
+    if (event.key === "Escape" && document.querySelector(".discord-server-tag-popup")) {{ closeServerTagPopup(); return; }}
     if (event.key === "Escape") closeProfile();
     if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("[data-discord-user-id]")) {{ event.preventDefault(); openProfile(event.target); }}
+  }});
+  // Keep the server popup under its tag as the page or the profile card scrolls.
+  const followServerTagPopup = () => {{
+    const button = document.querySelector('[data-server-tag][aria-expanded="true"]');
+    if (button) placeServerTagPopup(button);
+  }};
+  window.addEventListener("resize", followServerTagPopup);
+  window.addEventListener("scroll", followServerTagPopup, true);
+  document.addEventListener("mousedown", (event) => {{
+    if (event.target.closest?.(".discord-server-tag-popup") || event.target.closest?.("[data-server-tag]")) return;
+    closeServerTagPopup();
   }});
   const styles = {{
     t: {{ hour: "numeric", minute: "2-digit" }},

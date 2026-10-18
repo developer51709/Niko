@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiscordBadgeList } from "./DiscordBadgeList";
+import { DiscordServerTagPill, type DiscordServerTagInfo } from "./DiscordServerTag";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
 import { profileBadges } from "../data/profileBadges";
 import type { CSSProperties, ReactNode } from "react";
@@ -193,6 +194,7 @@ type TranscriptProfile = {
   id: string; username: string; display_name: string; avatar_url: string | null;
   banner_url: string | null;  banner_color: string | null; bio: string | null;
   guild_nick: string | null; guild_tag: string | null; guild_badge_url: string | null;
+  server_tag?: DiscordServerTagInfo | null;
   status?: string | null;
 
   avatar_decoration_url: string | null;
@@ -456,12 +458,18 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
   }, [openProfileId]);
   useEffect(() => {
     if (!interactiveUsers || (!profile && !profileLoading && !profileError)) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeProfile(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // A floating server-tag popup is the topmost layer, so Escape closes it
+      // and leaves the profile underneath open for the next Escape.
+      if (document.querySelector(".discord-server-tag-popup")) return;
+      closeProfile();
+    };
     const onClick = (event: MouseEvent) => {
       const target = event.target;
       // The badge popup floats outside the card, so a click inside it keeps the
       // profile open.
-      if (target instanceof Element && !target.closest(".discord-profile-card") && !target.closest(".discord-badge-popup") && !target.closest("[data-discord-user-id]")) closeProfile();
+      if (target instanceof Element && !target.closest(".discord-profile-card") && !target.closest(".discord-badge-popup") && !target.closest(".discord-server-tag-popup") && !target.closest("[data-discord-user-id]")) closeProfile();
     };
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
@@ -553,10 +561,11 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
                 profile badges on the line directly below it. */}
             <p className="discord-profile-username">
               <span className="discord-profile-user-tag">{profile.username}</span>
-              {profile.guild_tag && <span className="discord-profile-guild-tag">
-                {profile.guild_badge_url && <img src={profile.guild_badge_url} alt="" />}
-                <span>{profile.guild_tag}</span>
-              </span>}
+              {profile.guild_tag && <DiscordServerTagPill
+                server={profile.server_tag || null}
+                tag={profile.guild_tag}
+                badgeUrl={profile.guild_badge_url}
+              />}
             </p>
             {/* Badge artwork ships with the app; clicking one opens the badge
                 popup owned by DiscordBadgeList. */}

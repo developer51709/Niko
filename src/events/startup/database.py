@@ -446,6 +446,13 @@ async def _create_tables(bot):
             pass
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_privacy (
+            guild_id       INTEGER PRIMARY KEY,
+            private_server INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS triggers (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id   INTEGER NOT NULL,

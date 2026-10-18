@@ -234,6 +234,131 @@ def test_public_discord_user_profile_reads_the_richest_presence_across_guilds(mo
     assert profile["custom_status"]["text"] == "Writing docs"
 
 
+def test_custom_status_with_only_an_emoji_does_not_show_the_placeholder_text():
+    """discord.py names an emoji-only custom activity "Custom Status"."""
+    activity = SimpleNamespace(
+        type=SimpleNamespace(name="custom"),
+        state=None,
+        name="Custom Status",
+        emoji=SimpleNamespace(name="\U0001f319", id=None, animated=False),
+    )
+    member = SimpleNamespace(activities=[activity])
+
+    status = routes._custom_status(member)
+
+    assert status["text"] is None
+    assert status["emoji_name"] == "\U0001f319"
+
+
+def _tagged_profile_user(primary_guild):
+    user = _presence_user()
+    user.primary_guild = primary_guild
+    return user
+
+
+def _tagged_profile_bot(members, user, guild=None):
+    return SimpleNamespace(
+        loop=SimpleNamespace(is_running=lambda: True),
+        guilds=members,
+        cxn=None,
+        get_guild=lambda guild_id: guild if guild_id == 123 else None,
+        fetch_guild=lambda guild_id: asyncio.sleep(0, result=guild),
+        fetch_user=lambda user_id: asyncio.sleep(0, result=user),
+    )
+
+
+def test_profile_payload_carries_the_public_server_tag_details(monkeypatch):
+    user = _tagged_profile_user(
+        SimpleNamespace(id=123, tag="MOON", badge=SimpleNamespace(url="https://cdn.example/tag.png"))
+    )
+    member = _presence_member(user)
+    guild = SimpleNamespace(
+        id=123,
+        name="The Gamer Nation",
+        icon=SimpleNamespace(url="https://cdn.example/icon.png"),
+        banner=None,
+        description="Roleplay and gaming",
+        member_count=72,
+        approximate_presence_count=33,
+        created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        vanity_url="https://discord.gg/gamernation",
+        invites=None,
+        members=[member],
+        get_member=lambda user_id: member if user_id == 456 else None,
+        fetch_member=lambda user_id: asyncio.sleep(0, result=member),
+    )
+    async def public(guild_id):
+        return {"private": False}
+
+    monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
+    monkeypatch.setattr(routes, "_guild_privacy", public)
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+
+    assert server["available"] is True
+    assert server["private"] is False
+    assert server["tag"] == "MOON"
+    assert server["badge_url"] == "https://cdn.example/tag.png"
+    assert server["name"] == "The Gamer Nation"
+    assert server["icon_url"] == "https://cdn.example/icon.png"
+    assert server["description"] == "Roleplay and gaming"
+    assert server["online_count"] == 33
+    assert server["member_count"] == 72
+    assert server["invite_url"] == "https://discord.gg/gamernation"
+    assert server["created_at"] == int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp())
+
+
+def test_profile_payload_hides_a_private_servers_details(monkeypatch):
+    user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
+    member = _presence_member(user)
+    guild = SimpleNamespace(
+        id=123,
+        name="The Gamer Nation",
+        icon=SimpleNamespace(url="https://cdn.example/icon.png"),
+        banner=None,
+        description="Roleplay and gaming",
+        member_count=72,
+        created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        vanity_url="https://discord.gg/gamernation",
+        invites=None,
+        members=[member],
+        get_member=lambda user_id: member if user_id == 456 else None,
+        fetch_member=lambda user_id: asyncio.sleep(0, result=member),
+    )
+    async def private(guild_id):
+        return {"private": True}
+
+    monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
+    monkeypatch.setattr(routes, "_guild_privacy", private)
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+
+    assert server == {
+        "id": "123",
+        "tag": "MOON",
+        "badge_url": None,
+        "available": True,
+        "private": True,
+    }
+
+
+def test_profile_payload_reports_a_server_niko_is_not_in(monkeypatch):
+    user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
+    member = _presence_member(user)
+
+    monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([], user, None))
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+
+    assert server["available"] is False
+    assert server["private"] is False
+    assert "name" not in server
+    assert "invite_url" not in server
+
+
 def test_public_discord_user_profile_re_reads_presence_on_every_request(monkeypatch):
     """A popup polls this endpoint, so every response reports the current status.
 
