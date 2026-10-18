@@ -1,4 +1,7 @@
-declare const process: { stdout: { columns?: number; isTTY?: boolean; write(message: string): boolean } };
+declare const process: {
+  stdout: { columns?: number; isTTY?: boolean; write(message: string): boolean };
+  env: Record<string, string | undefined>;
+};
 
 interface ImportMeta {
   glob<T>(pattern: string, options: { eager: true; query: string; import: string }): Record<string, T>;

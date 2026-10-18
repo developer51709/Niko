@@ -109,6 +109,52 @@ def test_discord_text_endpoint_uses_discord_api_when_bot_cache_misses(monkeypatc
     }
 
 
+def test_transcript_endpoint_resolves_message_author_profiles(monkeypatch):
+    """The web transcript gets avatars and names for its message authors."""
+    from webapp import transcript_routes
+
+    messages = [
+        {"timestamp": "2026-10-15 15:03:00 UTC", "author": "Soren", "author_id": 101, "content": "hello"},
+        {"timestamp": "2026-10-15 15:04:00 UTC", "author": "Soren", "author_id": 101, "content": "again"},
+    ]
+
+    class FakeCxn:
+        async def fetchrow(self, *_args):
+            return {
+                "transcript_id": "test",
+                "guild_id": 1,
+                "channel_id": 2,
+                "channel_name": "ticket",
+                "opener_id": 101,
+                "category": "General",
+                "claimed_by": None,
+                "message_count": len(messages),
+                "messages": messages,
+                "created_at": "2026-10-15 15:00:00 UTC",
+            }
+
+    monkeypatch.setattr(transcript_routes, "_discord_bot", SimpleNamespace(cxn=FakeCxn()))
+    monkeypatch.setattr(transcript_routes, "run_on_bot_loop", _run_on_loop)
+    monkeypatch.setattr(
+        transcript_routes,
+        "_resolve_transcript_mentions",
+        lambda guild_id, msgs: {"user": {}, "channel": {}, "role": {}},
+    )
+    calls = {}
+
+    def fake_profiles(guild_id, text, author_ids):
+        calls.update(guild_id=guild_id, text=text, author_ids=list(author_ids))
+        return {"101": {"id": "101", "display_name": "Soren", "username": "soren", "avatar_url": None}}
+
+    monkeypatch.setattr(transcript_routes, "resolve_discord_user_profiles", fake_profiles)
+
+    response = app.test_client().get("/api/transcript/test")
+
+    assert response.status_code == 200
+    assert calls == {"guild_id": 1, "text": "", "author_ids": [101, 101]}
+    assert response.get_json()["author_profiles"]["101"]["display_name"] == "Soren"
+
+
 def test_discord_text_endpoint_rejects_invalid_or_oversized_requests():
     client = app.test_client()
 
@@ -307,6 +353,8 @@ def test_profile_payload_carries_the_public_server_tag_details(monkeypatch):
     assert server["member_count"] == 72
     assert server["invite_url"] == "https://discord.gg/gamernation"
     assert server["created_at"] == int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp())
+    # A signed-out visitor is never treated as a member, so the popup offers Join.
+    assert server["viewer_is_member"] is False
 
 
 def test_profile_payload_hides_a_private_servers_details(monkeypatch):
@@ -341,7 +389,47 @@ def test_profile_payload_hides_a_private_servers_details(monkeypatch):
         "badge_url": None,
         "available": True,
         "private": True,
+        "viewer_is_member": False,
     }
+
+
+def test_profile_payload_reports_membership_for_the_signed_in_viewer(monkeypatch):
+    user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
+    member = _presence_member(user)
+    viewer = SimpleNamespace(id=789)
+    guild = SimpleNamespace(
+        id=123,
+        name="The Gamer Nation",
+        icon=None,
+        banner=None,
+        description=None,
+        member_count=72,
+        approximate_presence_count=33,
+        created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        vanity_url=None,
+        # A normal invite must not turn into a Join button: Discord only offers
+        # Join for a vanity invite.
+        invites=lambda: asyncio.sleep(0, result=[SimpleNamespace(code="not-a-vanity")]),
+        features=[],
+        members=[member, viewer],
+        get_member=lambda user_id: member if user_id == 456 else viewer if user_id == 789 else None,
+        fetch_member=lambda user_id: asyncio.sleep(0, result=member if user_id == 456 else viewer if user_id == 789 else None),
+    )
+    async def public(guild_id):
+        return {"private": False}
+
+    monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
+    monkeypatch.setattr(routes, "_guild_privacy", public)
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    with app.test_client() as client:
+        with client.session_transaction() as flask_session:
+            flask_session["user"] = {"id": "789"}
+        server = client.get("/api/discord/users/456").get_json()["server_tag"]
+
+    assert server["available"] is True
+    assert server["viewer_is_member"] is True
+    assert "invite_url" not in server
 
 
 def test_profile_payload_reports_a_server_niko_is_not_in(monkeypatch):

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import type { CSSProperties } from "react";
-import { DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
+import type { CSSProperties, MouseEvent } from "react";
+import { DiscordMarkdown, useDiscordProfile, type DiscordMentionNames } from "../components/DiscordMarkdown";
 
 // ── Types mirroring the stored transcript message payloads ────────────────
 
@@ -71,6 +71,15 @@ type TranscriptSticker = {
   url?: string;
 };
 
+type TranscriptAuthorProfile = {
+  id?: string;
+  username?: string;
+  display_name?: string;
+  avatar_url?: string | null;
+  guild_tag?: string | null;
+  guild_badge_url?: string | null;
+};
+
 type TranscriptData = {
   transcript_id: string;
   guild_id: number;
@@ -83,6 +92,7 @@ type TranscriptData = {
   messages: TranscriptMessage[];
   created_at: string;
   mention_names?: DiscordMentionNames;
+  author_profiles?: Record<string, TranscriptAuthorProfile>;
 };
 
 const FORMATS = [
@@ -112,6 +122,68 @@ const stickerUrl = (sticker: TranscriptSticker): string => {
   if (!sticker.id) return "";
   return `https://cdn.discordapp.com/stickers/${sticker.id}.${sticker.format_type === 4 ? "gif" : "png"}`;
 };
+
+const AVATAR_COLORS = ["#5865f2", "#3ba55d", "#faa61a", "#ed4245", "#eb459e", "#9b59b6"];
+
+function avatarColor(userId: string, name: string) {
+  const seed = userId || name;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) hash = (hash + seed.charCodeAt(i)) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[hash];
+}
+
+function parseTranscriptTime(value?: string): Date | null {
+  const raw = String(value || "").trim();
+  if (!raw || raw.toLowerCase() === "now") return null;
+  const normalized = raw.replace(/ UTC$/i, "Z").replace(" ", "T");
+  const date = new Date(normalized);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+const messageClock = new Intl.DateTimeFormat(undefined, {
+  month: "2-digit", day: "2-digit", year: "2-digit", hour: "numeric", minute: "2-digit",
+});
+const gutterClock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const dayClock = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" });
+
+function attachmentName(url: string) {
+  if (!url || url.startsWith("data:")) return "Attachment";
+  try {
+    const name = decodeURIComponent(new URL(url).pathname.split("/").pop() || "");
+    return name || "Attachment";
+  } catch {
+    return "Attachment";
+  }
+}
+
+type TranscriptRow =
+  | { kind: "day"; key: string; label: string }
+  | { kind: "message"; key: string; message: TranscriptMessage; grouped: boolean };
+
+function buildTranscriptRows(messages: TranscriptMessage[]): TranscriptRow[] {
+  const rows: TranscriptRow[] = [];
+  let lastAuthor = "";
+  let lastTime: Date | null = null;
+  let lastDay = "";
+  messages.forEach((message, index) => {
+    const time = parseTranscriptTime(message.timestamp);
+    const day = time ? time.toDateString() : "";
+    if (day && day !== lastDay) {
+      rows.push({ kind: "day", key: `day-${index}`, label: dayClock.format(time as Date) });
+      lastAuthor = "";
+      lastTime = null;
+      lastDay = day;
+    }
+    const authorId = String(message.author_id || "");
+    const grouped = Boolean(authorId) && authorId === lastAuthor && (
+      !time || !lastTime || (time.getTime() - lastTime.getTime() >= 0 && time.getTime() - lastTime.getTime() <= 7 * 60 * 1000)
+    );
+    rows.push({ kind: "message", key: `message-${index}`, message, grouped });
+    lastAuthor = authorId;
+    lastTime = time;
+  });
+  return rows;
+}
 
 function isVideoMedia(media?: Cv2Media): boolean {
   const url = mediaUrl(media);
@@ -500,111 +572,119 @@ function MessageContent({ text, mentionNames }: { text: string; mentionNames?: D
   return <MarkdownBlock text={text} mentionNames={mentionNames} />;
 }
 
-function TranscriptMessageView({ msg, mentionNames }: { msg: TranscriptMessage; mentionNames?: DiscordMentionNames }) {
+function TranscriptMessageView({ msg, mentionNames, grouped, author, onOpenProfile }: {
+  msg: TranscriptMessage;
+  mentionNames?: DiscordMentionNames;
+  grouped: boolean;
+  author?: TranscriptAuthorProfile;
+  onOpenProfile: (userId: string, trigger: HTMLElement) => void;
+}) {
   const hasRich = !!(
     (msg.attachments && msg.attachments.length > 0) ||
     (msg.embeds && msg.embeds.length > 0) ||
     (msg.components && msg.components.length > 0) ||
     (msg.stickers && msg.stickers.length > 0)
   );
+  const authorId = String(msg.author_id || "");
+  const clickable = /^\d{1,22}$/.test(authorId);
+  // Keep the server display name saved with the message; the popup below shows
+  // Discord's global profile name instead.
+  const displayName = msg.author || author?.display_name || "Unknown";
+  const time = parseTranscriptTime(msg.timestamp);
+  const initial = Array.from(displayName.trim()).find((char) => /[\p{L}\p{N}]/u.test(char)) || "?";
+  const avatar = author?.avatar_url
+    ? <img className="transcript-avatar" src={author.avatar_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+    : <span className="transcript-avatar transcript-avatar-fallback" style={{ backgroundColor: avatarColor(authorId, displayName) }}>{initial.toUpperCase()}</span>;
+  const openAuthor = (event: MouseEvent<HTMLElement>) => onOpenProfile(authorId, event.currentTarget);
 
   return (
-    <div
-      style={{
-        padding: "10px 16px",
-        borderBottom: "1px solid #2b2d31",
-        fontSize: 14,
-        lineHeight: 1.6,
-      }}
-    >
-      <div style={{ marginBottom: 2 }}>
-        <span style={{ color: "#949ba4", fontSize: 11, fontFamily: "monospace" }}>{msg.timestamp}</span>{" "}
-        <span style={{ color: "#f2f3f5", fontWeight: 600 }}>{msg.author}</span>{" "}
-        <span style={{ color: "#949ba4", fontSize: 11 }}>({msg.author_id})</span>
+    <div className={`transcript-message${grouped ? " is-grouped" : ""}`} data-author-id={authorId}>
+      <div className="transcript-message-gutter">
+        {grouped ? <>
+          {time && <time className="transcript-gutter-time" dateTime={time.toISOString()}>{gutterClock.format(time)}</time>}
+          <span className="transcript-avatar-spacer" aria-hidden="true" />
+        </> : clickable
+          ? <button type="button" className="transcript-avatar-button" title={`View ${displayName} profile`} aria-label={`View ${displayName} profile`} onClick={openAuthor}>{avatar}</button>
+          : <span className="transcript-avatar-button">{avatar}</span>}
       </div>
 
-      {msg.content ? (
-        <div style={{ color: "#dbdee1" }}>
-          <MessageContent text={msg.content} mentionNames={mentionNames} />
-        </div>
-      ) : !hasRich ? (
-        <div style={{ color: "#6d737a", fontStyle: "italic", fontSize: 13 }}>
-          Message content unavailable
-        </div>
-      ) : null}
+      <div className="transcript-message-body">
+        {!grouped && (
+          <div className="transcript-message-head">
+            {clickable
+              ? <button type="button" className="transcript-author-button" title={`View ${displayName} profile`} onClick={openAuthor}>{displayName}</button>
+              : <span className="transcript-author-button">{displayName}</span>}
+            {author?.guild_tag && (
+              <span className="transcript-guild-tag">
+                {author.guild_badge_url && <img src={author.guild_badge_url} alt="" loading="lazy" />}
+                <span>{author.guild_tag}</span>
+              </span>
+            )}
+            {time
+              ? <time className="transcript-timestamp" dateTime={time.toISOString()} title={msg.timestamp}>{messageClock.format(time)}</time>
+              : msg.timestamp ? <span className="transcript-timestamp">{msg.timestamp}</span> : null}
+          </div>
+        )}
 
-      {msg.attachments && msg.attachments.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
-          {msg.attachments.map((url, j) => {
-            if (isVideoUrl(url)) {
+        {msg.content ? (
+          <div className="transcript-message-text">
+            <MessageContent text={msg.content} mentionNames={mentionNames} />
+          </div>
+        ) : !hasRich ? (
+          <div className="transcript-message-text is-muted">Message content unavailable</div>
+        ) : null}
+
+        {msg.attachments && msg.attachments.length > 0 && (
+          <div className="transcript-attachments">
+            {msg.attachments.map((url, j) => {
+              if (isVideoUrl(url)) {
+                return <video key={j} className="transcript-attachment-video" src={url} controls preload="metadata" />;
+              }
+              if (isImageUrl(url)) {
+                return (
+                  <a key={j} className="transcript-attachment-image" href={url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={url}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </a>
+                );
+              }
               return (
-                <video
-                  key={j}
-                  src={url}
-                  controls
-                  preload="metadata"
-                  style={{ maxWidth: 360, maxHeight: 260, borderRadius: 6, background: "#1e1f22" }}
-                />
-              );
-            }
-            if (isImageUrl(url)) {
-              return (
-                <a key={j} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                  <img
-                    src={url}
-                    alt=""
-                    style={{ maxWidth: 300, maxHeight: 260, objectFit: "cover", borderRadius: 6, display: "block", background: "#1e1f22" }}
-                    onError={(e) => {
-                      // If inline preview fails, degrade to a file link
-                      const el = e.currentTarget as HTMLImageElement;
-                      el.style.display = "none";
-                    }}
-                  />
+                <a key={j} className="transcript-attachment-file" href={url} target="_blank" rel="noopener noreferrer">
+                  <span className="transcript-attachment-icon" aria-hidden="true">📎</span>
+                  <span>{attachmentName(url)}</span>
                 </a>
               );
-            }
-            return (
-              <a
-                key={j}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#00a8fc", fontSize: 12, textDecoration: "none" }}
-              >
-                📎 Attachment
-              </a>
-            );
-          })}
-        </div>
-      )}
+            })}
+          </div>
+        )}
 
-      {msg.embeds && msg.embeds.length > 0 && (
-        <>
-          {msg.embeds.map((embed, i) => (
-            <EmbedView key={i} embed={embed} mentionNames={mentionNames} />
-          ))}
-        </>
-      )}
+        {msg.embeds && msg.embeds.length > 0 && (
+          <>
+            {msg.embeds.map((embed, i) => (
+              <EmbedView key={i} embed={embed} mentionNames={mentionNames} />
+            ))}
+          </>
+        )}
 
-      {msg.stickers && msg.stickers.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {msg.stickers.map((sticker, i) => {
-            const url = stickerUrl(sticker);
-            return url ? (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                <img
-                  src={url}
-                  alt={sticker.name || "Discord sticker"}
-                  title={sticker.name || "Discord sticker"}
-                  style={{ width: 160, maxWidth: "100%", maxHeight: 160, objectFit: "contain", display: "block" }}
-                />
-              </a>
-            ) : null;
-          })}
-        </div>
-      )}
+        {msg.stickers && msg.stickers.length > 0 && (
+          <div className="transcript-stickers">
+            {msg.stickers.map((sticker, i) => {
+              const url = stickerUrl(sticker);
+              return url ? (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <img src={url} alt={sticker.name || "Discord sticker"} title={sticker.name || "Discord sticker"} />
+                </a>
+              ) : null;
+            })}
+          </div>
+        )}
 
-      {msg.components && msg.components.length > 0 && <Cv2Components components={msg.components} mentionNames={mentionNames} />}
+        {msg.components && msg.components.length > 0 && <Cv2Components components={msg.components} mentionNames={mentionNames} />}
+      </div>
     </div>
   );
 }
@@ -615,6 +695,10 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
   const [data, setData] = useState<TranscriptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // One popup controller for the page: author rows and mention links share it,
+  // so opening a new profile always replaces the last one.
+  const profile = useDiscordProfile();
+  const rows = data ? buildTranscriptRows(data.messages) : [];
 
   useEffect(() => {
     setLoading(true);
@@ -705,23 +789,31 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
         </div>
 
         {/* Messages */}
-        <div
-          style={{
-            background: "#1e1f22",
-            border: "1px solid #3f4147",
-            borderRadius: 8,
-            overflow: "hidden",
-          }}
-        >
-          {data.messages.map((msg, i) => (
-            <TranscriptMessageView key={i} msg={msg} mentionNames={data.mention_names} />
-          ))}
-          {data.messages.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: "#949ba4" }}>
-              No messages in this transcript.
-            </div>
-          )}
+        <div className="transcript-chat">
+          <div className="transcript-chat-header">
+            <span className="transcript-chat-hash" aria-hidden="true">#</span>
+            <strong className="transcript-chat-title">{data.channel_name}</strong>
+            <span className="transcript-chat-meta">
+              {data.message_count} messages · {data.created_at}
+            </span>
+          </div>
+          <div className="transcript-chat-log">
+            {rows.map((row) => row.kind === "day"
+              ? <div className="transcript-day-divider" key={row.key} role="separator"><span>{row.label}</span></div>
+              : <TranscriptMessageView
+                  key={row.key}
+                  msg={row.message}
+                  mentionNames={data.mention_names}
+                  grouped={row.grouped}
+                  author={data.author_profiles?.[String(row.message.author_id)]}
+                  onOpenProfile={profile.openProfile}
+                />)}
+            {rows.length === 0 && (
+              <div className="transcript-empty">No messages in this transcript.</div>
+            )}
+          </div>
         </div>
+        {profile.dialog}
 
         {/* Footer */}
         <div

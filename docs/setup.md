@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 ### 3. Configure Environment Variables
 Create a `.env` file or set the following environment variables:
-- `DISCORD_TOKEN`: Your bot's secret token.
+- `DISCORD_BOT_TOKEN`: Your bot's secret token.
 - `DISCORD_PUBLIC_KEY` *(optional)*: Your application's **Public Key** from the Developer Portal. Required by the Interactions Endpoint URL (see below); the bot also reads it from the application object when it is unset, and caches what it read.
 - `DISCORD_INTERACTION_BUDGET_SECONDS` *(optional)*: How long the interactions endpoint waits for a handler before answering Discord with `202` (default `2.0`, maximum `3.0`).
 - `NSFW_API_URL` *(optional)*: Base URL of your deployed [NSFW Image Filter API](../nsfw-api/README.md) (a Cloudflare Worker). Required to enable the AutoMod **NSFW image filter**.
@@ -29,7 +29,7 @@ Create a `.env` file or set the following environment variables:
 
 ### 4. Run the Bot
 ```bash
-python bot.py
+python src/bot.py
 ```
 
 ### 5. Serve interactions from your own endpoint *(optional)*
@@ -59,6 +59,6 @@ Note:
 ## Hosting on Replit
 If you are using Replit, simply:
 1. Import the repository.
-2. Add your `DISCORD_TOKEN` to the Secrets tool.
+2. Add your `DISCORD_BOT_TOKEN` to the Secrets tool.
 3. Click the "Run" button.
 4. The Agent will handle the environment setup.

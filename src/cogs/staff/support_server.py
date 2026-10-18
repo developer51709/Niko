@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 
 import discord
+from discord.http import Route
 
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from utils import logging
@@ -57,6 +59,7 @@ CHANNEL_SPECS = {
     "staff_rules": ("Staff", "staff-guidelines", "text", True),
     "staff_announcements": ("Staff", "staff-announcements", "text", True),
     "staff_chat": ("Staff", "staff-chat", "text", True),
+    "staff_cmds": ("Staff", "staff-cmds", "text", True),
     "staff_voice": ("Staff", "staff-voice", "voice", True),
     "logs": ("Logs", "moderation-logs", "text", True),
     "member_logs": ("Logs", "member-logs", "text", True),
@@ -114,7 +117,7 @@ CHANNEL_TOPICS = {
     "staff_announcements": "Internal staff updates and operational notices.",
     "staff_rules": "Private staff guidelines and expectations.",
     "staff_chat": "Private staff coordination and discussion.",
-    "staff_announcements": "Internal staff updates and operational notices.",
+    "staff_cmds": "Private channel for staff command output and bot operations.",
     "logs": "Internal moderation action records.",
     "member_logs": "Internal member join, leave, and profile-change records.",
     "message_logs": "Internal message edit and deletion records.",
@@ -125,6 +128,39 @@ CHANNEL_TOPICS = {
 }
 
 API_STEP_DELAY = 0.35
+
+# Branding the support setup applies to the official guild. Discord only
+# accepts a guild description for community-enabled servers, and only allows a
+# single server tag of up to four characters once the Server Tags perk is
+# unlocked, so both are guarded before the API call.
+SUPPORT_GUILD_NAME = "Niko"
+SUPPORT_GUILD_DESCRIPTION = (
+    "The official Niko support server. Get help, report bugs, suggest features, "
+    "and meet the community behind Niko — a friendly Discord bot for moderation, "
+    "music, and community tools."
+)
+SUPPORT_GUILD_TAGS = ("Niko",)
+
+# Role icons are a Level 2 Server Boosting perk (the ``ROLE_ICONS`` feature).
+ROLE_ICON_LEVEL = 2
+_ASSET_EMOJI_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets", "emojis"
+)
+ROLE_ICON_ASSETS = {
+    "owner": "badge_owner.png",
+    "staff": "badge_staff.png",
+    "head_admin": "badge_head_admin.png",
+    "moderator": "badge_moderator.png",
+    "head_support": "badge_head_support.png",
+    "graphic_designer": "badge_graphic_designer.png",
+    "support": "badge_support.png",
+    "event_coordinator": "badge_event_coordinator.png",
+    "partnerships_promotions_lead": "badge_partnership_lead.png",
+    "partnership_manager": "badge_partnership_manager.png",
+    "bugbounty": "badge_bug_hunter_role.png",
+    "partner": "badge_partner_role.png",
+    "supporter": "badge_supporter_role.png",
+}
 # Discord community servers prevent deleting channels referenced by these
 # server-level settings. Repoint them to the new canonical channels first.
 COMMUNITY_SYSTEM_CHANNELS = {
@@ -223,6 +259,94 @@ async def persist_support_ids(bot, guild: discord.Guild, roles: dict, channels: 
         "ON CONFLICT (guild_id) DO UPDATE SET role_ids = $4, channel_ids = $5, updated_at = datetime('now')",
         guild.id, json.dumps(roles), json.dumps(channels), json.dumps(roles), json.dumps(channels),
     )
+
+
+def _role_icon_bytes(key: str) -> bytes | None:
+    """Read the bundled role icon for a configured role, if there is one."""
+    filename = ROLE_ICON_ASSETS.get(key)
+    if not filename:
+        return None
+    path = os.path.join(_ASSET_EMOJI_DIR, filename)
+    try:
+        with open(path, "rb") as file:
+            return file.read()
+    except OSError as error:
+        logging.warning("SupportServer", f"Could not read the role icon for {key}: {error}")
+        return None
+
+
+def role_icons_available(guild: discord.Guild) -> bool:
+    """Whether the guild has unlocked Discord's custom role icons perk."""
+    return "ROLE_ICONS" in getattr(guild, "features", ()) or int(getattr(guild, "premium_tier", 0) or 0) >= ROLE_ICON_LEVEL
+
+
+async def apply_role_icons(guild: discord.Guild, roles: dict) -> int:
+    """Give configured roles their artwork once the guild reaches the perk.
+
+    Discord unlocks role icons at boost Level 2. The setup and the boost
+    listener both call this, and it only uploads an icon when the role does not
+    already have one, so repeat runs do not churn through uploads.
+    """
+    if not role_icons_available(guild):
+        return 0
+    applied = 0
+    for key in ROLE_ICON_ASSETS:
+        role_id = roles.get(key)
+        role = guild.get_role(int(role_id)) if role_id else None
+        if role is None or getattr(role, "display_icon", None) is not None:
+            continue
+        icon = _role_icon_bytes(key)
+        if icon is None:
+            continue
+        try:
+            await role.edit(display_icon=icon, reason="Apply Niko support server role icons")
+        except (discord.Forbidden, discord.HTTPException) as error:
+            logging.warning("SupportServer", f"Could not set the {key} role icon: {error}")
+            continue
+        applied += 1
+        await _pace()
+    return applied
+
+
+async def apply_support_guild_branding(guild: discord.Guild) -> dict:
+    """Set the support guild's name, description, and server tag.
+
+    Returns the fields that were sent so the setup report can mention them.
+    Missing permissions or an un-unlocked Server Tags perk are logged and
+    skipped instead of failing the whole structural reconcile.
+    """
+    if guild.id != SUPPORT_GUILD:
+        raise ValueError("Branding may only be applied to the configured support guild.")
+    if not getattr(getattr(guild, "me", None), "guild_permissions", None) or not guild.me.guild_permissions.manage_guild:
+        logging.warning("SupportServer", "Skipped branding: Niko needs Manage Server to edit the guild profile.")
+        return {}
+
+    changes = {}
+    if guild.name != SUPPORT_GUILD_NAME:
+        changes["name"] = SUPPORT_GUILD_NAME
+    if "COMMUNITY" in getattr(guild, "features", ()) and guild.description != SUPPORT_GUILD_DESCRIPTION:
+        changes["description"] = SUPPORT_GUILD_DESCRIPTION
+    if changes:
+        await guild.edit(**changes, reason="Set the official Niko support server identity")
+        await _pace()
+
+    # Discord exposes one four-character server tag, unlocked by the Server
+    # Tags boost perk; discord.py 2.7 does not model the field yet, so the raw
+    # PATCH keeps it alongside name and description.
+    if "GUILD_TAGS" in getattr(guild, "features", ()):
+        current = list(getattr(guild, "tags", None) or (getattr(guild, "_raw_data", {}) or {}).get("tags") or ())
+        if [str(tag) for tag in current] != list(SUPPORT_GUILD_TAGS):
+            try:
+                await guild._state.http.request(
+                    Route("PATCH", "/guilds/{guild_id}", guild_id=guild.id),
+                    json={"tags": list(SUPPORT_GUILD_TAGS)},
+                    reason="Set the official Niko support server tag",
+                )
+                changes["tags"] = list(SUPPORT_GUILD_TAGS)
+                await _pace()
+            except (discord.Forbidden, discord.HTTPException) as error:
+                logging.warning("SupportServer", f"Could not set the support server tag: {error}")
+    return changes
 
 
 async def _ensure_role(guild: discord.Guild, key: str) -> discord.Role:
@@ -400,6 +524,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         roles[key] = (await _ensure_role(guild, key)).id
 
     await _reorder_support_roles(guild, roles)
+    await apply_role_icons(guild, roles)
 
     for owner_id in OWNER_IDS:
         owner = guild.get_member(int(owner_id))
@@ -511,6 +636,7 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
             await _pace()
 
     await _replace_community_system_channels(guild, channels)
+    await apply_support_guild_branding(guild)
     return roles, channels
 
 
