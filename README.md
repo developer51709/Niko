@@ -1,227 +1,246 @@
 <div align="center">
 
-![Niko Banner](docs/assets/niko_banner_2.png)
+![Niko](docs/assets/niko_banner_2.png)
 
-# 🎵 Niko Discord Bot
-*A cozy, trilingual café-themed companion for your server*
+# Niko
 
----
+**The warm, capable Discord companion for communities that care.**
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![discord.py](https://img.shields.io/badge/discord.py-2.3-5865F2?style=for-the-badge&logo=discord&logoColor=white)
-![OpenAI](https://img.shields.io/badge/Powered_by-OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
+Moderation, music, progression, tickets, social feeds, and AI — in one polished Discord experience with a full web dashboard.
+
+[Add Niko](https://discord.com/oauth2/authorize?client_id=1520558530472448170) ·
+[Dashboard](https://niko.sryze.cc/dashboard) ·
+[Support server](https://niko.sryze.cc/discord) ·
+[Documentation](https://niko.sryze.cc/docs) ·
+[Changelog](https://niko.sryze.cc/changelog)
+
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![discord.py 2.7+](https://img.shields.io/badge/discord.py-2.7%2B-5865F2?style=flat-square&logo=discord&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-API-000000?style=flat-square&logo=flask&logoColor=white)
+![React 18](https://img.shields.io/badge/React-18-149ECA?style=flat-square&logo=react&logoColor=white)
+![Vite 6](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)
 
 </div>
 
 ---
 
-## 🔗 Links
+## Overview
 
-| Name | Link |
-|------|------|
-| **Bot Invite** | [Add Niko to your server](https://discord.com/oauth2/authorize?client_id=1520558530472448170) |
-| **Support Server** | [niko.sryze.cc/discord](https://niko.sryze.cc/discord) — resolves the current invite |
-| **GitHub** | [developer51709/Niko](https://github.com/developer51709/Niko) |
-| **Wiki Page** | [Official Wiki](https://app.devin.ai/org/developer51709/wiki/developer51709/Niko?branch=main)
+Niko is a self-hosted Discord bot built for communities that want thoughtful moderation, engaging social features, and a dashboard that actually reflects how their server is doing. It runs as a single Python process: the bot, the Flask API, and the generated React dashboard share one deployment, one database, and one event loop.
 
----
+The result is a companion that feels native to Discord — fast slash commands, polished Components v2 panels, live profile popouts, and transcripts that look like Discord's own — without giving up the control of self-hosting.
 
-## 📋 Overview
-
-Niko is a warm, trilingual (EN / DE / ES) Discord bot with a cozy café personality. He is powered by OpenAI for natural conversation, remembers past interactions per user, and brings a lo-fi aesthetic to any community. With 20+ cog groups and 76 slash commands, Niko covers everything from a premium economy system and Lavalink music to moderation, giveaways, ticketing, social media notifiers, and more — all wrapped in an interactive Components v2 UI.
-
-**Current stats:** 55 servers · 1,342 users · 76 slash commands
+> **Quick start:** set `DISCORD_BOT_TOKEN`, run `python src/bot.py`, and open the dashboard on port `5000`.
 
 ---
 
-## ✨ Feature Highlights
+## Highlights
 
-### 🤖 AI & Personality
-- **OpenAI-powered chat** — mention Niko to start a conversation; he adapts his tone based on your favorability score and past memory
-- **Trilingual** — responds in English, German, or Spanish; auto-detects language
-- **Multi-personality** — *café* (warm bestie) and *normal* modes, configurable per server
-- **AI image generation** — `/imagine` produces images in-channel
-- **AI debugging system** — automated error reporting and one-click AI-assisted fixes
+### Moderation and safety
+- Kick, ban, mute, tempmute, warn, purge, slowmode, and channel lockdown
+- AutoMod for spam, invite links, blocked words, mass mentions, join raids, and external-app abuse
+- Optional AI image filtering through a self-hostable Cloudflare Worker
+- Moderation logs, case history, and per-server exemption lists
 
-### 💰 Premium Economy
-- **PIL image cards** — beautiful wallet, reward, and leaderboard cards rendered server-side
-- **Job ladder** — 8 tiers from Barista → Café Owner, each with unique pay, XP, and cooldowns
-- **Tiered bank** — 5 vault tiers (Tin Jar → Diamond Vault) with daily compound interest
-- **Shop system** — consumables (XP boosts, shields), upgrades (vault keys), collectibles
-- **Weekly lottery** — ticket-based with a rolling jackpot
-- **Achievements** — 15+ unlockable badges based on milestones and activity
-- **Crime & rob** — risk-based side income with item defenses
-- **Transaction log** — full history of every credit and debit
+### Community and engagement
+- Persistent ticket system with Discord-styled HTML transcripts
+- Giveaways with account-age, server-age, role, and booster requirements
+- Polls, suggestions, starboard, custom tags, birthdays, and reminders
+- Social feed notifications for YouTube, Twitch, X, TikTok, Bluesky, and Reddit
 
-### 📊 Leveling
-- Per-message XP with configurable multiplier and cooldown
-- Per-guild settings: XP toggle, announcement channel, custom level-up messages
-- Role rewards at configurable thresholds
-- `/leveling` unified slash command group with subcommands (`rank`, `leaderboard`, `panel`, `config`)
-- Leaderboard with interactive pagination buttons
-
-### 🎵 Music
-- **Lavalink / wavelink** — high-quality, gap-free audio playback
+### Music
+- Lavalink/wavelink playback with queue, loop, shuffle, volume, and seek controls
 - YouTube, Spotify, and direct URL support
-- Three-state loop (off / track / queue), queue shuffle, volume control
-- Live now-playing card with progress bar and interactive buttons
-- Last.fm autoplay top-up for endless continuous listening
+- Live now-playing cards and Last.fm-powered autoplay
 
-### 🛡️ Moderation
-- Full toolkit: kick, ban, mute, tempmute, warn, purge, slowmode, lock
-- **AutoMod dashboard** — anti-spam, anti-link, bad words, mass mention, external app raid protection
-- Whitelist system to exempt trusted users and roles
-- Mod-log channel with rich event embeds
+### Progression and economy
+- Per-message XP, leveling curves, role rewards, and leaderboards
+- Jobs, banking, daily streaks, shops, collectibles, crime, and robbery
+- Weekly lottery and unlockable achievements with server-side image cards
 
-### 👥 Community
-- **Giveaways** — CV2 setup wizard with join requirements (account age, server age, roles, booster)
-- **Tickets** — persistent per-guild ticket system with category and support-role config
-- **Polls** — live multi-option polls with real-time vote counts
-- **Suggestions** — board with admin approve/deny workflow
-- **Starboard** — auto-mirror starred messages
-- **Tags** — per-guild custom text snippets
-- **Birthdays** — daily birthday announcement task
-- **Highlights** — keyword-based DM notifications
-- **Reminders** — personal scheduled DM reminders
-- **Social notifiers** — YouTube, Twitch, Twitter/X, TikTok, Bluesky and Reddit feed subscriptions, managed from Discord or the dashboard's per-server **Notifications** tab (pause, resume, test, custom messages and per-account channels)
+### AI companion
+- OpenAI-compatible chat with per-user memory and favorability
+- Configurable identity and tone per server
+- Image generation, translation, definitions, and AI-assisted error reports
 
-### 🎰 Casino
-Blackjack, Slots, Roulette — all with PIL image cards and full economy integration
-
-### ⚙️ Admin & Customization
-- **Custom triggers** — create custom trigger-response pairs per server with a permission-gated settings panel and role menu support
-- Prefix management, emoji sync, onboarding configuration
-- Per-guild configurable settings via interactive CV2 panels
-
-### 💝 Donations
-- **OxaPay integration** — accept crypto donations directly through the bot
-- `/donate` command for supporters
-
-### 🌐 Website & Dashboard
-- React + Vite public landing page, command directory, docs, and legal pages
-- Discord OAuth dashboard with live bot stats and guild configuration
-- Single-process Flask API served directly by the bot
+### Dashboard and operations
+- Discord OAuth dashboard for server settings, activity, and moderation insights
+- Live command directory, documentation, changelog, and public profile cards
+- Staff workspace for team applications, server notes, and standby management
+- Interaction endpoint support, standby failover, and Discord-aware proxy recovery
 
 ---
 
-## 📂 Project Structure
+## Tech stack
 
-```
+| Layer | Technology |
+|---|---|
+| Bot runtime | Python 3.10+, discord.py 2.7+ |
+| Web API | Flask, served in the bot process |
+| Dashboard | React 18, TypeScript, Vite 6 |
+| Music | Lavalink / wavelink |
+| AI | OpenAI-compatible API |
+| Storage | MongoDB when configured, with SQLite/JSON fallbacks |
+| Optional filter service | Cloudflare Workers (`nsfw-api/`) |
+
+---
+
+## Repository structure
+
+```text
 src/
-├── bot.py            # Entry point — loads cogs, syncs slash commands, event loop
-├── api_server.py     # Starts the dashboard API beside the bot
-├── webapp/           # Flask app entrypoint, helpers, and focused route modules
-│   ├── __init__.py    # Exposes the Flask app
-│   ├── server.py      # Shared app setup and web helpers
-│   └── *_routes.py    # Auth, dashboard, public, team, donation, card, and site routes
-├── cogs/
-│   ├── admin/            # Admin tools, prefix management, custom triggers
-│   ├── ai/               # AI chat, memory, favorability, image generation
-│   ├── automod/          # AutoMod dashboard, raid protection
-│   ├── casino/           # Blackjack, Slots, Roulette, mini-games
-│   ├── donations/        # Crypto donations via OxaPay
-│   ├── economy/          # Balance, jobs, bank, shop, lottery, achievements
-│   ├── fun/              # Roleplay, memes, animals, AFK, snipe
-│   ├── giveaway/         # CV2 giveaway setup with join requirements
-│   ├── help/             # Dynamic help system
-│   ├── info/             # Serverinfo, userinfo, avatar
-│   ├── legal/            # Legal information and terms
-│   ├── leveling/         # XP, levels, leaderboard, level panel
-│   ├── logging/          # Event logger (join/leave/edit/delete)
-│   ├── moderation/       # Kick, ban, warn, mute, purge, mod-log
-│   ├── music/            # Lavalink/wavelink music players
-│   ├── notifier/         # Social media feed subscriptions
-│   ├── onboarding/       # Verification, captcha, role assignment
-│   ├── social/           # Polls, suggestions, starboard, tags, highlights
-│   ├── system/           # Error handler, AI debugging reporter
-│   ├── tickets/          # Persistent ticket system
-│   ├── utility/          # Reminders, birthdays, translate, define
-│   └── voicemaster/      # Dynamic voice channel creation
-├── utils/                # Shared utility modules
-│   ├── ai/               # OpenAI client, memory, config, debugging, actions
-│   ├── image/            # PIL economy card renderer
-│   ├── onboarding/       # Captcha generation, config, utils
-│   ├── social/           # Platform scrapers (YouTube, Twitter, TikTok, Bluesky, Reddit)
-│   ├── tickets/          # Ticket config and helpers
-│   ├── paginator.py      # Shared PaginatedView for CV2 lists
-│   ├── ratelimit.py      # Async rolling-window rate limiters
-│   └── blacklist_manager.py
-├── config/              # Bot configuration (emojis, AI config, etc.)
-├── website/             # Generated React build served by webapp/
-│   └── dist/
-├── web/                 # React + Vite dashboard source
-│   ├── src/App.tsx      # Public pages and dashboard views
-│   ├── src/api.ts       # Typed API client
-│   └── src/styles.css   # Design tokens and responsive styles
-└── data/                # Persistent storage (JSON + SQLite)
-    ├── database.db       # Giveaway data (SQLite)
-    ├── levels.json
-    ├── level_config.json
-    ├── mod_config.json
-    ├── warnings.json
-    ├── ticket_config.json
-    ├── reminders.json
-    ├── tags.json
-    ├── birthdays.json
-    ├── highlights.json
-    ├── polls.json
-    ├── suggestions.json
-    ├── starboard.json
-    └── economy_data/     # Per-user economy profiles (JSON)
+├── bot.py                  # Bot entry point and gateway lifecycle
+├── api_server.py           # Starts the Flask API beside the bot
+├── cogs/                   # Feature modules (moderation, economy, music, ...)
+├── webapp/                 # Flask routes, auth, cards, and shared web helpers
+├── utils/                  # AI, music, tickets, image rendering, and integrations
+├── events/                 # Gateway and startup event handlers
+├── config/                 # Bot IDs, links, emojis, and runtime configuration
+├── assets/                 # Fonts, badges, and generated emoji art
+└── website/dist/           # Generated dashboard build (served by Flask)
+
+web/                        # React + Vite dashboard source
+docs/                       # Setup, API, dashboard, maintenance, and legal docs
+tests/                      # pytest suite covering bot, API, and rendering behavior
+nsfw-api/                   # Optional Cloudflare Worker for image classification
+scripts/                    # Badge and emoji asset generation helpers
 ```
 
----
-
-## 🚀 Setup
-
-1. Add your `DISCORD_BOT_TOKEN` to environment secrets
-2. Add `DISCORD_CLIENT_SECRET` to enable Discord OAuth dashboard login
-3. Start the **Discord Bot** workflow — cogs load automatically, slash commands sync globally on first run
-4. Run `npm run build` when changing the frontend; the **Run the bot** workflow serves it
-5. In your server, use `/leveling panel` and `/automod` to configure per-guild settings interactively
-6. *Optional:* set `DISCORD_PUBLIC_KEY` and point the portal's **Interactions Endpoint URL** at `https://<your host>/api/discord/interactions` so slash commands and buttons are answered inside Discord's own request instead of an outbound one — see `docs/maintenance.md`
-
-**Requirements:** Python 3.10+, Node.js 20+, discord.py 2.3, wavelink, Flask, Pillow, OpenAI (via any OpenAI compatible API provider)
+`src/website/dist/` is generated output. Edit `web/` and run the build rather than changing files under `dist/` directly.
 
 ---
 
-## 📜 Commands (summary)
+## Getting started
 
-| Category | Key Commands |
-|----------|-------------|
-| **Economy** | `/balance` `/daily` `/work` `/job` `/shop` `/bank` `/lottery` `/pay` `/crime` `/rob` |
-| **Leveling** | `/leveling rank` `/leveling leaderboard` `/leveling panel` `/leveling config` |
-| **Music** | `/play` `/nowplaying` `/queue` `/skip` `/stop` `/loop` `/shuffle` `/volume` |
-| **Casino** | `/blackjack` `/slots` `/roulette` `/connectfour` `/tictactoe` |
-| **Donations** | `/donate` |
-| **Moderation** | `/kick` `/ban` `/warn` `/mute` `/purge` `/automod` `/whitelist` |
-| **Giveaways** | `/giveaway start/end/reroll/list` |
-| **Tickets** | `/ticket panel/config` `/close` `/delete` |
-| **Community** | `/poll` `/suggest` `/starboard` `/tag` `/birthday` `/highlight` `/notifier` |
-| **AI & Chat** | `@Niko` `/favor` `/memory` `/imagine` `/translate` `/define` |
-| **Fun** | `/hug` `/pat` `/boop` `/meme` `/cat` `/afk` `/snipe` |
-| **Utility** | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` |
-| **Admin** | `/reload` `/sync` `/emojisync` `/onboarding` `/voicemaster` `/trigger` |
+### Prerequisites
+
+- Python 3.10 or newer
+- Node.js 20 or newer
+- A Discord application with a bot user and the **Message Content**, **Server Members**, and **Presence** intents enabled
+
+### 1. Install the Python dependencies
+
+```bash
+git clone https://github.com/developer51709/Niko.git
+cd Niko
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Configure the environment
+
+Set these variables in your hosting dashboard, shell, or a local `src/.env` file. `DISCORD_BOT_TOKEN` is required; the dashboard needs OAuth credentials.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DISCORD_BOT_TOKEN` | Yes | Bot token from the Discord Developer Portal |
+| `DISCORD_CLIENT_SECRET` | For the dashboard | Enables Discord OAuth login |
+| `SESSION_SECRET` | Recommended | Keeps dashboard sessions stable across restarts |
+| `DISCORD_CLIENT_ID` | Optional | Defaults to Niko's application ID |
+| `PUBLIC_URL` | Optional | Canonical public origin for OAuth and links |
+| `PORT` | Optional | Web port, defaults to `5000` |
+| `MONGODB_URL` | Optional | MongoDB connection; otherwise local storage is used |
+| `MONGODB_DATABASE` | Optional | MongoDB database name |
+| `DISCORD_PUBLIC_KEY` | Optional | Enables Discord's interactions endpoint |
+| `NSFW_API_URL` / `NSFW_API_TOKEN` | Optional | Enables the AutoMod image filter |
+| `TOPGG_WEBHOOK_TOKEN` | Optional | Enables top.gg vote rewards |
+
+The full list, including Twitch and notification integrations, lives in [`docs/setup.md`](docs/setup.md).
+
+### 3. Build the dashboard
+
+```bash
+npm install
+npm run build
+```
+
+### 4. Run Niko
+
+```bash
+python src/bot.py
+```
+
+The API starts with the bot. The dashboard is available at `http://localhost:5000` (or your configured `PORT`), and the same process serves the generated site from `src/website/dist/`.
 
 ---
 
-## 🎨 UI System
+## Commands
 
-All user-facing responses use **discord.ui.LayoutView (Components v2)** featuring:
-- **Containers** with colour accents per context
-- **Text displays** and section separators
-- **Media galleries** for image card rendering (economy, casino)
-- **Action rows** with buttons (music controls, ticket actions, paginator arrows)
-- **Paginated views** for leaderboards and command lists
+| Area | Commands |
+|---|---|
+| Economy | `/balance` `/daily` `/work` `/job` `/shop` `/bank` `/lottery` `/pay` `/crime` `/rob` |
+| Leveling | `/leveling rank` `/leveling leaderboard` `/leveling panel` `/leveling config` |
+| Music | `/play` `/nowplaying` `/queue` `/skip` `/stop` `/loop` `/shuffle` `/volume` |
+| Moderation | `/kick` `/ban` `/warn` `/mute` `/purge` `/automod` `/whitelist` |
+| Giveaways | `/giveaway start` `/giveaway end` `/giveaway reroll` `/giveaway list` |
+| Tickets | `/ticket panel` `/ticket config` `/close` `/delete` |
+| Community | `/poll` `/suggest` `/starboard` `/tag` `/birthday` `/highlight` `/notifier` |
+| AI | `@Niko` `/favor` `/memory` `/imagine` `/translate` `/define` |
+| Fun | `/hug` `/pat` `/boop` `/meme` `/cat` `/afk` `/snipe` |
+| Utility | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` |
+| Admin | `/reload` `/sync` `/emojisync` `/onboarding` `/voicemaster` `/trigger` |
+
+The dashboard's live command directory is the source of truth for the current build.
 
 ---
+
+## Documentation
+
+| Guide | What it covers |
+|---|---|
+| [Setup](docs/setup.md) | Environment variables, first run, and interactions endpoint |
+| [API](docs/api.md) | Public and authenticated routes, plus endpoint conventions |
+| [Dashboard](docs/dashboard.md) | Dashboard structure and server configuration |
+| [Maintenance](docs/maintenance.md) | Updates, backups, proxy behavior, and standby failover |
+| [AI providers](docs/ai-providers.md) | OpenAI-compatible provider configuration |
+| [FAQ](docs/faq.md) | Common questions and troubleshooting |
+| [Privacy policy](docs/privacy-policy.md) | What Niko stores and how it is used |
+| [Terms of service](docs/terms-of-service.md) | Usage terms for the hosted deployment |
+
+Public documentation, release notes, and the command reference are also available at [niko.sryze.cc](https://niko.sryze.cc).
+
+---
+
+## Security
+
+Niko takes user privacy seriously. If you believe you have found a vulnerability, please report it privately:
+
+1. Open a private security advisory at [github.com/developer51709/Niko/security/advisories/new](https://github.com/developer51709/Niko/security/advisories/new), or
+2. Join the [support server](https://niko.sryze.cc/discord) and open a **Bug** post in `#community-help` or a private ticket from `#create-a-ticket`.
+
+Include the affected endpoint or page, reproduction steps, and the impact. Please do not include real secrets or other people's private data. Valid reports are rewarded with the **Bug Bounty** role, because every vulnerability fixed is a potential future incident prevented.
+
+The deployment also publishes [`/.well-known/security.txt`](https://niko.sryze.cc/.well-known/security.txt) and serves friendly decoy responses on commonly scanned secret paths rather than exposing real configuration.
+
+---
+
+## Development
+
+Run the checks before opening a pull request:
+
+```bash
+pytest
+npm run typecheck
+npm run build
+```
+
+Guidelines:
+
+- Keep changes focused and match the existing Python and React conventions.
+- Add or update tests when behavior changes.
+- Update `web/src/data/changelog.ts` for user-visible updates.
+- Rebuild `src/website/dist/` when the frontend changes; do not edit generated assets by hand.
+- Never commit tokens, `.env` files, or other credentials.
+
+---
+
+## Credits
+
+Niko is built and maintained by [@sorenthedev](https://github.com/developer51709), with contributions from the Niko staff and community.
 
 <div align="center">
 
-*Niko — making your Discord server cozier, one cup at a time 🍵*
-
-*Built by [@sorenthedev](https://github.com/developer51709)*
+**Built for communities that care.**
 
 </div>

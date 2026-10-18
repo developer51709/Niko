@@ -18,9 +18,9 @@ from discord.ext import commands
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from config.links import WEBSITE
 from cogs.staff.support_server import (
-    CHANNEL_SPECS, ROLE_SPECS, SupportGuidePanel, SupportPingPanel, assign_support_roles,
-    create_support_invite, get_support_ids, persist_support_ids,
-    reconcile_structure, support_rules_text,
+    CHANNEL_SPECS, ROLE_SPECS, SupportGuidePanel, SupportPingPanel, apply_role_icons,
+    assign_support_roles, create_support_invite, get_support_ids, persist_support_ids,
+    reconcile_structure, role_icons_available, support_rules_text,
 )
 from cogs.staff.owner import OwnerCog, _StatusPanelCog
 from cogs.staff.development import Development
@@ -322,6 +322,17 @@ class StaffCog(commands.Cog):
         self._owner_source = OwnerCog(bot)
         self._development_source = Development(bot)
         self._register_legacy_commands()
+
+    @commands.Cog.listener()
+    async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
+        """Apply role icons the moment the support server unlocks the perk."""
+        if after.id != SUPPORT_GUILD:
+            return
+        if not role_icons_available(after) or role_icons_available(before):
+            return
+        roles = (await get_support_ids(self.bot)).get("roles", {})
+        if roles:
+            await apply_role_icons(after, roles)
 
     @commands.group(name="staff", invoke_without_command=True, hidden=True)
     async def staff(self, ctx: commands.Context):

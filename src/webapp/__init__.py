@@ -18,6 +18,7 @@ from . import (  # noqa: E402,F401
     team_recruitment_routes,
     economy_routes,
     site_routes,
+    security_decoy_routes,
     appeal_routes,
     standby_routes,
     interaction_routes,

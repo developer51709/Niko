@@ -133,35 +133,53 @@ async def _guild_privacy(guild_id):
         return {"private": False}
 
 
-async def _guild_invite_url(guild):
-    """The invite Discord's "Go to Server" button opens.
+async def _viewer_is_guild_member(guild, viewer_id) -> bool:
+    """Whether the viewer is in the server, consulting Discord when uncached."""
+    if not viewer_id:
+        return False
+    try:
+        member_id = int(viewer_id)
+    except (TypeError, ValueError):
+        return False
+    try:
+        if guild.get_member(member_id) is not None:
+            return True
+    except Exception:
+        pass
+    if not hasattr(guild, "fetch_member"):
+        return False
+    try:
+        return await guild.fetch_member(member_id) is not None
+    except Exception:
+        return False
 
-    Vanity URLs are the only invite a bot can read without extra permissions, so
-    an existing invite is used next and a link that opens the guild in Discord
-    is the last resort. Niko never creates an invite just to render a popup.
+
+def _guild_vanity_url(guild):
+    """The server's vanity invite, or ``None`` when it has none.
+
+    Discord only offers Join in its server-tag popup when the guild has a
+    vanity invite it can use. Matching that means no generic invite lookup and
+    no deep-link fallback: without a vanity URL there is nothing to join.
     """
     vanity = getattr(guild, "vanity_url", None)
-    if vanity:
-        return str(vanity)
-    invites = getattr(guild, "invites", None)
-    if invites is not None:
-        try:
-            for invite in await invites():
-                code = getattr(invite, "code", None)
-                if code:
-                    return f"https://discord.gg/{code}"
-        except Exception:
-            pass
-    guild_id = getattr(guild, "id", None)
-    return f"https://discord.com/channels/{guild_id}" if guild_id is not None else None
+    return str(vanity) if vanity else None
 
 
-async def _guild_tag_server(primary_guild):
+def _current_viewer_id() -> str | None:
+    """The signed-in viewer's Discord ID, or ``None`` for a guest."""
+    viewer_id = str((session.get("user") or {}).get("id") or "")
+    return viewer_id or None
+
+
+async def _guild_tag_server(primary_guild, viewer_id=None):
     """Resolve the guild behind a member's primary server tag.
 
     The payload always carries the states Discord's own popup can show: public
     (the server's details), private (a server that opted out of the popup), and
-    unknown (a server Niko is not in, so nothing can be read).
+    unknown (a server Niko is not in, so nothing can be read). It also records
+    whether the signed-in viewer is already a member, which decides whether the
+    popup offers "Go to Server" or "Join". Join is only offered when the guild
+    exposes a vanity invite, matching Discord's own popup.
     """
     if primary_guild is None:
         return None
@@ -195,6 +213,7 @@ async def _guild_tag_server(primary_guild):
         return payload
 
     payload["available"] = True
+    payload["viewer_is_member"] = await _viewer_is_guild_member(guild, viewer_id)
     privacy = await _guild_privacy(guild_id)
     if privacy.get("private"):
         # A private server keeps its tag, but Discord hides the profile itself.
@@ -223,8 +242,10 @@ async def _guild_tag_server(primary_guild):
         "online_count": online,
         "member_count": getattr(guild, "member_count", None),
         "created_at": _unix_seconds(getattr(guild, "created_at", None)),
-        "invite_url": await _guild_invite_url(guild),
     })
+    vanity_url = _guild_vanity_url(guild)
+    if vanity_url:
+        payload["invite_url"] = vanity_url
     return payload
 
 
@@ -373,7 +394,7 @@ async def _fetch_discord_text_mentions(guild_id, mention_ids, names):
     return names
 
 
-async def _fetch_discord_user_profile(guild_id, user_id):
+async def _fetch_discord_user_profile(guild_id, user_id, viewer_id=None):
     """Collect a small public profile payload for transcript mention popovers."""
     guild = None
     if guild_id:
@@ -474,7 +495,7 @@ async def _fetch_discord_user_profile(guild_id, user_id):
         # The server-tag popup needs the guild behind the tag. It is a separate
         # object because the tag pill keeps its text and badge even when the
         # server is private or no longer available to Niko.
-        "server_tag": await _guild_tag_server(primary_guild),
+        "server_tag": await _guild_tag_server(primary_guild, viewer_id),
         "badges": badges,
         "nitro_badge": None,
         "booster_badge": None,
@@ -496,23 +517,44 @@ async def _fetch_discord_user_profile(guild_id, user_id):
     }
 
 
-def resolve_discord_user_profiles(guild_id, text):
-    """Fetch bounded public profile data for users mentioned in a transcript."""
+def resolve_discord_user_profiles(guild_id, text, extra_user_ids=None):
+    """Fetch bounded public profile data for users mentioned in a transcript.
+
+    ``extra_user_ids`` lets a transcript resolve its message authors as well as
+    the users written into the message text, so every name and avatar on the
+    page can open the same profile popup.
+    """
     if _discord_bot is None:
         return {}
-    user_ids = sorted(set(re.findall(r"<@!?([0-9]+)>", str(text or ""))))[:_MAX_FETCHES_PER_TYPE]
+    mentioned = set(re.findall(r"<@!?([0-9]+)>", str(text or "")))
+    try:
+        authors = {
+            str(user_id).strip() for user_id in (extra_user_ids or [])
+            if str(user_id).strip().isdigit()
+        }
+    except TypeError:
+        authors = set()
+    # Authors come first so a chat full of mentions still resolves the people
+    # whose names and avatars sit on the page.
+    user_ids = []
+    for user_id in sorted(authors) + sorted(mentioned - authors):
+        if user_id not in user_ids:
+            user_ids.append(user_id)
+    user_ids = user_ids[:_MAX_FETCHES_PER_TYPE]
     if not user_ids:
         return {}
     bot_loop = getattr(_discord_bot, "loop", None)
     if bot_loop is None or not bot_loop.is_running():
         return {}
 
+    viewer_id = _current_viewer_id()
+
     async def fetch_profiles():
         semaphore = asyncio.Semaphore(_MAX_PARALLEL_FETCHES)
         async def bounded(user_id):
             async with semaphore:
                 try:
-                    profile = await _fetch_discord_user_profile(guild_id, user_id)
+                    profile = await _fetch_discord_user_profile(guild_id, user_id, viewer_id)
                     return user_id, profile
                 except Exception:
                     return user_id, None
@@ -582,8 +624,9 @@ def api_get_discord_user_profile(user_id):
         return jsonify({"error": "Invalid Discord user ID."}), 400
     if _discord_bot is None:
         return jsonify({"error": "Discord profile lookup is unavailable."}), 503
+    viewer_id = _current_viewer_id()
     try:
-        profile = _server.run_on_bot_loop(_fetch_discord_user_profile(None, user_id))
+        profile = _server.run_on_bot_loop(_fetch_discord_user_profile(None, user_id, viewer_id))
     except Exception:
         profile = None
     if profile is None:

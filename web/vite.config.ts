@@ -196,9 +196,23 @@ function createRasterTextPaths(metadata: PageMetadata, fontRoot: string) {
 }
 
 function staticMetadataPlugin(): Plugin {
+  let buildStarted = false;
+  let buildFailed = false;
   return {
     name: "niko-static-social-metadata",
+    buildStart() {
+      buildStarted = true;
+    },
+    buildEnd(error) {
+      if (error) buildFailed = true;
+    },
     async closeBundle() {
+      // Rollup still runs closeBundle after a failed build. A failure before
+      // Rollup starts (for example, while emptying dist) never reaches
+      // buildEnd, so a missing buildStart is also treated as a failed build.
+      // Generating cards there would write into a half-cleaned dist and print
+      // a progress bar for work the failed build never produced.
+      if (!buildStarted || buildFailed) return;
       const dist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/website/dist");
       const faviconSvg = fs.readFileSync(path.join(dist, "favicon.svg"));
       const iconDirectory = path.join(dist, "icons");
@@ -212,6 +226,12 @@ function staticMetadataPlugin(): Plugin {
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       writeMachineReadableContent(dist);
       const totalPages = PAGE_METADATA.length;
+      const progressStartedAt = Date.now();
+      const colorEnabled = Boolean(process.stdout.isTTY)
+        && !("NO_COLOR" in process.env)
+        && process.env.TERM !== "dumb";
+      const paint = (code: string, value: string) => colorEnabled ? `\u001b[${code}m${value}\u001b[0m` : value;
+      const barWidth = Math.max(8, Math.min(30, (process.stdout.columns ?? 80) - 52));
       for (const [index, metadata] of PAGE_METADATA.entries()) {
         const route = metadata.path === "/" ? "" : metadata.path.slice(1);
         const htmlPath = path.join(dist, route, "index.html");
@@ -238,15 +258,33 @@ function staticMetadataPlugin(): Plugin {
         }).render();
         fs.writeFileSync(pngPath, raster.asPng());
         const completed = index + 1;
-        const prefix = "Open Graph cards [";
-        const suffix = `] ${completed}/${totalPages}`;
-        const consoleWidth = process.stdout.columns ?? 80;
-        const progressWidth = Math.max(1, consoleWidth - prefix.length - suffix.length - 1);
-        const filled = Math.round((completed / totalPages) * progressWidth);
-        const progress = `${"#".repeat(filled)}${"-".repeat(progressWidth - filled)}`;
-        const progressInterval = Math.max(1, Math.ceil(totalPages / 10));
-        if (completed === totalPages || (process.stdout.isTTY && completed % progressInterval === 0)) {
-          process.stdout.write(`${process.stdout.isTTY ? "\r" : ""}\u001b[36m${prefix}\u001b[0m\u001b[32m${progress}\u001b[0m${suffix}${completed === totalPages ? "\n" : ""}`);
+        const ratio = completed / Math.max(1, totalPages);
+        const percent = Math.round(ratio * 100);
+        const filled = completed === totalPages
+          ? barWidth
+          : Math.max(1, Math.round(ratio * barWidth));
+        const empty = Math.max(0, barWidth - filled);
+        const elapsedMs = Date.now() - progressStartedAt;
+        const elapsed = elapsedMs < 10_000 ? `${(elapsedMs / 1000).toFixed(1)}s` : `${Math.round(elapsedMs / 1000)}s`;
+        const count = `${String(completed).padStart(String(totalPages).length)}/${totalPages}`;
+        const plainBar = `${"#".repeat(filled)}${"-".repeat(empty)}`;
+        // A sage-to-mint bar with a dim track, matching the dashboard palette
+        // instead of the old cyan/green terminal defaults.
+        const coloredBar = `${
+          filled > 1 ? paint("38;5;115", "█".repeat(filled - 1)) : ""
+        }${
+          filled > 0 ? paint("1;38;5;157", "█") : ""
+        }${
+          empty > 0 ? paint("38;5;238", "░".repeat(empty)) : ""
+        }`;
+        const line = colorEnabled
+          ? `${paint("38;5;245", "Open Graph cards")} ${paint("38;5;240", "[")}${coloredBar}${paint("38;5;240", "]")} ${paint("1;38;5;115", `${String(percent).padStart(3)}%`)}  ${paint("38;5;250", count)}  ${paint("38;5;238", "·")}  ${paint("38;5;245", elapsed)}`
+          : `Open Graph cards [${plainBar}] ${String(percent).padStart(3)}%  ${count}  ·  ${elapsed}`;
+        if (process.stdout.isTTY) {
+          process.stdout.write(`\r\u001b[2K${line}`);
+          if (completed === totalPages) process.stdout.write("\n");
+        } else if (completed === totalPages) {
+          process.stdout.write(`${line}\n`);
         }
       }
     },

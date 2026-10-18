@@ -137,7 +137,8 @@ button.discord-profile-guild-tag:hover, button.discord-profile-guild-tag.is-open
 .discord-server-tag-popup.is-unknown .discord-server-tag-description { color: #b5bac1; }
 .discord-server-tag-invite { display: block; margin-top: 14px; padding: 11px 10px; color: #fff; background: #248046; border-radius: 8px; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; }
 a.discord-server-tag-invite:hover { background: #1a6334; }
-.discord-server-tag-invite.is-disabled { color: #a3a6ad; background: #3f4147; cursor: not-allowed; pointer-events: none; }
+.discord-server-tag-invite.is-join { background: #5865f2; }
+a.discord-server-tag-invite.is-join:hover { background: #4752c4; }
 .discord-profile-spotify { margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }
 .discord-profile-spotify-link { display: block; color: inherit; text-decoration: none; }
 .discord-profile-spotify-link:hover .discord-profile-spotify { background: #2a2c31; }
@@ -1526,6 +1527,56 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-layout .achievement-reward { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; background: var(--surface-muted); color: var(--sage); font-family: "Space Mono", monospace; font-size: 9px; }
 .dashboard-layout .achievement-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: var(--surface-raised); border: 1px solid var(--line-soft); font-size: 10px; line-height: 1.45; }
 .dashboard-layout .achievement-chip strong { font-size: 12px; }
+
+/* ── Ticket transcript chat ────────────────────────────────────────────────── */
+
+.transcript-chat { overflow: hidden; background: #313338; border: 1px solid #3f4147; border-radius: 8px; }
+.transcript-chat-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; background: #313338; border-bottom: 1px solid #26272b; }
+.transcript-chat-hash { color: #80848e; font-size: 24px; font-weight: 500; line-height: 1; }
+.transcript-chat-title { overflow: hidden; color: #f2f3f5; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.transcript-chat-meta { overflow: hidden; margin-left: auto; color: #949ba4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.transcript-chat-log { display: flex; flex-direction: column; padding: 8px 0 32px; }
+.transcript-day-divider { display: flex; align-items: center; gap: 10px; margin: 20px 12px 6px; color: #949ba4; font-size: 12px; font-weight: 600; }
+.transcript-day-divider::before, .transcript-day-divider::after { content: ""; flex: 1 1 auto; height: 1px; background: #3f4147; }
+.transcript-message { display: flex; margin-top: 17px; padding: 2px 16px 2px 0; color: #dbdee1; font-size: 16px; line-height: 1.375; }
+.transcript-message:hover { background: #2e3035; }
+.transcript-message.is-grouped { margin-top: 0; padding-top: 1px; padding-bottom: 1px; }
+.transcript-message-gutter { position: relative; display: flex; align-items: flex-start; flex: 0 0 72px; justify-content: center; }
+.transcript-avatar-button { display: block; width: 40px; height: 40px; flex: 0 0 auto; margin-top: 2px; padding: 0; border: 0; border-radius: 50%; background: none; }
+button.transcript-avatar-button, button.transcript-author-button { cursor: pointer; }
+.transcript-avatar { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; color: #fff; font-size: 16px; font-weight: 600; }
+.transcript-avatar-button:focus-visible, .transcript-author-button:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; }
+.transcript-avatar-spacer { display: block; width: 40px; height: 1px; }
+.transcript-gutter-time { position: absolute; top: 5px; right: 4px; display: none; color: #6d6f78; font-size: 11px; white-space: nowrap; }
+.transcript-message.is-grouped:hover .transcript-gutter-time { display: block; }
+.transcript-message-body { min-width: 0; flex: 1 1 auto; }
+.transcript-message-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 22px; }
+.transcript-author-button { max-width: 100%; overflow: hidden; padding: 0; border: 0; background: none; color: #f2f3f5; font: inherit; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+button.transcript-author-button:hover { text-decoration: underline; }
+.transcript-guild-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px 0 4px; border: 1px solid #3f4147; border-radius: 4px; background: #2b2d31; color: #b5bac1; font-size: 12px; font-weight: 500; line-height: 16px; }
+.transcript-guild-tag img { width: 14px; height: 14px; border-radius: 3px; object-fit: cover; }
+.transcript-timestamp { color: #949ba4; font-size: 12px; }
+.transcript-message-text { color: #dbdee1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.transcript-message-text.is-muted { color: #6d737a; font-size: 13px; font-style: italic; }
+.transcript-attachments { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.transcript-attachment-image { display: block; width: max-content; max-width: min(550px, 100%); }
+.transcript-attachment-image img { display: block; max-width: 100%; max-height: 350px; border-radius: 8px; object-fit: contain; }
+.transcript-attachment-video { max-width: 360px; max-height: 260px; border-radius: 8px; background: #1e1f22; }
+.transcript-attachment-file { display: inline-flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 10px 16px; border: 1px solid #3f4147; border-radius: 8px; background: #2b2d31; color: #00a8fc; font-size: 14px; font-weight: 500; text-decoration: none; }
+.transcript-attachment-file:hover { background: #313338; }
+.transcript-stickers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.transcript-stickers img { display: block; width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; }
+.transcript-empty { padding: 40px; color: #949ba4; text-align: center; }
+
+@media (max-width: 640px) {
+  .transcript-chat-meta { display: none; }
+  .transcript-message { padding-right: 10px; }
+  .transcript-message-gutter { flex-basis: 56px; }
+  .transcript-avatar-button, .transcript-avatar, .transcript-avatar-spacer { width: 36px; height: 36px; }
+  .transcript-avatar-spacer { height: 1px; }
+  .transcript-gutter-time { right: 2px; }
+  .transcript-attachment-image img { max-height: 260px; }
+}
 
 /* ── Economy tabs on narrow screens ───────────────────────────────────────── */
 

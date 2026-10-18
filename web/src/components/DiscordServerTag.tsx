@@ -23,6 +23,8 @@ export type DiscordServerTagInfo = {
   member_count?: number | null;
   created_at?: number | null;
   invite_url?: string | null;
+  /** Whether the signed-in viewer already belongs to this server. */
+  viewer_is_member?: boolean | null;
 };
 
 function monthYear(unix?: number | null) {
@@ -156,6 +158,13 @@ export function ServerTagPopup({ server, tag, badgeUrl, popupRef, style }: {
   const established = monthYear(server.created_at);
   const showDetails = !isPrivate && !isUnknown;
   const hasStats = showDetails && (online !== null || members !== null);
+  // Discord offers Go to Server to people who already belong to the server,
+  // and Join to everyone else only when the guild has a vanity invite it can
+  // use. With no invite to offer, the button is simply left out. A signed-out
+  // viewer is treated as a non-member.
+  const isMember = Boolean(server.viewer_is_member);
+  const memberUrl = isMember && server.id ? `https://discord.com/channels/${server.id}` : null;
+  const joinUrl = showDetails && !isMember ? server.invite_url || null : null;
 
   return <div
     ref={popupRef}
@@ -188,9 +197,11 @@ export function ServerTagPopup({ server, tag, badgeUrl, popupRef, style }: {
       </p>}
       {showDetails && established && <p className="discord-server-tag-created">Est. {established}</p>}
       {description && <p className="discord-server-tag-description">{description}</p>}
-      {showDetails && server.invite_url
-        ? <a className="discord-server-tag-invite" href={server.invite_url} target="_blank" rel="noopener noreferrer">Go to Server</a>
-        : <span className="discord-server-tag-invite is-disabled" aria-disabled="true">Go to Server</span>}
+      {memberUrl
+        ? <a className="discord-server-tag-invite" href={memberUrl} target="_blank" rel="noopener noreferrer">Go to Server</a>
+        : joinUrl
+          ? <a className="discord-server-tag-invite is-join" href={joinUrl} target="_blank" rel="noopener noreferrer">Join</a>
+          : null}
     </div>
   </div>;
 }
