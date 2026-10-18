@@ -14,7 +14,7 @@ sys.path.insert(0, "src")
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp import team_recruitment_routes
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_SPECS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids
+from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_ICON_ASSETS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -52,7 +52,11 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "Logs")
         self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
-        self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_voice", "scam_review")))
+        self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_cmds", "staff_voice", "scam_review")))
+        self.assertEqual(CHANNEL_SPECS["staff_cmds"], ("Staff", "staff-cmds", "text", True))
+        self.assertEqual(CHANNEL_TOPICS["staff_cmds"], "Private channel for staff command output and bot operations.")
+        staff_order = [key for key, spec in CHANNEL_SPECS.items() if spec[0] == "Staff"]
+        self.assertEqual(staff_order, ["staff_rules", "staff_announcements", "staff_chat", "staff_cmds", "staff_voice"])
 
     def test_configured_bot_channels_are_read_only_for_members(self):
         read_only_channels = ("welcome", "roles", "support_guide", "tickets", "giveaways", "voice_panel")
@@ -114,6 +118,106 @@ class SupportServerStructureTests(unittest.TestCase):
                 position=3,
                 reason="Keep staff guidelines at the top of the staff category",
             )
+        asyncio.run(check())
+
+    def test_support_guild_branding_sets_name_description_and_server_tag(self):
+        async def check():
+            guild = SimpleNamespace(
+                id=staff_module.SUPPORT_GUILD,
+                name="Old name",
+                description="Old description",
+                features=["COMMUNITY", "GUILD_TAGS"],
+                me=SimpleNamespace(guild_permissions=SimpleNamespace(manage_guild=True)),
+                edit=AsyncMock(),
+                _raw_data={"tags": ["OLD"]},
+                _state=SimpleNamespace(http=SimpleNamespace(request=AsyncMock())),
+            )
+            with patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                changes = await apply_support_guild_branding(guild)
+            self.assertEqual(changes, {
+                "name": SUPPORT_GUILD_NAME,
+                "description": SUPPORT_GUILD_DESCRIPTION,
+                "tags": list(SUPPORT_GUILD_TAGS),
+            })
+            guild.edit.assert_awaited_once_with(
+                name=SUPPORT_GUILD_NAME,
+                description=SUPPORT_GUILD_DESCRIPTION,
+                reason="Set the official Niko support server identity",
+            )
+            request = guild._state.http.request
+            request.assert_awaited_once()
+            self.assertEqual(request.await_args.kwargs["json"], {"tags": list(SUPPORT_GUILD_TAGS)})
+            self.assertEqual(request.await_args.kwargs["reason"], "Set the official Niko support server tag")
+
+            guild.name = SUPPORT_GUILD_NAME
+            guild.description = SUPPORT_GUILD_DESCRIPTION
+            guild.edit.reset_mock()
+            guild._raw_data = {"tags": list(SUPPORT_GUILD_TAGS)}
+            with patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                self.assertEqual(await apply_support_guild_branding(guild), {})
+            guild.edit.assert_not_awaited()
+
+        asyncio.run(check())
+
+    def test_support_guild_branding_skips_community_and_tag_dependent_fields(self):
+        async def check():
+            guild = SimpleNamespace(
+                id=staff_module.SUPPORT_GUILD,
+                name="Old name",
+                description=None,
+                features=[],
+                me=SimpleNamespace(guild_permissions=SimpleNamespace(manage_guild=True)),
+                edit=AsyncMock(),
+                _raw_data={},
+                _state=SimpleNamespace(http=SimpleNamespace(request=AsyncMock())),
+            )
+            with patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                changes = await apply_support_guild_branding(guild)
+            self.assertEqual(changes, {"name": SUPPORT_GUILD_NAME})
+            guild.edit.assert_awaited_once_with(
+                name=SUPPORT_GUILD_NAME,
+                reason="Set the official Niko support server identity",
+            )
+            guild._state.http.request.assert_not_awaited()
+
+        asyncio.run(check())
+
+    def test_role_icons_apply_only_once_the_boost_perk_is_unlocked(self):
+        async def check():
+            roles = {key: index for index, key in enumerate(ROLE_ICON_ASSETS, start=1)}
+            role_map = {index: SimpleNamespace(display_icon=None, edit=AsyncMock()) for index in roles.values()}
+            guild = SimpleNamespace(
+                features=["ROLE_ICONS"],
+                premium_tier=2,
+                get_role=lambda role_id: role_map.get(role_id),
+            )
+            with patch("cogs.staff.support_server._role_icon_bytes", return_value=b"png"), \
+                 patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                applied = await apply_role_icons(guild, roles)
+            self.assertEqual(applied, len(roles))
+            for role in role_map.values():
+                role.edit.assert_awaited_once_with(
+                    display_icon=b"png",
+                    reason="Apply Niko support server role icons",
+                )
+
+            # Existing icons are left alone, and the perk gate refuses to upload.
+            for role in role_map.values():
+                role.display_icon = object()
+                role.edit.reset_mock()
+            with patch("cogs.staff.support_server._role_icon_bytes", return_value=b"png"), \
+                 patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                self.assertEqual(await apply_role_icons(guild, roles), 0)
+            guild.premium_tier = 1
+            guild.features = []
+            self.assertFalse(role_icons_available(guild))
+            for role in role_map.values():
+                role.display_icon = None
+            with patch("cogs.staff.support_server._role_icon_bytes", return_value=b"png"):
+                self.assertEqual(await apply_role_icons(guild, roles), 0)
+            for role in role_map.values():
+                role.edit.assert_not_awaited()
+
         asyncio.run(check())
 
     def test_support_roles_are_reordered_by_configured_priority(self):

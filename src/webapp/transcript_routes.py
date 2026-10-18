@@ -5,7 +5,7 @@ import json
 from flask import Response
 
 from . import server as _server
-from .discord_text_routes import resolve_discord_text_mentions
+from .discord_text_routes import resolve_discord_text_mentions, resolve_discord_user_profiles
 
 globals().update({
     name: value
@@ -46,6 +46,15 @@ def api_get_transcript(transcript_id):
             result["messages"] = []
     result["mention_names"] = _resolve_transcript_mentions(
         result.get("guild_id"), result.get("messages", [])
+    )
+    # The web transcript draws the same author row as the HTML export, so the
+    # page gets avatars and display names for every message author up front.
+    author_ids = [
+        message.get("author_id") for message in result.get("messages", [])
+        if isinstance(message, dict) and message.get("author_id")
+    ]
+    result["author_profiles"] = resolve_discord_user_profiles(
+        result.get("guild_id"), "", author_ids
     )
     return jsonify(result)
 
@@ -106,8 +115,13 @@ def api_download_transcript(transcript_id):
         metadata["guild_name"] = guild_name
         mention_text = json.dumps(messages, ensure_ascii=False)
         mention_names = _resolve_transcript_mentions(result.get("guild_id"), messages)
-        from .discord_text_routes import resolve_discord_user_profiles
-        user_profiles = resolve_discord_user_profiles(result.get("guild_id"), mention_text)
+        author_ids = [
+            message.get("author_id") for message in messages
+            if isinstance(message, dict) and message.get("author_id")
+        ]
+        user_profiles = resolve_discord_user_profiles(
+            result.get("guild_id"), mention_text, author_ids
+        )
         content = export_html(messages, metadata, mention_names, user_profiles)
         return Response(
             content,

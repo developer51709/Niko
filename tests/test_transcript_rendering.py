@@ -28,6 +28,14 @@ def test_export_html_renders_custom_emoji_and_stickers():
     assert 'alt=":coffee:"' in html
 
 
+def test_markdown_draws_discord_blockquotes_without_the_marker():
+    html = _md_to_html("> quoted\n>no space")
+
+    assert '<span class="tq">quoted</span>' in html
+    assert '<span class="tq">no space</span>' in html
+    assert "&gt;" not in html
+
+
 def test_markdown_renders_discord_dynamic_timestamps():
     html = _md_to_html("Release <t:1788800225:f> (<t:1788800225:R>)")
 
@@ -62,6 +70,85 @@ def test_transcript_html_embeds_live_mention_names_and_profile_data():
     assert "Loading Discord profile" not in html
 
 
+def test_export_groups_messages_and_separates_days_like_discord():
+    html = export_html(
+        [
+            {"timestamp": "2026-10-15 15:03:00 UTC", "author": "Soren", "author_id": 101, "content": "first"},
+            {"timestamp": "2026-10-15 15:04:00 UTC", "author": "Soren", "author_id": 101, "content": "second"},
+            {"timestamp": "2026-10-15 15:20:00 UTC", "author": "Soren", "author_id": 101, "content": "after the group window"},
+            {"timestamp": "2026-10-18 13:43:00 UTC", "author": "Kumie", "author_id": 202, "content": "a new day"},
+        ],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {},
+    )
+
+    # Two calendar days get a labelled divider, and the repeated author inside
+    # the seven-minute window loses its header and avatar the way Discord does.
+    assert html.count('<div class="day-divider"') == 2
+    assert "October 15, 2026" in html
+    assert "October 18, 2026" in html
+    assert html.count('<div class="message-head">') == 3
+    assert html.count('<div class="message message-grouped"') == 1
+    assert 'class="message-gutter-time"' in html
+    assert ">3:04 PM</time>" in html
+    assert "10/15/26, 3:03 PM</time>" in html
+
+
+def test_export_makes_message_names_and_avatars_open_the_profile_popup():
+    html = export_html(
+        [{"timestamp": "2026-10-15 15:03:00 UTC", "author": "Soren", "author_id": 101, "content": "hello"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {},
+    )
+
+    # A name and avatar are buttons that carry the same user id the document
+    # click handler uses for mention links, so both open the profile card.
+    assert '<button type="button" class="message-avatar-button" data-discord-user-id="101"' in html
+    assert '<button type="button" class="message-author" data-discord-user-id="101"' in html
+    assert 'class="message-avatar message-avatar-fallback"' in html
+    # Even without a live lookup the export carries a minimal profile, so the
+    # card still opens instead of doing nothing.
+    assert '"101": {"id": "101", "display_name": "Soren", "username": "Soren"}' in html
+    assert "const mentionProfiles =" in html
+
+
+def test_export_keeps_the_saved_server_display_name_in_the_chat_row():
+    html = export_html(
+        [{"timestamp": "2026-10-15 15:03:00 UTC", "author": "Soren \U0001f319 MOON", "author_id": 101, "content": "hello"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {},
+        {"101": {"id": "101", "username": "soren", "display_name": "Soren", "avatar_url": None}},
+    )
+
+    # The chat row is what Discord showed in the server, while the profile card
+    # still carries Discord's global name.
+    assert '<span class="message-author-name">Soren \U0001f319 MOON</span>' in html
+    assert '"display_name": "Soren"' in html
+
+
+def test_export_renders_attachments_inside_the_message():
+    html = export_html(
+        [{
+            "timestamp": "2026-10-15 15:03:00 UTC",
+            "author": "Soren",
+            "author_id": 101,
+            "content": "look",
+            "attachments": [
+                "https://cdn.discordapp.com/attachments/1/2/screenshot.png",
+                "https://cdn.discordapp.com/attachments/1/2/logs.zip",
+            ],
+        }],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {},
+    )
+
+    # Images get Discord's inline preview; other files keep their real name.
+    assert 'class="message-attachment-image"' in html
+    assert 'screenshot.png' in html
+    assert 'class="message-attachment-file"' in html
+    assert ">logs.zip</span>" in html
+
+
 def test_export_popup_matches_the_discord_layout():
     profile = {
         "id": "456",
@@ -88,6 +175,7 @@ def test_export_popup_matches_the_discord_layout():
             "member_count": 72,
             "created_at": 1760000000,
             "invite_url": "https://discord.gg/gamernation",
+            "viewer_is_member": False,
         },
         "guild_nick": "Server Nick",
         "custom_status": {
@@ -136,8 +224,16 @@ def test_export_popup_matches_the_discord_layout():
     assert "discord-server-tag-popup" in html
     assert "The server has limited who can see this profile." in html
     assert "Unknown Server" in html
-    assert "discord-server-tag-invite is-disabled" in html
-    assert "Go to Server" in html
+    assert "is-disabled" not in html
+    # Members get Go to Server; non-members and guests get Join only when the
+    # guild has a vanity invite, otherwise no button is rendered at all.
+    assert ".discord-server-tag-invite.is-join" in html
+    assert "const isMember = Boolean(server && server.viewer_is_member);" in html
+    assert "const memberUrl = isMember && server && server.id" in html
+    assert "const joinUrl = showDetails && !isMember && server ? server.invite_url : null;" in html
+    assert '<a class="discord-server-tag-invite" href="' in html
+    assert '>Go to Server</a>' in html
+    assert '>Join</a>' in html
     # The Spotify card is drawn above the profile link and can tick its progress.
     assert "Listening to Spotify" in html
     assert "discord-profile-spotify-track" in html

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import unquote, urlparse
 
 import aiohttp
 
@@ -508,9 +509,8 @@ def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
     html_lines = []
     for line in lines:
         stripped = line.lstrip()
-        if stripped.startswith("&gt; ") or stripped.startswith(">"):
-            body = stripped[4:] if stripped.startswith("&gt; ") else stripped[1:].lstrip()
-            html_lines.append(f'<span class="tq">&gt; {body}</span>')
+        if stripped.startswith("&gt;"):
+            html_lines.append(f'<span class="tq">{stripped[4:].lstrip()}</span>')
         elif stripped.startswith("-# "):
             html_lines.append(f'<span class="tsm">{stripped[3:]}</span>')
         elif re.match(r"#{1,4}\s", stripped):
@@ -777,6 +777,98 @@ def export_txt(messages: List[dict]) -> str:
     return "\n".join(lines).strip()
 
 
+_AVATAR_COLORS = ("#5865f2", "#3ba55d", "#faa61a", "#ed4245", "#eb459e", "#9b59b6")
+_GROUP_WINDOW_SECONDS = 7 * 60
+
+
+def _parse_transcript_time(value: Any) -> Optional[datetime]:
+    """Return an aware timestamp for a stored transcript time, if it parses."""
+    raw = str(value or "").strip()
+    if not raw or raw.lower() == "now":
+        return None
+    normalized = raw[:-4] + "+00:00" if raw.endswith(" UTC") else raw
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        parsed = None
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%m/%d/%Y %I:%M %p"):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+
+
+def _message_clock(value: datetime) -> str:
+    return value.strftime("%m/%d/%y, %-I:%M %p")
+
+
+def _day_divider_label(value: datetime) -> str:
+    return value.strftime("%B %-d, %Y")
+
+
+def _message_avatar_html(name: str, author_id: str, avatar_url: Any) -> str:
+    if avatar_url:
+        visual = (
+            f'<img class="message-avatar" src="{_esc(avatar_url)}" alt="" '
+            'loading="lazy" referrerpolicy="no-referrer">'
+        )
+    else:
+        initial = next((char for char in str(name) if char.isalnum()), "?")
+        color = _AVATAR_COLORS[sum(ord(char) for char in str(author_id or name)) % len(_AVATAR_COLORS)]
+        visual = f'<span class="message-avatar message-avatar-fallback" style="background:{color}">{_esc(initial.upper())}</span>'
+    if author_id:
+        return (
+            f'<button type="button" class="message-avatar-button" '
+            f'data-discord-user-id="{_esc(author_id)}" title="View {_esc(name)} profile" '
+            f'aria-label="View {_esc(name)} profile">{visual}</button>'
+        )
+    return f'<span class="message-avatar-button" aria-hidden="true">{visual}</span>'
+
+
+def _message_name_html(name: str, author_id: str) -> str:
+    label = f'<span class="message-author-name">{_esc(name)}</span>'
+    if author_id:
+        return (
+            f'<button type="button" class="message-author" '
+            f'data-discord-user-id="{_esc(author_id)}" title="View {_esc(name)} profile">{label}</button>'
+        )
+    return f'<span class="message-author">{label}</span>'
+
+
+def _message_guild_tag_html(profile: dict) -> str:
+    tag = str(profile.get("guild_tag") or "").strip()
+    if not tag:
+        return ""
+    badge = profile.get("guild_badge_url")
+    art = f'<img src="{_esc(badge)}" alt="" loading="lazy">' if badge else ""
+    return f'<span class="message-guild-tag">{art}<span>{_esc(tag)}</span></span>'
+
+
+def _attachment_html(url: Any) -> str:
+    value = str(url or "")
+    if not value:
+        return ""
+    safe = _esc(value)
+    if _is_image_url(value):
+        return (
+            f'<a class="message-attachment-image" href="{safe}" target="_blank" '
+            f'rel="noopener noreferrer"><img src="{safe}" alt="Attachment" '
+            'loading="lazy" referrerpolicy="no-referrer"></a>'
+        )
+    name = "Attachment"
+    if not value.startswith("data:"):
+        name = unquote(urlparse(value).path.rsplit("/", 1)[-1]) or name
+    return (
+        f'<a class="message-attachment-file" href="{safe}" target="_blank" '
+        f'rel="noopener noreferrer"><span class="message-attachment-icon" '
+        f'aria-hidden="true">&#128206;</span><span>{_esc(name)}</span></a>'
+    )
+
+
 def export_html(messages: List[dict], metadata: dict, mention_names: dict | None = None, user_profiles: dict | None = None) -> str:
     """Styled HTML transcript page (rich: content, attachments, embeds, CV2)."""
     title = metadata.get("channel_name", "Transcript")
@@ -784,22 +876,57 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     created = metadata.get("created_at", "")
     msg_count = len(messages)
 
+    # Always give the author a card to open, even when live profile data was
+    # unavailable at export time, so names and avatars stay clickable.
+    profiles = {
+        str(key): value for key, value in (user_profiles or {}).items()
+        if isinstance(value, dict)
+    }
+    for msg in messages:
+        author_id = str(msg.get("author_id") or "")
+        if author_id and author_id not in profiles:
+            author = str(msg.get("author") or "Unknown")
+            profiles[author_id] = {"id": author_id, "display_name": author, "username": author}
+
     msg_rows = []
+    last_author_id: Optional[str] = None
+    last_time: Optional[datetime] = None
+    last_day = None
     for msg in messages:
         ts = msg.get("timestamp", "")
-        author = msg.get("author", "Unknown")
-        author_id = msg.get("author_id", "")
+        author = msg.get("author") or ""
+        author_id = str(msg.get("author_id") or "")
+        profile = profiles.get(author_id) or {}
+        # Chat rows keep the server display name the message was saved with; the
+        # profile card is where Discord's global name belongs.
+        display_name = str(author or profile.get("display_name") or "Unknown")
         content = msg.get("content", "")
+        timestamp = _parse_transcript_time(ts)
+        day = timestamp.date() if timestamp else None
 
-        content_html = f'<div class="content">{_md_to_html(content, mention_names)}</div>' if content else ""
+        if day is not None and day != last_day:
+            msg_rows.append(
+                '<div class="day-divider" role="separator">'
+                f'<span>{_esc(_day_divider_label(timestamp))}</span></div>'
+            )
+            last_author_id = None
+            last_time = None
+            last_day = day
+
+        grouped = bool(author_id) and author_id == last_author_id and (
+            timestamp is None
+            or last_time is None
+            or 0 <= (timestamp - last_time).total_seconds() <= _GROUP_WINDOW_SECONDS
+        )
+
+        content_html = f'<div class="message-text">{_md_to_html(content, mention_names)}</div>' if content else ""
 
         attachments = msg.get("attachments") or []
         att_html = ""
         if attachments:
-            att_html = '<div class="attachments">' + "".join(
-                f'<a href="{_esc(a)}" target="_blank" rel="noopener noreferrer">📎 Attachment</a>'
-                for a in attachments
-            ) + "</div>"
+            items = "".join(_attachment_html(url) for url in attachments if url)
+            if items:
+                att_html = f'<div class="message-attachments">{items}</div>'
 
         embeds_html = "".join(
             _embed_to_html(embed, mention_names) for embed in msg.get("embeds") or []
@@ -828,19 +955,48 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
             stickers_html = f'<div class="stickers">{stickers_html}</div>'
 
         if not (content or attachments or embeds_html or components_html or stickers_html):
-            content_html = '<div class="content ts-muted"><em>Message content unavailable</em></div>'
+            content_html = '<div class="message-text ts-muted"><em>Message content unavailable</em></div>'
+
+        time_html = ""
+        if timestamp is not None:
+            time_html = (
+                f'<time class="message-timestamp" datetime="{timestamp.isoformat()}" '
+                f'title="{_esc(ts)}">{_esc(_message_clock(timestamp))}</time>'
+            )
+        elif ts:
+            time_html = f'<span class="message-timestamp">{_esc(ts)}</span>'
+
+        if grouped:
+            gutter = (
+                f'<time class="message-gutter-time" datetime="{timestamp.isoformat()}">'
+                f'{_esc(timestamp.strftime("%-I:%M %p"))}</time>'
+                if timestamp is not None else ""
+            )
+            avatar_col = f'{gutter}<span class="message-avatar-spacer" aria-hidden="true"></span>'
+            head_html = ""
+        else:
+            head_html = (
+                '<div class="message-head">'
+                f'{_message_name_html(display_name, author_id)}'
+                f'{_message_guild_tag_html(profile)}'
+                f'{time_html}</div>'
+            )
+            avatar_col = _message_avatar_html(display_name, author_id, profile.get("avatar_url"))
 
         msg_rows.append(
-            f'<div class="message">'
-            f'<div class="message-head"><span class="timestamp">{_esc(ts)}</span> '
-            f'<span class="author">{_esc(author)}</span> '
-            f'<span class="author-id">({_esc(author_id)})</span></div>'
-            f'{content_html}{att_html}{embeds_html}{components_html}{stickers_html}'
-            f'</div>'
+            f'<div class="message{" message-grouped" if grouped else ""}" '
+            f'data-author-id="{_esc(author_id)}">'
+            f'<div class="message-gutter">{avatar_col}</div>'
+            '<div class="message-body">'
+            f'{head_html}{content_html}{att_html}{embeds_html}{components_html}{stickers_html}'
+            '</div></div>'
         )
+        last_author_id = author_id or None
+        last_time = timestamp
 
     msg_block = chr(10).join(msg_rows)
-    profile_json = json.dumps(user_profiles or {}, ensure_ascii=False).replace("</", "<\\/")
+    created_html = f" · Created {_esc(created)}" if created else ""
+    profile_json = json.dumps(profiles, ensure_ascii=False).replace("</", "<\\/")
     badge_art_json = json.dumps(_profile_badge_art(), ensure_ascii=False)
     status_art_json = json.dumps(_profile_status_art(), ensure_ascii=False)
 
@@ -852,17 +1008,44 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
 <title>Transcript — {_esc(title)}</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #1e1f22; color: #dbdee1; padding: 20px; }}
-  .header {{ background: #2b2d31; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #3f4147; }}
-  .header h1 {{ font-size: 20px; color: #f2f3f5; margin-bottom: 8px; }}
-  .header .meta {{ color: #949ba4; font-size: 13px; }}
-  .message {{ padding: 10px 14px; border-bottom: 1px solid #2b2d31; line-height: 1.55; font-size: 14px; }}
+  body {{ font-family: 'gg sans', 'Segoe UI', system-ui, -apple-system, sans-serif; background: #313338; color: #dbdee1; }}
+  .app {{ display: flex; flex-direction: column; min-height: 100dvh; }}
+  .channel-header {{ position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 20px; background: #313338; border-bottom: 1px solid #26272b; }}
+  .channel-heading {{ display: flex; align-items: center; gap: 8px; min-width: 0; }}
+  .channel-hash {{ color: #80848e; font-size: 24px; font-weight: 500; line-height: 1; }}
+  .channel-header h1 {{ overflow: hidden; color: #f2f3f5; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }}
+  .channel-meta {{ overflow: hidden; margin-left: auto; color: #949ba4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }}
+  .chat-log {{ display: flex; flex: 1 1 auto; flex-direction: column; padding: 8px 0 40px; }}
+  .day-divider {{ display: flex; align-items: center; gap: 10px; margin: 20px 16px 6px; color: #949ba4; font-size: 12px; font-weight: 600; }}
+  .day-divider::before, .day-divider::after {{ content: ""; flex: 1 1 auto; height: 1px; background: #3f4147; }}
+  .message {{ position: relative; display: flex; margin-top: 17px; padding: 2px 20px 2px 0; color: #dbdee1; font-size: 16px; line-height: 1.375; }}
   .message:hover {{ background: #2e3035; }}
-  .message-head {{ margin-bottom: 2px; }}
-  .timestamp {{ color: #949ba4; font-size: 11px; font-family: monospace; }}
-  .author {{ color: #f2f3f5; font-weight: 600; }}
-  .author-id {{ color: #949ba4; font-size: 11px; }}
-  .content {{ color: #dbdee1; white-space: pre-wrap; word-break: break-word; }}
+  .message-grouped {{ margin-top: 0; padding-top: 1px; padding-bottom: 1px; }}
+  .message-gutter {{ position: relative; display: flex; flex: 0 0 72px; justify-content: center; align-items: flex-start; }}
+  .message-avatar-button {{ display: block; width: 40px; height: 40px; flex: 0 0 auto; margin-top: 2px; padding: 0; border: 0; border-radius: 50%; background: none; }}
+  button.message-avatar-button {{ cursor: pointer; }}
+  .message-avatar-button:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
+  .message-avatar {{ display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; color: #fff; font-size: 16px; font-weight: 600; }}
+  .message-avatar-fallback {{ background: #5865f2; }}
+  .message-avatar-spacer {{ display: block; width: 40px; height: 1px; }}
+  .message-gutter-time {{ position: absolute; top: 5px; right: 4px; display: none; color: #6d6f78; font-size: 11px; font-weight: 400; line-height: 1.2; white-space: nowrap; }}
+  .message-grouped:hover .message-gutter-time {{ display: block; }}
+  .message-body {{ min-width: 0; flex: 1 1 auto; }}
+  .message-head {{ display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 22px; }}
+  .message-author {{ max-width: 100%; overflow: hidden; padding: 0; border: 0; background: none; color: #f2f3f5; font: inherit; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }}
+  button.message-author {{ cursor: pointer; }}
+  .message-author:hover .message-author-name {{ text-decoration: underline; }}
+  .message-author:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; border-radius: 2px; }}
+  .message-guild-tag {{ display: inline-flex; align-items: center; gap: 4px; padding: 0 5px 0 4px; border: 1px solid #3f4147; border-radius: 4px; background: #2b2d31; color: #b5bac1; font-size: 12px; font-weight: 500; line-height: 16px; }}
+  .message-guild-tag img {{ width: 14px; height: 14px; border-radius: 3px; object-fit: cover; }}
+  .message-timestamp {{ color: #949ba4; font-size: 12px; font-weight: 400; }}
+  .message-text {{ color: #dbdee1; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }}
+  .message-attachments {{ display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }}
+  .message-attachment-image {{ display: block; width: max-content; max-width: min(550px, 100%); }}
+  .message-attachment-image img {{ display: block; max-width: 100%; max-height: 350px; border-radius: 8px; object-fit: contain; }}
+  .message-attachment-file {{ display: inline-flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 10px 16px; border: 1px solid #3f4147; border-radius: 8px; background: #2b2d31; color: #00a8fc; font-size: 14px; font-weight: 500; text-decoration: none; }}
+  .message-attachment-file:hover {{ background: #313338; }}
+  .message-attachment-icon {{ font-size: 16px; line-height: 1; }}
   .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
   .custom-emoji-fallback {{ color: inherit; }}
   .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
@@ -884,6 +1067,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-head {{ display: flex; align-items: center; gap: 8px; margin-top: -38px; }}
   .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; }}
   .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 0; border-radius: 50%; object-fit: cover; background: #313338; }}
+  .discord-profile-avatar-fallback {{ display: flex; align-items: center; justify-content: center; background: #5865f2; color: #fff; font-size: 28px; font-weight: 600; }}
   .discord-profile-avatar-decoration {{ position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; transform: translate(-50%, -50%) scale(1.2); pointer-events: none; }}
   .discord-status-icon {{ position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }}
   .discord-profile-status {{ position: relative; flex: 1 1 auto; min-width: 0; padding: 8px 11px; color: #dbdee1; background: #232428; border-radius: 12px; font-size: 12.5px; line-height: 1.4; }}
@@ -933,7 +1117,8 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-server-tag-popup.is-unknown .discord-server-tag-description {{ color: #b5bac1; }}
   .discord-server-tag-invite {{ display: block; margin-top: 14px; padding: 11px 10px; color: #fff; background: #248046; border-radius: 8px; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; }}
   .discord-server-tag-invite:hover {{ background: #1a6334; text-decoration: none; }}
-  .discord-server-tag-invite.is-disabled {{ color: #a3a6ad; background: #3f4147; cursor: not-allowed; }}
+  .discord-server-tag-invite.is-join {{ background: #5865f2; }}
+  .discord-server-tag-invite.is-join:hover {{ background: #4752c4; }}
   .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }}
   .discord-profile-spotify-link {{ display: block; color: inherit; text-decoration: none; }}
   .discord-profile-spotify-head {{ color: #b5bac1; font-size: 11px; font-weight: 700; }}
@@ -955,14 +1140,26 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   }}
   .stickers {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
   .sticker img {{ width: 160px; max-width: 100%; max-height: 160px; object-fit: contain; display: block; }}
+  .message-text strong {{ font-weight: 700; }}
+  .message-text em {{ font-style: italic; }}
+  .message-text u {{ text-decoration: underline; }}
+  .message-text s {{ text-decoration: line-through; }}
   .ts-muted {{ color: #6d737a; }}
   .tsm {{ color: #949ba4; font-size: 12px; }}
   .th {{ font-size: 16px; font-weight: 700; color: #f2f3f5; }}
-  .tq {{ display: inline-block; color: #b5bac1; border-left: 3px solid #4e5058; padding-left: 8px; }}
+  .tq {{ display: block; padding-left: 12px; border-left: 4px solid #4e5058; color: #dbdee1; }}
+  @media (max-width: 520px) {{
+    .channel-header {{ gap: 8px; padding: 0 12px; }}
+    .channel-meta {{ display: none; }}
+    .message {{ padding-right: 12px; }}
+    .message-gutter {{ flex-basis: 56px; }}
+    .message-avatar-button, .message-avatar, .message-avatar-spacer {{ width: 36px; height: 36px; }}
+    .message-avatar-spacer {{ height: 1px; }}
+    .message-gutter-time {{ right: 2px; }}
+    .message-attachment-image img {{ max-height: 260px; }}
+  }}
   code {{ background: #2b2d31; padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; color: #f2b8c2; }}
-  .attachments {{ margin-top: 4px; }}
-  .attachments a {{ color: #00a8fc; text-decoration: none; font-size: 12px; margin-right: 10px; }}
-  .attachments a:hover, a:hover {{ text-decoration: underline; }}
+  a:hover {{ text-decoration: underline; }}
 
   .embed {{ display: flex; max-width: 560px; margin-top: 8px; background: #2b2d31; border: 1px solid #3f4147; border-left: 4px solid #5865f2; border-radius: 6px; padding: 10px 12px; }}
   .embed-body {{ flex: 1; min-width: 0; }}
@@ -1004,11 +1201,15 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>#{_esc(title)}</h1>
-  <div class="meta">{_esc(guild)} · {_esc(msg_count)} messages · Created {_esc(created)}</div>
-</div>
+<div class="app">
+<header class="channel-header">
+  <div class="channel-heading"><span class="channel-hash" aria-hidden="true">#</span><h1>{_esc(title)}</h1></div>
+  <div class="channel-meta">{_esc(guild)} · {_esc(msg_count)} messages{created_html}</div>
+</header>
+<main class="chat-log">
 {msg_block}
+</main>
+</div>
 <script>
 (() => {{
   const mentionProfiles = {profile_json};
@@ -1057,7 +1258,8 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">'
       + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '')
       + statusDot(profile) + '</span>'
-    : '';
+    : '<span class="discord-profile-avatar-wrap"><span class="discord-profile-avatar discord-profile-avatar-fallback">' + escapeHtml((String(profile.display_name || '?').trim().charAt(0) || '?').toUpperCase()) + '</span>'
+      + statusDot(profile) + '</span>';
   const profileStatusBubble = (profile) => {{
     const customStatus = profile.custom_status || {{}};
     const statusEmoji = customStatus.emoji_id
@@ -1124,9 +1326,17 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     }}
     const established = showDetails && server ? monthYear(server.created_at) : "";
     const badge = badgeUrl ? '<img src="' + escapeHtml(badgeUrl) + '" alt="">' : "";
-    const button = showDetails && server && server.invite_url
-      ? '<a class="discord-server-tag-invite" href="' + escapeHtml(server.invite_url) + '" target="_blank" rel="noopener noreferrer">Go to Server</a>'
-      : '<span class="discord-server-tag-invite is-disabled" aria-disabled="true">Go to Server</span>';
+    // Discord offers Go to Server to viewers who already belong to the server.
+    // Everyone else gets Join only when the guild has a vanity invite it can
+    // use; with no invite to offer the button is left out entirely.
+    const isMember = Boolean(server && server.viewer_is_member);
+    const memberUrl = isMember && server && server.id ? 'https://discord.com/channels/' + server.id : null;
+    const joinUrl = showDetails && !isMember && server ? server.invite_url : null;
+    const button = memberUrl
+      ? '<a class="discord-server-tag-invite" href="' + escapeHtml(memberUrl) + '" target="_blank" rel="noopener noreferrer">Go to Server</a>'
+      : joinUrl
+        ? '<a class="discord-server-tag-invite is-join" href="' + escapeHtml(joinUrl) + '" target="_blank" rel="noopener noreferrer">Join</a>'
+        : '';
     return '<div class="discord-server-tag-popup' + (isPrivate ? ' is-private' : '') + (isUnknown ? ' is-unknown' : '') + '" role="dialog" aria-label="' + escapeHtml(name) + ' server tag">'
       + banner
       + '<div class="discord-server-tag-body">'
@@ -1281,12 +1491,28 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
         if (serverTagButton.getAttribute("aria-expanded") === "true") {{ closeServerTagPopup(); return; }}
         closeServerTagPopup();
         const holder = document.createElement("div");
-        holder.innerHTML = serverTagPopup(profile.server_tag, profile.guild_tag, profile.guild_badge_url);
-        const popup = holder.firstElementChild;
-        if (!popup) return;
-        document.body.appendChild(popup);
-        placeServerTagPopup(serverTagButton);
-        serverTagButton.setAttribute("aria-expanded", "true");
+        const renderTagPopup = (tagProfile) => {{
+          holder.innerHTML = serverTagPopup(tagProfile.server_tag, tagProfile.guild_tag, tagProfile.guild_badge_url);
+          const next = holder.firstElementChild;
+          if (!next) return;
+          document.querySelector(".discord-server-tag-popup")?.remove();
+          document.body.appendChild(next);
+          placeServerTagPopup(serverTagButton);
+          serverTagButton.setAttribute("aria-expanded", "true");
+        }};
+        renderTagPopup(profile);
+        // An exported transcript can be viewed by someone other than the
+        // person who generated it, so refresh the profile once from the live
+        // API to pick up this viewer's server membership. A downloaded copy
+        // has no API to call, and keeps the state embedded at export time.
+        if (profile.id) {{
+          fetch("/api/discord/users/" + encodeURIComponent(profile.id))
+            .then((response) => response.ok ? response.json() : null)
+            .then((fresh) => {{
+              if (fresh && fresh.server_tag && serverTagButton.getAttribute("aria-expanded") === "true") renderTagPopup(fresh);
+            }})
+            .catch(() => {{}});
+        }}
       }});
     }}
     const menuButton = card.querySelector("[data-profile-menu-button]");

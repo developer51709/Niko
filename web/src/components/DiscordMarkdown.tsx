@@ -326,46 +326,15 @@ function ProfileMenu({ userId }: { userId: string }) {
   </div>;
 }
 
-export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {
-  text: string;
-  mentionNames?: DiscordMentionNames;
-  guildId?: string;
-  className?: string;
-  style?: CSSProperties;
-  interactiveUsers?: boolean;
-  inline?: boolean;
-}) {
-  const [resolvedNames, setResolvedNames] = useState<{ key: string; names: DiscordMentionNames }>({ key: "", names: {} });
-  const resolutionKey = `${guildId || ""}:${text}`;
-  const mentionNamesKey = JSON.stringify(mentionNames || {});
-  useEffect(() => {
-    const mentions = { user: new Set<string>(), channel: new Set<string>(), role: new Set<string>() };
-    const mentionPattern = /<@!?(\d+)>|<@&(\d+)>|<#(\d+)>/g;
-    let match: RegExpExecArray | null;
-    while ((match = mentionPattern.exec(text))) {
-      if (match[1]) mentions.user.add(match[1]);
-      else if (match[2]) mentions.role.add(match[2]);
-      else if (match[3]) mentions.channel.add(match[3]);
-    }
-    const hasMissingNames = (["user", "channel", "role"] as const).some((kind) =>
-      Array.from(mentions[kind]).some((id) => !mentionNames?.[kind]?.[id]),
-    );
-    if (!hasMissingNames) return;
-    let active = true;
-    void resolveDiscordText(text, guildId).then((result) => {
-      if (active) setResolvedNames({ key: resolutionKey, names: result.mention_names });
-    }).catch(() => {
-      // Keep the ID fallback when Discord name lookup is unavailable.
-    });
-    return () => { active = false; };
-  }, [guildId, mentionNamesKey, resolutionKey, text]);
-  const resolvedMentionNames: DiscordMentionNames = {
-    ...(resolvedNames.key === resolutionKey ? resolvedNames.names : {}),
-    ...mentionNames,
-    user: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.user : {}), ...mentionNames?.user },
-    channel: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.channel : {}), ...mentionNames?.channel },
-    role: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.role : {}), ...mentionNames?.role },
-  };
+// A profile popup is global: opening another user's card closes the last one,
+// even when the two triggers live in different markdown blocks.
+const PROFILE_OPEN_EVENT = "niko:discord-profile-open";
+let profileOwnerSequence = 0;
+
+/** Shared profile-popup state for mention links and transcript author rows. */
+export function useDiscordProfile(enabled = true) {
+  const ownerRef = useRef(0);
+  if (ownerRef.current === 0) ownerRef.current = ++profileOwnerSequence;
   const [profile, setProfile] = useState<TranscriptProfile | null>(null);
   const [profilePosition, setProfilePosition] = useState({ left: 12, top: 12 });
   const profileCardRef = useRef<HTMLDivElement>(null);
@@ -413,7 +382,9 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     };
   }, [positionProfile, profile, profileError, profileLoading]);
   const openProfile = useCallback(async (userId: string, trigger: HTMLElement) => {
-    if (!/^\d{1,22}$/.test(userId)) return;
+    if (!enabled || !/^\d{1,22}$/.test(userId)) return;
+    // The previous card belongs to another trigger, so it yields to this one.
+    document.dispatchEvent(new CustomEvent(PROFILE_OPEN_EVENT, { detail: ownerRef.current }));
     const requestId = ++requestRef.current;
     profileTriggerRef.current = trigger;
     setProfilePosition({ left: 12, top: 12 });
@@ -428,7 +399,7 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     } finally {
       if (requestRef.current === requestId) setProfileLoading(false);
     }
-  }, []);
+  }, [enabled]);
   const openProfileId = profile?.id || "";
   useEffect(() => {
     if (!openProfileId) return;
@@ -457,7 +428,15 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     };
   }, [openProfileId]);
   useEffect(() => {
-    if (!interactiveUsers || (!profile && !profileLoading && !profileError)) return;
+    if (!enabled || (!profile && !profileLoading && !profileError)) return;
+    const closeOther = (event: Event) => {
+      if ((event as CustomEvent<number>).detail !== ownerRef.current) closeProfile();
+    };
+    document.addEventListener(PROFILE_OPEN_EVENT, closeOther);
+    return () => document.removeEventListener(PROFILE_OPEN_EVENT, closeOther);
+  }, [closeProfile, enabled, profile, profileError, profileLoading]);
+  useEffect(() => {
+    if (!enabled || (!profile && !profileLoading && !profileError)) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // A floating server-tag popup is the topmost layer, so Escape closes it
@@ -474,7 +453,94 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
     return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
-  }, [closeProfile, interactiveUsers, profile, profileError, profileLoading]);
+  }, [closeProfile, enabled, profile, profileError, profileLoading]);
+
+  const dialog = enabled && (profileLoading || profileError || profile)
+    ? createPortal(<div className="discord-profile-popover" role="presentation">
+      <div ref={profileCardRef} className="discord-profile-card" role={profileError ? "alert" : profileLoading ? "status" : "dialog"} aria-label={profile ? `${profile.display_name} Discord profile` : undefined} style={{ "--profile-left": `${profilePosition.left}px`, "--profile-top": `${profilePosition.top}px` } as CSSProperties}>
+        {profileLoading ? <div className="discord-profile-state">Loading Discord profile…</div> : profileError ? <div className="discord-profile-state">{profileError}</div> : profile && <>
+          {profile.banner_url
+            ? <img className="discord-profile-banner" src={profile.banner_url} alt="" />
+            : <div className="discord-profile-banner" style={{ backgroundColor: profile.banner_color || "#202225" }} />}
+          {/* Keyed by user so an open menu never carries over to the next popup. */}
+          <ProfileMenu key={profile.id} userId={profile.id} />
+          <div className="discord-profile-body">
+            <div className="discord-profile-head">
+              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status)}>
+                <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
+                {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
+              </DiscordStatusAvatar>}
+              {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <div className="discord-profile-status">
+                <span className="discord-profile-status-text">{statusEmoji(customStatus)}{customStatus.text}</span>
+              </div>}
+            </div>
+            <h2 className="discord-profile-name">{profile.display_name}</h2>
+            {/* Discord puts the server tag pill on the username row and the
+                profile badges on the line directly below it. */}
+            <p className="discord-profile-username">
+              <span className="discord-profile-user-tag">{profile.username}</span>
+              {profile.guild_tag && <DiscordServerTagPill
+                server={profile.server_tag || null}
+                tag={profile.guild_tag}
+                badgeUrl={profile.guild_badge_url}
+              />}
+            </p>
+            {/* Badge artwork ships with the app; clicking one opens the badge
+                popup owned by DiscordBadgeList. */}
+            <DiscordBadgeList badges={profileBadgeList} />
+            {profile.bio && <section className="discord-profile-about"><h3>About Me</h3><p>{profile.bio}</p></section>}
+            {spotifyActivity && <ProfileSpotifyCard activity={spotifyActivity} />}
+            <a className="discord-profile-full-link" href={`https://discord.com/users/${profile.id}`} target="_blank" rel="noopener noreferrer">Open Discord profile</a>
+          </div>
+        </>}
+      </div>
+    </div>, document.body)
+    : null;
+
+  return { openProfile, closeProfile, dialog };
+}
+
+export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {
+  text: string;
+  mentionNames?: DiscordMentionNames;
+  guildId?: string;
+  className?: string;
+  style?: CSSProperties;
+  interactiveUsers?: boolean;
+  inline?: boolean;
+}) {
+  const [resolvedNames, setResolvedNames] = useState<{ key: string; names: DiscordMentionNames }>({ key: "", names: {} });
+  const resolutionKey = `${guildId || ""}:${text}`;
+  const mentionNamesKey = JSON.stringify(mentionNames || {});
+  useEffect(() => {
+    const mentions = { user: new Set<string>(), channel: new Set<string>(), role: new Set<string>() };
+    const mentionPattern = /<@!?(\d+)>|<@&(\d+)>|<#(\d+)>/g;
+    let match: RegExpExecArray | null;
+    while ((match = mentionPattern.exec(text))) {
+      if (match[1]) mentions.user.add(match[1]);
+      else if (match[2]) mentions.role.add(match[2]);
+      else if (match[3]) mentions.channel.add(match[3]);
+    }
+    const hasMissingNames = (["user", "channel", "role"] as const).some((kind) =>
+      Array.from(mentions[kind]).some((id) => !mentionNames?.[kind]?.[id]),
+    );
+    if (!hasMissingNames) return;
+    let active = true;
+    void resolveDiscordText(text, guildId).then((result) => {
+      if (active) setResolvedNames({ key: resolutionKey, names: result.mention_names });
+    }).catch(() => {
+      // Keep the ID fallback when Discord name lookup is unavailable.
+    });
+    return () => { active = false; };
+  }, [guildId, mentionNamesKey, resolutionKey, text]);
+  const resolvedMentionNames: DiscordMentionNames = {
+    ...(resolvedNames.key === resolutionKey ? resolvedNames.names : {}),
+    ...mentionNames,
+    user: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.user : {}), ...mentionNames?.user },
+    channel: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.channel : {}), ...mentionNames?.channel },
+    role: { ...(resolvedNames.key === resolutionKey ? resolvedNames.names.role : {}), ...mentionNames?.role },
+  };
+  const { openProfile, dialog } = useDiscordProfile(interactiveUsers);
 
   const lines = text.split("\n");
   const children: ReactNode[] = [];
@@ -538,44 +604,6 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     }
   } : undefined}>
     {children}
-    {interactiveUsers && (profileLoading || profileError || profile) && createPortal(<div className="discord-profile-popover" role="presentation">
-      <div ref={profileCardRef} className="discord-profile-card" role={profileError ? "alert" : profileLoading ? "status" : "dialog"} aria-label={profile ? `${profile.display_name} Discord profile` : undefined} style={{ "--profile-left": `${profilePosition.left}px`, "--profile-top": `${profilePosition.top}px` } as CSSProperties}>
-        {profileLoading ? <div className="discord-profile-state">Loading Discord profile…</div> : profileError ? <div className="discord-profile-state">{profileError}</div> : profile && <>
-          {profile.banner_url
-            ? <img className="discord-profile-banner" src={profile.banner_url} alt="" />
-            : <div className="discord-profile-banner" style={{ backgroundColor: profile.banner_color || "#202225" }} />}
-          {/* Keyed by user so an open menu never carries over to the next popup. */}
-          <ProfileMenu key={profile.id} userId={profile.id} />
-          <div className="discord-profile-body">
-            <div className="discord-profile-head">
-              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status)}>
-                <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
-                {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
-              </DiscordStatusAvatar>}
-              {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <div className="discord-profile-status">
-                <span className="discord-profile-status-text">{statusEmoji(customStatus)}{customStatus.text}</span>
-              </div>}
-            </div>
-            <h2 className="discord-profile-name">{profile.display_name}</h2>
-            {/* Discord puts the server tag pill on the username row and the
-                profile badges on the line directly below it. */}
-            <p className="discord-profile-username">
-              <span className="discord-profile-user-tag">{profile.username}</span>
-              {profile.guild_tag && <DiscordServerTagPill
-                server={profile.server_tag || null}
-                tag={profile.guild_tag}
-                badgeUrl={profile.guild_badge_url}
-              />}
-            </p>
-            {/* Badge artwork ships with the app; clicking one opens the badge
-                popup owned by DiscordBadgeList. */}
-            <DiscordBadgeList badges={profileBadgeList} />
-            {profile.bio && <section className="discord-profile-about"><h3>About Me</h3><p>{profile.bio}</p></section>}
-            {spotifyActivity && <ProfileSpotifyCard activity={spotifyActivity} />}
-            <a className="discord-profile-full-link" href={`https://discord.com/users/${profile.id}`} target="_blank" rel="noopener noreferrer">Open Discord profile</a>
-          </div>
-        </>}
-      </div>
-    </div>, document.body)}
+    {dialog}
   </Wrapper>;
 }
