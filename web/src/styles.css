@@ -92,7 +92,9 @@ h1, h2, h3, p { margin-top: 0; }
 .dashboard-layout .staff-profile-preview-avatar-status-wrap > .staff-profile-preview-avatar { margin-top: 0; }
 .dashboard-layout .staff-profile-preview .discord-status-icon { width: 15px; height: 15px; border: 2px solid var(--surface-raised); background: var(--surface-raised); }
 .discord-profile-name { margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }
-.discord-profile-guild-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.discord-profile-guild-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border: 1px solid transparent; border-radius: 4px; font: inherit; font-size: 10px; font-weight: 700; line-height: 1.2; }
+button.discord-profile-guild-tag { cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+button.discord-profile-guild-tag:hover, button.discord-profile-guild-tag.is-open { background: #35373c; border-color: rgb(255 255 255 / .12); }
 .discord-profile-guild-tag img { width: 14px; height: 14px; object-fit: contain; }
 .discord-profile-username { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }
 .discord-profile-user-tag { min-width: 0; overflow-wrap: anywhere; }
@@ -108,6 +110,34 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-badge-popup-copy { display: grid; gap: 2px; min-width: 0; }
 .discord-badge-popup-copy strong { color: #f2f3f5; font-size: 12.5px; font-weight: 700; }
 .discord-badge-popup-copy p { margin: 0; color: #b5bac1; font-size: 11.5px; line-height: 1.4; }
+/* Discord's server-tag popup: banner, overlapping icon, name and tag pill,
+   member counts, description, then the green join button. Fixed above the
+   profile popup so the card is neither stretched nor clipped by it. */
+.discord-server-tag-popup { position: fixed; left: var(--server-tag-left, 12px); top: var(--server-tag-top, 12px); z-index: 10002; width: min(20rem, calc(100vw - 1.5rem)); overflow: hidden; color: #f2f3f5; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 12px; box-shadow: 0 18px 46px rgb(0 0 0 / .6); font-size: 12.5px; line-height: 1.4; }
+.discord-server-tag-banner { display: block; width: 100%; height: 5.25rem; object-fit: cover; background: linear-gradient(135deg, #5865f2, #3b3f8f); }
+/* A server that hides its profile has no banner to show, so the header is the
+   same neutral grey Discord leaves behind for the private and unknown states. */
+.discord-server-tag-popup.is-private .discord-server-tag-banner,
+.discord-server-tag-popup.is-unknown .discord-server-tag-banner { background: linear-gradient(135deg, #4e5058, #2b2d31); }
+.discord-server-tag-body { padding: 0 16px 16px; }
+.discord-server-tag-icon-shell { display: grid; place-items: center; width: 80px; height: 80px; margin-top: -40px; overflow: hidden; background: #1e1f22; border: 6px solid #232428; border-radius: 18px; }
+.discord-server-tag-icon { width: 100%; height: 100%; object-fit: cover; }
+.discord-server-tag-icon.is-placeholder { color: #dbdee1; font-size: 30px; font-weight: 700; }
+.discord-server-tag-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.discord-server-tag-name { margin: 0; color: #f2f3f5; font-size: 18px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.discord-server-tag-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; color: #e3e5e8; background: #35373c; border-radius: 5px; font-size: 11px; font-weight: 700; line-height: 1.3; }
+.discord-server-tag-pill img { width: 14px; height: 14px; object-fit: contain; }
+.discord-server-tag-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 6px 0 0; color: #dbdee1; font-size: 12.5px; }
+.discord-server-tag-stats span { display: inline-flex; align-items: center; gap: 5px; }
+.discord-server-tag-stats i { width: 8px; height: 8px; border-radius: 50%; background: #80848e; }
+.discord-server-tag-online i { background: #23a55a; }
+.discord-server-tag-created { margin: 3px 0 0; color: #b5bac1; font-size: 12.5px; }
+.discord-server-tag-description { display: -webkit-box; overflow: hidden; margin: 10px 0 0; color: #dbdee1; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.discord-server-tag-popup.is-private .discord-server-tag-description,
+.discord-server-tag-popup.is-unknown .discord-server-tag-description { color: #b5bac1; }
+.discord-server-tag-invite { display: block; margin-top: 14px; padding: 11px 10px; color: #fff; background: #248046; border-radius: 8px; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; }
+a.discord-server-tag-invite:hover { background: #1a6334; }
+.discord-server-tag-invite.is-disabled { color: #a3a6ad; background: #3f4147; cursor: not-allowed; pointer-events: none; }
 .discord-profile-spotify { margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }
 .discord-profile-spotify-link { display: block; color: inherit; text-decoration: none; }
 .discord-profile-spotify-link:hover .discord-profile-spotify { background: #2a2c31; }
