@@ -650,6 +650,24 @@ def api_save_server(guild_id):
             except Exception as error:
                 return jsonify({"error": f"Verification settings saved, but the panel could not be posted: {error}"}), 503
 
+    privacy_data = body.get("privacy")
+    if privacy_data is not None:
+        if not isinstance(privacy_data, dict):
+            return jsonify({"error": "Privacy settings must be an object."}), 400
+        if "private" in privacy_data and not isinstance(privacy_data["private"], bool):
+            return jsonify({"error": "privacy.private must be true or false."}), 400
+        from utils.guild_privacy import set_guild_privacy
+        try:
+            run_on_bot_loop(
+                set_guild_privacy(
+                    numeric_guild_id,
+                    bool(privacy_data.get("private")),
+                    getattr(_discord_bot, "cxn", None),
+                )
+            )
+        except Exception as error:
+            return jsonify({"error": f"The privacy setting could not be saved: {error}"}), 503
+
     logging_data = body.get("logging")
     if logging_data is not None:
         if not isinstance(logging_data, dict):

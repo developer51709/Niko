@@ -155,6 +155,7 @@ PRIMARY_KEYS: dict = {
     "moderation_config": "guild_id",
     "modlog": "guild_id",
     "guild_profiles": "guild_id",
+    "guild_privacy": "guild_id",
     "donation_invoices": "order_id",
     "transcripts": "transcript_id",
     "ticket_config": "guild_id",
