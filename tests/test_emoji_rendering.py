@@ -55,6 +55,49 @@ def test_the_web_emoji_list_matches_the_bot_config():
     assert web == config
 
 
+def test_retired_owner_and_developer_emojis_are_removed():
+    config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+    web = (ROOT / "web" / "src" / "data" / "botEmojis.ts").read_text(encoding="utf-8")
+    owner = (ROOT / "src" / "cogs" / "staff" / "owner.py").read_text(encoding="utf-8")
+
+    # These two old application emojis are retired; neither the bot nor the
+    # rendering lab should still carry their names or ids.
+    assert "badge_developer" not in config
+    assert "bot_owner" not in config
+    assert "badge_developer" not in web
+    assert 'name: "bot_owner"' not in web
+    assert not (ROOT / "src" / "assets" / "emojis" / "badge_developer.png").exists()
+    assert not (ROOT / "src" / "assets" / "emojis" / "bot_owner.png").exists()
+
+    # Owner-only command panels use the owner role badge instead.
+    assert "get_emoji('bot_owner')" not in owner
+    assert owner.count("get_emoji('badge_owner')") >= 2
+    assert 'name: "badge_owner"' in web
+
+
+def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
+    config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+    web = (ROOT / "web" / "src" / "data" / "botEmojis.ts").read_text(encoding="utf-8")
+    cog = (ROOT / "src" / "cogs" / "info" / "cog.py").read_text(encoding="utf-8")
+    build = (ROOT / "scripts" / "build-badge-art.mjs").read_text(encoding="utf-8")
+    assets = ROOT / "src" / "assets" / "emojis"
+
+    # The old partner emoji art did not match the rest of the set, so neither
+    # the bot config nor the rendering lab carries it anymore.
+    assert 'emoji_name == "partner"' not in config
+    assert 'name: "partner"' not in web
+    assert not (assets / "partner.png").exists()
+    assert not (assets / "icon_partner.png").exists()
+
+    # Its replacement is generated from the same profile badge asset the
+    # website popups draw, so the bot card and the site match.
+    assert 'emoji_name == "partner_badge"' in config
+    assert 'name: "partner_badge"' in web
+    assert (assets / "partner_badge.png").exists()
+    assert 'partner_badge: "badges/partner.svg"' in build
+    assert '(("partner",),                                    "partner_badge")' in cog
+
+
 def test_the_react_markdown_writes_the_emoji_name_out_when_it_cannot_load():
     source = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
 
@@ -68,6 +111,76 @@ def test_the_react_markdown_writes_the_emoji_name_out_when_it_cannot_load():
     assert "event.currentTarget.alt" not in source
     # The profile popup's custom status uses the same component.
     assert 'className="discord-profile-status-emoji"' in source
+
+
+def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
+    markdown = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
+    page = (ROOT / "web" / "src" / "pages" / "TranscriptPage.tsx").read_text(encoding="utf-8")
+    route = (ROOT / "src" / "webapp" / "transcript_routes.py").read_text(encoding="utf-8")
+
+    # The generated bot emoji list decides the popup layout, so an app emoji
+    # never has to be guessed from its name.
+    assert "const APPLICATION_EMOJI_IDS = new Set(BOT_EMOJIS.map((emoji) => emoji.id));" in markdown
+    assert 'data-emoji-app={isApplication ? "1" : "0"}' in markdown
+    assert "This emoji is from the Niko app" in markdown
+    assert "This emoji is from this server. Get Nitro to use it everywhere." in markdown
+    # The button uses Discord's own Nitro mark, not a hand-drawn placeholder.
+    assert 'd="M13.32 21.978' in markdown
+    # The popup is a fixed layer on the page, not a child clipped by the chat.
+    assert "createPortal(" in markdown
+    assert 'window.addEventListener("scroll", positionPopup, true);' in markdown
+    assert 'if (event.key === "Escape") setOpen(false);' in markdown
+
+    # The transcript page supplies the ticket server's identity, and the API
+    # resolves it from the stored guild id instead of trusting old metadata.
+    assert "<DiscordEmojiProvider guildName={data.guild_name} guildIconUrl={data.guild_icon_url}>" in page
+    assert 'result.update(_guild_identity(result.get("guild_id")))' in route
+    assert 'metadata.update(_guild_identity(result.get("guild_id")))' in route
+
+
+def test_custom_emoji_popup_knows_application_and_server_emojis():
+    application = _md_to_html("<:hypesquad_bravery:1520827369508700252>")
+    server = _md_to_html("<:drinking~1:123456789012345678>")
+
+    # The popup needs the id for its own artwork and whether the emoji belongs
+    # to the Niko application or to the ticket's server.
+    assert 'data-emoji-id="1520827369508700252"' in application
+    assert 'data-emoji-app="1"' in application
+    assert 'data-emoji-id="123456789012345678"' in server
+    assert 'data-emoji-app="0"' in server
+    # A resolved emoji is a keyboard-operable popup trigger; a broken one later
+    # falls back to its name and loses that role.
+    assert 'role="button" tabindex="0" aria-haspopup="dialog"' in application
+
+
+def test_export_includes_both_discord_emoji_popup_layouts():
+    page = export_html(
+        [{
+            "timestamp": "now",
+            "author": "Niko",
+            "author_id": 1,
+            "content": "<:hypesquad_bravery:1520827369508700252> <:drinking~1:123456789012345678>",
+        }],
+        {
+            "channel_name": "ticket",
+            "guild_name": "Niko",
+            "guild_icon_url": "https://cdn.example/icon.png",
+        },
+    )
+
+    # The application popup names the app; the server popup adds the Nitro
+    # prompt and the ticket server's icon and name.
+    assert "This emoji is from the Niko app" in page
+    assert "This emoji is from this server. Get Nitro to use it everywhere." in page
+    assert "discord-emoji-popup-nitro" in page
+    # The downloaded page carries the same official Nitro mark.
+    assert 'd="M13.32 21.978' in page
+    assert 'const emojiGuild = {"name": "Niko", "iconUrl": "https://cdn.example/icon.png"};' in page
+    assert "Invite-only server" in page
+    # Clicking the emoji opens the popup, and Escape closes it again.
+    assert "const openEmojiPopup = (img) =>" in page
+    assert 'event.target.closest?.("img.custom-emoji[data-emoji-id]")' in page
+    assert "if (event.key === \"Escape\") { closeEmojiPopup(); closeProfile(); }" in page
 
 
 def test_the_export_swaps_a_broken_emoji_for_its_name():

@@ -160,13 +160,13 @@ const NIKO_BADGES = {
 
 /** Emoji name in src/config/emojis.py -> badge SVG, relative to web/public/assets. */
 const EMOJI_ART = {
-  // Discord profile badges Niko had no emoji art for. The SVGs in
-  // web/public/assets are the bare glyphs the popups draw, so these are the
-  // badges the bot card used to show as a unicode fallback or an unrelated
-  // emoji. Badges Discord's own art already covers in src/assets/emojis
-  // (partner, the HypeSquad houses, the developer badges) are deliberately not
-  // rasterised here: replacing that art with a bare glyph would be a downgrade.
+  // Discord profile badges, drawn from the same SVGs the popups use so the
+  // bot card and the website always show the same art. The HypeSquad houses and
+  // the developer badges keep Discord's own emoji art in src/assets/emojis.
   staff_badge: "badges/staff.svg",
+  // The old partner emoji art no longer matched the rest of the set, so the
+  // badge is generated from the profile badge asset like the others.
+  partner_badge: "badges/partner.svg",
   bug_hunter_badge: "badges/bug_hunter_level_1.svg",
   bug_hunter_gold_badge: "badges/bug_hunter_level_2.svg",
   hypesquad_events: "hypesquad/events.svg",

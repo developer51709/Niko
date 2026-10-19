@@ -1,11 +1,6 @@
-# this is where the bots custom emojis are configured
-# this is used to make the bot more customizable and to make it easier to change the emojis
-
-
-# emojis for the bot
 def get_emoji(emoji_name: str):
     if emoji_name == "active_developer_badge":
-        return "<:active_developer_badge:1526320574060560424>"
+        return "<:active_developer_badge:1561569636313473265>"
     # Discord profile badges that Niko did not have emoji art for yet. Their
     # artwork is generated from the badge SVGs into src/assets/emojis/ by
     # scripts/build-badge-art.mjs, and the ids are placeholders: the startup
@@ -40,6 +35,8 @@ def get_emoji(emoji_name: str):
         return "<:early_supporter_badge:1560768159676366848>"
     if emoji_name == "hypesquad_events":
         return "<:hypesquad_events:1560768162482618401>"
+    if emoji_name == "partner_badge":
+        return "<:partner_badge:1561572830376755350>"
     if emoji_name == "staff_badge":
         return "<:staff_badge:1560768165527425137>"
     if emoji_name == "supports_commands_badge":
@@ -50,8 +47,6 @@ def get_emoji(emoji_name: str):
         return "<:arrow_right:1555276717487292487>"
     if emoji_name == "automod":
         return "<:Automod:1555276720146227220>"
-    if emoji_name == "badge_developer":
-        return "<:badge_developer:1560774031181881406>"
     # Niko's own role badges, one per team role plus the community roles. The
     # artwork is generated from web/public/assets/badges/niko_*.svg into
     # src/assets/emojis/badge_*.png by scripts/build-badge-art.mjs, and these
@@ -90,8 +85,6 @@ def get_emoji(emoji_name: str):
         return "<:badge_partner_role:1560787802558435370>"
     if emoji_name == "bluesky":
         return "<:bluesky:1545426285948436610>"
-    if emoji_name == "bot_owner":
-        return "<:bot_owner:1555276733786095636>"
     if emoji_name == "broom":
         return "<:broom:1555276736315392113>"
     if emoji_name == "C4Empty":
@@ -153,9 +146,9 @@ def get_emoji(emoji_name: str):
     if emoji_name == "ai":
         return "<:ai:1555275330518908988>"
     if emoji_name == "ban":
-        return "<:ban:1555275333450866738>"
+        return "<:ban:1561569639539150858>"
     if emoji_name == "boost":
-        return "<:boost:1555275336227364884>"
+        return "<:boost:1561569642659577926>"
     if emoji_name == "bot":
         return "<:bot:1555275338660057250>"
     if emoji_name == "bug":
@@ -217,11 +210,9 @@ def get_emoji(emoji_name: str):
     if emoji_name == "moderation":
         return "<:moderation:1555275422118191145>"
     if emoji_name == "nsfw":
-        return "<:nsfw:1555275427570917376>"
+        return "<:nsfw:1561569646182670367>"
     if emoji_name == "paint":
         return "<:paint:1555275430347415683>"
-    if emoji_name == "partner":
-        return "<:partner:1555275434298712165>"
     if emoji_name == "pause":
         return "<:pause:1555275437150572564>"
     if emoji_name == "play":
@@ -332,9 +323,6 @@ def get_emoji(emoji_name: str):
         return "<:thumbs_up:1555276780636606556>"
     if emoji_name == "tiktok":
         return "<:tiktok:1545426286883901610>"
-    # Niko's own addition: the top.gg logo, used for the listing site's voting
-    # badges. Startup sync uploads the artwork from src/assets/emojis/topgg.png
-    # and keeps this id pointing at the live application emoji.
     if emoji_name == "topgg":
         return "<:topgg:1560070335863459861>"
     if emoji_name == "twitch":
@@ -344,7 +332,7 @@ def get_emoji(emoji_name: str):
     if emoji_name == "voicemaster":
         return "<:voicemaster:1555275502078533763>"
     if emoji_name == "verified_developer_badge":
-        return "<:verified_developer_badge:1526320577676312666>"
+        return "<:verified_developer_badge:1561569652637831228>"
     if emoji_name == "hide":
         return "<:hide:1555275505022930944>"
     if emoji_name == "lock":
@@ -377,11 +365,6 @@ def get_emoji(emoji_name: str):
         return "<:youtube:1545426288830054461>"
     if emoji_name == "youtube_shorts":
         return "<:youtube_shorts:1545426290020978738>"
-    if emoji_name == "enabled":
-        return "<:disable_no:1520827872925716580><:enable_yes:1520827877283856445>"
-    if emoji_name == "disabled":
-        return "<:disable_yes:1520827881574367293><:enable_no:1520827885483458763>"
-    # these use two emojis instead of just returning one
     if emoji_name == "enabled":
         return "<:disable_no:1520827872925716580><:enable_yes:1520827877283856445>"
     if emoji_name == "disabled":

@@ -23,7 +23,8 @@ Each transcript gets a unique short ID and its own web page:
 Anyone with the link can view the transcript in a clean, dark, Discord-style page with:
 
 - A Discord chat layout: grouped messages, day dividers, avatars, names, and timestamps
-- Discord markdown, mentions, embeds, and components kept intact
+- Discord markdown, mentions, embeds, and components kept intact, including click-to-reveal spoilers and connected quote bars
+- Custom emoji popups that name the Niko app or the ticket's server, matching Discord's own layouts
 - Inline image previews and named file attachments
 - The same profile popup as a mention when you click a name or avatar
 - The channel name, category, opener, and message count

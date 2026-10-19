@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { DiscordMarkdown, useDiscordProfile, type DiscordMentionNames } from "../components/DiscordMarkdown";
+import { DiscordEmojiProvider, DiscordMarkdown, useDiscordProfile, type DiscordMentionNames } from "../components/DiscordMarkdown";
 
 // ── Types mirroring the stored transcript message payloads ────────────────
 
@@ -83,6 +83,8 @@ type TranscriptAuthorProfile = {
 type TranscriptData = {
   transcript_id: string;
   guild_id: number;
+  guild_name?: string | null;
+  guild_icon_url?: string | null;
   channel_id: number;
   channel_name: string;
   opener_id: number;
@@ -746,8 +748,9 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
   }
 
   return (
-    <div className="page-main">
-      <div className="shell" style={{ maxWidth: 800 }}>
+    <DiscordEmojiProvider guildName={data.guild_name} guildIconUrl={data.guild_icon_url}>
+      <div className="page-main">
+        <div className="shell" style={{ maxWidth: 800 }}>
         {/* Header */}
         <div
           style={{
@@ -828,6 +831,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
           Transcript ID: <code style={{ fontFamily: "monospace" }}>{transcriptId}</code>
         </div>
       </div>
-    </div>
+      </div>
+    </DiscordEmojiProvider>
   );
 }

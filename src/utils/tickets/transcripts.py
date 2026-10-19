@@ -430,6 +430,17 @@ def _discord_timestamp_text(unix: int, style: str) -> Optional[str]:
     return value.strftime("%b %-d, %Y %-I:%M %p UTC")
 
 
+@lru_cache(maxsize=1)
+def _application_emoji_ids() -> frozenset[str]:
+    """Every emoji registered to the Niko application, from the bot config."""
+    config = Path(__file__).resolve().parents[3] / "src" / "config" / "emojis.py"
+    try:
+        text = config.read_text(encoding="utf-8")
+    except OSError:
+        return frozenset()
+    return frozenset(re.findall(r"<a?:[A-Za-z0-9_~]+:(\d+)>", text))
+
+
 def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
     """Convert a light markdown subset into safe HTML.
 
@@ -462,6 +473,20 @@ def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
     value = re.sub(r"__([^_\n]+)__", r"<u>\1</u>", value)
     value = re.sub(r"~~([^~\n]+)~~", r"<s>\1</s>", value)
 
+    # Discord spoilers stay hidden until clicked. The link inside a spoiler is
+    # inert while hidden, so a spoiler can never be used to trick someone into
+    # opening a link they have not chosen to reveal.
+    def _spoiler(match: "re.Match[str]") -> str:
+        return (
+            '<span class="discord-md-spoiler" role="button" tabindex="0" '
+            'aria-expanded="false" aria-label="Spoiler, click to reveal" '
+            f'data-discord-spoiler>{match.group(1)}</span>'
+        )
+
+    # Stop at the closing ``||`` while still allowing a single pipe (and table
+    # syntax) inside the hidden text.
+    value = re.sub(r"\|\|((?:(?!\|\|)[^\n])+)\|\|", _spoiler, value)
+
     # Discord custom emoji are stored in message content as <:name:id> or
     # <a:name:id>. Render the CDN asset instead of exposing the raw token.
     def _custom_emoji(match: "re.Match[str]") -> str:
@@ -470,9 +495,14 @@ def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
         emoji_id = match.group(3)
         extension = "gif" if animated else "png"
         url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{extension}"
+        is_application = emoji_id in _application_emoji_ids()
         return (
             f'<img class="custom-emoji" src="{url}" alt=":{name}:" title=":{name}:" '
-            f'data-emoji-name="{name}">'
+            f'data-emoji-name="{name}" data-emoji-id="{emoji_id}" '
+            f'data-emoji-animated="{str(animated).lower()}" '
+            f'data-emoji-app="{1 if is_application else 0}" '
+            'role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" '
+            f'aria-label=":{name}: emoji">'
         )
 
     value = re.sub(r"&lt;(a?):([A-Za-z0-9_~]+):(\d+)&gt;", _custom_emoji, value)
@@ -507,16 +537,29 @@ def _md_to_html(text: Any, mention_names: dict | None = None) -> str:
 
     lines = value.split("\n")
     html_lines = []
-    for line in lines:
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         stripped = line.lstrip()
         if stripped.startswith("&gt;"):
-            html_lines.append(f'<span class="tq">{stripped[4:].lstrip()}</span>')
-        elif stripped.startswith("-# "):
+            # Consecutive quoted lines are one quote in Discord: the left bar
+            # runs down the whole run and rounds only at its two ends.
+            quote_lines = []
+            while index < len(lines):
+                current = lines[index].lstrip()
+                if not current.startswith("&gt;"):
+                    break
+                quote_lines.append(current[4:].lstrip())
+                index += 1
+            html_lines.append(f'<span class="tq">{"<br>".join(quote_lines)}</span>')
+            continue
+        if stripped.startswith("-# "):
             html_lines.append(f'<span class="tsm">{stripped[3:]}</span>')
         elif re.match(r"#{1,4}\s", stripped):
             html_lines.append(f'<span class="th">{stripped}</span>')
         else:
             html_lines.append(line)
+        index += 1
     value = "<br>".join(html_lines)
 
     for key, replacement in code_holders.items():
@@ -999,6 +1042,13 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     profile_json = json.dumps(profiles, ensure_ascii=False).replace("</", "<\\/")
     badge_art_json = json.dumps(_profile_badge_art(), ensure_ascii=False)
     status_art_json = json.dumps(_profile_status_art(), ensure_ascii=False)
+    emoji_guild_json = json.dumps(
+        {
+            "name": guild,
+            "iconUrl": metadata.get("guild_icon_url") or "",
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1046,12 +1096,39 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .message-attachment-file {{ display: inline-flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 10px 16px; border: 1px solid #3f4147; border-radius: 8px; background: #2b2d31; color: #00a8fc; font-size: 14px; font-weight: 500; text-decoration: none; }}
   .message-attachment-file:hover {{ background: #313338; }}
   .message-attachment-icon {{ font-size: 16px; line-height: 1; }}
-  .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; }}
+  .custom-emoji {{ width: 22px; height: 22px; object-fit: contain; vertical-align: -0.35em; display: inline-block; cursor: pointer; border-radius: 3px; }}
+  .custom-emoji:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
   .custom-emoji-fallback {{ color: inherit; }}
+  /* Discord's custom-emoji popup: application emojis name the app, while
+     server emojis add the Nitro prompt and the server source row. */
+  .discord-emoji-popup {{ position: fixed; left: var(--emoji-popup-left, 12px); top: var(--emoji-popup-top, 12px); z-index: 103; width: min(22rem, calc(100vw - 1.5rem)); padding: 16px; color: #dbdee1; background: #111214; border: 1px solid rgb(255 255 255 / .08); border-radius: 10px; box-shadow: 0 18px 52px rgb(0 0 0 / .6); font-size: 13px; line-height: 1.4; }}
+  .discord-emoji-popup-main {{ display: flex; align-items: flex-start; gap: 14px; }}
+  .discord-emoji-popup-art {{ width: 52px; height: 52px; flex: 0 0 auto; object-fit: contain; }}
+  .discord-emoji-popup-copy {{ min-width: 0; }}
+  .discord-emoji-popup-name {{ display: block; margin: 0 0 3px; color: #f2f3f5; font-size: 15.5px; font-weight: 700; overflow-wrap: anywhere; }}
+  .discord-emoji-popup-copy p {{ margin: 0; color: #b5bac1; font-size: 13.5px; line-height: 1.4; }}
+  .discord-emoji-popup-nitro {{ display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; padding: 10px 12px; color: #111214; background: #fff; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; box-shadow: 0 0 0 1px #fff, 0 0 18px rgb(88 101 242 / .65), 0 0 32px rgb(235 69 158 / .35); }}
+  .discord-emoji-popup-nitro:hover {{ color: #111214; background: #f6f6f6; text-decoration: none; }}
+  .discord-emoji-popup-nitro-mark {{ width: 18px; height: 18px; flex: 0 0 auto; }}
+  .discord-emoji-popup-source {{ margin: 14px -16px 0; padding: 12px 16px 0; border-top: 1px solid #2b2d31; }}
+  .discord-emoji-popup-source > p {{ margin: 0 0 10px; color: #949ba4; font-size: 13px; }}
+  .discord-emoji-popup-guild {{ display: flex; align-items: center; gap: 10px; }}
+  .discord-emoji-popup-guild-icon {{ width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; object-fit: cover; background: #5865f2; }}
+  .discord-emoji-popup-guild-fallback {{ display: grid; place-items: center; color: #fff; font-size: 18px; font-weight: 700; }}
+  .discord-emoji-popup-guild-copy {{ display: grid; gap: 2px; min-width: 0; }}
+  .discord-emoji-popup-guild-copy strong {{ color: #f2f3f5; font-size: 14.5px; font-weight: 650; overflow-wrap: anywhere; }}
+  .discord-emoji-popup-guild-copy small {{ color: #949ba4; font-size: 12.5px; }}
   .discord-timestamp {{ color: #b5bac1; white-space: nowrap; }}
   .discord-md-mention {{ display: inline; padding: 1px 4px; color: #dce4ff; background: rgba(88, 101, 242, .3); border-radius: 4px; font-weight: 650; line-height: 1.5; text-decoration: none; }}
-  .discord-md-mention-role {{ color: #f1d7ff; background: rgba(160, 89, 198, .24); }}
+  /* Discord paints user, role and channel mentions with the same blue. */
+  .discord-md-mention-role {{ color: #dce4ff; background: rgba(88, 101, 242, .3); }}
   .discord-md-mention-user {{ cursor: pointer; }}
+  .discord-md-spoiler {{ margin: 0 -2px; padding: 0 2px; border-radius: 4px; background: #202225; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
+  .discord-md-spoiler:not(.is-revealed) {{ color: transparent; }}
+  .discord-md-spoiler:not(.is-revealed) > * {{ visibility: hidden; }}
+  .discord-md-spoiler:not(.is-revealed) a {{ pointer-events: none; }}
+  .discord-md-spoiler.is-revealed {{ background: transparent; cursor: auto; }}
+  .discord-md-spoiler:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
   .discord-profile-popover {{ position: fixed; inset: 0; z-index: 100; pointer-events: none; }}
   .discord-profile-card {{ position: fixed; left: var(--profile-left); top: var(--profile-top); width: min(20rem, calc(100vw - 1.5rem)); max-height: min(35rem, calc(100dvh - 1.5rem)); overflow-y: auto; border: 1px solid rgb(255 255 255 / .08); border-radius: .85rem; background: #111214; color: #f2f3f5; box-shadow: 0 18px 52px rgb(0 0 0 / .58); pointer-events: auto; font-size: 13px; line-height: 1.45; }}
   .discord-profile-banner {{ display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #202225 center / cover no-repeat; }}
@@ -1147,7 +1224,9 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .ts-muted {{ color: #6d737a; }}
   .tsm {{ color: #949ba4; font-size: 12px; }}
   .th {{ font-size: 16px; font-weight: 700; color: #f2f3f5; }}
-  .tq {{ display: block; padding-left: 12px; border-left: 4px solid #4e5058; color: #dbdee1; }}
+  /* One rounded bar for a whole run of quote lines, like Discord. */
+  .tq {{ position: relative; display: block; padding-left: 12px; color: #dbdee1; }}
+  .tq::before {{ position: absolute; top: 0; bottom: 0; left: 0; width: 4px; background: #4e5058; border-radius: 4px; content: ""; }}
   @media (max-width: 520px) {{
     .channel-header {{ gap: 8px; padding: 0 12px; }}
     .channel-meta {{ display: none; }}
@@ -1215,6 +1294,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   const mentionProfiles = {profile_json};
   const badgeArt = {badge_art_json};
   const statusArt = {status_art_json};
+  const emojiGuild = {emoji_guild_json};
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "'": "&#39;" }})[char]);
   // Discord never shows a broken custom emoji: an emoji it cannot resolve is
   // written out as its name between colons. The same swap keeps a dead emoji
@@ -1232,6 +1312,95 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     img.addEventListener("error", replace, {{ once: true }});
   }};
   document.querySelectorAll("img.custom-emoji").forEach(fixCustomEmoji);
+  // Discord's custom-emoji popup: application emojis name the bot's app, while
+  // server emojis add the Nitro prompt and the server they came from.
+  const NITRO_MARK = '<svg class="discord-emoji-popup-nitro-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M13.32 21.978a10.322 10.322 0 01-2.07-.36 6.638 6.638 0 01-.675-.219.152.152 0 00-.057-.019.372.372 0 01-.09-.03l-.137-.06a.383.383 0 00-.088-.03.418.418 0 01-.097-.038 7.412 7.412 0 00-.187-.088 8.155 8.155 0 01-.67-.325 4.26 4.26 0 01-.34-.19 1.966 1.966 0 01-.18-.11 1.274 1.274 0 00-.17-.103.763.763 0 01-.103-.07.397.397 0 00-.086-.056c-.007 0-.084-.054-.171-.12a1.052 1.052 0 00-.179-.12c-.011 0-.021-.008-.021-.018 0-.01-.072-.07-.16-.133a.873.873 0 01-.16-.132c0-.01-.01-.017-.02-.017-.012 0-.048-.027-.08-.06a.34.34 0 00-.069-.06.33.33 0 01-.068-.055 10.464 10.464 0 01-1.008-1.008.33.33 0 01-.055-.069.34.34 0 00-.06-.068c-.033-.033-.06-.068-.06-.08 0-.011-.008-.02-.017-.02a.873.873 0 01-.132-.16.825.825 0 00-.133-.16c-.01 0-.018-.01-.018-.022 0-.011-.054-.092-.12-.178a1.496 1.496 0 01-.12-.171.4.4 0 00-.055-.087c-.064-.084-.1-.14-.119-.182a.73.73 0 00-.055-.09 1.612 1.612 0 01-.11-.18 4.258 4.258 0 01-.19-.34 8.154 8.154 0 01-.325-.67 7.397 7.397 0 00-.088-.188.418.418 0 01-.038-.097.42.42 0 00-.033-.093c-.078-.175-.087-.2-.087-.221a.152.152 0 00-.02-.057c-.055-.098-.266-.812-.35-1.185-.06-.266-.161-.848-.181-1.045l-.014-.135-.523-.001c-.59-.001-.7-.018-.9-.139a.968.968 0 01.014-1.668c.189-.113.32-.132.89-.132h.498l.025-.225c.047-.438.196-1.222.29-1.525a.808.808 0 00.03-.125c0-.02-.352-.026-1.695-.026-1.446 0-1.714-.005-1.824-.03a1.116 1.116 0 01-.83-.83 1.111 1.111 0 01.83-1.329C.97 7.003 1.287 7 3.15 7c2.035 0 2.164-.003 2.193-.036a.35.35 0 00.043-.065c.018-.038.052-.095.103-.17.062-.093.089-.137.103-.17a.76.76 0 01.07-.103.397.397 0 00.057-.086c0-.007.054-.084.12-.17.066-.088.12-.168.12-.18 0-.011.008-.02.018-.02.01 0 .07-.073.133-.16a.873.873 0 01.132-.16c.01 0 .017-.01.017-.022 0-.01.027-.047.06-.079a.34.34 0 00.06-.069.33.33 0 01.055-.068c.03-.032.109-.118.175-.192.066-.074.131-.147.146-.162.021-.023-.233-.028-1.69-.033l-1.717-.006L3.208 5a1.48 1.48 0 01-.64-.392 1.44 1.44 0 01-.393-.651c-.038-.125-.046-.194-.046-.41 0-.216.008-.285.046-.41.085-.273.193-.451.393-.65.188-.19.346-.29.585-.372.283-.098.14-.096 6.016-.1 5.47-.002 5.626 0 6.12.063.236.03.698.112.956.17.366.083 1.082.294 1.18.35.019.01.045.019.057.019.012 0 .053.013.09.03l.136.06c.038.016.077.03.088.03.011 0 .055.017.097.038l.187.088a8.155 8.155 0 01.67.324 4.261 4.261 0 01.34.19c.057.03.112.064.18.11.093.062.138.089.17.103a.76.76 0 01.103.07c.04.031.08.057.086.057.008 0 .085.054.171.12.087.066.168.12.18.12.01 0 .02.008.02.018 0 .01.072.07.16.133.088.064.16.123.16.132 0 .01.01.017.021.017.012 0 .047.027.08.06a.34.34 0 00.068.06.33.33 0 01.068.055l.193.175a10.464 10.464 0 01.816.833.33.33 0 01.055.068.34.34 0 00.06.07c.033.031.06.067.06.078 0 .012.007.021.016.021.01 0 .07.072.132.16.064.088.124.16.134.16.01 0 .018.01.018.021 0 .012.054.092.12.18.066.086.12.163.12.17 0 .007.024.046.055.086.063.085.1.14.118.183a.727.727 0 00.055.09c.045.065.078.118.111.18a4.259 4.259 0 01.19.34 8.147 8.147 0 01.325.67c.027.06.067.145.088.187.02.043.038.086.038.097 0 .011.013.051.03.088l.06.136c.016.038.03.079.03.09a6.613 6.613 0 01.238.732 10.11 10.11 0 01-.219 6.176.152.152 0 00-.02.057.405.405 0 01-.031.095c-.078.175-.088.2-.088.22a.418.418 0 01-.038.096l-.088.187a8.153 8.153 0 01-.325.67 4.258 4.258 0 01-.19.34c-.03.057-.063.112-.11.181-.061.093-.088.137-.103.17a.764.764 0 01-.07.102.397.397 0 00-.056.087c0 .007-.054.084-.12.17-.066.087-.12.168-.12.18 0 .011-.008.02-.018.02-.01 0-.07.073-.134.16a.873.873 0 01-.132.16c-.009 0-.016.01-.016.021 0 .012-.027.047-.06.08a.34.34 0 00-.06.068.33.33 0 01-.055.068l-.175.193a10.463 10.463 0 01-.834.816.33.33 0 01-.068.055.34.34 0 00-.069.06c-.032.033-.067.06-.079.06-.011 0-.02.007-.02.017 0 .009-.073.068-.16.132a.825.825 0 00-.16.133c0 .01-.01.018-.022.018-.011 0-.092.054-.179.12-.086.066-.163.12-.17.12a.4.4 0 00-.087.055c-.084.063-.14.1-.183.118a.728.728 0 00-.09.055 1.612 1.612 0 01-.18.111 4.264 4.264 0 01-.34.19c-.099.05-.193.1-.21.111a8.155 8.155 0 01-.46.214c-.06.027-.144.067-.187.088a.419.419 0 01-.097.038.383.383 0 00-.088.03l-.136.06a.372.372 0 01-.09.03.153.153 0 00-.057.02c-.098.054-.814.266-1.18.348-.946.213-1.994.295-2.925.23zm1.74-3.135a7.374 7.374 0 001.66-.444c.346-.134 1.079-.535 1.35-.738.055-.042.172-.128.26-.191.088-.064.178-.136.2-.16.022-.025.13-.123.24-.218.243-.21.212-.18.423-.423.096-.11.196-.22.222-.247.027-.026.098-.116.16-.2.061-.084.145-.198.187-.253.176-.233.632-1.064.725-1.32l.092-.247c.446-1.186.543-2.575.271-3.853-.08-.377-.143-.581-.363-1.18-.095-.262-.55-1.089-.725-1.32a24.578 24.578 0 01-.191-.26 2.3 2.3 0 00-.16-.2 3.244 3.244 0 01-.16-.18 3.94 3.94 0 00-.536-.536 1.424 1.424 0 01-.175-.158c0-.008-.096-.084-.215-.17a5.702 5.702 0 01-.225-.167 4.486 4.486 0 00-.448-.288 6.844 6.844 0 00-2.937-.953 9.532 9.532 0 00-1.576.038c-.756.113-1.43.321-2.09.644-.249.122-.743.404-.77.439a1.6 1.6 0 01-.14.1c-.422.282-.954.771-1.328 1.223-.377.455-.64.854-.89 1.354a6.996 6.996 0 00-.558 4.564c.113.482.273.958.466 1.387.118.26.435.832.528.952.03.04.095.13.142.201a6.86 6.86 0 004.458 2.772c.453.076.609.086 1.243.08.467-.006.646-.016.86-.048zm-1.51-1.725a5.329 5.329 0 01-1.308-.308 5.763 5.763 0 01-.683-.326 7.122 7.122 0 01-.707-.482 6.14 6.14 0 01-.675-.676 7.121 7.121 0 01-.482-.707 5.026 5.026 0 01-.506-3.7 4.89 4.89 0 01.775-1.679c.17-.241.196-.274.385-.48.157-.171.3-.309.503-.484.115-.1.518-.373.707-.482a5.026 5.026 0 013.7-.505 4.89 4.89 0 011.68.774c.241.17.274.196.48.385.17.157.308.3.484.504.099.115.373.517.482.707a5.028 5.028 0 01.407 4.04 4.835 4.835 0 01-.677 1.338c-.17.242-.196.275-.385.481-.147.161-.15.164-.311.311-.206.19-.239.216-.48.386a4.89 4.89 0 01-1.68.774 5.276 5.276 0 01-1.71.129zm2.888-3.437c.477-.797.867-1.469.867-1.493 0-.036-1.485-2.586-1.697-2.914l-.049-.075H12.62l-.047.075c-.219.35-1.659 2.88-1.659 2.915 0 .036 1.46 2.567 1.658 2.875l.048.076 1.475-.006 1.475-.005z"/></svg>';
+  let emojiTrigger = null;
+  const closeEmojiPopup = () => {{
+    document.querySelector(".discord-emoji-popup")?.remove();
+    if (emojiTrigger) emojiTrigger.setAttribute("aria-expanded", "false");
+    emojiTrigger = null;
+  }};
+  const positionEmojiPopup = () => {{
+    const popup = document.querySelector(".discord-emoji-popup");
+    if (!emojiTrigger || !popup) return;
+    const rect = emojiTrigger.getBoundingClientRect();
+    const margin = 12;
+    const gap = 8;
+    const width = popup.offsetWidth;
+    const height = popup.offsetHeight;
+    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+    const below = rect.bottom + gap;
+    const top = below + height <= window.innerHeight - margin
+      ? below
+      : Math.max(margin, rect.top - height - gap);
+    popup.style.left = left + "px";
+    popup.style.top = Math.min(top, window.innerHeight - height - margin) + "px";
+  }};
+  const emojiPopupMarkup = (img) => {{
+    const isApplication = img.dataset.emojiApp === "1";
+    const name = img.dataset.emojiName || "";
+    const art = img.currentSrc || img.src;
+    const main = '<div class="discord-emoji-popup-main">'
+      + '<img class="discord-emoji-popup-art" src="' + escapeHtml(art) + '" alt="">'
+      + '<div class="discord-emoji-popup-copy">'
+      + '<strong class="discord-emoji-popup-name">:' + escapeHtml(name) + ':</strong>'
+      + '<p>' + (isApplication
+        ? "This emoji is from the Niko app"
+        : "This emoji is from this server. Get Nitro to use it everywhere.") + '</p>'
+      + '</div></div>';
+    const label = ':' + escapeHtml(name) + ': emoji';
+    if (isApplication) {{
+      return '<div class="discord-emoji-popup" role="dialog" aria-label="' + label + '">' + main + '</div>';
+    }}
+    const guildName = emojiGuild.name || "This server";
+    const initial = escapeHtml((Array.from(String(guildName).trim())[0] || "?").toUpperCase());
+    const icon = emojiGuild.iconUrl
+      ? '<img class="discord-emoji-popup-guild-icon" src="' + escapeHtml(emojiGuild.iconUrl) + '" alt="">'
+      : '<span class="discord-emoji-popup-guild-icon discord-emoji-popup-guild-fallback" aria-hidden="true">' + initial + '</span>';
+    return '<div class="discord-emoji-popup" role="dialog" aria-label="' + label + '">'
+      + main
+      + '<a class="discord-emoji-popup-nitro" href="https://discord.com/nitro" target="_blank" rel="noopener noreferrer">' + NITRO_MARK + '<span>Get Nitro</span></a>'
+      + '<div class="discord-emoji-popup-source"><p>This emoji is from</p>'
+      + '<div class="discord-emoji-popup-guild">' + icon
+      + '<div class="discord-emoji-popup-guild-copy"><strong>' + escapeHtml(guildName) + '</strong><small>Invite-only server</small></div>'
+      + '</div></div></div>';
+  }};
+  const openEmojiPopup = (img) => {{
+    closeEmojiPopup();
+    emojiTrigger = img;
+    const holder = document.createElement("div");
+    holder.innerHTML = emojiPopupMarkup(img);
+    const popup = holder.firstElementChild;
+    if (!popup) return;
+    document.body.appendChild(popup);
+    img.setAttribute("aria-expanded", "true");
+    positionEmojiPopup();
+  }};
+  window.addEventListener("resize", positionEmojiPopup);
+  window.addEventListener("scroll", positionEmojiPopup, true);
+  // A spoiler is opened by its own click, and only then do the links inside it
+  // become clickable. The first click never follows anything it hides.
+  const bindSpoiler = (spoiler) => {{
+    const reveal = () => {{
+      if (spoiler.classList.contains("is-revealed")) return;
+      spoiler.classList.add("is-revealed");
+      spoiler.setAttribute("aria-expanded", "true");
+      spoiler.removeAttribute("aria-label");
+    }};
+    spoiler.addEventListener("click", (event) => {{
+      if (spoiler.classList.contains("is-revealed")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      reveal();
+    }});
+    spoiler.addEventListener("keydown", (event) => {{
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      reveal();
+    }});
+  }};
+  document.querySelectorAll("[data-discord-spoiler]").forEach(bindSpoiler);
   let profileTimer = null;
   let profilePollTimer = null;
   let refreshProfilePresence = null;
@@ -1561,6 +1730,13 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     }}
   }};
   document.addEventListener("click", (event) => {{
+    const emoji = event.target.closest?.("img.custom-emoji[data-emoji-id]");
+    if (emoji) {{
+      event.preventDefault();
+      closeProfile();
+      openEmojiPopup(emoji);
+      return;
+    }}
     const link = event.target.closest?.("[data-discord-user-id]");
     if (!link) {{
       // The badge and server popups float outside the card on purpose; a click
@@ -1571,11 +1747,16 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     event.preventDefault();
     openProfile(link);
   }});
+  document.addEventListener("click", (event) => {{
+    if (event.target.closest?.("img.custom-emoji[data-emoji-id]")) return;
+    if (!event.target.closest?.(".discord-emoji-popup")) closeEmojiPopup();
+  }});
   document.addEventListener("keydown", (event) => {{
     // A floating server-tag popup is the topmost layer, so Escape closes it
     // and leaves the profile underneath open for the next Escape.
     if (event.key === "Escape" && document.querySelector(".discord-server-tag-popup")) {{ closeServerTagPopup(); return; }}
-    if (event.key === "Escape") closeProfile();
+    if (event.key === "Escape") {{ closeEmojiPopup(); closeProfile(); }}
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("img.custom-emoji[data-emoji-id]")) {{ event.preventDefault(); openEmojiPopup(event.target); return; }}
     if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("[data-discord-user-id]")) {{ event.preventDefault(); openProfile(event.target); }}
   }});
   // Keep the server popup under its tag as the page or the profile card scrolls.
