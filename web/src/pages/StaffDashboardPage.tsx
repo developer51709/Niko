@@ -425,7 +425,7 @@ export function StaffDashboardPage() {
 
   const content = <div className="staff-page">
     <header className="staff-heading">
-      <div><div className="eyebrow">Staff workspace</div><h1>Shape your presence.</h1><p>Manage the public details granted to your <strong>{staff.role_label}</strong> role. Your name and avatar always come directly from Discord.</p></div>
+      <div><div className="eyebrow">Team operations</div><h1>Staff workspace.</h1><p>Manage your public staff profile, guild operations, blacklist appeals, team applications and bot health from one place.</p></div>
       <div className="staff-role-card"><span className="staff-role-mark"><img src={signedInAvatar} alt="Your Discord profile" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = discordDefaultAvatar; }} /></span><span><small>Signed in as</small><strong>{staff.role_label}</strong></span></div>
     </header>
 

@@ -309,6 +309,11 @@ async def update_follow(cxn, *, guild_id, platform: str, username: str, **fields
     updates = {key: value for key, value in fields.items() if key in UPDATABLE_COLUMNS}
     if not updates:
         return await get_follow(cxn, guild_id, platform, username)
+    if bool(updates.get("enabled")) and "failures" not in updates:
+        # Switching a follow back on starts its health record over. Keeping the
+        # count that paused it would pause it again on the very next hiccup, and
+        # the panel would keep showing stale failed checks on a working account.
+        updates["failures"] = 0
     assignments = []
     args: list = []
     for column, value in updates.items():

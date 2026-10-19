@@ -280,6 +280,31 @@ class FollowsStoreTests(unittest.TestCase):
         self.assertIn("Real Name|UC123", stored)
         self.assertNotIn("Home|UC123", stored)
 
+    def test_resuming_clears_the_failure_count_it_was_paused_for(self):
+        pool = migrated_pool()
+        follow(pool, last_post_id="stream:1")
+        paused = asyncio.run(
+            follows.update_follow(
+                pool,
+                guild_id=GUILD,
+                platform="twitch",
+                username="shroud",
+                enabled=False,
+                failures=follows.FAILURE_LIMIT,
+            )
+        )
+        resumed = asyncio.run(
+            follows.update_follow(
+                pool, guild_id=GUILD, platform="twitch", username="shroud", enabled=True
+            )
+        )
+
+        # Pausing keeps the count for the panel, resuming starts a clean record
+        # so the follow is not paused again by the next single failure.
+        self.assertEqual(paused["failures"], follows.FAILURE_LIMIT)
+        self.assertEqual(resumed["failures"], 0)
+        self.assertTrue(resumed["enabled"])
+
     def test_platform_counts_and_check_records(self):
         pool = migrated_pool()
         follow(pool, username="a", channel_id=1)
@@ -355,6 +380,92 @@ class FollowFormattingTests(unittest.TestCase):
             "New Twitch post from @shroud: Ranked grind https://twitch.tv/shroud",
         )
         self.assertEqual(follows.render_template("", account="@x", platform="twitch"), "")
+
+
+class PlatformExistenceTests(unittest.TestCase):
+    """Verification is about an account existing, not about it having a post."""
+
+    def test_a_youtube_channel_with_no_videos_still_verifies(self):
+        from utils.social import youtube
+
+        channel_id = "UC" + "a" * 22
+        quiet = SimpleNamespace(feed={"title": "Quiet Channel"}, entries=[])
+        with patch.object(youtube, "_fetch_feed", return_value=quiet):
+            verified = asyncio.run(youtube.validate_youtube_channel(channel_id))
+            latest = asyncio.run(youtube.fetch_latest_youtube(f"Quiet Channel|{channel_id}"))
+
+        # The channel is addable even though there is nothing to announce yet.
+        self.assertEqual(verified, ("Quiet Channel", channel_id))
+        self.assertIsNone(latest)
+
+    def test_youtube_existence_only_fails_on_a_missing_channel(self):
+        from utils.social import youtube
+
+        class Response:
+            def __init__(self, status):
+                self.status = status
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc_info):
+                return False
+
+        class Session:
+            status = 200
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc_info):
+                return False
+
+            def get(self, *args, **kwargs):
+                return Response(Session.status)
+
+        stored = "Home|UC" + "a" * 22
+        with patch.object(youtube.aiohttp, "ClientSession", Session):
+            for status, expected in ((200, True), (404, False), (500, True)):
+                with self.subTest(status=status):
+                    Session.status = status
+                    self.assertIs(asyncio.run(youtube.channel_exists(stored)), expected)
+
+    def test_twitch_existence_does_not_need_a_video(self):
+        from utils.social import twitch
+
+        with patch.object(twitch, "_helix", return_value=[{"id": "1", "login": "quiet"}]):
+            self.assertTrue(twitch.channel_exists("quiet"))
+        # Twitch answered that no such login exists.
+        with patch.object(twitch, "_helix", return_value=[]):
+            self.assertFalse(twitch.channel_exists("gone"))
+        # Twitch could not be asked at all: not evidence the channel is gone.
+        with patch.object(twitch, "_helix", return_value=None):
+            self.assertTrue(twitch.channel_exists("offline"))
+
+    def test_the_notifier_asks_the_platform_whether_the_account_exists(self):
+        channel_id = "UC" + "a" * 22
+        seen = []
+
+        def youtube_lookup(name):
+            seen.append(("youtube", name))
+            return True
+
+        def twitch_lookup(name):
+            seen.append(("twitch", name))
+            return False
+
+        with patch.object(notifier, "youtube_channel_exists", youtube_lookup), patch.object(
+            notifier, "twitch_channel_exists", twitch_lookup
+        ):
+            self.assertTrue(
+                asyncio.run(notifier.account_exists("youtube", f"Quiet|{channel_id}"))
+            )
+            self.assertFalse(asyncio.run(notifier.account_exists("twitch", "shroud")))
+
+        self.assertEqual(seen, [("youtube", f"Quiet|{channel_id}"), ("twitch", "shroud")])
 
 
 class FakeChannel:
@@ -474,8 +585,13 @@ class PollLoopTests(unittest.TestCase):
         async def failing_fetch(platform, username):
             return None
 
+        async def gone(platform, username):
+            return False
+
         instance = cog_for(bot)
-        with patch.object(notifier, "_fetch", failing_fetch):
+        with patch.object(notifier, "_fetch", failing_fetch), patch.object(
+            notifier, "account_exists", gone
+        ):
             for _ in range(notifier.FAILURE_LIMIT):
                 asyncio.run(instance.poll_once())
 
@@ -486,6 +602,84 @@ class PollLoopTests(unittest.TestCase):
         # The pause is announced once, not on every failed check.
         self.assertEqual(len(channel.sent), 1)
         self.assertIn("Paused @shroud", "".join(view_text(channel.sent[0]["view"])))
+
+    def test_a_quiet_account_is_healthy_and_clears_old_failures(self):
+        """Nothing to announce is not a failed request (YouTube, offline Twitch)."""
+        pool = migrated_pool()
+        channel = FakeChannel(10)
+        bot = FakeBot(pool, [FakeGuild(GUILD, [channel])])
+        follow(pool, last_post_id="stream:1")
+        asyncio.run(
+            follows.update_follow(
+                pool, guild_id=GUILD, platform="twitch", username="shroud", failures=4
+            )
+        )
+
+        async def nothing_new(platform, username):
+            return None
+
+        async def still_there(platform, username):
+            return True
+
+        with patch.object(notifier, "_fetch", nothing_new), patch.object(
+            notifier, "account_exists", still_there
+        ):
+            asyncio.run(cog_for(bot).poll_once())
+
+        row = asyncio.run(follows.get_follow(pool, GUILD, "twitch", "shroud"))
+        # The account is readable, so the check succeeded and the stale count
+        # that was heading towards a pause is gone.
+        self.assertEqual(row["failures"], 0)
+        self.assertTrue(row["enabled"])
+        self.assertIsNotNone(row["last_checked_at"])
+        self.assertEqual(channel.sent, [])
+
+    def test_a_quiet_account_never_reaches_the_pause_threshold(self):
+        pool = migrated_pool()
+        channel = FakeChannel(10)
+        bot = FakeBot(pool, [FakeGuild(GUILD, [channel])])
+        follow(pool, last_post_id="stream:1")
+
+        async def nothing_new(platform, username):
+            return None
+
+        async def still_there(platform, username):
+            return True
+
+        instance = cog_for(bot)
+        with patch.object(notifier, "_fetch", nothing_new), patch.object(
+            notifier, "account_exists", still_there
+        ):
+            for _ in range(notifier.FAILURE_LIMIT * 3):
+                asyncio.run(instance.poll_once())
+
+        row = asyncio.run(follows.get_follow(pool, GUILD, "twitch", "shroud"))
+        self.assertEqual(row["failures"], 0)
+        self.assertTrue(row["enabled"])
+        self.assertEqual(channel.sent, [])
+
+    def test_a_delivery_problem_is_not_a_failed_check(self):
+        """A deleted announcement channel is the server's fault, not the account's."""
+        pool = migrated_pool()
+        bot = FakeBot(pool, [FakeGuild(GUILD, [])])
+        follow(pool, last_post_id="stream:1")
+        asyncio.run(
+            follows.update_follow(
+                pool, guild_id=GUILD, platform="twitch", username="shroud", failures=3
+            )
+        )
+
+        async def fake_fetch(platform, username):
+            return {"id": "stream:2", "url": "https://twitch.tv/shroud", "title": "Live"}
+
+        with patch.object(notifier, "_fetch", fake_fetch):
+            asyncio.run(cog_for(bot).poll_once())
+
+        row = asyncio.run(follows.get_follow(pool, GUILD, "twitch", "shroud"))
+        self.assertEqual(row["failures"], 0)
+        self.assertTrue(row["enabled"])
+        # The old id is kept so the post is still announced once a channel exists.
+        self.assertEqual(row["last_post_id"], "stream:1")
 
     def test_paused_follows_and_disabled_servers_are_never_fetched(self):
         pool = migrated_pool()
@@ -823,6 +1017,47 @@ class NotifierRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("already follows", response.get_json()["error"])
 
+    def test_add_follow_falls_back_to_the_saved_default_channel(self):
+        """Leaving the channel picker blank is valid while a default exists."""
+        pool = migrated_pool()
+        asyncio.run(follows.save_notifier_config(pool, GUILD, default_channel_id=20))
+        client, patches = notifier_client(pool)
+        try:
+            with patch.object(
+                notifier, "validate_account", side_effect=lambda platform, query: ok_twitch(query)
+            ), patch.object(
+                notifier,
+                "fetch_latest_post",
+                side_effect=lambda platform, username: post("stream:1"),
+            ):
+                added = client.post(
+                    f"/api/guild/{GUILD}/notifier/follows",
+                    json={"platform": "twitch", "query": "shroud", "channel_id": ""},
+                    headers={"X-CSRF-Token": "test-csrf"},
+                )
+        finally:
+            stop_patches(patches)
+
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(added.get_json()["follow"]["channel_id"], "20")
+
+    def test_add_follow_without_a_channel_or_default_is_rejected(self):
+        """With the default cleared, the channel becomes required again."""
+        pool = migrated_pool()
+        client, patches = notifier_client(pool)
+        try:
+            missing = client.post(
+                f"/api/guild/{GUILD}/notifier/follows",
+                json={"platform": "twitch", "query": "shroud"},
+                headers={"X-CSRF-Token": "test-csrf"},
+            )
+        finally:
+            stop_patches(patches)
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("Pick a channel", missing.get_json()["error"])
+        self.assertEqual(asyncio.run(follows.list_follows(pool, GUILD)), [])
+
     def test_update_and_delete_follows(self):
         pool = migrated_pool()
         follow(pool, last_post_id="stream:1")
@@ -896,7 +1131,7 @@ class NotifierRouteTests(unittest.TestCase):
         try:
             with patch.object(
                 notifier, "fetch_latest_post", side_effect=lambda platform, username: None
-            ):
+            ), patch.object(notifier, "account_exists", side_effect=lambda platform, name: False):
                 response = client.post(
                     f"/api/guild/{GUILD}/notifier/test",
                     json={"platform": "twitch", "username": "shroud"},
@@ -907,6 +1142,31 @@ class NotifierRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.get_json()["delivered"])
+        self.assertIn("could not be read", response.get_json()["message"])
+        self.assertEqual(channel.sent, [])
+
+    def test_test_notification_reports_a_quiet_account_as_healthy(self):
+        pool = migrated_pool()
+        follow(pool, last_post_id="stream:1")
+        channel = FakeChannel(10)
+        guild = FakeGuild(GUILD, [channel])
+        bot = SimpleNamespace(cxn=pool, get_guild=lambda guild_number: guild)
+        client, patches = notifier_client(pool, bot=bot)
+        try:
+            with patch.object(
+                notifier, "fetch_latest_post", side_effect=lambda platform, username: None
+            ), patch.object(notifier, "account_exists", side_effect=lambda platform, name: True):
+                response = client.post(
+                    f"/api/guild/{GUILD}/notifier/test",
+                    json={"platform": "twitch", "username": "shroud"},
+                    headers={"X-CSRF-Token": "test-csrf"},
+                )
+        finally:
+            stop_patches(patches)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.get_json()["delivered"])
+        self.assertIn("nothing to announce", response.get_json()["message"])
         self.assertEqual(channel.sent, [])
 
 

@@ -237,7 +237,10 @@ def api_add_notifier_follow(guild_id):
         return jsonify({"error": "That account could not be checked right now. Try again."}), 503
     if not ok:
         label = notifier.PLATFORMS[platform]["label"]
-        return jsonify({"error": f"Could not find **{query}** as a {label}."}), 400
+        hint = notifier.validation_hint(platform)
+        return jsonify({
+            "error": f"Could not find **{query}** as a {label}." + (f" {hint}" if hint else "")
+        }), 400
 
     try:
         existing = run_on_bot_loop(get_follow(cxn, guild_number, platform, stored))
@@ -397,6 +400,14 @@ async def _send_test_notification(guild_number: int, follow: dict) -> dict:
 
     post = await notifier.fetch_latest_post(follow["platform"], follow["username"])
     if not post:
+        # A quiet account (no uploads, or offline with no VODs) is not a broken
+        # one, so say that instead of reporting a read failure.
+        if await notifier.account_exists(follow["platform"], follow["username"]):
+            return {
+                "ok": True,
+                "delivered": False,
+                "message": "The account is readable but has nothing to announce right now.",
+            }
         return {
             "ok": True,
             "delivered": False,

@@ -30,8 +30,21 @@ from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
 from utils.blacklist_manager import BlacklistManager
-from utils.social.youtube import fetch_latest_youtube, validate_youtube_channel, make_stored, display_name as yt_display, channel_id_of
-from utils.social.twitch import fetch_latest_twitch, normalize_login as twitch_login, validate_twitch_login
+from utils.social.youtube import (
+    fetch_latest_youtube,
+    validate_youtube_channel,
+    channel_exists as youtube_channel_exists,
+    make_stored,
+    display_name as yt_display,
+    channel_id_of,
+)
+from utils.social.twitch import (
+    fetch_latest_twitch,
+    normalize_login as twitch_login,
+    validate_twitch_login,
+    channel_exists as twitch_channel_exists,
+    credentials_configured as twitch_configured,
+)
 from utils.social.twitter import fetch_latest_tweet, validate_twitter_username
 from utils.social.tiktok import fetch_latest_tiktok, validate_tiktok_username
 from utils.social.bluesky import fetch_latest_bluesky, validate_bluesky_handle
@@ -137,6 +150,28 @@ async def _fetch(platform: str, username: str) -> dict | None:
     return None
 
 
+async def account_exists(platform: str, username: str) -> bool:
+    """Whether the platform still knows this account, posts or not.
+
+    A channel with no uploads, or one that is simply offline with no videos to
+    show, is healthy — only an account the platform reports as gone is a failed
+    check. Without this distinction every quiet channel is paused after a few
+    polls, which is exactly the "random" pausing servers saw on YouTube and
+    Twitch.
+    """
+    try:
+        if platform == "youtube":
+            return await youtube_channel_exists(username)
+        if platform == "twitch":
+            # Helix access is synchronous, like the fetcher that uses it.
+            return await asyncio.to_thread(twitch_channel_exists, username)
+        ok, _ = await _validate(platform, username)
+        return ok
+    except Exception:
+        # An unanswerable check is no evidence the account is gone.
+        return True
+
+
 async def _validate(platform: str, raw: str) -> tuple[bool, str]:
     """
     Validate the user input for a given platform.
@@ -192,6 +227,21 @@ def platform_catalog() -> list[dict]:
         }
         for platform, meta in PLATFORMS.items()
     ]
+
+
+def validation_hint(platform: str) -> str:
+    """Explain a verification failure that is about configuration, not input.
+
+    Twitch is the one platform with app credentials, and without them no login
+    can ever be confirmed. Saying so beats "could not find" for an account the
+    owner knows exists.
+    """
+    if platform == "twitch" and not twitch_configured():
+        return (
+            "Twitch tracking needs TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET, "
+            "and this bot has neither configured."
+        )
+    return ""
 
 
 async def validate_account(platform: str, raw: str) -> tuple[bool, str]:
@@ -447,7 +497,7 @@ class AddFollowModal(Modal):
                 discord.ui.TextDisplay(
                     content=(
                         f"Could not find **{raw}** as a {meta['label']}.\n"
-                        f"Double-check the name and try again."
+                        f"{validation_hint(self.platform) or 'Double-check the name and try again.'}"
                     )
                 ),
                 accent_colour=discord.Colour(0xED4245),
@@ -908,12 +958,16 @@ class Notifier(commands.Cog):
 
         ok, stored = await _validate(platform, query)
         if not ok:
+            hint = validation_hint(platform)
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Account Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"Could not validate **{query}** on **{platform.capitalize()}**."
+                    content=(
+                        f"Could not validate **{query}** on **{platform.capitalize()}**."
+                        + (f"\n{hint}" if hint else "")
+                    )
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
@@ -922,16 +976,22 @@ class Notifier(commands.Cog):
 
         post = await _fetch(platform, stored)
         if not post:
-            fail = discord.ui.LayoutView()
-            fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} No Posts Found"),
+            # The account itself is fine, there is just nothing to announce yet
+            # (no uploads, or offline with no VODs). That is not a failure.
+            quiet = discord.ui.LayoutView()
+            quiet.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Account Verified"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"Account found but couldn't retrieve any posts for **{stored}**."
+                    content=(
+                        f"**{_display(platform, stored)}** exists and can be read, "
+                        "but has nothing to announce right now — it may not have "
+                        "uploaded anything yet."
+                    )
                 ),
-                accent_colour=discord.Colour(0xFEE75C),
+                accent_colour=discord.Colour(0x57F287),
             ))
-            await msg.edit(view=fail)
+            await msg.edit(view=quiet)
             return
 
         dname   = _display(platform, stored)
@@ -977,12 +1037,16 @@ class Notifier(commands.Cog):
 
         ok, stored = await _validate(platform, username)
         if not ok:
+            hint = validation_hint(platform)
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Found"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"Could not find **{username}** on **{platform.capitalize()}**."
+                    content=(
+                        f"Could not find **{username}** on **{platform.capitalize()}**."
+                        + (f"\n{hint}" if hint else "")
+                    )
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
@@ -1099,6 +1163,22 @@ class Notifier(commands.Cog):
         )
         return corrected if renamed else username
 
+    async def _record_success(self, follow: dict, checked_at: str) -> None:
+        """Mark a check as healthy and clear any failures it had collected.
+
+        A stale count is what made a resumed follow pause again on its first
+        hiccup and kept the dashboard warning about an account that had been
+        readable for days.
+        """
+        await record_check(
+            self.bot.cxn,
+            guild_id=follow["guild_id"],
+            platform=follow["platform"],
+            username=follow["username"],
+            failures=0,
+            last_checked_at=checked_at,
+        )
+
     async def _record_failure(self, follow: dict, checked_at: str) -> None:
         """Track a failed check and pause the follow once it keeps failing.
 
@@ -1164,6 +1244,7 @@ class Notifier(commands.Cog):
         username = follow["username"]
         post_id = post.get("id")
         if not post_id:
+            await self._record_success(follow, checked_at)
             return False
 
         async def remember(post_id=post_id) -> None:
@@ -1188,6 +1269,9 @@ class Notifier(commands.Cog):
 
         channel = _follow_channel(follow)
         if channel is None:
+            # The account was read fine; only the announcement channel is gone.
+            # That is a server-side problem, not a failed check on the account.
+            await self._record_success(follow, checked_at)
             return False
 
         role = None
@@ -1207,7 +1291,10 @@ class Notifier(commands.Cog):
                 allowed_mentions=allowed_mentions,
             )
         except Exception:
-            return False  # missing permissions — keep the old id so it retries later
+            # Missing permissions or a Discord outage: keep the old id so it
+            # retries later, but do not blame the account for it.
+            await self._record_success(follow, checked_at)
+            return False
         await remember()
         return True
 
@@ -1273,9 +1360,15 @@ class Notifier(commands.Cog):
             for follow in accounts[(platform, username)]:
                 follow["platform"] = platform
                 try:
-                    posted = await self._deliver(follow, post, checked_at) if post else False
                     if post is None:
-                        await self._record_failure(follow, checked_at)
+                        # Nothing new to announce is not a failure. Confirm the
+                        # account itself still exists; only then is a check lost.
+                        if await account_exists(platform, username):
+                            await self._record_success(follow, checked_at)
+                        else:
+                            await self._record_failure(follow, checked_at)
+                        continue
+                    posted = await self._deliver(follow, post, checked_at)
                 except Exception:
                     continue
                 # Brief pause between real sends, never on pure bookkeeping.

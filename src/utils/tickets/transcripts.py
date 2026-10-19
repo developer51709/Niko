@@ -1147,10 +1147,19 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-avatar-fallback {{ display: flex; align-items: center; justify-content: center; background: #5865f2; color: #fff; font-size: 28px; font-weight: 600; }}
   .discord-profile-avatar-decoration {{ position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; transform: translate(-50%, -50%) scale(1.2); pointer-events: none; }}
   .discord-status-icon {{ position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }}
-  .discord-profile-status {{ position: relative; flex: 1 1 auto; min-width: 0; padding: 8px 11px; color: #dbdee1; background: #232428; border-radius: 12px; font-size: 12.5px; line-height: 1.4; }}
-  .discord-profile-status::before {{ position: absolute; top: 50%; left: -6px; border: 6px solid transparent; border-right-color: #232428; border-left: 0; content: ""; transform: translateY(-50%); }}
-  .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }}
-  .discord-profile-status-emoji {{ display: inline-block; width: 15px; height: 15px; margin-right: 5px; object-fit: contain; vertical-align: -.2em; }}
+  /* Discord's custom-status bubble: a dark card beside the avatar with a tail
+     pointing back at it, a two-line clamp that expands on click, and a compact
+     square when the status is only an emoji. */
+  .discord-profile-status {{ position: relative; flex: 0 1 auto; width: fit-content; max-width: min(15rem, 100%); min-width: 0; margin-left: 4px; padding: 9px 13px; color: #f2f3f5; background: #232428; border: 1px solid rgb(255 255 255 / .06); border-radius: 18px; box-shadow: 0 6px 18px rgb(0 0 0 / .28); font-size: 13px; line-height: 1.42; }}
+  .discord-profile-status::before {{ position: absolute; top: 14px; left: -6px; width: 13px; height: 13px; background: inherit; border-bottom: 1px solid rgb(255 255 255 / .06); border-left: 1px solid rgb(255 255 255 / .06); border-radius: 0 0 0 4px; content: ""; transform: rotate(45deg); }}
+  .discord-profile-status.is-clamped {{ cursor: pointer; }}
+  .discord-profile-status.is-clamped:hover {{ background: #2b2d31; }}
+  .discord-profile-status:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
+  .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }}
+  .discord-profile-status.is-expanded .discord-profile-status-text {{ display: block; -webkit-line-clamp: unset; }}
+  .discord-profile-status-emoji {{ display: inline-block; width: 16px; height: 16px; margin-right: 6px; object-fit: contain; vertical-align: -.22em; }}
+  .discord-profile-status.is-emoji-only {{ display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 80px; padding: 0; border-radius: 20px; }}
+  .discord-profile-status.is-emoji-only .discord-profile-status-emoji {{ display: grid; place-items: center; width: 40px; height: 40px; margin: 0; font-size: 34px; line-height: 1; }}
   .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
   .discord-profile-username {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }}
   .discord-profile-user-tag {{ min-width: 0; overflow-wrap: anywhere; }}
@@ -1434,8 +1443,48 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     const statusEmoji = customStatus.emoji_id
       ? '<img class="discord-profile-status-emoji" src="https://cdn.discordapp.com/emojis/' + encodeURIComponent(customStatus.emoji_id) + (customStatus.emoji_animated ? '.gif' : '.png') + '" alt="">'
       : (customStatus.emoji_name ? '<span class="discord-profile-status-emoji">' + escapeHtml(customStatus.emoji_name) + '</span>' : '');
-    if (!customStatus.text && !statusEmoji) return '';
-    return '<div class="discord-profile-status"><span class="discord-profile-status-text">' + statusEmoji + escapeHtml(customStatus.text || '') + '</span></div>';
+    const statusText = String(customStatus.text || '').trim();
+    if (!statusText && !statusEmoji) return '';
+    if (!statusText) return '<div class="discord-profile-status is-emoji-only">' + statusEmoji + '</div>';
+    return '<div class="discord-profile-status" data-profile-status-bubble><span class="discord-profile-status-text">' + statusEmoji + escapeHtml(statusText) + '</span></div>';
+  }};
+  // Long statuses clamp to two lines, like Discord, and expand when clicked. A
+  // presence refresh rebuilds the bubble, so the binder runs on the new node.
+  const bindStatusBubble = (card, startExpanded) => {{
+    const bubble = card.querySelector('[data-profile-status-bubble]');
+    const text = bubble ? bubble.querySelector('.discord-profile-status-text') : null;
+    if (!bubble || !text) return;
+    // A presence refresh rebuilds the bubble; an open status stays open so the
+    // five-second poll never collapses the text someone is reading.
+    if (startExpanded) bubble.classList.add('is-expanded');
+    const sync = () => {{
+      const expanded = bubble.classList.contains('is-expanded');
+      const clamped = !expanded && text.scrollHeight > text.clientHeight + 1;
+      bubble.classList.toggle('is-clamped', clamped);
+      if (clamped || expanded) {{
+        bubble.setAttribute('role', 'button');
+        bubble.setAttribute('tabindex', '0');
+        bubble.setAttribute('aria-expanded', String(expanded));
+        bubble.setAttribute('title', expanded ? 'Show less' : 'Show full status');
+      }} else {{
+        bubble.removeAttribute('role');
+        bubble.removeAttribute('tabindex');
+        bubble.removeAttribute('aria-expanded');
+        bubble.removeAttribute('title');
+      }}
+    }};
+    const toggle = () => {{
+      if (!bubble.classList.contains('is-clamped') && !bubble.classList.contains('is-expanded')) return;
+      bubble.classList.toggle('is-expanded');
+      sync();
+    }};
+    bubble.addEventListener('click', toggle);
+    bubble.addEventListener('keydown', (event) => {{
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggle();
+    }});
+    sync();
   }};
   const closeServerTagPopup = () => {{
     document.querySelector(".discord-server-tag-popup")?.remove();
@@ -1702,6 +1751,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       }});
     }}
     bindSpotify(card, spotify.timing);
+    bindStatusBubble(card);
     // Presence moves while the card is open, so an open popup re-reads the same
     // public endpoint the website popup uses instead of freezing the presence it
     // was opened with. The embedded snapshot stays the source when the API cannot
@@ -1711,7 +1761,9 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     const applyPresence = (next) => {{
       if (!next || !card.isConnected) return;
       const head = card.querySelector('.discord-profile-head');
+      const wasExpanded = Boolean(head && head.querySelector('.discord-profile-status.is-expanded'));
       if (head) head.innerHTML = profileAvatar(next) + profileStatusBubble(next);
+      bindStatusBubble(card, wasExpanded);
       const spotifyNode = card.querySelector('[data-profile-spotify]');
       const nextSpotify = profileSpotify(next);
       if (spotifyNode) spotifyNode.innerHTML = nextSpotify.html;

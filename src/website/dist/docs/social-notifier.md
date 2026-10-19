@@ -21,8 +21,8 @@ Everything the Discord commands can do is also available per server under **Dash
 
 The tab has three parts:
 
-- **Announcement defaults** — the server-wide switch that pauses every announcement at once, plus a default channel and a default ping role used by accounts that do not set their own.
-- **Add an account** — paste a profile link (the platform is detected for you) or type the handle, pick a channel, and optionally set a ping role and a custom message. Niko validates the account against the platform before saving, and the newest post is recorded silently so following a creator never dumps their back catalogue into your channel.
+- **Announcement defaults** — the server-wide switch that pauses every announcement at once, plus a default channel and a default ping role used by accounts that do not set their own. While a default channel is saved, adding an account does not require you to pick a channel; clearing the default makes the picker required again.
+- **Add an account** — paste a profile link (the platform is detected for you) or type the handle, and optionally set a ping role and a custom message. The announcement channel is optional while the server has a **default channel** saved above: leave the picker on the default and Niko uses it. With no default saved, the channel is required. Niko checks that the account exists before saving — an account that has not posted anything yet is still valid — and the newest post is recorded silently so following a creator never dumps their back catalogue into your channel.
 - **Followed accounts** — every tracked account as its own card with its channel, ping role and message, a paused/active badge, how many checks have failed, when it was last checked, plus **Send test**, **Pause**/**Resume**, **Remove** and **Save changes**.
 
 Adding an account that is already followed updates that card instead of creating a duplicate, and each card only sends the fields you actually changed.
@@ -112,7 +112,7 @@ Before following an account, you can verify it works:
 .notifier test <platform> <query>
 ```
 
-This validates the account exists and shows the latest post.
+This validates the account exists and shows the latest post. A channel with nothing to announce yet is reported as verified rather than as a failure.
 
 ## Notification Format
 
@@ -134,7 +134,8 @@ Each notification includes a link to view the original post.
 3. For each followed account, the newest post is compared with the last-seen post ID
 4. If the post ID differs, the notification is sent and the last-seen ID is updated to prevent duplicates
 5. On first follow — from Discord or from the dashboard — the current latest post is recorded without sending a notification
-6. Accounts that keep failing are paused automatically instead of being retried forever, and the channel is told once, with the command to resume them
+6. A check only fails when the platform reports that the account is gone or cannot be reached at all. Having nothing new to announce — no uploads yet, or offline with no VODs — is a healthy check, not a failure
+7. Accounts that keep failing are paused automatically instead of being retried forever, and the channel is told once, with the command to resume them
 
 ## Limits and Health
 
@@ -144,5 +145,7 @@ Each notification includes a link to view the original post.
 | Accounts per platform per server | 10 |
 | Custom message length | 300 characters |
 | Failed checks before auto-pause | 5 |
+
+A successful check clears an account's failed-check count, so an account that recovers stops showing warnings. Resuming a paused account also starts its count over, which means one bad poll never pauses it again.
 
 A paused account keeps its history, so **Resume** in the dashboard (or `.notifier resume`) puts it straight back to work once the platform is reachable again.

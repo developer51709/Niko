@@ -29,15 +29,30 @@
 .dashboard-layout .server-chart-insights span { display: inline-flex; gap: 5px; }
 .dashboard-layout .server-chart-insights strong { color: var(--ink); font-weight: 700; }
 .dashboard-layout .server-chart-description { margin: 5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+/* The inspected day, kept visible so a tap on a touch screen reads as clearly
+   as a mouse hover does. */
+.dashboard-layout .server-chart-readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 9px; min-height: 17px; margin: 7px 0 3px; color: var(--dim); font-size: 9px; }
+.dashboard-layout .server-chart-readout strong { color: var(--ink); font-size: 10px; }
+.dashboard-layout .server-chart-readout span { white-space: nowrap; }
+.dashboard-layout .server-chart-readout.is-active span { color: var(--accent-dark); }
+.dashboard-layout .server-chart-interactive { display: block; margin: 0 -2px; padding: 0 2px; border-radius: 6px; outline: none; touch-action: pan-y; }
+.dashboard-layout .server-chart-interactive:focus-visible { outline: 2px solid rgba(213, 220, 229, .5); outline-offset: 2px; }
 .dashboard-layout .server-chart-empty { display: grid; min-height: 102px; place-items: center; padding: 16px; color: var(--muted); font-size: 10px; line-height: 1.6; text-align: center; }
 .dashboard-layout .server-line-chart { display: block; width: 100%; height: 112px; overflow: visible; }
+.dashboard-layout .server-line-chart.is-interactive { cursor: crosshair; touch-action: pan-y; }
 .dashboard-layout .server-chart-gridline { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 3 4; }
 .dashboard-layout .server-chart-axis-label { fill: var(--dim); font: 8px "Space Mono", monospace; }
 .dashboard-layout .server-chart-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dashboard-layout .server-chart-guide { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 3; opacity: .45; }
 .dashboard-layout .server-chart-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.dashboard-layout .server-chart-point.is-selected { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
 .dashboard-layout .server-chart-days { display: flex; justify-content: space-between; gap: 2px; padding: 0 0 0 12%; color: var(--dim); font: 8px "Space Mono", monospace; }
-.dashboard-layout .server-member-chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); align-items: end; gap: 5px; height: 112px; padding: 9px 2px 0; border-bottom: 1px solid var(--line-soft); }
-.dashboard-layout .server-member-day { min-width: 0; display: flex; height: 100%; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; color: var(--dim); font: 7px "Space Mono", monospace; }
+.dashboard-layout .server-member-chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); align-items: end; gap: 5px; height: 112px; padding: 9px 2px 0; border-bottom: 1px solid var(--line-soft); border-radius: 6px; outline: none; touch-action: pan-y; }
+.dashboard-layout .server-member-chart:focus-visible { outline: 2px solid rgba(213, 220, 229, .5); outline-offset: 2px; }
+.dashboard-layout .server-member-day { min-width: 0; width: 100%; display: flex; height: 100%; padding: 0; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; color: var(--dim); background: transparent; border: 0; border-radius: 5px; font: 7px "Space Mono", monospace; appearance: none; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.dashboard-layout .server-member-day:hover, .dashboard-layout .server-member-day.is-selected { color: var(--ink); background: rgba(255, 255, 255, .06); }
+.dashboard-layout .server-member-day.is-selected .leave-bar { opacity: 1; }
+.dashboard-layout .server-member-day:focus-visible { outline: 2px solid rgba(213, 220, 229, .5); outline-offset: 1px; }
 .dashboard-layout .server-member-day > span { min-height: 10px; white-space: nowrap; }
 .dashboard-layout .server-member-bars { display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 100%; height: 84px; }
 .dashboard-layout .server-member-bars i { width: min(38%, 7px); min-height: 0; border-radius: 3px 3px 0 0; transition: height .25s ease; }

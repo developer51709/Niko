@@ -81,7 +81,12 @@ async def fetch_latest_reddit(subreddit: str) -> dict | None:
 
 
 async def validate_reddit(subreddit: str) -> bool:
-    """Return True if the subreddit exists and has recent posts."""
+    """Return True if the subreddit exists, even before it has any posts.
+
+    An empty subreddit still answers its feed with an empty list; only a
+    subreddit that does not exist comes back 404. Requiring a post here made a
+    freshly created community impossible to add.
+    """
     sub = _clean_sub(subreddit)
     url = f"https://www.reddit.com/r/{sub}/new/.rss?limit=1"
 
@@ -94,11 +99,7 @@ async def validate_reddit(subreddit: str) -> bool:
                             await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
                             continue
                         return False
-                    if resp.status != 200:
-                        return False
-                    content = await resp.text()
-                    feed = feedparser.parse(content)
-                    return len(feed.entries) > 0
+                    return resp.status not in (404, 410)
         except Exception:
             if attempt < _MAX_RETRIES - 1:
                 await asyncio.sleep(_RETRY_DELAY)
