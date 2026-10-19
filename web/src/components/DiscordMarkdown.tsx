@@ -439,6 +439,46 @@ function statusEmoji(status: DiscordCustomStatus) {
   return status.emoji_name ? <span className="discord-profile-status-emoji">{status.emoji_name}</span> : null;
 }
 
+/**
+ * Discord's custom-status bubble. An emoji-only status is a compact square that
+ * holds just the emoji; text clamps to two lines and expands on click, the way
+ * Discord truncates a long status and opens it in full.
+ */
+function ProfileCustomStatus({ status }: { status: DiscordCustomStatus }) {
+  const emoji = statusEmoji(status);
+  const text = status.text?.trim() || "";
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const textRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const node = textRef.current;
+    if (expanded || !text || !node) {
+      setClamped(false);
+      return;
+    }
+    setClamped(node.scrollHeight > node.clientHeight + 1);
+  }, [expanded, text, status.emoji_id, status.emoji_name]);
+  const toggle = useCallback(() => setExpanded((current) => !current), []);
+  if (!text) return <div className="discord-profile-status is-emoji-only">{emoji}</div>;
+  const expandable = clamped || expanded;
+  return <div
+    className={`discord-profile-status${expanded ? " is-expanded" : ""}${clamped ? " is-clamped" : ""}`}
+    role={expandable ? "button" : undefined}
+    tabIndex={expandable ? 0 : undefined}
+    aria-expanded={expandable ? expanded : undefined}
+    aria-label={expandable ? (expanded ? "Collapse custom status" : "Show full custom status") : undefined}
+    title={expandable ? (expanded ? "Show less" : "Show full status") : undefined}
+    onClick={expandable ? toggle : undefined}
+    onKeyDown={expandable ? (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggle();
+    } : undefined}
+  >
+    <span ref={textRef} className="discord-profile-status-text">{emoji}{text}</span>
+  </div>;
+}
+
 function trackClock(seconds: number) {
   const total = Math.max(0, Math.round(seconds));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
@@ -670,9 +710,7 @@ export function useDiscordProfile(enabled = true) {
                 <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
                 {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
               </DiscordStatusAvatar>}
-              {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <div className="discord-profile-status">
-                <span className="discord-profile-status-text">{statusEmoji(customStatus)}{customStatus.text}</span>
-              </div>}
+              {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <ProfileCustomStatus status={customStatus} />}
             </div>
             <h2 className="discord-profile-name">{profile.display_name}</h2>
             {/* Discord puts the server tag pill on the username row and the

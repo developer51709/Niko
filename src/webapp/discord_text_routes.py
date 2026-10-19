@@ -101,15 +101,15 @@ def _custom_status(member):
         kind = getattr(activity, "type", None)
         if str(getattr(kind, "name", kind) or "").lower() != "custom":
             continue
-        # The status text is always ``state``. discord.py fills ``name`` with the
-        # placeholder "Custom Status" when a member sets only an emoji, so
-        # reading ``name`` as a fallback wrote that placeholder into the popup.
-        text = getattr(activity, "state", None)
+        # discord.py stores the literal placeholder "Custom Status" in both
+        # ``state`` and ``name`` when a member sets only an emoji, so the shared
+        # normaliser keeps that placeholder out of the popup text.
+        text = _server.custom_status_text(activity)
         emoji = getattr(activity, "emoji", None)
-        if not text and emoji is None:
+        if text is None and emoji is None:
             continue
         return {
-            "text": str(text) if text else None,
+            "text": text,
             # A unicode emoji carries only a name; a custom one also has an id.
             "emoji_name": getattr(emoji, "name", None),
             "emoji_id": str(getattr(emoji, "id", "") or "") or None,

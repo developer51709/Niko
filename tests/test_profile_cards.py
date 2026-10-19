@@ -271,6 +271,16 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         self.assertIn(".catch(() => {});", self.source)
         self.assertIn("setProfile((current) => (current && current.id === next.id ? next : current))", self.source)
 
+    def test_the_custom_status_bubble_matches_discords_layout(self):
+        """The bubble keeps Discord's shape: square for an emoji, clamped text."""
+        styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn('className="discord-profile-status is-emoji-only"', self.source)
+        self.assertIn(".discord-profile-status.is-emoji-only {", styles)
+        # Long text shows two lines, then opens in full when the bubble is clicked.
+        self.assertIn("-webkit-line-clamp: 2;", styles)
+        self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text", styles)
+        self.assertIn("setExpanded((current) => !current)", self.source)
+
     def test_the_popup_dot_uses_the_live_status(self):
         self.assertIn("<DiscordStatusAvatar status={profileStatusKey(profile.status)}", self.source)
         self.assertIn("label={profileStatusLabel(profile.status)}", self.source)

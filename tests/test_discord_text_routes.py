@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import discord
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
@@ -281,19 +283,48 @@ def test_public_discord_user_profile_reads_the_richest_presence_across_guilds(mo
 
 
 def test_custom_status_with_only_an_emoji_does_not_show_the_placeholder_text():
-    """discord.py names an emoji-only custom activity "Custom Status"."""
-    activity = SimpleNamespace(
-        type=SimpleNamespace(name="custom"),
-        state=None,
-        name="Custom Status",
-        emoji=SimpleNamespace(name="\U0001f319", id=None, animated=False),
-    )
+    """An emoji-only custom status shows the emoji and no text.
+
+    Discord omits ``state`` for an emoji-only status, so discord.py stores the
+    literal placeholder "Custom Status" in both ``state`` and ``name``. The
+    popup used to render that placeholder beside the emoji.
+    """
+    activity = discord.CustomActivity(name="Custom Status", emoji="\U0001f319")
     member = SimpleNamespace(activities=[activity])
 
     status = routes._custom_status(member)
 
     assert status["text"] is None
     assert status["emoji_name"] == "\U0001f319"
+
+
+def test_profile_popup_endpoint_returns_no_text_for_an_emoji_only_status(monkeypatch):
+    """The popup payload carries the emoji alone, with no placeholder text."""
+    user = _presence_user()
+    activity = discord.CustomActivity(name="Custom Status", emoji="\U0001f319")
+    member = _presence_member(user, status="online", activities=[activity])
+    monkeypatch.setattr(routes, "_discord_bot", _presence_bot([member], user))
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    profile = app.test_client().get("/api/discord/users/456").get_json()
+
+    assert profile["custom_status"]["text"] is None
+    assert profile["custom_status"]["emoji_name"] == "\U0001f319"
+
+
+def test_staff_cards_drop_the_custom_status_placeholder_text(monkeypatch):
+    """The staff card and the popup share one text normaliser."""
+    user = _presence_user()
+    activity = discord.CustomActivity(name="Custom Status", emoji="\U0001f319")
+    member = _presence_member(user, status="online", activities=[activity])
+    bot = _presence_bot([member], user)
+    monkeypatch.setattr(routes._server, "_discord_bot", bot)
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    identity = routes._server._staff_identity("456")
+
+    assert identity["custom_status"]["text"] is None
+    assert identity["custom_status"]["emoji"]["value"] == "\U0001f319"
 
 
 def _tagged_profile_user(primary_guild):
