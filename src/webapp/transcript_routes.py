@@ -13,6 +13,23 @@ globals().update({
     if not name.startswith("__")
 })
 
+def _guild_identity(guild_id):
+    """The ticket server's name and icon for the emoji popup's source row."""
+    guild = None
+    try:
+        if _discord_bot is not None:
+            guild = _discord_bot.get_guild(int(guild_id))
+    except (AttributeError, TypeError, ValueError):
+        guild = None
+    if guild is None:
+        return {"guild_name": "Server", "guild_icon_url": None}
+    icon = getattr(guild, "icon", None)
+    return {
+        "guild_name": getattr(guild, "name", None) or "Server",
+        "guild_icon_url": str(icon.url) if icon is not None else None,
+    }
+
+
 def _resolve_transcript_mentions(guild_id, messages):
     """Resolve all transcript mentions through the shared bounded resolver."""
     if not isinstance(messages, list):
@@ -44,6 +61,7 @@ def api_get_transcript(transcript_id):
             result["messages"] = json.loads(messages)
         except (json.JSONDecodeError, TypeError):
             result["messages"] = []
+    result.update(_guild_identity(result.get("guild_id")))
     result["mention_names"] = _resolve_transcript_mentions(
         result.get("guild_id"), result.get("messages", [])
     )
@@ -104,15 +122,7 @@ def api_download_transcript(transcript_id):
         )
     elif fmt == "html":
         from utils.tickets.transcripts import export_html
-        guild_name = "Server"
-        try:
-            if _discord_bot:
-                guild = _discord_bot.get_guild(int(result.get("guild_id", 0)))
-                if guild:
-                    guild_name = guild.name
-        except Exception:
-            pass
-        metadata["guild_name"] = guild_name
+        metadata.update(_guild_identity(result.get("guild_id")))
         mention_text = json.dumps(messages, ensure_ascii=False)
         mention_names = _resolve_transcript_mentions(result.get("guild_id"), messages)
         author_ids = [

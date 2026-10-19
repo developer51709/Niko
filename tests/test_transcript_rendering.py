@@ -31,9 +31,48 @@ def test_export_html_renders_custom_emoji_and_stickers():
 def test_markdown_draws_discord_blockquotes_without_the_marker():
     html = _md_to_html("> quoted\n>no space")
 
-    assert '<span class="tq">quoted</span>' in html
-    assert '<span class="tq">no space</span>' in html
+    # Adjacent lines are one quote with one bar, so the bar connects rather than
+    # restarting (and rounding) on every line.
+    assert html.count('<span class="tq">') == 1
+    assert '<span class="tq">quoted<br>no space</span>' in html
     assert "&gt;" not in html
+
+
+def test_markdown_separates_quote_runs_from_plain_lines():
+    html = _md_to_html("> one\nplain\n> two\n> three")
+
+    assert html.count('<span class="tq">') == 2
+    assert '<span class="tq">one</span><br>plain<br><span class="tq">two<br>three</span>' in html
+
+
+def test_markdown_renders_click_to_reveal_spoilers():
+    html = _md_to_html("||secret|| and ||[link](https://example.com)||")
+
+    assert html.count("data-discord-spoiler") == 2
+    assert 'role="button"' in html
+    assert 'aria-expanded="false"' in html
+    assert 'href="https://example.com"' in html
+    # A single pipe inside the hidden text does not end the spoiler early.
+    assert '>a | b</span>' in _md_to_html("||a | b||")
+
+
+def test_export_styles_role_mentions_and_spoilers_like_discord():
+    page = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@&101> ||secret||"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"role": {"101": "Helpers"}},
+    )
+
+    # Roles share the user/channel mention blue instead of their own purple.
+    assert '.discord-md-mention-role { color: #dce4ff; background: rgba(88, 101, 242, .3); }' in page
+    assert "#f1d7ff" not in page
+    # A hidden spoiler hides its content and makes any link inside inert until
+    # the spoiler itself has been clicked.
+    assert ".discord-md-spoiler:not(.is-revealed) a { pointer-events: none; }" in page
+    assert 'document.querySelectorAll("[data-discord-spoiler]").forEach(bindSpoiler);' in page
+    assert 'spoiler.classList.add("is-revealed");' in page
+    # One rounded bar spans a run of quote lines.
+    assert '.tq::before { position: absolute; top: 0; bottom: 0; left: 0; width: 4px; background: #4e5058; border-radius: 4px;' in page
 
 
 def test_markdown_renders_discord_dynamic_timestamps():

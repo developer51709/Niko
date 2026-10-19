@@ -282,7 +282,7 @@ class OwnerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"# {get_emoji('bot_owner')} Owner Commands\n> These commands are restricted to bot owners only."
+                content=f"# {get_emoji('badge_owner')} Owner Commands\n> These commands are restricted to bot owners only."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
@@ -1352,7 +1352,7 @@ class OwnerCog(commands.Cog):
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('bot_owner')} Premium Management\n"
+                    f"### {get_emoji('badge_owner')} Premium Management\n"
                     f"`{prefix}premium add <user>` — grant premium\n"
                     f"`{prefix}premium remove <user>` — revoke premium\n"
                     f"`{prefix}premium list` — list all premium users"
