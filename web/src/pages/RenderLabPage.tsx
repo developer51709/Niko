@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { DiscordBadgeList } from "../components/DiscordBadgeList";
-import { DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
+import { DiscordEmoji, DiscordEmojiProvider, DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
 import { BOT_EMOJIS, botEmojiToken } from "../data/botEmojis";
-import { BADGE_GROUPS, profileBadges, type ProfileBadge } from "../data/profileBadges";
+import { BADGE_GROUPS, profileBadges } from "../data/profileBadges";
 import { navigate, RENDER_LAB_PATH } from "../router";
 
 // A scratch page for eyeballing Discord text + profile popup rendering. It is
@@ -128,9 +128,11 @@ function readIdsFromUrl() {
 
 const labStyles = `
 .render-lab{max-width:1100px;margin:0 auto;padding:34px 20px 80px}
-.render-lab h1{margin:10px 0 8px;font-size:30px;letter-spacing:-.02em}
-.render-lab h2{margin:0 0 4px;font-size:18px}
-.render-lab h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.render-lab>h1{margin:10px 0 8px;font-size:30px;letter-spacing:-.02em}
+.render-lab-section>h2{margin:0 0 4px;font-size:18px}
+/* Only the lab's own section labels, never the Discord headings rendered in a
+   sample — those keep their real sizes and casing. */
+.render-lab-section>h3,.render-lab-badge-group>h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
 .render-lab p{margin:0;color:var(--muted);font-size:13px;line-height:1.7}
 .render-lab-kicker{color:var(--accent-dark);font:700 9px "Space Mono",monospace;letter-spacing:.14em;text-transform:uppercase}
 .render-lab-path{display:inline-block;margin-top:6px;padding:4px 7px;background:var(--surface-muted);border:1px solid var(--line-soft);border-radius:5px;color:var(--muted);font:11px "Space Mono",monospace}
@@ -149,12 +151,6 @@ const labStyles = `
 .render-lab-render .discord-md-block-code{margin:6px 0}
 .render-lab-badge-group{margin-top:18px}
 .render-lab-badge-group>p{margin-bottom:0}
-.render-lab-badge-legend{display:grid;gap:6px;margin:12px 0 0;padding:0;list-style:none}
-.render-lab-badge-legend li{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--surface-muted);border:1px solid var(--line-soft);border-radius:8px}
-.render-lab-badge-legend img{width:26px;height:26px;flex:0 0 auto;object-fit:contain}
-.render-lab-badge-legend span{display:grid;gap:2px;min-width:0}
-.render-lab-badge-legend strong{font-size:12px}
-.render-lab-badge-legend em{color:var(--muted);font-size:11.5px;font-style:normal}
 .render-lab-emoji-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:6px;margin:14px 0 0;padding:0;list-style:none}
 .render-lab-emoji-list li{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 9px;background:var(--surface-muted);border:1px solid var(--line-soft);border-radius:8px}
 .render-lab-emoji-list .discord-markdown{flex:0 0 auto;color:#dbdee1}
@@ -163,21 +159,6 @@ const labStyles = `
 .render-lab-mentions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 @media(max-width:560px){.render-lab{padding:22px 14px 60px}.render-lab-controls input{min-width:0;width:100%}}
 `;
-
-/** The badge popup's art-name-description layout, printed next to the badges so
- * a click can be checked against what the popup is supposed to show. */
-function BadgeLegend({ badges }: { badges: ProfileBadge[] }) {
-  return (
-    <ul className="render-lab-badge-legend">
-      {badges.map((badge) => (
-        <li key={badge.key}>
-          <img src={badge.src} alt="" />
-          <span><strong>{badge.label}</strong><em>{badge.description}</em></span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function SampleCard({ sample }: { sample: Sample }) {
   return (
@@ -208,6 +189,7 @@ export function RenderLabPage() {
   const mentionText = ids.map((id) => `<@${id}>`).join(" · ");
 
   return (
+    <DiscordEmojiProvider guildName="Niko" guildIconUrl="/niko-app-icon.svg">
     <>
       <style>{labStyles}</style>
       <main className="render-lab">
@@ -270,8 +252,7 @@ export function RenderLabPage() {
         <section className="render-lab-section" aria-labelledby="render-lab-badges">
           <h2 id="render-lab-badges">Profile badges</h2>
           <p>
-            Every badge the profile popups can draw, each one opening the badge popup when clicked. The list under each row
-            is the art, name and description the popup should show.
+            Every badge the profile popups can draw. Click any badge to see the art, name and description its popup shows.
           </p>
           {BADGE_SECTIONS.map((group) => (
             <div className="render-lab-badge-group" key={group.title}>
@@ -280,7 +261,6 @@ export function RenderLabPage() {
               <div className="render-lab-render" style={{ marginTop: 10 }}>
                 <DiscordBadgeList badges={group.badges} label={`${group.title} preview`} />
               </div>
-              <BadgeLegend badges={group.badges} />
             </div>
           ))}
         </section>
@@ -294,6 +274,17 @@ export function RenderLabPage() {
           </p>
           <div className="render-lab-render" style={{ marginTop: 12 }}>
             <DiscordMarkdown text={EMOJI_PARADE} />
+          </div>
+          <h3 style={{ marginTop: 18 }}>Emoji popup layouts</h3>
+          <p>
+            Click either emoji: the first opens the application-emoji popup, the second previews the server-emoji popup
+            with its Nitro prompt and server row.
+          </p>
+          <div className="render-lab-render" style={{ marginTop: 10 }}>
+            <span className="discord-markdown"><DiscordEmoji name="hypesquad_bravery" id="1520827369508700252" className="discord-md-emoji" /></span>
+            <span> application emoji · </span>
+            <span className="discord-markdown"><DiscordEmoji name="hypesquad_bravery" id="1520827369508700252" className="discord-md-emoji" source="server" /></span>
+            <span> server emoji</span>
           </div>
           <h3 style={{ marginTop: 18 }}>Emoji the CDN cannot resolve</h3>
           <p>Bold, italic, underline, strike and spoiler around emojis with an unknown id, a stale id and no id at all.</p>
@@ -343,5 +334,6 @@ export function RenderLabPage() {
         ))}
       </main>
     </>
+    </DiscordEmojiProvider>
   );
 }

@@ -53,6 +53,9 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-markdown .discord-md-link { color: #00a8fc; text-decoration: none; }
 .discord-markdown .discord-md-link:hover { text-decoration: underline; }
 .discord-markdown .discord-md-emoji { display: inline-block; width: 22px; height: 22px; object-fit: contain; vertical-align: -.35em; }
+.discord-markdown .discord-emoji-trigger { cursor: pointer; border-radius: 4px; }
+.discord-markdown .discord-emoji-trigger:hover { filter: brightness(1.12); }
+.discord-markdown .discord-emoji-trigger:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; }
 .discord-markdown .discord-md-mention { display: inline; padding: 1px 4px; color: #dce4ff; background: rgba(88, 101, 242, .3); border: 0; border-radius: 4px; font: inherit; font-weight: 650; line-height: 1.5; }
 .discord-markdown button.discord-md-mention { cursor: pointer; }
 .discord-profile-popover { position: fixed; inset: 0; z-index: 10000; pointer-events: none; isolation: isolate; }
@@ -159,9 +162,38 @@ a.discord-server-tag-invite.is-join:hover { background: #4752c4; }
 .discord-profile-state { padding: 18px; }
 .discord-markdown .discord-md-mention-user,
 .discord-markdown .discord-md-mention-channel { color: #dce4ff; background: rgba(88, 101, 242, .3); }
-.discord-markdown .discord-md-mention-role { color: #f1d7ff; background: rgba(160, 89, 198, .24); }
+/* Discord paints user, role and channel mentions with the same blue. */
+.discord-markdown .discord-md-mention-role { color: #dce4ff; background: rgba(88, 101, 242, .3); }
+/* Discord's custom-emoji popup: application emojis name the app, while server
+   emojis add the Nitro prompt and the server row below a divider. */
+.discord-emoji-popup { position: fixed; left: var(--emoji-popup-left, 12px); top: var(--emoji-popup-top, 12px); z-index: 10003; width: min(22rem, calc(100vw - 1.5rem)); padding: 16px; color: #dbdee1; background: #111214; border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; box-shadow: 0 18px 52px rgba(0, 0, 0, .6); font-size: 13px; line-height: 1.4; }
+.discord-emoji-popup-main { display: flex; align-items: flex-start; gap: 14px; }
+.discord-emoji-popup-art { width: 52px; height: 52px; flex: 0 0 auto; object-fit: contain; }
+.discord-emoji-popup-copy { min-width: 0; }
+.discord-emoji-popup-name { display: block; margin: 0 0 3px; color: #f2f3f5; font-size: 15.5px; font-weight: 700; overflow-wrap: anywhere; }
+.discord-emoji-popup-copy p { margin: 0; color: #b5bac1; font-size: 13.5px; line-height: 1.4; }
+.discord-emoji-popup-nitro { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; padding: 10px 12px; color: #111214; background: #fff; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; box-shadow: 0 0 0 1px #fff, 0 0 18px rgba(88, 101, 242, .65), 0 0 32px rgba(235, 69, 158, .35); }
+.discord-emoji-popup-nitro:hover { color: #111214; background: #f6f6f6; text-decoration: none; }
+.discord-emoji-popup-nitro-mark { width: 18px; height: 18px; flex: 0 0 auto; }
+.discord-emoji-popup-source { margin: 14px -16px 0; padding: 12px 16px 0; border-top: 1px solid #2b2d31; }
+.discord-emoji-popup-source > p { margin: 0 0 10px; color: #949ba4; font-size: 13px; }
+.discord-emoji-popup-guild { display: flex; align-items: center; gap: 10px; }
+.discord-emoji-popup-guild-icon { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; object-fit: cover; background: #5865f2; }
+.discord-emoji-popup-guild-fallback { display: grid; place-items: center; color: #fff; font-size: 18px; font-weight: 700; }
+.discord-emoji-popup-guild-copy { display: grid; gap: 2px; min-width: 0; }
+.discord-emoji-popup-guild-copy strong { color: #f2f3f5; font-size: 14.5px; font-weight: 650; overflow-wrap: anywhere; }
+.discord-emoji-popup-guild-copy small { color: #949ba4; font-size: 12.5px; }
 .discord-markdown .discord-md-timestamp { display: inline-block; padding: 0 4px; color: #b5bac1; background: rgba(79, 84, 92, .48); border-radius: 3px; font-size: .92em; }
-.discord-markdown .discord-md-quote { margin: 4px 0; padding-left: 9px; color: #b5bac1; border-left: 3px solid #4e5058; }
+/* Consecutive quote lines share one vertical bar, with rounded ends at the top
+   and bottom of the run instead of a separate stub on each line. */
+.discord-markdown .discord-md-quote { position: relative; margin: 2px 0; padding-left: 12px; color: #b5bac1; border-left: 0; }
+.discord-markdown .discord-md-quote::before { position: absolute; top: 0; bottom: 0; left: 0; width: 4px; background: #4e5058; border-radius: 4px; content: ""; }
+.discord-markdown .discord-md-spoiler { margin: 0 -2px; padding: 0 2px; border-radius: 4px; background: #202225; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.discord-markdown .discord-md-spoiler:not(.is-revealed) { color: transparent; }
+.discord-markdown .discord-md-spoiler:not(.is-revealed) > * { visibility: hidden; }
+.discord-markdown .discord-md-spoiler:not(.is-revealed) a { pointer-events: none; }
+.discord-markdown .discord-md-spoiler.is-revealed { background: transparent; cursor: auto; }
+.discord-markdown .discord-md-spoiler:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; }
 .discord-markdown .discord-md-subtext { display: inline-block; width: 100%; color: #949ba4; font-size: .86em; }
 .discord-markdown .discord-md-role,
 .discord-markdown .discord-md-channel { color: var(--accent-dark); background: color-mix(in srgb, var(--accent) 14%, transparent); }

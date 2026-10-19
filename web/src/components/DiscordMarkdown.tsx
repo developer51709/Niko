@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiscordBadgeList } from "./DiscordBadgeList";
 import { DiscordServerTagPill, type DiscordServerTagInfo } from "./DiscordServerTag";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
+import { BOT_EMOJIS } from "../data/botEmojis";
 import { profileBadges } from "../data/profileBadges";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { resolveDiscordText } from "../api";
 
 export type DiscordMentionNames = Partial<Record<"user" | "channel" | "role", Record<string, string>>>;
@@ -114,6 +115,77 @@ function tokenize(text: string): Node[] {
   return roots;
 }
 
+/** The server an emoji token belongs to, provided by the transcript page. */
+export type DiscordEmojiSource = {
+  guildName?: string | null;
+  guildIconUrl?: string | null;
+};
+
+const DiscordEmojiContext = createContext<DiscordEmojiSource>({});
+
+/** Supplies the emoji popup's "This emoji is from" server row. */
+export function DiscordEmojiProvider({ guildName, guildIconUrl, children }: {
+  guildName?: string | null;
+  guildIconUrl?: string | null;
+  children: ReactNode;
+}) {
+  return <DiscordEmojiContext.Provider value={{ guildName, guildIconUrl }}>{children}</DiscordEmojiContext.Provider>;
+}
+
+// Application emojis live on the bot itself; every other custom emoji is a
+// server emoji. The generated list is shared with the rendering lab, so the
+// popup never has to guess from the emoji name.
+const APPLICATION_EMOJI_IDS = new Set(BOT_EMOJIS.map((emoji) => emoji.id));
+
+// Discord's own Nitro mark, used by the Get Nitro button in the client.
+function NitroMark() {
+  return <svg className="discord-emoji-popup-nitro-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path fill="currentColor" d="M13.32 21.978a10.322 10.322 0 01-2.07-.36 6.638 6.638 0 01-.675-.219.152.152 0 00-.057-.019.372.372 0 01-.09-.03l-.137-.06a.383.383 0 00-.088-.03.418.418 0 01-.097-.038 7.412 7.412 0 00-.187-.088 8.155 8.155 0 01-.67-.325 4.26 4.26 0 01-.34-.19 1.966 1.966 0 01-.18-.11 1.274 1.274 0 00-.17-.103.763.763 0 01-.103-.07.397.397 0 00-.086-.056c-.007 0-.084-.054-.171-.12a1.052 1.052 0 00-.179-.12c-.011 0-.021-.008-.021-.018 0-.01-.072-.07-.16-.133a.873.873 0 01-.16-.132c0-.01-.01-.017-.02-.017-.012 0-.048-.027-.08-.06a.34.34 0 00-.069-.06.33.33 0 01-.068-.055 10.464 10.464 0 01-1.008-1.008.33.33 0 01-.055-.069.34.34 0 00-.06-.068c-.033-.033-.06-.068-.06-.08 0-.011-.008-.02-.017-.02a.873.873 0 01-.132-.16.825.825 0 00-.133-.16c-.01 0-.018-.01-.018-.022 0-.011-.054-.092-.12-.178a1.496 1.496 0 01-.12-.171.4.4 0 00-.055-.087c-.064-.084-.1-.14-.119-.182a.73.73 0 00-.055-.09 1.612 1.612 0 01-.11-.18 4.258 4.258 0 01-.19-.34 8.154 8.154 0 01-.325-.67 7.397 7.397 0 00-.088-.188.418.418 0 01-.038-.097.42.42 0 00-.033-.093c-.078-.175-.087-.2-.087-.221a.152.152 0 00-.02-.057c-.055-.098-.266-.812-.35-1.185-.06-.266-.161-.848-.181-1.045l-.014-.135-.523-.001c-.59-.001-.7-.018-.9-.139a.968.968 0 01.014-1.668c.189-.113.32-.132.89-.132h.498l.025-.225c.047-.438.196-1.222.29-1.525a.808.808 0 00.03-.125c0-.02-.352-.026-1.695-.026-1.446 0-1.714-.005-1.824-.03a1.116 1.116 0 01-.83-.83 1.111 1.111 0 01.83-1.329C.97 7.003 1.287 7 3.15 7c2.035 0 2.164-.003 2.193-.036a.35.35 0 00.043-.065c.018-.038.052-.095.103-.17.062-.093.089-.137.103-.17a.76.76 0 01.07-.103.397.397 0 00.057-.086c0-.007.054-.084.12-.17.066-.088.12-.168.12-.18 0-.011.008-.02.018-.02.01 0 .07-.073.133-.16a.873.873 0 01.132-.16c.01 0 .017-.01.017-.022 0-.01.027-.047.06-.079a.34.34 0 00.06-.069.33.33 0 01.055-.068c.03-.032.109-.118.175-.192.066-.074.131-.147.146-.162.021-.023-.233-.028-1.69-.033l-1.717-.006L3.208 5a1.48 1.48 0 01-.64-.392 1.44 1.44 0 01-.393-.651c-.038-.125-.046-.194-.046-.41 0-.216.008-.285.046-.41.085-.273.193-.451.393-.65.188-.19.346-.29.585-.372.283-.098.14-.096 6.016-.1 5.47-.002 5.626 0 6.12.063.236.03.698.112.956.17.366.083 1.082.294 1.18.35.019.01.045.019.057.019.012 0 .053.013.09.03l.136.06c.038.016.077.03.088.03.011 0 .055.017.097.038l.187.088a8.155 8.155 0 01.67.324 4.261 4.261 0 01.34.19c.057.03.112.064.18.11.093.062.138.089.17.103a.76.76 0 01.103.07c.04.031.08.057.086.057.008 0 .085.054.171.12.087.066.168.12.18.12.01 0 .02.008.02.018 0 .01.072.07.16.133.088.064.16.123.16.132 0 .01.01.017.021.017.012 0 .047.027.08.06a.34.34 0 00.068.06.33.33 0 01.068.055l.193.175a10.464 10.464 0 01.816.833.33.33 0 01.055.068.34.34 0 00.06.07c.033.031.06.067.06.078 0 .012.007.021.016.021.01 0 .07.072.132.16.064.088.124.16.134.16.01 0 .018.01.018.021 0 .012.054.092.12.18.066.086.12.163.12.17 0 .007.024.046.055.086.063.085.1.14.118.183a.727.727 0 00.055.09c.045.065.078.118.111.18a4.259 4.259 0 01.19.34 8.147 8.147 0 01.325.67c.027.06.067.145.088.187.02.043.038.086.038.097 0 .011.013.051.03.088l.06.136c.016.038.03.079.03.09a6.613 6.613 0 01.238.732 10.11 10.11 0 01-.219 6.176.152.152 0 00-.02.057.405.405 0 01-.031.095c-.078.175-.088.2-.088.22a.418.418 0 01-.038.096l-.088.187a8.153 8.153 0 01-.325.67 4.258 4.258 0 01-.19.34c-.03.057-.063.112-.11.181-.061.093-.088.137-.103.17a.764.764 0 01-.07.102.397.397 0 00-.056.087c0 .007-.054.084-.12.17-.066.087-.12.168-.12.18 0 .011-.008.02-.018.02-.01 0-.07.073-.134.16a.873.873 0 01-.132.16c-.009 0-.016.01-.016.021 0 .012-.027.047-.06.08a.34.34 0 00-.06.068.33.33 0 01-.055.068l-.175.193a10.463 10.463 0 01-.834.816.33.33 0 01-.068.055.34.34 0 00-.069.06c-.032.033-.067.06-.079.06-.011 0-.02.007-.02.017 0 .009-.073.068-.16.132a.825.825 0 00-.16.133c0 .01-.01.018-.022.018-.011 0-.092.054-.179.12-.086.066-.163.12-.17.12a.4.4 0 00-.087.055c-.084.063-.14.1-.183.118a.728.728 0 00-.09.055 1.612 1.612 0 01-.18.111 4.264 4.264 0 01-.34.19c-.099.05-.193.1-.21.111a8.155 8.155 0 01-.46.214c-.06.027-.144.067-.187.088a.419.419 0 01-.097.038.383.383 0 00-.088.03l-.136.06a.372.372 0 01-.09.03.153.153 0 00-.057.02c-.098.054-.814.266-1.18.348-.946.213-1.994.295-2.925.23zm1.74-3.135a7.374 7.374 0 001.66-.444c.346-.134 1.079-.535 1.35-.738.055-.042.172-.128.26-.191.088-.064.178-.136.2-.16.022-.025.13-.123.24-.218.243-.21.212-.18.423-.423.096-.11.196-.22.222-.247.027-.026.098-.116.16-.2.061-.084.145-.198.187-.253.176-.233.632-1.064.725-1.32l.092-.247c.446-1.186.543-2.575.271-3.853-.08-.377-.143-.581-.363-1.18-.095-.262-.55-1.089-.725-1.32a24.578 24.578 0 01-.191-.26 2.3 2.3 0 00-.16-.2 3.244 3.244 0 01-.16-.18 3.94 3.94 0 00-.536-.536 1.424 1.424 0 01-.175-.158c0-.008-.096-.084-.215-.17a5.702 5.702 0 01-.225-.167 4.486 4.486 0 00-.448-.288 6.844 6.844 0 00-2.937-.953 9.532 9.532 0 00-1.576.038c-.756.113-1.43.321-2.09.644-.249.122-.743.404-.77.439a1.6 1.6 0 01-.14.1c-.422.282-.954.771-1.328 1.223-.377.455-.64.854-.89 1.354a6.996 6.996 0 00-.558 4.564c.113.482.273.958.466 1.387.118.26.435.832.528.952.03.04.095.13.142.201a6.86 6.86 0 004.458 2.772c.453.076.609.086 1.243.08.467-.006.646-.016.86-.048zm-1.51-1.725a5.329 5.329 0 01-1.308-.308 5.763 5.763 0 01-.683-.326 7.122 7.122 0 01-.707-.482 6.14 6.14 0 01-.675-.676 7.121 7.121 0 01-.482-.707 5.026 5.026 0 01-.506-3.7 4.89 4.89 0 01.775-1.679c.17-.241.196-.274.385-.48.157-.171.3-.309.503-.484.115-.1.518-.373.707-.482a5.026 5.026 0 013.7-.505 4.89 4.89 0 011.68.774c.241.17.274.196.48.385.17.157.308.3.484.504.099.115.373.517.482.707a5.028 5.028 0 01.407 4.04 4.835 4.835 0 01-.677 1.338c-.17.242-.196.275-.385.481-.147.161-.15.164-.311.311-.206.19-.239.216-.48.386a4.89 4.89 0 01-1.68.774 5.276 5.276 0 01-1.71.129zm2.888-3.437c.477-.797.867-1.469.867-1.493 0-.036-1.485-2.586-1.697-2.914l-.049-.075H12.62l-.047.075c-.219.35-1.659 2.88-1.659 2.915 0 .036 1.46 2.567 1.658 2.875l.048.076 1.475-.006 1.475-.005z" />
+  </svg>;
+}
+
+/** Discord's custom-emoji popup: application emoji or server emoji. */
+function DiscordEmojiPopup({ name, id, animated, isApplication, guildName, guildIconUrl, popupRef, style }: {
+  name: string;
+  id: string;
+  animated: boolean;
+  isApplication: boolean;
+  guildName?: string | null;
+  guildIconUrl?: string | null;
+  popupRef?: Ref<HTMLDivElement>;
+  style?: CSSProperties;
+}) {
+  const initial = Array.from((guildName || "This server").trim())[0]?.toUpperCase() || "?";
+  const art = `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`;
+  return <div ref={popupRef} className="discord-emoji-popup" role="dialog" aria-label={`:${name}: emoji`} style={style}>
+    <div className="discord-emoji-popup-main">
+      <img className="discord-emoji-popup-art" src={art} alt="" />
+      <div className="discord-emoji-popup-copy">
+        <strong className="discord-emoji-popup-name">:{name}:</strong>
+        <p>{isApplication ? "This emoji is from the Niko app" : "This emoji is from this server. Get Nitro to use it everywhere."}</p>
+      </div>
+    </div>
+    {!isApplication && <>
+      <a className="discord-emoji-popup-nitro" href="https://discord.com/nitro" target="_blank" rel="noopener noreferrer">
+        <NitroMark />
+        <span>Get Nitro</span>
+      </a>
+      <div className="discord-emoji-popup-source">
+        <p>This emoji is from</p>
+        <div className="discord-emoji-popup-guild">
+          {guildIconUrl
+            ? <img className="discord-emoji-popup-guild-icon" src={guildIconUrl} alt="" />
+            : <span className="discord-emoji-popup-guild-icon discord-emoji-popup-guild-fallback" aria-hidden="true">{initial}</span>}
+          <div className="discord-emoji-popup-guild-copy">
+            <strong>{guildName || "This server"}</strong>
+            <small>Invite-only server</small>
+          </div>
+        </div>
+      </div>
+    </>}
+  </div>;
+}
+
 /**
  * A Discord custom emoji.
  *
@@ -121,25 +193,145 @@ function tokenize(text: string): Node[] {
  * emoji, an emoji from another server, a stale id — it writes the name out
  * between colons as plain text. The fallback here is the same, which also keeps
  * a failed image from shifting the line or eating the formatting around it.
+ *
+ * A resolved emoji is clickable and opens Discord's own emoji popup. Application
+ * emojis name the Niko app; server emojis name the transcript's server and show
+ * the Nitro prompt, matching Discord's two popup layouts.
  */
-export function DiscordEmoji({ name, id, animated = false, className }: {
+export function DiscordEmoji({ name, id, animated = false, className, interactive = true, source }: {
   name: string;
   id: string;
   animated?: boolean;
   className?: string;
+  interactive?: boolean;
+  /** Lets the rendering lab preview a server popup with a known emoji id. */
+  source?: "app" | "server";
 }) {
   const [broken, setBroken] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 12, top: 12 });
+  const triggerRef = useRef<HTMLImageElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const emojiContext = useContext(DiscordEmojiContext);
+  const isApplication = source ? source === "app" : APPLICATION_EMOJI_IDS.has(id);
+
+  const positionPopup = useCallback(() => {
+    const trigger = triggerRef.current;
+    const popup = popupRef.current;
+    if (!trigger || !popup) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 12;
+    const gap = 8;
+    const width = popup.offsetWidth;
+    const height = popup.offsetHeight;
+    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+    const below = rect.bottom + gap;
+    const top = below + height <= window.innerHeight - margin
+      ? below
+      : Math.max(margin, rect.top - height - gap);
+    setPosition({ left, top: Math.min(top, window.innerHeight - height - margin) });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) positionPopup();
+  }, [open, positionPopup]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", positionPopup);
+    window.addEventListener("scroll", positionPopup, true);
+    return () => {
+      window.removeEventListener("resize", positionPopup);
+      window.removeEventListener("scroll", positionPopup, true);
+    };
+  }, [open, positionPopup]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && (triggerRef.current?.contains(target) || popupRef.current?.contains(target))) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   if (!id || broken) {
     return <span className="discord-emoji-fallback" data-discord-emoji-name={name}>{`:${name}:`}</span>;
   }
-  return <img
-    className={className}
-    data-discord-emoji-name={name}
-    src={`https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`}
-    alt={`:${name}:`}
-    title={`:${name}:`}
-    onError={() => setBroken(true)}
-  />;
+  return <>
+    <img
+      ref={triggerRef}
+      className={`${className || ""}${interactive ? " discord-emoji-trigger" : ""}`.trim() || undefined}
+      data-discord-emoji-name={name}
+      data-emoji-id={id}
+      data-emoji-app={isApplication ? "1" : "0"}
+      src={`https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`}
+      alt={`:${name}:`}
+      title={`:${name}:`}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-haspopup={interactive ? "dialog" : undefined}
+      aria-expanded={interactive ? open : undefined}
+      aria-label={interactive ? `:${name}: emoji` : undefined}
+      onClick={interactive ? (event) => { event.preventDefault(); event.stopPropagation(); setOpen((value) => !value); } : undefined}
+      onKeyDown={interactive ? (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen((value) => !value);
+      } : undefined}
+      onError={() => setBroken(true)}
+    />
+    {interactive && open && createPortal(
+      <DiscordEmojiPopup
+        name={name}
+        id={id}
+        animated={animated}
+        isApplication={isApplication}
+        guildName={emojiContext.guildName}
+        guildIconUrl={emojiContext.guildIconUrl}
+        popupRef={popupRef}
+        style={{ "--emoji-popup-left": `${position.left}px`, "--emoji-popup-top": `${position.top}px` } as CSSProperties}
+      />,
+      document.body,
+    )}
+  </>;
+}
+
+/**
+ * Discord's spoiler: the content stays hidden until it is clicked, and while it
+ * is hidden every link inside it is inert. That way a spoiler can never be used
+ * to trick someone into opening a link they have not chosen to reveal.
+ */
+function DiscordSpoiler({ children }: { children: ReactNode }) {
+  const [revealed, setRevealed] = useState(false);
+  const reveal = () => setRevealed(true);
+  return <span
+    className={`discord-md-spoiler${revealed ? " is-revealed" : ""}`}
+    role="button"
+    tabIndex={0}
+    aria-expanded={revealed}
+    aria-label={revealed ? undefined : "Spoiler, click to reveal"}
+    onClick={(event) => {
+      if (revealed) return;
+      event.preventDefault();
+      event.stopPropagation();
+      reveal();
+    }}
+    onKeyDown={(event) => {
+      if (revealed || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      reveal();
+    }}
+  >{children}</span>;
 }
 
 function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "discord-md", interactiveUsers = true): ReactNode[] {
@@ -156,17 +348,25 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
     }
     if (node.kind === "mention") {
       const label = node.mention === "everyone" ? node.id : names?.[node.mention]?.[node.id] || `${node.mention === "channel" ? "#" : "@"}${node.id}`;
-      const mentionLabel = node.mention === "user" && !label.startsWith("@") ? `@${label}` : label;
+      // Discord writes a sigil in front of every named mention, whether the
+      // name came from the resolver or the id fallback.
+      const mentionLabel = node.mention === "user" || node.mention === "role"
+        ? (label.startsWith("@") ? label : `@${label}`)
+        : node.mention === "channel"
+          ? (label.startsWith("#") ? label : `#${label}`)
+          : label;
       if (node.mention === "user" && interactiveUsers) {
         return <button key={key} type="button" className={`discord-md-mention discord-md-mention-${node.mention}`} data-discord-user-id={node.id} title={`user · ${node.id}`}>{mentionLabel}</button>;
       }
       return <span key={key} className={`discord-md-mention discord-md-mention-${node.mention}`} title={node.mention === "everyone" ? undefined : `${node.mention} · ${node.id}`}>{mentionLabel}</span>;
     }
+    if (node.format === "spoiler") {
+      return <DiscordSpoiler key={key}>{renderInline(node.children, names, key, interactiveUsers)}</DiscordSpoiler>;
+    }
     const style: CSSProperties = node.format === "bold" ? { fontWeight: 700 }
       : node.format === "italic" || node.format === "italicAlt" ? { fontStyle: "italic" }
         : node.format === "underline" ? { textDecoration: "underline" }
-          : node.format === "strike" ? { textDecoration: "line-through" }
-            : { background: "#3f4147", borderRadius: 3 };
+          : { textDecoration: "line-through" };
     return <span key={key} style={style}>{renderInline(node.children, names, key, interactiveUsers)}</span>;
   });
 }
@@ -234,7 +434,7 @@ async function fetchDiscordProfile(userId: string): Promise<TranscriptProfile> {
 
 function statusEmoji(status: DiscordCustomStatus) {
   if (status.emoji_id) {
-    return <DiscordEmoji name={status.emoji_name || "emoji"} id={status.emoji_id} animated={status.emoji_animated} className="discord-profile-status-emoji" />;
+    return <DiscordEmoji name={status.emoji_name || "emoji"} id={status.emoji_id} animated={status.emoji_animated} className="discord-profile-status-emoji" interactive={false} />;
   }
   return status.emoji_name ? <span className="discord-profile-status-emoji">{status.emoji_name}</span> : null;
 }
@@ -563,7 +763,8 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
       children.push(<pre className="discord-md-block-code" key={`code-${index}`}><code>{code.join("\n")}</code></pre>);
       continue;
     }
-    const isTableRow = (value: string) => value.trimStart().startsWith("|");
+    // A double pipe is a spoiler, not the first cell of a table row.
+    const isTableRow = (value: string) => value.trimStart().startsWith("|") && !value.trimStart().startsWith("||");
     if (isTableRow(line)) {
       const rows: string[][] = [];
       while (index < lines.length && isTableRow(lines[index])) {
@@ -583,14 +784,32 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
       continue;
     }
     const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      // Consecutive quote lines are one quote in Discord: a single rounded bar
+      // runs down the left of the whole run instead of restarting per line.
+      const quoteLines: string[] = [];
+      const quoteStart = index;
+      while (index < lines.length) {
+        const next = lines[index].trimStart().match(/^>\s?(.*)$/);
+        if (!next) break;
+        quoteLines.push(next[1]);
+        index += 1;
+      }
+      index -= 1;
+      children.push(<blockquote className="discord-md-quote" key={`quote-${quoteStart}`}>
+        {quoteLines.map((quoteLine, quoteIndex) => <span key={quoteIndex}>
+          {renderInlineText(quoteLine, `quote-${quoteStart}-${quoteIndex}`)}
+          {quoteIndex < quoteLines.length - 1 ? <br /> : null}
+        </span>)}
+      </blockquote>);
+      continue;
+    }
     const subtext = trimmed.startsWith("-# ");
-    const content = subtext ? trimmed.slice(3) : quote ? quote[1] : line;
+    const content = subtext ? trimmed.slice(3) : line;
     const inline = renderInlineText(content, index);
-    children.push(quote
-      ? <blockquote className="discord-md-quote" key={index}>{inline}</blockquote>
-      : subtext
-        ? <small className="discord-md-subtext" key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</small>
-        : <span key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</span>);
+    children.push(subtext
+      ? <small className="discord-md-subtext" key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</small>
+      : <span key={index}>{inline}{index < lines.length - 1 ? <br /> : null}</span>);
   }
   const Wrapper = inline ? "span" : "div";
   return <Wrapper className={`discord-markdown${inline ? " discord-markdown-inline" : ""}${className ? ` ${className}` : ""}`} style={style} onClick={interactiveUsers ? (event) => {

@@ -685,7 +685,7 @@ class InfoCog(commands.Cog):
         pf = target.public_flags
         _disc_flag_map = [
             (("staff",),                                      "staff_badge"),
-            (("partner",),                                    "partner"),
+            (("partner",),                                    "partner_badge"),
             (("hypesquad_events",),                           "hypesquad_events"),
             (("bug_hunter_level_1", "bug_hunter"),            "bug_hunter_badge"),
             (("hypesquad_bravery",),                          "hypesquad_bravery"),
