@@ -941,6 +941,25 @@ def _presence_member(user_id: str, bot=None):
     return members[0] if members else None
 
 
+_CUSTOM_STATUS_PLACEHOLDER = "custom status"
+
+
+def custom_status_text(activity) -> str | None:
+    """The text of a custom status, or ``None`` when it only carries an emoji.
+
+    Discord omits ``state`` from an emoji-only custom status, and discord.py
+    then fills both ``state`` and ``name`` with the literal placeholder
+    "Custom Status". Rendering either one as the text wrote that placeholder
+    into the profile popup beside the emoji instead of showing the emoji alone.
+    """
+    for attribute in ("state", "name"):
+        value = getattr(activity, attribute, None)
+        text = str(value).strip() if value is not None else ""
+        if text and text.casefold() != _CUSTOM_STATUS_PLACEHOLDER:
+            return text
+    return None
+
+
 def _staff_identity(user_id: str) -> dict:
     """Resolve a staff member's global identity and the richest live presence."""
     ordered_members = _presence_members(user_id)
@@ -989,7 +1008,7 @@ def _staff_identity(user_id: str) -> dict:
             if class_name == "customactivity" or activity_type in {"custom", "customstatus", "custom_activity"}:
                 if custom_status is None:
                     custom_status = {
-                        "text": getattr(activity, "state", None),
+                        "text": custom_status_text(activity),
                         "emoji": serialize_emoji(getattr(activity, "emoji", None)),
                     }
                 continue

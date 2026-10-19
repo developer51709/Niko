@@ -125,7 +125,9 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     });
     setForm((current) => ({
       ...current,
-      channel_id: current.channel_id || response.config.default_channel_id || "",
+      // The default channel is applied by the server when the picker is left
+      // blank, so it is never preselected here: the picker stays optional while
+      // a default exists and becomes required as soon as the default is cleared.
       ping_role_id: current.ping_role_id || response.config.ping_role_id || "",
     }));
   }), [guildId]);
@@ -158,6 +160,9 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
   const countFor = (id: string) => data.follows.filter((follow) => follow.platform === id).length;
   const atGuildLimit = data.follows.length >= data.limits.max_follows;
   const atPlatformLimit = Boolean(form.platform) && countFor(form.platform) >= data.limits.max_follows_per_platform;
+  const defaultChannelId = data.config.default_channel_id || "";
+  const defaultChannelLabel = defaultChannelId ? channelLabel(resources, defaultChannelId) : "";
+  const addChannelRequired = !defaultChannelId;
   const addBlocked = atGuildLimit || atPlatformLimit || platforms.length === 0;
   const blockedReason = atGuildLimit
     ? `This server already follows ${data.limits.max_follows} accounts. Remove one before adding another.`
@@ -198,7 +203,9 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     event.preventDefault();
     if (addBlocked) { notifyError(blockedReason, "notifier-add"); return; }
     if (!form.platform) { notifyError("Pick the platform you want to follow.", "notifier-add"); return; }
-    if (!form.channel_id) { notifyError("Pick the channel announcements should go to.", "notifier-add"); return; }
+    // A blank picker is fine while the server has a default channel; the API
+    // falls back to it. Only a server with no default has to choose here.
+    if (!form.channel_id && addChannelRequired) { notifyError("Pick the channel announcements should go to.", "notifier-add"); return; }
     setAdding(true);
     notifyLoading("Checking that account…", "notifier-add");
     addNotifierFollow(guildId, {
@@ -356,9 +363,16 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
             placeholder={platformHint?.field_placeholder || "https://twitch.tv/name or @handle"}
           />
         </Field>
-        <Field label="Announcement channel">
-          <select value={form.channel_id} onChange={(event) => setForm({ ...form, channel_id: event.target.value })}>
-            <option value="">Choose a channel</option>
+        <Field
+          label={addChannelRequired ? "Announcement channel · required" : "Announcement channel"}
+          hint={addChannelRequired
+            ? "This server has no default channel yet, so pick where announcements should go."
+            : `Optional — leave it on the default channel (#${defaultChannelLabel}) or pick another.`}
+        >
+          <select value={form.channel_id} aria-required={addChannelRequired} onChange={(event) => setForm({ ...form, channel_id: event.target.value })}>
+            <option value="">
+              {defaultChannelId ? `Use default — #${defaultChannelLabel}` : "Choose a channel"}
+            </option>
             {channelsWithSelected(resources, form.channel_id).map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}
           </select>
         </Field>

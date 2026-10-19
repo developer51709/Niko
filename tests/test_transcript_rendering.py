@@ -443,3 +443,28 @@ def test_export_popup_refreshes_presence_while_the_card_is_open():
     # Closing the card tears the poll and its visibility listener down.
     assert "const closeProfile = () => { stopProfileTimer(); stopProfilePoll();" in page
     assert 'document.removeEventListener("visibilitychange", refreshProfilePresence);' in page
+
+
+def test_export_popup_status_bubble_matches_discords_layout():
+    page = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {
+            "id": "456", "username": "liveuser", "display_name": "Live Nick",
+            "status": "online",
+            "custom_status": {
+                "text": None, "emoji_name": "\U0001f4bb", "emoji_id": None, "emoji_animated": False,
+            },
+        }},
+    )
+
+    # An emoji-only status is the compact square, not a text bubble.
+    assert 'class="discord-profile-status is-emoji-only"' in page
+    # Long text clamps to two lines and expands in place, like Discord's popup.
+    assert "-webkit-line-clamp: 2" in page
+    assert "bindStatusBubble(card);" in page
+    assert "text.scrollHeight > text.clientHeight + 1" in page
+    # The five-second presence poll rebuilds the bubble without collapsing a
+    # status the reader has opened.
+    assert "bindStatusBubble(card, wasExpanded);" in page

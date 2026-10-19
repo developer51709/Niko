@@ -9,6 +9,9 @@ _TIMEOUT  = aiohttp.ClientTimeout(total=15)
 _YT_FEED  = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 _YT_THUMB = "https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
 
+#: A channel id is always "UC" plus 22 URL-safe base64 characters.
+_CHANNEL_ID_RE = re.compile(r"^UC[A-Za-z0-9_\-]{22}$")
+
 
 # ─────────────────────────────────────────
 #  Internal helpers
@@ -44,6 +47,20 @@ def channel_id_of(username: str) -> str:
     return cid
 
 
+async def _fetch_feed(channel_id: str):
+    """Read and parse a channel's upload feed, or ``None`` if it is unreadable."""
+    url = _YT_FEED.format(channel_id=channel_id)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=_HEADERS, timeout=_TIMEOUT) as resp:
+                if resp.status != 200:
+                    return None
+                content = await resp.read()
+    except Exception:
+        return None
+    return feedparser.parse(content)
+
+
 # ─────────────────────────────────────────
 #  Fetchers
 # ─────────────────────────────────────────
@@ -51,18 +68,11 @@ def channel_id_of(username: str) -> str:
 async def fetch_latest_youtube(username: str) -> dict | None:
     """Fetch the most recent video for a stored YouTube username."""
     _, cid = _parse_stored(username)
-    url = _YT_FEED.format(channel_id=cid)
+    feed = await _fetch_feed(cid)
+    if feed is None or not feed.entries:
+        return None
+
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=_HEADERS, timeout=_TIMEOUT) as resp:
-                if resp.status != 200:
-                    return None
-                content = await resp.read()
-
-        feed = feedparser.parse(content)
-        if not feed.entries:
-            return None
-
         entry    = feed.entries[0]
         video_id = entry.get("yt_videoid", "")
         if not video_id:
@@ -80,18 +90,43 @@ async def fetch_latest_youtube(username: str) -> dict | None:
         return None
 
 
+async def channel_exists(username: str) -> bool:
+    """Whether a channel still exists, whether or not it has uploaded anything.
+
+    The upload feed answers 200 for an empty channel and 404 for one that does
+    not exist, which is exactly what the notifier needs: a quiet channel is
+    healthy, a deleted one is not. A timeout, a rate limit or a 5xx is treated
+    as "still there" — an unreachable feed is no evidence the channel is gone,
+    and guessing wrong pauses a server's notifications for no reason.
+    """
+    _, cid = _parse_stored(username)
+    if not _CHANNEL_ID_RE.match(cid):
+        return False
+    url = _YT_FEED.format(channel_id=cid)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=_HEADERS, timeout=_TIMEOUT) as resp:
+                return resp.status not in (404, 410)
+    except Exception:
+        return True
+
+
 async def resolve_youtube_channel(query: str) -> tuple[str, str] | None:
     """
     Resolve a YouTube @handle, short URL, or bare channel ID to
     (display_name, channel_id).  Returns None if unresolvable.
+
+    A channel does not need any uploads to resolve: the display name comes from
+    the feed's own title, which YouTube serves for an empty channel too.
     """
     query = query.strip().lstrip("@")
 
     # Already a valid channel ID (UC + 22 base64 chars = 24 total)
-    if re.match(r"^UC[A-Za-z0-9_\-]{22}$", query):
-        post = await fetch_latest_youtube(f"tmp|{query}")
-        name = post.get("author", query) if post else query
-        return name, query
+    if _CHANNEL_ID_RE.match(query):
+        feed = await _fetch_feed(query)
+        if feed is None:
+            return None
+        return (feed.feed.get("title") or query), query
 
     # Try as a @handle
     page_url = f"https://www.youtube.com/@{query}"
@@ -119,17 +154,9 @@ async def resolve_youtube_channel(query: str) -> tuple[str, str] | None:
 
     # Get display name from the RSS feed (most reliable source)
     display = query
-    try:
-        feed_url = _YT_FEED.format(channel_id=channel_id)
-        async with aiohttp.ClientSession() as feed_session:
-            async with feed_session.get(feed_url, headers=_HEADERS, timeout=_TIMEOUT) as feed_resp:
-                if feed_resp.status == 200:
-                    feed_content = await feed_resp.read()
-                    feed = feedparser.parse(feed_content)
-                    if feed.feed.get("title"):
-                        display = feed.feed["title"]
-    except Exception:
-        pass
+    feed = await _fetch_feed(channel_id)
+    if feed is not None and feed.feed.get("title"):
+        display = feed.feed["title"]
 
     # Fallback: try page HTML channelName
     if display == query:
@@ -142,13 +169,10 @@ async def resolve_youtube_channel(query: str) -> tuple[str, str] | None:
 
 async def validate_youtube_channel(query: str) -> tuple[str, str] | None:
     """
-    Validate a YouTube channel and return (display_name, channel_id),
-    or None if the channel cannot be found / has no videos.
+    Validate a YouTube channel and return (display_name, channel_id).
+
+    Verification is about the channel existing, not about it having uploaded a
+    video: a brand-new channel with an empty feed is still a channel somebody
+    may want to follow, so it must be addable.
     """
-    result = await resolve_youtube_channel(query)
-    if result is None:
-        return None
-    display, cid = result
-    # Confirm the feed actually has videos
-    post = await fetch_latest_youtube(f"{display}|{cid}")
-    return (display, cid) if post else None
+    return await resolve_youtube_channel(query)

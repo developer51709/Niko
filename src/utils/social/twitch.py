@@ -153,11 +153,36 @@ def validate_twitch_login(login: str) -> bool:
     return fetch_channel(login) is not None
 
 
+def channel_exists(login: str) -> bool:
+    """Whether Twitch still knows a channel, even with nothing to watch.
+
+    A Twitch channel needs no videos to exist: it can be brand new, or simply
+    offline with every VOD expired, and ``fetch_latest_twitch`` then has nothing
+    to return. That is a quiet channel, not a broken one, so the notifier asks
+    the users endpoint instead of inferring health from a post.
+
+    ``_helix`` returns ``None`` when Twitch could not be asked at all (missing
+    credentials, a network error, a rejected token) and ``[]`` when it answered
+    that no such login exists. Only the answer is evidence the channel is gone;
+    an unanswerable request leaves the follow alone.
+    """
+    login = normalize_login(login)
+    if not login:
+        return False
+    users = _helix("/users", login=login)
+    if users is None:
+        return True
+    return bool(users)
+
+
 def fetch_latest_twitch(login: str) -> dict | None:
     """Notifier payload for the newest Twitch activity on a channel.
 
     Prefers a live stream and falls back to the latest archived broadcast so a
     channel that is offline does not silently produce no notifications.
+    ``None`` means "nothing to announce" — an offline channel with no VODs is
+    healthy, so callers check :func:`channel_exists` rather than treating the
+    missing post as a failed request.
     """
     login = normalize_login(login)
     channel = fetch_channel(login)
