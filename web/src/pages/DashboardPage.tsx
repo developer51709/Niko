@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
@@ -10,6 +10,7 @@ import { AchievementsView } from "../components/dashboard/AchievementsView";
 import { EconomyView } from "../components/dashboard/EconomyView";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useLiveResource } from "../hooks/useLiveResource";
 import type { PublicConfig } from "../types";
 import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
 import type { AchievementsResponse, AuthStatus, BotStats, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, User, UserOverview } from "../types";
@@ -25,6 +26,11 @@ function AuthCard({ auth }: { auth: AuthStatus }) {
   </div></main></>;
 }
 
+/** How often the overview's analytics refresh themselves while it is open. */
+const OVERVIEW_POLL_MS = 10_000;
+/** The personal pages refresh on the same rhythm as the guild analytics card. */
+const PERSONAL_POLL_MS = 10_000;
+
 function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { section: DashSection; guild: Guild; stats: BotStats | null; csrfToken?: string; refreshToken: number }) {
   const [overview, setOverview] = useState<GuildOverview | null>(null);
   const [levels, setLevels] = useState<LevelRow[]>([]);
@@ -32,17 +38,61 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   const [resources, setResources] = useState<GuildResources | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [liveAt, setLiveAt] = useState<number | null>(null);
+  const [liveStale, setLiveStale] = useState(false);
+  const overviewRef = useRef<GuildOverview | null>(null);
 
   useEffect(() => {
-    setLoading(true); setError("");
-      const request = section === "overview"
-      ? getOverview(guild.id).then(setOverview)
-      : section === "leveling"
-          ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
-          : section === "applications"
-              ? getResources(guild.id).then(setResources)
-              : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
+    let active = true;
+    let inFlight = false;
+    setLoading(true); setError(""); setLiveAt(null); setLiveStale(false);
+    overviewRef.current = null;
+
+    // The overview holds the analytics cards, so it refreshes on its own while
+    // the tab is open: the first paint still shows the skeleton, later polls
+    // swap the numbers in place.
+    if (section === "overview") {
+      const loadOverview = async (background: boolean) => {
+        if (!active || inFlight) return;
+        if (background && document.visibilityState === "hidden") return;
+        inFlight = true;
+        try {
+          const value = await getOverview(guild.id);
+          if (!active) return;
+          overviewRef.current = value;
+          setOverview(value);
+          setLiveAt(Date.now());
+          setLiveStale(false);
+          setError("");
+        } catch (reason) {
+          if (!active) return;
+          // A failed refresh keeps the last snapshot and says so; only the
+          // first load replaces the page with an error.
+          if (background && overviewRef.current) setLiveStale(true);
+          else setError(reason instanceof Error ? reason.message : "This server could not be loaded.");
+        } finally {
+          inFlight = false;
+          if (active) setLoading(false);
+        }
+      };
+      void loadOverview(false);
+      const timer = window.setInterval(() => void loadOverview(true), OVERVIEW_POLL_MS);
+      const onVisibilityChange = () => { if (document.visibilityState === "visible") void loadOverview(true); };
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      return () => {
+        active = false;
+        window.clearInterval(timer);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      };
+    }
+
+    const request = section === "leveling"
+      ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
+      : section === "applications"
+          ? getResources(guild.id).then(setResources)
+          : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
+    return () => { active = false; };
   }, [guild.id, section, refreshToken]);
 
   if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${section}`}>
@@ -51,7 +101,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
     <span>Loading {section}...</span>
   </div>;
   if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
-  if (section === "overview" && overview) return <OverviewView overview={overview} />;
+  if (section === "overview" && overview) return <OverviewView overview={overview} liveAt={liveAt} liveStale={liveStale} />;
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
   if (section === "server") return <ServerSettingsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
@@ -63,43 +113,52 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 
+function SectionSkeleton({ label }: { label: string }) {
+  return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${label}`}>
+    <div className="skeleton-title" /><div className="skeleton-copy" />
+    <div className="skeleton-grid"><i /><i /><i /></div>
+    <span>Loading {label}...</span>
+  </div>;
+}
+
+function SectionError({ message }: { message: string }) {
+  return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{message}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
+}
+
 /**
  * The personal tabs under My overview. The economy and achievements are global
  * per Discord account, so they load from `/api/me/*` and never need a server.
+ * Each tab keeps itself current while it is open, like the guild analytics card.
  */
-function UserSection({ tab, user, overview, guilds, csrfToken, refreshToken, onServers, onManage }: {
+function UserSection({ tab, user, overview, overviewLiveAt, overviewLiveStale, guilds, csrfToken, refreshToken, onServers, onManage }: {
   tab: UserTab;
   user: User;
   overview: UserOverview | null;
+  overviewLiveAt: number | null;
+  overviewLiveStale: boolean;
   guilds: Guild[];
   csrfToken?: string;
   refreshToken: number;
   onServers: () => void;
   onManage: (guild: Guild) => void;
 }) {
-  const [economy, setEconomy] = useState<EconomyStanding | null>(null);
-  const [achievements, setAchievements] = useState<AchievementsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const economy = useLiveResource<EconomyStanding>("personal-economy", getMyEconomy, { enabled: tab === "economy", refreshKey: refreshToken });
+  const achievements = useLiveResource<AchievementsResponse>("personal-achievements", getMyAchievements, { enabled: tab === "achievements", refreshKey: refreshToken });
 
-  useEffect(() => {
-    if (tab === "overview") { setLoading(false); setError(""); return; }
-    setLoading(true); setError("");
-    const request = tab === "economy"
-      ? getMyEconomy().then(setEconomy)
-      : getMyAchievements().then(setAchievements);
-    request.catch((reason) => setError(reason instanceof Error ? reason.message : "This page could not be loaded.")).finally(() => setLoading(false));
-  }, [tab, refreshToken]);
-
-  if (tab === "overview") return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} />;
-  if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${tab}`}>
-    <div className="skeleton-title" /><div className="skeleton-copy" />
-    <div className="skeleton-grid"><i /><i /><i /></div>
-    <span>Loading {tab}...</span>
-  </div>;
-  if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
-  if (tab === "economy" && economy) return <EconomyView standing={economy} />;
-  if (tab === "achievements" && achievements) return <AchievementsView achievements={achievements} />;
+  if (tab === "overview") {
+    if (!overview) return <SectionSkeleton label="overview" />;
+    return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} liveAt={overviewLiveAt} liveStale={overviewLiveStale} />;
+  }
+  if (tab === "economy") {
+    if (economy.error) return <SectionError message={economy.error} />;
+    if (economy.loading && !economy.data) return <SectionSkeleton label="economy" />;
+    return economy.data ? <EconomyView standing={economy.data} liveAt={economy.syncedAt} liveStale={economy.stale} /> : null;
+  }
+  if (tab === "achievements") {
+    if (achievements.error) return <SectionError message={achievements.error} />;
+    if (achievements.loading && !achievements.data) return <SectionSkeleton label="achievements" />;
+    return achievements.data ? <AchievementsView achievements={achievements.data} liveAt={achievements.syncedAt} liveStale={achievements.stale} /> : null;
+  }
   return null;
 }
 
@@ -130,7 +189,6 @@ export function DashboardPage() {
   const [route, setRoute] = useState(dashboardRoute);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [stats, setStats] = useState<BotStats | null>(null);
-  const [userOverview, setUserOverview] = useState<UserOverview | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [selectedGuild, setSelectedGuild] = useState<Guild | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +197,13 @@ export function DashboardPage() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [staffRole, setStaffRole] = useState<string | null>(null);
+  // The personal tabs share one account-wide snapshot; it stays current while a
+  // personal page is open and pauses as soon as the reader moves to a server.
+  const personalOverview = useLiveResource<UserOverview>("personal-overview", getUserOverview, {
+    enabled: Boolean(auth?.authenticated) && route.view === "overview",
+    intervalMs: PERSONAL_POLL_MS,
+    fallbackError: "Your profile could not be loaded.",
+  });
 
   useEffect(() => {
     const handleRoute = () => setRoute(dashboardRoute());
@@ -156,9 +221,8 @@ export function DashboardPage() {
         return getDashboardAccess().then((access) => {
           setBlacklist(access);
           if (access.blacklisted) return null;
-          return Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]).then(([profile, availableGuilds, staffStatus]) => {
-          setUserOverview(profile);
-          setGuilds(availableGuilds);
+          return Promise.all([getGuilds(), getStaffMe().catch(() => null)]).then(([availableGuilds, staffStatus]) => {
+            setGuilds(availableGuilds);
             setStaffRole(staffStatus?.role || null);
           });
         });
@@ -216,12 +280,12 @@ export function DashboardPage() {
         const access = await getDashboardAccess();
         setBlacklist(access);
         if (!access.blacklisted) {
-          const [profile, availableGuilds, staffStatus] = await Promise.all([getUserOverview(), getGuilds(), getStaffMe().catch(() => null)]);
-          setUserOverview(profile);
+          const [availableGuilds, staffStatus] = await Promise.all([getGuilds(), getStaffMe().catch(() => null)]);
           setGuilds(availableGuilds);
           setStaffRole(staffStatus?.role || null);
         }
       }
+      personalOverview.refresh();
       setRefreshToken((value) => value + 1);
       setError("");
     } catch (reason) {
@@ -241,7 +305,7 @@ export function DashboardPage() {
         : <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
-    content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={userOverview} guilds={guilds} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
+    content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={personalOverview.data} overviewLiveAt={personalOverview.syncedAt} overviewLiveStale={personalOverview.stale} guilds={guilds} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
   }
 
   return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} userTab={route.tab} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onUserTabChange={changeUserTab} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>

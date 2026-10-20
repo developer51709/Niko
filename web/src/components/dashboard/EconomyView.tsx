@@ -1,4 +1,4 @@
-import { CoinLabel, DashHeading } from "./DashboardViews";
+import { AnimatedValue, CoinLabel, DashHeading, LiveChip } from "./DashboardViews";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import type { EconomyStanding, EconomyTransaction, LotteryStanding } from "../../types";
@@ -95,7 +95,7 @@ function TransactionRow({ entry }: { entry: EconomyTransaction }) {
   </li>;
 }
 
-export function EconomyView({ standing }: { standing: EconomyStanding }) {
+export function EconomyView({ standing, liveAt = null, liveStale = false }: { standing: EconomyStanding; liveAt?: number | null; liveStale?: boolean }) {
   const vote = standing.vote;
   const lottery = standing.lottery ?? NO_ROUND;
   const filledSteps = Math.min(Math.max(vote.streak, 0), STREAK_STEPS);
@@ -110,21 +110,22 @@ export function EconomyView({ standing }: { standing: EconomyStanding }) {
         <div className="economy-headline">
           <div>
             <span className="panel-kicker">Net worth</span>
-            <strong>{formatNumber(standing.net_worth)} <CoinLabel /></strong>
+            <AnimatedValue value={standing.net_worth}>{formatNumber(standing.net_worth)} <CoinLabel /></AnimatedValue>
             <small>{formatNumber(standing.balance)} in your wallet · {formatNumber(standing.bank)} in the vault</small>
           </div>
           <div className="achievement-summary-chips">
+            <LiveChip liveAt={liveAt} liveStale={liveStale} />
             <span className="achievement-chip"><Icon name="chart" /><strong>Global rank {rankLabel(standing.global_rank, standing.account_count)}</strong></span>
             <span className="achievement-chip"><Icon name="guild_achievements" /><strong>{formatNumber(standing.achievements_unlocked)} of {formatNumber(standing.achievements_total)} badges</strong></span>
           </div>
         </div>
         <div className="economy-stat-grid">
-          <div className="economy-stat"><span>Level</span><strong>{formatNumber(standing.level)}</strong><small>Working as {standing.job_name}</small></div>
-          <div className="economy-stat"><span>Bank tier</span><strong>{formatNumber(standing.bank_tier + 1)}</strong><small>Vault upgrades raise interest</small></div>
-          <div className="economy-stat"><span>Daily streak</span><strong>{formatNumber(standing.daily_streak)}</strong><small>Days claimed in a row</small></div>
-          <div className="economy-stat"><span>Total earned</span><strong>{formatNumber(standing.total_earned)} <CoinLabel /></strong><small>{formatNumber(standing.total_spent)} spent overall</small></div>
-          <div className="economy-stat"><span>Shifts worked</span><strong>{formatNumber(standing.times_worked)}</strong><small>Across every job shift</small></div>
-          <div className="economy-stat is-accent"><span>Achievements</span><strong>{formatNumber(standing.achievements_unlocked)} / {formatNumber(standing.achievements_total)}</strong><small>{formatNumber(standing.achievement_coins)} coins won from badges</small></div>
+          <div className="economy-stat"><span>Level</span><AnimatedValue value={standing.level}>{formatNumber(standing.level)}</AnimatedValue><small>Working as {standing.job_name}</small></div>
+          <div className="economy-stat"><span>Bank tier</span><AnimatedValue value={standing.bank_tier + 1}>{formatNumber(standing.bank_tier + 1)}</AnimatedValue><small>Vault upgrades raise interest</small></div>
+          <div className="economy-stat"><span>Daily streak</span><AnimatedValue value={standing.daily_streak}>{formatNumber(standing.daily_streak)}</AnimatedValue><small>Days claimed in a row</small></div>
+          <div className="economy-stat"><span>Total earned</span><AnimatedValue value={standing.total_earned}>{formatNumber(standing.total_earned)} <CoinLabel /></AnimatedValue><small>{formatNumber(standing.total_spent)} spent overall</small></div>
+          <div className="economy-stat"><span>Shifts worked</span><AnimatedValue value={standing.times_worked}>{formatNumber(standing.times_worked)}</AnimatedValue><small>Across every job shift</small></div>
+          <div className="economy-stat is-accent"><span>Achievements</span><AnimatedValue value={`${standing.achievements_unlocked}/${standing.achievements_total}`}>{formatNumber(standing.achievements_unlocked)} / {formatNumber(standing.achievements_total)}</AnimatedValue><small>{formatNumber(standing.achievement_coins)} coins won from badges</small></div>
         </div>
       </section>
 
@@ -191,10 +192,10 @@ export function EconomyView({ standing }: { standing: EconomyStanding }) {
             <span className="panel-icon"><Icon name="chart" /></span>
           </div>
           <div className="metric-list">
-            <div><span>Global rank</span><strong>{standing.global_rank ? `#${formatNumber(standing.global_rank)}` : "Unranked"}</strong></div>
-            <div><span>Ranked accounts</span><strong>{formatNumber(standing.account_count ?? 0)}</strong></div>
-            <div><span>Coins from badges</span><strong>{formatNumber(standing.achievement_coins)}</strong></div>
-            <div><span>Lifetime earnings</span><strong>{formatNumber(standing.total_earned)}</strong></div>
+            <div><span>Global rank</span><AnimatedValue value={standing.global_rank ?? 0}>{standing.global_rank ? `#${formatNumber(standing.global_rank)}` : "Unranked"}</AnimatedValue></div>
+            <div><span>Ranked accounts</span><AnimatedValue value={standing.account_count ?? 0}>{formatNumber(standing.account_count ?? 0)}</AnimatedValue></div>
+            <div><span>Coins from badges</span><AnimatedValue value={standing.achievement_coins}>{formatNumber(standing.achievement_coins)}</AnimatedValue></div>
+            <div><span>Lifetime earnings</span><AnimatedValue value={standing.total_earned}>{formatNumber(standing.total_earned)}</AnimatedValue></div>
           </div>
           <p className="economy-panel-note">Your account is ranked against every Niko member, not against the members of one server. The public leaderboard shows the same standings.</p>
           <a className="button button-muted button-small" href="/leaderboard">Open the public leaderboard <Icon name="arrow" /></a>
