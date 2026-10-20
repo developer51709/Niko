@@ -138,6 +138,7 @@ PRIMARY_KEYS: dict = {
     "level_config": "guild_id",
     "giveaways": "message_id",
     "participants": ("message_id", "user_id"),
+    "giveaway_bans": ("guild_id", "user_id"),
     "polls": "message_id",
     "poll_votes": ("message_id", "user_id"),
     "triggers": "id",

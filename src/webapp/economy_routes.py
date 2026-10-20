@@ -13,9 +13,14 @@ Both are account-scoped rather than guild-scoped: the economy is global per
 Discord user, so it carries no server ranking and needs no server selected.
 """
 
-from cogs.economy.data import ACHIEVEMENTS, achievement_progress
+from cogs.economy.data import ACHIEVEMENTS, achievement_progress, _get_lottery_from_db
 from cogs.economy.seasons import season_status
-from utils.economy_jobs import get_job
+from utils.economy_jobs import (
+    LOTTERY_BASE_POT,
+    LOTTERY_DRAW_INTERVAL,
+    LOTTERY_TICKET_PRICE,
+    get_job,
+)
 from cogs.economy.voting import (
     record_vote as _record_vote,
     send_vote_thanks as _send_vote_thanks,
@@ -42,8 +47,52 @@ TOPGG_LOGO_URL = "/topgg.svg"
 _ACCOUNT_COLUMNS = (
     "user_id, balance, bank, level, job, daily_streak, total_earned, total_spent, "
     "times_worked, bank_tier, achievements, transactions, season_progress, "
-    "votes, vote_streak, best_vote_streak, last_vote"
+    "votes, vote_streak, best_vote_streak, last_vote, lottery_tickets, "
+    "lottery_tickets_bought, lottery_wins"
 )
+
+
+#: Friendly names for the ledger kinds the bot writes. Every casino result
+#: (``blackjack``/``slots``/``roulette``) has its own entry here: the card is
+#: what tells a member their gambling activity was recorded, so a raw
+#: ``blackjack_loss`` identifier would read as a missing entry rather than a
+#: named result.
+TRANSACTION_LABELS = {
+    "activity": "Activity",
+    "achievement": "Achievement",
+    "interest": "Bank interest",
+    "vote": "top.gg vote",
+    "daily": "Daily reward",
+    "work": "Work shift",
+    "pay": "Payment sent",
+    "received": "Payment received",
+    "buy": "Shop purchase",
+    "sell": "Shop sale",
+    "crime": "Crime pays",
+    "crime_fine": "Crime fine",
+    "rob": "Robbery",
+    "robbed": "Robbed",
+    "rob_fail": "Robbery caught",
+    "rob_apology": "Robbery apology",
+    "coinflip_win": "Coinflip won",
+    "coinflip_loss": "Coinflip lost",
+    "dice_win": "Dice won",
+    "dice_loss": "Dice lost",
+    "slots_win": "Slots won",
+    "slots_loss": "Slots lost",
+    "blackjack": "Blackjack push",
+    "blackjack_win": "Blackjack won",
+    "blackjack_loss": "Blackjack lost",
+    "roulette_win": "Roulette won",
+    "roulette_loss": "Roulette lost",
+    "lottery": "Lottery win",
+    "lottery_buy": "Lottery tickets",
+}
+
+
+def transaction_label(kind: str) -> str:
+    """The name the recent-activity card prints for a ledger kind."""
+    return TRANSACTION_LABELS.get(str(kind), str(kind).replace("_", " ").strip().capitalize())
 
 
 def _as_int(value) -> int:
@@ -141,14 +190,16 @@ def _account_count() -> int | None:
         return None
 
 
-def _recent_transactions(account: dict, limit: int = 6) -> list[dict]:
+def _recent_transactions(account: dict, limit: int = 8) -> list[dict]:
     """Shape the stored transaction log for the dashboard."""
     entries = []
     for entry in _json_list(account.get("transactions"))[:limit]:
         if not isinstance(entry, dict):
             continue
+        kind = str(entry.get("kind") or "activity")
         entries.append({
-            "kind": str(entry.get("kind") or "activity"),
+            "kind": kind,
+            "label": transaction_label(kind),
             "amount": _as_int(entry.get("amount")),
             "note": str(entry.get("note") or ""),
             "ts": _as_int(entry.get("ts")),
@@ -156,11 +207,95 @@ def _recent_transactions(account: dict, limit: int = 6) -> list[dict]:
     return entries
 
 
+def _winner_name(winner_id: str | None) -> str | None:
+    """The last winner's display name, when the live bot still knows the user."""
+    if not winner_id or not str(winner_id).isdigit() or _discord_bot is None:
+        return None
+    user = _discord_bot.get_user(int(winner_id))
+    return getattr(user, "display_name", None) if user else None
+
+
+def _lottery_state() -> dict:
+    """Read the current round: prize, entrants and their tickets.
+
+    The pot lives in ``economy_lottery`` and the entrants are counted from
+    ``economy_users``, so the count is the number of *members* holding a ticket
+    rather than the number of tickets. The live bot is preferred; a deployment
+    without it reads the same SQLite file the site is served from.
+    """
+    if _discord_bot is not None:
+        async def read_state():
+            state = dict(await _get_lottery_from_db(_discord_bot))
+            row = await _discord_bot.cxn.fetchrow(
+                "SELECT COUNT(*) AS participants, COALESCE(SUM(lottery_tickets), 0) AS tickets "
+                "FROM economy_users WHERE lottery_tickets > 0"
+            )
+            state["participants"] = _as_int(row.get("participants")) if row else 0
+            state["tickets"] = _as_int(row.get("tickets")) if row else 0
+            return state
+
+        try:
+            state = run_on_bot_loop(read_state())
+        except Exception:
+            state = None
+        if state is not None:
+            state["last_winner_name"] = _winner_name(str(state.get("last_winner") or ""))
+            return state
+
+    # The same seed the bot's own ``_get_lottery_from_db`` falls back to, so a
+    # deployment without the live bot still describes the first round instead of
+    # reporting an empty, closed lottery the bot would never draw from.
+    state = {"pot": LOTTERY_BASE_POT, "next_draw": int(time.time()) + LOTTERY_DRAW_INTERVAL,
+             "last_winner": None, "last_pot": 0, "participants": 0, "tickets": 0}
+    conn = sqlite_connect()
+    if conn is None:
+        return state
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT pot, next_draw, last_winner, last_pot FROM economy_lottery WHERE id = 1")
+        row = cursor.fetchone()
+        if row:
+            state.update({"pot": _as_int(row[0]), "next_draw": _as_int(row[1]),
+                          "last_winner": row[2], "last_pot": _as_int(row[3])})
+        cursor.execute(
+            "SELECT COUNT(*), COALESCE(SUM(lottery_tickets), 0) FROM economy_users "
+            "WHERE lottery_tickets > 0"
+        )
+        counts = cursor.fetchone()
+        if counts:
+            state["participants"] = _as_int(counts[0])
+            state["tickets"] = _as_int(counts[1])
+    except sqlite3.Error:
+        pass
+    finally:
+        conn.close()
+    state["last_winner_name"] = None
+    return state
+
+
+def lottery_standing(account: dict | None) -> dict:
+    """The lottery card the economy tab renders: prize, entrants, your tickets."""
+    state = _lottery_state()
+    pot = _as_int(state.get("pot"))
+    return {
+        "pot": pot,
+        "participants": _as_int(state.get("participants")),
+        "tickets": _as_int(state.get("tickets")),
+        "your_tickets": _as_int((account or {}).get("lottery_tickets")),
+        "ticket_price": LOTTERY_TICKET_PRICE,
+        "next_draw": _as_int(state.get("next_draw")),
+        "last_winner": state.get("last_winner_name"),
+        "last_pot": _as_int(state.get("last_pot")),
+        "open": pot > 0,
+    }
+
+
 def economy_summary(
     account: dict | None,
     *,
     global_rank: int | None = None,
     account_count: int | None = None,
+    lottery: dict | None = None,
 ) -> dict:
     """Build the personal economy tab payload for one account."""
     account = account or {}
@@ -188,6 +323,7 @@ def economy_summary(
         "global_rank": global_rank,
         "account_count": account_count,
         "transactions": _recent_transactions(account),
+        "lottery": lottery if lottery is not None else lottery_standing(account),
         "vote": vote_standing(account),
     }
 
@@ -245,6 +381,7 @@ def api_me_economy():
         account,
         global_rank=_global_rank(_as_int(account.get("balance")) + _as_int(account.get("bank"))),
         account_count=_account_count(),
+        lottery=lottery_standing(account),
     ))
 
 

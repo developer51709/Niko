@@ -137,6 +137,10 @@ def _default_user() -> dict:
         "effects":       {},   # e.g. {"work_cooldown_half": True, "crime_boost": 1, "rob_shield": 1, "lottery_boost": 1}
         # lottery
         "lottery_tickets": 0,
+        # lifetime lottery counters, so a weekly ticket reset never erases what
+        # a member has bought or won (see the lottery badges below)
+        "lottery_tickets_bought": 0,
+        "lottery_wins": 0,
         # top.gg voting (see cogs/economy/voting.py)
         "votes":            0,
         "vote_streak":      0,
@@ -453,6 +457,51 @@ ACHIEVEMENTS = {
         "description": "Keep a 100-vote streak on top.gg.",
         "test": lambda d: int(d.get("best_vote_streak", 0)) >= 100,
         "progress": lambda d: (int(d.get("best_vote_streak", 0)), 100),
+    },
+    # ── Lottery ──────────────────────────────────────────────────────────
+    # ``lottery_tickets`` is reset by every draw, so these badges read the
+    # lifetime counters instead: what a member has bought, and what they won.
+    "lottery_first_ticket": {
+        "name": "First Ticket", "emoji": "🎟️", "reward": 250,
+        "description": "Buy your first lottery ticket.",
+        "test": lambda d: int(d.get("lottery_tickets_bought", 0)) >= 1,
+        "progress": lambda d: (int(d.get("lottery_tickets_bought", 0)), 1),
+    },
+    "lottery_tickets_25": {
+        "name": "Ticket Stub", "emoji": "🎫", "reward": 1_000,
+        "description": "Buy 25 lottery tickets.",
+        "test": lambda d: int(d.get("lottery_tickets_bought", 0)) >= 25,
+        "progress": lambda d: (int(d.get("lottery_tickets_bought", 0)), 25),
+    },
+    "lottery_tickets_100": {
+        "name": "Regular Punter", "emoji": "💰", "reward": 5_000,
+        "description": "Buy 100 lottery tickets.",
+        "test": lambda d: int(d.get("lottery_tickets_bought", 0)) >= 100,
+        "progress": lambda d: (int(d.get("lottery_tickets_bought", 0)), 100),
+    },
+    "lottery_tickets_500": {
+        "name": "Pot Chaser", "emoji": "🎯", "reward": 25_000,
+        "description": "Buy 500 lottery tickets.",
+        "test": lambda d: int(d.get("lottery_tickets_bought", 0)) >= 500,
+        "progress": lambda d: (int(d.get("lottery_tickets_bought", 0)), 500),
+    },
+    "lottery_win_first": {
+        "name": "Lucky Winner", "emoji": "🍀", "reward": 2_500,
+        "description": "Win the weekly lottery once.",
+        "test": lambda d: int(d.get("lottery_wins", 0)) >= 1,
+        "progress": lambda d: (int(d.get("lottery_wins", 0)), 1),
+    },
+    "lottery_wins_3": {
+        "name": "Hat Trick", "emoji": "🎉", "reward": 10_000,
+        "description": "Win the weekly lottery 3 times.",
+        "test": lambda d: int(d.get("lottery_wins", 0)) >= 3,
+        "progress": lambda d: (int(d.get("lottery_wins", 0)), 3),
+    },
+    "lottery_wins_10": {
+        "name": "Jackpot Royalty", "emoji": "📣", "reward": 50_000,
+        "description": "Win the weekly lottery 10 times.",
+        "test": lambda d: int(d.get("lottery_wins", 0)) >= 10,
+        "progress": lambda d: (int(d.get("lottery_wins", 0)), 10),
     },
     # ── Seasonal events ──────────────────────────────────────────────────
     # Each window is an inclusive MM-DD range in local time and repeats every
@@ -798,18 +847,10 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
         # Calculate net worth
         net_worth = int(data.get("balance", 0)) + int(data.get("bank", 0))
         
-        await bot.cxn.execute("""
-            INSERT OR REPLACE INTO economy_users (
-                user_id, balance, bank, net_worth, leaderboard_private, total_earned, total_spent,
-                xp, level, job, times_worked, bank_tier, last_interest,
-                last_interest_day, daily_streak, last_daily, last_work,
-                last_crime, last_rob, last_heist, last_slots, last_blackjack,
-                last_roulette, last_casino, last_gamble, last_bet, last_race,
-                last_fight, last_duel, inventory, effects, lottery_tickets,
-                transactions, achievements, season_progress, votes, vote_streak,
-                best_vote_streak, last_vote
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        # The value list and the placeholders are built together: INSERT OR
+        # REPLACE rewrites the whole row, so a column added to one side and not
+        # the other would silently reset that field on the next command.
+        values = [
             user_id,
             data.get("balance", 100),
             data.get("bank", 0),
@@ -842,17 +883,32 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
             inventory_json,
             effects_json,
             data.get("lottery_tickets", 0),
+            int(data.get("lottery_tickets_bought", 0)),
+            int(data.get("lottery_wins", 0)),
             transactions_json,
             achievements_json,
             season_progress_json,
             # Vote state is written on every save, so it must be listed here:
-            # INSERT OR REPLACE rewrites the whole row, and an omitted column
-            # would silently reset the streak on the next economy command.
+            # an omitted column would silently reset the streak on the next
+            # economy command.
             int(data.get("votes", 0)),
             int(data.get("vote_streak", 0)),
             int(data.get("best_vote_streak", 0)),
-            int(data.get("last_vote", 0))
-        )
+            int(data.get("last_vote", 0)),
+        ]
+        await bot.cxn.execute(f"""
+            INSERT OR REPLACE INTO economy_users (
+                user_id, balance, bank, net_worth, leaderboard_private, total_earned, total_spent,
+                xp, level, job, times_worked, bank_tier, last_interest,
+                last_interest_day, daily_streak, last_daily, last_work,
+                last_crime, last_rob, last_heist, last_slots, last_blackjack,
+                last_roulette, last_casino, last_gamble, last_bet, last_race,
+                last_fight, last_duel, inventory, effects, lottery_tickets,
+                lottery_tickets_bought, lottery_wins,
+                transactions, achievements, season_progress, votes, vote_streak,
+                best_vote_streak, last_vote
+            ) VALUES ({', '.join(['?'] * len(values))})
+        """, *values)
     except Exception as e:
         log.error("Economy", f"Could not save user {user_id} to database: {e}")
 

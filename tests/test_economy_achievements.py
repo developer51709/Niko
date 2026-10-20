@@ -19,7 +19,12 @@ sys.path.insert(0, str(ROOT / "src"))
 from database import SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
 from webapp import app  # noqa: E402
-from webapp.economy_routes import TOPGG_LOGO_URL, achievement_entries, economy_summary  # noqa: E402
+from webapp.economy_routes import (  # noqa: E402
+    TOPGG_LOGO_URL,
+    achievement_entries,
+    economy_summary,
+    transaction_label,
+)
 from cogs.economy.seasons import season_status, season_window  # noqa: E402
 from cogs.economy.data import (  # noqa: E402
     ACHIEVEMENTS,
@@ -33,6 +38,12 @@ from cogs.economy.data import (  # noqa: E402
     seasonal_progress,
 )
 from cogs.economy.voting import apply_vote  # noqa: E402
+from utils.economy_jobs import (  # noqa: E402
+    LOTTERY_BASE_POT,
+    LOTTERY_DRAW_INTERVAL,
+    LOTTERY_TICKET_PRICE,
+)
+from webapp import economy_routes as economy_routes_module  # noqa: E402
 
 VOTE_FIELDS = ("votes", "vote_streak", "best_vote_streak", "last_vote")
 
@@ -307,7 +318,8 @@ class DashboardPayloadTests(unittest.TestCase):
             self.assertNotIn(server_field, summary)
         # The malformed ledger row is dropped rather than rendered as garbage.
         self.assertEqual(summary["transactions"], [{
-            "kind": "vote", "amount": 550, "note": "top.gg vote · streak 2", "ts": 1_700_000_000,
+            "kind": "vote", "label": "top.gg vote", "amount": 550,
+            "note": "top.gg vote · streak 2", "ts": 1_700_000_000,
         }])
         self.assertEqual(summary["vote"]["votes"], 3)
         self.assertEqual(summary["vote"]["streak"], 2)
@@ -341,6 +353,47 @@ class DashboardPayloadTests(unittest.TestCase):
                     self.assertGreater(entry["season"]["starts_at"], entry["season"]["ends_at"] - 400 * 86_400)
                     self.assertGreater(entry["season"]["ends_at"], entry["season"]["starts_at"])
 
+    def test_economy_summary_carries_the_lottery_card(self):
+        summary = economy_summary(account(lottery_tickets=3))
+        lottery = summary["lottery"]
+
+        # The card shows the member's own entries, so the viewer's ticket count
+        # comes from the account rather than from the round totals.
+        self.assertEqual(lottery["your_tickets"], 3)
+        self.assertEqual(lottery["ticket_price"], LOTTERY_TICKET_PRICE)
+        self.assertIsInstance(lottery["open"], bool)
+        self.assertIn("last_winner", lottery)
+        for field in ("pot", "participants", "tickets", "next_draw", "last_pot"):
+            self.assertIsInstance(lottery[field], int, field)
+            self.assertGreaterEqual(lottery[field], 0, field)
+
+    def test_economy_summary_passes_through_a_supplied_round(self):
+        # The route reads the round once and hands it in, so the summary must
+        # not re-read the lottery state and disagree with the card it renders.
+        supplied = {
+            "pot": 5_000, "participants": 2, "tickets": 4, "your_tickets": 1,
+            "ticket_price": 250, "next_draw": 1_800_000_000,
+            "last_winner": "Niko", "last_pot": 9_000, "open": True,
+        }
+        summary = economy_summary(account(), lottery=supplied)
+        self.assertEqual(summary["lottery"], supplied)
+
+    def test_casino_ledger_kinds_get_a_readable_label(self):
+        # A casino result is written by the casino cogs, not by the economy
+        # mixins, so the card has to name each kind explicitly: a raw
+        # "roulette_loss" would read as an unlabelled row.
+        for kind, label in {
+            "slots_win": "Slots won",
+            "slots_loss": "Slots lost",
+            "blackjack_win": "Blackjack won",
+            "blackjack_loss": "Blackjack lost",
+            "blackjack": "Blackjack push",
+            "roulette_win": "Roulette won",
+            "roulette_loss": "Roulette lost",
+        }.items():
+            self.assertEqual(transaction_label(kind), label)
+        self.assertEqual(transaction_label("some_new_kind"), "Some new kind")
+
     def test_economy_summary_survives_an_empty_account(self):
         summary = economy_summary(None)
         self.assertEqual(summary["net_worth"], 0)
@@ -365,6 +418,9 @@ class CatalogueCoverageTests(unittest.TestCase):
             "net worth": ("net_worth", ["worth_1k", "worth_250k", "millionaire"]),
             "votes": ("votes", ["voter_first", "voter_regular", "voter_25", "voter_devoted", "voter_legend"]),
             "vote streak": ("best_vote_streak", ["vote_streak_7", "vote_streak_30", "vote_streak_100"]),
+            "lottery tickets": ("lottery_tickets_bought", ["lottery_first_ticket", "lottery_tickets_25",
+                                                          "lottery_tickets_100", "lottery_tickets_500"]),
+            "lottery wins": ("lottery_wins", ["lottery_win_first", "lottery_wins_3", "lottery_wins_10"]),
         }
         for family, (_, ordered) in ladders.items():
             with self.subTest(family=family):
@@ -749,6 +805,43 @@ class SeasonalPersistenceTests(unittest.TestCase):
         # cannot be collected from spending that happened before the window.
         _check_achievements(stored, now=dt.datetime(2026, 10, 25))
         self.assertNotIn("spooky_spender", stored["achievements"])
+
+
+class LotteryCardTests(unittest.TestCase):
+    """The economy tab's lottery card has to render the round it is given."""
+
+    def setUp(self):
+        self.view = (ROOT / "web" / "src" / "components" / "dashboard" / "EconomyView.tsx").read_text(encoding="utf-8")
+
+    def test_the_card_renders_every_field_of_the_round(self):
+        self.assertIn("standing.lottery", self.view)
+        for field in ("pot", "participants", "tickets", "your_tickets",
+                      "ticket_price", "next_draw", "last_winner", "last_pot"):
+            with self.subTest(field=field):
+                self.assertIn(f"lottery.{field}", self.view)
+
+    def test_the_card_says_how_to_buy_a_ticket_and_where_the_draw_is_posted(self):
+        self.assertIn("/lottery buy", self.view)
+        self.assertIn("#lottery", self.view)
+
+    def test_without_a_saved_round_the_card_shows_the_bot_s_seed(self):
+        # A deployment with no live bot and no lottery row must describe the
+        # round the bot would open, not an empty closed lottery.
+        with mock.patch.object(economy_routes_module, "_discord_bot", None), \
+             mock.patch.object(economy_routes_module, "sqlite_connect", return_value=None):
+            state = economy_routes_module._lottery_state()
+
+        self.assertEqual(state["pot"], LOTTERY_BASE_POT)
+        self.assertGreater(state["next_draw"], int(time.time()))
+        self.assertLessEqual(state["next_draw"], int(time.time()) + LOTTERY_DRAW_INTERVAL)
+        self.assertEqual((state["participants"], state["tickets"]), (0, 0))
+
+    def test_the_entered_state_uses_the_dashboard_accent_not_a_new_colour(self):
+        card = dashboard_rule(".dashboard-layout .lottery-card")
+        entered = dashboard_rule(".dashboard-layout .lottery-card.is-entered")
+        self.assertIn("var(--line-soft)", card)
+        self.assertIn("var(--filter-border)", entered)
+        self.assertIn("var(--filter-active)", entered)
 
 
 class AchievementProgressBarStyleTests(unittest.TestCase):

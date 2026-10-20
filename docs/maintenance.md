@@ -11,6 +11,14 @@ Restart the bot process after updating.
 ## Backing Up Data
 - **JSON Data**: Regularly back up the `data/` folder.
 
+## Discord API proxy workers
+
+`proxy-worker/` is an optional Cloudflare Worker that relays Discord REST requests from Cloudflare's Worker egress instead of the bot host's shared IP. It deploys the same way as `nsfw-api/`: Cloudflare's Workers Builds Git integration can build the folder on every push, or run `wrangler deploy` from `proxy-worker/`. Create an `AUTH_TOKEN` secret on every worker and set the same value as `PROXY_WORKER_TOKEN` on the bot. Multiple workers may be registered; Niko rotates through them per request.
+
+The owner controls it from **Staff workspace → Discord proxy**. Registering a worker verifies a fresh HMAC challenge and stores the registration in the `proxy_workers` MongoDB collection; the routing switch lives in `proxy_worker_settings`. Registration and routing fail closed without MongoDB, and routing stays off until the owner enables it. Enabling routing sends Discord REST traffic (including dashboard and OAuth calls) through the workers first. A failed or unreachable worker falls through to the next worker, then to the existing standby/direct/Webshare path, so the bot does not lose its normal egress.
+
+The relay only accepts HTTPS `discord.com`/`discordapp.com` API paths. Each request is HMAC-signed with a timestamp and nonce, expires after 60 seconds and cannot be replayed. Worker telemetry is in memory per isolate: 15 minutes of 5-second latency buckets, request and status totals, the latest requests and the latest errors. Request bodies and responses are not stored. Webhook and interaction tokens are redacted from paths before they reach the dashboard feed. Multipart attachment uploads stay on the bot's direct route. Only REST traffic is relayed; the long-lived Discord gateway WebSocket remains on the normal direct/standby connection because a Worker cannot proxy that socket.
+
 ## Standby backend failover
 
 A standby instance is a complete, warmed copy of the production bot backend and dashboard. It logs in with the production bot identity but holds no Discord gateway ownership until a signed handoff from the primary. Standby backend failover is separate from outbound proxying: Webshare remains the independently managed proxy service for egress routing.

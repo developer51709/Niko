@@ -74,6 +74,24 @@ persisting them. Staff application submissions require a Discord-authenticated
 session and are checked against current guild membership using the bot; each
 application/user pair is unique in the database.
 
+### Owner operations
+
+The bot owner can manage standby instances and optional Discord proxy workers.
+These routes require a staff session with the owner role; mutations also need
+the CSRF token returned by `/auth/status`. They are answered by the primary
+instance so a standby that owns the gateway cannot change the registry.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/staff/standbys` | Verified standby instances, live health, and failover state |
+| POST | `/api/staff/standbys` | Verify and register a standby |
+| DELETE | `/api/staff/standbys/<id>` | Remove a standby |
+| POST | `/api/staff/standbys/failover` | Set mode or activate/rotate a route |
+| GET | `/api/staff/proxy-workers` | Worker health, latency buckets, recent requests/errors, and aggregate usage |
+| POST | `/api/staff/proxy-workers` | Verify and register a proxy worker |
+| DELETE | `/api/staff/proxy-workers/<id>` | Remove a proxy worker |
+| POST | `/api/staff/proxy-workers/routing` | Persist the owner's routing switch |
+
 ## Adding an endpoint
 
 The Flask app entrypoint is `src/webapp/__init__.py`; shared setup and helpers

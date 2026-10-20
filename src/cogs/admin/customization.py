@@ -32,7 +32,7 @@ DISCORD_BOTCLIENT_UA = (
     "DiscordBot (https://github.com/aiko-chan-ai/DiscordBotClient, 1.0)"
 )
 
-async def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, timeout=10):
+async def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, timeout=10, proxy_manager=None):
     """
     urls: list of URL strings to try in order
     token: raw token string from env
@@ -64,12 +64,24 @@ async def try_patch_with_fallbacks(urls, token, payload, extra_headers=None, tim
                     headers.pop("Authorization", None)
 
                 try:
-                    async with session.patch(
-                        url,
-                        headers=headers,
-                        data=json.dumps(payload),
-                        timeout=aiohttp.ClientTimeout(total=timeout)
-                    ) as r:
+                    request = (
+                        proxy_manager.relay_or_request(
+                            session,
+                            "PATCH",
+                            url,
+                            headers=headers,
+                            data=json.dumps(payload),
+                            timeout=aiohttp.ClientTimeout(total=timeout),
+                        )
+                        if proxy_manager is not None
+                        else session.patch(
+                            url,
+                            headers=headers,
+                            data=json.dumps(payload),
+                            timeout=aiohttp.ClientTimeout(total=timeout),
+                        )
+                    )
+                    async with await request as r:
                         status = r.status
                         text = await r.text()
                         attempted.append({
@@ -403,7 +415,9 @@ class SetNameView(discord.ui.LayoutView):
             """
             owner = False
                 
-        success, attempts = await try_patch_with_fallbacks(urls, token, body)
+        success, attempts = await try_patch_with_fallbacks(
+            urls, token, body, proxy_manager=getattr(interaction.client, "discord_proxy", None)
+        )
 
         if success:
             if owner:
@@ -518,7 +532,9 @@ class SetProfileView(discord.ui.LayoutView):
         else:
             owner = False
 
-        success, attempts = await try_patch_with_fallbacks(urls, token, body)
+        success, attempts = await try_patch_with_fallbacks(
+            urls, token, body, proxy_manager=getattr(interaction.client, "discord_proxy", None)
+        )
 
         if success:
             if owner:
