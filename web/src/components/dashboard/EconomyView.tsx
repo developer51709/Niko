@@ -1,10 +1,27 @@
 import { CoinLabel, DashHeading } from "./DashboardViews";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
-import type { EconomyStanding, EconomyTransaction } from "../../types";
+import type { EconomyStanding, EconomyTransaction, LotteryStanding } from "../../types";
 
 /** The vote streak caps at ten steps on the server; the track mirrors that. */
 const STREAK_STEPS = 10;
+
+/**
+ * A round the API has not reported yet. The lottery card is one panel among
+ * several, so a payload from an older build leaves an honest "no round yet"
+ * card instead of taking the whole tab down.
+ */
+const NO_ROUND: LotteryStanding = {
+  pot: 0,
+  participants: 0,
+  tickets: 0,
+  your_tickets: 0,
+  ticket_price: 0,
+  next_draw: 0,
+  last_winner: null,
+  last_pot: 0,
+  open: false,
+};
 
 function signedAmount(amount: number) {
   const sign = amount >= 0 ? "+" : "−";
@@ -14,6 +31,44 @@ function signedAmount(amount: number) {
 function rankLabel(rank: number | null, total: number | null) {
   if (rank === null) return "Ranking soon";
   return total ? `#${formatNumber(rank)} of ${formatNumber(total)}` : `#${formatNumber(rank)}`;
+}
+
+/**
+ * The draw runs on the bot's clock, so the card counts down to the same unix
+ * second the economy tick compares against rather than to a client date.
+ */
+function drawCountdown(nextDraw: number) {
+  if (!nextDraw) return "Next round opens soon";
+  const remaining = Math.max(0, nextDraw - Math.floor(Date.now() / 1000));
+  if (remaining === 0) return "Drawing now";
+  const days = Math.floor(remaining / 86400);
+  const hours = Math.floor((remaining % 86400) / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  if (days) return `Draws in ${days}d ${hours}h`;
+  if (hours) return `Draws in ${hours}h ${minutes}m`;
+  return `Draws in ${minutes}m`;
+}
+
+/** What the last draw paid, or a line that says no draw has happened yet. */
+function lastDrawLabel(lottery: LotteryStanding) {
+  if (!lottery.last_winner) return "No winner has been drawn yet";
+  return `Last draw: ${lottery.last_winner} took ${formatNumber(lottery.last_pot)} coins`;
+}
+
+/**
+ * The round, in the member's terms: what is at stake, who is in it, and whether
+ * the viewer holds a ticket. A ticket is the only way into the draw, so the
+ * viewer's own count is the card's main call to action.
+ */
+function lotteryNote(lottery: LotteryStanding) {
+  if (lottery.your_tickets > 0) {
+    const chance = lottery.tickets > 0
+      ? ` (${Math.round((lottery.your_tickets / lottery.tickets) * 100)}% of the tickets in play)`
+      : "";
+    return `You hold ${formatNumber(lottery.your_tickets)} of ${formatNumber(lottery.tickets)} tickets${chance}.`;
+  }
+  if (lottery.participants === 0) return "No tickets sold yet — the first ticket starts the pot.";
+  return "You are not in this round yet. Every ticket is one entry in the draw.";
 }
 
 function nextVoteLabel(standing: EconomyStanding["vote"]) {
@@ -31,7 +86,7 @@ function nextVoteLabel(standing: EconomyStanding["vote"]) {
 function TransactionRow({ entry }: { entry: EconomyTransaction }) {
   const at = new Date(entry.ts * 1000);
   return <li className="economy-transaction">
-    <span className="economy-transaction-kind">{entry.kind}</span>
+    <span className="economy-transaction-kind">{entry.label || entry.kind}</span>
     <span className="economy-transaction-note">{entry.note || "Economy activity"}</span>
     <span className={`economy-transaction-amount${entry.amount >= 0 ? " is-gain" : " is-loss"}`}>{signedAmount(entry.amount)} <CoinLabel /></span>
     <time dateTime={at.toISOString()} title={at.toLocaleString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })}>
@@ -42,12 +97,13 @@ function TransactionRow({ entry }: { entry: EconomyTransaction }) {
 
 export function EconomyView({ standing }: { standing: EconomyStanding }) {
   const vote = standing.vote;
+  const lottery = standing.lottery ?? NO_ROUND;
   const filledSteps = Math.min(Math.max(vote.streak, 0), STREAK_STEPS);
   return <>
     <DashHeading
       eyebrow="Personal · economy"
       title="Your economy standing."
-      text="Wallets, vaults, streaks and voting, in one place. The economy is global, so these numbers follow your Niko account into every server — no server needs to be selected to read them."
+      text="Wallets, vaults, the weekly lottery, streaks and voting, in one place. The economy is global, so these numbers follow your Niko account into every server — no server needs to be selected to read them."
     />
     <div className="economy-layout">
       <section className="dash-panel">
@@ -69,6 +125,31 @@ export function EconomyView({ standing }: { standing: EconomyStanding }) {
           <div className="economy-stat"><span>Total earned</span><strong>{formatNumber(standing.total_earned)} <CoinLabel /></strong><small>{formatNumber(standing.total_spent)} spent overall</small></div>
           <div className="economy-stat"><span>Shifts worked</span><strong>{formatNumber(standing.times_worked)}</strong><small>Across every job shift</small></div>
           <div className="economy-stat is-accent"><span>Achievements</span><strong>{formatNumber(standing.achievements_unlocked)} / {formatNumber(standing.achievements_total)}</strong><small>{formatNumber(standing.achievement_coins)} coins won from badges</small></div>
+        </div>
+      </section>
+
+      <section className="dash-panel">
+        <div className="panel-heading">
+          <div><span className="panel-kicker">Weekly lottery</span><h3>This round&apos;s pot</h3></div>
+          <span className="panel-icon"><Icon name="guild_achievements" /></span>
+        </div>
+        <div className={`lottery-card${lottery.your_tickets > 0 ? " is-entered" : ""}`}>
+          <div className="lottery-prize">
+            <strong>{formatNumber(lottery.pot)} <CoinLabel /></strong>
+            <span>{drawCountdown(lottery.next_draw)}</span>
+          </div>
+          <div className="lottery-chips">
+            <span className="lottery-chip">Entrants<strong>{formatNumber(lottery.participants)}</strong></span>
+            <span className="lottery-chip">Tickets in play<strong>{formatNumber(lottery.tickets)}</strong></span>
+            <span className="lottery-chip">Your tickets<strong>{formatNumber(lottery.your_tickets)}</strong></span>
+            <span className="lottery-chip">Ticket price<strong>{lottery.ticket_price ? <>{formatNumber(lottery.ticket_price)} <CoinLabel /></> : "—"}</strong></span>
+          </div>
+          <p className="economy-panel-note">{lotteryNote(lottery)}</p>
+          <small className="lottery-last">{lastDrawLabel(lottery)}</small>
+          <p className="lottery-how">
+            Buy tickets in Discord with <code>/lottery buy &lt;count&gt;</code>. The draw runs weekly and is
+            announced in the support server&apos;s <code>#lottery</code> channel.
+          </p>
         </div>
       </section>
 

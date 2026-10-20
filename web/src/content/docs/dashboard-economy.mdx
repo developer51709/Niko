@@ -17,7 +17,7 @@ Open the dashboard, then use the **My overview** tab in the sidebar. It holds th
 | Tab | Address | What it shows |
 | --- | --- | --- |
 | Overview | `/dashboard` | Your profile snapshot and the economy privacy toggle |
-| Economy | `/dashboard/me/economy` | Wallet, vault, net worth, global rank, recent activity and the vote card |
+| Economy | `/dashboard/me/economy` | Wallet, vault, net worth, the weekly lottery, global rank, recent activity and the vote card |
 | Achievements | `/dashboard/me/achievements` | Every badge with its progress bar, reward and unlock state |
 
 These tabs read `GET /api/me/economy` and `GET /api/me/achievements` for the signed-in account only — no server is selected and no Manage Server permission is needed.
@@ -27,9 +27,16 @@ These tabs read `GET /api/me/economy` and `GET /api/me/achievements` for the sig
 - **Balance and vault** with the combined net worth for the account
 - **Level, job, bank tier and daily streak**
 - **Totals**: earned, spent and shifts worked
+- **Weekly lottery**: the pot, the draw countdown, how many members and tickets are in the round, and your own tickets
 - **Global rank** and how many economy profiles exist
 - **Recent ledger activity**, newest first
 - **top.gg vote streak**, current multipliers and the listing link
+
+### The lottery card
+
+The lottery is one global weekly round, so the card reads the live round rather than a server setting: the pot the next draw pays after the house rake, the time left, entrants, tickets in play and the price of one ticket. **Your tickets** is the part that matters — a round you are not entered in shows no count, and a round with no tickets yet says so instead of pretending the pot is winnable.
+
+Tickets are bought in Discord with `/lottery buy <count>`; the dashboard shows the round, it does not sell tickets. Each draw is announced in the support server's `#lottery` channel, and the card's footer repeats the last winner and what they took home.
 
 ## The Achievements tab
 

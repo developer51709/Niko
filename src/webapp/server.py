@@ -192,11 +192,12 @@ def get_runtime_level_config(guild_id: str) -> dict:
     return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
-# Only the primary's own failover control plane stays local. The standby's own
-# service routes (/health and /internal/standby/*) are proxied together with the
-# rest of the application so the public production domain exposes the complete
-# active instance rather than a trimmed subset of it.
-_STANDBY_LOCAL_PATHS = ("/api/staff/standbys",)
+# Only the primary's own owner-control plane (standby and proxy-worker
+# management) stays local. The standby's own service routes (/health and
+# /internal/standby/*) are proxied together with the rest of the application so
+# the public production domain exposes the complete active instance rather than
+# a trimmed subset of it.
+_STANDBY_LOCAL_PATHS = ("/api/staff/standbys", "/api/staff/proxy-workers")
 _STANDBY_HOP_BY_HOP_HEADERS = {
     "connection", "content-encoding", "content-length", "keep-alive", "proxy-authenticate",
     "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
@@ -812,14 +813,15 @@ def discord_request(method: str, url: str, **kwargs):
     Discord answers every request through Cloudflare, and that edge challenges
     plain ``python-requests`` traffic from a datacenter IP — the OAuth token
     exchange is a POST, so it is challenged before any dashboard call. The bot's
-    own ``User-Agent`` therefore travels with every call, and the deployment's own
-    egress is the first attempt: that is the identity Discord answers for this bot,
-    while the Webshare proxy is another datacenter IP the same edge also refuses.
-    When that first attempt comes back as a Cloudflare interstitial the call is
-    retried over the bot's active proxy and then, while a standby owns the
-    gateway, relayed to it. Every browser path that touches Discord goes through
-    here, so login, the dashboard and the membership checks all share the bot's
-    egress instead of sending a bare client from this host.
+    own ``User-Agent`` therefore travels with every call. When proxy workers are
+    enabled they are the first attempt, followed by the deployment's own egress;
+    that is the identity Discord answers for this bot, while the Webshare proxy
+    is another datacenter IP the same edge also refuses. When a direct attempt
+    comes back as a Cloudflare interstitial the call is relayed to a standby
+    when one is configured, then retried over the bot's active proxy. Every
+    browser path that touches Discord goes through here, so login, the dashboard
+    and the membership checks all share the bot's egress instead of sending a
+    bare client from this host.
 
     A blocked response is only relayed when a signed relay can actually be sent.
     Without an active standby origin and the relay secrets, the Discord response is
@@ -834,6 +836,16 @@ def discord_request(method: str, url: str, **kwargs):
     if headers:
         kwargs["headers"] = headers
     manager = getattr(_discord_bot, "standby_failover", None) if _discord_bot is not None else None
+    proxy_workers = getattr(_discord_bot, "discord_proxy", None) if _discord_bot is not None else None
+    if proxy_workers is not None and proxy_workers.can_relay(url):
+        try:
+            proxied = proxy_workers.request_via_worker(method, url, kwargs)
+        except Exception as exc:
+            app.logger.warning("Discord proxy worker failed for %s %s: %s", method, url, exc)
+        else:
+            if manager is None or manager.cloudflare_interstitial(proxied) is None:
+                return proxied
+            proxied.close()
     response = getattr(req, method.lower())(url, **kwargs)
     if manager is None or manager.cloudflare_interstitial(response) is None:
         return response

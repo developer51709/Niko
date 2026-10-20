@@ -40,6 +40,21 @@ def _giveaway_paused(giveaway, guild_id) -> bool:
     return _guild_paused(guild_id)
 
 
+async def _giveaway_banned(bot, guild_id, user_id) -> bool:
+    """True when the member is banned from this server's giveaways.
+
+    The ban lives in its own table and is scoped to the guild, so the same
+    member can still enter giveaways in another server Niko is in.
+    """
+    if guild_id is None:
+        return False
+    row = await bot.cxn.fetchval(
+        "SELECT 1 FROM giveaway_bans WHERE guild_id = $1 AND user_id = $2",
+        int(guild_id), int(user_id),
+    )
+    return row is not None
+
+
 # ─────────────────────────────────────────────────────────────
 #  REQUIREMENT HELPERS
 # ─────────────────────────────────────────────────────────────
@@ -153,12 +168,18 @@ MESSAGES = {
             "label_no_participants":  "Nobody participated",
             "no_participants_msg":    "The giveaway for **{prize}** has ended, but nobody participated! 😢",
             "winner_announce":        "🎉 Congratulations {mentions}! You won **{prize}**!\n{url}",
+            "reroll_hint":            "-# Reroll with `{command}` — copy and paste it here.",
             "reroll_announce":        "🎉 **Giveaway Reroll!** The new winner for **{prize}** is: {mentions}! Congratulations!",
             "join_success":           "🎉 You have successfully joined the giveaway! Good luck!",
             "join_already":           "✅ You have already joined this giveaway!",
             "join_ended":             "This giveaway has already ended!",
             "join_host":              "You cannot join your own giveaway!",
             "join_bot":               "Bots cannot participate in giveaways!",
+            "join_banned":            "You are banned from joining giveaways in this server.",
+            "ban_success":            "**{user}** can no longer join giveaways in this server. Their entries were removed from **{count}** active giveaway(s).",
+            "ban_already":            "**{user}** is already banned from giveaways in this server.",
+            "unban_success":          "**{user}** can join giveaways in this server again.",
+            "unban_not_banned":       "**{user}** is not banned from giveaways in this server.",
             "no_exist":               "This giveaway doesn't exist anymore.",
             "no_perm_manage":         "❌ Only the giveaway host or a server admin can manage this giveaway.",
             "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
@@ -187,12 +208,18 @@ MESSAGES = {
             "label_no_participants":  "Niemand hat teilgenommen",
             "no_participants_msg":    "Das Gewinnspiel für **{prize}** ist beendet, aber niemand hat teilgenommen! 😢",
             "winner_announce":        "🎉 Glückwunsch {mentions}! Ihr habt **{prize}** gewonnen!\n{url}",
+            "reroll_hint":            "-# Neu ziehen mit `{command}` — einfach kopieren und hier einfügen.",
             "reroll_announce":        "🎉 **Reroll!** Der neue Gewinner für **{prize}** ist: {mentions}! Glückwunsch!",
             "join_success":           "🎉 Du hast erfolgreich am Gewinnspiel teilgenommen! Viel Glück!",
             "join_already":           "✅ Du hast bereits an diesem Gewinnspiel teilgenommen!",
             "join_ended":             "Dieses Gewinnspiel ist bereits beendet!",
             "join_host":              "Du kannst nicht an deinem eigenen Gewinnspiel teilnehmen!",
             "join_bot":               "Bots können nicht an Gewinnspielen teilnehmen!",
+            "join_banned":            "Du bist von Gewinnspielen in diesem Server ausgeschlossen.",
+            "ban_success":            "**{user}** kann nicht mehr an Gewinnspielen in diesem Server teilnehmen. Die Teilnahmen wurden aus **{count}** laufenden Gewinnspiel(en) entfernt.",
+            "ban_already":            "**{user}** ist bereits von Gewinnspielen in diesem Server ausgeschlossen.",
+            "unban_success":          "**{user}** kann wieder an Gewinnspielen in diesem Server teilnehmen.",
+            "unban_not_banned":       "**{user}** ist nicht von Gewinnspielen in diesem Server ausgeschlossen.",
             "no_exist":               "Dieses Gewinnspiel existiert nicht mehr.",
             "no_perm_manage":         "❌ Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
             "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
@@ -221,12 +248,18 @@ MESSAGES = {
             "label_no_participants":  "Nadie participó",
             "no_participants_msg":    "El sorteo de **{prize}** ha terminado, ¡pero nadie participó! 😢",
             "winner_announce":        "🎉 ¡Felicidades {mentions}! ¡Has ganado **{prize}**!\n{url}",
+            "reroll_hint":            "-# Vuelve a sortear con `{command}`: cópialo y pégalo aquí.",
             "reroll_announce":        "🎉 **¡Re-sorteo!** El nuevo ganador de **{prize}** es: {mentions}! ¡Felicidades!",
             "join_success":           "🎉 ¡Te has unido al sorteo correctamente! ¡Mucha suerte!",
             "join_already":           "✅ ¡Ya te uniste a este sorteo!",
             "join_ended":             "¡Este sorteo ya ha terminado!",
             "join_host":              "¡No puedes unirte a tu propio sorteo!",
             "join_bot":               "¡Los bots no pueden participar en sorteos!",
+            "join_banned":            "Estás vetado de los sorteos de este servidor.",
+            "ban_success":            "**{user}** ya no puede unirse a los sorteos de este servidor. Se quitaron sus participaciones de **{count}** sorteo(s) activo(s).",
+            "ban_already":            "**{user}** ya está vetado de los sorteos de este servidor.",
+            "unban_success":          "**{user}** puede volver a unirse a los sorteos de este servidor.",
+            "unban_not_banned":       "**{user}** no está vetado de los sorteos de este servidor.",
             "no_exist":               "Este sorteo ya no existe.",
             "no_perm_manage":         "❌ Solo el organizador del sorteo o un admin del servidor puede gestionarlo.",
             "end_confirmed":          "✅ El sorteo ha sido finalizado. Los ganadores han sido anunciados en el canal.",
@@ -419,6 +452,11 @@ class _GiveawayJoinBtn(discord.ui.Button):
             return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True)
         if interaction.user.bot:
             return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_bot')}", ephemeral=True)
+        # A giveaway ban is set by the server's managers and wins over every
+        # other check, so a banned member is told why instead of being asked to
+        # meet requirements they will never satisfy.
+        if await _giveaway_banned(self._bot, interaction.guild_id, user_id):
+            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_banned')}", ephemeral=True)
 
         # Enforce host-configured requirements (account age, server age, roles, boost).
         reqs = _load_reqs(giveaway["requirements"])
@@ -531,6 +569,15 @@ class _MgmtSelectBtn(discord.ui.Button):
             "SELECT user_id FROM participants WHERE message_id = $1", self._message_id
         )
         participants = [row["user_id"] for row in rows]
+        # A manual selection is still a draw, so a banned member cannot be
+        # picked here either.
+        if participants:
+            banned = await self._bot.cxn.fetch(
+                "SELECT user_id FROM giveaway_bans WHERE guild_id = $1",
+                interaction.guild_id,
+            )
+            banned_ids = {int(row["user_id"]) for row in banned}
+            participants = [uid for uid in participants if int(uid) not in banned_ids]
 
         if not participants:
             empty_view = discord.ui.LayoutView()

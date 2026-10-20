@@ -67,6 +67,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 - Discord OAuth dashboard for server settings, activity, and moderation insights
 - Live command directory, documentation, changelog, and public profile cards
 - Staff workspace for team applications, server notes, and standby management
+- Optional Discord REST proxy workers with live latency, errors, and request telemetry
 - Interaction endpoint support, standby failover, and Discord-aware proxy recovery
 
 ---
@@ -82,6 +83,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 | AI | OpenAI-compatible API |
 | Storage | MongoDB when configured, with SQLite/JSON fallbacks |
 | Optional filter service | Cloudflare Workers (`nsfw-api/`) |
+| Optional Discord egress | Cloudflare Workers (`proxy-worker/`) |
 
 ---
 
@@ -103,6 +105,7 @@ web/                        # React + Vite dashboard source
 docs/                       # Setup, API, dashboard, maintenance, and legal docs
 tests/                      # pytest suite covering bot, API, and rendering behavior
 nsfw-api/                   # Optional Cloudflare Worker for image classification
+proxy-worker/               # Optional Cloudflare Worker for Discord API egress
 scripts/                    # Badge and emoji asset generation helpers
 ```
 
@@ -144,6 +147,7 @@ Set these variables in your hosting dashboard, shell, or a local `src/.env` file
 | `MONGODB_DATABASE` | Optional | MongoDB database name |
 | `DISCORD_PUBLIC_KEY` | Optional | Enables Discord's interactions endpoint |
 | `NSFW_API_URL` / `NSFW_API_TOKEN` | Optional | Enables the AutoMod image filter |
+| `PROXY_WORKER_TOKEN` | Optional | Enables owner-managed Discord API proxy workers |
 | `TOPGG_WEBHOOK_TOKEN` | Optional | Enables top.gg vote rewards |
 
 The full list, including Twitch and notification integrations, lives in [`docs/setup.md`](docs/setup.md).

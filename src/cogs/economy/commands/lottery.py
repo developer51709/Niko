@@ -3,7 +3,7 @@ Economy — lottery commands (info, buy).
 """
 from discord.ext import commands
 from ..data import (
-    _info_view, _fmt_remaining, _save_lottery, get_emoji,
+    _info_view, _fmt_remaining, _save_lottery, _check_achievements, get_emoji,
     LOTTERY_TICKET_PRICE,
 )
 
@@ -80,26 +80,32 @@ class LotteryMixin:
 
         self._credit(data, -cost, "lottery_buy", f"{count} tickets" + (" (lucky x2)" if bonus_mult > 1 else ""))
         data["lottery_tickets"] = int(data.get("lottery_tickets", 0)) + added
+        # The lifetime counter is what the lottery badges read: ``lottery_tickets``
+        # is reset by every draw, so it would make a badge unreachable for the
+        # next week. Bonus tickets are not charged for, so only the paid count
+        # moves the counter.
+        data["lottery_tickets_bought"] = int(data.get("lottery_tickets_bought", 0)) + count
         self.lottery["pot"] = int(self.lottery.get("pot", 0)) + cost
-        
+
+        # Buying a ticket can be the action that earns a ticket badge, so the
+        # unlock is paid and reported here instead of on the next economy command.
+        unlocked = _check_achievements(data)
+
         # Save to database
         from ..data import _save_lottery_to_db
         await _save_lottery_to_db(self.bot, self.lottery)
         await self.save_user_economy_data(ctx.author.id)
 
+        body = (
+            f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
+            f"• Spent **{cost:,}** 🪙\n"
+            f"• Pot is now **{int(self.lottery['pot']):,}** 🪙"
+            + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else "")
+        )
+        if unlocked:
+            body += "\n\n**New achievements** " + ", ".join(unlocked)
+
         if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(
-                "🎟️ Tickets bought",
-                f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
-                f"• Spent **{cost:,}** 🪙\n"
-                f"• Pot is now **{int(self.lottery['pot']):,}** 🪙"
-                + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else ""),
-            ))
+            await ctx.interaction.followup.send(view=_info_view("🎟️ Tickets bought", body))
         else:
-            await ctx.send(view=_info_view(
-                "🎟️ Tickets bought",
-                f"You now hold **{int(data['lottery_tickets'])}** tickets.\n"
-                f"• Spent **{cost:,}** 🪙\n"
-                f"• Pot is now **{int(self.lottery['pot']):,}** 🪙"
-                + (f"\n-# Lucky charm doubled your tickets! 🍀" if bonus_mult > 1 else ""),
-            ))
+            await ctx.send(view=_info_view("🎟️ Tickets bought", body))

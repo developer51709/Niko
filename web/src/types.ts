@@ -99,6 +99,86 @@ export type StandbyFailoverStatus = {
   failover_count: number;
   egress_blocked: boolean;
 };
+export type ProxyWorkerLatencyPoint = {
+  t: number;
+  avg: number;
+  p95: number;
+  count: number;
+  errors: number;
+};
+export type ProxyWorkerRequest = {
+  at: number;
+  method: string;
+  path: string;
+  status: number;
+  latency_ms?: number;
+  ok?: boolean;
+  worker_id?: string;
+  worker_name?: string;
+  message?: string;
+};
+export type ProxyWorkerStats = {
+  service?: string;
+  name?: string;
+  version?: string;
+  ready?: boolean;
+  uptime_seconds: number;
+  now?: number;
+  checked_at?: number;
+  stats_error?: string;
+  totals?: {
+    requests: number;
+    success: number;
+    errors: number;
+    bytes_in: number;
+    bytes_out: number;
+    avg_latency_ms: number;
+    p95_latency_ms: number;
+  };
+  statuses?: Record<string, number>;
+  latency?: ProxyWorkerLatencyPoint[];
+  recent?: ProxyWorkerRequest[];
+  errors?: ProxyWorkerRequest[];
+};
+export type ProxyWorker = {
+  id: string;
+  name: string;
+  url: string;
+  created_at: number;
+  health?: "online" | "offline";
+  active?: boolean;
+  stats?: ProxyWorkerStats | null;
+};
+export type ProxyWorkerRouting = {
+  enabled: boolean;
+  token_configured: boolean;
+  worker_count: number;
+  online_count: number;
+  total_requests: number;
+  total_failures: number;
+  last_error?: string | null;
+  last_worker?: string | null;
+  last_used_at?: number | null;
+  recent_errors?: { at: number; worker?: string | null; message: string }[];
+};
+export type ProxyWorkerUsage = {
+  requests: number;
+  success: number;
+  errors: number;
+  bytes_in: number;
+  bytes_out: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  statuses: Record<string, number>;
+};
+export type ProxyWorkersResponse = {
+  workers: ProxyWorker[];
+  routing: ProxyWorkerRouting;
+  usage: ProxyWorkerUsage;
+  latency: ProxyWorkerLatencyPoint[];
+  feed: ProxyWorkerRequest[];
+  errors: ProxyWorkerRequest[];
+};
 export type BlacklistAppealStatus = {
   status: "eligible" | "pending" | "approved" | "denied" | "not_blacklisted" | "not_eligible";
   can_appeal: boolean;
@@ -152,6 +232,8 @@ export type UserOverview = {
 
 export type EconomyTransaction = {
   kind: string;
+  /** Friendly name for `kind`, e.g. "Blackjack won" instead of `blackjack_win`. */
+  label: string;
   amount: number;
   note: string;
   ts: number;
@@ -167,6 +249,27 @@ export type VoteStanding = {
   reward_multiplier: number;
   earnings_multiplier: number;
   vote_url: string;
+};
+
+/**
+ * The weekly lottery as the economy tab shows it: the prize the next draw pays,
+ * how many members are in the round, and how many tickets the viewer holds.
+ */
+export type LotteryStanding = {
+  /** Coins the next draw pays out, after the house rake. */
+  pot: number;
+  /** Members holding at least one ticket this round, not the ticket count. */
+  participants: number;
+  tickets: number;
+  your_tickets: number;
+  ticket_price: number;
+  /** Unix seconds of the next draw, or 0 before the first round exists. */
+  next_draw: number;
+  /** The last winner's display name, when the bot still knows the account. */
+  last_winner: string | null;
+  last_pot: number;
+  /** False while the pot is empty, so the card can say the round has not started. */
+  open: boolean;
 };
 
 export type EconomyStanding = {
@@ -188,6 +291,7 @@ export type EconomyStanding = {
   global_rank: number | null;
   account_count: number | null;
   transactions: EconomyTransaction[];
+  lottery: LotteryStanding;
   vote: VoteStanding;
 };
 

@@ -91,9 +91,9 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     assert view_labels(view) == ["Read the docs", "What's new"]
 
     text = view_text(view)
-    assert "Twitch" in text
-    assert "Notifications tab" in text
-    assert ".notifier" in text
+    assert "Giveaway bans" in text
+    assert ".giveaway ban" in text
+    assert ".giveaway unban" in text
 
 
 def test_announcement_links_point_at_pages_that_exist():
@@ -109,14 +109,21 @@ def test_announcement_links_point_at_pages_that_exist():
     assert f'slug: "{changelog_slug}"' in changelog, changelog_slug
 
 
-def test_changelog_entry_covers_the_twitch_notifier_update():
-    """Twitch ships with this release, so its changelog entry has to say so."""
+def test_changelog_entry_covers_the_giveaway_ban_update():
+    """The announced entry has to describe the commands the announcement names."""
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
-    entry = changelog.split('slug: "notifier-dashboard-tab"', 1)[1].split("\n  },", 1)[0]
+    entry = changelog.split('slug: "giveaway-bans"', 1)[1].split("\n  },", 1)[0]
 
-    assert "Twitch" in entry
-    assert "TWITCH_CLIENT_ID" in entry
-    assert "live" in entry
+    assert ".giveaway ban" in entry
+    assert "unban" in entry
+    assert "entries" in entry
+
+
+def test_the_small_lottery_card_entry_is_not_published():
+    """The lottery card was a small economy tweak, not a release of its own."""
+    changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
+
+    assert 'slug: "lottery-card-and-channel"' not in changelog
 
 
 def test_staff_announce_posts_the_update_with_both_links():

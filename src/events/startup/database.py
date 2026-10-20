@@ -499,6 +499,8 @@ async def _create_tables(bot):
             inventory        TEXT    DEFAULT '{}',
             effects          TEXT    DEFAULT '{}',
             lottery_tickets  INTEGER DEFAULT 0,
+            lottery_tickets_bought INTEGER DEFAULT 0,
+            lottery_wins     INTEGER DEFAULT 0,
             transactions     TEXT    DEFAULT '[]',
             achievements     TEXT    DEFAULT '[]',
             season_progress  TEXT    DEFAULT '{}',
@@ -547,6 +549,16 @@ async def _create_tables(bot):
         try:
             await bot.cxn.execute(
                 f"ALTER TABLE economy_users ADD COLUMN {vote_column} INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass  # column already exists; MongoDB is schema-less
+
+    # Lifetime lottery counters back the lottery badges. They are separate from
+    # ``lottery_tickets``, which every draw resets to zero.
+    for lottery_column in ("lottery_tickets_bought", "lottery_wins"):
+        try:
+            await bot.cxn.execute(
+                f"ALTER TABLE economy_users ADD COLUMN {lottery_column} INTEGER DEFAULT 0"
             )
         except Exception:
             pass  # column already exists; MongoDB is schema-less

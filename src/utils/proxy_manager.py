@@ -67,9 +67,14 @@ class _RelayedAiohttpResponse:
     """Minimal aiohttp response contract needed by discord.py HTTPClient."""
 
     def __init__(self, status: int, headers: dict, body: bytes):
+        from http import HTTPStatus
         from multidict import CIMultiDict
 
         self.status = status
+        try:
+            self.reason = HTTPStatus(status).phrase
+        except ValueError:
+            self.reason = "Unknown Status"
         self.headers = CIMultiDict(headers)
         self._body = body
 
@@ -161,6 +166,7 @@ class WebshareProxyManager:
 
     def __init__(self, api_key: str | None):
         self.api_key = api_key
+        self.bot = None                 # set by attach; used to detect proxy workers
         self.http = None                # discord HTTPClient (set by attach)
         self.enabled = False
         self._proxy_url: str | None = None
@@ -190,6 +196,7 @@ class WebshareProxyManager:
         """
         if not self.api_key:
             return False
+        self.bot = bot
         self.http = bot.http
         current_session = self._current_session()
         if self._attached_bot_http is bot.http:
@@ -255,7 +262,7 @@ class WebshareProxyManager:
                         # The caller has to see the connection error it actually hit.
                         pass
                 raise
-            if manager._should_monitor(str(url)):
+            if manager._should_monitor(str(url)) and not manager._discord_proxy_relayed():
                 try:
                     await manager.handle_rate_limit(resp)
                 except Exception as exc:
@@ -300,6 +307,23 @@ class WebshareProxyManager:
 
         hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
         return hostname == "discord.com" or hostname.endswith((".discord.com", ".discordapp.com"))
+
+    def _discord_proxy_relayed(self) -> bool:
+        """Whether this exact response came from a proxy worker.
+
+        A 429 answered through a worker belongs to that rotating egress, not to
+        the shared hosting IP Webshare exists to rescue. Arming Webshare here
+        would spend its bandwidth on traffic the worker already moved. A request
+        that fell back to the direct route must still arm the normal recovery.
+        """
+        proxy = getattr(self.bot, "discord_proxy", None)
+        checker = getattr(proxy, "request_was_relayed", None)
+        if not callable(checker):
+            return False
+        try:
+            return bool(checker())
+        except Exception:
+            return False
 
     async def _enable_webshare(self, reason: str | None = None) -> bool:
         if not self.api_key or self.http is None:

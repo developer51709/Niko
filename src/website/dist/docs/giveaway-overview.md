@@ -40,6 +40,28 @@ You can restrict who can enter a giveaway:
 
 These are configured through the interactive panel when starting a giveaway.
 
+## Banning Members
+
+Some members should not be able to enter your giveaways at all — the person who keeps making alts, the member who won and then broke the giveaway rules, or whoever you are currently dealing with. A giveaway ban keeps them out of every giveaway in your server without removing them from the server.
+
+```
+.giveaway ban @member
+```
+
+Banning a member does three things:
+
+- They can no longer press **Join** on any giveaway in this server; the button tells them they are banned instead of entering them
+- The entries they already hold in your **active** giveaways are removed, so the current giveaways are not left with their name in the draw
+- The final draw and any reroll skip them, so an entry that slips in at the last second cannot become a win
+
+To let someone enter again:
+
+```
+.giveaway unban @member
+```
+
+Bans are **per server**: a member banned here can still enter giveaways in other servers Niko is in. They never affect the member's ability to talk in your server — use a timeout or a ban from Discord for that. Both commands need **Manage Server**.
+
 ## Rerolling
 
 If you need to pick a new winner:
@@ -50,7 +72,9 @@ If you need to pick a new winner:
 
 Replace `<message_id>` with the ID of the giveaway message (right-click → Copy Message ID).
 
-> **Note:** Only members with **Manage Server** permission can start and reroll giveaways.
+You do not have to hunt for that ID: the message Niko posts when a giveaway ends includes the exact reroll command, with this giveaway's message ID and your server's own prefix already filled in, so the host can copy that line and paste it back as-is.
+
+> **Note:** Only members with **Manage Server** permission can start, reroll, ban or unban giveaways.
 
 ## How It Works
 
@@ -62,5 +86,5 @@ Replace `<message_id>` with the ID of the giveaway message (right-click → Copy
 
 ## Requirements
 
-- **Manage Server** permission to start and reroll giveaways
+- **Manage Server** permission to start, reroll, ban and unban giveaways
 - Bot needs **Send Messages** and **Add Reactions** permissions in the giveaway channel

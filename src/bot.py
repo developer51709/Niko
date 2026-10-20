@@ -18,6 +18,7 @@ from utils.interaction_endpoint import install_interaction_endpoint
 from utils.interaction_priority import install_interaction_priority
 from utils.proxy_manager import WebshareProxyManager
 from utils.standby_manager import StandbyFailoverManager
+from utils.discord_proxy import DiscordProxyManager
 from utils import logging
 from events.on_ready import handle_ready
 from events.on_message import handle_message
@@ -56,6 +57,11 @@ WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
 bot.proxy_manager: WebshareProxyManager | None = WebshareProxyManager(WEBSHARE_API_KEY)
 bot.standby_failover = StandbyFailoverManager()
 bot.standby_failover.attach(bot)
+# Optional Discord REST egress through registered Cloudflare workers. The hook
+# is installed now so registry changes at startup take effect before login, and
+# the manager stays disabled until the owner enables routing.
+bot.discord_proxy = DiscordProxyManager()
+bot.discord_proxy.attach(bot)
 if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
     logging.info("ProxyManager", "Webshare proxy failover armed.")
 
@@ -104,6 +110,11 @@ async def _on_gateway_ready(bot):
 async def on_ready():
     try:
         await _on_gateway_ready(bot)
+        # A reconnect can replace discord.py's aiohttp session; re-attaching is
+        # idempotent and keeps worker routing available on the new session.
+        proxy = getattr(bot, "discord_proxy", None)
+        if proxy is not None:
+            proxy.attach(bot)
         handoff = getattr(bot, "gateway_handoff", None)
         if handoff is not None:
             handoff.mark_connected()
@@ -153,15 +164,29 @@ if __name__ == "__main__":
         handoff = GatewayHandoff(bot, active=not standby_mode)
         bot.gateway_handoff = handoff
 
-        # Load standby endpoints before Discord login so the wrapped
-        # static_login can switch to a warm standby if egress is challenged.
-        if not standby_mode and os.getenv("MONGODB_URL"):
+        # Load standby endpoints on the primary and optional proxy workers on
+        # both roles before Discord login, so the wrapped static_login can
+        # switch egress if the host is challenged. Neither registry is required
+        # for the bot to start.
+        if os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
-                from webapp.standby_routes import initialize_standby_registry
-                await initialize_standby_registry(bot)
             except Exception as e:
-                logging.warning("StandbyFailover", f"Could not preload standby instances: {e}")
+                logging.warning("Database", f"Could not connect the shared database before login: {e}")
+            else:
+                if not standby_mode:
+                    try:
+                        from webapp.standby_routes import initialize_standby_registry
+                        await initialize_standby_registry(bot)
+                    except Exception as e:
+                        logging.warning("StandbyFailover", f"Could not preload standby instances: {e}")
+                try:
+                    from webapp.proxy_worker_routes import initialize_proxy_worker_registry
+                    await initialize_proxy_worker_registry(bot)
+                except Exception as e:
+                    logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
+        if bot.discord_proxy is not None:
+            bot.discord_proxy.attach(bot)
         if not standby_mode and bot.proxy_manager is not None:
             bot.proxy_manager.attach(bot)
 
@@ -203,6 +228,17 @@ if __name__ == "__main__":
             await load_cogs(bot)
             await preload_economy_cache(bot)
             bot._pre_gateway_initialized = True
+            if bot.discord_proxy is not None:
+                # A standby that takes the gateway must also use the owner's
+                # worker egress, so both roles reload the shared registry once
+                # the database pool is live.
+                if getattr(getattr(bot, "cxn", None), "db_type", None) == "mongodb":
+                    try:
+                        from webapp.proxy_worker_routes import initialize_proxy_worker_registry
+                        await initialize_proxy_worker_registry(bot)
+                    except Exception as e:
+                        logging.warning("DiscordProxy", f"Could not load proxy workers after login: {e}")
+                bot.discord_proxy.attach(bot)
             if bot.proxy_manager is not None:
                 if not standby_mode:
                     bot.proxy_manager.attach(bot)

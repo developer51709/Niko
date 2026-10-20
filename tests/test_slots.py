@@ -1,180 +1,245 @@
-"""
-Unit tests for the slots evaluate() function and balance-update logic.
+"""Slots: the paytable and the wager accounting.
 
-These tests verify the bug fix where the bet amount was not being
-deducted from the player's balance on a winning spin.
+The slots command used to move ``user_data["balance"]`` on its own, which kept
+the spin out of the transaction ledger: the dashboard's recent activity card
+never showed a spin, ``total_earned``/``total_spent`` ignored it, and a win
+credited the payout while the stake was never recorded. These tests pin the
+fixed behaviour: every spin settles as one net result through
+``EconomyCog.record_gamble``, so a winning spin is ``payout - bet`` and a losing
+spin is ``-bet``.
 
 Run with:  python -m pytest tests/test_slots.py -v
 """
 
-import importlib
+import asyncio
 import sys
-import os
-from unittest.mock import MagicMock, patch
+import time
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from cogs.casino import slots as slots_module  # noqa: E402
+from cogs.casino.slots import Slots, evaluate_grid  # noqa: E402
+from cogs.economy.cog import EconomyCog  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Load the Slots cog module without importing discord
-# ---------------------------------------------------------------------------
-
-# The slots module imports discord at the top level. We stub it out so the
-# module can be imported in a CI environment without the full dependency
-# tree.
-for mod_name in [
-    "discord",
-    "discord.ext",
-    "discord.ext.commands",
-]:
-    if mod_name not in sys.modules:
-        sys.modules[mod_name] = MagicMock()
-
-# Now import the module
-spec = importlib.util.spec_from_file_location(
-    "slots",
-    os.path.join(os.path.dirname(__file__), "..", "src", "cogs", "casino", "slots.py"),
-)
-slots_mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(slots_mod)
+BET = 100
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def account(**overrides):
+    data = {
+        "balance": 1000,
+        "total_earned": 0,
+        "total_spent": 0,
+        "transactions": [],
+        "achievements": [],
+        "last_slots": 0,
+    }
+    data.update(overrides)
+    return data
 
-def _make_grid(symbol):
-    """Build a 3x3 grid filled with the same symbol."""
+
+def grid_of(symbol):
     return [[symbol for _ in range(3)] for _ in range(3)]
 
 
-def _mixed_grid():
-    """Build a 3x3 grid with no matching lines."""
+def mixed_grid():
     return [
         ["🍒", "🍋", "🍊"],
-        ["🍎", "🍐", "🍇"],
+        ["🍎", "🍇", "🍐"],
         ["💎", "🔥", "🪙"],
     ]
 
 
-# ---------------------------------------------------------------------------
-# evaluate() tests
-# ---------------------------------------------------------------------------
+def one_line_grid(symbol):
+    """A grid whose only payline is the middle row."""
+    return [
+        ["🍋", "🍊", "🍎"],
+        [symbol, symbol, symbol],
+        ["🍇", "🍐", "💎"],
+    ]
 
-class TestEvaluate:
-    """Tests for the evaluate() helper inside Slots."""
 
-    def _get_evaluate(self):
-        """Extract the evaluate closure from the Slots class."""
-        # evaluate is defined inside slots_play, so we need to reach it
-        # via the source. Instead, we replicate the logic by calling the
-        # closure through a minimal fake context.
-        # Simpler: just test the balance logic directly (see TestBalanceUpdate).
-        pass
+class FakeEconomy:
+    """The economy surface the casino cogs use, backed by the real ledger.
 
-    def test_no_match_returns_zero(self):
-        """A grid with no matching lines should return 0 winnings."""
-        grid = _mixed_grid()
-        # We test the evaluate logic by reproducing it here since it's a
-        # closure inside slots_play. The important thing is the balance
-        # update, tested below.
-        # Still, let's verify the grid has no 3-in-a-row:
-        lines = [
-            grid[1], grid[0], grid[2],
-            [grid[0][0], grid[1][1], grid[2][2]],
-            [grid[0][2], grid[1][1], grid[2][0]],
+    ``record_gamble``/``_credit`` are the real cog methods, so a test asserts on
+    the same transaction-log and total bookkeeping the dashboard reads.
+    """
+
+    record_gamble = EconomyCog.record_gamble
+    _credit = EconomyCog._credit
+
+    def __init__(self, data):
+        self.data = data
+        self.saves = 0
+
+    async def get_user_economy_data(self, user_id):
+        return self.data
+
+    async def save_user_economy_data(self, user_id):
+        self.saves += 1
+
+
+class FakeMessage:
+    def __init__(self):
+        self.edits = []
+
+    async def edit(self, **kwargs):
+        self.edits.append(kwargs)
+        return self
+
+
+class FakeCtx:
+    def __init__(self, user_id=42):
+        self.author = SimpleNamespace(id=user_id)
+        self.sent = []
+
+    async def send(self, *args, **kwargs):
+        message = FakeMessage()
+        self.sent.append((args, kwargs, message))
+        return message
+
+
+class FakeBot:
+    def __init__(self, economy):
+        self._economy = economy
+
+    def get_cog(self, name):
+        return self._economy if name == "EconomyCog" else None
+
+
+def play(data, *, amount=BET, final_grid=None):
+    """Run one ``slots play`` and return (ctx, economy) after the spin."""
+    economy = FakeEconomy(data)
+    ctx = FakeCtx()
+    grids = [mixed_grid(), grid_of("🍒"), mixed_grid(), final_grid or mixed_grid()]
+    with patch.object(slots_module, "spin_grid", side_effect=grids), \
+         patch.object(slots_module.asyncio, "sleep", new=AsyncMock()), \
+         patch("cogs.economy.cog._check_achievements", return_value=[]):
+        asyncio.run(Slots.slots_play.callback(Slots(FakeBot(economy)), ctx, amount))
+    return ctx, economy
+
+
+class PaytableTests(unittest.TestCase):
+    def test_no_matching_line_returns_nothing(self):
+        self.assertEqual(evaluate_grid(mixed_grid(), BET), (0, []))
+
+    def test_common_line_returns_twice_the_bet(self):
+        self.assertEqual(evaluate_grid(one_line_grid("🍒"), BET), (BET * 2, [("🍒", "Common Line (2×)")]))
+
+    def test_uncommon_line_returns_three_times_the_bet(self):
+        self.assertEqual(evaluate_grid(one_line_grid("🍇"), BET)[0], BET * 3)
+
+    def test_rare_line_returns_five_times_the_bet(self):
+        self.assertEqual(evaluate_grid(one_line_grid("💎"), BET)[0], BET * 5)
+
+    def test_jackpot_line_returns_twenty_five_times_the_bet(self):
+        self.assertEqual(evaluate_grid(one_line_grid("🪙"), BET)[0], BET * 25)
+
+    def test_full_board_pays_every_line_plus_the_board_jackpot(self):
+        returned, hits = evaluate_grid(grid_of("🍒"), BET)
+        # Five common lines at 2x, then the 100x board jackpot on top.
+        self.assertEqual(returned, BET * (5 * 2 + 100))
+        self.assertEqual(len(hits), 6)
+        self.assertIn(("🍒", "FULL BOARD JACKPOT (100×)"), hits)
+
+    def test_every_line_is_credited_once(self):
+        grid = [
+            ["💎", "💎", "💎"],   # top row
+            ["🔥", "🔥", "🔥"],   # middle row
+            ["🍎", "🍎", "🍎"],   # bottom row
         ]
-        for line in lines:
-            assert not (line[0] == line[1] == line[2]), "Unexpected match in mixed grid"
+        returned, hits = evaluate_grid(grid, BET)
+        self.assertEqual(returned, BET * (5 + 5 + 3))
+        # Lines are read middle, top, bottom, then the two diagonals.
+        self.assertEqual([label for _, label in hits], [
+            "Rare Line (5×)",
+            "Rare Line (5×)",
+            "Uncommon Line (3×)",
+        ])
 
 
-# ---------------------------------------------------------------------------
-# Balance update logic tests
-# ---------------------------------------------------------------------------
+class SpinAccountingTests(unittest.TestCase):
+    """A spin must settle as one net ledger entry through the economy cog."""
 
-class TestBalanceUpdate:
-    """Tests for the balance update logic after a spin."""
+    def test_losing_spin_debits_the_bet_and_records_it(self):
+        data = account()
+        _, economy = play(data)
 
-    def test_losing_spin_deducts_bet(self):
-        """On a loss (winnings == 0), balance should decrease by the bet amount."""
-        balance = 1000
-        amount = 100
-        winnings = 0
+        self.assertEqual(data["balance"], 900)
+        self.assertEqual(data["total_spent"], BET)
+        self.assertEqual(data["total_earned"], 0)
+        self.assertEqual(economy.saves, 1)
+        entry = data["transactions"][0]
+        self.assertEqual(entry["kind"], "slots_loss")
+        self.assertEqual(entry["amount"], -BET)
+        self.assertIn("no line", entry["note"])
 
-        # Replicate the fixed logic:
-        # user_data["balance"] -= amount
-        # if winnings > 0: user_data["balance"] += winnings
-        new_balance = balance - amount
-        if winnings > 0:
-            new_balance += winnings
+    def test_winning_spin_credits_the_payout_minus_the_stake(self):
+        data = account()
+        _, _ = play(data, final_grid=one_line_grid("🍇"))
 
-        assert new_balance == 900, f"Expected 900, got {new_balance}"
+        # 3x returned on a 100 bet: the wallet gains 200, not 300.
+        self.assertEqual(data["balance"], 1200)
+        self.assertEqual(data["total_earned"], 200)
+        self.assertEqual(data["total_spent"], 0)
+        entry = data["transactions"][0]
+        self.assertEqual(entry["kind"], "slots_win")
+        self.assertEqual(entry["amount"], 200)
+        self.assertIn("Uncommon Line (3×)", entry["note"])
 
-    def test_winning_spin_deducts_bet_then_adds_winnings(self):
-        """On a win, balance should be (balance - bet + winnings), not (balance + winnings)."""
-        balance = 1000
-        amount = 100
-        winnings = 200  # 2x common line
+    def test_even_money_win_profits_exactly_one_stake(self):
+        data = account()
+        play(data, final_grid=one_line_grid("🍒"))
+        # 2x returned = even money: the wallet gains the stake, not the return.
+        self.assertEqual(data["balance"], 1100)
+        self.assertEqual(data["transactions"][0]["kind"], "slots_win")
+        self.assertEqual(data["transactions"][0]["amount"], BET)
 
-        # Fixed logic
-        new_balance = balance - amount
-        if winnings > 0:
-            new_balance += winnings
+    def test_spin_goes_through_record_gamble(self):
+        data = account()
+        economy = FakeEconomy(data)
+        record = MagicMock(return_value=[])
+        economy.record_gamble = record
+        with patch.object(slots_module, "spin_grid", side_effect=[mixed_grid()] * 4), \
+             patch.object(slots_module.asyncio, "sleep", new=AsyncMock()):
+            asyncio.run(Slots.slots_play.callback(Slots(FakeBot(economy)), FakeCtx(), BET))
 
-        # The bug would have been: balance + winnings = 1200 (bet never paid)
-        # The fix gives: balance - amount + winnings = 1100
-        assert new_balance == 1100, f"Expected 1100 (net +100), got {new_balance}"
-        assert new_balance != 1200, "Bug: bet was not deducted on win"
+        record.assert_called_once()
+        args = record.call_args.args
+        self.assertIs(args[0], data)
+        self.assertEqual(args[1], -BET)
+        self.assertEqual(args[2], "slots_loss")
 
-    def test_jackpot_deducts_bet(self):
-        """Even a jackpot win should deduct the bet first."""
-        balance = 1000
-        amount = 100
-        winnings = 2500  # 25x jackpot
+    def test_wallet_cannot_go_below_the_bet(self):
+        data = account(balance=50)
+        ctx, economy = play(data)
 
-        new_balance = balance - amount
-        if winnings > 0:
-            new_balance += winnings
+        self.assertEqual(data["balance"], 50)
+        self.assertEqual(data["transactions"], [])
+        self.assertEqual(economy.saves, 0)
+        self.assertIn("enough coins", ctx.sent[-1][0][0])
 
-        assert new_balance == 3400, f"Expected 3400, got {new_balance}"
 
-    def test_full_board_jackpot_deducts_bet(self):
-        """Full board jackpot (100x) should also deduct the bet."""
-        balance = 1000
-        amount = 100
-        winnings = 10000  # 100x
+class CommandGuardTests(unittest.TestCase):
+    def test_cooldown_blocks_a_second_spin(self):
+        data = account(last_slots=time.time())
+        ctx, economy = play(data)
 
-        new_balance = balance - amount
-        if winnings > 0:
-            new_balance += winnings
+        self.assertEqual(data["balance"], 1000)
+        self.assertEqual(economy.saves, 0)
+        self.assertIn("You can only play slots once every", ctx.sent[-1][0][0])
 
-        assert new_balance == 10900, f"Expected 10900, got {new_balance}"
-
-    def test_old_bug_would_give_wrong_balance(self):
-        """Document the old buggy behavior to ensure the fix prevents it."""
-        balance = 1000
-        amount = 100
-        winnings = 200
-
-        # OLD (buggy) logic:
-        # if winnings > 0: balance += winnings
-        # else: balance -= amount
-        old_balance = balance
-        if winnings > 0:
-            old_balance += winnings
-        else:
-            old_balance -= amount
-
-        # NEW (fixed) logic:
-        new_balance = balance - amount
-        if winnings > 0:
-            new_balance += winnings
-
-        # The old logic gave 1200 (free bet), the fix gives 1100 (correct)
-        assert old_balance == 1200, "Old logic should have given 1200 (the bug)"
-        assert new_balance == 1100, "New logic should give 1100 (the fix)"
-        assert old_balance > new_balance, "Fix should result in lower balance than the bug"
+    def test_non_positive_bet_is_rejected(self):
+        for amount in (0, -50):
+            data = account()
+            ctx, _ = play(data, amount=amount)
+            self.assertEqual(data["balance"], 1000)
+            self.assertIn("more than 0 coins", ctx.sent[-1][0][0])
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()
