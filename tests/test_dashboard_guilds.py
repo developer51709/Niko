@@ -77,13 +77,15 @@ class GuildListRouteTests(unittest.TestCase):
             json.dump({"guild_count": 2, "guild_ids": [111, 222]}, file)
         server.BOT_STATS = self._temp_path
         server._discord_bot = None
-        self._discord_get = dashboard_routes.discord_get
-        dashboard_routes.discord_get = lambda endpoint, token: FAKE_GUILDS
+        # The route reads the list through ``member_guilds``; the fetch itself is
+        # covered by tests/test_member_guilds_egress.py.
+        self._member_guilds = dashboard_routes.member_guilds
+        dashboard_routes.member_guilds = lambda token: FAKE_GUILDS
 
     def tearDown(self):
         server.BOT_STATS = self._stats_path
         server._discord_bot = self._bot
-        dashboard_routes.discord_get = self._discord_get
+        dashboard_routes.member_guilds = self._member_guilds
         os.unlink(self._temp_path)
 
     def _client(self):

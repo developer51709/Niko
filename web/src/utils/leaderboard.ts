@@ -1,6 +1,5 @@
 // Pure helpers behind the live economy leaderboard, kept out of the component
 // so the polling arithmetic is easy to reason about and check on its own.
-// (The shared "synced … ago" wording lives in ./live.)
 
 export type RankedRow = { key: string; rank: number };
 

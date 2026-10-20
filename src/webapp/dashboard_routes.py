@@ -130,12 +130,21 @@ def api_save_economy_privacy():
 @app.route("/api/guilds")
 @require_auth
 def api_guilds():
-    """Guilds the user can manage, annotated with Niko's install state."""
+    """Guilds the user can manage, annotated with Niko's install state.
+
+    The list is read on the bot's event loop over its REST session, so it
+    egresses with the bot instead of this host's own IP. Answering ``[]`` when
+    that read failed is what made /dashboard/servers look empty while Webshare
+    failover was active, so a failure is reported as one.
+    """
     token = session.get("access_token", "")
     try:
-        all_guilds = discord_get("/users/@me/guilds", token)
-    except Exception:
-        return jsonify([])
+        all_guilds = member_guilds(token)
+    except Exception as exc:
+        app.logger.warning("Member guild list unavailable: %s", exc)
+        return jsonify({
+            "error": "Your server list could not be loaded from Discord. Try again in a moment."
+        }), 503
 
     present = bot_guild_ids()
     result  = []

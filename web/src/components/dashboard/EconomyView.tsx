@@ -1,4 +1,4 @@
-import { AnimatedValue, CoinLabel, DashHeading, LiveChip } from "./DashboardViews";
+import { AnimatedValue, CoinLabel, DashHeading } from "./DashboardViews";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import type { EconomyStanding, EconomyTransaction, LotteryStanding } from "../../types";
@@ -95,7 +95,7 @@ function TransactionRow({ entry }: { entry: EconomyTransaction }) {
   </li>;
 }
 
-export function EconomyView({ standing, liveAt = null, liveStale = false }: { standing: EconomyStanding; liveAt?: number | null; liveStale?: boolean }) {
+export function EconomyView({ standing }: { standing: EconomyStanding }) {
   const vote = standing.vote;
   const lottery = standing.lottery ?? NO_ROUND;
   const filledSteps = Math.min(Math.max(vote.streak, 0), STREAK_STEPS);
@@ -114,7 +114,6 @@ export function EconomyView({ standing, liveAt = null, liveStale = false }: { st
             <small>{formatNumber(standing.balance)} in your wallet · {formatNumber(standing.bank)} in the vault</small>
           </div>
           <div className="achievement-summary-chips">
-            <LiveChip liveAt={liveAt} liveStale={liveStale} />
             <span className="achievement-chip"><Icon name="chart" /><strong>Global rank {rankLabel(standing.global_rank, standing.account_count)}</strong></span>
             <span className="achievement-chip"><Icon name="guild_achievements" /><strong>{formatNumber(standing.achievements_unlocked)} of {formatNumber(standing.achievements_total)} badges</strong></span>
           </div>
