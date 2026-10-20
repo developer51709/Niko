@@ -30,6 +30,7 @@ from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
 from utils.blacklist_manager import BlacklistManager
+from utils.prefix_manager import resolve_prefix
 from utils.social.youtube import (
     fetch_latest_youtube,
     validate_youtube_channel,
@@ -864,7 +865,7 @@ class Notifier(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def notifier(self, ctx: commands.Context):
         """Open the social media notifier setup panel."""
-        prefix  = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else "."
+        prefix  = await resolve_prefix(self.bot, ctx)
         follows = await list_follows(self.bot.cxn, ctx.guild.id)
         view = build_setup_view(ctx.guild, ctx.channel, follows, prefix)
         await ctx.send(view=view)

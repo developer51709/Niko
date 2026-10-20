@@ -752,7 +752,9 @@ def managed_guild_ids() -> set[str]:
     if not token:
         return set()
     try:
-        all_guilds = discord_get("/users/@me/guilds", token)
+        # Same egress as /api/guilds, so a guild page stays reachable while the
+        # bot is egressing over its proxy and this host's own IP is blocked.
+        all_guilds = member_guilds(token)
     except Exception:
         # Keep a recently OAuth-verified authorization decision through a
         # transient Discord API failure instead of turning it into a false 403.
@@ -898,6 +900,122 @@ def discord_get(endpoint: str, token: str):
     )
     r.raise_for_status()
     return r.json()
+
+
+# ── Member guild list ────────────────────────────────────────────────────────
+# One guild-list fetch has to fit inside a dashboard request, so the retry only
+# exists to pick up the proxy the rate-limit hook has just armed.
+_MEMBER_GUILDS_REQUEST_TIMEOUT = 6
+_MEMBER_GUILDS_ATTEMPTS = 2
+_MEMBER_GUILDS_RETRY_CAP = 3.0
+
+
+class DiscordEgressError(RuntimeError):
+    """Discord could not be reached over the bot's own REST egress."""
+
+
+def _member_guilds_retry_delay(body: str) -> float:
+    """How long a limited guild-list request should wait before retrying."""
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return 1.0
+    retry_after = payload.get("retry_after") if isinstance(payload, dict) else None
+    try:
+        delay = float(retry_after)
+    except (TypeError, ValueError):
+        return 1.0
+    return min(max(delay, 0.5), _MEMBER_GUILDS_RETRY_CAP)
+
+
+async def _member_guilds_via_bot(token: str) -> list:
+    """Ask Discord for the member's guilds over the bot's own REST session.
+
+    The session is the one discord.py uses for the bot's own calls, so the
+    request inherits its egress: the active Webshare proxy after a global limit,
+    the proxy-worker hook installed on the session, and the rate-limit monitor
+    that arms that proxy. The member's OAuth token travels as the bearer instead
+    of the bot token, because this lists the servers *they* can manage.
+    """
+    http = getattr(_discord_bot, "http", None) if _discord_bot is not None else None
+    session = getattr(http, "_HTTPClient__session", None) if http is not None else None
+    if session is None:
+        raise DiscordEgressError("The bot's Discord connection is not ready yet.")
+
+    url = f"{DISCORD_API}/users/@me/guilds"
+    user_agent = getattr(http, "user_agent", None)
+    last_status = 0
+
+    for attempt in range(_MEMBER_GUILDS_ATTEMPTS):
+        headers = {"Authorization": f"Bearer {token}"}
+        if isinstance(user_agent, str) and user_agent:
+            headers["User-Agent"] = user_agent
+        kwargs = {"headers": headers, "timeout": _MEMBER_GUILDS_REQUEST_TIMEOUT}
+
+        # Read the proxy on every attempt: the rate-limit hook arms Webshare
+        # while a blocked response is being handled, so the retry leaves over
+        # the new egress instead of the IP Discord just refused.
+        proxy = getattr(http, "proxy", None)
+        if isinstance(proxy, str) and proxy:
+            kwargs["proxy"] = proxy
+        proxy_auth = getattr(http, "proxy_auth", None)
+        if proxy_auth is not None:
+            kwargs["proxy_auth"] = proxy_auth
+
+        try:
+            async with session.get(url, **kwargs) as response:
+                status = int(getattr(response, "status", 0) or 0)
+                body = await response.text()
+        except OSError as exc:
+            # A proxy that refuses the connection is rotated by the request
+            # hook, so one retry leaves over the replacement egress.
+            if attempt + 1 >= _MEMBER_GUILDS_ATTEMPTS:
+                raise DiscordEgressError(
+                    f"The server list request failed ({type(exc).__name__})."
+                ) from exc
+            await asyncio.sleep(1.0)
+            continue
+
+        if 300 > status >= 200:
+            try:
+                guilds = json.loads(body)
+            except ValueError as exc:
+                raise DiscordEgressError("Discord returned an unreadable server list.") from exc
+            if not isinstance(guilds, list):
+                raise DiscordEgressError("Discord returned an unexpected server list.")
+            return guilds
+
+        last_status = status
+        # A refused or limited response is what the failover is for; anything
+        # else (an expired token, a 500) will not improve on a retry.
+        if status not in {403, 429} or attempt + 1 >= _MEMBER_GUILDS_ATTEMPTS:
+            break
+        await asyncio.sleep(_member_guilds_retry_delay(body))
+
+    raise DiscordEgressError(
+        f"Discord answered HTTP {last_status or 'no status'} for the server list."
+    )
+
+
+def member_guilds(token: str) -> list:
+    """The guilds the signed-in member can manage, read the way the bot reads.
+
+    ``/dashboard/servers`` used to ask Discord from this Flask thread with a bare
+    ``requests`` client, so the call left over the deployment's own IP - the very
+    address that was limited or Cloudflare-challenged when Webshare failover
+    armed. The list came back empty and the page listed no servers at all while
+    the bot itself was healthy.
+
+    Fetching on the bot's event loop over its REST session puts the call on the
+    bot's egress instead of a separate one, which is what "proxied with the bot"
+    means: whichever route the bot's own REST calls take, this list takes too.
+    """
+    bot = _discord_bot
+    loop = getattr(bot, "loop", None) if bot is not None else None
+    if bot is None or loop is None or not loop.is_running():
+        # A web-only process has no bot loop or session to borrow.
+        return discord_get("/users/@me/guilds", token)
+    return run_on_bot_loop(_member_guilds_via_bot(token), timeout=18)
 
 
 # ── OAuth routes ─────────────────────────────────────────────────────────────

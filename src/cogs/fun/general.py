@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 
 from config.links import WEBSITE
+from utils.prefix_manager import resolve_prefix
 
 # Nitro gift prank — the thumbnail on the gift card and the rickroll in the
 # ephemeral "accept" response.
@@ -42,44 +43,8 @@ class NitroAcceptButton(discord.ui.DynamicItem[discord.ui.Button], template=r"is
 
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
-    """
-    Resolve the primary prefix for the current context/interaction.
-
-    Supports:
-    - Static string prefix
-    - Static list/tuple of prefixes
-    - Dynamic prefix function: command_prefix(bot, message) -> list[str]
-    """
-    raw = bot.command_prefix
-
-    # Static prefix (string)
-    if isinstance(raw, str):
-        return raw
-
-    # Static list/tuple of prefixes
-    if isinstance(raw, (list, tuple)):
-        return raw[0]
-
-    # Dynamic prefix function
-    try:
-        # Context: has .message
-        msg = getattr(ctx_or_interaction, "message", None)
-
-        # Interaction: use the original message if present
-        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
-            msg = ctx_or_interaction.message
-
-        if msg is None:
-            return "!"
-
-        prefixes = raw(bot, msg)
-        if isinstance(prefixes, (list, tuple)) and prefixes:
-            return prefixes[0]
-    except Exception:
-        pass
-
-    # Fallback prefix if everything else fails
-    return "."
+    """Return the primary prefix for this context, honouring a dynamic prefix."""
+    return await resolve_prefix(bot, ctx_or_interaction)
 
 
 class FunCog(commands.Cog):

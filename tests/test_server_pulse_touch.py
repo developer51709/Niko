@@ -44,7 +44,10 @@ class ServerPulseTouchTests(unittest.TestCase):
         )
 
     def test_the_selected_day_is_announced_and_highlighted(self):
+        # The two chart readouts are the card's only live regions: the refresh
+        # itself is passive and no longer announces a sync badge or timestamp.
         self.assertEqual(self.card.count('aria-live="polite"'), 2)
+        self.assertEqual(self.card.count('server-chart-readout'), 2)
         self.assertIn("server-chart-readout", self.card)
         self.assertIn("is-selected", self.card)
         self.assertIn("server-chart-guide", self.card)
