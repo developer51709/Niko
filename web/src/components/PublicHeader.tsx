@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { navigate, type Page } from "../router";
 import { Brand } from "./Brand";
@@ -17,6 +17,29 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
   const config = useBotConfig();
   const isDashboard = page === "dashboard";
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // A click anywhere outside the menu (or Escape) closes it, so nobody has to
+  // find the Menu button again to dismiss the popover.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      // Return focus to the trigger so the keyboard position is not lost.
+      menuRef.current?.querySelector<HTMLButtonElement>(".dashboard-menu-trigger")?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
   const goTo = (path: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -54,7 +77,7 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
           ))}
         </nav>
       )}
-      <div className="header-actions">
+      <div className="header-actions" ref={menuRef}>
         <PublicHeaderActions
           inviteUrl={config?.invite_url}
           onNavigate={goTo}

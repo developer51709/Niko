@@ -139,12 +139,12 @@ def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
 
 
 def test_custom_emoji_popup_knows_application_and_server_emojis():
-    application = _md_to_html("<:hypesquad_bravery:1520827369508700252>")
+    application = _md_to_html("<:hypesquad_bravery:1555268436756664381>")
     server = _md_to_html("<:drinking~1:123456789012345678>")
 
     # The popup needs the id for its own artwork and whether the emoji belongs
     # to the Niko application or to the ticket's server.
-    assert 'data-emoji-id="1520827369508700252"' in application
+    assert 'data-emoji-id="1555268436756664381"' in application
     assert 'data-emoji-app="1"' in application
     assert 'data-emoji-id="123456789012345678"' in server
     assert 'data-emoji-app="0"' in server

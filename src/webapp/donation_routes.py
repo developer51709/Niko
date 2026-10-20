@@ -29,9 +29,11 @@ def api_create_donation_invoice():
 
     order_id = f"donation_{claims['user_id']}_{uuid.uuid4().hex}"
     callback_url = f"{public_base_url()}/api/donations/webhook"
+    # White-label: the payer receives an address, amount, and QR code from our
+    # own page instead of a hosted OxaPay checkout.
     try:
         client = OxaPayClient(OXAPAY_KEY)
-        result = run_on_bot_loop(client.create_invoice(
+        result = run_on_bot_loop(client.create_white_label(
             amount=amount,
             currency="USD",
             pay_currency=currency,
@@ -45,6 +47,7 @@ def api_create_donation_invoice():
     if not result.get("success"):
         return jsonify({"error": result.get("message", "OxaPay could not create the invoice.")}), 502
 
+    details = result.get("data") or {}
     try:
         save_invoice_result = save_invoice
         run_on_bot_loop(save_invoice_result(
@@ -55,7 +58,7 @@ def api_create_donation_invoice():
             amount=amount,
             currency="USD",
             pay_currency=currency,
-            pay_link=result["payLink"],
+            pay_link="",
         ))
     except Exception as error:
         return jsonify({"error": f"Invoice created but could not be recorded: {error}"}), 503
@@ -63,7 +66,16 @@ def api_create_donation_invoice():
         "ok": True,
         "order_id": order_id,
         "track_id": result["trackId"],
-        "pay_link": result["payLink"],
+        "pay_link": "",
+        "amount_cents": int(round(amount * 100)),
+        "amount_label": f"${amount:,.2f} USD",
+        "pay_currency": currency,
+        "pay_amount": details.get("pay_amount"),
+        "network": details.get("network"),
+        "address": details.get("address"),
+        "memo": details.get("memo") or None,
+        "qr_code": details.get("qr_code"),
+        "expires_at": details.get("expired_at"),
         "status_url": f"/api/donations/{quote(order_id, safe='')}",
     })
 

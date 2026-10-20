@@ -652,9 +652,10 @@ class OwnerCog(commands.Cog):
     #: The release ``.staff announce`` announces. The docs page and the changelog
     #: entry are named in one place, so the buttons can never point at a page that
     #: was renamed or retired alongside the update.
-    UPDATE_TITLE = "Giveaway bans"
-    UPDATE_DOCS_URL = f"{links.DOCS}/giveaway-overview"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/giveaway-bans"
+    UPDATE_TITLE = "Niko Premium is live — plus a legal update"
+    UPDATE_DOCS_URL = f"{links.DOCS}/premium-overview"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/premium-subscriptions"
+    UPDATE_DATA_REMOVAL_URL = links.DATA_REMOVAL
 
     @commands.command(name="announce", help="Announce the latest Niko update (or `policy`) in this channel.")
     @is_owner()
@@ -687,21 +688,32 @@ class OwnerCog(commands.Cog):
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**Giveaway bans are here.** Keep a member out of every giveaway in your server, "
-                    "not just the one running right now.\n\n"
-                    "**One command, every giveaway.** `.giveaway ban @member` stops that member from "
-                    "joining any giveaway in the server from then on, and clears the entries they "
-                    "already hold. `.giveaway unban @member` lets them enter again.\n\n"
-                    "- **New:** `.giveaway ban <member>` with a per-server ban list\n"
-                    "- **New:** `.giveaway unban <member>` to lift it\n"
-                    "- **Better:** a banned member can no longer win, even if an entry slips in while a "
-                    "giveaway is ending\n"
-                    "- Bans need **Manage Server** and never touch the member's access to the server itself"
+                    "**The image filter you actually wanted is finally here.** Niko Premium is a "
+                    "**$15/month server subscription** that runs every image posted in your server "
+                    "through fal.ai's NSFW model and removes the ones that should never have been posted. "
+                    "Real detection, real moderation logs, and it works on the first upload.\n\n"
+                    "**And no, we did not paywall the bot.** Economy, leveling, tickets, giveaways, "
+                    "reminders, the social notifier, bot profile customization, and the scam image "
+                    "filter all stay **free for every server**. The one existing feature this touches is "
+                    "the NSFW image filter — which never worked reliably before this update. Now it does.\n\n"
+                    "**Also in this update: a legal update.** Our data-removal process is now spelled "
+                    "out in one policy page. Signed-in members can request deletion of their account "
+                    "data or a server they own — including after Niko has been removed, if they were "
+                    "the owner when it left. Moderation and safety records stay protected, and "
+                    "court-ordered requests go directly to the bot owner through a formal legal "
+                    f"process. Read the policy: <{self.UPDATE_DATA_REMOVAL_URL}>\n\n"
+                    "- **Premium:** AI image moderation with fal.ai's `imageutils/nsfw` model\n"
+                    "- **$15/month per server**, renewing monthly — no auto-charge, just a reminder DM "
+                    "three days before your term ends\n"
+                    "- **Checkout on our own page:** one glass card, crypto live now via OxaPay, card "
+                    "coming soon\n"
+                    "- **Gift a month** to any server you are in — its owner gets a DM telling them who sent it\n"
+                    "- **Manage everything** with `/premium status`, `/premium upgrade`, and `/premium gift`"
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Run `.giveaway ban @member` in your server, or read how it works below."
+                content="-# Run `/premium upgrade` in your server, or read the full breakdown below."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(

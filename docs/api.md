@@ -28,6 +28,9 @@ but admin login intentionally remains unavailable.
 | GET | `/api/botstats` | Public server, member, command, and uptime stats |
 | GET | `/api/commands` | Live command registry; accepts `?category=` |
 | POST | `/api/discord/interactions` | Discord's interactions endpoint; the callback is returned in the response body |
+| GET | `/api/premium/plans` | Plan price, perks, currencies, and enabled payment methods |
+| POST | `/api/premium/webhook` | OxaPay white-label callback, verified with the HMAC-SHA512 merchant signature |
+| POST | `/api/donations/webhook` | OxaPay donation callback, verified the same way |
 
 The interactions endpoint is public for the same reason it exists: Discord has
 no session. The Ed25519 signature over the raw body is what proves the caller is
@@ -67,12 +70,38 @@ performed server-side; the frontend must not be treated as the security boundary
 | POST | `/api/guild/<id>/config/ai` | Update AI enabled state and personality |
 | POST | `/api/guild/<id>/config/leveling` | Update leveling controls |
 | POST | `/api/guild/<id>/config/server` | Update prefixes, onboarding, logging, and ticket settings |
+| GET | `/api/premium/guild/<id>` | Premium subscription state and perks for one managed server |
+| POST | `/api/premium/checkout` | Start a white-label premium purchase or gift; returns the crypto address, amount, and QR code |
+| GET | `/api/premium/orders/<order_id>` | Poll a checkout and the guild's resulting term |
+| GET | `/api/premium/gift-targets` | Servers the signed-in member belongs to, with premium state |
+| POST | `/api/donations/invoice` | Create a white-label donation quote from a signed `/donate` token |
+| GET | `/api/donations/<order_id>` | Donation payment status |
+
+The premium checkout stores nothing the browser sends about money: the price,
+currency, and month length come from `utils/premium.py`. An OxaPay callback is
+the only thing that extends a term, and `confirm_payment` makes a repeated
+callback a no-op, so a retried provider notification cannot add a second month.
 
 POST requests use JSON and return `{ "ok": true }` on success. The API only
 accepts the documented configuration keys and converts booleans/numbers before
 persisting them. Staff application submissions require a Discord-authenticated
 session and are checked against current guild membership using the bot; each
 application/user pair is unique in the database.
+
+### Data removal
+
+Data removal requests require a Discord session. Server requests also require
+the caller to be the current owner, or the owner recorded when Niko left the
+server. Submissions require the CSRF token from `/auth/status`. Nothing is
+deleted until the bot owner approves the request in the owner-only queue.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/privacy/data-removal` | Own requests plus the account/server targets the caller can prove they own |
+| POST | `/api/privacy/data-removal` | Submit a scoped account or server deletion request |
+| DELETE | `/api/privacy/data-removal/<request_id>` | Withdraw a pending request |
+| GET | `/api/staff/data-removal` | Owner-only review queue |
+| POST | `/api/staff/data-removal/<request_id>/review` | Approve (run the scoped deletion) or deny a request |
 
 ### Owner operations
 
@@ -91,6 +120,9 @@ instance so a standby that owns the gateway cannot change the registry.
 | POST | `/api/staff/proxy-workers` | Verify and register a proxy worker |
 | DELETE | `/api/staff/proxy-workers/<id>` | Remove a proxy worker |
 | POST | `/api/staff/proxy-workers/routing` | Persist the owner's routing switch |
+| GET | `/api/staff/billing` | Recent payments, active subscriptions, revenue totals, and gateway state |
+| POST | `/api/staff/billing/payments/<order_id>/resolve` | Flag a payment for follow-up or mark it resolved with a note |
+| POST | `/api/staff/billing/subscriptions/<guild_id>` | Grant, extend, or cancel a server's subscription |
 
 ## Adding an endpoint
 

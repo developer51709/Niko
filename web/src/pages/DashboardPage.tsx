@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { ApiError, getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
@@ -125,11 +125,12 @@ function SectionError({ message }: { message: string }) {
  * per Discord account, so they load from `/api/me/*` and never need a server.
  * Each tab keeps itself current while it is open, like the guild analytics card.
  */
-function UserSection({ tab, user, overview, guilds, csrfToken, refreshToken, onServers, onManage }: {
+function UserSection({ tab, user, overview, guilds, guildsUnavailable, csrfToken, refreshToken, onServers, onManage }: {
   tab: UserTab;
   user: User;
   overview: UserOverview | null;
   guilds: Guild[];
+  guildsUnavailable: string;
   csrfToken?: string;
   refreshToken: number;
   onServers: () => void;
@@ -140,7 +141,7 @@ function UserSection({ tab, user, overview, guilds, csrfToken, refreshToken, onS
 
   if (tab === "overview") {
     if (!overview) return <SectionSkeleton label="overview" />;
-    return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} />;
+    return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} guildsUnavailable={guildsUnavailable} />;
   }
   if (tab === "economy") {
     if (economy.error) return <SectionError message={economy.error} />;
@@ -177,12 +178,32 @@ function DashboardLoading() {
   </div>;
 }
 
+/**
+ * Read the manageable server list without letting a Discord hiccup take the
+ * dashboard down: a failed read keeps the workspace usable and reports itself
+ * on the servers view, which is the only place the list is shown in full.
+ */
+function loadGuilds(): Promise<{ guilds: Guild[]; error: string; expired: boolean }> {
+  return getGuilds().then(
+    (guilds) => ({ guilds, error: "", expired: false }),
+    (reason: unknown) => ({
+      guilds: [] as Guild[],
+      error: reason instanceof Error ? reason.message : "Your server list could not be loaded.",
+      // A 401 means Discord rejected the session token and it could not be
+      // refreshed: retrying changes nothing until the reader signs in again.
+      expired: reason instanceof ApiError && reason.status === 401,
+    }),
+  );
+}
+
 export function DashboardPage() {
   const config = useBotConfig();
   const [route, setRoute] = useState(dashboardRoute);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [stats, setStats] = useState<BotStats | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [guildsError, setGuildsError] = useState("");
+  const [guildsExpired, setGuildsExpired] = useState(false);
   const [selectedGuild, setSelectedGuild] = useState<Guild | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -214,8 +235,10 @@ export function DashboardPage() {
         return getDashboardAccess().then((access) => {
           setBlacklist(access);
           if (access.blacklisted) return null;
-          return Promise.all([getGuilds(), getStaffMe().catch(() => null)]).then(([availableGuilds, staffStatus]) => {
-            setGuilds(availableGuilds);
+          return Promise.all([loadGuilds(), getStaffMe().catch(() => null)]).then(([available, staffStatus]) => {
+            setGuilds(available.guilds);
+            setGuildsError(available.error);
+            setGuildsExpired(available.expired);
             setStaffRole(staffStatus?.role || null);
           });
         });
@@ -273,8 +296,10 @@ export function DashboardPage() {
         const access = await getDashboardAccess();
         setBlacklist(access);
         if (!access.blacklisted) {
-          const [availableGuilds, staffStatus] = await Promise.all([getGuilds(), getStaffMe().catch(() => null)]);
-          setGuilds(availableGuilds);
+          const [available, staffStatus] = await Promise.all([loadGuilds(), getStaffMe().catch(() => null)]);
+          setGuilds(available.guilds);
+          setGuildsError(available.error);
+          setGuildsExpired(available.expired);
           setStaffRole(staffStatus?.role || null);
         }
       }
@@ -290,7 +315,7 @@ export function DashboardPage() {
 
   let content;
   if (route.view === "servers") {
-    content = <ServersView guilds={guilds} onManage={openGuild} />;
+    content = <ServersView guilds={guilds} onManage={openGuild} unavailable={guildsError} onRetry={refreshDashboard} retrying={refreshing} loginUrl={guildsExpired ? `/auth/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}` : ""} />;
   } else if (route.view === "guild") {
     content = selectedGuild
       ? selectedGuild.blacklisted
@@ -298,7 +323,7 @@ export function DashboardPage() {
         : <DashboardSection key={`${selectedGuild.id}-${route.section}`} section={route.section} guild={selectedGuild} stats={stats} csrfToken={auth.csrf_token} refreshToken={refreshToken} />
       : <DashboardLoading />;
   } else {
-    content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={personalOverview.data} guilds={guilds} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
+    content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={personalOverview.data} guilds={guilds} guildsUnavailable={guildsError} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
   }
 
   return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} userTab={route.tab} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onUserTabChange={changeUserTab} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>

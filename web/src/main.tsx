@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
 import "./guild-settings.css";
+import "./color-picker.css";
+import "./billing.css";
+import "./data-removal.css";
 import "./discord-name-fonts.css";
 
 if ("serviceWorker" in navigator) {

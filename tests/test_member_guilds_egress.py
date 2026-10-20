@@ -298,6 +298,18 @@ class GuildListRouteTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual(["111"], [guild["id"] for guild in response.get_json()])
 
+    def test_a_revoked_session_asks_for_a_new_login_instead_of_blaming_discord(self):
+        def revoked(token):
+            raise server.DiscordEgressError("Discord answered HTTP 401 for the server list.", status=401)
+
+        dashboard_routes.member_guilds = revoked
+        response = self._client().get("/api/guilds")
+
+        self.assertEqual(401, response.status_code)
+        payload = response.get_json()
+        self.assertEqual("/auth/login", payload["login_url"])
+        self.assertIn("session expired", payload["error"])
+
     def test_the_route_reads_the_list_over_the_bots_proxy(self):
         """End to end: the page's own request goes through the bot's egress."""
         loop, loop_thread = start_loop(self)
@@ -320,6 +332,151 @@ class GuildListRouteTests(unittest.TestCase):
         # Fetched on the bot's loop, over the bot's active proxy.
         self.assertEqual([loop_thread], session.threads)
         self.assertEqual(PROXY, session.calls[0][1]["proxy"])
+
+
+class RejectedTokenRecoveryTests(unittest.TestCase):
+    """A 401 mid-session is a token Discord revoked, not a Discord outage.
+
+    The dashboard logged out of nowhere and every request then answered 401:
+    the stored access token had been rotated away by another refresh while
+    ``token_exp`` still said it was good for hours, so nothing ever replaced it.
+    """
+
+    def setUp(self):
+        self._once = server._member_guilds_once
+        self._refresh = server.ensure_access_token
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        server._member_guilds_once = self._once
+        server.ensure_access_token = self._refresh
+
+    def test_a_rejected_token_reports_its_status(self):
+        session = FakeSession([(401, json.dumps({"message": "401: Unauthorized"}))])
+
+        with self.assertRaises(server.DiscordEgressError) as raised:
+            run_fetch(session)
+
+        self.assertEqual(401, raised.exception.status)
+
+    def test_a_revoked_token_is_refreshed_once_and_the_read_retried(self):
+        from flask import session as flask_session
+
+        tokens = []
+
+        def once(token):
+            tokens.append(token)
+            if len(tokens) == 1:
+                raise server.DiscordEgressError(
+                    "Discord answered HTTP 401 for the server list.", status=401
+                )
+            return GUILDS
+
+        refreshes = []
+
+        def refresh(force=False):
+            refreshes.append(force)
+            return True
+
+        server._member_guilds_once = once
+        server.ensure_access_token = refresh
+
+        with app.test_request_context("/dashboard/servers"):
+            flask_session["access_token"] = "fresh-token"
+            self.assertEqual(GUILDS, server.member_guilds("revoked-token"))
+
+        # The retry left over the refreshed token, not the one Discord refused.
+        self.assertEqual(["revoked-token", "fresh-token"], tokens)
+        # Forced: the session clock still believed the old token was fresh.
+        self.assertEqual([True], refreshes)
+
+    def test_a_401_the_session_cannot_refresh_is_reported_once(self):
+        calls = []
+
+        def once(token):
+            calls.append(token)
+            raise server.DiscordEgressError(
+                "Discord answered HTTP 401 for the server list.", status=401
+            )
+
+        server._member_guilds_once = once
+        server.ensure_access_token = lambda force=False: False
+
+        with self.assertRaises(server.DiscordEgressError) as raised:
+            server.member_guilds("revoked-token")
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual(401, raised.exception.status)
+
+    def test_an_egress_failure_does_not_spend_the_refresh_token(self):
+        calls = []
+        refreshes = []
+
+        def once(token):
+            calls.append(token)
+            raise server.DiscordEgressError(
+                "Discord answered HTTP 403 for the server list.", status=403
+            )
+
+        server._member_guilds_once = once
+        server.ensure_access_token = lambda force=False: refreshes.append(force) or True
+
+        with self.assertRaises(server.DiscordEgressError):
+            server.member_guilds("user-token")
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual([], refreshes)
+
+
+class ForcedTokenRefreshTests(unittest.TestCase):
+    """``ensure_access_token(force=True)`` refreshes a clock-fresh token."""
+
+    def _patch_token_exchange(self, seen):
+        def fake_request(method, url, **kwargs):
+            seen.append(kwargs["data"]["refresh_token"])
+            response = mock.Mock()
+            response.json.return_value = {
+                "access_token": "new-token",
+                "refresh_token": "rotated-token",
+                "expires_in": 604800,
+            }
+            response.raise_for_status.return_value = None
+            return response
+
+        return mock.patch.object(server, "discord_request", fake_request)
+
+    def test_a_clock_fresh_token_is_left_alone_unless_forced(self):
+        from flask import session as flask_session
+
+        seen = []
+        with app.test_request_context("/dashboard"):
+            flask_session["user"] = {"id": "42"}
+            flask_session["access_token"] = "stale-token"
+            flask_session["refresh_token"] = "refresh-1"
+            flask_session["token_exp"] = time.time() + 3600
+            with self._patch_token_exchange(seen):
+                self.assertTrue(server.ensure_access_token())
+                self.assertEqual("stale-token", flask_session["access_token"])
+
+        self.assertEqual([], seen)
+
+    def test_force_exchanges_the_refresh_token_even_while_the_clock_is_fresh(self):
+        from flask import session as flask_session
+
+        seen = []
+        with app.test_request_context("/dashboard"):
+            flask_session["user"] = {"id": "42"}
+            flask_session["access_token"] = "stale-token"
+            flask_session["refresh_token"] = "refresh-1"
+            flask_session["token_exp"] = time.time() + 3600
+            with self._patch_token_exchange(seen), mock.patch.object(
+                server, "DISCORD_CLIENT_SECRET", "secret"
+            ):
+                self.assertTrue(server.ensure_access_token(force=True))
+                self.assertEqual("new-token", flask_session["access_token"])
+                self.assertEqual("rotated-token", flask_session["refresh_token"])
+
+        self.assertEqual(["refresh-1"], seen)
 
 
 if __name__ == "__main__":

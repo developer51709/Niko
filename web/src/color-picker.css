@@ -1,0 +1,211 @@
+/* Colour picker popover: saturation canvas, hue/alpha rails, and value fields.
+   Tokens come from styles.css, so the panel matches the dashboard glass. */
+
+.color-picker { position: relative; min-width: 0; }
+
+.color-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 11px 6px 6px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  text-align: left;
+  transition: border-color .16s ease, background .16s ease;
+}
+.color-picker-trigger:hover { background: var(--surface-muted); border-color: rgba(226, 234, 246, .26); }
+.color-picker-trigger:disabled { cursor: not-allowed; opacity: .5; }
+.color-picker-trigger-value { font: 11px "Space Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+
+.color-picker-trigger-swatch,
+.color-picker-swatch { position: relative; display: block; overflow: hidden; flex: 0 0 auto; border-radius: 6px; }
+.color-picker-trigger-swatch { width: 30px; height: 30px; box-shadow: inset 0 0 0 1px rgba(226, 234, 246, .18); }
+.color-picker-swatch { width: 32px; height: 32px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(226, 234, 246, .18); }
+.color-picker-trigger-swatch > span,
+.color-picker-swatch > span { display: block; width: 100%; height: 100%; }
+
+/* Alpha checkerboard: 8px squares over the raised surface. */
+.color-picker-checker {
+  background:
+    repeating-conic-gradient(rgba(226, 234, 246, .26) 0% 25%, transparent 0% 50%) 50% / 8px 8px,
+    var(--surface-raised);
+}
+
+.color-picker-panel {
+  position: fixed;
+  z-index: 40;
+  width: 268px;
+  overflow: hidden;
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(150deg, rgba(30, 34, 41, .96), rgba(8, 9, 11, .97));
+  border: 1px solid rgba(226, 234, 246, .22);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .52), inset 0 1px 0 rgba(255, 255, 255, .14);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+  animation: color-picker-in .16s ease both;
+}
+
+.color-picker-canvas {
+  position: relative;
+  height: 164px;
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.color-picker-canvas::before,
+.color-picker-canvas::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.color-picker-canvas::before { background: linear-gradient(to right, #fff, transparent); }
+.color-picker-canvas::after { background: linear-gradient(to top, #000, transparent); }
+.color-picker-canvas[data-dragging] { cursor: grabbing; }
+
+.color-picker-thumb {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35), 0 1px 4px rgba(0, 0, 0, .4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: transform .1s ease-out;
+}
+.color-picker-canvas[data-dragging] .color-picker-thumb { transform: translate(-50%, -50%) scale(1.12); }
+.color-picker-thumb-rail { top: 50%; width: 18px; height: 18px; }
+
+.color-picker-body { display: grid; gap: 12px; padding: 12px; }
+
+.color-picker-head { display: flex; align-items: center; gap: 10px; }
+
+.color-picker-rails { display: grid; flex: 1 1 auto; gap: 10px; min-width: 0; }
+
+.color-picker-rail {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(226, 234, 246, .14);
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+.color-picker-rail[data-dragging] { cursor: grabbing; }
+.color-picker-rail[data-dragging] .color-picker-thumb { transform: translate(-50%, -50%) scale(1.12); }
+
+.color-picker-fields { display: flex; align-items: flex-start; gap: 8px; }
+.color-picker-field { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+
+.color-picker-field-shell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.color-picker-field-shell:hover { border-color: rgba(226, 234, 246, .2); }
+.color-picker-field-shell:focus-within { border-color: rgba(226, 234, 246, .34); }
+.color-picker-field-shell input {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 8px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  font: 12px "Space Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  appearance: textfield;
+}
+.color-picker-field-shell input::-webkit-outer-spin-button,
+.color-picker-field-shell input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.color-picker-hex-input { text-align: left !important; padding-left: 4px !important; text-transform: uppercase; letter-spacing: .08em; }
+.color-picker-field-prefix { padding-left: 9px; color: var(--dim); font: 12px "Space Mono", monospace; }
+.color-picker-field-label { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+
+.color-picker-icon-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, transform .1s ease-out;
+}
+.color-picker-icon-button:hover { color: var(--ink); background: var(--surface-muted); border-color: rgba(226, 234, 246, .24); }
+.color-picker-icon-button:active { transform: scale(.97); }
+.color-picker-icon-button:disabled { cursor: not-allowed; opacity: .5; }
+.color-picker-format { margin-top: 0; }
+
+.color-picker-swatches { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
+.color-picker-swatch-button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(226, 234, 246, .18);
+  transition: transform .1s ease-out;
+  cursor: pointer;
+}
+.color-picker-swatch-button:hover { transform: scale(1.12); }
+.color-picker-swatch-button:active { transform: scale(.94); }
+.color-picker-swatch-button:disabled { cursor: not-allowed; opacity: .5; }
+.color-picker-swatch-button svg { color: #fff; opacity: 0; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); }
+.color-picker-swatch-button svg.is-selected { opacity: 1; }
+/* The tick follows the swatch's luminance so it stays legible on pale colours. */
+.color-picker-swatch-button svg.is-dark-mark { color: rgba(0, 0, 0, .8); filter: none; }
+
+.color-picker-trigger:focus-visible,
+.color-picker-canvas:focus-visible,
+.color-picker-rail:focus-visible,
+.color-picker-icon-button:focus-visible,
+.color-picker-swatch-button:focus-visible {
+  outline: 2px solid rgba(226, 234, 246, .55);
+  outline-offset: 2px;
+}
+.color-picker-canvas:focus-visible { outline-offset: -2px; }
+
+@keyframes color-picker-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .color-picker-panel { animation: none; }
+  .color-picker-thumb,
+  .color-picker-trigger,
+  .color-picker-icon-button,
+  .color-picker-swatch-button { transition: none; }
+  .color-picker-canvas[data-dragging] .color-picker-thumb,
+  .color-picker-rail[data-dragging] .color-picker-thumb { transform: translate(-50%, -50%); }
+  .color-picker-swatch-button:hover,
+  .color-picker-swatch-button:active,
+  .color-picker-icon-button:active { transform: none; }
+}
+
+@media (max-width: 420px) {
+  .color-picker-panel { width: min(268px, calc(100vw - 24px)); }
+}

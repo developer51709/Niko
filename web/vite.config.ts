@@ -127,6 +127,7 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/changelog", title: "Changelog — Niko", description: "A clear record of every improvement, fix, and new feature added to Niko.", section: "What's new" },
   { path: "/privacy", title: "Privacy policy — Niko", description: "Learn what information Niko uses and how it supports Discord communities.", section: "Niko legal" },
   { path: "/terms", title: "Terms of service — Niko", description: "The terms that apply when you use Niko in a Discord server.", section: "Niko legal" },
+  { path: "/data-removal", title: "Data removal — Niko", description: "Request deletion of your Niko account data or a server you own, and read the strict policy that protects moderation records.", section: "Privacy" },
   { path: "/community", title: "Community policy — Niko", description: "The community expectations for every server using Niko.", section: "Niko legal" },
   ...docsMetadata(),
   ...CHANGELOG.map(metadataForChangelog),

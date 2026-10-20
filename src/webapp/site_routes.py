@@ -38,7 +38,9 @@ def changelog_markdown(slug):
 @app.route("/community")
 @app.route("/privacy")
 @app.route("/terms")
+@app.route("/data-removal")
 @app.route("/donate")
+@app.route("/billing")
 @app.route("/transcript/<path:path>")
 @app.route("/transcript")
 def public_spa_route(path=None):
@@ -50,8 +52,10 @@ def public_spa_route(path=None):
 @app.route("/changelog/<path:path>")
 @app.route("/privacy/<path:path>")
 @app.route("/terms/<path:path>")
+@app.route("/data-removal/<path:path>")
 @app.route("/community/<path:path>")
 @app.route("/donate/<path:path>")
+@app.route("/billing/<path:path>")
 @app.route("/dashboard/<path:path>")
 def nested_spa_route(path):
     return serve_spa_shell()

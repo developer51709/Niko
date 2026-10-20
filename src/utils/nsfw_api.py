@@ -1,13 +1,18 @@
 """
-NSFW Image Filter — bot-side client for the externally hosted
-Cloudflare Workers AI API (see nsfw-api/README.md).
+NSFW Image Filter — fal.ai client.
 
-The API base URL comes from the ``NSFW_API_URL`` environment variable;
-an optional ``NSFW_API_TOKEN`` is sent as a Bearer token when set.
+Models: https://fal.ai/models/fal-ai/imageutils/nsfw
+
+Only guilds with an active premium subscription run this filter (see
+``utils.premium``); AutoMod checks the entitlement before calling in, so a
+free guild never spends the API credits.
+
+The key comes from ``FAL_KEY`` (``FAL_API_KEY`` is accepted as an alias). The
+module fails open: a missing key, a slow request, or a provider error returns
+"no verdict" so a message is never blocked by an outage.
 """
 
 import asyncio
-import base64
 import os
 
 import aiohttp
@@ -21,27 +26,67 @@ log = logging
 SUPPORTED_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
 SUPPORTED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
-# Max attachment size we'll download (10 MB) and max images per message.
+# Max attachment size we'll classify (10 MB) and max images per message.
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 MAX_IMAGES_PER_MESSAGE = 2
 
-# Local request timeout so a slow API never stalls on_message handling.
+# Local request timeout so a slow model never stalls on_message handling.
 REQUEST_TIMEOUT_SECONDS = 12
 
-
-def get_api_url() -> str:
-    """Base URL of the NSFW API, without a trailing slash (or '' if unset)."""
-    return (os.getenv("NSFW_API_URL") or "").strip().rstrip("/")
+DEFAULT_MODEL_URL = "https://fal.run/fal-ai/imageutils/nsfw"
+DEFAULT_THRESHOLD = 0.85
 
 
-def get_api_token() -> str:
-    """Optional bearer token for the NSFW API ('' when unset)."""
-    return (os.getenv("NSFW_API_TOKEN") or "").strip()
+def get_api_key() -> str:
+    """fal.ai key ('' when unset)."""
+    return (os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY") or "").strip()
+
+
+def get_model_url() -> str:
+    """Sync inference URL for the NSFW model."""
+    return (os.getenv("FAL_NSFW_URL") or DEFAULT_MODEL_URL).strip()
+
+
+def get_threshold() -> float:
+    """Score at or above which an image is treated as NSFW."""
+    try:
+        value = float(os.getenv("NSFW_THRESHOLD", DEFAULT_THRESHOLD))
+    except (TypeError, ValueError):
+        return DEFAULT_THRESHOLD
+    return min(1.0, max(0.0, value))
 
 
 def api_configured() -> bool:
-    """True when NSFW_API_URL is set — otherwise the filter fails open."""
-    return bool(get_api_url())
+    """True when a fal.ai key is set — otherwise the filter fails open."""
+    return bool(get_api_key())
+
+
+def score_from_payload(payload) -> float | None:
+    """Read the NSFW confidence out of a fal.ai response.
+
+    The hosted model returns ``{"nsfw_probability": 0.97}``; the older
+    ``nsfw_score`` alias and boolean forms are accepted too, so a model swap
+    does not silently disable filtering.
+    """
+    if not isinstance(payload, dict):
+        return None
+    for key in ("nsfw_probability", "nsfw_score", "score", "nsfw", "NSFW"):
+        if key not in payload:
+            continue
+        value = payload[key]
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        try:
+            return min(1.0, max(0.0, float(value)))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_hit(score: float | None, threshold: float | None = None) -> bool:
+    if score is None:
+        return False
+    return score >= (get_threshold() if threshold is None else threshold)
 
 
 def _pick_attachments(message: discord.Message):
@@ -59,55 +104,57 @@ def _pick_attachments(message: discord.Message):
     return picked
 
 
+async def classify_image(session: aiohttp.ClientSession, image_url: str, key: str | None = None) -> float | None:
+    """Score one image URL with fal.ai, returning None when no verdict exists."""
+    api_key = key or get_api_key()
+    if not api_key or not image_url:
+        return None
+    try:
+        async with session.post(
+            get_model_url(),
+            json={"image_url": image_url},
+            headers={"Authorization": f"Key {api_key}"},
+        ) as resp:
+            if resp.status != 200:
+                log.warning("fal.ai NSFW returned HTTP %s", resp.status)
+                return None
+            payload = await resp.json(content_type=None)
+    except (aiohttp.ClientError, asyncio.TimeoutError) as error:
+        log.warning("fal.ai NSFW request failed: %s", error)
+        return None
+    return score_from_payload(payload)
+
+
 async def check_message_images(message: discord.Message):
     """
-    Check a message's image attachments against the NSFW API.
+    Check a message's image attachments with fal.ai.
 
     Returns (hit, score, filename):
       hit      — True when at least one image is classified NSFW
       score    — confidence of the offending verdict (0.0 when no hit)
       filename — name of the offending attachment (or None)
 
-    Fail-open: any error (missing env var, network, API error) returns
-    (False, 0.0, None) so the message is never blocked by an outage.
+    Discord attachments are passed to the model by URL, so the image bytes are
+    never copied through this process. Fail-open on every error path.
     """
-    url = get_api_url()
-    if not url:
+    if not api_configured():
         return (False, 0.0, None)
 
     attachments = _pick_attachments(message)
     if not attachments:
         return (False, 0.0, None)
 
-    headers = {"Content-Type": "application/json"}
-    token = get_api_token()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for att in attachments:
-                data = await att.read()
-                payload = {"image": base64.b64encode(data).decode("ascii")}
-                try:
-                    async with session.post(
-                        f"{url}/check", json=payload, headers=headers
-                    ) as resp:
-                        if resp.status != 200:
-                            log.warning(
-                                "NSFW API returned HTTP %s for %s",
-                                resp.status, att.filename,
-                            )
-                            continue
-                        result = await resp.json()
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    log.warning("NSFW API request failed: %s", e)
+                url = getattr(att, "url", None)
+                if not url:
                     continue
-
-                if result.get("nsfw"):
-                    return (True, float(result.get("score", 1.0)), att.filename)
-    except Exception as e:  # never break message handling on filter errors
-        log.warning("NSFW filter error (failing open): %s", e)
+                score = await classify_image(session, str(url))
+                if _is_hit(score):
+                    return (True, float(score or 1.0), att.filename)
+    except Exception as error:  # never break message handling on filter errors
+        log.warning("NSFW filter error (failing open): %s", error)
 
     return (False, 0.0, None)

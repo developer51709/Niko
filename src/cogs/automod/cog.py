@@ -1,4 +1,5 @@
 from utils.nsfw_api import check_message_images
+from utils.premium import is_premium
 
 from .views import *
 
@@ -177,9 +178,11 @@ class AutoMod(commands.Cog):
                 return
 
         # ── NSFW image filter ────────────────────────
-        # Runs after the text filters and fails open when the NSFW API is
-        # unreachable or not configured (see utils.nsfw_api).
-        if cfg["automod"].get("nsfw_image_filter", False):
+        # Premium perk: the fal.ai call only runs while the guild's
+        # subscription is active, and fails open when the API is unreachable.
+        # Turning the filter on without premium is refused by the dashboard,
+        # so a stale config simply pauses instead of silently costing credits.
+        if cfg["automod"].get("nsfw_image_filter", False) and await self._premium_active(message.guild.id):
             hit, score, filename = await check_message_images(message)
             if hit:
                 try:
@@ -191,6 +194,15 @@ class AutoMod(commands.Cog):
                     f"{message.author.mention} posted a flagged image in {message.channel.mention}.\n\n"
                     f"**File:** `{filename or 'unknown'}`  •  Confidence: `{score:.0%}`")
                 return
+
+    async def _premium_active(self, guild_id: int) -> bool:
+        """Whether this guild's premium subscription covers AI moderation."""
+        if not getattr(self.bot, "cxn", None):
+            return False
+        try:
+            return await is_premium(self.bot.cxn, guild_id)
+        except Exception:
+            return False
 
     # ─── USER-INSTALLED APP ABUSE ─────────────────
 
