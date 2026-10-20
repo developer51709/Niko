@@ -24,6 +24,8 @@ import type {
   BlacklistAppealStatus,
   StandbyFailoverStatus,
   StandbyInstance,
+  ProxyWorkersResponse,
+  ProxyWorkerRouting,
   NotifierConfig,
   NotifierFollow,
   NotifierResponse,
@@ -81,6 +83,10 @@ export const getStaffStandbys = () => api<{ standbys: StandbyInstance[]; failove
 export const controlStaffStandbyFailover = (body: { action: "mode"; mode: "auto" | "off" } | { action: "activate"; standby_id: string } | { action: "rotate" }, csrfToken?: string) => api<{ ok: boolean; failover: StandbyFailoverStatus }>("/api/staff/standbys/failover", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const addStaffStandby = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean; standby: StandbyInstance }>("/api/staff/standbys", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
 export const removeStaffStandby = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/standbys/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const getStaffProxyWorkers = () => api<ProxyWorkersResponse>("/api/staff/proxy-workers");
+export const addStaffProxyWorker = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/proxy-workers", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
+export const removeStaffProxyWorker = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/proxy-workers/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const setStaffProxyWorkerRouting = (enabled: boolean, csrfToken?: string) => api<{ ok: boolean; routing: ProxyWorkerRouting }>("/api/staff/proxy-workers/routing", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ enabled }) });
 export const saveStaffProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const saveGlobalProfile = (body: Record<string, unknown>, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/global-profile", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const getStaffGuilds = () => api<{ guilds: StaffGuild[]; count: number; role: string }>("/api/staff/guilds");

@@ -389,7 +389,11 @@ class Blackjack(commands.Cog):
             if game.insurance_bet > 0:
                 payout += game.insurance_bet * 2  # 2:1 insurance payout
             payout -= amount
-            user_data["balance"] += payout
+            economy.record_gamble(
+                user_data, payout,
+                "blackjack_win" if payout > 0 else "blackjack_loss" if payout < 0 else "blackjack",
+                "dealer blackjack" + (" · insurance paid" if game.insurance_bet > 0 else ""),
+            )
             user_data["last_blackjack"] = time.time()
             await economy.save_user_economy_data(ctx.author.id)
 
@@ -403,7 +407,7 @@ class Blackjack(commands.Cog):
         # ── Player natural blackjack ───────────────────────────────────────
         if player_has_blackjack:
             winnings = game.settle_blackjack()
-            user_data["balance"] += winnings
+            economy.record_gamble(user_data, winnings, "blackjack_win", "natural blackjack")
             user_data["last_blackjack"] = time.time()
             await economy.save_user_economy_data(ctx.author.id)
 
@@ -452,7 +456,12 @@ class Blackjack(commands.Cog):
 
         # ── PAYOUTS ────────────────────────────────────────────────────────
         total_result = sum(game.settle_hand(h) for h in game.hands)
-        user_data["balance"] += total_result
+        hands = len(game.hands)
+        economy.record_gamble(
+            user_data, total_result,
+            "blackjack_win" if total_result > 0 else "blackjack_loss" if total_result < 0 else "blackjack",
+            f"{hands} hand{'s' if hands > 1 else ''} · bet {amount:,}",
+        )
         user_data["last_blackjack"] = time.time()
         await economy.save_user_economy_data(ctx.author.id)
 

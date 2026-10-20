@@ -2,6 +2,7 @@
 @import "./styles/docs.css";
 @import "./styles/changelog.css";
 @import "./styles/server-stats.css";
+@import "./styles/proxy-workers.css";
 @import "./glass-landing.css";
 
 :root {
@@ -1548,6 +1549,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-layout .vote-multipliers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .dashboard-layout .vote-multiplier-chip { display: grid; gap: 2px; min-width: 108px; padding: 9px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; font-size: 10px; }
 .dashboard-layout .vote-multiplier-chip strong { font-size: 14px; color: var(--sage); }
+/* The lottery card is the one panel whose prize is the headline, so the pot
+   carries the same weight as the net-worth figure and an entered round takes
+   the active filter tint the rest of the dashboard uses for "this is yours". */
+.dashboard-layout .lottery-card { padding: 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: linear-gradient(135deg, var(--surface-raised), var(--surface)); }
+.dashboard-layout .lottery-card.is-entered { border-color: var(--filter-border); background: linear-gradient(135deg, var(--filter-active), var(--surface)); }
+.dashboard-layout .lottery-prize { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.dashboard-layout .lottery-prize strong { font-size: 30px; line-height: 1.1; letter-spacing: -.02em; }
+.dashboard-layout .lottery-prize span { color: var(--sage); font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
+.dashboard-layout .lottery-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(125px, 100%), 1fr)); gap: 8px; margin-top: 14px; }
+.dashboard-layout .lottery-chip { display: grid; gap: 3px; padding: 9px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; color: var(--dim); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.dashboard-layout .lottery-chip strong { color: var(--ink); font-size: 14px; letter-spacing: -.01em; text-transform: none; }
+.dashboard-layout .lottery-last { display: block; margin-top: 4px; color: var(--dim); font-size: 9px; }
+.dashboard-layout .lottery-how { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.dashboard-layout .lottery-how code { padding: 1px 5px; border-radius: 5px; background: var(--surface-muted); color: var(--ink); font-family: "Space Mono", monospace; font-size: 9px; }
 .dashboard-layout .economy-transaction-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .dashboard-layout .economy-transaction { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 9px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 10px; font-size: 10px; }
 .dashboard-layout .economy-transaction-kind { grid-area: 1 / 1; color: var(--muted); font-family: "Space Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }

@@ -5,7 +5,75 @@ import time
 import asyncio
 import os
 
-slots_cooldown = os.getenv("SLOTS_COOLDOWN") or 60
+# Seconds between spins. Kept numeric so the cooldown is compared as a time,
+# not as concatenated strings.
+slots_cooldown = float(os.getenv("SLOTS_COOLDOWN") or 60)
+
+# Symbol tiers and the weighted pool the machine draws from. The rarer a symbol,
+# the more a line of it pays: common 2x, uncommon 3x, rare 5x, jackpot 25x, and
+# a board of one symbol pays the 100x full-board jackpot on top of its lines.
+COMMON = ["🍒", "🍋", "🍊"]
+UNCOMMON = ["🍎", "🍇", "🍐"]
+RARE = ["💎", "🔥"]
+JACKPOT = ["🪙"]
+
+SYMBOLS = COMMON * 6 + UNCOMMON * 4 + RARE * 2 + JACKPOT * 1
+
+LINE_PAYOUTS = {
+    **{symbol: (2, "Common Line (2×)") for symbol in COMMON},
+    **{symbol: (3, "Uncommon Line (3×)") for symbol in UNCOMMON},
+    **{symbol: (5, "Rare Line (5×)") for symbol in RARE},
+    **{symbol: (25, "JACKPOT LINE (25×)") for symbol in JACKPOT},
+}
+
+FULL_BOARD_MULTIPLIER = 100
+
+
+def spin_grid() -> list[list[str]]:
+    """Draw a fresh 3x3 grid from the weighted symbol pool."""
+    return [[random.choice(SYMBOLS) for _ in range(3)] for _ in range(3)]
+
+
+def grid_to_text(grid) -> str:
+    return "\n".join(" ".join(row) for row in grid)
+
+
+def evaluate_grid(grid, amount: int) -> tuple[int, list[tuple[str, str]]]:
+    """Return ``(returned, hits)`` for a finished grid.
+
+    ``returned`` is everything the machine pays back - the stake plus the profit
+    - so the account moves by ``returned - amount``. Keeping the paytable here
+    rather than inside the command lets every line and the full-board jackpot be
+    tested without spinning.
+    """
+    lines = [
+        grid[1],                               # middle row
+        grid[0],                               # top row
+        grid[2],                               # bottom row
+        [grid[0][0], grid[1][1], grid[2][2]],  # diagonal \
+        [grid[0][2], grid[1][1], grid[2][0]],  # diagonal /
+    ]
+
+    total = 0
+    hits: list[tuple[str, str]] = []
+
+    for line in lines:
+        if line[0] == line[1] == line[2]:
+            symbol = line[0]
+            payout = LINE_PAYOUTS.get(symbol)
+            if payout is not None:
+                multiplier, label = payout
+                total += amount * multiplier
+                hits.append((symbol, label))
+
+    # Full board jackpot
+    flat = [cell for row in grid for cell in row]
+    if len(set(flat)) == 1:
+        total += amount * FULL_BOARD_MULTIPLIER
+        hits.append((flat[0], "FULL BOARD JACKPOT (100×)"))
+
+    return total, hits
+
 
 # Prefix resolver (required for dynamic prefixes to work)
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
@@ -83,77 +151,14 @@ class Slots(commands.Cog):
         balance = user_data["balance"]
 
         # Cooldown
-        if str(user_data["last_slots"]) + str(slots_cooldown) > str(time.time()):
-            return await ctx.send(f"You can only play slots once every {slots_cooldown} seconds.")
+        if float(user_data.get("last_slots") or 0) + slots_cooldown > time.time():
+            return await ctx.send(f"You can only play slots once every {int(slots_cooldown)} seconds.")
 
         if amount is None or amount <= 0:
             return await ctx.send("You must bet more than 0 coins.")
 
         if amount > balance:
             return await ctx.send("You don't have enough coins to play slots.")
-
-        # Symbol tiers
-        COMMON = ["🍒", "🍋", "🍊"]
-        UNCOMMON = ["🍎", "🍇", "🍐"]
-        RARE = ["💎", "🔥"]
-        JACKPOT = ["🪙"]
-
-        # Weighted symbol pool
-        SYMBOLS = (
-            COMMON * 6 +
-            UNCOMMON * 4 +
-            RARE * 2 +
-            JACKPOT * 1
-        )
-
-        # Helper to generate a 3×3 grid
-        def spin_grid():
-            return [
-                [random.choice(SYMBOLS) for _ in range(3)]
-                for _ in range(3)
-            ]
-
-        # Helper to format grid
-        def grid_to_text(grid):
-            return "\n".join(" ".join(row) for row in grid)
-
-        # Helper to evaluate paylines
-        def evaluate(grid):
-            lines = [
-                grid[1],                           # middle row
-                grid[0],                           # top row
-                grid[2],                           # bottom row
-                [grid[0][0], grid[1][1], grid[2][2]],  # diagonal \
-                [grid[0][2], grid[1][1], grid[2][0]]   # diagonal /
-            ]
-
-            total = 0
-            hits = []
-
-            for line in lines:
-                if line[0] == line[1] == line[2]:
-                    symbol = line[0]
-
-                    if symbol in COMMON:
-                        total += amount * 2
-                        hits.append((symbol, "Common Line (2×)"))
-                    elif symbol in UNCOMMON:
-                        total += amount * 3
-                        hits.append((symbol, "Uncommon Line (3×)"))
-                    elif symbol in RARE:
-                        total += amount * 5
-                        hits.append((symbol, "Rare Line (5×)"))
-                    elif symbol in JACKPOT:
-                        total += amount * 25
-                        hits.append((symbol, "JACKPOT LINE (25×)"))
-
-            # Full board jackpot
-            flat = [c for row in grid for c in row]
-            if len(set(flat)) == 1:
-                total += amount * 100
-                hits.append(("🪙", "FULL BOARD JACKPOT (100×)"))
-
-            return total, hits
 
         # SPIN ANIMATION
         view = discord.ui.LayoutView()
@@ -188,24 +193,27 @@ class Slots(commands.Cog):
 
         # Final result
         final_grid = spin_grid()
-        winnings, hits = evaluate(final_grid)
+        returned, hits = evaluate_grid(final_grid, amount)
 
-        # Update economy — always deduct the bet first, then add winnings
-        user_data["balance"] -= amount
-        if winnings > 0:
-            user_data["balance"] += winnings
+        # `returned` is the stake plus the profit, and the stake is part of the
+        # result, so the wallet moves by the net only. record_gamble writes that
+        # to the ledger, so slots shows up in the dashboard's recent activity
+        # card and counts towards earned/spent and gambling achievements.
+        net = returned - amount
+        if net:
+            note = f"bet {amount:,}" + (f" · {hits[0][1]}" if hits else " · no line")
+            economy.record_gamble(user_data, net, "slots_win" if net > 0 else "slots_loss", note)
 
         user_data["last_slots"] = time.time()
-        economy = self.bot.get_cog("EconomyCog")
         await economy.save_user_economy_data(ctx.author.id)
 
         # Build result embed
         result_text = grid_to_text(final_grid)
 
-        if winnings > 0:
+        if net > 0:
             title = "🎉 You Win!"
             details = "\n".join(f"{sym} — {desc}" for sym, desc in hits)
-            description = f"{result_text}\n\n**{details}**\nYou won **{winnings}** coins."
+            description = f"{result_text}\n\n**{details}**\nYou won **{net}** coins."
         else:
             title = "😢 You Lose"
             description = f"{result_text}\n\nYou lost **{amount}** coins."

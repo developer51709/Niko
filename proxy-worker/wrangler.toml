@@ -1,0 +1,12 @@
+name = "niko-discord-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Optional label shown in the owner dashboard.
+# [vars]
+# WORKER_NAME = "discord-proxy-eu"
+# PROXY_TIMEOUT_MS = "15000"
+
+# Required after deploying:
+#   wrangler secret put AUTH_TOKEN
+# Set the same value as PROXY_WORKER_TOKEN on the bot.

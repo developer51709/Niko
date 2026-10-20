@@ -1,3 +1,5 @@
+from config.ids import SUPPORT_GUILD
+
 from .data import *
 from .commands.currency import CurrencyMixin
 from .commands.jobs import JobsMixin
@@ -137,6 +139,23 @@ class EconomyCog(
             data["total_spent"] = int(data.get("total_spent", 0)) + abs(amount)
         _log_tx(data, kind, amount, note)
 
+    def record_gamble(self, data: dict, amount: int, kind: str, note: str = "") -> list[str]:
+        """Apply a casino result to an account and write it to the ledger.
+
+        The casino cogs (blackjack, slots, roulette) live outside the economy
+        mixins and used to move ``data["balance"]`` directly. That left their
+        wins and losses out of ``total_earned``/``total_spent`` and, more
+        visibly, out of the recent activity card on the dashboard. Every casino
+        payout now goes through here so it is recorded the same way as crime,
+        rob, coinflip and dice, and so gambling achievements still unlock.
+
+        Returns the display labels of any badges the result unlocked.
+        """
+        amount = int(amount)
+        if amount:
+            self._credit(data, amount, kind, note)
+        return _check_achievements(data)
+
     async def _net_rank(self, uid: str) -> int | None:
         # Get all users from database for ranking
         all_users = await _get_all_users_from_db(self.bot)
@@ -233,6 +252,90 @@ class EconomyCog(
             await ctx.interaction.followup.send(view=view, file=discord.File(buf, "reward.png"))
         else:
             await ctx.send(view=view, file=discord.File(buf, "reward.png"))
+
+    # ── Lottery announcements ────────────────────────────────────────────────
+    async def _lottery_channel(self):
+        """The support server's #lottery channel, or None when it is not set up.
+
+        The channel id comes from the same `support_server_config` row the
+        `.staff supportsetup` command writes, so nothing is hardcoded and the
+        announcement stays optional: a deployment without the support server
+        simply draws the lottery silently.
+        """
+        cached = getattr(self, "_lottery_channel_cache", None)
+        if cached is not None:
+            return cached
+        pool = getattr(self.bot, "cxn", None)
+        if pool is None:
+            return None
+        try:
+            row = await pool.fetchrow(
+                "SELECT channel_ids FROM support_server_config WHERE guild_id = $1",
+                SUPPORT_GUILD,
+            )
+        except Exception as exc:
+            log.error("Economy", f"Could not read the support server channels: {exc}")
+            return None
+        channel_ids = row.get("channel_ids") if row else None
+        if isinstance(channel_ids, str):
+            try:
+                channel_ids = json.loads(channel_ids or "{}")
+            except (TypeError, ValueError):
+                channel_ids = None
+        channel_id = channel_ids.get("lottery") if isinstance(channel_ids, dict) else None
+        if not channel_id:
+            return None
+        channel = self.bot.get_channel(int(channel_id))
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(int(channel_id))
+            except Exception:
+                return None
+        self._lottery_channel_cache = channel
+        return channel
+
+    async def _announce_lottery_draw(
+        self, *, winner_name: str | None, payout: int, tickets: int, entrants: int,
+        unlocked: list[str] | None = None,
+    ) -> None:
+        """Post the weekly draw to #lottery. Best effort: never fail the draw."""
+        try:
+            channel = await self._lottery_channel()
+            if channel is None:
+                return
+            remaining = max(0, int(self.lottery.get("next_draw", 0)) - int(time.time()))
+            if winner_name:
+                title = "🎰 Lottery drawn"
+                body = (
+                    f"**{winner_name}** won **{payout:,}** 🪙 this week.\n"
+                    f"• Tickets in play: **{tickets:,}** from **{entrants:,}** "
+                    f"member{'s' if entrants != 1 else ''}\n"
+                    f"• Next pot starts at **{int(self.lottery.get('pot', 0)):,}** 🪙\n\n"
+                    f"Next draw in **{_fmt_remaining(remaining)}** — buy tickets with `/lottery buy`."
+                )
+                if unlocked:
+                    body += "\n\n**New achievements** " + ", ".join(unlocked)
+            else:
+                title = "🎰 No lottery winner this week"
+                body = (
+                    "Nobody held a ticket when the draw came up, so the pot rolls over.\n\n"
+                    f"Next draw in **{_fmt_remaining(remaining)}** — buy tickets with `/lottery buy`."
+                )
+            await channel.send(view=_info_view(title, body))
+        except Exception as exc:
+            log.error("Economy", f"Could not announce the lottery draw: {exc}")
+
+    async def _winner_name(self, winner_id: str | None) -> str | None:
+        """The winner's display name for the announcement, or None if unknown."""
+        if not winner_id:
+            return None
+        try:
+            user = self.bot.get_user(int(winner_id))
+            if user is None:
+                user = await self.bot.fetch_user(int(winner_id))
+            return getattr(user, "display_name", None) or getattr(user, "name", None)
+        except Exception:
+            return None
 
     # ── Background tick: bank interest + lottery draw ────────────────────────
     @tasks.loop(minutes=30)
@@ -350,8 +453,13 @@ class EconomyCog(
 
         pot = int(self.lottery.get("pot", LOTTERY_BASE_POT))
         if not entrants or total_tickets <= 0 or pot <= 0:
+            # Nothing to pay out, but the draw still happened: the channel post
+            # tells members the pot rolled over and when the next draw runs.
             self.lottery["next_draw"] = now + LOTTERY_DRAW_INTERVAL
             await _save_lottery_to_db(self.bot, self.lottery)
+            await self._announce_lottery_draw(
+                winner_name=None, payout=0, tickets=0, entrants=0,
+            )
             return
 
         roll = random.randint(1, total_tickets)
@@ -368,6 +476,10 @@ class EconomyCog(
 
         winner_data = await self.get_user_economy_data(int(winner_id))
         self._credit(winner_data, payout, "lottery", f"weekly draw winner ({total_tickets} tickets)")
+        # Winning a draw is its own milestone, and the badge rewards are paid on
+        # the same save as the payout.
+        winner_data["lottery_wins"] = int(winner_data.get("lottery_wins", 0)) + 1
+        unlocked = _check_achievements(winner_data)
         await self.save_user_economy_data(int(winner_id))
 
         # Reset lottery tickets for all entrants
@@ -388,6 +500,13 @@ class EconomyCog(
         }
         await _save_lottery_to_db(self.bot, self.lottery)
         log.info("Economy", f"Lottery: paid {payout:,} coins to {winner_id} (next pot starts at {self.lottery['pot']:,}).")
+        await self._announce_lottery_draw(
+            winner_name=await self._winner_name(winner_id),
+            payout=payout,
+            tickets=total_tickets,
+            entrants=len(entrants),
+            unlocked=unlocked,
+        )
 
 
 async def setup(bot: commands.Bot):

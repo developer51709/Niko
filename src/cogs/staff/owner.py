@@ -687,9 +687,9 @@ class OwnerCog(commands.Cog):
     #: The release ``.staff announce`` announces. The docs page and the changelog
     #: entry are named in one place, so the buttons can never point at a page that
     #: was renamed or retired alongside the update.
-    UPDATE_TITLE = "Twitch alerts & a Notifications tab"
-    UPDATE_DOCS_URL = f"{links.DOCS}/social-notifier"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/notifier-dashboard-tab"
+    UPDATE_TITLE = "Giveaway bans"
+    UPDATE_DOCS_URL = f"{links.DOCS}/giveaway-overview"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/giveaway-bans"
 
     @commands.command(name="announce", help="Announce the latest Niko update (or `policy`) in this channel.")
     @is_owner()
@@ -722,20 +722,21 @@ class OwnerCog(commands.Cog):
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**Twitch is here.** Niko can now announce a channel **going live**, and falls "
-                    "back to its newest broadcast when it is offline.\n\n"
-                    "**Every server has a Notifications tab.** Add an account by pasting a profile "
-                    "link, give each one its own channel, ping role and custom message, send a test, "
-                    "and pause or resume it in one click.\n\n"
-                    "- **New:** Twitch live alerts, next to YouTube, Twitter/X, TikTok, Bluesky and Reddit\n"
-                    "- **New:** a per-server Notifications tab with test, pause and resume\n"
-                    "- **Better:** one request per creator no matter how many servers follow them, and a "
-                    "feed that stops working is paused automatically instead of failing silently"
+                    "**Giveaway bans are here.** Keep a member out of every giveaway in your server, "
+                    "not just the one running right now.\n\n"
+                    "**One command, every giveaway.** `.giveaway ban @member` stops that member from "
+                    "joining any giveaway in the server from then on, and clears the entries they "
+                    "already hold. `.giveaway unban @member` lets them enter again.\n\n"
+                    "- **New:** `.giveaway ban <member>` with a per-server ban list\n"
+                    "- **New:** `.giveaway unban <member>` to lift it\n"
+                    "- **Better:** a banned member can no longer win, even if an entry slips in while a "
+                    "giveaway is ending\n"
+                    "- Bans need **Manage Server** and never touch the member's access to the server itself"
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Manage it in the dashboard, or with `.notifier` in Discord."
+                content="-# Run `.giveaway ban @member` in your server, or read how it works below."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(

@@ -25,6 +25,45 @@ EUROPEAN_WHEEL = [
 RED_NUMBERS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 BLACK_NUMBERS = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
 
+# Bet type -> (winning-number test, total return multiplier). A European wheel
+# pays even money as 2x the stake back, a dozen or column as 3x, and the inside
+# bets as the usual 35/17/11/8/5x. The green zero loses every outside bet.
+OUTSIDE_PAYOUTS = {
+    "red": (lambda n: n in RED_NUMBERS, 2),
+    "black": (lambda n: n in BLACK_NUMBERS, 2),
+    "odd": (lambda n: n != 0 and n % 2 == 1, 2),
+    "even": (lambda n: n != 0 and n % 2 == 0, 2),
+    "low": (lambda n: 1 <= n <= 18, 2),
+    "high": (lambda n: 19 <= n <= 36, 2),
+    "dozen1": (lambda n: 1 <= n <= 12, 3),
+    "dozen2": (lambda n: 13 <= n <= 24, 3),
+    "dozen3": (lambda n: 25 <= n <= 36, 3),
+    "column1": (lambda n: n % 3 == 1, 3),
+    "column2": (lambda n: n % 3 == 2, 3),
+    "column3": (lambda n: n != 0 and n % 3 == 0, 3),
+}
+INSIDE_PAYOUTS = {"straight": 35, "split": 17, "street": 11, "corner": 8, "line": 5}
+
+
+def resolve_bet(bet_type: str, numbers, result: int, amount: int) -> tuple[bool, int]:
+    """Return ``(win, returned)`` for one spin.
+
+    ``returned`` is everything the table pays back on a win - the stake plus the
+    profit - so the account is settled with ``returned - amount`` on a win and
+    ``-amount`` on a loss. Keeping the whole table in one pure function means
+    every bet type is testable without driving the interactive views.
+    """
+    outside = OUTSIDE_PAYOUTS.get(bet_type)
+    if outside is not None:
+        wins, multiplier = outside
+        return (True, amount * multiplier) if wins(result) else (False, 0)
+
+    multiplier = INSIDE_PAYOUTS.get(bet_type)
+    if multiplier is not None and numbers and result in numbers:
+        return True, amount * multiplier
+
+    return False, 0
+
 ACCENT_GREEN = discord.Colour(0x57F287)
 ACCENT_RED = discord.Colour(0xED4245)
 ACCENT_GOLD = discord.Colour(0xFEE75C)
@@ -327,12 +366,13 @@ def build_spinning_view() -> discord.ui.LayoutView:
 #  RESULT VIEW
 # ============================
 
-def build_result_view(ctx, win: bool, result: int, color_str: str, bet_type: str, amount: int, payout: int) -> RouletteLayoutView:
+def build_result_view(ctx, win: bool, result: int, color_str: str, bet_type: str, amount: int, winnings: int) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
 
     title = "🎉 You Win!" if win else "💀 You Lose"
     result_line = f"**Result:** {result} ({color_str})"
-    outcome_line = f"You won **{payout}** coins." if win else f"You lost **{amount}** coins."
+    # `winnings` is the net profit, so the card matches what the wallet gained.
+    outcome_line = f"You won **{winnings}** coins." if win else f"You lost **{amount}** coins."
     bet_label = bet_type.replace("dozen", "Dozen ").replace("column", "Column ").title()
 
     class SpinAgainBtn(discord.ui.Button):
@@ -460,55 +500,28 @@ class Roulette(commands.Cog):
             color_str = "⚫ Black"
 
         # STEP 5 — PAYOUT LOGIC
-        win = False
-        payout = 0
-
-        if bet_type == "red" and result in RED_NUMBERS:
-            win, payout = True, amount * 2
-        elif bet_type == "black" and result in BLACK_NUMBERS:
-            win, payout = True, amount * 2
-        elif bet_type == "odd" and result != 0 and result % 2 == 1:
-            win, payout = True, amount * 2
-        elif bet_type == "even" and result != 0 and result % 2 == 0:
-            win, payout = True, amount * 2
-        elif bet_type == "low" and 1 <= result <= 18:
-            win, payout = True, amount * 2
-        elif bet_type == "high" and 19 <= result <= 36:
-            win, payout = True, amount * 2
-        elif bet_type == "dozen1" and 1 <= result <= 12:
-            win, payout = True, amount * 3
-        elif bet_type == "dozen2" and 13 <= result <= 24:
-            win, payout = True, amount * 3
-        elif bet_type == "dozen3" and 25 <= result <= 36:
-            win, payout = True, amount * 3
-        elif bet_type == "column1" and result % 3 == 1:
-            win, payout = True, amount * 3
-        elif bet_type == "column2" and result % 3 == 2:
-            win, payout = True, amount * 3
-        elif bet_type == "column3" and result % 3 == 0:
-            win, payout = True, amount * 3
-        elif bet_type == "straight" and numbers and result == numbers[0]:
-            win, payout = True, amount * 35
-        elif bet_type == "split" and numbers and result in numbers:
-            win, payout = True, amount * 17
-        elif bet_type == "street" and numbers and result in numbers:
-            win, payout = True, amount * 11
-        elif bet_type == "corner" and numbers and result in numbers:
-            win, payout = True, amount * 8
-        elif bet_type == "line" and numbers and result in numbers:
-            win, payout = True, amount * 5
+        win, returned = resolve_bet(bet_type, numbers, result, amount)
 
         # STEP 6 — UPDATE ECONOMY
-        if win:
-            user_data["balance"] += payout
-        else:
-            user_data["balance"] -= amount
+        # The stake is part of the result: a win pays the stake back with the
+        # profit, a loss costs the stake. `returned` is the total, so the account
+        # moves by the net only — crediting the total without ever debiting the
+        # stake paid every winner one extra stake. record_gamble writes the net
+        # to the ledger, so roulette also shows up in the dashboard's recent
+        # activity card and counts towards the gambling badges.
+        net = returned - amount if win else -amount
+        if net:
+            economy.record_gamble(
+                user_data, net,
+                "roulette_win" if net > 0 else "roulette_loss",
+                f"{bet_type} · {result} ({color_str})",
+            )
 
         user_data["last_roulette"] = time.time()
         await economy.save_user_economy_data(ctx.author.id)
 
         # STEP 7 — RESULT
-        view = build_result_view(ctx, win, result, color_str, bet_type, amount, payout)
+        view = build_result_view(ctx, win, result, color_str, bet_type, amount, net)
         await msg.edit(view=view)
         await view.wait()
 

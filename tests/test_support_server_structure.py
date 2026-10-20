@@ -30,6 +30,11 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertNotIn("event_voice", CHANNEL_SPECS)
         self.assertIn("giveaways", CHANNEL_SPECS)
         self.assertEqual(CHANNEL_SPECS["giveaways"][0], CHANNEL_SPECS["events"][0])
+        # Weekly lottery draws are announced by the economy cog, so the channel
+        # has to exist in the same Events category as the other event channels.
+        self.assertEqual(CHANNEL_SPECS["lottery"], ("Events", "lottery", "text", False))
+        self.assertEqual(CHANNEL_SPECS["lottery"][0], CHANNEL_SPECS["events"][0])
+        self.assertIn("/lottery", CHANNEL_TOPICS["lottery"])
         self.assertTrue(all(name.istitle() or name == "Logs" for name in {spec[0] for spec in CHANNEL_SPECS.values()}))
         category_sizes = {}
         for category, _name, _kind, _staff_only in CHANNEL_SPECS.values():
@@ -59,7 +64,7 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(staff_order, ["staff_rules", "staff_announcements", "staff_chat", "staff_cmds", "staff_voice"])
 
     def test_configured_bot_channels_are_read_only_for_members(self):
-        read_only_channels = ("welcome", "roles", "support_guide", "tickets", "giveaways", "voice_panel")
+        read_only_channels = ("welcome", "roles", "support_guide", "tickets", "giveaways", "lottery", "voice_panel")
         for key in read_only_channels:
             with self.subTest(channel=key):
                 overwrite = _everyone_channel_overwrite(key, staff_only=False)

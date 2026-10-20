@@ -23,9 +23,14 @@ class _RelayedAiohttpResponse:
     """Minimal aiohttp response contract consumed by discord.py."""
 
     def __init__(self, status: int, headers: dict, body: bytes):
+        from http import HTTPStatus
         from multidict import CIMultiDict
 
         self.status = status
+        try:
+            self.reason = HTTPStatus(status).phrase
+        except ValueError:
+            self.reason = "Unknown Status"
         self.headers = CIMultiDict(headers)
         self._body = body
 

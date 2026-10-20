@@ -53,6 +53,8 @@ CHANNEL_SPECS = {
     "partners": ("Partnerships", "partners", "text", False),
     "event_chat": ("Events", "event-chat", "text", False),
     "giveaways": ("Events", "giveaways", "text", False),
+    # Weekly lottery draws are announced here by the economy cog.
+    "lottery": ("Events", "lottery", "text", False),
     "help": ("Support", "community-help", "forum", False),
     "tickets": ("Support", "create-a-ticket", "text", False),
     "support_guide": ("Support", "support-guide", "text", False),
@@ -110,6 +112,7 @@ CHANNEL_TOPICS = {
     "partners": "Partner server advertisements and community recommendations.",
     "event_chat": "Talk about current and upcoming community events.",
     "giveaways": "Official Niko community giveaways, entries, and winner announcements.",
+    "lottery": "Every weekly lottery draw, its winner and the pot they took home. Play with /lottery.",
     "support_guide": "Helpful support links, ticket guidance, and privacy reminders.",
     "polls": "Official polls and voting. This channel is read-only for members.",
     "help": "Public peer-to-peer help forum. Open a private ticket for account or sensitive issues.",
@@ -410,7 +413,7 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
         view_channel=not staff_only,
         send_messages=not (key in {
             "welcome", "rules", "roles", "announcements", "status", "polls",
-            "events", "giveaways", "tickets", "support_guide", "voice_panel",
+            "events", "giveaways", "lottery", "tickets", "support_guide", "voice_panel",
             "staff_announcements", "staff_rules", "partnership_info", "partnership_ad",
         }),
         read_message_history=True,
