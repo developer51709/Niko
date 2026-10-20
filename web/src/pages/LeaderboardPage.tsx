@@ -6,8 +6,6 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { formatNumber } from "../utils/format";
 import { rankChanges, rankMap } from "../utils/leaderboard";
-import { syncedLabel } from "../utils/live";
-import { useSyncedClock } from "../hooks/useLiveSync";
 
 type Entry = {
   key: string;
@@ -31,10 +29,7 @@ export function LeaderboardPage() {
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [stale, setStale] = useState(false);
   const [moves, setMoves] = useState<Record<string, number>>({});
-  const [lastSync, setLastSync] = useState<number | null>(null);
-  const now = useSyncedClock(lastSync);
   const ranksRef = useRef<Map<string, number>>(new Map());
   const hasDataRef = useRef(false);
   const moveTimer = useRef<number | null>(null);
@@ -47,7 +42,6 @@ export function LeaderboardPage() {
     ranksRef.current = new Map();
     setLoading(true);
     setError("");
-    setStale(false);
     setMoves({});
 
     const load = async () => {
@@ -68,8 +62,6 @@ export function LeaderboardPage() {
         hasDataRef.current = true;
         setData(result);
         setError("");
-        setStale(false);
-        setLastSync(Date.now());
         setLoading(false);
         if (Object.keys(deltas).length) {
           setMoves(deltas);
@@ -79,11 +71,9 @@ export function LeaderboardPage() {
       } catch (reason) {
         if (!active) return;
         setLoading(false);
-        if (hasDataRef.current) {
-          // Keep the standings on screen and say we are reconnecting rather
-          // than replacing a good board with an error page.
-          setStale(true);
-        } else {
+        // A failed poll keeps the standings already on screen and lets the next
+        // one catch up; only a first load that never landed is an error.
+        if (!hasDataRef.current) {
           setError(reason instanceof Error ? reason.message : "The leaderboard could not be loaded.");
         }
       } finally {
@@ -121,9 +111,7 @@ export function LeaderboardPage() {
             <span className="panel-kicker">🏆 Global economy leaderboard</span>
             <h2>Rankings</h2>
             <p>{data ? `${formatNumber(data.total)} members ordered by net worth` : "The latest economy standings"}</p>
-            <span className="leaderboard-synced" role="status" aria-live="polite">{syncedLabel(lastSync, now)}</span>
           </div>
-          <span className={`leaderboard-live${stale ? " is-stale" : ""}`}><span className="status-dot" /> {stale ? "RECONNECTING" : "LIVE"}</span>
         </div>
         {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />Loading standings…</div> : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error}</div> : !data?.entries.length ? <div className="leaderboard-state">The board is quiet for now — check back after a few coins are earned.</div> : <div className="leaderboard-list">
           <AnimatePresence initial={false} mode="popLayout">

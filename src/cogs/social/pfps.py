@@ -12,6 +12,7 @@ from config.emojis import get_emoji
 from cogs.system.error_handler import is_owner
 from utils.image.extractor import extract_image_from_message, extract_images_from_message
 from utils import logging
+from utils.prefix_manager import resolve_prefix
 
 PFPS_FOLDER = "src/assets/pfps"
 
@@ -21,23 +22,9 @@ PFPS_FOLDER = "src/assets/pfps"
 # ------------------------------
 
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
-    raw = bot.command_prefix
-    if isinstance(raw, str):
-        return raw
-    if isinstance(raw, (list, tuple)):
-        return raw[0]
-    try:
-        msg = getattr(ctx_or_interaction, "message", None)
-        if msg is None and isinstance(ctx_or_interaction, discord.Interaction):
-            msg = ctx_or_interaction.message
-        if msg is None:
-            return "."
-        prefixes = raw(bot, msg)
-        if isinstance(prefixes, (list, tuple)) and prefixes:
-            return prefixes[0]
-    except Exception:
-        pass
-    return "."
+    """Return the primary prefix for this context, honouring a dynamic prefix."""
+    return await resolve_prefix(bot, ctx_or_interaction)
+
 
 # ------------------------------
 # Profile Picture Functions

@@ -29,6 +29,7 @@ from utils import logging as log
 from utils.paginator import PaginatedView, paginate
 from utils.ai.config import get_personality
 from utils.i18n import make_msg
+from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji
 from .seasons import season_open, season_open_key
 from utils.economy_jobs import (
@@ -78,23 +79,8 @@ msg = make_msg(MESSAGES)
 
 # ── Prefix resolver (used by tip text in cards) ──────────────────────────────
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
-    raw = bot.command_prefix
-    if isinstance(raw, str):
-        return raw
-    if isinstance(raw, (list, tuple)):
-        return raw[0]
-    try:
-        message = getattr(ctx_or_interaction, "message", None)
-        if message is None and isinstance(ctx_or_interaction, discord.Interaction):
-            message = ctx_or_interaction.message
-        if message is None:
-            return "."
-        prefixes = raw(bot, message)
-        if isinstance(prefixes, (list, tuple)) and prefixes:
-            return prefixes[0]
-    except Exception:
-        pass
-    return "."
+    """Return the primary prefix for this context, honouring a dynamic prefix."""
+    return await resolve_prefix(bot, ctx_or_interaction)
 
 
 # ── Default user shape ──────────────────────────────────────────────────────

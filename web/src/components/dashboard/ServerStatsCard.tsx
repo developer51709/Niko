@@ -4,11 +4,10 @@ import { Activity, BarChart3, Hash, Users } from "lucide-react";
 import Tabs, { type TabItem } from "../ui/tabs";
 import type { ServerStats } from "../../types";
 import { formatNumber } from "../../utils/format";
-import { syncedLabel } from "../../utils/live";
-import { useFreshSignal, useSyncedClock } from "../../hooks/useLiveSync";
+import { useFreshSignal } from "../../hooks/useLiveSync";
 import { useCountUp } from "../../hooks/useCountUp";
 
-type Props = { stats: ServerStats; liveAt?: number | null; liveStale?: boolean };
+type Props = { stats: ServerStats };
 const tabItems: TabItem[] = [
   { value: "messages", label: "Messages" },
   { value: "members", label: "Members" },
@@ -233,10 +232,9 @@ function LiveMetric({ icon, label, value, note, signed = false }: { icon: ReactN
   </div>;
 }
 
-export function ServerStatsCard({ stats, liveAt = null, liveStale = false }: Props) {
+export function ServerStatsCard({ stats }: Props) {
   const [tab, setTab] = useState("messages");
   const reduceMotion = useReducedMotion();
-  const now = useSyncedClock(liveAt);
   const totals = useMemo(() => ({
     messages: stats.activity.reduce((sum, day) => sum + day.messages, 0),
     joins: stats.activity.reduce((sum, day) => sum + day.joins, 0),
@@ -251,11 +249,7 @@ export function ServerStatsCard({ stats, liveAt = null, liveStale = false }: Pro
   const panel = tab === "members" ? <MemberChart stats={stats} /> : tab === "layout" ? <LayoutChart stats={stats} /> : <MessageChart stats={stats} />;
 
   return <section className="dash-panel server-stats-card" aria-label="Server statistics">
-    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. These trends begin when Niko’s activity tracking is enabled.</p></div>{liveAt ? <div className="server-stats-live">
-      <span className={`server-live${liveStale ? " is-stale" : ""}`}><span className="status-dot" />{liveStale ? "RECONNECTING" : "LIVE"}</span>
-      <span className="server-live-sync" role="status" aria-live="polite">{syncedLabel(liveAt, now)}</span>
-      <span className="panel-icon"><Activity /></span>
-    </div> : <span className="panel-icon"><Activity /></span>}</div>
+    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. These trends begin when Niko’s activity tracking is enabled.</p></div><span className="panel-icon"><Activity /></span></div>
     <div className="server-stat-metrics">
       <LiveMetric icon={<Users />} label="Members now" value={stats.member_count} note="Current server size" />
       <LiveMetric icon={<BarChart3 />} label="Messages" value={totals.messages} note="Across this period" />

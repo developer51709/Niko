@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { saveEconomyPrivacy } from "../../api";
-import { syncedLabel } from "../../utils/live";
-import { useSyncedClock } from "../../hooks/useLiveSync";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import { displayName } from "../../utils/format";
@@ -39,15 +37,6 @@ export function AnimatedValue({ value, children, className = "" }: { value: stri
   >{children}</motion.strong>;
 }
 
-/** Says a page refreshes itself, and how long ago the data on screen landed. */
-export function LiveChip({ liveAt, liveStale = false }: { liveAt: number | null; liveStale?: boolean }) {
-  const now = useSyncedClock(liveAt);
-  if (liveAt === null) return null;
-  return <span className={`live-chip${liveStale ? " is-stale" : ""}`} role="status" aria-live="polite">
-    <span className="status-dot" />{liveStale ? "RECONNECTING" : "LIVE"}<small>{syncedLabel(liveAt, now)}</small>
-  </span>;
-}
-
 export function StatCard({ label, value, note, accent = "" }: { label: string; value: string; note: string; accent?: string }) {
   return <div className={`dash-stat ${accent}`}><span>{label}</span><AnimatedValue value={value}>{value}</AnimatedValue><small>{note}</small></div>;
 }
@@ -60,7 +49,7 @@ export function CoinLabel() {
   return <span className="economy-coin">coins</span>;
 }
 
-export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken, liveAt = null, liveStale = false }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string; liveAt?: number | null; liveStale?: boolean }) {
+export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
   // A poll can land between the switch flipping and the save finishing. While a
@@ -91,10 +80,7 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
          <UserAvatar user={user} className="profile-avatar" />
         <div><span className="panel-kicker">Signed in as</span><h3>{displayName(user)}</h3><p>Personal economy profile</p></div>
       </div>
-      <div className="overview-intro-actions">
-        <LiveChip liveAt={liveAt} liveStale={liveStale} />
-        <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
-      </div>
+      <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
     </div>
     <div className="dash-stats overview-stats">
       <StatCard label="Net worth" value={formatNumber(overview?.net_worth)} note="Across your Niko profile" accent="accent-orange" />
@@ -170,11 +156,10 @@ export function RankList({ rows }: { rows: LevelRow[] }) {
   </div>;
 }
 
-export function OverviewView({ overview, liveAt = null, liveStale = false }: { overview: GuildOverview; liveAt?: number | null; liveStale?: boolean }) {
+export function OverviewView({ overview }: { overview: GuildOverview }) {
   return <>
     <div className="guild-welcome">
       <div><span className="welcome-mark"><Icon name="grid" /></span><div><span className="panel-kicker">Server pulse</span><strong>Here’s what needs your attention.</strong></div></div>
-      <span className={`welcome-time${liveStale ? " is-stale" : ""}`}>{liveStale ? "RECONNECTING" : "LIVE SIGNALS"} <span className="status-dot" /></span>
     </div>
     <DashHeading eyebrow="Overview" title="A quick read on your room." text="The important signals, without making you hunt for them." />
     <div className="dash-stats guild-overview-stats">
@@ -182,7 +167,7 @@ export function OverviewView({ overview, liveAt = null, liveStale = false }: { o
       <StatCard label="Automod" value={overview.moderation.automod_active ? "Active" : "Quiet"} note="Protection status" accent="accent-green" />
       <StatCard label="Level leaders" value={formatNumber(overview.leveling.top.length)} note="Members with recorded XP" accent="accent-violet" />
     </div>
-    <ServerStatsCard stats={overview.server} liveAt={liveAt} liveStale={liveStale} />
+    <ServerStatsCard stats={overview.server} />
     <div className="dash-columns overview-columns">
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Community energy</span><h3>Top XP</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={overview.leveling.top} /></section>
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span></div><div className="server-controls-body"><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p><span className="text-link">Open server settings <Icon name="arrow" /></span></div></section>

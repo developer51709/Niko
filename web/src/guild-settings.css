@@ -72,7 +72,7 @@
 .dash-sidebar .brand-mark { border-radius: 9px; background: var(--accent); }
 .side-rail-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 63px; }
 .side-rail-heading .side-label { margin: 0 10px 11px; }
-.rail-status, .connection-chip, .welcome-time { display: inline-flex; align-items: center; gap: 6px; color: var(--sage); text-transform: uppercase; letter-spacing: .09em; font: 9px "Space Mono", monospace; }
+.rail-status, .connection-chip { display: inline-flex; align-items: center; gap: 6px; color: var(--sage); text-transform: uppercase; letter-spacing: .09em; font: 9px "Space Mono", monospace; }
 .dash-nav { gap: 4px; }
 .dash-nav button { min-height: 46px; padding: 11px 13px; border: 1px solid transparent; border-radius: 9px; font-size: 12px; transition: transform .18s ease, opacity .18s ease; }
 .dash-nav button:hover { background: var(--nav-active); border-color: transparent; border-left-color: var(--accent); transform: translateX(2px); }
@@ -130,7 +130,6 @@
 .welcome-mark { width: 39px; height: 39px; display: grid; place-items: center; color: var(--accent); background: var(--surface); border-radius: 10px; }
 .guild-welcome .panel-kicker { color: var(--surface); opacity: .78; }
 .guild-welcome strong { display: block; margin-top: 3px; font-size: 13px; letter-spacing: -.02em; }
-.guild-welcome .welcome-time { color: var(--surface); opacity: .78; }
 .guild-welcome .status-dot { background: var(--surface); }
 .dash-stats { gap: 12px; }
 .dash-stat { min-height: 128px; padding: 19px; background: rgba(255, 255, 255, .035); border-color: var(--line); border-top: 3px solid var(--accent); border-radius: 14px; box-shadow: var(--shadow-soft); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); transition: transform .18s ease, opacity .18s ease; }
@@ -371,10 +370,7 @@
   box-shadow: inset 0 1px rgba(255, 255, 255, .045), var(--shadow-soft);
 }
 .dashboard-layout .guild-welcome .panel-kicker { color: var(--accent); opacity: 1; }
-.dashboard-layout .guild-welcome .welcome-time { color: var(--sage); opacity: 1; }
 .dashboard-layout .guild-welcome .status-dot { background: var(--sage); }
-.dashboard-layout .guild-welcome .welcome-time.is-stale { color: #e8b48f; }
-.dashboard-layout .guild-welcome .welcome-time.is-stale .status-dot { background: #e8b48f; }
 .dashboard-layout .guild-welcome .welcome-mark {
   color: var(--accent-dark);
   background: rgba(255, 255, 255, .07);

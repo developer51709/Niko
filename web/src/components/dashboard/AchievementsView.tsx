@@ -1,4 +1,4 @@
-import { AnimatedValue, CoinLabel, DashHeading, LiveChip } from "./DashboardViews";
+import { AnimatedValue, CoinLabel, DashHeading } from "./DashboardViews";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import type { AchievementEntry, AchievementsResponse, AchievementSeason } from "../../types";
@@ -55,7 +55,7 @@ function AchievementCard({ entry }: { entry: AchievementEntry }) {
   </article>;
 }
 
-export function AchievementsView({ achievements, liveAt = null, liveStale = false }: { achievements: AchievementsResponse; liveAt?: number | null; liveStale?: boolean }) {
+export function AchievementsView({ achievements }: { achievements: AchievementsResponse }) {
   const locked = achievements.achievements.filter((entry) => !entry.unlocked);
   const unlocked = achievements.achievements.filter((entry) => entry.unlocked);
   const overallPercent = achievements.total ? Math.round((achievements.unlocked / achievements.total) * 100) : 0;
@@ -73,7 +73,6 @@ export function AchievementsView({ achievements, liveAt = null, liveStale = fals
           <small>{overallPercent}% of every badge unlocked</small>
         </div>
         <div className="achievement-summary-chips">
-          <LiveChip liveAt={liveAt} liveStale={liveStale} />
           <span className="achievement-chip"><Icon name="check" />Earned from badges <AnimatedValue value={achievements.coins_earned}>{formatNumber(achievements.coins_earned)} <CoinLabel /></AnimatedValue></span>
           <span className="achievement-chip"><Icon name="lock" />Still on the table <AnimatedValue value={achievements.coins_available}>{formatNumber(achievements.coins_available)} <CoinLabel /></AnimatedValue></span>
         </div>
