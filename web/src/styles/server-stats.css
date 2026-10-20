@@ -5,6 +5,20 @@
 .dashboard-layout .server-stats-heading p { margin: 5px 0 0; color: var(--dim); font-size: 10px; }
 .dashboard-layout .server-stats-heading .panel-icon { color: var(--accent-dark); }
 .dashboard-layout .server-stats-heading .panel-icon .icon { width: 16px; height: 16px; }
+/* Live status for the analytics card: the badge says the numbers are current,
+   the label says how current. */
+.dashboard-layout .server-stats-live { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; }
+.dashboard-layout .server-live { display: inline-flex; align-items: center; gap: 5px; color: var(--sage); font: 8px "Space Mono", monospace; letter-spacing: .09em; }
+.dashboard-layout .server-live .status-dot { width: 6px; height: 6px; background: var(--sage); animation: server-live-pulse 2.8s ease-in-out infinite; }
+.dashboard-layout .server-live.is-stale { color: #e8b48f; }
+.dashboard-layout .server-live.is-stale .status-dot { background: #e8b48f; animation: none; }
+.dashboard-layout .server-live-sync { color: var(--dim); font: 8px "Space Mono", monospace; letter-spacing: .04em; white-space: nowrap; }
+@keyframes server-live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.82); } }
+.dashboard-layout .server-stat-metrics > div { transition: border-color .35s ease, box-shadow .35s ease; }
+.dashboard-layout .server-stat-metrics > div.is-fresh { border-color: rgba(139, 213, 177, .34); box-shadow: 0 0 0 1px rgba(139, 213, 177, .12), 0 8px 20px rgba(0, 0, 0, .18); }
+.dashboard-layout .server-live-panel { transition: opacity .3s ease; }
+.dashboard-layout .server-live-panel.is-fresh .server-chart-line { filter: brightness(1.45); }
+.dashboard-layout .server-live-panel.is-fresh .server-member-bars i { filter: brightness(1.18); }
 .dashboard-layout .server-stat-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 17px; }
 .dashboard-layout .server-stat-metrics > div { min-width: 0; display: grid; grid-template-columns: 15px 1fr; align-items: center; gap: 3px 6px; padding: 10px 8px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 5px; }
 .dashboard-layout .server-stat-metrics svg { width: 13px; height: 13px; color: var(--accent-dark); }
@@ -42,7 +56,7 @@
 .dashboard-layout .server-line-chart.is-interactive { cursor: crosshair; touch-action: pan-y; }
 .dashboard-layout .server-chart-gridline { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 3 4; }
 .dashboard-layout .server-chart-axis-label { fill: var(--dim); font: 8px "Space Mono", monospace; }
-.dashboard-layout .server-chart-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dashboard-layout .server-chart-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: filter .45s ease; }
 .dashboard-layout .server-chart-guide { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 3; opacity: .45; }
 .dashboard-layout .server-chart-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
 .dashboard-layout .server-chart-point.is-selected { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
@@ -79,7 +93,14 @@
 .dashboard-layout .server-layout-track .layout-channels { background: var(--sage); }
 .dashboard-layout .server-layout-track .layout-roles { background: #b58a68; }
 .dashboard-layout .server-stats-footnote { margin-top: 11px; color: var(--dim); font-size: 9px; }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-layout .server-live .status-dot { animation: none; }
+  .dashboard-layout .server-stat-metrics > div,
+  .dashboard-layout .server-live-panel,
+  .dashboard-layout .server-chart-line { transition: none; }
+}
 @media (max-width: 700px) {
+  .dashboard-layout .server-stats-live { justify-content: flex-start; }
   .dashboard-layout .server-stat-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .dashboard-layout .server-stat-metrics > div { grid-template-columns: 1fr; padding: 8px 6px; }
   .dashboard-layout .server-stat-metrics svg { display: none; }

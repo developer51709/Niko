@@ -139,7 +139,9 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
         self.assertEqual(payload["page"], 2)
         self.assertEqual(payload["total"], 45)
         self.assertEqual(payload["pages"], 3)
-        self.assertEqual(payload["entries"][0], {
+        hidden_entry = payload["entries"][0]
+        self.assertEqual(hidden_entry, {
+            "key": hidden_entry["key"],
             "rank": 21,
             "net_worth": 900,
             "private": True,
@@ -147,6 +149,11 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
             "display_name": None,
             "avatar_url": None,
         })
+        # The row key exists so the browser can animate a moving row, but it
+        # must never be the Discord id it was derived from.
+        self.assertIsInstance(hidden_entry["key"], str)
+        self.assertNotEqual(hidden_entry["key"], "123")
+        self.assertNotIn("123", hidden_entry["key"])
         self.assertEqual(payload["entries"][1]["rank"], 22)
 
     def test_private_identity_is_returned_to_official_staff_and_mutual_guild_members(self):

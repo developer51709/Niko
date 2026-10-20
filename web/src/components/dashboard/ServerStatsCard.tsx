@@ -1,10 +1,14 @@
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useReducedMotion } from "motion/react";
 import { Activity, BarChart3, Hash, Users } from "lucide-react";
 import Tabs, { type TabItem } from "../ui/tabs";
 import type { ServerStats } from "../../types";
 import { formatNumber } from "../../utils/format";
+import { syncedLabel } from "../../utils/live";
+import { useFreshSignal, useSyncedClock } from "../../hooks/useLiveSync";
+import { useCountUp } from "../../hooks/useCountUp";
 
-type Props = { stats: ServerStats };
+type Props = { stats: ServerStats; liveAt?: number | null; liveStale?: boolean };
 const tabItems: TabItem[] = [
   { value: "messages", label: "Messages" },
   { value: "members", label: "Members" },
@@ -214,24 +218,53 @@ function LayoutChart({ stats }: Props) {
   </div>;
 }
 
-export function ServerStatsCard({ stats }: Props) {
+/**
+ * One metric tile. A live refresh counts the number up to its new value and
+ * breathes the tile once, so movement is felt rather than just repainted.
+ */
+function LiveMetric({ icon, label, value, note, signed = false }: { icon: ReactNode; label: string; value: number; note: string; signed?: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const display = useCountUp(value, !reduceMotion);
+  const fresh = useFreshSignal(String(value), 1_400) && !reduceMotion;
+  return <div className={fresh ? "is-fresh" : undefined}>
+    {icon}<span>{label}</span>
+    <strong>{signed && display > 0 ? "+" : ""}{formatNumber(display)}</strong>
+    <small>{note}</small>
+  </div>;
+}
+
+export function ServerStatsCard({ stats, liveAt = null, liveStale = false }: Props) {
   const [tab, setTab] = useState("messages");
+  const reduceMotion = useReducedMotion();
+  const now = useSyncedClock(liveAt);
   const totals = useMemo(() => ({
     messages: stats.activity.reduce((sum, day) => sum + day.messages, 0),
     joins: stats.activity.reduce((sum, day) => sum + day.joins, 0),
     leaves: stats.activity.reduce((sum, day) => sum + day.leaves, 0),
   }), [stats.activity]);
+  const net = totals.joins - totals.leaves;
+  // Only a refresh that actually moved the numbers brightens the chart.
+  const chartFresh = useFreshSignal(
+    `${totals.messages}|${totals.joins}|${totals.leaves}|${stats.member_count}|${stats.channel_count}|${stats.role_count}`,
+    1_200,
+  ) && !reduceMotion;
   const panel = tab === "members" ? <MemberChart stats={stats} /> : tab === "layout" ? <LayoutChart stats={stats} /> : <MessageChart stats={stats} />;
 
   return <section className="dash-panel server-stats-card" aria-label="Server statistics">
-    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. These trends begin when Niko’s activity tracking is enabled.</p></div><span className="panel-icon"><Activity /></span></div>
+    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. These trends begin when Niko’s activity tracking is enabled.</p></div>{liveAt ? <div className="server-stats-live">
+      <span className={`server-live${liveStale ? " is-stale" : ""}`}><span className="status-dot" />{liveStale ? "RECONNECTING" : "LIVE"}</span>
+      <span className="server-live-sync" role="status" aria-live="polite">{syncedLabel(liveAt, now)}</span>
+      <span className="panel-icon"><Activity /></span>
+    </div> : <span className="panel-icon"><Activity /></span>}</div>
     <div className="server-stat-metrics">
-      <div><Users /><span>Members now</span><strong>{formatNumber(stats.member_count)}</strong><small>Current server size</small></div>
-      <div><BarChart3 /><span>Messages</span><strong>{formatNumber(totals.messages)}</strong><small>Across this period</small></div>
-      <div><Hash /><span>Joined</span><strong>{formatNumber(totals.joins)}</strong><small>Across this period</small></div>
-      <div><Users /><span>Net members</span><strong>{totals.joins - totals.leaves > 0 ? "+" : ""}{formatNumber(totals.joins - totals.leaves)}</strong><small>Joined minus left</small></div>
+      <LiveMetric icon={<Users />} label="Members now" value={stats.member_count} note="Current server size" />
+      <LiveMetric icon={<BarChart3 />} label="Messages" value={totals.messages} note="Across this period" />
+      <LiveMetric icon={<Hash />} label="Joined" value={totals.joins} note="Across this period" />
+      <LiveMetric icon={<Users />} label="Net members" value={net} note="Joined minus left" signed />
     </div>
-    <Tabs items={tabItems} value={tab} onValueChange={setTab} label="Server statistics" renderPanel={() => panel} />
+    <div className={chartFresh ? "server-live-panel is-fresh" : "server-live-panel"}>
+      <Tabs items={tabItems} value={tab} onValueChange={setTab} label="Server statistics" renderPanel={() => panel} />
+    </div>
     <div className="server-stats-footnote">Counts are daily aggregates; no message content or member identities are shown. Days before tracking began may have no recorded activity.</div>
   </section>;
 }

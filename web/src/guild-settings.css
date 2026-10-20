@@ -373,6 +373,8 @@
 .dashboard-layout .guild-welcome .panel-kicker { color: var(--accent); opacity: 1; }
 .dashboard-layout .guild-welcome .welcome-time { color: var(--sage); opacity: 1; }
 .dashboard-layout .guild-welcome .status-dot { background: var(--sage); }
+.dashboard-layout .guild-welcome .welcome-time.is-stale { color: #e8b48f; }
+.dashboard-layout .guild-welcome .welcome-time.is-stale .status-dot { background: #e8b48f; }
 .dashboard-layout .guild-welcome .welcome-mark {
   color: var(--accent-dark);
   background: rgba(255, 255, 255, .07);
