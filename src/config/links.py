@@ -19,6 +19,11 @@ TOS = f"{WEBSITE}/terms"
 PRIVACY = f"{WEBSITE}/privacy"
 COMMUNITY = f"{WEBSITE}/community"
 DOCS = f"{WEBSITE}/docs"
+DATA_REMOVAL = f"{WEBSITE}/data-removal"
+
+# Direct contact for formal legal requests. The owner's public site lists the
+# contact details; Niko never publishes a private address on the bot itself.
+OWNER_CONTACT = "https://sorenthedev.indevs.in"
 
 # top.gg listing. The bot ID defaults to the application ID the rest of the
 # deployment uses; set TOPGG_BOT_ID when the listing belongs to a different app.

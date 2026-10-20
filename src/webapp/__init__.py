@@ -11,6 +11,8 @@ from . import (  # noqa: E402,F401
     dashboard_routes,
     notifier_routes,
     donation_routes,
+    premium_routes,
+    privacy_routes,
     discord_text_routes,
     transcript_routes,
     card_routes,

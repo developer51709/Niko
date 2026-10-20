@@ -2,6 +2,7 @@
 
 import binascii
 from utils.economy_jobs import get_job
+from utils.premium import get_subscription, subscription_view
 
 from . import server as _server
 
@@ -135,12 +136,22 @@ def api_guilds():
     The list is read on the bot's event loop over its REST session, so it
     egresses with the bot instead of this host's own IP. Answering ``[]`` when
     that read failed is what made /dashboard/servers look empty while Webshare
-    failover was active, so a failure is reported as one.
+    failover was active, so a failure is reported as one - and the dashboard
+    keeps rendering around it instead of treating the whole workspace as down.
     """
     token = session.get("access_token", "")
     try:
         all_guilds = member_guilds(token)
     except Exception as exc:
+        if getattr(exc, "status", 0) == 401:
+            # Discord refused the session token and it could not be refreshed;
+            # the session has been cleared, so ask the browser to sign in again
+            # instead of blaming Discord for an outage.
+            app.logger.warning("Member guild list rejected the session token: %s", exc)
+            return jsonify({
+                "error": "Your Discord session expired. Sign in again to load your servers.",
+                "login_url": "/auth/login",
+            }), 401
         app.logger.warning("Member guild list unavailable: %s", exc)
         return jsonify({
             "error": "Your server list could not be loaded from Discord. Try again in a moment."
@@ -279,11 +290,24 @@ def api_guild_overview(guild_id):
 def api_guild_levels(guild_id):
     return jsonify(_get_levels(guild_id))
 
+def _guild_premium_view(guild_id) -> dict:
+    """Premium entitlement for one guild, never raising into a config response."""
+    fallback = {"active": False, "status": "expired"}
+    try:
+        if _discord_bot is None or not getattr(_discord_bot, "cxn", None):
+            return fallback
+        row = run_on_bot_loop(get_subscription(_discord_bot.cxn, int(guild_id)))
+        return subscription_view(row) or fallback
+    except Exception:
+        return fallback
+
+
 @app.route("/api/guild/<guild_id>/config")
 @require_auth
 @require_guild_access
 def api_guild_config(guild_id):
     modcfg  = get_runtime_moderation_config(guild_id)
+    premium_cfg = _guild_premium_view(guild_id)
     aicfg   = get_ai_config(int(guild_id))
     level_cfg = get_runtime_level_config(guild_id)
 
@@ -297,6 +321,7 @@ def api_guild_config(guild_id):
         "ai":         aicfg,
         "leveling":   level_cfg,
         "server":     server_cfg,
+        "premium":    premium_cfg,
     })
 
 @app.route("/api/guild/<guild_id>/tickets")
@@ -455,6 +480,16 @@ def api_guild_resources(guild_id):
 @require_csrf
 def api_save_automod(guild_id):
     body = request.get_json(silent=True) or {}
+    requested_nsfw = bool((body.get("automod") or {}).get("nsfw_image_filter"))
+    current_nsfw = bool((get_runtime_moderation_config(guild_id).get("automod") or {}).get("nsfw_image_filter"))
+    # Only a switch from off to on is a premium action; saving another setting
+    # while the filter is already enabled must keep working after it lapses.
+    if requested_nsfw and not current_nsfw and not _guild_premium_view(guild_id).get("active"):
+        return jsonify({
+            "error": "AI image moderation is a Niko Premium perk. Upgrade this server to turn it on.",
+            "premium_required": True,
+            "upgrade_url": f"/billing?guild={guild_id}",
+        }), 402
     moderation = _discord_bot.get_cog("ModerationUtils") if _discord_bot is not None else None
     if moderation is not None:
         guild_config = moderation.get_guild_config(int(guild_id))

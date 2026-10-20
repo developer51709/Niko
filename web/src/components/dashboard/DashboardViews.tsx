@@ -49,7 +49,7 @@ export function CoinLabel() {
   return <span className="economy-coin">coins</span>;
 }
 
-export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string }) {
+export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken, guildsUnavailable = "" }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string; guildsUnavailable?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
   // A poll can land between the switch flipping and the save finishing. While a
@@ -106,7 +106,7 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
         <div className="panel-heading"><div><span className="panel-kicker">Quick access</span><h3>Your servers</h3></div><span className="panel-icon"><Icon name="users" /></span></div>
         <div className="mini-server-list">
           {installed.slice(0, 4).map((guild) => <button key={guild.id} onClick={() => onManage(guild)}><GuildIcon guild={guild} /><span>{guild.name}</span><Icon name="arrow" /></button>)}
-          {!installed.length && <p className="empty-state compact">Add Niko to a server to start managing it.</p>}
+          {!installed.length && <p className="empty-state compact">{guildsUnavailable ? "Your server list could not be loaded from Discord. Open Servers to retry." : "Add Niko to a server to start managing it."}</p>}
         </div>
         <button className="text-link overview-link" onClick={onServers}>View all servers <Icon name="arrow" /></button>
       </section>
@@ -124,9 +124,25 @@ function ServerCard({ guild, onManage }: { guild: Guild; onManage: (guild: Guild
   </article>;
 }
 
-export function ServersView({ guilds, onManage }: { guilds: Guild[]; onManage: (guild: Guild) => void }) {
+export function ServersView({ guilds, onManage, unavailable = "", onRetry, retrying = false, loginUrl = "" }: { guilds: Guild[]; onManage: (guild: Guild) => void; unavailable?: string; onRetry?: () => void; retrying?: boolean; loginUrl?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const available = guilds.filter((guild) => guild.installed === false);
+  // A failed read is reported as such: the empty grid below would otherwise
+  // read as "you have no servers" when Discord simply did not answer.
+  if (unavailable) {
+    return <>
+      <DashHeading eyebrow="Servers" title="Choose where to work." text="Manage servers with Niko already installed, or add Niko to another server you can administer." />
+      <section className="dash-panel server-unavailable" role="alert">
+        <div className="panel-heading"><div><span className="panel-kicker">Server list</span><h3>Discord didn’t return your servers</h3></div><span className="panel-icon"><Icon name="shield" /></span></div>
+        <div className="server-unavailable-body">
+          <p>{unavailable}</p>
+          {loginUrl
+            ? <a className="button button-primary button-small" href={loginUrl}>Sign in again <Icon name="arrow" /></a>
+            : onRetry && <button className="button button-muted button-small" onClick={onRetry} disabled={retrying}>{retrying ? "Retrying…" : "Try again"} <Icon name="arrow" /></button>}
+        </div>
+      </section>
+    </>;
+  }
   return <>
     <DashHeading eyebrow="Servers" title="Choose where to work." text="Manage servers with Niko already installed, or add Niko to another server you can administer." />
     <div className="server-summary">
