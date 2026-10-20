@@ -9,6 +9,7 @@ export function Footer() {
       <div>
         <a href="/privacy" onClick={(e) => { e.preventDefault(); navigate("/privacy"); }}>Privacy</a>
         <a href="/terms" onClick={(e) => { e.preventDefault(); navigate("/terms"); }}>Terms</a>
+        <a href="/data-removal" onClick={(e) => { e.preventDefault(); navigate("/data-removal"); }}>Data removal</a>
         <a href="/community" onClick={(e) => { e.preventDefault(); navigate("/community"); }}>Community Policy</a>
         <a href="/support" onClick={(e) => { e.preventDefault(); navigate("/support"); }}>Support</a>
       </div>

@@ -206,6 +206,41 @@ export type BlacklistAppeal = {
   staff_note?: string | null;
 };
 
+export type DataRemovalRequest = {
+  id: string;
+  scope: "account" | "server";
+  guild_id?: string | null;
+  guild_name?: string | null;
+  reason: string;
+  status: "pending" | "completed" | "denied" | "withdrawn";
+  created_at: number;
+  updated_at: number;
+  review_note?: string | null;
+  completed_at?: number | null;
+  reviewed_by?: string | null;
+};
+
+export type DataRemovalServer = {
+  id: string;
+  name: string;
+  icon_url?: string | null;
+  bot_present: boolean;
+  removed_at?: number | null;
+  pending: boolean;
+};
+
+export type DataRemovalOverview = {
+  requests: DataRemovalRequest[];
+  account: { pending: boolean };
+  servers: DataRemovalServer[];
+  confirmations: { account: string; min_reason_length: number };
+};
+
+export type StaffDataRemovalRequest = DataRemovalRequest & {
+  user_id: string;
+  result?: { removed?: string[]; anonymized?: string[]; preserved?: string[]; errors?: string[] } | null;
+};
+
 export type User = {
   id: string;
   username?: string;
@@ -447,6 +482,52 @@ export type ServerConfig = {
   global_profile?: GlobalProfile;
 };
 
+export type PremiumSubscription = {
+  guild_id?: string;
+  plan?: string;
+  status?: string;
+  active: boolean;
+  price_cents?: number;
+  currency?: string;
+  started_at?: string | null;
+  expires_at?: string | null;
+  days_remaining?: number;
+  source?: string;
+  gifted_by?: string | null;
+  gifted_by_name?: string | null;
+  auto_renew?: boolean;
+};
+
+export type StaffBillingPayment = {
+  order_id: string;
+  track_id: string | null;
+  guild_id: string;
+  guild_name?: string | null;
+  payer_id: string;
+  payer_name?: string | null;
+  kind: string;
+  months: number;
+  amount_cents: number;
+  amount_label: string;
+  currency: string;
+  pay_currency?: string | null;
+  status: string;
+  paid: boolean;
+  issue_status?: string | null;
+  issue_note?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  created_at?: string | null;
+  paid_at?: string | null;
+};
+
+export type StaffBillingResponse = {
+  payments: StaffBillingPayment[];
+  subscriptions: (PremiumSubscription & { guild_name?: string | null; owner_id?: string | null })[];
+  totals: { paid_count: number; paid_cents: number; paid_label: string; active_count: number; expiring_soon: number };
+  gateway: { configured: boolean; model: string };
+};
+
 export type GuildConfig = {
   moderation: Record<string, any>;
   server: ServerConfig;
@@ -465,6 +546,7 @@ export type GuildConfig = {
     level_up_channel?: string | null;
     level_up_message?: string;
   };
+  premium?: PremiumSubscription;
 };
 
 export type GuildResources = {

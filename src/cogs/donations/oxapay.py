@@ -6,6 +6,7 @@ Docs: https://oxapay.com/api
 import aiohttp
 
 OXAPAY_BASE = "https://api.oxapay.com"
+OXAPAY_V1_BASE = "https://api.oxapay.com/v1"
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
 
 
@@ -63,6 +64,76 @@ class OxaPayClient:
             "success": False,
             "message": data.get("message", f"OxaPay error {data.get('result')}"),
         }
+
+    async def create_white_label(
+        self,
+        *,
+        amount: float,
+        pay_currency: str,
+        description: str,
+        order_id: str,
+        callback_url: str | None = None,
+        currency: str = "USD",
+        network: str | None = None,
+        lifetime: int = 60,
+        fee_paid_by_payer: int = 1,
+        under_paid_coverage: int = 10,
+        email: str | None = None,
+    ) -> dict:
+        """Create a white-label payment and return its raw address details.
+
+        Unlike :meth:`create_invoice` this never produces a hosted OxaPay page:
+        the caller renders the address, amount, and QR code in its own UI.
+
+        Returns:
+            {"success": True, "trackId": str, "data": dict}
+            {"success": False, "message": str}
+        """
+        payload: dict = {
+            "amount": float(amount),
+            "currency": currency,
+            "pay_currency": pay_currency.upper(),
+            "lifetime": max(15, min(2880, int(lifetime))),
+            "fee_paid_by_payer": 1 if fee_paid_by_payer else 0,
+            "under_paid_coverage": max(0, min(60, int(under_paid_coverage))),
+            "order_id": order_id,
+            "description": description,
+        }
+        if network:
+            payload["network"] = network
+        if callback_url:
+            payload["callback_url"] = callback_url
+        if email:
+            payload["email"] = email
+
+        try:
+            async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                async with session.post(
+                    f"{OXAPAY_V1_BASE}/payment/white-label",
+                    json=payload,
+                    headers={
+                        "merchant_api_key": self.merchant_key,
+                        "Content-Type": "application/json",
+                    },
+                ) as resp:
+                    data = await resp.json(content_type=None)
+        except Exception as exc:
+            return {"success": False, "message": f"Network error: {exc}"}
+
+        details = data.get("data") if isinstance(data, dict) else None
+        if isinstance(details, dict) and details.get("track_id"):
+            return {
+                "success": True,
+                "trackId": str(details.get("track_id")),
+                "data": details,
+            }
+        message = ""
+        if isinstance(data, dict):
+            error = data.get("error")
+            if isinstance(error, dict) and error.get("message"):
+                message = str(error["message"])
+            message = message or str(data.get("message") or "")
+        return {"success": False, "message": message or "OxaPay could not start this payment."}
 
     async def check_payment(self, track_id: str) -> dict:
         """

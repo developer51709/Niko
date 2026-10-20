@@ -424,6 +424,102 @@ async def _create_tables(bot):
     """)
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS premium_subscriptions (
+            guild_id        INTEGER PRIMARY KEY,
+            plan            TEXT NOT NULL DEFAULT 'premium_monthly',
+            status          TEXT NOT NULL DEFAULT 'active',
+            price_cents     INTEGER NOT NULL DEFAULT 1500,
+            currency        TEXT NOT NULL DEFAULT 'USD',
+            started_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at      TEXT NOT NULL,
+            auto_renew      INTEGER NOT NULL DEFAULT 1,
+            source          TEXT NOT NULL DEFAULT 'purchase',
+            gifted_by       INTEGER,
+            gifted_by_name  TEXT,
+            owner_id        INTEGER,
+            reminder_sent_at TEXT,
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS premium_payments (
+            order_id       TEXT PRIMARY KEY,
+            track_id       TEXT UNIQUE,
+            guild_id       INTEGER NOT NULL,
+            payer_id       INTEGER NOT NULL,
+            kind           TEXT NOT NULL DEFAULT 'purchase',
+            months         INTEGER NOT NULL DEFAULT 1,
+            amount_cents   INTEGER NOT NULL DEFAULT 1500,
+            currency       TEXT NOT NULL DEFAULT 'USD',
+            pay_currency   TEXT,
+            address        TEXT,
+            pay_amount     REAL,
+            qr_code        TEXT,
+            status         TEXT NOT NULL DEFAULT 'Waiting',
+            issue_status   TEXT,
+            issue_note     TEXT,
+            resolved_by    INTEGER,
+            resolved_at    TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            paid_at        TEXT,
+            expires_at     INTEGER
+        )
+    """)
+
+    # ── Guild ownership history ─────────────────────────────────────────────
+    # A server owner must still be able to request deletion of their server's
+    # data after Niko has been removed. The row keeps the owner recorded at the
+    # moment the bot left, so ownership can be verified without the bot being
+    # present. `removed_at` is cleared when the bot rejoins the server.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_ownership (
+            guild_id        INTEGER PRIMARY KEY,
+            owner_id        INTEGER NOT NULL,
+            guild_name      TEXT,
+            icon_url        TEXT,
+            first_seen_at   REAL NOT NULL,
+            last_checked_at REAL NOT NULL,
+            removed_at      REAL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_guild_ownership_owner "
+        "ON guild_ownership (owner_id, removed_at)"
+    )
+
+    # ── Data removal requests ───────────────────────────────────────────────
+    # Submissions are reviewed before any deletion runs. Moderation and safety
+    # records are never deleted by this queue; see utils/data_removal.py.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS data_removal_requests (
+            request_id       TEXT PRIMARY KEY,
+            user_id          INTEGER NOT NULL,
+            scope            TEXT NOT NULL,
+            guild_id         INTEGER,
+            guild_name       TEXT,
+            reason           TEXT NOT NULL DEFAULT '',
+            status           TEXT NOT NULL DEFAULT 'pending',
+            ownership_note   TEXT,
+            created_at       REAL NOT NULL,
+            updated_at       REAL NOT NULL,
+            reviewed_by      INTEGER,
+            reviewed_at      REAL,
+            review_note      TEXT,
+            completed_at     REAL,
+            result           TEXT
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_data_removal_user "
+        "ON data_removal_requests (user_id, created_at)"
+    )
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_data_removal_status "
+        "ON data_removal_requests (status, created_at)"
+    )
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS guild_profiles (
             guild_id       INTEGER PRIMARY KEY,
             display_name   TEXT,

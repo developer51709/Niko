@@ -18,10 +18,13 @@ import type {
   PublicStaffApplication,
   StaffGuild,
   StaffBlacklist,
+  StaffBillingResponse,
   LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
   BlacklistAppealStatus,
+  DataRemovalOverview,
+  StaffDataRemovalRequest,
   StandbyFailoverStatus,
   StandbyInstance,
   ProxyWorkersResponse,
@@ -98,6 +101,14 @@ export const lockdownStaffGuild = (guildId: string, step: string, csrfToken?: st
 export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken?: string) => api<{ ok: boolean; recipient_id: string }>(`/api/staff/guilds/${guildId}/moderation-notice`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ message }) });
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
+export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
+export const resolveStaffBillingPayment = (orderId: string, status: "open" | "resolved", note: string, csrfToken?: string) => api<{ ok: boolean; issue_status: string }>(`/api/staff/billing/payments/${encodeURIComponent(orderId)}/resolve`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status, note }) });
+export const updateStaffSubscription = (guildId: string, action: "grant" | "cancel", months: number, csrfToken?: string) => api<{ ok: boolean; premium: StaffBillingResponse["subscriptions"][number] }>(`/api/staff/billing/subscriptions/${encodeURIComponent(guildId)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ action, months }) });
+export const getDataRemovalOverview = () => api<DataRemovalOverview>("/api/privacy/data-removal");
+export const submitDataRemovalRequest = (body: { scope: "account" | "server"; guild_id?: string; reason: string; confirmation: string }, csrfToken?: string) => api<{ ok: boolean; request: DataRemovalOverview["requests"][number] }>("/api/privacy/data-removal", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const withdrawDataRemovalRequest = (requestId: string, csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/privacy/data-removal/${encodeURIComponent(requestId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const getStaffDataRemovalRequests = () => api<{ requests: StaffDataRemovalRequest[]; pending: number }>("/api/staff/data-removal");
+export const reviewStaffDataRemoval = (requestId: string, status: "approved" | "denied", note: string, csrfToken?: string) => api<{ ok: boolean; status: string; result?: { removed?: string[]; errors?: string[] } }>(`/api/staff/data-removal/${encodeURIComponent(requestId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status, note }) });
 export const getBlacklistAppealStatus = () => api<BlacklistAppealStatus>("/api/appeals/blacklist");
 export const submitBlacklistAppeal = (appeal: string, csrfToken?: string) => api<{ ok: boolean; appeal_id: string; status: "pending" }>("/api/appeals/blacklist", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ appeal }) });
 export const getGuildBlacklistAppealStatus = (guildId: string) => api<BlacklistAppealStatus>(`/api/appeals/guild/${encodeURIComponent(guildId)}`);

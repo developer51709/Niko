@@ -689,12 +689,17 @@ def require_dashboard_auth(f):
     return _inner
 
 
-def ensure_access_token() -> bool:
-    """Keep the OAuth session usable across Discord's short-lived access token."""
+def ensure_access_token(force: bool = False) -> bool:
+    """Keep the OAuth session usable across Discord's short-lived access token.
+
+    ``force`` skips the still-fresh shortcut: a 401 from Discord is the only
+    reliable signal that the token was revoked, because the stored expiry can
+    still be hours away when another session refreshed it first.
+    """
     if "user" not in session:
         return False
     expires_at = float(session.get("token_exp", 0))
-    if session.get("access_token") and time.time() < expires_at - 30:
+    if not force and session.get("access_token") and time.time() < expires_at - 30:
         return True
 
     refresh_token = session.get("refresh_token")
@@ -911,7 +916,15 @@ _MEMBER_GUILDS_RETRY_CAP = 3.0
 
 
 class DiscordEgressError(RuntimeError):
-    """Discord could not be reached over the bot's own REST egress."""
+    """Discord could not be reached over the bot's own REST egress.
+
+    ``status`` carries Discord's HTTP answer when there was one, so a caller can
+    tell a rejected token (401) apart from an egress that could not connect.
+    """
+
+    def __init__(self, message: str, status: int = 0) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def _member_guilds_retry_delay(body: str) -> float:
@@ -993,8 +1006,27 @@ async def _member_guilds_via_bot(token: str) -> list:
         await asyncio.sleep(_member_guilds_retry_delay(body))
 
     raise DiscordEgressError(
-        f"Discord answered HTTP {last_status or 'no status'} for the server list."
+        f"Discord answered HTTP {last_status or 'no status'} for the server list.",
+        status=last_status,
     )
+
+
+def _member_guilds_once(token: str) -> list:
+    bot = _discord_bot
+    loop = getattr(bot, "loop", None) if bot is not None else None
+    if bot is None or loop is None or not loop.is_running():
+        # A web-only process has no bot loop or session to borrow. Report the
+        # HTTP answer the same way the proxied path does, so a rejected token
+        # is refreshed here too instead of shown as a Discord outage.
+        try:
+            return discord_get("/users/@me/guilds", token)
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", 0) or 0
+            raise DiscordEgressError(
+                f"Discord answered HTTP {status or 'no status'} for the server list.",
+                status=status,
+            ) from exc
+    return run_on_bot_loop(_member_guilds_via_bot(token), timeout=18)
 
 
 def member_guilds(token: str) -> list:
@@ -1010,12 +1042,24 @@ def member_guilds(token: str) -> list:
     bot's egress instead of a separate one, which is what "proxied with the bot"
     means: whichever route the bot's own REST calls take, this list takes too.
     """
-    bot = _discord_bot
-    loop = getattr(bot, "loop", None) if bot is not None else None
-    if bot is None or loop is None or not loop.is_running():
-        # A web-only process has no bot loop or session to borrow.
-        return discord_get("/users/@me/guilds", token)
-    return run_on_bot_loop(_member_guilds_via_bot(token), timeout=18)
+    try:
+        return _member_guilds_once(token)
+    except DiscordEgressError as exc:
+        # A 401 while the session clock still says the token is valid means
+        # Discord no longer accepts it - another tab, another worker, or a
+        # rotation refreshed the session and revoked this value. Refresh once
+        # and retry over the new token instead of reporting the dashboard broken.
+        if getattr(exc, "status", 0) != 401 or not _force_token_refresh():
+            raise
+    return _member_guilds_once(session.get("access_token", ""))
+
+
+def _force_token_refresh() -> bool:
+    """Refresh the session's OAuth token even though its clock says it is fresh."""
+    try:
+        return ensure_access_token(force=True)
+    except Exception:
+        return False
 
 
 # ── OAuth routes ─────────────────────────────────────────────────────────────

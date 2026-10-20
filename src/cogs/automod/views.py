@@ -64,7 +64,7 @@ MESSAGES = {
         "images_title":      "Image Filtering Settings",
         "images_desc":       "Automatic moderation for images posted in your server.",
         "nsfwimg_desc":      "**NSFW Filter** — deletes images classified as NSFW via AI (external API)",
-        "nsfwimg_note":      "-# ⚠️ **Note:** This feature is still in testing and might not work properly.",
+        "nsfwimg_note":      "-# Premium perk — fal.ai's NSFW model scores every image while the server's subscription is active.",
         "section_images":    "**🖼️ Image Filtering**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke Settings",
@@ -170,7 +170,7 @@ MESSAGES = {
         "images_title":      "Bildfilter-Einstellungen",
         "images_desc":       "Automatische Moderation für in deinem Server gepostete Bilder.",
         "nsfwimg_desc":      "**NSFW-Filter** — löscht per KI als NSFW eingestufte Bilder (externe API)",
-        "nsfwimg_note":      "-# ⚠️ **Hinweis:** Diese Funktion befindet sich noch in der Testphase und funktioniert möglicherweise nicht richtig.",
+        "nsfwimg_note":      "-# Premium-Vorteil — fal.ais NSFW-Modell bewertet jedes Bild, solange das Server-Abo aktiv ist.",
         "section_images":    "**🖼️ Bildfilter**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
@@ -275,7 +275,7 @@ MESSAGES = {
         "images_title":      "Configuración del Filtrado de Imágenes",
         "images_desc":       "Moderación automática para imágenes publicadas en tu servidor.",
         "nsfwimg_desc":      "**Filtro NSFW** — borra imágenes clasificadas como NSFW por IA (API externa)",
-        "nsfwimg_note":      "-# ⚠️ **Nota:** Esta función todavía está en pruebas y puede que no funcione correctamente.",
+        "nsfwimg_note":      "-# Ventaja premium — el modelo NSFW de fal.ai analiza cada imagen mientras la suscripción del servidor esté activa.",
         "section_images":    "**🖼️ Filtrado de Imágenes**",
         # ── Anti-Nuke panel ──
         "nuke_title":        "### 💣 Configuración Anti-Nuke",

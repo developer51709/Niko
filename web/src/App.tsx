@@ -7,7 +7,9 @@ import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
+import { BillingPage } from "./pages/BillingPage";
 import { LegalPage } from "./pages/LegalPage";
+import { DataRemovalPage } from "./pages/DataRemovalPage";
 import { TranscriptPage } from "./pages/TranscriptPage";
 import { ChangelogPage } from "./pages/ChangelogPage";
 import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
@@ -47,8 +49,10 @@ export function App() {
   else if (page === "discord") pageContent = <DiscordRedirectPage />;
   else if (page === "privacy") pageContent = <LegalPage type="privacy" />;
   else if (page === "terms") pageContent = <LegalPage type="terms" />;
+  else if (page === "data-removal") pageContent = <DataRemovalPage />;
   else if (page === "community") pageContent = <LegalPage type="community" />;
   else if (page === "donate") pageContent = <DonatePage />;
+  else if (page === "billing") pageContent = <BillingPage />;
   else if (page === "transcript") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     pageContent = <TranscriptPage transcriptId={pathParts[1] || ""} />;

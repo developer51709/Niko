@@ -91,9 +91,27 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     assert view_labels(view) == ["Read the docs", "What's new"]
 
     text = view_text(view)
-    assert "Giveaway bans" in text
-    assert ".giveaway ban" in text
-    assert ".giveaway unban" in text
+    assert "Niko Premium is live" in text
+    assert "$15/month" in text
+    assert "/premium gift" in text
+    # The release that made a feature premium has to say what stayed free.
+    assert "free for every server" in text
+    assert "NSFW image filter" in text
+    # Premium and the legal update ship together, so the announcement names both.
+    assert "legal update" in text.lower()
+    assert links.DATA_REMOVAL in text
+
+
+def test_changelog_entry_covers_the_legal_update():
+    """The announced entry must describe the legal changes in the same release."""
+    changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
+    entry = changelog.split('slug: "premium-subscriptions"', 1)[1].split("\n  },", 1)[0]
+    lowered = entry.lower()
+
+    assert "legal update" in lowered
+    assert "data-removal" in entry
+    assert "moderation and safety records are preserved" in lowered
+    assert "court-ordered" in lowered
 
 
 def test_announcement_links_point_at_pages_that_exist():

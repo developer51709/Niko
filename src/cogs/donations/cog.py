@@ -10,6 +10,7 @@ Flow:
 
 import os
 from datetime import datetime
+from urllib.parse import quote
 
 import discord
 from discord import app_commands
@@ -19,13 +20,27 @@ from config.emojis import get_emoji
 from config.ids import SUPPORT_GUILD
 from cogs.staff.support_server import support_role, get_support_ids
 from utils import logging
-from utils.donations import add_donor, get_total_donated, is_supporter
+from utils.donations import add_donor, create_donation_token, get_total_donated, is_supporter
 from .oxapay import OxaPayClient
 
 # OxaPay key type: use your MERCHANT API key (Dashboard → Merchant → API Key).
 # NOT the Sandbox key (testing only) and NOT the Payout API key (for sending crypto).
 OXAPAY_KEY: str = os.getenv("OXAPAY_API_KEY", "")
 INVOICE_LIFETIME: int = 60  # minutes
+
+
+def _site_base() -> str:
+    """Public origin of the white-label payment page."""
+    base = os.getenv("PUBLIC_URL") or os.getenv("DONATION_SITE_URL")
+    if not base and os.getenv("REPLIT_DEV_DOMAIN"):
+        base = f"https://{os.getenv('REPLIT_DEV_DOMAIN')}"
+    return (base or "https://niko.sryze.cc").rstrip("/")
+
+
+def donation_checkout_url(user_id: int, amount: float) -> str:
+    """Signed link to the white-label page, prefilled with the amount."""
+    token = create_donation_token(user_id)
+    return f"{_site_base()}/billing?token={quote(token, safe='')}&amount={amount:.2f}"
 
 CURRENCIES = [
     ("USDT", "Tether",   f"{get_emoji('crypto_tether_usdt')}"),
@@ -283,6 +298,8 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 ephemeral=bool(ctx.interaction),
             )
 
+        # Every checkout happens on the white-label page so crypto and (later)
+        # card share one interface, the same one premium uses.
         intro_view = discord.ui.LayoutView()
         intro_view.add_item(
             discord.ui.Container(
@@ -294,24 +311,28 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         f"As a thank-you you'll receive the "
                         f"{get_emoji('badge_supporter_role')} **Supporter** badge "
                         f"and role in the support server.\n\n"
-                        f"Select a cryptocurrency below to proceed:"
+                        f"Choose a cryptocurrency on the checkout page, send the exact "
+                        f"amount shown, and your badge arrives as soon as it confirms."
                     )
                 ),
-                _currency_select(self, amount, ctx.author.id),
+                discord.ui.ActionRow(
+                    discord.ui.Button(
+                        label="Open checkout",
+                        style=discord.ButtonStyle.link,
+                        url=donation_checkout_url(ctx.author.id, amount),
+                        emoji=get_emoji("oxapay"),
+                    )
+                ),
                 discord.ui.TextDisplay(
                     content=f"-# {get_emoji('oxapay')} Powered by OxaPay"
                 )
             )
         )
 
-        # currency_sel = _currency_view(self, amount, ctx.author.id)
-
         if ctx.interaction:
             await ctx.interaction.followup.send(view=intro_view, ephemeral=True)
-            # await ctx.interaction.followup.send(view=currency_sel, ephemeral=True)
         else:
             await ctx.send(view=intro_view)
-            # await ctx.send(view=currency_sel)
 
     @commands.hybrid_command(
         name="donationstatus",

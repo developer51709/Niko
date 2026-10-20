@@ -39,7 +39,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 ### Moderation and safety
 - Kick, ban, mute, tempmute, warn, purge, slowmode, and channel lockdown
 - AutoMod for spam, invite links, blocked words, mass mentions, join raids, and external-app abuse
-- Optional AI image filtering through a self-hostable Cloudflare Worker
+- Premium AI image filtering through fal.ai's NSFW model
 - Moderation logs, case history, and per-server exemption lists
 
 ### Community and engagement
@@ -52,6 +52,12 @@ The result is a companion that feels native to Discord — fast slash commands, 
 - Lavalink/wavelink playback with queue, loop, shuffle, volume, and seek controls
 - YouTube, Spotify, and direct URL support
 - Live now-playing cards and Last.fm-powered autoplay
+
+### Premium
+- Monthly server subscriptions with a white-label OxaPay crypto checkout
+- AI image moderation (`fal-ai/imageutils/nsfw`) as the premium perk
+- Gift premium to a server you are in, with an automatic DM to its owner
+- Renewal reminders before a subscription ends and an owner billing tab
 
 ### Progression and economy
 - Per-message XP, leveling curves, role rewards, and leaderboards
@@ -66,7 +72,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 ### Dashboard and operations
 - Discord OAuth dashboard for server settings, activity, and moderation insights
 - Live command directory, documentation, changelog, and public profile cards
-- Staff workspace for team applications, server notes, and standby management
+- Staff workspace for team applications, server notes, standby management, and owner-only billing
 - Optional Discord REST proxy workers with live latency, errors, and request telemetry
 - Interaction endpoint support, standby failover, and Discord-aware proxy recovery
 
@@ -82,7 +88,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 | Music | Lavalink / wavelink |
 | AI | OpenAI-compatible API |
 | Storage | MongoDB when configured, with SQLite/JSON fallbacks |
-| Optional filter service | Cloudflare Workers (`nsfw-api/`) |
+| AI image moderation | fal.ai (`fal-ai/imageutils/nsfw`) |
 | Optional Discord egress | Cloudflare Workers (`proxy-worker/`) |
 
 ---
@@ -146,7 +152,8 @@ Set these variables in your hosting dashboard, shell, or a local `src/.env` file
 | `MONGODB_URL` | Optional | MongoDB connection; otherwise local storage is used |
 | `MONGODB_DATABASE` | Optional | MongoDB database name |
 | `DISCORD_PUBLIC_KEY` | Optional | Enables Discord's interactions endpoint |
-| `NSFW_API_URL` / `NSFW_API_TOKEN` | Optional | Enables the AutoMod image filter |
+| `FAL_KEY` | For premium moderation | fal.ai key for the AutoMod NSFW image filter |
+| `OXAPAY_API_KEY` | For payments | OxaPay merchant key for premium and donation checkout |
 | `PROXY_WORKER_TOKEN` | Optional | Enables owner-managed Discord API proxy workers |
 | `TOPGG_WEBHOOK_TOKEN` | Optional | Enables top.gg vote rewards |
 
