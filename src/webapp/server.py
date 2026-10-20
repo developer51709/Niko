@@ -59,6 +59,7 @@ from cogs.donations.oxapay import OxaPayClient
 from config.ids import OWNER_IDS
 from cogs.staff.staff import STAFF_ROLES
 from utils.ai.config import get_ai_config, set_ai_config
+from . import leaderboard_cache
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -595,14 +596,19 @@ def get_mutual_leaderboard_identity_ids(target_user_ids: set[str]) -> set[str] |
         return set()
     if not ensure_access_token():
         return set()
-    try:
-        viewer_guild_ids = {
-            str(guild["id"])
-            for guild in discord_get("/users/@me/guilds", session.get("access_token", ""))
-            if guild.get("id")
-        }
-    except Exception:
-        return None
+    # The leaderboard polls, so the viewer's guild list is reused for a few
+    # seconds instead of spending a Discord OAuth call on every refresh.
+    viewer_guild_ids = leaderboard_cache.cached_viewer_guilds(str(viewer["id"]))
+    if viewer_guild_ids is None:
+        try:
+            viewer_guild_ids = {
+                str(guild["id"])
+                for guild in discord_get("/users/@me/guilds", session.get("access_token", ""))
+                if guild.get("id")
+            }
+        except Exception:
+            return None
+        leaderboard_cache.store_viewer_guilds(str(viewer["id"]), viewer_guild_ids)
     if not viewer_guild_ids or _discord_bot is None:
         return set()
 

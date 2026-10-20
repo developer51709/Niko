@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { saveEconomyPrivacy } from "../../api";
+import { syncedLabel } from "../../utils/live";
+import { useSyncedClock } from "../../hooks/useLiveSync";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import { displayName } from "../../utils/format";
@@ -18,8 +21,35 @@ export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: 
   </div>;
 }
 
+/**
+ * A value on a live page. It eases in once when the number it shows changes,
+ * and stays perfectly still on a refresh that changed nothing.
+ */
+export function AnimatedValue({ value, children, className = "" }: { value: string | number; children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion();
+  const previous = useRef(value);
+  const changed = previous.current !== value;
+  useEffect(() => { previous.current = value; }, [value]);
+  return <motion.strong
+    className={className || undefined}
+    key={String(value)}
+    initial={changed && !reduceMotion ? { opacity: 0.4, y: 4 } : false}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.32, ease: "easeOut" }}
+  >{children}</motion.strong>;
+}
+
+/** Says a page refreshes itself, and how long ago the data on screen landed. */
+export function LiveChip({ liveAt, liveStale = false }: { liveAt: number | null; liveStale?: boolean }) {
+  const now = useSyncedClock(liveAt);
+  if (liveAt === null) return null;
+  return <span className={`live-chip${liveStale ? " is-stale" : ""}`} role="status" aria-live="polite">
+    <span className="status-dot" />{liveStale ? "RECONNECTING" : "LIVE"}<small>{syncedLabel(liveAt, now)}</small>
+  </span>;
+}
+
 export function StatCard({ label, value, note, accent = "" }: { label: string; value: string; note: string; accent?: string }) {
-  return <div className={`dash-stat ${accent}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+  return <div className={`dash-stat ${accent}`}><span>{label}</span><AnimatedValue value={value}>{value}</AnimatedValue><small>{note}</small></div>;
 }
 
 /**
@@ -30,21 +60,29 @@ export function CoinLabel() {
   return <span className="economy-coin">coins</span>;
 }
 
-export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string }) {
+export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken, liveAt = null, liveStale = false }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string; liveAt?: number | null; liveStale?: boolean }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
-  useEffect(() => setPrivateLeaderboard(Boolean(overview?.leaderboard_private)), [overview?.leaderboard_private]);
+  // A poll can land between the switch flipping and the save finishing. While a
+  // save is in flight the optimistic value wins, so the switch never snaps back
+  // under the reader's finger.
+  const savingPrivacy = useRef(false);
+  useEffect(() => {
+    if (!savingPrivacy.current) setPrivateLeaderboard(Boolean(overview?.leaderboard_private));
+  }, [overview?.leaderboard_private]);
   // The toggle itself shows the pending state by staying where the user put it,
   // so only the result is reported, as a toast like every other dashboard save.
   const updatePrivacy = (value: boolean) => {
     setPrivateLeaderboard(value);
+    savingPrivacy.current = true;
     notifyLoading("Saving privacy setting…", "economy-privacy");
     saveEconomyPrivacy(value, csrfToken)
       .then(() => notifySuccess(value ? "Profile hidden on the public leaderboard." : "Profile visible on the public leaderboard.", "economy-privacy"))
       .catch((error) => {
         setPrivateLeaderboard(!value);
         notifyError(error instanceof Error ? error.message : "Could not save privacy setting.", "economy-privacy");
-      });
+      })
+      .finally(() => { savingPrivacy.current = false; });
   };
   return <>
     <DashHeading eyebrow="Personal overview" title="Your Niko snapshot." text="Keep an eye on your progress, then jump into a server when you’re ready to tune the room." />
@@ -53,7 +91,10 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
          <UserAvatar user={user} className="profile-avatar" />
         <div><span className="panel-kicker">Signed in as</span><h3>{displayName(user)}</h3><p>Personal economy profile</p></div>
       </div>
-      <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
+      <div className="overview-intro-actions">
+        <LiveChip liveAt={liveAt} liveStale={liveStale} />
+        <button className="button button-primary" onClick={onServers}>Manage a server <Icon name="arrow" /></button>
+      </div>
     </div>
     <div className="dash-stats overview-stats">
       <StatCard label="Net worth" value={formatNumber(overview?.net_worth)} note="Across your Niko profile" accent="accent-orange" />
@@ -69,10 +110,10 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
       <section className="dash-panel">
         <div className="panel-heading"><div><span className="panel-kicker">Progress</span><h3>Your momentum</h3></div><span className="panel-icon"><Icon name="spark" /></span></div>
         <div className="metric-list">
-          <div><span>Daily streak</span><strong>{formatNumber(overview?.daily_streak)} <small>days</small></strong></div>
-          <div><span>Achievements</span><strong>{formatNumber(overview?.achievements)} <small>unlocked</small></strong></div>
-          <div><span>Total earned</span><strong>{formatNumber(overview?.total_earned)} <small>coins</small></strong></div>
-          <div><span>Economy standing</span><strong>{overview?.economy_rank ? `#${formatNumber(overview.economy_rank)}` : "—"} <small>{overview?.economy_profiles ? `of ${formatNumber(overview.economy_profiles)}` : ""}</small></strong></div>
+          <div><span>Daily streak</span><AnimatedValue value={overview?.daily_streak ?? 0}>{formatNumber(overview?.daily_streak)} <small>days</small></AnimatedValue></div>
+          <div><span>Achievements</span><AnimatedValue value={overview?.achievements ?? 0}>{formatNumber(overview?.achievements)} <small>unlocked</small></AnimatedValue></div>
+          <div><span>Total earned</span><AnimatedValue value={overview?.total_earned ?? 0}>{formatNumber(overview?.total_earned)} <small>coins</small></AnimatedValue></div>
+          <div><span>Economy standing</span><AnimatedValue value={overview?.economy_rank ?? 0}>{overview?.economy_rank ? `#${formatNumber(overview.economy_rank)}` : "—"} <small>{overview?.economy_profiles ? `of ${formatNumber(overview.economy_profiles)}` : ""}</small></AnimatedValue></div>
         </div>
       </section>
       <section className="dash-panel">
@@ -129,11 +170,11 @@ export function RankList({ rows }: { rows: LevelRow[] }) {
   </div>;
 }
 
-export function OverviewView({ overview }: { overview: GuildOverview }) {
+export function OverviewView({ overview, liveAt = null, liveStale = false }: { overview: GuildOverview; liveAt?: number | null; liveStale?: boolean }) {
   return <>
     <div className="guild-welcome">
       <div><span className="welcome-mark"><Icon name="grid" /></span><div><span className="panel-kicker">Server pulse</span><strong>Here’s what needs your attention.</strong></div></div>
-      <span className="welcome-time">LIVE SIGNALS <span className="status-dot" /></span>
+      <span className={`welcome-time${liveStale ? " is-stale" : ""}`}>{liveStale ? "RECONNECTING" : "LIVE SIGNALS"} <span className="status-dot" /></span>
     </div>
     <DashHeading eyebrow="Overview" title="A quick read on your room." text="The important signals, without making you hunt for them." />
     <div className="dash-stats guild-overview-stats">
@@ -141,7 +182,7 @@ export function OverviewView({ overview }: { overview: GuildOverview }) {
       <StatCard label="Automod" value={overview.moderation.automod_active ? "Active" : "Quiet"} note="Protection status" accent="accent-green" />
       <StatCard label="Level leaders" value={formatNumber(overview.leveling.top.length)} note="Members with recorded XP" accent="accent-violet" />
     </div>
-    <ServerStatsCard stats={overview.server} />
+    <ServerStatsCard stats={overview.server} liveAt={liveAt} liveStale={liveStale} />
     <div className="dash-columns overview-columns">
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Community energy</span><h3>Top XP</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={overview.leveling.top} /></section>
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span></div><div className="server-controls-body"><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p><span className="text-link">Open server settings <Icon name="arrow" /></span></div></section>

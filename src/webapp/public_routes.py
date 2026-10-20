@@ -1,6 +1,7 @@
 """Flask routes for public."""
 
 from config import links as bot_links
+from . import leaderboard_cache
 from . import server as _server
 
 globals().update({
@@ -16,6 +17,53 @@ async def _current_support_invite():
         return None
     from cogs.staff.support_server import get_support_invite
     return await get_support_invite(_discord_bot)
+
+
+def _resolve_leaderboard_identities(user_ids):
+    """Resolve Discord identities for ``user_ids``, reusing cached lookups.
+
+    The board re-polls while it is open; without this cache every poll would
+    re-fetch the same avatars and display names from Discord.
+    """
+    if not user_ids or _discord_bot is None:
+        return {}
+    identities = leaderboard_cache.cached_identities(user_ids)
+    missing = {user_id for user_id in user_ids if user_id not in identities}
+    if not missing:
+        return identities
+
+    async def read_identities():
+        found = {}
+        for user_id in missing:
+            user = _discord_bot.get_user(int(user_id))
+            if user is None:
+                for guild in _discord_bot.guilds:
+                    member = guild.get_member(int(user_id))
+                    if member is not None:
+                        user = member
+                        break
+            if user is None:
+                try:
+                    user = await _discord_bot.fetch_user(int(user_id))
+                except Exception:
+                    continue
+            avatar = getattr(user, "display_avatar", None)
+            found[user_id] = {
+                "username": getattr(user, "name", None),
+                "display_name": getattr(user, "global_name", None) or getattr(user, "display_name", None) or getattr(user, "name", None),
+                "avatar_url": str(avatar.url) if avatar is not None else None,
+            }
+        return found
+
+    try:
+        fresh = run_on_bot_loop(read_identities())
+    except Exception:
+        fresh = {}
+    if fresh:
+        leaderboard_cache.store_identities(fresh)
+    identities.update(fresh)
+    return identities
+
 
 @app.route("/api/economy/leaderboard")
 def api_economy_leaderboard():
@@ -55,40 +103,16 @@ def api_economy_leaderboard():
         or official_staff
         or row["user_id"] in mutual_ids
     }
-    identities = {}
-    if visible_ids and _discord_bot is not None:
-        async def read_identities():
-            found = {}
-            for user_id in visible_ids:
-                user = _discord_bot.get_user(int(user_id))
-                if user is None:
-                    for guild in _discord_bot.guilds:
-                        member = guild.get_member(int(user_id))
-                        if member is not None:
-                            user = member
-                            break
-                if user is None:
-                    try:
-                        user = await _discord_bot.fetch_user(int(user_id))
-                    except Exception:
-                        continue
-                avatar = getattr(user, "display_avatar", None)
-                found[user_id] = {
-                    "username": getattr(user, "name", None),
-                    "display_name": getattr(user, "global_name", None) or getattr(user, "display_name", None) or getattr(user, "name", None),
-                    "avatar_url": str(avatar.url) if avatar is not None else None,
-                }
-            return found
-        try:
-            identities = run_on_bot_loop(read_identities())
-        except Exception:
-            identities = {}
+    identities = _resolve_leaderboard_identities(visible_ids)
 
     entries = []
     for rank, row in enumerate(rows, start=offset + 1):
         user_id = row["user_id"]
         identity = identities.get(user_id) if user_id in visible_ids else None
         entries.append({
+            # Stable across polls, so the browser can animate a row that moves
+            # rank. It is a salted digest, never the Discord id itself.
+            "key": leaderboard_cache.profile_key(user_id),
             "rank": rank,
             "net_worth": row["net_worth"],
             "private": bool(row.get("leaderboard_private")),
@@ -96,7 +120,11 @@ def api_economy_leaderboard():
             "display_name": identity.get("display_name") if identity else None,
             "avatar_url": identity.get("avatar_url") if identity else None,
         })
-    return jsonify({"entries": entries, "page": page, "page_size": page_size, "total": total, "pages": (total + page_size - 1) // page_size})
+    response = jsonify({"entries": entries, "page": page, "page_size": page_size, "total": total, "pages": (total + page_size - 1) // page_size})
+    # Polled standings must never be answered from a stale copy; the app-wide
+    # after_request hook already marks every /api/ response no-store, so this
+    # route only has to stay under that prefix.
+    return response
 
 
 @app.route("/api/commands")
