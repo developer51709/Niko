@@ -163,9 +163,9 @@ export function DataRemovalPage() {
               <p>
                 Deletes the personal data attached to your Discord account: economy balances,
                 leveling XP, birthdays, reminders, AFK state, music library, giveaway entries,
-                poll votes, roleplay preferences, and staff application submissions. Your name is
-                also removed from suggestions and giveaway hosts where it was attached to server
-                content.
+                poll votes, roleplay preferences, staff application submissions, and any public
+                staff profile (bio, banner, and links). Your name is also removed from suggestions
+                and giveaway hosts where it was attached to server content.
               </p>
             </article>
 

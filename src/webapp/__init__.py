@@ -7,6 +7,7 @@ from .server import app, configure_bot, public_base_url, redirect_uri
 from . import (  # noqa: E402,F401
     auth_routes,
     team_routes,
+    staff_management_routes,
     public_routes,
     dashboard_routes,
     notifier_routes,

@@ -138,8 +138,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 return FakeGuild()
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 saved_updates.append(params)
@@ -167,11 +169,12 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
         self.assertEqual(response.get_json()["review_status"], "approved")
         self.assertTrue(response.get_json()["dm_sent"])
         self.assertEqual(len([event for event in events if event[0] == "dm"]), 1)
-        self.assertEqual(len(saved_updates), 2)
-        self.assertEqual(saved_updates[0][0:2], (123, "moderator"))
-        self.assertEqual(saved_updates[0][2], next(iter(OWNER_IDS)))
-        self.assertEqual(saved_updates[1][0], "approved")
-        self.assertEqual([event[0] for event in events], ["role", "saved", "saved", "dm"])
+        self.assertEqual(len(saved_updates), 3)
+        self.assertEqual(saved_updates[0][0], "moderator")
+        self.assertEqual(saved_updates[0][1], next(iter(OWNER_IDS)))
+        self.assertEqual(saved_updates[1][0], 123)
+        self.assertEqual(saved_updates[2][0], "approved")
+        self.assertEqual([event[0] for event in events], ["role", "saved", "saved", "saved", "dm"])
         self.assertIn(role, member.roles)
 
     def test_review_keeps_approval_when_decision_dm_fails(self):
@@ -220,8 +223,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 return FakeGuild()
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 events.append("staff-saved" if "staff_members" in query else "review-saved")
@@ -252,7 +257,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
         self.assertFalse(body["unchanged"])
         self.assertFalse(body["dm_sent"])
         self.assertFalse(body["role_revoked"])
-        self.assertEqual(events, ["role-added", "staff-saved", "review-saved", "dm-failed"])
+        self.assertEqual(events, ["role-added", "staff-saved", "staff-saved", "review-saved", "dm-failed"])
         self.assertIn(role, member.roles)
 
     def test_staff_persistence_failure_rolls_back_new_discord_role(self):
@@ -293,8 +298,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 return FakeGuild()
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 if "staff_members" in query:
@@ -361,8 +368,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 return FakeUser()
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 events.append((query, params))
@@ -389,12 +398,13 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
         self.assertEqual(
             [event[0] if isinstance(event, tuple) else event for event in events],
             [
-                "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
+                "UPDATE staff_members SET role = $1, assigned_by = $2, assigned_at = $3, staff_status = $4, status_reason = NULL, status_changed_by = $5, status_changed_at = $6 WHERE user_id = $7",
+                "INSERT OR IGNORE INTO staff_members (user_id, role, assigned_by, assigned_at, staff_status, status_changed_by, status_changed_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') WHERE opening_id = $3 AND user_id = $4",
                 "dm",
             ],
         )
-        self.assertEqual(events[0][1][1], "moderator")
+        self.assertEqual(events[0][1][0], "moderator")
         self.assertIn(role, member.roles)
 
     def test_review_rolls_back_new_role_when_decision_dm_fails(self):
@@ -439,8 +449,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 return FakeGuild()
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 events.append("saved")
@@ -485,8 +497,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                 raise AssertionError("Denials must not look up or assign a staff role")
 
         class FakePool:
-            async def fetchrow(self, query, opening_id, user_id):
-                return {"user_id": user_id}
+            async def fetchrow(self, query, *params):
+                if "staff_members" in query:
+                    return None
+                return {"user_id": params[-1]}
 
             async def execute(self, query, *params):
                 events.append("saved")
@@ -584,7 +598,10 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
         self.assertNotIn(role, member.roles)
         self.assertEqual([event for event in events if isinstance(event, str)], ["role-removed", "dm"])
         statements = [event[0] for event in events if isinstance(event, tuple)]
-        self.assertIn("DELETE FROM staff_members WHERE user_id = $1 AND role = $2", statements)
+        self.assertIn(
+            "UPDATE staff_members SET staff_status = $1, status_reason = $2, status_changed_by = $3, status_changed_at = $4 WHERE user_id = $5 AND role = $6",
+            statements,
+        )
         self.assertIn(
             "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') WHERE opening_id = $3 AND user_id = $4",
             statements,
@@ -671,6 +688,46 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
                     )
                     self.assertEqual(response.status_code, 403)
                     self.assertIn("owner", response.get_json()["error"].lower())
+
+def test_suspended_staff_cannot_be_reapproved_until_the_hold_is_lifted():
+    """An old application must not restore a role while a suspension is active."""
+    writes = []
+
+    class FakePool:
+        async def fetchrow(self, query, *params):
+            if "staff_members" in query:
+                return {"staff_status": "suspended"}
+            return {"user_id": params[-1], "review_status": "pending"}
+
+        async def execute(self, *args, **kwargs):
+            writes.append(args)
+
+    class FakeBot:
+        def get_guild(self, guild_id):
+            raise AssertionError("A suspended applicant must not receive a role")
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["user"] = {"id": str(next(iter(OWNER_IDS)))}
+        session["access_token"] = "test-token"
+        session["token_exp"] = time.time() + 3600
+        session["csrf_token"] = "test-csrf"
+
+    with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        routes, "_pool", return_value=FakePool()
+    ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
+        routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+    ):
+        response = client.post(
+            "/api/staff/team-recruitment/team-moderator/submissions/123/review",
+            json={"status": "approved"},
+            headers={"X-CSRF-Token": "test-csrf"},
+        )
+
+    assert response.status_code == 409
+    assert "suspended" in response.get_json()["error"].lower()
+    assert writes == []
+
 
 if __name__ == "__main__":
     unittest.main()
