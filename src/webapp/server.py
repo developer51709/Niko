@@ -1296,9 +1296,30 @@ def _normalize_public_links(raw) -> list[dict]:
     return links
 
 
+STAFF_STATUS_LABELS = {
+    "active": "Active",
+    "suspended": "Suspended",
+    "former": "Former staff",
+}
+
+_STAFF_ROW_COLUMNS = (
+    "user_id", "role", "public_name", "public_bio", "public_avatar_url",
+    "public_banner_url", "public_links", "public_visible", "staff_status",
+    "status_reason", "status_changed_by", "status_changed_at",
+)
+_STAFF_LEGACY_ROW_COLUMNS = _STAFF_ROW_COLUMNS[:8]
+
+
+def _staff_status(row) -> str:
+    value = str(row.get("staff_status") or "active").strip().lower()
+    return value if value in STAFF_STATUS_LABELS else "active"
+
+
 def _staff_row(row) -> dict:
     role = str(row.get("role"))
     identity = _staff_identity(str(row.get("user_id")))
+    status = _staff_status(row)
+    profile_visible = bool(row.get("public_visible", 1))
     return {
         **identity,
         "role": role,
@@ -1308,12 +1329,18 @@ def _staff_row(row) -> dict:
         # staff-customizable on the website.
         "public_banner_url": row.get("public_banner_url"),
         "public_links": _normalize_public_links(row.get("public_links")),
-        "visible": bool(row.get("public_visible", 1)),
+        "visible": profile_visible and status == "active",
+        "profile_visible": profile_visible,
+        "staff_status": status,
+        "staff_status_label": STAFF_STATUS_LABELS[status],
+        "status_reason": row.get("status_reason"),
+        "status_changed_by": str(row["status_changed_by"]) if row.get("status_changed_by") is not None else None,
+        "status_changed_at": row.get("status_changed_at"),
     }
 
 
-def _load_staff_rows() -> list[dict]:
-    """Load every persisted staff role and enrich it with live Discord data.
+def _load_staff_records(*, include_inactive: bool = False) -> list[dict]:
+    """Load persisted staff records and enrich them with live Discord data.
 
     Staff roles live in the bot's active database pool. Do not fall back to
     SQLite only when the pool returns an empty list: a web process can have a
@@ -1321,22 +1348,29 @@ def _load_staff_rows() -> list[dict]:
     stores the other roles elsewhere. We also isolate malformed rows so one
     legacy record cannot hide the rest of the roster.
     """
-    columns = (
-        "user_id", "role", "public_name", "public_bio", "public_avatar_url",
-        "public_banner_url", "public_links", "public_visible",
-    )
     by_id: dict[str, dict] = {}
 
-    def add_raw(raw) -> None:
+    def add_raw(raw, *, overwrite: bool = True) -> None:
         try:
             row = dict(raw)
             user_id = str(row.get("user_id", "")).strip()
             role = str(row.get("role", "")).strip()
             if not user_id or not role:
                 return
-            # Only configured staff roles should be public. Keep the owner seed
-            # in the same roster as database-backed roles.
+            # The live bot database is authoritative. A stale local SQLite
+            # copy must never make a suspended profile public again.
+            if not overwrite and user_id in by_id:
+                return
+            numeric_user_id = int(user_id)
+            if numeric_user_id in OWNER_IDS:
+                row["role"] = role = "owner"
+                row["staff_status"] = "active"
+            # Only configured staff roles should appear. Keep the owner seed in
+            # the same roster as database-backed roles.
             if role not in STAFF_ROLES and role != "owner":
+                return
+            status = _staff_status(row)
+            if not include_inactive and status != "active":
                 return
             item = _staff_row({**row, "user_id": user_id, "role": role})
             by_id[user_id] = item
@@ -1344,32 +1378,51 @@ def _load_staff_rows() -> list[dict]:
             # A single old/incomplete record must not suppress other roles.
             return
 
-    if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
+    bot_pool = bool(_discord_bot is not None and getattr(_discord_bot, "cxn", None))
+    bot_read_ok = True
+    if bot_pool:
+        query = f"SELECT {', '.join(_STAFF_ROW_COLUMNS)} FROM staff_members"
+        legacy_query = f"SELECT {', '.join(_STAFF_LEGACY_ROW_COLUMNS)} FROM staff_members"
+
         async def read_staff():
-            return await _discord_bot.cxn.fetch(
-                "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
-                "public_banner_url, public_links, public_visible FROM staff_members"
-            )
+            try:
+                return await _discord_bot.cxn.fetch(query)
+            except Exception as exc:
+                # Only the pre-migration schema may fall back to the legacy
+                # columns. A transient database failure must not make a
+                # suspended record look active.
+                if "staff_status" not in str(exc).lower():
+                    raise
+                return await _discord_bot.cxn.fetch(legacy_query)
         try:
             for row in run_on_bot_loop(read_staff()):
                 add_raw(row)
         except Exception:
-            # The local fallback below still allows public roster pages to work
-            # while the bot pool is reconnecting.
-            pass
+            # The live roster is authoritative for staff privacy. If it cannot
+            # be read, do not substitute a stale local row that may still say
+            # a suspended member is active.
+            bot_read_ok = False
 
     # Also read the local store and merge it instead of using it as an
     # all-or-nothing fallback. This covers web-only processes and prevents the
     # owner seed row from masking other staff roles.
-    conn = sqlite_connect()
+    conn = sqlite_connect() if (not bot_pool or bot_read_ok) else None
     try:
         if conn:
-            raw_rows = conn.execute(
-                "SELECT user_id, role, public_name, public_bio, public_avatar_url, "
-                "public_banner_url, public_links, public_visible FROM staff_members"
-            ).fetchall()
+            try:
+                raw_rows = conn.execute(
+                    f"SELECT {', '.join(_STAFF_ROW_COLUMNS)} FROM staff_members"
+                ).fetchall()
+                columns = _STAFF_ROW_COLUMNS
+            except sqlite3.Error as exc:
+                if "staff_status" not in str(exc).lower():
+                    raise
+                raw_rows = conn.execute(
+                    f"SELECT {', '.join(_STAFF_LEGACY_ROW_COLUMNS)} FROM staff_members"
+                ).fetchall()
+                columns = _STAFF_LEGACY_ROW_COLUMNS
             for raw in raw_rows:
-                add_raw(dict(zip(columns, raw)))
+                add_raw(dict(zip(columns, raw)), overwrite=False)
     except sqlite3.Error:
         pass
     finally:
@@ -1381,10 +1434,30 @@ def _load_staff_rows() -> list[dict]:
         if user_id not in by_id:
             add_raw({"user_id": user_id, "role": "owner", "public_visible": 1})
 
+    if include_inactive:
+        status_order = {"active": 0, "suspended": 1, "former": 2}
+        return sorted(
+            by_id.values(),
+            key=lambda item: (
+                status_order.get(item["staff_status"], 3),
+                -STAFF_PRIORITY.get(item["role"], 40),
+                (item.get("name") or "").casefold(),
+            ),
+        )
     return sorted(
         (row for row in by_id.values() if row["visible"]),
         key=lambda item: -STAFF_PRIORITY.get(item["role"], 40),
     )
+
+
+def _load_staff_rows() -> list[dict]:
+    """Public team roster: active staff with a visible profile only."""
+    return _load_staff_records()
+
+
+def _load_staff_management_rows() -> list[dict]:
+    """Owner roster including suspended and former staff profiles."""
+    return _load_staff_records(include_inactive=True)
 
 
 def _current_staff_role() -> str | None:
@@ -1398,25 +1471,52 @@ def _current_staff_role() -> str | None:
     except (TypeError, ValueError):
         return None
 
-    
     # Staff authorization must use the same live database as the bot. The
     # previous SQLite-only lookup denied valid staff on Mongo/live-pool setups.
     if _discord_bot is not None and getattr(_discord_bot, "cxn", None):
         async def read_role():
-            return await _discord_bot.cxn.fetchrow(
-                "SELECT role FROM staff_members WHERE user_id = $1", int(user_id)
-            )
+            try:
+                return await _discord_bot.cxn.fetchrow(
+                    "SELECT role, staff_status FROM staff_members WHERE user_id = $1",
+                    int(user_id),
+                )
+            except Exception as exc:
+                if "staff_status" not in str(exc).lower():
+                    raise
+                return await _discord_bot.cxn.fetchrow(
+                    "SELECT role FROM staff_members WHERE user_id = $1", int(user_id)
+                )
         try:
             row = run_on_bot_loop(read_role())
             if row and row.get("role"):
+                if _staff_status(row) != "active":
+                    return None
                 return str(row["role"])
         except Exception:
-            pass
+            # The live database is the authority for staff access. Failing
+            # closed is safer than a stale local role during an outage.
+            return None
 
     conn = sqlite_connect()
     try:
-        row = conn.execute("SELECT role FROM staff_members WHERE user_id = ?", (int(user_id),)).fetchone() if conn else None
-        return str(row[0]) if row and row[0] else None
+        if not conn:
+            return None
+        try:
+            row = conn.execute(
+                "SELECT role, staff_status FROM staff_members WHERE user_id = ?",
+                (int(user_id),),
+            ).fetchone()
+        except sqlite3.Error as exc:
+            if "staff_status" not in str(exc).lower():
+                raise
+            row = conn.execute(
+                "SELECT role FROM staff_members WHERE user_id = ?", (int(user_id),)
+            ).fetchone()
+        if not row:
+            return None
+        if len(row) > 1 and str(row[1] or "active").strip().lower() != "active":
+            return None
+        return str(row[0]) if row[0] else None
     except (TypeError, ValueError, sqlite3.Error):
         return None
     finally:

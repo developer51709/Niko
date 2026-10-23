@@ -661,6 +661,8 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-guild-invite-result a { flex: 1; min-width: 180px; color: var(--ink); overflow-wrap: anywhere; }
 .dashboard-layout .staff-blacklist-form { display: grid; grid-template-columns: 140px minmax(120px, .8fr) minmax(180px, 1.4fr) auto; align-items: end; gap: 9px; padding: 16px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-radius: 13px; backdrop-filter: blur(18px); }
 .dashboard-layout .staff-blacklist-form input, .dashboard-layout .staff-blacklist-form select { width: 100%; min-height: 42px; padding: 0 11px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.dashboard-layout .staff-roster-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 9px; padding: 16px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-radius: 13px; backdrop-filter: blur(18px); }
+.dashboard-layout .staff-roster-form input, .dashboard-layout .staff-roster-form select { width: 100%; min-height: 42px; padding: 0 11px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font: inherit; }
 .dashboard-layout .staff-blacklist-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .dashboard-layout .staff-blacklist-list { min-width: 0; padding: 15px; background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(18px); }
 .dashboard-layout .staff-blacklist-list-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom: 9px; font-size: 12px; font-weight: 700; }
@@ -686,8 +688,8 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-lockdown-group.is-paused article small { color:var(--sage); }
 .dashboard-layout .staff-lockdown-group.is-failed article small { color:#efa19b; }
 .dashboard-layout .staff-lockdown-empty { margin:0; color:var(--muted); font-size:10px; }
-@media (max-width: 760px) { .dashboard-layout .staff-blacklist-form { grid-template-columns: 1fr 1fr; }.dashboard-layout .staff-blacklist-columns { grid-template-columns:1fr; }.dashboard-layout .staff-guild-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.dashboard-layout .staff-guild-actions { grid-template-columns:1fr 1fr; } }
-@media (max-width: 520px) { .dashboard-layout .staff-blacklist-form { grid-template-columns:1fr; }.dashboard-layout .staff-blacklist-entry { align-items:flex-start; flex-direction:column; }.dashboard-layout .staff-permissions-list { grid-template-columns:1fr; } }
+@media (max-width: 760px) { .dashboard-layout .staff-blacklist-form, .dashboard-layout .staff-roster-form { grid-template-columns: 1fr 1fr; }.dashboard-layout .staff-blacklist-columns { grid-template-columns:1fr; }.dashboard-layout .staff-guild-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.dashboard-layout .staff-guild-actions { grid-template-columns:1fr 1fr; } }
+@media (max-width: 520px) { .dashboard-layout .staff-blacklist-form, .dashboard-layout .staff-roster-form { grid-template-columns:1fr; }.dashboard-layout .staff-blacklist-entry { align-items:flex-start; flex-direction:column; }.dashboard-layout .staff-permissions-list { grid-template-columns:1fr; } }
 .dashboard-layout .staff-guild-reason input, .dashboard-layout .staff-guild-notice-field textarea { width: 100%; }
 .dashboard-layout .button-danger { color: #ffd8d4; background: rgba(164, 53, 48, .17); border-color: rgba(221, 102, 92, .3); }
 .dashboard-layout .button-danger:hover { background: rgba(164, 53, 48, .27); border-color: rgba(221, 102, 92, .5); }

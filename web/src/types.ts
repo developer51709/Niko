@@ -578,6 +578,25 @@ export type StaffMember = {
   custom_status?: StaffCustomStatus | null;
   activity?: string | null;
   visible?: boolean;
+  /** Active staff keep access; suspended and former profiles stay retained but hidden. */
+  staff_status?: "active" | "suspended" | "former";
+  staff_status_label?: string;
+  status_reason?: string | null;
+  status_changed_by?: string | null;
+  status_changed_at?: number | null;
+  /** The member's own public-listing switch, before staff status is applied. */
+  profile_visible?: boolean;
+};
+
+export type StaffRosterRole = {
+  key: string;
+  label: string;
+};
+
+export type StaffManagementResponse = {
+  members: StaffMember[];
+  roles: StaffRosterRole[];
+  count: number;
 };
 
 export type StaffEmoji = {

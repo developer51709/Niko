@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { addStaffStandby, controlStaffStandbyFailover, createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBilling, getStaffDataRemovalRequests, getStaffStandbys, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, removeStaffStandby, resetStaffGuildProfile, resolveStaffBillingPayment, reviewStaffDataRemoval, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist, updateStaffSubscription } from "../api";
+import { addStaffStandby, controlStaffStandbyFailover, createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBilling, getStaffDataRemovalRequests, getStaffMembers, getStaffStandbys, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, manageStaffMember, removeStaffStandby, resetStaffGuildProfile, resolveStaffBillingPayment, reviewStaffDataRemoval, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist, updateStaffSubscription } from "../api";
 import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
 import { Icon } from "../components/Icon";
@@ -11,7 +11,7 @@ import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
-import type { AuthStatus, StandbyFailoverStatus, StandbyInstance, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember } from "../types";
+import type { AuthStatus, StandbyFailoverStatus, StandbyInstance, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
 
 type ReviewedTeamSubmission = TeamRecruitmentSubmission & {
   opening_id: string;
@@ -36,7 +36,7 @@ const PUBLIC_LINK_TYPES = [
   ["other", "Other"],
 ] as const;
 
-type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "standbys" | "proxy-workers" | "team-recruitment" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "standbys" | "proxy-workers" | "team-recruitment" | "staff-management" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -51,6 +51,7 @@ const TAB_ROLES: Record<StaffTab, string[]> = {
   standbys: OWNER_ROLES,
   "proxy-workers": OWNER_ROLES,
   "team-recruitment": OWNER_ROLES,
+  "staff-management": OWNER_ROLES,
   billing: OWNER_ROLES,
   "data-removal": OWNER_ROLES,
   reports: [],
@@ -93,6 +94,14 @@ export function StaffDashboardPage() {
   const [nikoApplications, setNikoApplications] = useState<TeamRecruitmentOpening[]>([]);
   const [nikoSubmissions, setNikoSubmissions] = useState<ReviewedTeamSubmission[]>([]);
   const [nikoBusy, setNikoBusy] = useState(false);
+  const [staffRoster, setStaffRoster] = useState<StaffMember[]>([]);
+  const [staffRosterRoles, setStaffRosterRoles] = useState<StaffRosterRole[]>([]);
+  const [staffRosterLoading, setStaffRosterLoading] = useState(false);
+  const [staffRosterBusy, setStaffRosterBusy] = useState(false);
+  const [staffRosterSearch, setStaffRosterSearch] = useState("");
+  const [staffRosterRoleDrafts, setStaffRosterRoleDrafts] = useState<Record<string, string>>({});
+  const [newStaffId, setNewStaffId] = useState("");
+  const [newStaffRole, setNewStaffRole] = useState("");
   const [standbys, setStandbys] = useState<StandbyInstance[]>([]);
   const [standbyFailover, setStandbyFailover] = useState<StandbyFailoverStatus | null>(null);
   const [expandedStandbyId, setExpandedStandbyId] = useState<string | null>(null);
@@ -164,6 +173,7 @@ export function StaffDashboardPage() {
         void refreshStandbys();
         void refreshNikoApplications();
         void refreshBilling();
+        void refreshStaffRoster();
       }
       if (tabAllowedForRole(staffStatus.role, "guilds")) {
         setStaffGuildsLoading(true);
@@ -213,6 +223,7 @@ export function StaffDashboardPage() {
     if (activeTab === "reports") void loadErrorReports();
     else if (activeTab === "appeals") void loadAppeals();
     else if (activeTab === "billing") void refreshBilling();
+    else if (activeTab === "staff-management") void refreshStaffRoster();
     else if (activeTab === "data-removal") void refreshDataRemoval();
   }, [staff?.role, activeTab]);
 
@@ -229,11 +240,16 @@ export function StaffDashboardPage() {
   const canReviewAppeals = tabAllowedForRole(staff.role, "appeals");
   const canManageStandbys = tabAllowedForRole(staff.role, "standbys");
   const canManageNikoApplications = tabAllowedForRole(staff.role, "team-recruitment");
+  const canManageStaffRoster = tabAllowedForRole(staff.role, "staff-management");
   const canManageBilling = tabAllowedForRole(staff.role, "billing");
   const canManageDataRemoval = tabAllowedForRole(staff.role, "data-removal");
   const query = guildSearch.trim().toLocaleLowerCase();
   const filteredGuilds = staffGuilds.filter((guild) =>
     !query || `${guild.name} ${guild.id} ${guild.owner_name}`.toLocaleLowerCase().includes(query)
+  );
+  const rosterQuery = staffRosterSearch.trim().toLocaleLowerCase();
+  const filteredStaffRoster = staffRoster.filter((member) =>
+    !rosterQuery || `${member.name} ${member.username || ""} ${member.id} ${member.role_label} ${member.staff_status_label || ""}`.toLocaleLowerCase().includes(rosterQuery)
   );
   const update = (key: string, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
   const addLink = () => setLinks((current) => current.length < 10 ? [...current, { type: "", url: "" }] : current);
@@ -376,6 +392,89 @@ export function StaffDashboardPage() {
     try { setDataRemoval((await getStaffDataRemovalRequests()).requests); }
     catch (reason) { notifyError(reason instanceof Error ? reason.message : "Data removal requests unavailable.", "staff-data-removal"); }
   }
+  async function refreshStaffRoster() {
+    setStaffRosterLoading(true);
+    try {
+      const result = await getStaffMembers();
+      setStaffRoster(result.members);
+      setStaffRosterRoles(result.roles);
+    } catch (reason) {
+      notifyError(reason instanceof Error ? reason.message : "The staff roster could not be loaded.", "staff-roster");
+    } finally {
+      setStaffRosterLoading(false);
+    }
+  }
+  const rosterAction = async (
+    member: StaffMember,
+    action: "assign" | "demote" | "suspend" | "lift",
+    role?: string,
+    reason?: string,
+  ) => {
+    if (staffRosterBusy) return;
+    setStaffRosterBusy(true);
+    notifyLoading("Updating staff access…", "staff-roster");
+    try {
+      const result = await manageStaffMember(member.id, { action, role, reason }, auth.csrf_token);
+      const roleLabel = staffRosterRoles.find((item) => item.key === role)?.label || role || "staff";
+      if (action === "assign" && result.status === "suspended") {
+        notifySuccess(`${member.name} has the ${roleLabel} role saved, but their suspension remains active. Lift it when the investigation ends.`, "staff-roster");
+      } else if (action === "assign") {
+        notifySuccess(`${member.name} now has the ${roleLabel} role. Their retained public-profile settings were preserved.`, "staff-roster");
+      } else if (action === "suspend") {
+        notifySuccess(`${member.name} is suspended. Their Discord staff roles and all staff access were removed; the stored role and public profile are retained.`, "staff-roster");
+      } else if (action === "lift") {
+        notifySuccess(`${member.name}'s suspension was lifted and their Discord staff roles were restored.`, "staff-roster");
+      } else {
+        notifySuccess(`${member.name} was demoted. Their public profile is retained but hidden in case they return.`, "staff-roster");
+      }
+      await refreshStaffRoster();
+    } catch (actionError) {
+      notifyError(actionError instanceof Error ? actionError.message : "The staff update could not be completed.", "staff-roster");
+    } finally {
+      setStaffRosterBusy(false);
+    }
+  };
+  const saveStaffRole = async (member: StaffMember) => {
+    const role = staffRosterRoleDrafts[member.id] || member.role;
+    if (!role) { notifyError("Choose a staff role first.", "staff-roster"); return; }
+    const label = staffRosterRoles.find((item) => item.key === role)?.label || role;
+    if (!window.confirm(`Give ${member.name} the ${label} role?`)) return;
+    await rosterAction(member, "assign", role);
+  };
+  const suspendStaffMember = async (member: StaffMember) => {
+    const reason = window.prompt(
+      `Why is ${member.name} being suspended?\n\nThis is recorded in the staff roster. Their stored role and public profile are retained, but all staff access is removed until you lift the suspension.`,
+      "",
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 5) { notifyError("Add a short reason for the suspension.", "staff-roster"); return; }
+    if (!window.confirm(`Suspend ${member.name} and remove their staff access now?`)) return;
+    await rosterAction(member, "suspend", undefined, reason.trim());
+  };
+  const demoteStaffMember = async (member: StaffMember) => {
+    if (!window.confirm(`Demote ${member.name}? Their public profile will be kept but hidden in case they return.`)) return;
+    const reason = window.prompt("Reason for the demotion (optional)", "") || "";
+    await rosterAction(member, "demote", undefined, reason.trim());
+  };
+  const liftStaffSuspension = async (member: StaffMember) => {
+    if (!window.confirm(`Lift ${member.name}'s suspension and restore their staff roles?`)) return;
+    await rosterAction(member, "lift");
+  };
+  const addStaffRole = async () => {
+    if (!/^\d{5,22}$/.test(newStaffId.trim()) || !newStaffRole) {
+      notifyError("Enter a Discord user ID and choose a staff role.", "staff-roster");
+      return;
+    }
+    const roleLabel = staffRosterRoles.find((item) => item.key === newStaffRole)?.label || newStaffRole;
+    if (!window.confirm(`Give user ${newStaffId.trim()} the ${roleLabel} role?`)) return;
+    await rosterAction(
+      { id: newStaffId.trim(), name: `User ${newStaffId.trim()}`, role: newStaffRole, role_label: roleLabel },
+      "assign",
+      newStaffRole,
+    );
+    setNewStaffId("");
+    setNewStaffRole("");
+  };
   const reviewDataRemoval = async (request: StaffDataRemovalRequest, status: "approved" | "denied") => {
     if (dataRemovalBusy) return;
     const action = status === "approved" ? "approve and permanently run this deletion" : "deny this request";
@@ -497,6 +596,7 @@ export function StaffDashboardPage() {
       {canManageStandbys && <button type="button" role="tab" id="staff-standbys-tab" aria-selected={activeTab === "standbys"} aria-controls="staff-standbys-panel" className={activeTab === "standbys" ? "active" : ""} onClick={() => setActiveTab("standbys")}><Icon name="shield" /> Standby instances <span>{standbys.length}</span></button>}
       {canManageStandbys && <button type="button" role="tab" id="staff-proxy-workers-tab" aria-selected={activeTab === "proxy-workers"} aria-controls="staff-proxy-workers-panel" className={activeTab === "proxy-workers" ? "active" : ""} onClick={() => setActiveTab("proxy-workers")}><Icon name="chart" /> Discord proxy</button>}
       {canManageNikoApplications && <button type="button" role="tab" id="staff-team-recruitment-tab" aria-selected={activeTab === "team-recruitment"} aria-controls="staff-team-recruitment-panel" className={activeTab === "team-recruitment" ? "active" : ""} onClick={() => setActiveTab("team-recruitment")}><Icon name="users" /> Team Applications <span>{nikoApplications.reduce((count, application) => count + application.submission_count, 0)}</span></button>}
+      {canManageStaffRoster && <button type="button" role="tab" id="staff-staff-management-tab" aria-selected={activeTab === "staff-management"} aria-controls="staff-staff-management-panel" className={activeTab === "staff-management" ? "active" : ""} onClick={() => setActiveTab("staff-management")}><Icon name="users" /> Staff management <span>{staffRoster.filter((member) => member.staff_status !== "former").length}</span></button>}
       {canManageDataRemoval && <button type="button" role="tab" id="staff-data-removal-tab" aria-selected={activeTab === "data-removal"} aria-controls="staff-data-removal-panel" className={activeTab === "data-removal" ? "active" : ""} onClick={() => setActiveTab("data-removal")}><Icon name="lock" /> Data removal <span>{dataRemoval?.filter((request) => request.status === "pending").length ?? 0}</span></button>}
       {canManageBilling && <button type="button" role="tab" id="staff-billing-tab" aria-selected={activeTab === "billing"} aria-controls="staff-billing-panel" className={activeTab === "billing" ? "active" : ""} onClick={() => setActiveTab("billing")}><Icon name="guild_economy" /> Billing <span>{billing?.payments.filter((payment) => !payment.issue_status).length ?? 0}</span></button>}
       <button type="button" role="tab" id="staff-reports-tab" aria-selected={activeTab === "reports"} aria-controls="staff-reports-panel" className={activeTab === "reports" ? "active" : ""} onClick={() => setActiveTab("reports")}><Icon name="alert" /> Error reports <span>{errorReports.length}</span></button>
@@ -576,6 +676,28 @@ export function StaffDashboardPage() {
     {activeTab === "appeals" && canReviewAppeals && <section id="staff-appeals-panel" role="tabpanel" aria-labelledby="staff-appeals-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Trust &amp; safety</span><h2>Blacklist appeals</h2><p>Review requests privately. Approval removes the active restriction while preserving its appealed history; denied appeals cannot be resubmitted.</p></div><div className="staff-guild-count"><strong>{appeals.filter((appeal) => appeal.status === "pending").length}</strong><span>pending review</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">Visible to the bot owner and Head Admins</span><button type="button" className="button button-muted" onClick={() => void loadAppeals()} disabled={appealsLoading}><Icon name="spark" />{appealsLoading ? "Refreshing…" : "Refresh appeals"}</button></div>{appealsLoading && appeals.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading appeals…</p></div> : appeals.length === 0 ? <div className="staff-guild-empty">No blacklist appeals have been submitted.</div> : <div className="staff-guild-list">{appeals.map((appeal) => <article className={`staff-guild-card staff-appeal-card staff-appeal-${appeal.status}`} key={appeal.appeal_id}><div className="staff-appeal-header"><div className="staff-appeal-identity"><span className="panel-kicker">{appeal.guild_id ? "Guild appeal" : "User appeal"}</span><strong>{appeal.guild_id ? `Guild ${appeal.guild_id}` : appeal.username || "Discord user"}</strong><small>{appeal.guild_id ? `Submitted by user ${appeal.user_id}` : `Discord ID · ${appeal.user_id}`} <span aria-hidden="true">·</span> {new Date(appeal.created_at * 1000).toLocaleString()}</small></div><span className={`staff-guild-status${appeal.status === "denied" ? " is-blocked" : appeal.status === "pending" ? " is-pending" : " is-approved"}`}><i />{appeal.status}</span></div><div className="staff-appeal-reason staff-appeal-context"><span className="panel-kicker">Blacklist reason</span><p>{appeal.blacklist_reason || "No reason recorded."}</p></div><div className="staff-appeal-reason staff-appeal-message"><span className="panel-kicker">Appeal statement</span><p>{appeal.appeal_text}</p></div>{appeal.status === "pending" ? <><label className="form-field"><span className="form-label">Staff note {"(optional)"}</span><textarea rows={3} maxLength={2000} value={appealNotes[appeal.appeal_id] || ""} onChange={(event) => setAppealNotes((current) => ({ ...current, [appeal.appeal_id]: event.target.value }))} placeholder="Add context for the decision; the user can see this note…" /><small>{(appealNotes[appeal.appeal_id] || "").length}/2000 · shown to the user with the decision</small></label><div className="staff-appeal-actions"><button type="button" className="button button-muted" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "denied")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Deny appeal"}</button><button type="button" className="button button-primary" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "approved")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Approve appeal"}</button></div></> : <><div className="staff-appeal-reason staff-appeal-note"><span className="panel-kicker">Staff decision note</span><p>{appeal.staff_note || "No note added."}</p></div><small className="staff-appeal-reviewed">{appeal.status === "approved" ? "Approved" : "Denied"}{appeal.reviewed_at ? ` ${new Date(appeal.reviewed_at * 1000).toLocaleString()}` : ""} <span aria-hidden="true">·</span> Staff ID {appeal.reviewed_by || "unknown"}</small></>}</article>)}</div>}</section>}
     {activeTab === "proxy-workers" && canManageStandbys && <section id="staff-proxy-workers-panel" role="tabpanel" aria-labelledby="staff-proxy-workers-tab" className="staff-guild-operations"><ProxyWorkersView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "standbys" && canManageStandbys && <section id="staff-standbys-panel" role="tabpanel" aria-labelledby="staff-standbys-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · authenticated failover</span><h2>Standby backend instances</h2><p>Each standby runs a warm, full copy of the production backend and dashboard. It takes Discord gateway ownership only after an authenticated failover handoff; Webshare proxies remain a separate egress feature.</p></div><div className="staff-guild-count"><strong>{standbys.length}</strong><span>verified instances</span></div></header><form className="staff-blacklist-form" onSubmit={(event) => void saveStandby(event)}><input value={standbyName} onChange={(event) => setStandbyName(event.target.value)} maxLength={60} placeholder="Region / instance name" aria-label="Standby name" required /><input value={standbyUrl} onChange={(event) => setStandbyUrl(event.target.value)} type="url" placeholder="https://standby.example.com" aria-label="Standby HTTPS origin" required /><button type="submit" className="button button-primary" disabled={standbyBusy}>{standbyBusy ? "Verifying…" : "Verify & add standby"}</button></form><div className="staff-guild-toolbar standby-toolbar"><span className="standby-live-label"><i />Live status · {standbyRefreshedAt ? `updated ${new Date(standbyRefreshedAt).toLocaleTimeString()}` : "connecting…"}</span><div className="standby-mode-actions"><button type="button" className={`button button-small ${standbyFailover?.mode === "auto" || standbyFailover?.mode === "standby" ? "button-primary" : "button-muted"}`} disabled={standbyBusy} onClick={() => void standbyControl({ action: "mode", mode: "auto" }, "Automatic standby-first failover enabled.")}>Auto · standby first</button><button type="button" className={`button button-small ${standbyFailover?.mode === "off" ? "button-danger" : "button-muted"}`} disabled={standbyBusy} onClick={() => void standbyControl({ action: "mode", mode: "off" }, "Automatic routing disabled.")}>Direct / off</button><button type="button" className="button button-small button-muted" disabled={standbyBusy} onClick={() => void refreshStandbys()}><Icon name="spark" />Refresh now</button></div></div>{standbyFailover && <div className="standby-overview"><div><span className="panel-kicker">Route</span><strong>{standbyFailover.enabled ? standbys.find((item) => item.id === standbyFailover.active_standby_id)?.name || "Standby active" : standbyFailover.mode === "off" ? "Direct · failover off" : "Direct · auto armed"}</strong></div><div><span className="panel-kicker">Failovers</span><strong>{standbyFailover.failover_count}</strong></div><div><span className="panel-kicker">Egress</span><strong>{standbyFailover.egress_blocked ? "Blocked · rerouted" : "Clear"}</strong></div></div>}{standbyFailover?.last_error && <div className="notice warning" role="status">Last route warning: {standbyFailover.last_error}</div>}<div className="staff-guild-list">{standbys.map((standby) => { const expanded = expandedStandbyId === standby.id; const stats = standby.stats; return <article className={`staff-guild-card standby-card${expanded ? " expanded" : ""}`} key={standby.id}><button type="button" className="staff-guild-row standby-card-toggle" aria-expanded={expanded} onClick={() => setExpandedStandbyId(expanded ? null : standby.id)}><span className="staff-guild-icon"><Icon name="shield" /></span><span className="staff-guild-title"><strong>{standby.name}</strong><small>{standby.url} · verified {new Date(standby.created_at * 1000).toLocaleString()}</small></span><span className={`staff-guild-status${standby.health === "online" ? " is-approved" : " is-blocked"}`}><i />{standby.health === "online" ? "Online" : "Offline"}</span>{standby.active && <span className="standby-active-tag">Active</span>}<Icon name={expanded ? "close" : "arrow"} className="staff-guild-chevron" /></button>{expanded && <div className="standby-card-details"><div className="standby-stats-grid"><div><span className="panel-kicker">Health</span><strong>{standby.health === "online" ? "Reachable" : "Unavailable"}</strong></div><div><span className="panel-kicker">Discord API requests</span><strong>{stats?.total_api_requests ?? "—"}</strong></div><div><span className="panel-kicker">Failed requests</span><strong>{stats?.failed_api_requests ?? "—"}</strong></div><div><span className="panel-kicker">Uptime</span><strong>{stats ? `${Math.floor(stats.uptime_seconds / 3600)}h ${Math.floor(stats.uptime_seconds % 3600 / 60)}m` : "—"}</strong></div></div><div className="standby-manual-actions"><button type="button" className="button button-primary button-small" disabled={standbyBusy || standby.health !== "online"} onClick={() => void standbyControl({ action: "activate", standby_id: standby.id }, `${standby.name} is now the active Discord route.`)}><Icon name="spark" />Route through standby</button><button type="button" className="button button-muted button-small" disabled={standbyBusy} onClick={() => void standbyControl({ action: "rotate" }, "Failover route rotated.")}><Icon name="refresh" />Rotate route</button><button type="button" className="button button-danger button-small" disabled={standbyBusy} onClick={() => void deleteStandby(standby)}>Remove standby</button></div></div>}</article>; })}{standbys.length === 0 && <div className="staff-guild-empty">No verified standby instances yet.</div>}</div></section>}
+    {activeTab === "staff-management" && canManageStaffRoster && <section id="staff-staff-management-panel" role="tabpanel" aria-labelledby="staff-staff-management-tab" className="staff-guild-operations">
+      <header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · access control</span><h2>Staff management</h2><p>View the full staff roster, assign or change roles, and suspend access during investigations. Suspension preserves the stored role and the member's public profile but removes every official Discord staff role and blocks staff commands and website pages until you lift it.</p></div><div className="staff-guild-count"><strong>{staffRoster.filter((member) => member.staff_status !== "former").length}</strong><span>{staffRoster.filter((member) => member.staff_status === "suspended").length} suspended · {staffRoster.filter((member) => member.staff_status === "former").length} former</span></div></header>
+      <div className="staff-guild-toolbar"><label className="staff-guild-search"><Icon name="search" /><input type="search" value={staffRosterSearch} onChange={(event) => setStaffRosterSearch(event.target.value)} placeholder="Search staff by name, role, or ID" aria-label="Search staff roster" /></label><button type="button" className="button button-muted" onClick={() => void refreshStaffRoster()} disabled={staffRosterLoading}><Icon name="spark" />{staffRosterLoading ? "Refreshing…" : "Refresh roster"}</button></div>
+      <div className="staff-roster-form"><input value={newStaffId} onChange={(event) => setNewStaffId(event.target.value)} inputMode="numeric" maxLength={22} pattern="[0-9]{1,22}" placeholder="Discord user ID" aria-label="New staff Discord user ID" /><select value={newStaffRole} onChange={(event) => setNewStaffRole(event.target.value)} aria-label="New staff role"><option value="">Choose staff role…</option>{staffRosterRoles.map((role) => <option value={role.key} key={role.key}>{role.label}</option>)}</select><button type="button" className="button button-primary" disabled={staffRosterBusy || !newStaffId.trim() || !newStaffRole} onClick={() => void addStaffRole()}>Add staff role</button></div>
+      {staffRosterLoading && staffRoster.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading the staff roster…</p></div> : filteredStaffRoster.length === 0 ? <div className="staff-guild-empty">{staffRoster.length ? "No staff match that search." : "No staff records yet."}</div> : <div className="staff-guild-list">{filteredStaffRoster.map((member) => {
+        const status = member.staff_status || "active";
+        const isOwner = member.role === "owner";
+        const selectedRole = staffRosterRoleDrafts[member.id] || member.role;
+        const statusClass = status === "active" ? " is-approved" : status === "suspended" ? " is-blocked" : " is-pending";
+        const profileLabel = member.visible ? "Public" : member.profile_visible ? "Saved · hidden" : "Hidden";
+        return <article className="staff-guild-card" key={member.id}>
+          <div className="staff-guild-row"><span className="staff-guild-icon">{member.avatar_url ? <img src={member.avatar_url} alt="" /> : <b>{member.name.slice(0, 1).toUpperCase()}</b>}</span><span className="staff-guild-title"><strong>{member.name}{member.username ? ` · @${member.username}` : ""}</strong><small>{member.role_label} · Discord ID {member.id}{member.status_changed_at ? ` · ${member.staff_status_label || status} ${new Date(member.status_changed_at * 1000).toLocaleDateString()}` : ""}</small></span><span className={`staff-guild-status${statusClass}`}><i />{member.staff_status_label || status}</span></div>
+          <div className="staff-guild-details">
+            <div className="staff-guild-summary"><div><span className="panel-kicker">Assigned role</span><strong>{member.role_label}</strong></div><div><span className="panel-kicker">Public profile</span><strong>{profileLabel}</strong></div><div><span className="panel-kicker">Staff access</span><strong>{status === "active" ? "Enabled" : "Blocked"}</strong></div>{member.status_reason && <div><span className="panel-kicker">Status note</span><strong>{member.status_reason}</strong></div>}</div>
+            {isOwner ? <p className="staff-guild-blacklist-note">This is a configured bot owner. Owner access cannot be suspended or demoted from the staff roster.</p> : <div className="staff-guild-action-panel"><div className="staff-guild-action-heading"><div><span className="panel-kicker">Role &amp; access</span><h3>{status === "former" ? "Restore or keep this profile retained" : "Manage this staff member"}</h3></div><span className="staff-guild-id">{status === "suspended" ? "Suspension active" : status === "former" ? "Former staff" : "Active staff"}</span></div>
+              <div className="staff-guild-actions"><label className="form-field staff-guild-reason"><span className="form-label">Staff role</span><select value={selectedRole} onChange={(event) => setStaffRosterRoleDrafts((current) => ({ ...current, [member.id]: event.target.value }))} disabled={staffRosterBusy}>{staffRosterRoles.map((role) => <option value={role.key} key={role.key}>{role.label}</option>)}</select></label><button type="button" className="button button-primary" disabled={staffRosterBusy || !selectedRole} onClick={() => void saveStaffRole(member)}>{status === "former" ? "Assign & reinstate" : "Save role"}</button>{status === "suspended" && <button type="button" className="button button-primary" disabled={staffRosterBusy} onClick={() => void liftStaffSuspension(member)}>Lift suspension</button>}{status === "active" && <button type="button" className="button button-muted" disabled={staffRosterBusy} onClick={() => void suspendStaffMember(member)}>Suspend</button>}{status !== "former" && <button type="button" className="button button-danger" disabled={staffRosterBusy} onClick={() => void demoteStaffMember(member)}>Demote</button>}</div>
+              <p className="staff-guild-blacklist-note">{status === "suspended" ? "The stored role and public profile stay saved. Lift the suspension to restore Discord and website access without a new appointment." : status === "former" ? "The public profile remains saved but hidden. Assigning a new role restores it; a data removal request deletes the profile data." : "Suspending interrupts access without demoting. Demoting keeps the public profile saved but hidden for a future return."}</p>
+            </div>}
+          </div>
+        </article>;
+      })}</div>}
+    </section>}
     {activeTab === "team-recruitment" && canManageNikoApplications && <section id="staff-team-recruitment-panel" role="tabpanel" aria-labelledby="staff-team-recruitment-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · official team applications</span><h2>Team Applications</h2><p>Manage fixed role openings and review every submission from one queue. Role questions and role links are managed in code.</p></div><div className="staff-guild-count"><strong>{nikoSubmissions.length}</strong><span>submitted applications</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">{nikoSubmissions.filter((submission) => submission.review_status === "pending").length} pending · {nikoSubmissions.filter((submission) => submission.review_status !== "pending").length} reviewed</span><button type="button" className="button button-muted" onClick={() => void refreshNikoApplications()} disabled={nikoBusy}><Icon name="spark" />{nikoBusy ? "Refreshing…" : "Refresh"}</button></div><section className="team-recruitment-openings"><div className="team-recruitment-list-heading"><div><span className="panel-kicker">Opening controls</span><h3>Role openings</h3></div><span>{nikoApplications.length} fixed roles</span></div><div className="staff-guild-list">{nikoApplications.map((application) => <article className="staff-guild-card" key={application.id}><div className="staff-guild-row"><span className="staff-guild-icon"><Icon name="users" /></span><span className="staff-guild-title"><strong>{application.title} · {application.role_name || "Role"}</strong><small>{application.submission_count} {application.submission_count === 1 ? "submission" : "submissions"} · {application.status === "open" ? "Accepting applications" : "Closed"} · /team/apply/{application.id}</small></span><button type="button" className="button button-muted button-small" onClick={() => void toggleNikoOpening(application)} disabled={nikoBusy}>{application.status === "open" ? "Close" : "Reopen"}</button></div></article>)}{nikoApplications.length === 0 && <div className="staff-guild-empty">Fixed role applications will appear here when available.</div>}</div></section><section className="team-recruitment-submissions"><div className="team-recruitment-list-heading"><div><span className="panel-kicker">Review queue</span><h3>Submitted applications</h3></div><span>{nikoSubmissions.length} total</span></div>{nikoBusy && nikoSubmissions.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading submitted applications…</p></div> : nikoSubmissions.length === 0 ? <div className="staff-guild-empty">No submitted applications yet.</div> : <><div className="team-recruitment-status-group"><div className="team-recruitment-status-heading"><h4>Pending review</h4><span>{nikoSubmissions.filter((submission) => submission.review_status === "pending").length}</span></div>{nikoSubmissions.filter((submission) => submission.review_status === "pending").length === 0 ? <p className="team-recruitment-empty-group">You’re all caught up. New submissions will appear here.</p> : <div className="team-recruitment-review-list">{nikoSubmissions.filter((submission) => submission.review_status === "pending").map((submission) => <article className="team-recruitment-review-entry" key={`${submission.opening_id}-${submission.user_id}`}><header className="team-recruitment-submission-heading"><div><strong>{submission.display_name}</strong><small>Discord ID · {submission.user_id}{submission.submitted_at ? ` · ${new Date(submission.submitted_at).toLocaleString()}` : ""}</small></div><span className="team-recruitment-opening-tag">{submission.opening_title} · {submission.role_name || "Role"}</span></header><div className="team-recruitment-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || "No answer provided." : answer.answer || "No answer provided."}</p></div>)}</div><footer className="team-recruitment-review-actions"><button type="button" className="button button-muted button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "denied")}>Decline</button><button type="button" className="button button-primary button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "approved")}>Approve</button></footer></article>)}</div>}</div><div className="team-recruitment-status-group is-reviewed"><div className="team-recruitment-status-heading"><h4>Reviewed</h4><span>{nikoSubmissions.filter((submission) => submission.review_status !== "pending").length}</span></div>{nikoSubmissions.filter((submission) => submission.review_status !== "pending").length === 0 ? <p className="team-recruitment-empty-group">Reviewed applications will be kept here for reference.</p> : <div className="team-recruitment-review-list">{nikoSubmissions.filter((submission) => submission.review_status !== "pending").map((submission) => <article className="team-recruitment-review-entry" key={`${submission.opening_id}-${submission.user_id}`}><header className="team-recruitment-submission-heading"><div><strong>{submission.display_name}</strong><small>Discord ID · {submission.user_id}{submission.submitted_at ? ` · Submitted ${new Date(submission.submitted_at).toLocaleString()}` : ""}</small></div><span className={`team-recruitment-decision ${submission.review_status}`}>{submission.review_status === "approved" ? "Approved" : "Declined"}</span></header><div className="team-recruitment-opening-tag">{submission.opening_title} · {submission.role_name || "Role"}</div><div className="team-recruitment-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || "No answer provided." : answer.answer || "No answer provided."}</p></div>)}</div><small className="team-recruitment-review-meta">{submission.reviewed_at ? `Reviewed ${new Date(submission.reviewed_at).toLocaleString()}` : "Decision recorded"}{submission.reviewed_by ? ` · Staff ID ${submission.reviewed_by}` : ""}</small><footer className="team-recruitment-review-actions">{submission.review_status === "approved" ? <button type="button" className="button button-muted button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "denied")}>Revoke approval</button> : <button type="button" className="button button-primary button-small" disabled={nikoBusy} onClick={() => void reviewNikoSubmission(submission, "approved")}>Approve instead</button>}</footer></article>)}</div>}</div></>}</section></section>}
     {activeTab === "billing" && canManageBilling && <section id="staff-billing-panel" role="tabpanel" aria-labelledby="staff-billing-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Revenue</span><h2>Billing &amp; subscriptions</h2><p>Recent white-label payments, active premium servers, and the billing notes needed to resolve an issue. Only the bot owner can open this tab.</p></div><div className="staff-guild-count"><strong>{billing?.totals.paid_label || "$0.00 USD"}</strong><span>collected</span></div></header>

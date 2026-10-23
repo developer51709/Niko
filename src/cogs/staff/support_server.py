@@ -694,8 +694,12 @@ async def assign_join_roles(bot, member: discord.Member, roles: dict) -> None:
         additions.append(supporter)
     pool = getattr(bot, "cxn", None)
     if pool:
-        row = await pool.fetchrow("SELECT role FROM staff_members WHERE user_id = $1", member.id)
+        row = await pool.fetchrow(
+            "SELECT role, staff_status FROM staff_members WHERE user_id = $1", member.id
+        )
         staff_key = str(row["role"]) if row else None
+        if row and str(row.get("staff_status") or "active").strip().lower() != "active":
+            staff_key = None
         if member.id in OWNER_IDS:
             staff_key = "owner"
         if staff_key in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
@@ -717,12 +721,22 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
         return
     member_role = guild.get_role(int(roles["member"]))
     shared_staff = guild.get_role(int(roles["staff"]))
-    staff_rows = await pool.fetch("SELECT user_id, role FROM staff_members")
-    staff_by_user = {int(row["user_id"]): str(row["role"]) for row in staff_rows}
+    staff_rows = await pool.fetch(
+        "SELECT user_id, role, staff_status FROM staff_members"
+    )
+    staff_by_user = {}
+    inactive_staff_ids = set()
+    for row in staff_rows:
+        user_id = int(row["user_id"])
+        if str(row.get("staff_status") or "active").strip().lower() != "active":
+            inactive_staff_ids.add(user_id)
+        else:
+            staff_by_user[user_id] = str(row["role"])
     supported_staff_keys = {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}
     from config.ids import OWNER_IDS
     for owner_id in OWNER_IDS:
         staff_by_user[int(owner_id)] = "owner"
+        inactive_staff_ids.discard(int(owner_id))
     try:
         members = [member async for member in guild.fetch_members(limit=None)]
     except (discord.Forbidden, discord.HTTPException):
@@ -756,6 +770,15 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
                 await member.add_roles(specific, reason="Synchronize Niko staff assignment")
             if stale:
                 await member.remove_roles(*stale, reason="Remove obsolete Niko staff assignment")
+        elif member.id in inactive_staff_ids:
+            # Suspended and former staff keep the stored role on the roster,
+            # but must not keep any access-granting Discord role.
+            stale = [guild.get_role(int(roles[key])) for key in supported_staff_keys if roles.get(key)]
+            stale = [role for role in stale if role and role in member.roles]
+            if shared_staff and shared_staff in member.roles:
+                stale.append(shared_staff)
+            if stale:
+                await member.remove_roles(*stale, reason="Niko staff access suspended or revoked")
 
 
 class SupportGuidePanel(discord.ui.LayoutView):

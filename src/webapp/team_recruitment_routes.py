@@ -598,18 +598,22 @@ async def _apply_team_role(user_id, role_key):
 
 
 async def _persist_staff_assignment(user_id, role_key, assigned_by):
+    from cogs.staff.staff import persist_staff_role
+
     pool = _pool()
     if role_key not in _server.STAFF_ROLES:
         raise RuntimeError(f"{role_key} is not a staff role, so the roster cannot record it.")
-    await pool.execute(
-        "INSERT OR REPLACE INTO staff_members (user_id, role, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)",
-        int(user_id), role_key, int(assigned_by), int(time.time()),
-    )
+    await persist_staff_role(pool, int(user_id), role_key, int(assigned_by))
 
 
-async def _clear_staff_assignment(user_id, role_key):
+async def _clear_staff_assignment(user_id, role_key, actor_id=0):
+    """Demote without deleting the retained public staff profile."""
     await _pool().execute(
-        "DELETE FROM staff_members WHERE user_id = $1 AND role = $2", int(user_id), role_key,
+        "UPDATE staff_members SET staff_status = $1, status_reason = $2, "
+        "status_changed_by = $3, status_changed_at = $4 "
+        "WHERE user_id = $5 AND role = $6",
+        "former", "Team application approval reversed",
+        int(actor_id), int(time.time()), int(user_id), role_key,
     )
 
 
@@ -685,6 +689,17 @@ def review_staff_team_submission(opening_id, user_id):
             "dm_sent": None,
             "role_revoked": False,
         })
+    if status == "approved":
+        # Suspension is an explicit access hold. Approving an old application
+        # must not hand the member's Discord staff role back while an
+        # investigation is still active; the owner has to lift it first.
+        existing_staff = run_on_bot_loop(_pool().fetchrow(
+            "SELECT staff_status FROM staff_members WHERE user_id = $1", user_id,
+        ))
+        if existing_staff and str(existing_staff.get("staff_status") or "active").strip().lower() == "suspended":
+            return jsonify({
+                "error": "This applicant's staff access is suspended. Lift the suspension before approving a role.",
+            }), 409
     # Denying an application that was already approved takes the granted role
     # back, so Discord and the staff roster agree with the recorded decision.
     revoke_role = status == "denied" and previous_status == "approved"
@@ -702,7 +717,9 @@ def review_staff_team_submission(opening_id, user_id):
             ))
         elif revoke_role:
             role_revoked = bool(run_on_bot_loop(_revoke_team_role(user_id, role_key)))
-            run_on_bot_loop(_clear_staff_assignment(user_id, role_key))
+            run_on_bot_loop(_clear_staff_assignment(
+                user_id, role_key, int(session["user"].get("id", 0)),
+            ))
         run_on_bot_loop(_pool().execute(
             "UPDATE staff_team_submissions SET review_status = $1, reviewed_by = $2, reviewed_at = datetime('now') "
             "WHERE opening_id = $3 AND user_id = $4",

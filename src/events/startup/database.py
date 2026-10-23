@@ -234,10 +234,15 @@ async def _create_tables(bot):
             public_avatar_url TEXT,
             public_banner_url TEXT,
             public_links TEXT,
-            public_visible INTEGER NOT NULL DEFAULT 1
+            public_visible INTEGER NOT NULL DEFAULT 1,
+            staff_status TEXT NOT NULL DEFAULT 'active',
+            status_reason TEXT,
+            status_changed_by INTEGER,
+            status_changed_at REAL
         )
     """)
-    # Keep existing installations compatible with the richer public staff profile.
+    # Keep existing installations compatible with the richer public staff profile
+    # and the active/suspended/former staff lifecycle.
     for col_name, col_def in [
         ("public_name", "TEXT"),
         ("public_bio", "TEXT"),
@@ -245,6 +250,10 @@ async def _create_tables(bot):
         ("public_banner_url", "TEXT"),
         ("public_links", "TEXT"),
         ("public_visible", "INTEGER NOT NULL DEFAULT 1"),
+        ("staff_status", "TEXT NOT NULL DEFAULT 'active'"),
+        ("status_reason", "TEXT"),
+        ("status_changed_by", "INTEGER"),
+        ("status_changed_at", "REAL"),
     ]:
         try:
             await bot.cxn.execute(f"ALTER TABLE staff_members ADD COLUMN {col_name} {col_def}")

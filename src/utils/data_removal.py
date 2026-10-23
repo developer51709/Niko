@@ -241,6 +241,19 @@ async def execute_account_deletion(pool, user_id: int) -> dict:
 
     await _delete_music_data(user_id, errors)
 
+    # The public staff profile is personal data, not a moderation record. Clear
+    # every public field while leaving the internal role assignment and status
+    # intact so the team can still account for a former or suspended member.
+    if await _run(
+        pool,
+        "UPDATE staff_members SET public_name = NULL, public_bio = NULL, "
+        "public_avatar_url = NULL, public_banner_url = NULL, "
+        "public_links = NULL, public_visible = 0 WHERE user_id = $1",
+        user_id,
+        errors=errors,
+    ):
+        removed.append("staff_members:public_profile")
+
     return {
         "scope": "account",
         "user_id": str(user_id),
