@@ -181,6 +181,8 @@ PRIMARY_KEYS: dict = {
     "server_activity": "activity_id",
     "starboard_config": "guild_id",
     "starboard_messages": ("guild_id", "message_id"),
+    "booster_config": "guild_id",
+    "booster_roles": ("guild_id", "user_id"),
     "uwulock_config": ("guild_id", "channel_id", "user_id"),
     "uwulock_messages": "message_id",
     "suggestion_config": "guild_id",

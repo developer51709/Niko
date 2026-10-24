@@ -46,6 +46,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 - Persistent ticket system with Discord-styled HTML transcripts
 - Giveaways with account-age, server-age, role, and booster requirements
 - Polls, suggestions, starboard, custom tags, birthdays, and reminders
+- Custom boost and unboost announcements plus personal booster roles members can style and share
 - Social feed notifications for YouTube, Twitch, X, TikTok, Bluesky, and Reddit
 
 ### Music

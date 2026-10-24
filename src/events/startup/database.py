@@ -1051,6 +1051,25 @@ async def _create_tables(bot):
     await _migrate_starboard_data(bot)
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS booster_config (
+            guild_id INTEGER PRIMARY KEY,
+            notifications_enabled INTEGER NOT NULL DEFAULT 0,
+            roles_enabled INTEGER NOT NULL DEFAULT 0,
+            channel_id INTEGER,
+            boost_message TEXT NOT NULL DEFAULT 'Thank you {user} for boosting {server}! We now have {boost_count} boosts.',
+            unboost_message TEXT NOT NULL DEFAULT '{user} is no longer boosting {server}. We now have {boost_count} boosts.'
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS booster_roles (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS uwulock_config (
             guild_id   INTEGER NOT NULL,
             channel_id INTEGER NOT NULL,

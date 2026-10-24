@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, getAuth, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { ApiError, getAuth, getBoosterSettings, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
 import { NotifierView } from "../components/dashboard/NotifierView";
+import { BoostersView } from "../components/dashboard/BoostersView";
 import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { AchievementsView } from "../components/dashboard/AchievementsView";
 import { EconomyView } from "../components/dashboard/EconomyView";
@@ -13,7 +14,7 @@ import { useBotConfig } from "../hooks/useBotConfig";
 import { useLiveResource } from "../hooks/useLiveResource";
 import type { PublicConfig } from "../types";
 import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
-import type { AchievementsResponse, AuthStatus, BotStats, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, User, UserOverview } from "../types";
+import type { AchievementsResponse, AuthStatus, BotStats, BoosterSettings, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, User, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
@@ -36,6 +37,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [config, setConfig] = useState<GuildConfig | null>(null);
   const [resources, setResources] = useState<GuildResources | null>(null);
+  const [boosterSettings, setBoosterSettings] = useState<BoosterSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const overviewRef = useRef<GuildOverview | null>(null);
@@ -81,7 +83,12 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
       };
     }
 
-    const request = section === "leveling"
+    const request = section === "boosters"
+      ? Promise.all([getBoosterSettings(guild.id), getResources(guild.id)]).then(([boosterResult, available]) => {
+          setBoosterSettings(boosterResult.config);
+          setResources(available);
+        })
+      : section === "leveling"
       ? Promise.all([getLevels(guild.id), getConfig(guild.id), getResources(guild.id)]).then(([rows, value, available]) => { setLevels(rows); setConfig(value); setResources(available); })
       : section === "applications"
           ? getResources(guild.id).then(setResources)
@@ -103,6 +110,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   if (section === "onboarding") return <OnboardingView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "tickets") return <TicketsView guildId={guild.id} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "notifications") return <NotifierView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
+  if (section === "boosters") return <BoostersView guildId={guild.id} resources={resources} csrfToken={csrfToken} initialSettings={boosterSettings} />;
   if (section === "applications") return <StaffApplicationsView guildId={guild.id} resources={resources} csrfToken={csrfToken} />;
   if (section === "customization") return <CustomizationSettings guildId={guild.id} config={config} csrfToken={csrfToken} />;
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;

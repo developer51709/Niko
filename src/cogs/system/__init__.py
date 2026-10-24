@@ -1,4 +1,4 @@
-from . import error_handler, introduction, fileinput_patch, nitro, server_stats, guild_ownership
+from . import error_handler, introduction, fileinput_patch, nitro, server_stats, guild_ownership, boosters
 
 
 async def setup(bot):
@@ -8,3 +8,4 @@ async def setup(bot):
     await nitro.setup(bot)
     await server_stats.setup(bot)
     await guild_ownership.setup(bot)
+    await boosters.setup(bot)

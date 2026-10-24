@@ -60,6 +60,7 @@ performed server-side; the frontend must not be treated as the security boundary
 | GET | `/api/guild/<id>/levels` | XP leaderboard |
 | GET | `/api/guild/<id>/config` | Moderation, AI, leveling, and server config |
 | GET | `/api/guild/<id>/resources` | Available text channels and roles for dashboard selectors |
+| GET/POST | `/api/guild/<id>/boosters` | Read or update boost announcements and personal booster-role settings |
 | GET/POST | `/api/guild/<id>/applications` | List or create staff role openings |
 | POST | `/api/guild/<id>/applications/<application_id>/status` | Close or reopen an opening without changing its link or submissions |
 | GET | `/api/guild/<id>/applications/<application_id>/submissions` | Review applicant responses |
