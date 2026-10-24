@@ -2,7 +2,6 @@ import asyncio
 from typing import Union
 
 import discord
-from config.ids import SUPPORT_GUILD
 from discord import ui
 from discord.ext import commands
 
@@ -20,6 +19,9 @@ COLOR_ERROR = 0xFF0000
 
 SUPPORT_URL = links.SUPPORT_SERVER
 BOT_NAME = "Niko"
+
+SETUP_CATEGORY_NAME = "Niko | VoiceMaster"
+SETUP_HUB_NAME = "Join to Create"
 
 def make_container(text: str, accent: int = COLOR_DEFAULT) -> ui.LayoutView:
     view = ui.LayoutView(timeout=None)
@@ -222,8 +224,9 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         return cog, channel, False
 
     async def _dispatch(self, interaction: discord.Interaction, action: str):
-        if interaction.guild_id != SUPPORT_GUILD:
-            return await interaction.response.send_message("This voice panel is for the official Niko support server.", ephemeral=True)
+        # This panel is seeded in the support server and can be posted in any
+        # server with `voicemaster sendinterface`, so it must work everywhere.
+        # Ownership is enforced per channel by `is_channel_owner` below.
         owner_required = action not in ("claim", "info")
         cog, channel, err = await self._resolve(interaction, owner_required=owner_required)
         if err:
@@ -280,12 +283,205 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             )
 
 
+async def _allow_setup_interaction(ctx: commands.Context, interaction: discord.Interaction) -> bool:
+    """Only the member who started setup may drive its prompt."""
+    if interaction.user.id != ctx.author.id:
+        await interaction.response.send_message(
+            view=make_container(
+                f"-# {get_emoji('cross')} Only {ctx.author.mention} can use this setup prompt.",
+                accent=COLOR_ERROR,
+            ),
+            ephemeral=True,
+        )
+        return False
+    if not interaction.user.guild_permissions.manage_guild:
+        await interaction.response.send_message(
+            view=make_container(
+                f"-# {get_emoji('cross')} You need the **Manage Server** permission to configure VoiceMaster.",
+                accent=COLOR_ERROR,
+            ),
+            ephemeral=True,
+        )
+        return False
+    return True
+
+
+def _setup_success_view(join_channel: discord.VoiceChannel, category, prefix: str) -> ui.LayoutView:
+    view = ui.LayoutView(timeout=None)
+    container = ui.Container(accent_color=COLOR_SUCCESS)
+    container.add_item(ui.TextDisplay(f"## {get_emoji('tick')} VoiceMaster Setup Complete"))
+    container.add_item(ui.Separator())
+    container.add_item(ui.TextDisplay(
+        f"**Join Channel:** {join_channel.mention}\n"
+        f"**Category:** {category.name if category else 'No category'}\n\n"
+        f"-# Use `{prefix}voicemaster sendinterface` to send the control panel."
+    ))
+    view.add_item(container)
+    return view
+
+
+class VoiceMasterChannelSelect(ui.Select):
+    def __init__(self, cog, ctx: commands.Context, channels: list[discord.VoiceChannel]):
+        options = [
+            discord.SelectOption(
+                label=channel.name[:100],
+                value=str(channel.id),
+                description=(f"Category: {channel.category.name}" if channel.category else "No category")[:100],
+            )
+            for channel in channels[:25]
+        ]
+        super().__init__(
+            placeholder="Select the voice channel to use...",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+        self.cog = cog
+        self.ctx = ctx
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        channel = interaction.guild.get_channel(int(self.values[0]))
+        if not isinstance(channel, discord.VoiceChannel):
+            await interaction.edit_original_response(view=make_container(
+                f"-# {get_emoji('cross')} That voice channel is no longer available.", accent=COLOR_ERROR
+            ))
+            return
+        try:
+            await self.cog.configure_setup(interaction.guild, channel, channel.category)
+        except Exception as exc:
+            logging.error("VoiceMaster", f"Existing-channel setup error: {exc}")
+            await interaction.edit_original_response(view=make_container(
+                f"-# {get_emoji('cross')} Failed to save that channel. Please check my permissions.", accent=COLOR_ERROR
+            ))
+            return
+        await interaction.edit_original_response(
+            view=_setup_success_view(channel, channel.category, self.ctx.prefix)
+        )
+
+
+class VoiceMasterChannelSelectView(ui.LayoutView):
+    def __init__(self, cog, ctx: commands.Context, channels: list[discord.VoiceChannel]):
+        super().__init__(timeout=180)
+        self.ctx = ctx
+        container = ui.Container(
+            ui.TextDisplay(f"## {BOT_NAME} | Choose a hub channel"),
+            ui.Separator(),
+            ui.TextDisplay(
+                "Pick the voice channel members should join to get their own temporary channel. "
+                "New channels are created in that channel's category.\n\n"
+                f"-# Run `{ctx.prefix}voicemaster setup` again to have Niko create a new one instead."
+            ),
+            ui.Separator(),
+            ui.ActionRow(VoiceMasterChannelSelect(cog, ctx, channels)),
+            accent_color=COLOR_DEFAULT,
+        )
+        self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await _allow_setup_interaction(self.ctx, interaction)
+
+
+class VoiceMasterSetupView(ui.LayoutView):
+    """Interactive prompt asking whether to create a hub or use an existing channel."""
+
+    def __init__(self, cog, ctx: commands.Context, current_hub: discord.VoiceChannel | None = None):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.ctx = ctx
+
+        btn_create = ui.Button(
+            label="Create a new channel", style=discord.ButtonStyle.success, custom_id="vm_setup_create"
+        )
+        btn_existing = ui.Button(
+            label="Use an existing channel", style=discord.ButtonStyle.secondary, custom_id="vm_setup_existing"
+        )
+        btn_create.callback = self._create_new_channel
+        btn_existing.callback = self._choose_existing_channel
+
+        current = ""
+        if current_hub is not None:
+            current = (
+                f"\n\n-# VoiceMaster is currently using {current_hub.mention}. "
+                "Running setup again replaces that choice."
+            )
+
+        container = ui.Container(
+            ui.TextDisplay(f"## {BOT_NAME} | VoiceMaster Setup"),
+            ui.Separator(),
+            ui.TextDisplay(
+                "VoiceMaster gives every member their own temporary voice channel. "
+                "When someone joins your **hub** channel, Niko creates a channel for them and deletes it once it is empty.\n\n"
+                "Would you like Niko to create a hub channel for you, or would you like to use a channel you already have?"
+                f"{current}"
+            ),
+            ui.Separator(),
+            ui.ActionRow(btn_create, btn_existing),
+            accent_color=COLOR_DEFAULT,
+        )
+        self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await _allow_setup_interaction(self.ctx, interaction)
+
+    async def _create_new_channel(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            category = await interaction.guild.create_category(SETUP_CATEGORY_NAME)
+            channel = await interaction.guild.create_voice_channel(SETUP_HUB_NAME, category=category)
+            await self.cog.configure_setup(interaction.guild, channel, category)
+        except Exception as exc:
+            logging.error("VoiceMaster", f"Setup error: {exc}")
+            await interaction.edit_original_response(view=make_container(
+                f"-# {get_emoji('cross')} Failed to set up VoiceMaster. Please check my permissions.",
+                accent=COLOR_ERROR,
+            ))
+            return
+        await interaction.edit_original_response(
+            view=_setup_success_view(channel, category, self.ctx.prefix)
+        )
+
+    async def _choose_existing_channel(self, interaction: discord.Interaction):
+        channels = interaction.guild.voice_channels
+        if not channels:
+            await interaction.response.send_message(
+                view=make_container(
+                    f"-# {get_emoji('cross')} This server has no voice channels yet. "
+                    "Choose **Create a new channel** instead.",
+                    accent=COLOR_ERROR,
+                ),
+                ephemeral=True,
+            )
+            return
+        await interaction.response.edit_message(
+            view=VoiceMasterChannelSelectView(self.cog, self.ctx, channels)
+        )
+
+
 class VoiceMaster(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
         self.bot.add_view(VoiceMasterInterface())
         self._settings_cache: dict = {}
+
+    async def configure_setup(self, guild: discord.Guild, join_channel: discord.VoiceChannel, category) -> None:
+        """Save a hub channel (new or pre-existing) as this guild's VoiceMaster setup."""
+        category_id = category.id if category else None
+        await self.bot.cxn.execute(
+            """
+            INSERT INTO voicemaster_settings
+                (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (guild_id)
+            DO UPDATE SET
+                join_channel_id = $7,
+                category_id     = $8
+            """,
+            guild.id, join_channel.id, category_id, "{user}'s Channel", 0, 64000,
+            join_channel.id, category_id
+        )
+        self._bust_cache(guild.id)
 
     async def is_channel_owner(self, user_id: int, channel_id: int) -> bool:
         try:
@@ -497,40 +693,14 @@ class VoiceMaster(commands.Cog):
     @_voicemaster.command(help="Configure VoiceMaster for your server")
     @checks.has_perms(manage_guild=True)
     async def setup(self, ctx):
-        try:
-            category = await ctx.guild.create_category("Niko | VoiceMaster")
-            join_channel = await ctx.guild.create_voice_channel("Join to Create", category=category)
-
-            await self.bot.cxn.execute(
-                """
-                INSERT INTO voicemaster_settings
-                    (guild_id, join_channel_id, category_id, default_name, default_limit, default_bitrate)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (guild_id)
-                DO UPDATE SET
-                    join_channel_id = $7,
-                    category_id     = $8
-                """,
-                ctx.guild.id, join_channel.id, category.id, "{user}'s Channel", 0, 64000,
-                join_channel.id, category.id
-            )
-            self._bust_cache(ctx.guild.id)
-
-            view = ui.LayoutView(timeout=None)
-            container = ui.Container(accent_color=COLOR_SUCCESS)
-            container.add_item(ui.TextDisplay(f"## {get_emoji('tick')} VoiceMaster Setup Complete"))
-            container.add_item(ui.Separator())
-            container.add_item(ui.TextDisplay(
-                f"**Join Channel:** {join_channel.mention}\n"
-                f"**Category:** {category.name}\n\n"
-                f"-# Use `{ctx.prefix}voicemaster sendinterface` to send the control panel."
-            ))
-            view.add_item(container)
-            await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
-
-        except Exception as e:
-            logging.error("VoiceMaster", f"Setup error: {e}")
-            await fail(ctx, "Failed to set up VoiceMaster. Please check my permissions.")
+        current_hub = None
+        settings = await self.get_guild_settings(ctx.guild.id)
+        if settings and settings.get('join_channel_id'):
+            current_hub = ctx.guild.get_channel(settings['join_channel_id'])
+        await ctx.send(
+            view=VoiceMasterSetupView(self, ctx, current_hub),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     @_voicemaster.command(help="Send the VoiceMaster control panel")
     @checks.has_perms(manage_guild=True)
@@ -554,7 +724,9 @@ class VoiceMaster(commands.Cog):
             if settings:
                 if settings.get('join_channel_id'):
                     jc = ctx.guild.get_channel(settings['join_channel_id'])
-                    if jc:
+                    # Setup can point at a hub the admin already owned, so only
+                    # remove the channel Niko created itself.
+                    if jc and jc.name == SETUP_HUB_NAME:
                         await jc.delete(reason="VoiceMaster reset")
                 if settings.get('category_id'):
                     cat = ctx.guild.get_channel(settings['category_id'])
