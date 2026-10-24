@@ -49,6 +49,48 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "booster-roles-and-notifications",
+    title: "Booster Roles and Boost Announcements",
+    date: "2026-10-24",
+    tags: ["boosters", "roles", "dashboard", "notifications", "added"],
+    summary:
+      "Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.",
+    highlights: [
+      {
+        title: "A Custom Thank-You for Every Boost",
+        description:
+          "Choose the announcement channel and write separate messages for new and departing boosters. Templates support the member, server, boost count, and boost level.",
+        icon: "guild_notifications",
+      },
+      {
+        title: "One Role for Each Active Booster",
+        description:
+          "When enabled, Niko creates a permission-free role for each active booster. The owner can style that role and share it with other members.",
+        icon: "users",
+      },
+      {
+        title: "Role Styles Follow Discord's Perks",
+        description:
+          "Custom icons and gradient role colors are available only when the server has unlocked the matching Discord boost features.",
+        icon: "spark",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "A new Boosters dashboard section to enable notifications and roles per server",
+          "Separate editable boost and unboost message templates with `{user}`, `{name}`, `{server}`, `{boost_count}`, and `{boost_level}` placeholders",
+          "Automatic personal roles for active boosters and cleanup when a role owner stops boosting or leaves",
+          "`/boosterrole` commands to rename, recolor, set or clear an icon, and share or unshare a personal role",
+          "Solid colors, gradient colors, and role icons gated by Discord's server feature unlocks",
+          "Public documentation for dashboard setup, supported placeholders, role commands, and cleanup behavior",
+        ],
+      },
+    ],
+    commits: [],
+  },
+  {
     slug: "premium-subscriptions",
     title: "Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update",
     date: "2026-10-20",

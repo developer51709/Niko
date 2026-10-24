@@ -554,6 +554,14 @@ export type GuildResources = {
   roles: { id: string; name: string }[];
 };
 
+export type BoosterSettings = {
+  notifications_enabled: boolean;
+  roles_enabled: boolean;
+  channel_id: string;
+  boost_message: string;
+  unboost_message: string;
+};
+
 export type PublicProfileLink = {
   type: string;
   url: string;

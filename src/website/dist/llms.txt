@@ -10,6 +10,7 @@
 - [Anti-Spam Configuration](https://niko.sryze.cc/docs/automod-anti-spam.md)
 - [AutoMod Overview](https://niko.sryze.cc/docs/automod-overview.md)
 - [Blacklists and Appeals](https://niko.sryze.cc/docs/blacklist-and-appeals.md)
+- [Boost Notifications and Booster Roles](https://niko.sryze.cc/docs/booster-roles.md)
 - [Customize Niko's Server Profile](https://niko.sryze.cc/docs/dashboard-customization.md)
 - [Dashboard: Economy & Achievements](https://niko.sryze.cc/docs/dashboard-economy.md)
 - [Dashboard: Leveling Settings](https://niko.sryze.cc/docs/dashboard-leveling.md)
@@ -54,6 +55,7 @@
 
 ## Changelog
 
+- [Booster Roles and Boost Announcements](https://niko.sryze.cc/changelog/booster-roles-and-notifications.md) — Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.
 - [Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update](https://niko.sryze.cc/changelog/premium-subscriptions.md) — Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.
 - [Giveaway Bans Keep Ban-Dodgers Out of Your Giveaways](https://niko.sryze.cc/changelog/giveaway-bans.md) — Servers can now ban a member from their giveaways with `.giveaway ban`, and lift it with `.giveaway unban`. A ban is per server, clears the entries the member already holds, and is enforced at the draw as well as on the Join button, so a banned member cannot win by entering before the ban or during a giveaway's final seconds.
 - [The Notifier Keeps Quiet Channels and Uses Your Default Channel](https://niko.sryze.cc/changelog/notifier-health-and-defaults.md) — Quiet channels are no longer mistaken for broken ones: a YouTube channel with no uploads, an offline Twitch channel with no VODs and an empty subreddit all stay healthy, and a successful check clears the failed-check count. Adding an account also no longer demands a channel when the server has a default channel saved — leave the picker on the default and the follow posts there, and the picker only becomes required again once that default is cleared.

@@ -11,6 +11,7 @@ from . import (  # noqa: E402,F401
     public_routes,
     dashboard_routes,
     notifier_routes,
+    booster_routes,
     donation_routes,
     premium_routes,
     privacy_routes,

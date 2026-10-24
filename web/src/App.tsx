@@ -35,8 +35,8 @@ export function App() {
   if (page === "commands") pageContent = <CommandsPage />;
   else if (page === "leaderboard") pageContent = <LeaderboardPage />;
   else if (page === "docs-detail") {
-    const pathParts = window.location.pathname.split("/");
-    pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1]} />;
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1] || ""} />;
   } else if (page === "docs") pageContent = <DocsPage />;
   else if (page === "staff") pageContent = <StaffDashboardPage />;
   else if (page === "appeal") pageContent = <BlacklistAppealPage />;
@@ -59,8 +59,8 @@ export function App() {
   } else if (page === "render-lab") pageContent = <RenderLabPage />;
   else if (page === "changelog") pageContent = <ChangelogPage />;
   else if (page === "changelog-detail") {
-    const pathParts = window.location.pathname.split("/");
-    pageContent = <ChangelogSlugPage slug={pathParts[pathParts.length - 1]} />;
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    pageContent = <ChangelogSlugPage slug={pathParts[pathParts.length - 1] || ""} />;
   } else pageContent = <HomePage />;
 
   const now = new Date();

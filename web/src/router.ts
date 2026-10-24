@@ -3,7 +3,7 @@ export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
 export const RENDER_LAB_PATH = "/render-lab-b7f3e91c";
-export type DashSection = "overview" | "leveling" | "moderation" | "server" | "onboarding" | "tickets" | "notifications" | "applications" | "ai" | "customization";
+export type DashSection = "overview" | "leveling" | "moderation" | "server" | "onboarding" | "tickets" | "notifications" | "boosters" | "applications" | "ai" | "customization";
 export type UserTab = "overview" | "economy" | "achievements";
 export type DashboardView = "overview" | "servers" | "guild";
 
@@ -56,7 +56,7 @@ export function dashboardServersPath() {
 
 export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection; tab: UserTab } {
   const parts = normalizedPath(window.location.pathname).split("/").filter(Boolean);
-  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "onboarding", "tickets", "notifications", "applications", "ai", "customization"];
+  const known: DashSection[] = ["overview", "leveling", "moderation", "server", "onboarding", "tickets", "notifications", "boosters", "applications", "ai", "customization"];
   if (parts[1] === "servers") {
     return { view: "servers", guildId: null, section: "overview", tab: "overview" };
   }
