@@ -11,6 +11,7 @@ import random
 import time
 
 from config.emojis import get_emoji
+from utils.cooldown import cooldown_ready_at, cooldown_view
 from utils.paginator import PaginatedView, paginate
 from utils.prefix_manager import resolve_prefix
 from utils.image.blackjack import render_table
@@ -294,8 +295,14 @@ class Blackjack(commands.Cog):
         user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
 
-        if user_data["last_blackjack"] + int(os.getenv("BLACKJACK_COOLDOWN") or 60) > time.time():
-            return await ctx.send("You're on cooldown for blackjack.")
+        blackjack_cooldown = int(os.getenv("BLACKJACK_COOLDOWN") or 60)
+        if user_data["last_blackjack"] + blackjack_cooldown > time.time():
+            return await ctx.send(view=cooldown_view(
+                "play blackjack",
+                cooldown_ready_at(user_data["last_blackjack"], blackjack_cooldown),
+                title="🃏 Slow down",
+                note=f"Blackjack allows one hand every **{blackjack_cooldown}** seconds.",
+            ))
 
         if amount > balance:
             return await ctx.send("You don't have enough coins.")

@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from cogs.casino import roulette as roulette_module  # noqa: E402
 from cogs.casino.roulette import Roulette, resolve_bet  # noqa: E402
 from cogs.economy.cog import EconomyCog  # noqa: E402
+from utils.cooldown import cooldown_ready_at  # noqa: E402
 
 BET = 100
 
@@ -237,12 +238,16 @@ class SpinAccountingTests(unittest.TestCase):
 
 class CommandGuardTests(unittest.TestCase):
     def test_cooldown_blocks_a_second_spin(self):
-        data = account(last_roulette=time.time())
+        started = time.time()
+        data = account(last_roulette=started)
         ctx, economy, _ = spin(data, result=7)
 
         self.assertEqual(data["balance"], 1000)
         self.assertEqual(economy.saves, 0)
-        self.assertIn("You can only play roulette once every", ctx.sent[-1][0][0])
+        body = repr(ctx.sent[-1][1]["view"].to_components())
+        self.assertIn("You can spin the wheel again", body)
+        ready = cooldown_ready_at(started, roulette_module.ROULETTE_COOLDOWN)
+        self.assertIn(f"<t:{ready}:R>", body)
 
     def test_bet_larger_than_the_wallet_is_rejected(self):
         data = account()

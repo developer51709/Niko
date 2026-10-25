@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from cogs.casino import slots as slots_module  # noqa: E402
 from cogs.casino.slots import Slots, evaluate_grid  # noqa: E402
 from cogs.economy.cog import EconomyCog  # noqa: E402
+from utils.cooldown import cooldown_ready_at  # noqa: E402
 
 BET = 100
 
@@ -225,13 +226,24 @@ class SpinAccountingTests(unittest.TestCase):
 
 
 class CommandGuardTests(unittest.TestCase):
+    def test_the_result_offers_a_persistent_play_again_button(self):
+        ctx, _ = play(account())
+        result_view = ctx.sent[0][2].edits[-1]["view"]
+
+        self.assertIsNone(result_view.timeout)
+        self.assertIn(f"casino:slots:again:42:{BET}", repr(result_view.to_components()))
+
     def test_cooldown_blocks_a_second_spin(self):
-        data = account(last_slots=time.time())
+        started = time.time()
+        data = account(last_slots=started)
         ctx, economy = play(data)
 
         self.assertEqual(data["balance"], 1000)
         self.assertEqual(economy.saves, 0)
-        self.assertIn("You can only play slots once every", ctx.sent[-1][0][0])
+        body = repr(ctx.sent[-1][1]["view"].to_components())
+        self.assertIn("You can spin the slots again", body)
+        ready = cooldown_ready_at(started, slots_module.slots_cooldown)
+        self.assertIn(f"<t:{ready}:R>", body)
 
     def test_non_positive_bet_is_rejected(self):
         for amount in (0, -50):
