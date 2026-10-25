@@ -4,6 +4,8 @@ import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../ut
 import { Icon } from "../Icon";
 import type { BoosterSettings, GuildResources } from "../../types";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
+import { Switch } from "./Switch";
+import { SettingCard, SettingCards } from "./SettingCards";
 
 type Props = {
   guildId: string;
@@ -90,11 +92,13 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
           <div><span className="panel-kicker">Announcements</span><h3>Boost notifications</h3><p>Choose where boost and unboost messages appear, then customize both messages.</p></div>
           <span className="panel-icon"><Icon name="guild_notifications" /></span>
         </div>
-        <label className="setting-row">
-          <span><strong>Post boost and unboost announcements</strong><small>Messages are only posted after a member starts or stops boosting.</small></span>
-          <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => update("notifications_enabled", event.target.checked)} />
-          <i aria-hidden="true" />
-        </label>
+        <SettingCards>
+          <SettingCard
+            title="Post boost and unboost announcements"
+            hint="Messages are only posted after a member starts or stops boosting."
+            action={<Switch checked={settings.notifications_enabled} onCheckedChange={(value) => update("notifications_enabled", value)} aria-label="Post boost and unboost announcements" />}
+          />
+        </SettingCards>
         <div className="form-grid">
           <Field label="Announcement channel">
             <select value={settings.channel_id} onChange={(event) => update("channel_id", event.target.value)}>
@@ -118,11 +122,13 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
           <div><span className="panel-kicker">Personal roles</span><h3>Booster role access</h3><p>Each active booster gets a separate role they can customize and share.</p></div>
           <span className="panel-icon"><Icon name="users" /></span>
         </div>
-        <label className="setting-row">
-          <span><strong>Enable personal booster roles</strong><small>Active boosters can use /boosterrole to rename, recolor, set an icon, and share or unshare their role.</small></span>
-          <input type="checkbox" checked={settings.roles_enabled} onChange={(event) => update("roles_enabled", event.target.checked)} />
-          <i aria-hidden="true" />
-        </label>
+        <SettingCards>
+          <SettingCard
+            title="Enable personal booster roles"
+            hint="Active boosters can use /boosterrole to rename, recolor, set an icon, and share or unshare their role."
+            action={<Switch checked={settings.roles_enabled} onCheckedChange={(value) => update("roles_enabled", value)} aria-label="Enable personal booster roles" />}
+          />
+        </SettingCards>
         <p className="form-hint" role="note">
           Turning this off deletes Niko-managed booster roles and removes them from the boosters and anyone they shared them with. Role icons and gradient colors are available only when Discord unlocks those perks for your server.
         </p>

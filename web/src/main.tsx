@@ -4,6 +4,7 @@ import { App } from "./App";
 import "./styles.css";
 import "./guild-settings.css";
 import "./color-picker.css";
+import "./switch.css";
 import "./billing.css";
 import "./data-removal.css";
 import "./discord-name-fonts.css";

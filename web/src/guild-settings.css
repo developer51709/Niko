@@ -264,14 +264,43 @@
   height: 17px;
   color: inherit;
 }
-.setting-row { min-height: 69px; padding: 13px 8px; border-color: var(--line-soft); border-radius: 9px; transition: background .18s ease, border-color .18s ease; }
-.setting-row:hover { background: rgba(255, 255, 255, .045); }
-.setting-row strong { font-size: 12px; }
-.setting-row small { line-height: 1.4; }
-.setting-row i { background: var(--toggle-off); }
-.setting-row input:checked + i { background: var(--accent); }
 .setting-flag-experimental { color: #d8c5ff; background: rgba(164, 125, 255, .12); border-color: rgba(164, 125, 255, .28); }
 .setting-note { color: var(--muted); background: var(--filter-active); border-color: var(--filter-border); border-radius: 10px; }
+/* One shared toggle-card grid: every settings tab lays its switches out the same way. */
+.setting-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px; }
+.setting-cards.is-stacked { grid-template-columns: 1fr; }
+.setting-cards + .form-grid,
+.setting-cards + .personality-options,
+.setting-cards + .form-hint,
+.form-grid + .setting-cards { margin-top: 16px; }
+.setting-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 92px;
+  padding: 15px 16px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  transition: background .18s ease, border-color .18s ease;
+}
+.setting-card:hover { background: var(--surface-muted); border-color: var(--line); }
+.setting-card.is-locked { opacity: .55; }
+.setting-card.is-locked:hover { background: var(--surface-raised); border-color: var(--line-soft); }
+.setting-card-copy { display: grid; flex: 1 1 auto; align-content: center; gap: 6px; min-width: 0; }
+.setting-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.setting-card-title strong { color: var(--ink); font-size: 12px; line-height: 1.35; }
+.setting-card-title .setting-flag-experimental,
+.setting-card-title .setting-flag-premium { margin-left: 0; }
+.setting-card-copy small { margin: 0; color: var(--dim); font-size: 10px; line-height: 1.45; }
+.setting-card-control { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; align-self: center; }
+.setting-card-control .button-secondary { min-height: 34px; padding: 7px 11px; font-size: 10px; white-space: nowrap; }
+.setting-card-note { margin: 14px 0 0; }
+@media (max-width: 700px) {
+  .setting-cards { grid-template-columns: 1fr; }
+  .setting-card { min-height: 0; padding: 13px 14px; gap: 14px; }
+}
 .setting-footer { padding-top: 23px; }
 .setting-footer .button-primary { box-shadow: var(--shadow-soft); }
 .personality-options { padding-top: 19px; }
@@ -283,8 +312,9 @@
 .server-settings-stack { max-width: 900px; }
 .server-logging-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
 .server-logging-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, .65fr); align-items: end; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--line-soft); }
-.compact-setting-row { min-height: 42px; padding: 0 0 1px; border-bottom: 0; }
-.compact-setting-row:hover { padding-right: 3px; padding-left: 3px; }
+.server-logging-toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; }
+.server-logging-toggle strong { color: var(--ink); font-size: 11px; }
+.server-logging-toggle small { display: block; margin-top: 3px; color: var(--dim); font-size: 10px; }
 .form-field input, .form-field select, .form-field textarea { background: var(--surface-raised); border-color: var(--line); border-radius: 8px; }
 .form-field input:hover, .form-field select:hover, .form-field textarea:hover { border-color: var(--line); }
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(184, 197, 211, .16); }
@@ -347,7 +377,7 @@
   .settings-intro > div { min-width: 0; flex: 1; }
   .settings-intro strong, .settings-intro p { overflow-wrap: anywhere; }
   .server-logging-row .form-field { min-width: 0; }
-  .server-logging-row .compact-setting-row { width: 100%; }
+  .server-logging-row .server-logging-toggle { width: 100%; }
   .dashboard-layout .guild-feature-settings > .settings-panel { padding: 18px; }
   .dashboard-layout .settings-category-editor .settings-option-row { align-items: stretch; }
   .dashboard-layout .settings-category-editor .settings-option-remove { flex: 0 0 auto; }

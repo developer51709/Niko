@@ -1,0 +1,208 @@
+/* Material Design 3 switch used by the dashboard settings toggles.
+   Geometry and motion are ported from the 21st.dev M3 switch; colours use the
+   dashboard tokens so the control matches the surrounding glass panels. */
+
+.m3-switch {
+  --m3-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --m3-track-off: var(--toggle-off, #515967);
+  --m3-track-on: var(--accent);
+  --m3-handle-off: #e4e8ed;
+  --m3-handle-on: #111316;
+  --m3-on-icon: #111316;
+  --m3-off-icon: #5b6470;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m3-switch.is-destructive {
+  --m3-track-on: #ed4245;
+  --m3-handle-on: #ffffff;
+  --m3-on-icon: #7a1414;
+}
+
+.m3-switch.is-disabled { cursor: not-allowed; opacity: .5; }
+
+/* The real checkbox keeps keyboard, form, and screen-reader semantics while the
+   track below paints the control. */
+.m3-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.m3-switch-track {
+  position: relative;
+  display: block;
+  width: 52px;
+  height: 32px;
+  background: var(--m3-track-off);
+  border: 2px solid var(--line, rgba(226, 234, 246, .14));
+  border-radius: 999px;
+  transition: background .3s ease, border-color .3s ease;
+}
+
+.m3-switch.is-checked .m3-switch-track {
+  background: var(--m3-track-on);
+  border-color: var(--m3-track-on);
+}
+
+.m3-switch-input:focus-visible + .m3-switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── handle ─────────────────────────────────────────────────────────────── */
+
+.m3-switch-handle {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  overflow: hidden;
+  background: var(--m3-handle-off);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+  transition:
+    left .3s var(--m3-spring),
+    width .3s var(--m3-spring),
+    height .3s var(--m3-spring),
+    margin-top .3s var(--m3-spring),
+    background .3s ease;
+}
+
+.m3-switch.is-checked .m3-switch-handle {
+  left: 22px;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  background: var(--m3-handle-on);
+}
+
+/* Pressed: the handle stretches like an M3 thumb. */
+.m3-switch.is-pressed .m3-switch-handle {
+  left: 0;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+}
+
+.m3-switch.is-checked.is-pressed .m3-switch-handle { left: 18px; }
+
+/* ── icons ──────────────────────────────────────────────────────────────── */
+
+.m3-switch-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .25s ease, transform .25s var(--m3-spring);
+}
+
+.m3-switch-icon-on {
+  color: var(--m3-on-icon);
+  opacity: 0;
+  transform: scale(.5);
+}
+
+.m3-switch-icon-off {
+  color: var(--m3-off-icon);
+  opacity: 1;
+  transform: scale(1);
+}
+
+.m3-switch.is-checked .m3-switch-icon-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.m3-switch.is-checked .m3-switch-icon-off {
+  opacity: 0;
+  transform: scale(.5);
+}
+
+/* ── press halo ─────────────────────────────────────────────────────────── */
+
+.m3-switch-halo {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  pointer-events: none;
+  background: var(--m3-track-on);
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(.5);
+  transition:
+    left .3s var(--m3-spring),
+    opacity .2s ease,
+    transform .2s ease;
+}
+
+.m3-switch.is-checked .m3-switch-halo { left: 34px; }
+.m3-switch.is-hovered .m3-switch-halo { opacity: .14; transform: scale(1); }
+.m3-switch.is-pressed .m3-switch-halo { opacity: .24; transform: scale(1); }
+.m3-switch.is-disabled .m3-switch-halo { opacity: 0; }
+
+/* ── compact variant ────────────────────────────────────────────────────── */
+
+.m3-switch.is-small .m3-switch-track {
+  width: 40px;
+  height: 24px;
+}
+
+.m3-switch.is-small .m3-switch-handle {
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+}
+
+.m3-switch.is-small.is-checked .m3-switch-handle {
+  left: 18px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+}
+
+.m3-switch.is-small.is-pressed .m3-switch-handle {
+  left: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+}
+
+.m3-switch.is-small.is-checked.is-pressed .m3-switch-handle { left: 14px; }
+
+.m3-switch.is-small .m3-switch-halo {
+  left: 8px;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+}
+
+.m3-switch.is-small.is-checked .m3-switch-halo { left: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m3-switch-track,
+  .m3-switch-handle,
+  .m3-switch-halo,
+  .m3-switch-icon { transition-duration: .01ms; }
+}

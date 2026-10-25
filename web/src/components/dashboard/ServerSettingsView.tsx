@@ -4,6 +4,8 @@ import { Icon } from "../Icon";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { DashHeading } from "./DashboardViews";
+import { Switch } from "./Switch";
+import { SettingCard, SettingCards } from "./SettingCards";
 
 // Only the in-flight flag belongs in state now: every result is announced with a
 // toast (see ../../utils/toast) instead of an inline line in the card footer.
@@ -119,10 +121,10 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" /><StringOptionList label="Command prefixes" hint="The default prefix is ." options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} /></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
-        {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><label className="setting-row compact-setting-row"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><input type="checkbox" checked={!values.disabled_logging.includes(key)} onChange={() => toggleLogging(key)} /><i aria-hidden="true" /></label></div>; })}
+        {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
       </div></section>
 
-      <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><label className="setting-row"><span><strong>Private server</strong><small>Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible.</small></span><input type="checkbox" checked={values.private_server} onChange={(event) => setValue("private_server", event.target.checked)} /><i aria-hidden="true" /></label></section>
+      <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><SettingCards><SettingCard title="Private server" hint="Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible." action={<Switch checked={values.private_server} onCheckedChange={(value) => setValue("private_server", value)} aria-label="Private server" />} /></SettingCards></section>
 
       <SaveFooter state={state} />
     </form>
