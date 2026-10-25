@@ -1302,12 +1302,23 @@ STAFF_STATUS_LABELS = {
     "former": "Former staff",
 }
 
+_STAFF_CARD_COLUMNS = ("card_theme", "card_accent", "card_show_status")
 _STAFF_ROW_COLUMNS = (
     "user_id", "role", "public_name", "public_bio", "public_avatar_url",
     "public_banner_url", "public_links", "public_visible", "staff_status",
     "status_reason", "status_changed_by", "status_changed_at",
+    *_STAFF_CARD_COLUMNS,
+)
+# Card presentation is the newest addition, so a database that has not run its
+# migration yet is read without those columns first — losing them is harmless,
+# while losing the lifecycle columns would make a suspended profile public.
+_STAFF_PROFILE_ROW_COLUMNS = tuple(
+    column for column in _STAFF_ROW_COLUMNS if column not in _STAFF_CARD_COLUMNS
 )
 _STAFF_LEGACY_ROW_COLUMNS = _STAFF_ROW_COLUMNS[:8]
+_STAFF_READ_COLUMN_SETS = (
+    _STAFF_ROW_COLUMNS, _STAFF_PROFILE_ROW_COLUMNS, _STAFF_LEGACY_ROW_COLUMNS,
+)
 
 
 def _staff_status(row) -> str:
@@ -1331,6 +1342,12 @@ def _staff_row(row) -> dict:
         "public_links": _normalize_public_links(row.get("public_links")),
         "visible": profile_visible and status == "active",
         "profile_visible": profile_visible,
+        # Presentation for the GitHub README card (`/staff/<id>/card.svg`).
+        "card": {
+            "theme": "light" if str(row.get("card_theme") or "").strip().lower() == "light" else "dark",
+            "accent": str(row.get("card_accent") or "").strip().lstrip("#").upper() or None,
+            "show_status": row.get("card_show_status") is None or bool(row.get("card_show_status")),
+        },
         "staff_status": status,
         "staff_status_label": STAFF_STATUS_LABELS[status],
         "status_reason": row.get("status_reason"),
@@ -1381,19 +1398,22 @@ def _load_staff_records(*, include_inactive: bool = False) -> list[dict]:
     bot_pool = bool(_discord_bot is not None and getattr(_discord_bot, "cxn", None))
     bot_read_ok = True
     if bot_pool:
-        query = f"SELECT {', '.join(_STAFF_ROW_COLUMNS)} FROM staff_members"
-        legacy_query = f"SELECT {', '.join(_STAFF_LEGACY_ROW_COLUMNS)} FROM staff_members"
-
         async def read_staff():
-            try:
-                return await _discord_bot.cxn.fetch(query)
-            except Exception as exc:
-                # Only the pre-migration schema may fall back to the legacy
-                # columns. A transient database failure must not make a
-                # suspended record look active.
-                if "staff_status" not in str(exc).lower():
-                    raise
-                return await _discord_bot.cxn.fetch(legacy_query)
+            last_error = None
+            for columns in _STAFF_READ_COLUMN_SETS:
+                try:
+                    return await _discord_bot.cxn.fetch(
+                        f"SELECT {', '.join(columns)} FROM staff_members"
+                    )
+                except Exception as exc:
+                    # Only a pre-migration schema may fall back to a narrower
+                    # column set. A transient database failure must not make a
+                    # suspended record look active.
+                    message = str(exc).lower()
+                    if "card_" not in message and "staff_status" not in message:
+                        raise
+                    last_error = exc
+            raise last_error
         try:
             for row in run_on_bot_loop(read_staff()):
                 add_raw(row)
@@ -1409,19 +1429,20 @@ def _load_staff_records(*, include_inactive: bool = False) -> list[dict]:
     conn = sqlite_connect() if (not bot_pool or bot_read_ok) else None
     try:
         if conn:
-            try:
-                raw_rows = conn.execute(
-                    f"SELECT {', '.join(_STAFF_ROW_COLUMNS)} FROM staff_members"
-                ).fetchall()
-                columns = _STAFF_ROW_COLUMNS
-            except sqlite3.Error as exc:
-                if "staff_status" not in str(exc).lower():
-                    raise
-                raw_rows = conn.execute(
-                    f"SELECT {', '.join(_STAFF_LEGACY_ROW_COLUMNS)} FROM staff_members"
-                ).fetchall()
-                columns = _STAFF_LEGACY_ROW_COLUMNS
-            for raw in raw_rows:
+            raw_rows = None
+            columns = None
+            for candidates in _STAFF_READ_COLUMN_SETS:
+                try:
+                    raw_rows = conn.execute(
+                        f"SELECT {', '.join(candidates)} FROM staff_members"
+                    ).fetchall()
+                    columns = candidates
+                    break
+                except sqlite3.Error as exc:
+                    message = str(exc).lower()
+                    if "card_" not in message and "staff_status" not in message:
+                        raise
+            for raw in raw_rows or ():
                 add_raw(dict(zip(columns, raw)), overwrite=False)
     except sqlite3.Error:
         pass

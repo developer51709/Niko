@@ -7,6 +7,7 @@ import "./color-picker.css";
 import "./switch.css";
 import "./billing.css";
 import "./data-removal.css";
+import "./styles/staff-card.css";
 import "./discord-name-fonts.css";
 
 if ("serviceWorker" in navigator) {

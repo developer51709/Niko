@@ -258,6 +258,41 @@ class CommandGuardTests(unittest.TestCase):
         self.assertEqual(economy.saves, 0)
         self.assertIn("enough coins", ctx.sent[-1][0][0])
 
+    def test_timed_out_bet_type_stops_before_the_wheel(self):
+        """An expired sub-menu leaves choice as None; the round must end there."""
+        data = account()
+        economy = FakeEconomy(data)
+        ctx = FakeCtx()
+        with patch.object(roulette_module, "build_bet_type_view", lambda ctx: FakeView("color")), \
+             patch.object(roulette_module, "build_color_view", lambda ctx: FakeView(None)), \
+             patch.object(roulette_module, "build_chip_view") as chips, \
+             patch.object(roulette_module, "build_result_view") as card:
+            asyncio.run(Roulette.roulette.callback(Roulette(FakeBot(economy)), ctx))
+
+        chips.assert_not_called()
+        card.assert_not_called()
+        self.assertEqual(data["balance"], 1000)
+        self.assertEqual(data["transactions"], [])
+        self.assertEqual(economy.saves, 0)
+        self.assertIn("Timed out", ctx.sent[-1][0][0])
+
+    def test_timed_out_number_pick_does_not_take_the_stake(self):
+        data = account()
+        economy = FakeEconomy(data)
+        ctx = FakeCtx()
+        with patch.object(roulette_module, "build_bet_type_view", lambda ctx: FakeView("inside")), \
+             patch.object(roulette_module, "build_inside_view", lambda ctx: FakeView("straight")), \
+             patch.object(roulette_module, "build_number_view", lambda ctx, count: FakeView(None)), \
+             patch.object(roulette_module, "build_chip_view") as chips, \
+             patch.object(roulette_module, "build_result_view") as card:
+            asyncio.run(Roulette.roulette.callback(Roulette(FakeBot(economy)), ctx))
+
+        chips.assert_not_called()
+        card.assert_not_called()
+        self.assertEqual(data["balance"], 1000)
+        self.assertEqual(data["transactions"], [])
+        self.assertEqual(economy.saves, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

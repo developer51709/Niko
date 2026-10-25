@@ -1,6 +1,7 @@
 """Flask routes for team."""
 
 from . import server as _server
+from .staff_card import avatar_data_url, render_staff_card, validate_accent
 
 globals().update({
     name: value
@@ -19,6 +20,43 @@ def api_team_member(user_id):
     if not member:
         return jsonify({"error": "Team member not found."}), 404
     return jsonify(member)
+
+
+@app.route("/staff/<user_id>/card.svg")
+def api_staff_card(user_id):
+    """Public SVG card a staff member can embed in a GitHub README.
+
+    GitHub fetches this through its image proxy inside an ``<img>``, so the
+    document must stand on its own: the avatar is inlined as a data URI and the
+    markup uses presentation attributes instead of an external stylesheet. A
+    hidden or unknown profile still answers with a neutral card so an embedded
+    README image never breaks.
+    """
+    try:
+        member = next((item for item in _load_staff_rows() if item["id"] == str(user_id)), None)
+    except Exception:
+        # A database hiccup must not turn every README into a broken image.
+        member = None
+
+    status_param = request.args.get("status")
+    show_status = None if status_param is None else str(status_param).strip().lower() not in {"0", "false", "off", "no"}
+
+    svg = render_staff_card(
+        member,
+        theme=request.args.get("theme"),
+        accent=request.args.get("accent"),
+        show_status=show_status,
+        avatar_data_url=avatar_data_url(member.get("avatar_url")) if member else None,
+    )
+    response = Response(svg, mimetype="image/svg+xml")
+    # Presence is live, so no layer may reuse a rendered card. GitHub's image
+    # proxy and the browser both honour this and revalidate instead of serving
+    # the status the player had when the image was first requested.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.route("/api/team/profile-card")
@@ -55,7 +93,9 @@ def api_staff_me():
     role = _current_staff_role()
     if not role:
         return jsonify({"error": "This area is restricted to Niko staff."}), 403
-    member = next((item for item in _load_staff_rows() if item["id"] == str(session["user"]["id"])), None)
+    # Read the management roster so a member who hid their listing still gets
+    # their own saved bio, links, and card settings back in the editor.
+    member = next((item for item in _load_staff_management_rows() if item["id"] == str(session["user"]["id"])), None)
     return jsonify({"role": role, "role_label": "Owner" if role == "owner" else _staff_role_label(role), "profile": member or _staff_row({"user_id": session["user"]["id"], "role": role})})
 
 
@@ -388,10 +428,26 @@ def api_save_staff_profile():
     if not role:
         return jsonify({"error": "This area is restricted to Niko staff."}), 403
     body = request.get_json(silent=True) or {}
-    allowed = {"public_bio", "public_banner_url", "public_links", "public_visible"}
+    allowed = {
+        "public_bio", "public_banner_url", "public_links", "public_visible",
+        "card_theme", "card_accent", "card_show_status",
+    }
     values = {key: body[key] for key in allowed if key in body}
     if "public_bio" in values and len(str(values["public_bio"] or "")) > 1200:
         return jsonify({"error": "Your public bio must be 1200 characters or fewer."}), 400
+    if "card_theme" in values:
+        theme = str(values["card_theme"] or "").strip().lower()
+        if theme not in {"dark", "light"}:
+            return jsonify({"error": "Choose the dark or light card theme."}), 400
+        values["card_theme"] = theme
+    if "card_accent" in values:
+        accent = validate_accent(values["card_accent"])
+        if accent is None:
+            return jsonify({"error": "Card accent colors use six hex digits, for example C8A882."}), 400
+        # An empty accent resets the card to the default brand colour.
+        values["card_accent"] = accent or None
+    if "card_show_status" in values:
+        values["card_show_status"] = 1 if values["card_show_status"] else 0
     if "public_links" in values:
         raw_links = values["public_links"]
         if not isinstance(raw_links, list) or len(raw_links) > 10:

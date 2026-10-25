@@ -238,7 +238,10 @@ async def _create_tables(bot):
             staff_status TEXT NOT NULL DEFAULT 'active',
             status_reason TEXT,
             status_changed_by INTEGER,
-            status_changed_at REAL
+            status_changed_at REAL,
+            card_theme TEXT,
+            card_accent TEXT,
+            card_show_status INTEGER NOT NULL DEFAULT 1
         )
     """)
     # Keep existing installations compatible with the richer public staff profile
@@ -254,6 +257,10 @@ async def _create_tables(bot):
         ("status_reason", "TEXT"),
         ("status_changed_by", "INTEGER"),
         ("status_changed_at", "REAL"),
+        # GitHub README card presentation for the public staff profile.
+        ("card_theme", "TEXT"),
+        ("card_accent", "TEXT"),
+        ("card_show_status", "INTEGER NOT NULL DEFAULT 1"),
     ]:
         try:
             await bot.cxn.execute(f"ALTER TABLE staff_members ADD COLUMN {col_name} {col_def}")
