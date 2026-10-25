@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactElement, type ReactNode, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getGuildTickets, saveConfig, saveProfile, updateGuildTicketStatus } from "../../api";
 import { Icon } from "../Icon";
@@ -16,8 +16,24 @@ import { navigate } from "../../router";
 type SaveState = { saving: boolean };
 const initialSave: SaveState = { saving: false };
 
+const LABELABLE_CONTROLS = new Set(["input", "select", "textarea"]);
+
+/**
+ * A settings field. The label points at its control with `htmlFor` instead of
+ * wrapping it, so the click area stays the control itself rather than the label
+ * text, the hint, and the rest of the stretched grid cell.
+ */
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
+  const generatedId = useId();
+  const control = isValidElement(children) && typeof children.type === "string" && LABELABLE_CONTROLS.has(children.type)
+    ? children as ReactElement<{ id?: string }>
+    : null;
+  const controlId = control ? `${generatedId}-control` : undefined;
+  return <div className="form-field">
+    <label className="form-label" htmlFor={controlId}>{label}</label>
+    {control ? cloneElement(control, { id: controlId }) : children}
+    {hint && <small>{hint}</small>}
+  </div>;
 }
 
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
@@ -55,7 +71,9 @@ function TicketCategoryList({ categories, onChange }: { categories: string[]; on
         <button type="button" className="settings-option-remove" onClick={() => onChange(categories.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ticket category ${index + 1}`}>Remove</button>
       </div>)}
     </div>
-    <button type="button" className="button button-muted button-small settings-option-add" onClick={add}>＋ Add category</button>
+    <div className="settings-category-actions">
+      <button type="button" className="button button-muted button-small settings-option-add" onClick={add}>＋ Add category</button>
+    </div>
     <small>Add a separate option for each kind of support request.</small>
   </div>;
 }
