@@ -6,7 +6,7 @@ import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
 import { StaffApplicationsView } from "../components/dashboard/StaffApplicationsView";
 import { NotifierView } from "../components/dashboard/NotifierView";
 import { BoostersView } from "../components/dashboard/BoostersView";
-import { LevelingView, OverviewView, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
+import { LevelingView, OverviewView, SectionSkeleton, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { AchievementsView } from "../components/dashboard/AchievementsView";
 import { EconomyView } from "../components/dashboard/EconomyView";
 import { PublicHeader } from "../components/PublicHeader";
@@ -40,6 +40,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   const [boosterSettings, setBoosterSettings] = useState<BoosterSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const overviewRef = useRef<GuildOverview | null>(null);
 
   useEffect(() => {
@@ -95,14 +96,10 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
           : Promise.all([getConfig(guild.id), getResources(guild.id)]).then(([value, available]) => { setConfig(value); setResources(available); });
     request.catch((reason) => setError(reason instanceof Error ? reason.message : "This server could not be loaded.")).finally(() => setLoading(false));
     return () => { active = false; };
-  }, [guild.id, section, refreshToken]);
+  }, [guild.id, section, refreshToken, loadAttempt]);
 
-  if (loading) return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${section}`}>
-    <div className="skeleton-title" /><div className="skeleton-copy" />
-    <div className="skeleton-grid"><i /><i /><i /></div>
-    <span>Loading {section}...</span>
-  </div>;
-  if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
+  if (loading) return <SectionSkeleton label={section} />;
+  if (error) return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{error}</span><button className="button button-muted" type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Try again</button></div>;
   if (section === "overview" && overview) return <OverviewView overview={overview} />;
   if (section === "leveling") return <LevelingView guildId={guild.id} rows={levels} config={config} resources={resources} csrfToken={csrfToken} />;
   if (section === "moderation") return <ModerationView guildId={guild.id} config={config} csrfToken={csrfToken} />;
@@ -116,16 +113,8 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
   return <AiView guildId={guild.id} config={config} csrfToken={csrfToken} />;
 }
 
-function SectionSkeleton({ label }: { label: string }) {
-  return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${label}`}>
-    <div className="skeleton-title" /><div className="skeleton-copy" />
-    <div className="skeleton-grid"><i /><i /><i /></div>
-    <span>Loading {label}...</span>
-  </div>;
-}
-
-function SectionError({ message }: { message: string }) {
-  return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{message}</span><button className="button button-muted" onClick={() => window.location.reload()}>Try again</button></div>;
+function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{message}</span><button className="button button-muted" type="button" onClick={onRetry}>Try again</button></div>;
 }
 
 /**
@@ -152,12 +141,12 @@ function UserSection({ tab, user, overview, guilds, guildsUnavailable, csrfToken
     return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} guildsUnavailable={guildsUnavailable} />;
   }
   if (tab === "economy") {
-    if (economy.error) return <SectionError message={economy.error} />;
+    if (economy.error) return <SectionError message={economy.error} onRetry={economy.refresh} />;
     if (economy.loading && !economy.data) return <SectionSkeleton label="economy" />;
     return economy.data ? <EconomyView standing={economy.data} /> : null;
   }
   if (tab === "achievements") {
-    if (achievements.error) return <SectionError message={achievements.error} />;
+    if (achievements.error) return <SectionError message={achievements.error} onRetry={achievements.refresh} />;
     if (achievements.loading && !achievements.data) return <SectionSkeleton label="achievements" />;
     return achievements.data ? <AchievementsView achievements={achievements.data} /> : null;
   }

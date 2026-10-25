@@ -54,9 +54,16 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
     cache: "no-store",
     headers: { "Content-Type": "application/json", ...options?.headers },
   });
-  const payload = await response.json().catch(() => ({}));
+  const isJson = (response.headers.get("content-type") || "").toLowerCase().includes("json");
+  const payload: unknown = isJson ? await response.json().catch(() => null) : null;
   if (!response.ok) {
-    throw new ApiError(payload.error || response.statusText || "Request failed", response.status);
+    const message = payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+      ? payload.error
+      : response.statusText || "Request failed";
+    throw new ApiError(message, response.status);
+  }
+  if (!isJson || payload === null) {
+    throw new ApiError("The server returned an unexpected response. Please try again.", response.status);
   }
   return payload as T;
 }

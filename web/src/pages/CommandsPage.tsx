@@ -117,7 +117,10 @@ export function CommandsPage() {
 
   useEffect(() => {
     getCommands()
-      .then(setCommands)
+      .then((result) => {
+        if (!Array.isArray(result)) throw new Error("The command registry returned an invalid response.");
+        setCommands(result);
+      })
       .catch(() => setError("The command registry is unavailable right now."))
       .finally(() => setLoading(false));
   }, []);

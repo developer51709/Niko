@@ -28,10 +28,13 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   const control = isValidElement(children) && typeof children.type === "string" && LABELABLE_CONTROLS.has(children.type)
     ? children as ReactElement<{ id?: string }>
     : null;
+  const roleSelect = isValidElement(children) && children.type === RoleSelect
+    ? children as ReactElement<{ ariaLabel?: string }>
+    : null;
   const controlId = control ? `${generatedId}-control` : undefined;
   return <div className="form-field">
     <label className="form-label" htmlFor={controlId}>{label}</label>
-    {control ? cloneElement(control, { id: controlId }) : children}
+    {control ? cloneElement(control, { id: controlId }) : roleSelect ? cloneElement(roleSelect, { ariaLabel: roleSelect.props.ariaLabel || label }) : children}
     {hint && <small>{hint}</small>}
   </div>;
 }
@@ -93,13 +96,15 @@ export function OnboardingView({ guildId, config, resources, csrfToken }: { guil
 export function TicketsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const [data, setData] = useState<GuildTicketsResponse | null>(null);
   const [loadingTickets, setLoadingTickets] = useState(true);
+  const [ticketError, setTicketError] = useState("");
+  const [ticketRetry, setTicketRetry] = useState(0);
   const [savingConfig, setSavingConfig] = useState(false);
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "closed">("all");
   const [state, setState] = useState(initialSave);
   const [saving, setSaving] = useState("");
   const tickets = config?.server?.tickets || {};
   const [values, setValues] = useState({ panel_title: "", panel_description: "", panel_color: "#5865f2", panel_image: "", panel_categories: [] as string[], panel_channel_id: "", support_roles: [] as string[] });
-  useEffect(() => { let active = true; setLoadingTickets(true); setData(null); setState(initialSave); clearToasts("settings-tickets"); getGuildTickets(guildId).then((result) => { if (active) { setData(result); setValues({ panel_title: result.config.panel_title || "", panel_description: result.config.panel_description || "", panel_color: `#${Number(result.config.panel_color ?? 0x5865f2).toString(16).padStart(6, "0")}`, panel_image: result.config.panel_image || "", panel_categories: result.config.panel_categories || [], panel_channel_id: result.config.panel_channel_id || "", support_roles: result.config.support_roles || [] }); } }).catch((error) => { if (active) notifyError(error instanceof Error ? error.message : "Could not load ticket data.", "settings-tickets"); }).finally(() => { if (active) setLoadingTickets(false); }); return () => { active = false; }; }, [guildId]);
+  useEffect(() => { let active = true; setLoadingTickets(true); setTicketError(""); setData(null); setState(initialSave); clearToasts("settings-tickets"); getGuildTickets(guildId).then((result) => { if (active) { setData(result); setValues({ panel_title: result.config.panel_title || "", panel_description: result.config.panel_description || "", panel_color: `#${Number(result.config.panel_color ?? 0x5865f2).toString(16).padStart(6, "0")}`, panel_image: result.config.panel_image || "", panel_categories: result.config.panel_categories || [], panel_channel_id: result.config.panel_channel_id || "", support_roles: result.config.support_roles || [] }); } }).catch((error) => { if (active) setTicketError(error instanceof Error ? error.message : "Could not load ticket data."); }).finally(() => { if (active) setLoadingTickets(false); }); return () => { active = false; }; }, [guildId, ticketRetry]);
   useEffect(() => { if (config) setValues({ panel_title: tickets.panel_title || "", panel_description: tickets.panel_description || "", panel_color: `#${Number(tickets.panel_color ?? 0x5865f2).toString(16).padStart(6, "0")}`, panel_image: tickets.panel_image || "", panel_categories: tickets.panel_categories || [], panel_channel_id: tickets.panel_channel_id || "", support_roles: tickets.support_roles || [] }); }, [guildId, config]);
   const submit = (event: FormEvent) => { event.preventDefault(); setSavingConfig(true); setState({ saving: true }); notifyLoading("Saving ticket settings…", "settings-save"); saveConfig(guildId, "server", { tickets: { ...values, panel_categories: values.panel_categories.map((category) => category.trim()).filter(Boolean) } }, csrfToken).then(async () => { const freshData = await getGuildTickets(guildId); setData(freshData); setState({ saving: false }); notifySuccess("Ticket settings saved.", "settings-save"); }).catch((error) => { setState({ saving: false }); notifyError(error instanceof Error ? error.message : "Could not save ticket settings.", "settings-save"); }).finally(() => setSavingConfig(false)); };
   const setTicketStatus = (channelId: string, status: "open" | "closed") => {
@@ -113,7 +118,52 @@ export function TicketsView({ guildId, config, resources, csrfToken }: { guildId
   const channels = resources?.channels || [];
   const roles = resources?.roles || [];
   const filteredTickets = (data?.tickets || []).filter((ticket) => ticketFilter === "all" || (ticket.status || "open") === ticketFilter);
-  return <><DashHeading eyebrow="Tickets" title="Support, without losing the thread." text="Manage your ticket panel, check current conversations, and find saved transcripts." /><SettingsIntro icon="users" label="Support desk" title={`${data?.tickets.length || 0} current tickets`} text="Ticket status and historical transcripts for this server, together in one place." /><form onSubmit={submit} className="settings-stack guild-feature-settings ticket-settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Panel" title="Ticket system configuration" detail="Set up the public panel members use to ask for help." icon="settings" /><div className="form-grid"><Field label="Panel title"><input maxLength={200} value={values.panel_title} onChange={(event) => setValues({ ...values, panel_title: event.target.value })} placeholder="Open a Ticket" /></Field><Field label="Panel channel"><select value={values.panel_channel_id} onChange={(event) => setValues({ ...values, panel_channel_id: event.target.value })}><option value="">Keep current channel</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValues({ ...values, panel_description: event.target.value })} placeholder="Tell members what the ticket panel is for." /></Field><Field label="Panel accent color" hint="Six-digit hex color, for example 5865F2"><ColorPicker label="Ticket panel accent color" value={values.panel_color} onChange={(panel_color) => setValues({ ...values, panel_color })} /></Field><Field label="Panel image URL"><input type="url" value={values.panel_image} onChange={(event) => setValues({ ...values, panel_image: event.target.value })} placeholder="https://…" /></Field><div className="form-grid-wide"><Field label="Ticket categories"><TicketCategoryList categories={values.panel_categories} onChange={(panel_categories) => setValues({ ...values, panel_categories })} /></Field></div><Field label="Support roles"><RoleSelect roles={roles} value={values.support_roles} multiple ariaLabel="Support roles" onChange={(support_roles) => setValues({ ...values, support_roles: Array.isArray(support_roles) ? support_roles : [] })} /></Field></div><div className="setting-footer"><span>Changes apply to this server.</span><button className="button button-primary" type="submit" disabled={savingConfig}>{savingConfig ? "Saving…" : "Save changes"}</button></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Live queue" title="Current tickets" detail="Quickly reopen or close a ticket channel." icon="users" /><div className="ticket-filter-row" role="group" aria-label="Filter tickets">{(["all", "open", "closed"] as const).map((filter) => <button type="button" key={filter} className={ticketFilter === filter ? "button button-secondary is-active" : "button button-quiet"} aria-pressed={ticketFilter === filter} onClick={() => setTicketFilter(filter)}>{filter === "all" ? `All · ${data?.tickets.length || 0}` : `${filter === "open" ? "Open" : "Closed"} · ${(data?.tickets || []).filter((ticket) => (ticket.status || "open") === filter).length}`}</button>)}</div>{loadingTickets ? <div className="empty-state"><p>Loading current tickets…</p></div> : filteredTickets.length ? <div className="ticket-admin-list">{filteredTickets.map((ticket) => <article className="ticket-admin-row" key={ticket.channel_id}><div><strong>#{ticket.channel_name || `ticket-${ticket.channel_id}`}</strong> <a className="ticket-channel-link" href={`https://discord.com/channels/${guildId}/${ticket.channel_id}`} target="_blank" rel="noreferrer">Open in Discord</a><small>{ticket.category || "General"} · Opened by {ticket.opener_name || ticket.opener_id}{ticket.claimed_by ? ` · Claimed by ${ticket.claimed_by}` : ""}</small></div><span className={`application-status ${ticket.status === "closed" ? "closed" : "open"}`}>{ticket.status || "open"}</span><button className="button button-muted button-small" disabled={saving === ticket.channel_id} type="button" onClick={() => setTicketStatus(ticket.channel_id, ticket.status === "closed" ? "open" : "closed")}>{saving === ticket.channel_id ? "Saving…" : ticket.status === "closed" ? "Reopen" : "Close"}</button></article>)}</div> : <div className="empty-state"><p>No tickets are currently recorded for this server.</p></div>}</section><section className="dash-panel settings-panel"><SettingsSectionTitle label="History" title="Ticket transcripts" detail="Recent transcripts saved by Niko for this server." icon="book" />{loadingTickets ? <div className="empty-state"><p>Loading transcripts…</p></div> : data?.transcripts.length ? <div className="ticket-admin-list">{data.transcripts.map((transcript) => <article className="ticket-admin-row" key={transcript.transcript_id}><div><strong>#{transcript.channel_name}</strong><small>{transcript.category} · Opened by {transcript.opener_id} · {transcript.message_count} messages · {new Date(transcript.created_at).toLocaleString()}</small></div><a className="button button-secondary button-small" href={transcript.url} target="_blank" rel="noreferrer">View transcript</a></article>)}</div> : <div className="empty-state"><p>No transcripts have been generated for this server yet.</p></div>}</section></form></>;
+  return <>
+    <DashHeading eyebrow="Tickets" title="Support, without losing the thread." text="Manage your ticket panel, check current conversations, and find saved transcripts." />
+    <SettingsIntro
+      icon="users"
+      label="Support desk"
+      title={loadingTickets ? "Loading ticket activity…" : ticketError ? "Ticket activity unavailable" : `${data?.tickets.length || 0} current tickets`}
+      text={ticketError ? "The queue and transcript history could not be retrieved. Your ticket settings are still available." : "Ticket status and historical transcripts for this server, together in one place."}
+    />
+    {ticketError && <div className="inline-error" role="alert">
+      <strong>Couldn’t load ticket activity.</strong>
+      <span>{ticketError}</span>
+      <button className="button button-muted" type="button" onClick={() => setTicketRetry((attempt) => attempt + 1)}>Try again</button>
+    </div>}
+    <form onSubmit={submit} className="settings-stack guild-feature-settings ticket-settings-stack">
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Panel" title="Ticket system configuration" detail="Set up the public panel members use to ask for help." icon="settings" />
+        <div className="form-grid">
+          <Field label="Panel title"><input maxLength={200} value={values.panel_title} onChange={(event) => setValues({ ...values, panel_title: event.target.value })} placeholder="Open a Ticket" /></Field>
+          <Field label="Panel channel"><select value={values.panel_channel_id} onChange={(event) => setValues({ ...values, panel_channel_id: event.target.value })}><option value="">Keep current channel</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field>
+          <Field label="Panel description"><textarea rows={4} maxLength={2000} value={values.panel_description} onChange={(event) => setValues({ ...values, panel_description: event.target.value })} placeholder="Tell members what the ticket panel is for." /></Field>
+          <Field label="Panel accent color" hint="Six-digit hex color, for example 5865F2"><ColorPicker label="Ticket panel accent color" value={values.panel_color} onChange={(panel_color) => setValues({ ...values, panel_color })} /></Field>
+          <Field label="Panel image URL"><input type="url" value={values.panel_image} onChange={(event) => setValues({ ...values, panel_image: event.target.value })} placeholder="https://…" /></Field>
+          <div className="form-grid-wide"><Field label="Ticket categories"><TicketCategoryList categories={values.panel_categories} onChange={(panel_categories) => setValues({ ...values, panel_categories })} /></Field></div>
+          <Field label="Support roles"><RoleSelect roles={roles} value={values.support_roles} multiple ariaLabel="Support roles" onChange={(support_roles) => setValues({ ...values, support_roles: Array.isArray(support_roles) ? support_roles : [] })} /></Field>
+        </div>
+        <div className="setting-footer"><span>Changes apply to this server.</span><button className="button button-primary" type="submit" disabled={savingConfig}>{savingConfig ? "Saving…" : "Save changes"}</button></div>
+      </section>
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Live queue" title="Current tickets" detail="Quickly reopen or close a ticket channel." icon="users" />
+        <div className="ticket-filter-row" role="group" aria-label="Filter tickets">
+          {(["all", "open", "closed"] as const).map((filter) => <button type="button" key={filter} className={ticketFilter === filter ? "button button-secondary is-active" : "button button-quiet"} aria-pressed={ticketFilter === filter} onClick={() => setTicketFilter(filter)}>{filter === "all" ? `All · ${data?.tickets.length || 0}` : `${filter === "open" ? "Open" : "Closed"} · ${(data?.tickets || []).filter((ticket) => (ticket.status || "open") === filter).length}`}</button>)}
+        </div>
+        {loadingTickets ? <div className="empty-state"><p>Loading current tickets…</p></div>
+          : ticketError ? <div className="empty-state"><p>Ticket data is unavailable.</p></div>
+          : filteredTickets.length ? <div className="ticket-admin-list">{filteredTickets.map((ticket) => <article className="ticket-admin-row" key={ticket.channel_id}><div><strong>#{ticket.channel_name || `ticket-${ticket.channel_id}`}</strong> <a className="ticket-channel-link" href={`https://discord.com/channels/${guildId}/${ticket.channel_id}`} target="_blank" rel="noreferrer">Open in Discord</a><small>{ticket.category || "General"} · Opened by {ticket.opener_name || ticket.opener_id}{ticket.claimed_by ? ` · Claimed by ${ticket.claimed_by}` : ""}</small></div><span className={`application-status ${ticket.status === "closed" ? "closed" : "open"}`}>{ticket.status || "open"}</span><button className="button button-muted button-small" disabled={saving === ticket.channel_id} type="button" onClick={() => setTicketStatus(ticket.channel_id, ticket.status === "closed" ? "open" : "closed")}>{saving === ticket.channel_id ? "Saving…" : ticket.status === "closed" ? "Reopen" : "Close"}</button></article>)}</div>
+          : <div className="empty-state"><p>No tickets are currently recorded for this server.</p></div>}
+      </section>
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="History" title="Ticket transcripts" detail="Recent transcripts saved by Niko for this server." icon="book" />
+        {ticketError ? <div className="empty-state"><p>Transcript history is unavailable until ticket data can be loaded.</p></div>
+          : loadingTickets ? <div className="empty-state"><p>Loading transcripts…</p></div>
+          : data?.transcripts.length ? <div className="ticket-admin-list">{data.transcripts.map((transcript) => <article className="ticket-admin-row" key={transcript.transcript_id}><div><strong>#{transcript.channel_name}</strong><small>{transcript.category} · Opened by {transcript.opener_id} · {transcript.message_count} messages · {new Date(transcript.created_at).toLocaleString()}</small></div><a className="button button-secondary button-small" href={transcript.url} target="_blank" rel="noreferrer">View transcript</a></article>)}</div>
+          : <div className="empty-state"><p>No transcripts have been generated for this server yet.</p></div>}
+      </section>
+    </form>
+  </>;
 }
 
 export function ModerationView({ guildId, config, csrfToken }: { guildId: string; config: GuildConfig | null; csrfToken?: string }) {
@@ -179,7 +229,7 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
           const premiumFlag = key === "nsfw_image_filter";
           return <label className={`setting-row${premiumFlag && !premiumActive ? " is-locked" : ""}`} key={key}><span><strong>{label}{experimentalFlags.has(key) && <em className="setting-flag-experimental">experimental</em>}{premiumFlag && <em className="setting-flag-premium">premium</em>}</strong><small>{hint}</small></span><input type="checkbox" checked={Boolean(values.automod?.[key])} disabled={premiumFlag && !premiumActive} onChange={(e) => updateNested("automod", key, e.target.checked)} /><i aria-hidden="true" /></label>;
         })}
-        {experimentalFlags.size > 0 && <p className="setting-note">⚠️ The scam image filter is still in early testing and may have some reliability issues.</p>}
+        {experimentalFlags.size > 0 && <p className="setting-note">The scam image filter is still in early testing and may have some reliability issues.</p>}
       </div></section>
       <section className="dash-panel settings-panel"><SettingsSectionTitle label="Thresholds" title="Choose when protection steps in" detail="These limits apply across the server." /><div className="form-grid">
         <Field label="Spam messages" hint="Messages inside the spam interval"><input type="number" min="1" max="100" value={values.spam_threshold ?? 6} onChange={(e) => setValues({ ...values, spam_threshold: e.target.value })} /></Field>
