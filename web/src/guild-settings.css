@@ -163,7 +163,8 @@
 .dashboard-layout .settings-category-editor > small { color: var(--dim); font-size: 10px; }
 .dashboard-layout .settings-category-editor .settings-option-list { gap: 9px; }
 .dashboard-layout .settings-category-editor .settings-option-row input { min-height: 42px; }
-.dashboard-layout .settings-category-editor .settings-option-add { margin-top: 2px; }
+.dashboard-layout .settings-category-editor .settings-category-actions { display: flex; align-self: start; justify-content: flex-start; margin-top: 2px; }
+.dashboard-layout .settings-category-editor .settings-category-actions .button { width: auto; flex: 0 0 auto; margin-top: 0; }
 .dashboard-layout .color-picker { min-width: 0; }
 .ticket-admin-list { display: grid; gap: 8px; }
 .ticket-admin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 13px 14px; background: rgba(255,255,255,.025); border: 1px solid var(--line-soft); border-radius: 10px; }
