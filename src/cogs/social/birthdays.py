@@ -22,7 +22,6 @@ import discord
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 DATE_RE = re.compile(r"^\s*(\d{1,2})[-/](\d{1,2})\s*$")
@@ -82,59 +81,6 @@ MESSAGES = {
             "happy_birthday": "🎂🎉 ¡feliz cumpleaños {mention}! ¡te deseo el día más maravilloso! 🎈",
         },
     },
-    "cafe": {
-        "en": {
-            "set_ok":         "🎂 noted! your birthday is **{date}** ☕✨",
-            "removed":        "✅ wiped your birthday off the calendar ☕",
-            "invalid_date":   "❌ that date looks weird hun~ use `MM-DD` like `07-23` ☕",
-            "show_self":      "🎂 your cozy birthday is **{date}** ☕",
-            "show_other":     "🎂 {user}'s birthday is **{date}** ☕",
-            "show_none":      "📭 {user} hasn't told me their birthday yet ☕",
-            "today_empty":    "🎂 nobody's celebrating today — quiet café day ☕",
-            "today_title":    "### {icon} cake party today ☕✨",
-            "upcoming_empty": "📭 no birthdays coming up — calm café month ☕",
-            "upcoming_title": "### {icon} upcoming birthdays ☕✨",
-            "channel_set":    "✅ I'll yell happy birthday in {channel} ☕✨",
-            "role_set":       "✅ birthday folks will get the {role} role ☕",
-            "config_title":   "### {icon} birthday corner setup ☕",
-            "config_body":    "**channel:** {channel}\n**role:** {role}",
-            "happy_birthday": "🎂🎉 happy birthday {mention} ☕✨ wishing you the comfiest, sweetest day with extra cake 🍰",
-        },
-        "de": {
-            "set_ok":         "🎂 notiert! dein geburtstag ist **{date}** ☕✨",
-            "removed":        "✅ deinen geburtstag vom kalender gewischt ☕",
-            "invalid_date":   "❌ das datum sieht komisch aus~ nutz `MM-TT` wie `07-23` ☕",
-            "show_self":      "🎂 dein gemütlicher geburtstag ist **{date}** ☕",
-            "show_other":     "🎂 {user}s geburtstag ist **{date}** ☕",
-            "show_none":      "📭 {user} hat mir den geburtstag noch nicht verraten ☕",
-            "today_empty":    "🎂 niemand feiert heute — ruhiger café-tag ☕",
-            "today_title":    "### {icon} kuchenparty heute ☕✨",
-            "upcoming_empty": "📭 keine geburtstage in sicht — ruhiger café-monat ☕",
-            "upcoming_title": "### {icon} bevorstehende geburtstage ☕✨",
-            "channel_set":    "✅ ich rufe happy birthday in {channel} ☕✨",
-            "role_set":       "✅ geburtstagskinder bekommen die {role} rolle ☕",
-            "config_title":   "### {icon} geburtstags-ecke setup ☕",
-            "config_body":    "**kanal:** {channel}\n**rolle:** {role}",
-            "happy_birthday": "🎂🎉 happy birthday {mention} ☕✨ ich wünsch dir den gemütlichsten süßesten tag mit extra kuchen 🍰",
-        },
-        "es": {
-            "set_ok":         "🎂 ¡anotado! tu cumple es el **{date}** ☕✨",
-            "removed":        "✅ borré tu cumple del calendario ☕",
-            "invalid_date":   "❌ esa fecha se ve rara~ usa `MM-DD` como `07-23` ☕",
-            "show_self":      "🎂 tu cumple acogedor es el **{date}** ☕",
-            "show_other":     "🎂 el cumple de {user} es el **{date}** ☕",
-            "show_none":      "📭 {user} aún no me ha dicho su cumple ☕",
-            "today_empty":    "🎂 nadie celebra hoy — día tranquilo en el café ☕",
-            "today_title":    "### {icon} fiesta de pastel hoy ☕✨",
-            "upcoming_empty": "📭 no hay cumples próximos — mes tranquilo en el café ☕",
-            "upcoming_title": "### {icon} próximos cumpleaños ☕✨",
-            "channel_set":    "✅ gritaré feliz cumple en {channel} ☕✨",
-            "role_set":       "✅ los cumpleañeros recibirán el rol {role} ☕",
-            "config_title":   "### {icon} rincón de cumples ☕",
-            "config_body":    "**canal:** {channel}\n**rol:** {role}",
-            "happy_birthday": "🎂🎉 ¡feliz cumpleaños {mention} ☕✨ te deseo el día más acogedor y dulce con pastel extra 🍰",
-        },
-    },
 }
 
 
@@ -144,14 +90,6 @@ def _lang(ctx) -> str:
         if l.startswith("de"): return "de"
         if l.startswith("es"): return "es"
     return "en"
-
-
-def _personality(ctx_or_guild) -> str:
-    if isinstance(ctx_or_guild, commands.Context):
-        return get_personality(ctx_or_guild)
-    class _S:
-        guild = ctx_or_guild if isinstance(ctx_or_guild, discord.Guild) else None
-    return get_personality(_S())
 
 
 msg = make_msg(MESSAGES)

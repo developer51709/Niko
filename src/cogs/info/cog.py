@@ -1,6 +1,6 @@
 # info.py
 # Fully rewritten to use the message dictionary for all text.
-# Bilingual EN/DE, personality-aware, cv2 LayoutView responses.
+# Bilingual EN/DE, cv2 LayoutView responses.
 
 import discord
 from discord.ext import commands
@@ -9,7 +9,6 @@ import platform
 import psutil
 import os
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import PaginatedView, paginate
 from config import links
@@ -295,191 +294,6 @@ MESSAGES = {
         },
     },
 
-    "cafe": {
-        "en": {
-            "serverinfo_title": "☕ cozy server info",
-            "serverinfo_name": "server name",
-            "serverinfo_id": "server id",
-            "serverinfo_members": "members",
-            "serverinfo_users": "humans",
-            "serverinfo_bots": "bots",
-            "serverinfo_roles": "roles",
-            "serverinfo_created": "born on",
-            "serverinfo_owner": "server barista",
-
-            "userinfo_title": "☕ cozy user info",
-            "userinfo_username": "username",
-            "userinfo_id": "user id",
-            "userinfo_created": "account brewed on",
-            "userinfo_joined": "joined café",
-            "userinfo_toprole": "fanciest role",
-            "userinfo_roles": "roles",
-
-            "avatar_title": "{user}'s cute lil avatar ☕",
-
-            "banner_title": "{user}'s banner ✨️",
-            "banner_none": "{user} doesn't have a banner yet 😔",
-
-            "about_title": "☕ about niko",
-            "about_desc": (
-                "Niko is your cozy café companion — warm, social, and always ready to chat "
-                "or help out around the server."
-            ),
-            "about_dev": "barista",
-            "about_lib": "library",
-            "about_servers": "cafés",
-            "about_footer": "thanks for hanging out with niko ☕",
-
-            "creator_title": "☕ niko's creator",
-            "creator_desc": "niko was lovingly brewed by **{creator}** ☕",
-            "creator_tag": "creator tag",
-            "creator_id": "user id",
-            "creator_project": "project",
-
-            "roleinfo_title": "☕ cozy role info",
-            "roleinfo_name": "role name",
-            "roleinfo_id": "role id",
-            "roleinfo_color": "role color",
-            "roleinfo_position": "role position",
-            "roleinfo_members": "members with this vibe",
-            "roleinfo_need_role": "pls specify a role cutie ☕ example: `!roleinfo @Role`",
-
-            "servericon_title": "☕ server icon",
-
-            "serverbanner_title": "☕ server banner",
-            "serverbanner_none": "aww this café doesn't have a banner yet ☕",
-
-            "booststats_title": "boost vibes",
-            "booststats_count": "boost count",
-            "booststats_tier": "boost tier",
-            "booststats_boosters": "boosters",
-
-            "spotify_not_member": "i can only check spotify for café members ☕",
-            "spotify_not_listening": "{user} isn't vibing to spotify right now ☕",
-            "spotify_title": "{user} is vibing to spotify ☕",
-            "spotify_track": "track",
-            "spotify_artist": "artist",
-            "spotify_album": "album",
-            "spotify_duration": "duration",
-            "spotify_started": "started",
-            "spotify_ends": "ends",
-            "spotify_footer": "spotify vibes update in real time ☕",
-
-            "debuginfo_title": "☕ debug vibes",
-            "debuginfo_uptime": "uptime",
-            "debuginfo_model": "ai model",
-            "debuginfo_commands": "commands",
-            "debuginfo_ping": "latency",
-            "debuginfo_cpu": "cpu usage",
-            "debuginfo_ram": "memory usage",
-
-            "hostinfo_title": "☕ host info",
-            "hostinfo_hostname": "hostname",
-            "hostinfo_os": "os",
-            "hostinfo_cpu": "cpu",
-            "hostinfo_ram": "ram",
-            "invite_title": "invite niko",
-            "invite_link": "click here to invite niko to your café",
-
-            "shardinfo_title": "shard vibes",
-            "shardinfo_total": "total shards",
-            "shardinfo_guild_count": "cafés",
-            "shardinfo_member_count": "cozy folks",
-            "shardinfo_latency": "latency"
-        },
-
-        "de": {
-            "serverinfo_title": "☕ gemütliche server-infos",
-            "serverinfo_name": "servername",
-            "serverinfo_id": "server-id",
-            "serverinfo_members": "mitglieder",
-            "serverinfo_users": "menschen",
-            "serverinfo_bots": "bots",
-            "serverinfo_roles": "rollen",
-            "serverinfo_created": "geboren am",
-            "serverinfo_owner": "server-barista",
-
-            "userinfo_title": "☕ gemütliche benutzer-infos",
-            "userinfo_username": "benutzername",
-            "userinfo_id": "benutzer-id",
-            "userinfo_created": "account aufgebrüht am",
-            "userinfo_joined": "dem café beigetreten",
-            "userinfo_toprole": "schickste rolle",
-            "userinfo_roles": "rollen",
-
-            "avatar_title": "{user}s süßer avatar ☕",
-
-            "banner_title": "{user}s banner ✨️",
-            "banner_none": "{user} hat noch kein banner 😔",
-
-            "about_title": "☕ über niko",
-            "about_desc": (
-                "Niko ist dein gemütlicher café-begleiter — warm, sozial und immer bereit "
-                "zu plaudern oder zu helfen."
-            ),
-            "about_dev": "barista",
-            "about_lib": "bibliothek",
-            "about_servers": "cafés",
-            "about_footer": "danke fürs vorbeischauen ☕",
-
-            "creator_title": "☕ nikos ersteller",
-            "creator_desc": "niko wurde liebevoll von **{creator}** aufgebrüht ☕",
-            "creator_tag": "ersteller-tag",
-            "creator_id": "benutzer-id",
-            "creator_project": "projekt",
-
-            "roleinfo_title": "☕ gemütliche rollen-infos",
-            "roleinfo_name": "rollenname",
-            "roleinfo_id": "rollen-id",
-            "roleinfo_color": "farbe",
-            "roleinfo_position": "position",
-            "roleinfo_members": "mitglieder mit diesem vibe",
-            "roleinfo_need_role": "bitte gib eine rolle an ☕ beispiel: `!roleinfo @Rolle`",
-
-            "servericon_title": "☕ server-icon",
-
-            "serverbanner_title": "☕ server-banner",
-            "serverbanner_none": "aww dieses café hat noch kein banner ☕",
-
-            "booststats_title": "boost-vibes",
-            "booststats_count": "boosts",
-            "booststats_tier": "boost-stufe",
-            "booststats_boosters": "booster",
-
-            "spotify_not_member": "ich kann spotify nur für café-mitglieder prüfen ☕",
-            "spotify_not_listening": "{user} hört gerade kein spotify ☕",
-            "spotify_title": "{user} hört spotify ☕",
-            "spotify_track": "titel",
-            "spotify_artist": "künstler",
-            "spotify_album": "album",
-            "spotify_duration": "dauer",
-            "spotify_started": "gestartet",
-            "spotify_ends": "endet",
-            "spotify_footer": "spotify-vibes aktualisieren sich in echtzeit ☕",
-
-            "debuginfo_title": "☕ debug-infos",
-            "debuginfo_uptime": "laufzeit",
-            "debuginfo_model": "ki-modell",
-            "debuginfo_commands": "befehle",
-            "debuginfo_ping": "latenz",
-            "debuginfo_cpu": "cpu-auslastung",
-            "debuginfo_ram": "speicherverbrauch",
-
-            "hostinfo_title": "☕ host-infos",
-            "hostinfo_hostname": "hostname",
-            "hostinfo_os": "betriebssystem",
-            "hostinfo_cpu": "cpu",
-            "hostinfo_ram": "ram",
-            "invite_title": "niko einladen",
-            "invite_link": "klicke hier, um niko in dein café einzuladen",
-
-            "shardinfo_title": "shard-gefühle",
-            "shardinfo_total": "gesamt-shards",
-            "shardinfo_guild_count": "cafés",
-            "shardinfo_member_count": "gemütliche leute",
-            "shardinfo_latency": "latenz"
-        },
-    },
 }
 
 
@@ -613,7 +427,7 @@ class AvatarButtons(discord.ui.ActionRow):
 
 
 class InfoCog(commands.Cog):
-    """Cozy bilingual info commands with personality support."""
+    """Bilingual server and user info commands."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -627,7 +441,7 @@ class InfoCog(commands.Cog):
         name="serverinfo",
         aliases=["si", "server"],
         description="View server info",
-        help="{ 'en': 'peek at cozy server stats ☕', 'de': 'zeigt server-infos', 'es': 'mira info del servidor ☕' }"
+        help="{ 'en': 'show server stats', 'de': 'zeigt server-infos', 'es': 'muestra la información del servidor' }"
     )
     async def serverinfo(self, ctx):
         server = ctx.guild
@@ -655,7 +469,7 @@ class InfoCog(commands.Cog):
         name="userinfo",
         aliases=["ui", "user"],
         description="View user info",
-        help="{ 'en': 'see cute lil user details ☕', 'de': 'benutzer-infos anzeigen', 'es': 'mira detalles del usuario ☕' }"
+        help="{ 'en': 'see user details', 'de': 'benutzer-infos anzeigen', 'es': 'mira los detalles del usuario' }"
     )
     async def userinfo(self, ctx, member: discord.Member = None):
         if ctx.interaction:
@@ -818,7 +632,7 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(
         name="about",
         description="Learn about Niko",
-        help="{ 'en': 'learn about Niko ☕', 'de': 'über Niko', 'es': 'aprende sobre Niko ☕' }"
+        help="{ 'en': 'learn about Niko', 'de': 'über Niko', 'es': 'aprende sobre Niko' }"
     )
     async def about(self, ctx):
         bot_user = self.bot.user
@@ -883,7 +697,7 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(
         name="creator",
         description="Meet Niko's creator",
-        help="{ 'en': 'meet Nikos creator ☕', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko ☕' }"
+        help="{ 'en': 'meet Nikos creator', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko' }"
     )
     async def creator(self, ctx):
         creator = await self.bot.fetch_user(1052690741874401360)
@@ -934,7 +748,7 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(
         name="roleinfo",
         description="View role info",
-        help="{ 'en': 'see cozy role details ☕', 'de': 'rollen-infos anzeigen', 'es': 'mira detalles del rol ☕' }"
+        help="{ 'en': 'see role details', 'de': 'rollen-infos anzeigen', 'es': 'mira los detalles del rol' }"
     )
     async def roleinfo(self, ctx, role: discord.Role = None):
         if role is None:
@@ -985,7 +799,7 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(
         name="booststats",
         description="View the server's boost stats",
-        help="{ 'en': 'see the servers boost vibes ☕', 'de': 'boost-infos anzeigen', 'es': 'mira las estadísticas de boost del servidor ☕' }"
+        help="{ 'en': 'see the boost stats of this server', 'de': 'boost-infos anzeigen', 'es': 'mira las estadísticas de boost del servidor' }"
     )
     async def booststats(self, ctx):
         server = ctx.guild
@@ -1173,7 +987,7 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(
         name="invite",
         description="Get Niko's invite link",
-        help="{ 'en': 'get Nikos invite link ☕️', 'de': 'einladungslink für Niko', 'es': 'obtén el enlace de invitación de Niko ☕️' }"
+        help="{ 'en': 'get the Niko invite link', 'de': 'einladungslink für Niko', 'es': 'obtén el enlace de invitación de Niko' }"
     )
     async def invite(self, ctx):
         bot_user = self.bot.user

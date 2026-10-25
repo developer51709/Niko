@@ -850,12 +850,12 @@ def _render_shop_sync(items: list[dict], balance: int, category: str | None = No
     canvas = _make_canvas(SHOP_W, height, radius=28)
     d = ImageDraw.Draw(canvas)
     d.text((38, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(17))
-    d.text((38, 54), "Niko's Boutique", fill=INK, font=_bold(34))
-    balance_text = f"Balance  {int(balance):,} \U0001F950"
+    d.text((38, 54), "Niko's Shop", fill=INK, font=_bold(34))
+    balance_text = f"Balance  {int(balance):,} \U0001FA99"
     balance_font = _bold(17)
     balance_w = int(font_getlength(balance_font, balance_text))
     render_text_with_emojis(canvas, balance_text, balance_font, SHOP_W - 38 - balance_w, 41, emoji_size=17, fill=ACCENT_BRIGHT, bold=True)
-    subtitle = f"{category.title()} collection" if category else "Treats, upgrades, and little luxuries"
+    subtitle = f"{category.title()} collection" if category else "Consumables, upgrades, and collectibles"
     draw_text_with_fallback(d, (38, 94), subtitle, size=14, fill=MUTED)
 
     y = header_h
@@ -871,7 +871,7 @@ def _render_shop_sync(items: list[dict], balance: int, category: str | None = No
         render_text_with_emojis(canvas, f"{emoji}  {name}", item_name_font, 48, y + 15, emoji_size=20, fill=INK, bold=True)
         draw_text_with_fallback(d, (48, y + 43), description[:72], size=12, fill=MUTED)
         # Price line with emoji
-        price_text = f"{price:,} \U0001F950"
+        price_text = f"{price:,} \U0001FA99"
         sell_text = f"sell {sell:,}"
         pf = _bold(18)
         render_text_with_emojis(canvas, price_text, pf, SHOP_W - 190, y + 16, emoji_size=18, fill=ACCENT_BRIGHT, bold=True)
@@ -918,7 +918,7 @@ def _render_inventory_sync(
     # ── Header ──
     d.text((38, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(17))
     d.text((38, 54), f"{name}'s Inventory", fill=INK, font=_bold(34))
-    balance_text = f"Balance  {int(balance):,} \U0001F950"
+    balance_text = f"Balance  {int(balance):,} \U0001FA99"
     balance_font = _bold(17)
     balance_w = int(font_getlength(balance_font, balance_text))
     render_text_with_emojis(

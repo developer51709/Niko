@@ -27,7 +27,6 @@ from discord.ext import commands, tasks
 
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji

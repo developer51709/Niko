@@ -28,7 +28,6 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.blacklist_manager import BlacklistManager
 from utils.i18n import make_msg
 from utils.guild_lockdown import paused_message as polls_paused
@@ -97,65 +96,6 @@ MESSAGES = {
             "sent":          "✅ ¡Encuesta enviada!",
             "cancelled":     "🗑 Configuración cancelada.",
             "timed_out":     "⌛ Se agotó el tiempo de configuración.",
-        },
-    },
-    "cafe": {
-        "en": {
-            "need_options":  "❌ at least 2 options please — hit **Add Option** ☕",
-            "too_many":      "❌ 10 options max, sweet bean ☕",
-            "title":         "### {icon} {question} ☕",
-            "vote_count":    "**{letter}** {opt} — `{count}` sips ({pct}%)",
-            "footer_open":   "-# tap a button to vote · poll by {author} ☕✨",
-            "footer_closed": "-# poll closed ☕ · by {author}",
-            "vote_added":    "✅ vote tossed in for **{opt}** ☕",
-            "vote_removed":  "✅ vote pulled back ☕",
-            "ended":         "✅ poll closed cozily ☕",
-            "not_found":     "⚠️ couldn't find that poll hun~",
-            "not_owner":     "❌ only the poll creator or admins can do that ☕",
-            "results_title": "### {icon} final tally ☕✨",
-            "only_host":     "❌ only the poll creator can use this panel ☕",
-            "need_question": "❌ set a question first, darling ☕",
-            "sent":          "✅ poll sent! ☕✨",
-            "cancelled":     "🗑 poll setup cancelled ☕",
-            "timed_out":     "⌛ poll setup timed out ☕",
-        },
-        "de": {
-            "need_options":  "❌ mindestens 2 optionen bitte — **Option hinzufügen** ☕",
-            "too_many":      "❌ max 10 optionen, süßer ☕",
-            "title":         "### {icon} {question} ☕",
-            "vote_count":    "**{letter}** {opt} — `{count}` schlucke ({pct}%)",
-            "footer_open":   "-# tipp einen button zum abstimmen · umfrage von {author} ☕✨",
-            "footer_closed": "-# umfrage geschlossen ☕ · von {author}",
-            "vote_added":    "✅ stimme für **{opt}** rein ☕",
-            "vote_removed":  "✅ stimme zurückgezogen ☕",
-            "ended":         "✅ umfrage gemütlich geschlossen ☕",
-            "not_found":     "⚠️ konnte die umfrage nicht finden hun~",
-            "not_owner":     "❌ nur der ersteller oder admins können das ☕",
-            "results_title": "### {icon} endabrechnung ☕✨",
-            "only_host":     "❌ nur der ersteller kann das panel bedienen ☕",
-            "need_question": "❌ erst eine frage festlegen ☕",
-            "sent":          "✅ umfrage gesendet ☕",
-            "cancelled":     "🗑 setup abgebrochen ☕",
-            "timed_out":     "⌛ setup abgelaufen ☕",
-        },
-        "es": {
-            "need_options":  "❌ al menos 2 opciones por favor — **Añadir opción** ☕",
-            "too_many":      "❌ máximo 10 opciones, cariño ☕",
-            "title":         "### {icon} {question} ☕",
-            "vote_count":    "**{letter}** {opt} — `{count}` sorbos ({pct}%)",
-            "footer_open":   "-# pulsa un botón para votar · encuesta de {author} ☕✨",
-            "footer_closed": "-# encuesta cerrada ☕ · por {author}",
-            "vote_added":    "✅ voto echado por **{opt}** ☕",
-            "vote_removed":  "✅ voto retirado ☕",
-            "ended":         "✅ encuesta cerrada acogedoramente ☕",
-            "not_found":     "⚠️ no encontré esa encuesta hun~",
-            "not_owner":     "❌ solo el creador o admins pueden hacer eso ☕",
-            "results_title": "### {icon} resultados finales ☕✨",
-            "only_host":     "❌ solo el creador puede usar este panel ☕",
-            "need_question": "❌ primero pon una pregunta ☕",
-            "sent":          "✅ encuesta enviada ☕✨",
-            "cancelled":     "🗑 configuración cancelada ☕",
-            "timed_out":     "⌛ tiempo agotado ☕",
         },
     },
 }

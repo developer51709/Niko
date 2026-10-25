@@ -23,6 +23,8 @@ from utils.image import economy_card as ec  # noqa: E402
 from utils.image import level_card  # noqa: E402
 from cogs.economy.data import ACCENT_BROWN  # noqa: E402
 from cogs.casino import blackjack as casino_blackjack  # noqa: E402
+from cogs.tickets import views as ticket_views  # noqa: E402
+from utils.tickets.config import TicketConfig  # noqa: E402
 
 # Every colour the pre-theme café cards drew with.
 CAFE_RGB = (
@@ -230,6 +232,48 @@ class OldCafeThemeRemovedTests(unittest.TestCase):
         self.assertEqual(casino_blackjack.STATUS_NEUTRAL, ec.ACCENT_BRIGHT)
         self.assertEqual(casino_blackjack.STATUS_WIN, ec.SAGE)
         self.assertEqual(casino_blackjack.STATUS_LOSS, ec.DANGER)
+
+    def test_the_ticket_system_has_no_cafe_voice_left(self):
+        for relative in ("src/cogs/tickets/views.py", "src/cogs/tickets/cog.py"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            hits = [
+                literal for literal in ("\"cafe\"", "☕", "cozy", "booth", "staff lounge", "sweet bean")
+                if literal in text
+            ]
+            with self.subTest(path=relative):
+                self.assertEqual(hits, [], f"{relative} still ships the café ticket voice: {hits}")
+
+    def test_a_new_ticket_panel_uses_the_standard_defaults(self):
+        view = ticket_views.TicketPanelView(999, TicketConfig(guild_id=999))
+        text = "\n".join(
+            child.content
+            for container in view.children
+            for child in getattr(container, "children", [])
+            if isinstance(getattr(child, "content", None), str)
+        )
+        self.assertIn("Open a Ticket", text)
+        self.assertNotIn("☕", text)
+
+    def test_no_cog_ships_a_cafe_message_catalogue(self):
+        offenders = []
+        for path in sorted((ROOT / "src").rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            if re.search(r'^[ \t]*"cafe":\s*\{', text, re.MULTILINE) or 'MESSAGES["cafe"]' in text:
+                offenders.append(str(path.relative_to(ROOT)))
+        self.assertEqual(offenders, [], f"café message catalogues are back: {offenders}")
+
+    def test_the_shop_dropped_the_cafe_branding(self):
+        files = {
+            "src/cogs/economy/commands/shop.py": ("boutique", "Boutique"),
+            "src/utils/image/economy_card.py": ("Boutique", "Treats", "\U0001F950"),
+            "src/webapp/card_routes.py": ("Boutique", "boutique", "\U0001F950"),
+        }
+        for relative, literals in files.items():
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            for literal in literals:
+                with self.subTest(path=relative, literal=literal):
+                    self.assertNotIn(literal, text, f"{relative} still carries the café shop branding: {literal}")
+        self.assertIn("Niko's Shop", (ROOT / "src/utils/image/economy_card.py").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

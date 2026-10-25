@@ -8,7 +8,6 @@ import asyncio
 
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
-from utils.ai.config import get_personality
 from utils.blacklist_manager import BlacklistManager
 from utils.guild_lockdown import paused_message
 
@@ -279,110 +278,6 @@ MESSAGES = {
             "participants_empty":     "Nadie se ha unido al sorteo todavía.",
         },
     },
-    "cafe": {
-        "en": {
-            "giveaway_title":         "Giveaway",
-            "giveaway_ended_title":   "Giveaway Ended ☕",
-            "label_prize":            "prize",
-            "label_ends":             "ends",
-            "label_hosted_by":        "brewed by",
-            "label_winner":           "winner(s) ✨",
-            "label_no_participants":  "nobody sipped in 😢",
-            "no_participants_msg":    "the giveaway for **{prize}** ended, but nobody joined 😭 maybe next time~",
-            "winner_announce":        "🎉 congrats {mentions}! you won **{prize}**! enjoy it with a coffee ☕✨\n{url}",
-            "reroll_announce":        "🎉 **reroll time!** the new winner for **{prize}** is: {mentions}! congrats ☕",
-            "join_success":           "🎉 you're in! fingers crossed ☕✨",
-            "join_already":           "☕ you already joined this one~ sit tight!",
-            "join_ended":             "this giveaway is already over...",
-            "join_host":              "can't join your own giveaway, silly~",
-            "join_bot":               "bots can't join giveaways, sorry!",
-            "no_exist":               "this giveaway doesn't exist anymore.",
-            "no_perm_manage":         "☕ only the giveaway host or a server admin can manage this.",
-            "end_confirmed":          "✅ giveaway ended~ winners have been announced in the channel ☕",
-            "no_participants_yet":    "nobody has joined yet 😔",
-            "reroll_no_participants": "😔 nobody joined, so there's no one to reroll!",
-            "reroll_not_ended":       "😔 this giveaway isn't over yet! rerolls are only for ended ones~",
-            "reroll_not_found":       "😔 couldn't find a giveaway with that message id.",
-            "invalid_duration":       "❌️ invalid duration! use numbers with `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`)",
-            "invalid_winners":        "❌️ invalid winner count! needs to be a number (e.g. `2`).",
-            "min_one_winner":         "❌️ at least 1 winner is needed!",
-            "footer_active":          "{count} winner{s} | ends at",
-            "manage_title":           "⚙️ giveaway management",
-            "manage_info":            "use the buttons below to manage this giveaway ☕",
-            "select_result":          "🎲 randomly picked: {mention}",
-            "select_no_entries":      "nobody has entered yet, so there's no one to pick 😔",
-            "participants_title":     "☕ participants",
-            "participants_empty":     "nobody has joined yet 😔",
-        },
-        "de": {
-            "giveaway_title":         "Gewinnspiel",
-            "giveaway_ended_title":   "Gewinnspiel vorbei ☕",
-            "label_prize":            "preis",
-            "label_ends":             "endet",
-            "label_hosted_by":        "veranstaltet von",
-            "label_winner":           "gewinner ✨",
-            "label_no_participants":  "niemand dabei 😢",
-            "no_participants_msg":    "das gewinnspiel für **{prize}** ist vorbei, aber niemand hat mitgemacht 😭",
-            "winner_announce":        "🎉 glückwunsch {mentions}! ihr habt **{prize}** gewonnen! genieß es mit einem kaffee ☕✨\n{url}",
-            "reroll_announce":        "🎉 **reroll!** der neue gewinner für **{prize}**: {mentions}! glückwunsch ☕",
-            "join_success":           "🎉 du bist dabei! drück die daumen ☕✨",
-            "join_already":           "☕ du hast schon mitgemacht~ warte einfach!",
-            "join_ended":             "dieses gewinnspiel ist schon vorbei...",
-            "join_host":              "du kannst nicht am eigenen gewinnspiel teilnehmen~",
-            "join_bot":               "bots können leider nicht mitmachen!",
-            "no_exist":               "dieses gewinnspiel existiert nicht mehr.",
-            "no_perm_manage":         "☕ nur der veranstalter oder ein server-admin kann das verwalten.",
-            "end_confirmed":          "✅ gewinnspiel beendet~ gewinner wurden im channel bekannt gegeben ☕",
-            "no_participants_yet":    "noch niemand hat mitgemacht 😔",
-            "reroll_no_participants": "😔 niemand war dabei, also gibt's niemanden zum rerolln!",
-            "reroll_not_ended":       "😔 das gewinnspiel ist noch nicht vorbei!",
-            "reroll_not_found":       "😔 kein gewinnspiel mit dieser nachrichten-id gefunden.",
-            "invalid_duration":       "❌ ungültige dauer! benutze zahlen mit `s`, `m`, `h` oder `d` (z.b. `30s`, `10m`, `2h`, `1d`)",
-            "invalid_winners":        "❌ ungültige gewinneranzahl! muss eine zahl sein (z.b. `2`).",
-            "min_one_winner":         "❌ es braucht mindestens 1 gewinner!",
-            "footer_active":          "{count} gewinner | endet um",
-            "manage_title":           "⚙️ gewinnspiel-verwaltung",
-            "manage_info":            "nutze die schaltflächen unten, um das gewinnspiel zu verwalten ☕",
-            "select_result":          "🎲 zufällig ausgewählt: {mention}",
-            "select_no_entries":      "noch niemand ist dabei, also kann niemand ausgewählt werden 😔",
-            "participants_title":     "☕ teilnehmer",
-            "participants_empty":     "noch niemand hat mitgemacht 😔",
-        },
-        "es": {
-            "giveaway_title":         "Sorteo",
-            "giveaway_ended_title":   "Sorteo Terminado ☕",
-            "label_prize":            "premio",
-            "label_ends":             "termina",
-            "label_hosted_by":        "preparado por",
-            "label_winner":           "ganador(es) ✨",
-            "label_no_participants":  "nadie se animó 😢",
-            "no_participants_msg":    "el sorteo de **{prize}** terminó, pero nadie se unió 😭 ¡quizá la próxima!",
-            "winner_announce":        "🎉 ¡felicidades {mentions}! ¡has ganado **{prize}**! disfrútalo con un cafecito ☕✨\n{url}",
-            "reroll_announce":        "🎉 **¡hora de re-sortear!** el nuevo ganador de **{prize}** es: {mentions}! felicidades ☕",
-            "join_success":           "🎉 ¡estás dentro! crucemos los dedos ☕✨",
-            "join_already":           "☕ ya te uniste a este~ ¡tranqui!",
-            "join_ended":             "este sorteo ya terminó...",
-            "join_host":              "no puedes unirte a tu propio sorteo, tontito~",
-            "join_bot":               "¡los bots no pueden unirse a sorteos, lo siento!",
-            "no_exist":               "este sorteo ya no existe.",
-            "no_perm_manage":         "☕ solo el organizador o un admin del servidor puede gestionar esto.",
-            "end_confirmed":          "✅ sorteo terminado~ los ganadores han sido anunciados en el canal ☕",
-            "no_participants_yet":    "todavía nadie se ha unido 😔",
-            "reroll_no_participants": "😔 ¡nadie se unió, así que no hay a quién re-sortear!",
-            "reroll_not_ended":       "😔 ¡este sorteo aún no terminó! los re-sorteos son solo para los terminados~",
-            "reroll_not_found":       "😔 no encontré un sorteo con ese id de mensaje.",
-            "invalid_duration":       "❌ ¡duración inválida! usa números con `s`, `m`, `h` o `d` (p. ej. `30s`, `10m`, `2h`, `1d`)",
-            "invalid_winners":        "❌ ¡cantidad de ganadores inválida! tiene que ser un número (p. ej. `2`).",
-            "min_one_winner":         "❌ ¡se necesita al menos 1 ganador!",
-            "footer_active":          "{count} ganador{s} | termina el",
-            "manage_title":           "⚙️ gestión del sorteo",
-            "manage_info":            "usa los botones de abajo para gestionar este sorteo ☕",
-            "select_result":          "🎲 elegido al azar: {mention}",
-            "select_no_entries":      "todavía nadie se ha unido, así que no hay a quién elegir 😔",
-            "participants_title":     "☕ participantes",
-            "participants_empty":     "todavía nadie se ha unido 😔",
-        },
-    },
 }
 
 
@@ -397,13 +292,9 @@ def _get_lang(obj) -> str:
 
 
 def msg(obj, key: str, **kwargs) -> str:
-    personality = get_personality(obj)
+    """Resolve a giveaway message: guild language, then English, then the key."""
     lang = _get_lang(obj)
-    text = MESSAGES.get(personality, {}).get(lang, {}).get(key)
-    if text is None:
-        text = MESSAGES.get(personality, {}).get("en", {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"].get(lang, {}).get(key)
+    text = MESSAGES["normal"].get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
     return text.format(**kwargs) if kwargs else text

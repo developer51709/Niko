@@ -14,13 +14,10 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
-
 import aiosqlite
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from cogs.giveaway import views as giveaway_views  # noqa: E402
 from cogs.giveaway.cog import Giveaway  # noqa: E402
 from cogs.giveaway.views import _GiveawayJoinBtn, _MgmtSelectBtn  # noqa: E402
 from database import PRIMARY_KEYS, SQLitePool  # noqa: E402
@@ -107,13 +104,6 @@ class FakeChannel:
         self.sent.append(content)
 
 
-# The message catalogue reads the server's AI personality from the config
-# database; the ban behaviour does not depend on it, so keep these tests off
-# the config store and assert on the English copy.
-def _personality(obj):
-    return "normal"
-
-
 async def _memory_connection():
     # aiosqlite's connect() is awaitable rather than a coroutine, so it cannot
     # be handed straight to asyncio.run().
@@ -167,14 +157,12 @@ class GiveawayBanTests(unittest.TestCase):
 
     def _ban(self, member_id=BANNED, *, guild_id=GUILD):
         ctx = FakeCtx(guild_id=guild_id)
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(Giveaway.ban.callback(self.cog, ctx, FakeUser(member_id)))
+        asyncio.run(Giveaway.ban.callback(self.cog, ctx, FakeUser(member_id)))
         return ctx
 
     def _unban(self, member_id=BANNED, *, guild_id=GUILD):
         ctx = FakeCtx(guild_id=guild_id)
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(Giveaway.unban.callback(self.cog, ctx, FakeUser(member_id)))
+        asyncio.run(Giveaway.unban.callback(self.cog, ctx, FakeUser(member_id)))
         return ctx
 
     def _join(self, member_id, *, message_id=1000, guild_id=GUILD, bot=False):
@@ -182,15 +170,13 @@ class GiveawayBanTests(unittest.TestCase):
         interaction = FakeInteraction(
             guild_id=guild_id, user=FakeUser(member_id, bot=bot), message_id=message_id
         )
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(button.callback(interaction))
+        asyncio.run(button.callback(interaction))
         return interaction
 
     def _end(self, message_id=1000, *, guild_id=GUILD):
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(Giveaway.end_giveaway(
-                self.cog, message_id, CHANNEL_ID, guild_id, "Nitro", 1, ADMIN,
-            ))
+        asyncio.run(Giveaway.end_giveaway(
+            self.cog, message_id, CHANNEL_ID, guild_id, "Nitro", 1, ADMIN,
+        ))
 
     # ── command behaviour ────────────────────────────────────
 
@@ -259,8 +245,7 @@ class GiveawayBanTests(unittest.TestCase):
 
     def test_a_bot_cannot_be_banned_from_giveaways(self):
         ctx = FakeCtx()
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(Giveaway.ban.callback(self.cog, ctx, FakeUser(MEMBER, bot=True)))
+        asyncio.run(Giveaway.ban.callback(self.cog, ctx, FakeUser(MEMBER, bot=True)))
 
         self.assertEqual(self._ban_rows(), [])
         self.assertIn("Bots cannot participate", ctx.sent[-1])
@@ -328,8 +313,7 @@ class GiveawayBanTests(unittest.TestCase):
 
         button = _MgmtSelectBtn(self.bot, 1000)
         interaction = FakeInteraction(guild_id=GUILD, user=FakeUser(ADMIN), message_id=1000)
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(button.callback(interaction))
+        asyncio.run(button.callback(interaction))
 
         text = view_text(interaction.response.edited[-1])
         self.assertIn(f"<@{MEMBER}>", text)
@@ -348,8 +332,7 @@ class GiveawayBanTests(unittest.TestCase):
 
         button = _MgmtSelectBtn(self.bot, 1000)
         interaction = FakeInteraction(guild_id=GUILD, user=FakeUser(ADMIN), message_id=1000)
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(button.callback(interaction))
+        asyncio.run(button.callback(interaction))
 
         text = view_text(interaction.response.edited[-1])
         self.assertIn("Nobody has entered", text)

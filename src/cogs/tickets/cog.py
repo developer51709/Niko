@@ -29,7 +29,7 @@ class Tickets(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def ticket_setup(self, ctx: commands.Context):
-        view = TicketSetupView(ctx.guild.id, ctx.author, lang=_ctx_lang(ctx), personality=get_personality(ctx))
+        view = TicketSetupView(ctx.guild.id, ctx.author, lang=_ctx_lang(ctx))
         await ctx.send(view=view)
 
     # ───── admin: post panel here ─────────────────
@@ -530,11 +530,11 @@ class _PostPanelBtn(discord.ui.Button):
 
 
 class TicketSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, lang: str = "en", personality: str = "cafe"):
+    def __init__(self, guild_id: int, author: discord.Member, lang: str = "en"):
         super().__init__(timeout=None)
-        title = MESSAGES.get(personality, MESSAGES["normal"]).get(lang, {}).get("setup_title") \
+        title = MESSAGES["normal"].get(lang, {}).get("setup_title") \
                 or MESSAGES["normal"]["en"]["setup_title"]
-        desc = MESSAGES.get(personality, MESSAGES["normal"]).get(lang, {}).get("setup_desc") \
+        desc = MESSAGES["normal"].get(lang, {}).get("setup_desc") \
                 or MESSAGES["normal"]["en"]["setup_desc"]
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=title.format(icon=get_emoji("ticket"))),

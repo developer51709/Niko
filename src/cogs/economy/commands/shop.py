@@ -65,7 +65,7 @@ class _ShopTransactionView(discord.ui.LayoutView):
         )
         confirm.callback = self._confirm
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {'🛍️ Buy from' if mode == 'buy' else '💰 Sell from'} the boutique\n-# Select an item, then choose how many you want."),
+            discord.ui.TextDisplay(content=f"### {'🛍️ Buy from' if mode == 'buy' else '💰 Sell from'} the shop\n-# Select an item, then choose how many you want."),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(self.item_select),
             discord.ui.ActionRow(self.amount_select),
@@ -264,8 +264,8 @@ class ShopMixin:
 
     @commands.hybrid_command(
         name="shop",
-        description="Browse the boutique",
-        help="{ 'en': 'browse the boutique 🛍️✨', 'de': 'stöbere in der Boutique', 'es': 'explora la boutique 🛍️✨' }",
+        description="Browse the shop",
+        help="{ 'en': 'browse the shop 🛍️', 'de': 'stöbere im Shop', 'es': 'explora la tienda 🛍️' }",
     )
     async def shop(self, ctx: commands.Context, category: str = None):
         cats = ("consumable", "upgrade", "collectible")

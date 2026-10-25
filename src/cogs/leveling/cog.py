@@ -239,7 +239,7 @@ class Leveling(commands.Cog):
         cfg = await self._guild_cfg(ctx.guild.id)
         enabled_s = get_emoji("tick") if cfg.get("xp_enabled", True) else get_emoji("cross")
         embed_text = (
-            f"### ☕ Leveling Commands\n"
+            f"### Leveling Commands\n"
             f"**Status:** {enabled_s} • **Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x` • "
             f"**Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n\n"
             "Use `/leveling rank`, `/leveling leaderboard`, `/leveling panel`, or `/leveling config`.\n"
@@ -260,7 +260,7 @@ class Leveling(commands.Cog):
         name="rank",
         aliases=["level", "profile"],
         description="Check your level stats with a beautiful image card",
-        help="{ 'en': 'Check your level stats ☕', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel ☕' }"
+        help="{ 'en': 'Check your level stats', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel' }"
     )
     async def leveling_rank(self, ctx, member: discord.Member = None):
         member   = member or ctx.author
@@ -479,7 +479,7 @@ class Leveling(commands.Cog):
         name="panel",
         aliases=["levelpanel", "settings"],
         description="Open the interactive leveling management panel",
-        help="{ 'en': 'Open the interactive leveling management panel ☕', 'de': 'Leveling-Dashboard öffnen.' }"
+        help="{ 'en': 'Open the interactive leveling management panel', 'de': 'Leveling-Dashboard öffnen.' }"
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_panel(self, ctx):

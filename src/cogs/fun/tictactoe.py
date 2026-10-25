@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 from typing import List
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 # -----------------------------
@@ -37,38 +36,6 @@ MESSAGES = {
             "game_start": "¡{opponent}, vuestra partida ha comenzado!",
         },
     },
-
-    "cafe": {
-        "en": {
-            "not_your_turn": "hey {mention}, it’s not your turn yet ☕😔",
-            "winner_x": "yaaay {p1} wins — brewed that victory perfectly ☕✨",
-            "winner_o": "yaaay {p2} wins — cozy lil champion ☕🌿",
-            "tie": "it’s a tie… like two pastries fighting for the last crumb 🍰😔",
-            "mention_user": "bestie pls mention someone to play with ☕💛",
-            "cannot_play_self": "you can’t play against yourself silly ☕😆",
-            "game_start": "{opponent}, your cozy café match has begun ☕🎮",
-        },
-        "de": {
-            "not_your_turn": "hey {mention}, du bist noch nicht dran ☕😔",
-            "winner_x": "yaaay {p1} gewinnt — perfekt aufgebrüht ☕✨",
-            "winner_o": "yaaay {p2} gewinnt — kleines café‑champion ☕🌿",
-            "tie": "unentschieden… wie zwei kuchenstücke im kampf 🍰😔",
-            "mention_user": "liebchen, bitte erwähne jemanden zum spielen ☕💛",
-            "cannot_play_self": "du kannst nicht gegen dich selbst spielen hehe ☕😆",
-            "game_start": "{opponent}, euer gemütliches café‑spiel beginnt ☕🎮",
-        },
-        "es": {
-            "not_your_turn": "ey {mention}, aún no es tu turno ☕😔",
-            "winner_x": "¡yaaay {p1} gana — esa victoria salió perfecta ☕✨",
-            "winner_o": "¡yaaay {p2} gana — campeoncito acogedor ☕🌿",
-            "tie": "empate… como dos pastelitos peleando por la última miga 🍰😔",
-            "mention_user": "amix porfa menciona a alguien para jugar ☕💛",
-            "cannot_play_self": "no puedes jugar contra ti mismo, tontito ☕😆",
-            "game_start": "{opponent}, vuestra partida acogedora del café ha empezado ☕🎮",
-        },
-    },
-
-    # future personalities can be added here
 }
 
 msg = make_msg(MESSAGES)
@@ -208,14 +175,14 @@ class TicTacToe(discord.ui.View):
 # COG
 # -----------------------------
 class tictactoe(commands.Cog):
-    """TicTacToe game with cozy café personality + bilingual support."""
+    """TicTacToe game with bilingual support."""
 
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(
         aliases=["ttt"],
-        help="{ 'en': 'play a cozy tic‑tac‑toe match ☕', 'de': 'spiele tictactoe mit einem nutzer' }"
+        help="{ 'en': 'play a tic‑tac‑toe match', 'de': 'spiele tictactoe mit einem nutzer' }"
     )
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def tictactoe(self, ctx, member: discord.Member = None):

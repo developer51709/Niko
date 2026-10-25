@@ -1,6 +1,6 @@
 """
 Legal cog — /legal privacy, /legal terms, /legal community
-Trilingual EN/DE/ES, cv2 LayoutView, normal/cafe personalities.
+Trilingual EN/DE/ES, cv2 LayoutView.
 Content mirrors the public website's /privacy, /terms and /community pages
 (web/src/pages/LegalPage.tsx) and must be kept in sync with them.
 """
@@ -489,9 +489,6 @@ MESSAGES = {
         },
     }
 }
-
-# Cafe personality mirrors normal — same legal text, wrapped with cozy framing
-MESSAGES["cafe"] = MESSAGES["normal"]
 
 msg = make_msg(MESSAGES)
 

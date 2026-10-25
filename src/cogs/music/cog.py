@@ -991,7 +991,7 @@ class MusicSystem(commands.Cog):
     @commands.hybrid_command(
         name="play", aliases=["p"],
         description="Play a song or add it to the queue",
-        help="{ 'en': 'play a song or queue it up ☕🎶', 'de': 'spiele einen track ab', 'es': 'reproduce una canción o agrégala a la cola ☕🎶' }"
+        help="{ 'en': 'play a song or queue it up 🎶', 'de': 'spiele einen track ab', 'es': 'reproduce una canción o agrégala a la cola 🎶' }"
     )
     @app_commands.describe(search="Song name, YouTube/SoundCloud/Spotify URL, or sc:<query>")
     async def play(self, ctx: commands.Context, *, search: str):
@@ -1013,7 +1013,7 @@ class MusicSystem(commands.Cog):
         if is_spotify:
             resolving = discord.ui.LayoutView()
             resolving.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### ☕ {msg(ctx, 'spotify_resolving')}"),
+                discord.ui.TextDisplay(content=f"### {msg(ctx, 'spotify_resolving')}"),
                 accent_colour=SOURCE_COLOURS["spotify"],
             ))
             status_msg = await ctx.send(view=resolving)
@@ -1111,7 +1111,7 @@ class MusicSystem(commands.Cog):
             multi.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### ☕ Added {queued_count + 1} track{'s' if queued_count else ''} to the queue\n"
+                        f"### Added {queued_count + 1} track{'s' if queued_count else ''} to the queue\n"
                         f"Now playing **{first_track.title}** + {queued_count} more queued."
                     )
                 ),
@@ -1140,7 +1140,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="resume",
-        help="{ 'en': 'resume the paused track ☕🎶', 'de': 'setzt den pausierten track fort' }"
+        help="{ 'en': 'resume the paused track 🎶', 'de': 'setzt den pausierten track fort' }"
     )
     async def resume(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1155,7 +1155,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="skip", aliases=["sk"],
-        help="{ 'en': 'skip to the next track 🍰', 'de': 'springt zum nächsten track' }"
+        help="{ 'en': 'skip to the next track', 'de': 'springt zum nächsten track' }"
     )
     async def skip(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1169,7 +1169,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="stop",
-        help="{ 'en': 'stop and clear the queue ☕', 'de': 'stoppt die wiedergabe' }"
+        help="{ 'en': 'stop and clear the queue', 'de': 'stoppt die wiedergabe' }"
     )
     async def stop(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1247,7 +1247,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="queue", aliases=["q"],
-        help="{ 'en': 'show the current queue ☕📜', 'de': 'zeigt die warteschlange' }"
+        help="{ 'en': 'show the current queue 📜', 'de': 'zeigt die warteschlange' }"
     )
     async def queue(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1289,7 +1289,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="liked", aliases=["likes"],
-        help="{ 'en': 'show your liked songs ☕♥', 'de': 'zeigt deine gelikten songs' }"
+        help="{ 'en': 'show your liked songs ♥', 'de': 'zeigt deine gelikten songs' }"
     )
     async def liked(self, ctx: commands.Context):
         """List your liked songs (newest first). Use `.unlike <number>` to
@@ -1356,7 +1356,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="nowplaying", aliases=["np"],
-        help="{ 'en': 'see whats brewing right now ☕🎵', 'de': 'zeigt den aktuellen track' }"
+        help="{ 'en': 'see what is playing right now 🎵', 'de': 'zeigt den aktuellen track' }"
     )
     async def nowplaying(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1382,7 +1382,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="disconnect", aliases=["dc", "leave"],
-        help="{ 'en': 'have niko leave the voice channel ☕', 'de': 'trennt niko vom sprachkanal' }"
+        help="{ 'en': 'have niko leave the voice channel', 'de': 'trennt niko vom sprachkanal' }"
     )
     async def disconnect(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -1399,7 +1399,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="musicstatus",
-        help="{ 'en': 'check if niko is connected to a music server ☕', 'de': 'prüfe ob niko verbunden ist' }"
+        help="{ 'en': 'check if niko is connected to a music server', 'de': 'prüfe ob niko verbunden ist' }"
     )
     async def music_status(self, ctx: commands.Context):
         sp_line = ""

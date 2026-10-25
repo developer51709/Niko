@@ -19,7 +19,6 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 MESSAGES = {
@@ -73,56 +72,6 @@ MESSAGES = {
             "verdict":        "**Veredicto de {who}:** {reason}",
         },
     },
-    "cafe": {
-        "en": {
-            "no_channel":     "no suggestions corner set yet — admin needs to run `suggest channel <channel>` first ☕",
-            "submitted":      "pinned your idea in {channel} — `#{id}` ☕✨",
-            "channel_set":    "suggestions corner is now {channel} ☕",
-            "config_title":   "### {icon} suggestions corner ☕",
-            "config_body":    "**channel:** {channel}",
-            "missing":        "no idea with id `#{id}` here hun~",
-            "approved":       "idea `#{id}` brewed and approved ☕✨",
-            "denied":         "idea `#{id}` gently set aside ☕",
-            "title_open":     "### {icon} idea #{id} ☕",
-            "title_approved": "### {icon} idea #{id} · {tick} approved ☕✨",
-            "title_denied":   "### {icon} idea #{id} · {cross} set aside ☕",
-            "body":           "{text}\n\n-# by {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**verdict by {who}:** {reason}",
-        },
-        "de": {
-            "no_channel":     "noch keine vorschlags-ecke — admin muss erst `suggest channel <channel>` machen ☕",
-            "submitted":      "deine idee in {channel} angepinnt — `#{id}` ☕✨",
-            "channel_set":    "die vorschlags-ecke ist jetzt {channel} ☕",
-            "config_title":   "### {icon} vorschlags-ecke ☕",
-            "config_body":    "**kanal:** {channel}",
-            "missing":        "keine idee mit id `#{id}` hier hun~",
-            "approved":       "idee `#{id}` gebraut und angenommen ☕✨",
-            "denied":         "idee `#{id}` sanft beiseite gelegt ☕",
-            "title_open":     "### {icon} idee #{id} ☕",
-            "title_approved": "### {icon} idee #{id} · {tick} angenommen ☕✨",
-            "title_denied":   "### {icon} idee #{id} · {cross} beiseite gelegt ☕",
-            "body":           "{text}\n\n-# von {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**urteil von {who}:** {reason}",
-        },
-        "es": {
-            "no_channel":     "aún no hay rincón de sugerencias — un admin debe correr `suggest channel <canal>` primero ☕",
-            "submitted":      "pegué tu idea en {channel} — `#{id}` ☕✨",
-            "channel_set":    "el rincón de sugerencias ahora es {channel} ☕",
-            "config_title":   "### {icon} rincón de sugerencias ☕",
-            "config_body":    "**canal:** {channel}",
-            "missing":        "no hay idea con id `#{id}` aquí~",
-            "approved":       "idea `#{id}` preparada y aprobada ☕✨",
-            "denied":         "idea `#{id}` apartada con cariño ☕",
-            "title_open":     "### {icon} idea #{id} ☕",
-            "title_approved": "### {icon} idea #{id} · {tick} aprobada ☕✨",
-            "title_denied":   "### {icon} idea #{id} · {cross} apartada ☕",
-            "body":           "{text}\n\n-# por {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**veredicto de {who}:** {reason}",
-        },
-    },
 }
 
 
@@ -133,15 +82,6 @@ def _lang(ctx) -> str:
         if l.startswith("de"): return "de"
         if l.startswith("es"): return "es"
     return "en"
-
-
-def _personality(ctx) -> str:
-    if isinstance(ctx, commands.Context):
-        return get_personality(ctx)
-    class _S: pass
-    s = _S()
-    s.guild = getattr(ctx, "guild", None) if not isinstance(ctx, discord.Guild) else ctx
-    return get_personality(s)
 
 
 msg = make_msg(MESSAGES)
