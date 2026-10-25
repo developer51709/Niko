@@ -6,11 +6,12 @@ import random
 import discord
 from discord.ext import commands
 from ..data import (
-    _info_view, _fmt_remaining, _check_achievements,
+    _info_view, _check_achievements,
     COOLDOWN_CRIME, COOLDOWN_ROB,
     get_emoji,
     ACCENT_GOLD, ACCENT_RED,
 )
+from utils.cooldown import cooldown_ready_at, cooldown_view
 
 
 class GamblingMixin:
@@ -30,17 +31,15 @@ class GamblingMixin:
         data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         if now - int(data.get("last_crime", 0)) < COOLDOWN_CRIME:
-            remain = COOLDOWN_CRIME - (now - int(data["last_crime"]))
+            view = cooldown_view(
+                "try a heist",
+                cooldown_ready_at(data.get("last_crime"), COOLDOWN_CRIME),
+                title="👮 Lay low",
+                note="The shopkeeper's watching.",
+            )
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "👮 Lay low",
-                    f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "👮 Lay low",
-                    f"The shopkeeper's watching. Try again in **{_fmt_remaining(remain)}**.",
-                ))
+                return await ctx.interaction.followup.send(view=view)
+            return await ctx.send(view=view)
 
         effects = data.setdefault("effects", {})
         boost   = 0.25 if effects.pop("crime_boost", 0) else 0.0
@@ -107,11 +106,14 @@ class GamblingMixin:
                 return await ctx.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
 
         if now - int(data.get("last_rob", 0)) < COOLDOWN_ROB:
-            remain = COOLDOWN_ROB - (now - int(data["last_rob"]))
+            view = cooldown_view(
+                "plan another robbery",
+                cooldown_ready_at(data.get("last_rob"), COOLDOWN_ROB),
+                title="🕵️ Lay low",
+            )
             if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
-            else:
-                return await ctx.send(view=_info_view("🕵️ Lay low", f"Try again in **{_fmt_remaining(remain)}**."))
+                return await ctx.interaction.followup.send(view=view)
+            return await ctx.send(view=view)
 
         target_effects = target.setdefault("effects", {})
         if target_effects.pop("rob_shield", 0):

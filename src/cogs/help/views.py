@@ -90,8 +90,9 @@ _UI_STRINGS: dict[str, dict] = {
         "general_intro":        "Use the dropdown below to browse commands by category.",
         "general_about_title":  "**About Niko**",
         "general_about_body": (
-            "Niko is a cozy, AI-powered Discord bot with a café personality — "
-            "trilingual (EN/DE/ES), packed with economy, leveling, music, moderation, and more!"
+            "Niko is a modern all-in-one Discord bot — AI chat, economy and casino games, "
+            "leveling, music, tickets, giveaways, moderation, voice rooms, and a web dashboard, "
+            "all in three languages (EN/DE/ES)."
         ),
         "general_links_title":  "**{icon} Links**",
     },
@@ -115,8 +116,9 @@ _UI_STRINGS: dict[str, dict] = {
         "general_intro":        "Usa el menú desplegable para explorar los comandos por categoría.",
         "general_about_title":  "**Sobre Niko**",
         "general_about_body": (
-            "Niko es un bot de Discord acogedor con personalidad de café e impulsado por IA — "
-            "trilingüe (EN/DE/ES), repleto de economía, niveles, música, moderación y más!"
+            "Niko es un bot de Discord moderno todo en uno: chat con IA, economía y juegos de casino, "
+            "niveles, música, tickets, sorteos, moderación, salas de voz y un panel web, "
+            "todo en tres idiomas (EN/DE/ES)."
         ),
         "general_links_title":  "**{icon} Enlaces**",
     },
@@ -140,8 +142,9 @@ _UI_STRINGS: dict[str, dict] = {
         "general_intro":        "Nutze das Dropdown unten, um Befehle nach Kategorie zu durchsuchen.",
         "general_about_title":  "**Über Niko**",
         "general_about_body": (
-            "Niko ist ein gemütlicher, KI-gestützter Discord-Bot mit Café-Persönlichkeit — "
-            "dreisprachig (EN/DE/ES), vollgepackt mit Wirtschaft, Leveling, Musik, Moderation und mehr!"
+            "Niko ist ein moderner All-in-One-Discord-Bot: KI-Chat, Wirtschaft und Casinospiele, "
+            "Leveling, Musik, Tickets, Giveaways, Moderation, Sprachkanäle und ein Web-Dashboard — "
+            "alles dreisprachig (EN/DE/ES)."
         ),
         "general_links_title":  "**{icon} Links**",
     },

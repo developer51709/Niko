@@ -13,9 +13,14 @@ from utils.image.economy_card import render_shop_card, render_inventory_card, fe
 
 
 class _ShopActionView(discord.ui.LayoutView):
-    """Shop card controls; the buttons open user-only transaction panels."""
+    """Shop card controls; the buttons open user-only transaction panels.
 
-    def __init__(self, cog, *, timeout: float | None = 900, image_name: str = "shop.png"):
+    The buttons carry fixed custom ids, so the view is registered once at
+    startup (see EconomyCog.cog_load) and every shop message posted since then
+    keeps working after a restart without storing any message ids.
+    """
+
+    def __init__(self, cog, *, timeout: float | None = None, image_name: str = "shop.png"):
         super().__init__(timeout=timeout)
         self.cog = cog
         container = discord.ui.Container(

@@ -5,6 +5,8 @@ import time
 import asyncio
 import os
 
+from cogs.casino.replay import InteractionContext
+from utils.cooldown import cooldown_ready_at, cooldown_view
 from utils.prefix_manager import resolve_prefix
 
 # Seconds between spins. Kept numeric so the cooldown is compared as a time,
@@ -83,9 +85,74 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     return await resolve_prefix(bot, ctx_or_interaction)
 
 
+def _slots_cooldown_view(last_spin) -> discord.ui.LayoutView:
+    """The shared cooldown notice, used by the command and by Play Again."""
+    return cooldown_view(
+        "spin the slots",
+        cooldown_ready_at(last_spin, slots_cooldown),
+        title="🎰 Slow down",
+        note=f"Slots allow one spin every **{int(slots_cooldown)}** seconds.",
+    )
+
+
+_PLAY_AGAIN_TEMPLATE = r"casino:slots:again:(?P<user_id>\d+):(?P<amount>\d+)"
+
+
+class PlayAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_PLAY_AGAIN_TEMPLATE):
+    """Persistent "Play Again" button on a slots result.
+
+    The player and their wager live in the custom id, so the button replays the
+    same spin after a restart without any message state being stored.
+    """
+
+    def __init__(self, user_id: int, amount: int):
+        super().__init__(discord.ui.Button(
+            label="Play Again",
+            style=discord.ButtonStyle.green,
+            custom_id=f"casino:slots:again:{int(user_id)}:{int(amount)}",
+        ))
+        self.user_id = int(user_id)
+        self.amount = int(amount)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(int(match["user_id"]), int(match["amount"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "This spin belongs to someone else. Start your own with `/slots play`.",
+                ephemeral=True,
+            )
+        cog = interaction.client.get_cog("Slots")
+        if cog is None:
+            return await interaction.response.send_message(
+                "Slots is unavailable right now.", ephemeral=True
+            )
+        economy = interaction.client.get_cog("EconomyCog")
+        if economy is not None:
+            data = await economy.get_user_economy_data(self.user_id)
+            last_spin = float(data.get("last_slots") or 0)
+            if last_spin + slots_cooldown > time.time():
+                # Answer the cooldown privately so a spammed button cannot
+                # flood the channel with notices.
+                return await interaction.response.send_message(
+                    view=_slots_cooldown_view(last_spin), ephemeral=True
+                )
+        await interaction.response.defer()
+        await cog.play(InteractionContext(interaction), self.amount)
+
+
 class Slots(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    async def cog_load(self):
+        # One registration covers every slots result ever posted: the button
+        # rebuilds itself from its custom id.
+        registry = discord.ui.LayoutView(timeout=None)
+        registry.add_item(discord.ui.Container(discord.ui.ActionRow(PlayAgainButton(0, 1))))
+        self.bot.add_view(registry)
 
     @commands.hybrid_group(
         name="slots",
@@ -111,6 +178,10 @@ class Slots(commands.Cog):
     @slots.command(name="play", description="Play a game of slots")
     async def slots_play(self, ctx, amount: int = None):
         """Play a casino‑style 3×3 slot machine."""
+        await self.play(ctx, amount)
+
+    async def play(self, ctx, amount: int | None = None):
+        """Run one spin; shared by the command and the Play Again button."""
         # Economy access
         economy = self.bot.get_cog("EconomyCog")
         user_data = await economy.get_user_economy_data(ctx.author.id)
@@ -118,7 +189,7 @@ class Slots(commands.Cog):
 
         # Cooldown
         if float(user_data.get("last_slots") or 0) + slots_cooldown > time.time():
-            return await ctx.send(f"You can only play slots once every {int(slots_cooldown)} seconds.")
+            return await ctx.send(view=_slots_cooldown_view(user_data.get("last_slots")))
 
         if amount is None or amount <= 0:
             return await ctx.send("You must bet more than 0 coins.")
@@ -184,7 +255,7 @@ class Slots(commands.Cog):
             title = "😢 You Lose"
             description = f"{result_text}\n\nYou lost **{amount}** coins."
 
-        result_view = discord.ui.LayoutView()
+        result_view = discord.ui.LayoutView(timeout=None)
         result_container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"### {title}"
@@ -192,7 +263,8 @@ class Slots(commands.Cog):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"{description}"
-            )
+            ),
+            discord.ui.ActionRow(PlayAgainButton(ctx.author.id, amount)),
         )
         result_view.add_item(result_container)
         await msg.edit(view=result_view)

@@ -5,7 +5,7 @@ from .commands.currency import CurrencyMixin
 from .commands.jobs import JobsMixin
 from .commands.gambling import GamblingMixin
 from .commands.leaderboard import LeaderboardMixin
-from .commands.shop import ShopMixin
+from .commands.shop import ShopMixin, _ShopActionView
 from .commands.bank import BankMixin
 from .commands.lottery import LotteryMixin
 from .voting import VoteMixin
@@ -37,6 +37,12 @@ class EconomyCog(
         self.lottery: dict = {}  # Will be loaded from database in setup
         
         self._tick_task.start()
+
+    async def cog_load(self):
+        # The shop card's Buy/Sell buttons have stable custom ids and need no
+        # per-message state, so a single registration covers every shop message
+        # and they keep working after a restart.
+        self.bot.add_view(_ShopActionView(self, timeout=None))
 
     def cog_unload(self):
         try:

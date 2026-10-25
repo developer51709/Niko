@@ -373,57 +373,124 @@ async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
     ]
 
 
+# The avatar panel's buttons carry the target's user id in their custom id, so
+# they resolve the right person after a restart without any message state.
+_AVATAR_SERVER_TEMPLATE = r"avatar:server:(?P<user_id>\d+)"
+_AVATAR_BANNER_TEMPLATE = r"avatar:banner:(?P<user_id>\d+)"
+
+
+def _avatar_image_view(title: str, image_url: str) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {title}"),
+        discord.ui.MediaGallery(discord.MediaGalleryItem(media=image_url)),
+    ))
+    return view
+
+
+async def _avatar_member(interaction: discord.Interaction, user_id: int):
+    """Resolve the target as a member, wherever the interaction happens."""
+    guild = interaction.guild
+    if guild is not None:
+        member = guild.get_member(user_id)
+        if member is not None:
+            return member
+        try:
+            return await guild.fetch_member(user_id)
+        except discord.HTTPException:
+            return None
+    # DMs have no guild of their own, so fall back to a cached server avatar.
+    fallback = None
+    for shared in interaction.client.guilds:
+        member = shared.get_member(user_id)
+        if member is None:
+            continue
+        if member.guild_avatar:
+            return member
+        fallback = fallback or member
+    return fallback
+
+
+class _ServerAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_SERVER_TEMPLATE):
+    def __init__(self, user_id: int):
+        super().__init__(discord.ui.Button(
+            label="Server Avatar",
+            style=discord.ButtonStyle.success,
+            custom_id=f"avatar:server:{int(user_id)}",
+        ))
+        self.user_id = int(user_id)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(int(match["user_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        member = await _avatar_member(interaction, self.user_id)
+        if member is None:
+            return await interaction.response.send_message(
+                "This user is no longer in this server.", ephemeral=True
+            )
+        if not member.guild_avatar:
+            return await interaction.response.send_message(
+                "This user doesn't have a different server avatar.", ephemeral=True
+            )
+        await interaction.response.send(
+            view=_avatar_image_view("Server Avatar", member.guild_avatar.url), ephemeral=True
+        )
+
+
+class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_BANNER_TEMPLATE):
+    def __init__(self, user_id: int):
+        super().__init__(discord.ui.Button(
+            label="User Banner",
+            style=discord.ButtonStyle.success,
+            custom_id=f"avatar:banner:{int(user_id)}",
+        ))
+        self.user_id = int(user_id)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(int(match["user_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        user = interaction.client.get_user(self.user_id)
+        if user is None:
+            try:
+                user = await interaction.client.fetch_user(self.user_id)
+            except discord.HTTPException:
+                user = None
+        if user is None:
+            return await interaction.response.send_message(
+                "I couldn't find that user anymore.", ephemeral=True
+            )
+        if not user.banner:
+            return await interaction.response.send_message(
+                "This user doesn't have a banner.", ephemeral=True
+            )
+        await interaction.response.send(
+            view=_avatar_image_view("User Banner", user.banner.url), ephemeral=True
+        )
+
+
 class AvatarButtons(discord.ui.ActionRow):
-    def __init__(self, user, member, author_id, banner_url):
+    """Avatar panel controls, keyed to the user the panel is showing."""
+
+    def __init__(self, user_id: int):
         super().__init__()
-        self.user = user
-        self.member = member
-        self.author_id = author_id
-        self.banner_url = banner_url
+        self.user_id = int(user_id)
+        self.add_item(_ServerAvatarButton(self.user_id))
+        self.add_item(_UserBannerButton(self.user_id))
 
-    @discord.ui.button(label='Server Avatar', style=discord.ButtonStyle.success, custom_id='server_avatar_button')
-    async def server_avatar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.member.guild_avatar:
-            await interaction.response.send_message(
-                "This user doesn't have a different server avatar.",
-                ephemeral=True
-            )
-        else:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content="### Server Avatar"
-                ),
-                discord.ui.MediaGallery(
-                    discord.MediaGalleryItem(
-                        media=self.member.guild_avatar.url
-                    )
-                )
-            )
-            view.add_item(container)
-            await interaction.response.send(view=view, ephemeral=True)
 
-    @discord.ui.button(label='User Banner', style=discord.ButtonStyle.success, custom_id='banner_button')
-    async def banner(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.banner_url:
-            await interaction.response.send_message(
-                "This user doesn't have a banner.",
-                ephemeral=True
-            )
-        else:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content="### User Banner"
-                ),
-                discord.ui.MediaGallery(
-                    discord.MediaGalleryItem(
-                        media=self.banner_url
-                    )
-                )
-            )
-            view.add_item(container)
-            await interaction.response.send(view=view, ephemeral=True)
+def register_avatar_persistent_views(bot) -> None:
+    """Register both avatar custom-id patterns so the buttons keep responding
+    after a restart for panels posted before it."""
+    registry = discord.ui.LayoutView(timeout=None)
+    registry.add_item(discord.ui.Container(discord.ui.ActionRow(
+        _ServerAvatarButton(0),
+        _UserBannerButton(0),
+    )))
+    bot.add_view(registry)
 
 
 class InfoCog(commands.Cog):
@@ -433,6 +500,9 @@ class InfoCog(commands.Cog):
         self.bot = bot
         if not hasattr(self.bot, "start_time"):
             self.bot.start_time = time.time()
+
+    async def cog_load(self):
+        register_avatar_persistent_views(self.bot)
 
     # -------------------------------
     # SERVER INFO
@@ -594,7 +664,9 @@ class InfoCog(commands.Cog):
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
         avatar_url = target.avatar.url if target.avatar else "https://cdn.discordapp.com/embed/avatars/0.png"
-        view = discord.ui.LayoutView()
+        # timeout=None keeps the buttons live for as long as the message exists;
+        # they are resolved from their custom ids, so no state is kept here.
+        view = discord.ui.LayoutView(timeout=None)
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"### {msg(ctx, 'avatar_title', user=target.display_name)}"
@@ -604,7 +676,7 @@ class InfoCog(commands.Cog):
                     media=avatar_url
                 )
             ),
-            AvatarButtons(ctx.author, target, ctx.author.id, target.banner.url if target.banner else None)
+            AvatarButtons(target.id)
         )
         view.add_item(container)
         await ctx.send(view=view)

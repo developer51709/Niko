@@ -8,6 +8,9 @@ import random
 import time
 import asyncio
 
+from cogs.casino.replay import InteractionContext
+from utils.cooldown import cooldown_ready_at, cooldown_view
+
 # ============================
 #  CONSTANTS
 # ============================
@@ -366,8 +369,65 @@ def build_spinning_view() -> discord.ui.LayoutView:
 #  RESULT VIEW
 # ============================
 
+def _roulette_cooldown_view(last_spin) -> discord.ui.LayoutView:
+    """The shared cooldown notice, used by the command and by Spin Again."""
+    return cooldown_view(
+        "spin the wheel",
+        cooldown_ready_at(last_spin, ROULETTE_COOLDOWN),
+        title="🎡 Slow down",
+        note=f"Roulette allows one spin every **{ROULETTE_COOLDOWN}** seconds.",
+    )
+
+
+_SPIN_AGAIN_TEMPLATE = r"casino:roulette:again:(?P<user_id>\d+)"
+
+
+class SpinAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_SPIN_AGAIN_TEMPLATE):
+    """Persistent "Spin Again" button on a roulette result.
+
+    The player's id lives in the custom id, so a click on an old result starts
+    the same flow for the same person after a restart.
+    """
+
+    def __init__(self, user_id: int):
+        super().__init__(discord.ui.Button(
+            label="Spin Again",
+            style=discord.ButtonStyle.green,
+            custom_id=f"casino:roulette:again:{int(user_id)}",
+        ))
+        self.user_id = int(user_id)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(int(match["user_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "This wheel belongs to someone else. Start your own with `/roulette`.",
+                ephemeral=True,
+            )
+        cog = interaction.client.get_cog("Roulette")
+        if cog is None:
+            return await interaction.response.send_message(
+                "Roulette is unavailable right now.", ephemeral=True
+            )
+        economy = interaction.client.get_cog("EconomyCog")
+        if economy is not None:
+            data = await economy.get_user_economy_data(self.user_id)
+            last_spin = float(data["last_roulette"]) if data.get("last_roulette") else 0.0
+            if last_spin + ROULETTE_COOLDOWN > time.time():
+                # Answer the cooldown privately so a spammed button cannot
+                # flood the channel with notices.
+                return await interaction.response.send_message(
+                    view=_roulette_cooldown_view(last_spin), ephemeral=True
+                )
+        await interaction.response.defer()
+        await cog.play(InteractionContext(interaction))
+
+
 def build_result_view(ctx, win: bool, result: int, color_str: str, bet_type: str, amount: int, winnings: int) -> RouletteLayoutView:
-    view = RouletteLayoutView(ctx)
+    view = RouletteLayoutView(ctx, timeout=None)
 
     title = "🎉 You Win!" if win else "💀 You Lose"
     result_line = f"**Result:** {result} ({color_str})"
@@ -375,20 +435,12 @@ def build_result_view(ctx, win: bool, result: int, color_str: str, bet_type: str
     outcome_line = f"You won **{winnings}** coins." if win else f"You lost **{amount}** coins."
     bet_label = bet_type.replace("dozen", "Dozen ").replace("column", "Column ").title()
 
-    class SpinAgainBtn(discord.ui.Button):
-        def __init__(self_):
-            super().__init__(label="Spin Again", style=discord.ButtonStyle.green)
-        async def callback(self_, interaction):
-            view.choice = "spin"
-            view.stop()
-            await interaction.response.defer()
-
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {title}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=f"{result_line}\n{outcome_line}\n**Bet:** {bet_label}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(SpinAgainBtn()),
+        discord.ui.ActionRow(SpinAgainButton(ctx.author.id)),
         accent_colour=ACCENT_GREEN if win else ACCENT_RED
     )
     view.add_item(container)
@@ -403,15 +455,25 @@ class Roulette(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def cog_load(self):
+        # One registration covers every roulette result ever posted: the button
+        # rebuilds itself from its custom id.
+        registry = discord.ui.LayoutView(timeout=None)
+        registry.add_item(discord.ui.Container(discord.ui.ActionRow(SpinAgainButton(0))))
+        self.bot.add_view(registry)
+
     @commands.hybrid_command(name="roulette", description="Play interactive European roulette", help="{ 'en': 'play interactive European roulette 🎡', 'de': 'spiele interaktives europäisches Roulette 🎡', 'es': 'juega ruleta europea interactiva 🎡' }")
     async def roulette(self, ctx):
         """Play interactive European roulette."""
+        await self.play(ctx)
 
+    async def play(self, ctx):
+        """Run one round; shared by the command and the Spin Again button."""
         economy = self.bot.get_cog("EconomyCog")
         user_data = await economy.get_user_economy_data(ctx.author.id)
 
         if user_data["last_roulette"] + ROULETTE_COOLDOWN > time.time():
-            return await ctx.send(f"You can only play roulette once every {ROULETTE_COOLDOWN} seconds.")
+            return await ctx.send(view=_roulette_cooldown_view(user_data["last_roulette"]))
 
         # STEP 1 — CHOOSE BET TYPE
         view = build_bet_type_view(ctx)
@@ -523,10 +585,6 @@ class Roulette(commands.Cog):
         # STEP 7 — RESULT
         view = build_result_view(ctx, win, result, color_str, bet_type, amount, net)
         await msg.edit(view=view)
-        await view.wait()
-
-        if view.choice == "spin":
-            return await self.roulette(ctx)
 
 
 # ============================
