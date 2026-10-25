@@ -11,7 +11,7 @@ import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../ut
 import { Icon } from "../Icon";
 import { RoleSelect } from "./RoleSelect";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
-import { DashHeading } from "./DashboardViews";
+import { DashHeading, SectionSkeleton } from "./DashboardViews";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type Draft = { channel_id: string; ping_role_id: string; template: string };
@@ -107,6 +107,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [savingConfig, setSavingConfig] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busyFollow, setBusyFollow] = useState("");
@@ -139,7 +140,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
       .catch((reason) => { if (active) setLoadError(reason instanceof Error ? reason.message : "Social notifications could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [load]);
+  }, [load, retryAttempt]);
 
   useEffect(() => {
     if (!confirmRemove) return;
@@ -147,11 +148,11 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     return () => window.clearTimeout(timer);
   }, [confirmRemove]);
 
-  if (loading) return <div className="section-loading" role="status">Loading social notifications…</div>;
+  if (loading) return <SectionSkeleton label="social notifications" />;
   if (loadError || !data) return <div className="inline-error" role="alert">
     <strong>Couldn’t load social notifications.</strong>
     <span>{loadError || "This server has no notification data yet."}</span>
-    <button className="button button-muted" onClick={() => { setLoadError(""); setLoading(true); load().catch((reason) => setLoadError(reason instanceof Error ? reason.message : "Social notifications could not be loaded.")).finally(() => setLoading(false)); }}>Try again</button>
+    <button className="button button-muted" type="button" onClick={() => { setLoadError(""); setLoading(true); setRetryAttempt((attempt) => attempt + 1); }}>Try again</button>
   </div>;
 
   const platforms = data.platforms;

@@ -14,8 +14,16 @@ import { ServerStatsCard } from "./ServerStatsCard";
 export function DashHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
   return <div className="dash-heading">
     <div className="heading-meta"><div className="eyebrow">{eyebrow}</div><span className="heading-context">NIKO / CONTROL ROOM</span></div>
-    <h2>{title}</h2>
+    <h1>{title}</h1>
     <p>{text}</p>
+  </div>;
+}
+
+export function SectionSkeleton({ label }: { label: string }) {
+  return <div className="section-loading section-skeleton" role="status" aria-label={`Loading ${label}`}>
+    <div className="skeleton-title" /><div className="skeleton-copy" />
+    <div className="skeleton-grid"><i /><i /><i /></div>
+    <span>Loading {label}…</span>
   </div>;
 }
 

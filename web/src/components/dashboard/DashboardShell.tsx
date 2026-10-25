@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PublicHeader } from "../PublicHeader";
 import { Icon } from "../Icon";
 import { navigate, type DashboardView, type DashSection, type UserTab } from "../../router";
@@ -67,7 +67,61 @@ export function DashboardShell({
   children,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const wasSidebarOpen = useRef(false);
   const installedGuilds = guilds.filter((guild) => guild.installed !== false);
+
+  useEffect(() => {
+    if (!sidebarOpen) {
+      if (wasSidebarOpen.current) {
+        const trigger = document.querySelector<HTMLButtonElement>(".dashboard-sidebar-toggle");
+        if (trigger?.getClientRects().length) trigger.focus();
+        wasSidebarOpen.current = false;
+      }
+      return;
+    }
+
+    wasSidebarOpen.current = true;
+    const sidebar = sidebarRef.current;
+    const trigger = document.querySelector<HTMLButtonElement>(".dashboard-sidebar-toggle");
+    const focusableElements = () => Array.from(
+      sidebar?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [],
+    ).filter((element) => element.getClientRects().length > 0);
+    const firstNavigationItem = sidebar?.querySelector<HTMLElement>('.dash-nav button[aria-current="page"]')
+      || sidebar?.querySelector<HTMLElement>(".dash-nav button");
+    const focusFrame = window.requestAnimationFrame(() => (firstNavigationItem || focusableElements()[0])?.focus());
+
+    const handleDrawerKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = focusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        sidebar?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const focusIsInside = sidebar?.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || !focusIsInside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !focusIsInside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDrawerKeys);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleDrawerKeys);
+    };
+  }, [sidebarOpen]);
   const sectionNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-nav-mobile" : "dash-nav"} aria-label="Server settings">
       {sections.map(([id, label, icon]) => (
@@ -151,7 +205,7 @@ export function DashboardShell({
         onClick={() => setSidebarOpen(false)}
       />
       <div className="dashboard-workspace">
-        <aside id="dashboard-sidebar" className={`dash-sidebar${sidebarOpen ? " is-open" : ""}`}>
+        <aside id="dashboard-sidebar" ref={sidebarRef} tabIndex={-1} className={`dash-sidebar${sidebarOpen ? " is-open" : ""}`}>
           <div className="dash-mobile-controls">{topActions()}</div>
           <div className="side-rail-heading"><span className="side-label">Workspace</span><span className="rail-status"><span className="status-dot" /> Live</span></div>
           {primaryNav()}

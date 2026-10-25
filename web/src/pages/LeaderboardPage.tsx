@@ -98,7 +98,7 @@ export function LeaderboardPage() {
     : { layout: { duration: 0.5, ease: "easeInOut" as const }, duration: 0.3 };
 
   return <>
-    <PublicHeader page="home" />
+    <PublicHeader page="leaderboard" />
     <main className="shell page-main economy-leaderboard-page">
       <section className="leaderboard-hero">
         <span className="eyebrow">Niko · global economy standings</span>
@@ -108,7 +108,7 @@ export function LeaderboardPage() {
       <section className="leaderboard-panel" aria-label="Global economy leaderboard">
         <div className="leaderboard-panel-heading">
           <div>
-            <span className="panel-kicker">🏆 Global economy leaderboard</span>
+            <span className="panel-kicker">Global economy leaderboard</span>
             <h2>Rankings</h2>
             <p>{data ? `${formatNumber(data.total)} members ordered by net worth` : "The latest economy standings"}</p>
           </div>

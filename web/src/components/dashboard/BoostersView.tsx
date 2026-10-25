@@ -3,7 +3,7 @@ import { getBoosterSettings, saveBoosterSettings } from "../../api";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import type { BoosterSettings, GuildResources } from "../../types";
-import { DashHeading } from "./DashboardViews";
+import { DashHeading, SectionSkeleton } from "./DashboardViews";
 
 type Props = {
   guildId: string;
@@ -35,14 +35,15 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
   const [loading, setLoading] = useState(!initialSettings);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
     clearToasts("boosters-settings");
+    setLoadError("");
     if (initialSettings) {
       setSettings(initialSettings);
       setLoading(false);
-      setLoadError("");
       return () => { active = false; };
     }
     setLoading(true);
@@ -51,7 +52,7 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
       .catch((error) => { if (active) setLoadError(error instanceof Error ? error.message : "Booster settings could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [guildId, initialSettings]);
+  }, [guildId, initialSettings, retryAttempt]);
 
   const update = (key: keyof Draft, value: string | boolean) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -70,11 +71,11 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
       .finally(() => setSaving(false));
   };
 
-  if (loading) return <div className="section-loading" role="status">Loading booster settings…</div>;
+  if (loading) return <SectionSkeleton label="booster settings" />;
   if (loadError) return <div className="inline-error" role="alert">
     <strong>Couldn’t load booster settings.</strong>
     <span>{loadError}</span>
-    <button className="button button-muted" onClick={() => window.location.reload()}>Try again</button>
+    <button className="button button-muted" type="button" onClick={() => { setLoading(true); setLoadError(""); setRetryAttempt((attempt) => attempt + 1); }}>Try again</button>
   </div>;
 
   return <>
