@@ -19,7 +19,6 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.blacklist_manager import BlacklistManager
 from utils.i18n import make_msg
 
@@ -63,41 +62,6 @@ MESSAGES = {
             "starred":       "{emoji} **{count}** · {channel}",
         },
     },
-    "cafe": {
-        "en": {
-            "channel_set":   "✅ starboard wall is now {channel} ☕✨",
-            "threshold_set": "✅ stars needed: **{n}** ✨",
-            "emoji_set":     "✅ trigger emoji is now {emoji} ☕",
-            "ignored":       "✅ ignoring {channel} from now on ☕",
-            "unignored":     "✅ listening to {channel} again ☕",
-            "disabled":      "✅ starboard turned off cozily ☕",
-            "config_title":  "### {icon} starboard wall ☕✨",
-            "config_body":   "**channel:** {channel}\n**threshold:** `{threshold}`\n**emoji:** {emoji}\n**ignored channels:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-        "de": {
-            "channel_set":   "✅ starboard-wand ist jetzt {channel} ☕✨",
-            "threshold_set": "✅ benötigte sterne: **{n}** ✨",
-            "emoji_set":     "✅ trigger-emoji ist jetzt {emoji} ☕",
-            "ignored":       "✅ ignoriere {channel} ab jetzt ☕",
-            "unignored":     "✅ höre {channel} wieder zu ☕",
-            "disabled":      "✅ starboard gemütlich ausgeschaltet ☕",
-            "config_title":  "### {icon} starboard-wand ☕✨",
-            "config_body":   "**kanal:** {channel}\n**schwelle:** `{threshold}`\n**emoji:** {emoji}\n**ignorierte kanäle:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-        "es": {
-            "channel_set":   "✅ pared del starboard ahora es {channel} ☕✨",
-            "threshold_set": "✅ estrellas necesarias: **{n}** ✨",
-            "emoji_set":     "✅ emoji activador es ahora {emoji} ☕",
-            "ignored":       "✅ ignorando {channel} desde ahora ☕",
-            "unignored":     "✅ volviendo a escuchar {channel} ☕",
-            "disabled":      "✅ starboard apagado acogedoramente ☕",
-            "config_title":  "### {icon} pared del starboard ☕✨",
-            "config_body":   "**canal:** {channel}\n**umbral:** `{threshold}`\n**emoji:** {emoji}\n**canales ignorados:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-    },
 }
 
 
@@ -108,15 +72,6 @@ def _lang(ctx) -> str:
         if l.startswith("de"): return "de"
         if l.startswith("es"): return "es"
     return "en"
-
-
-def _personality(ctx) -> str:
-    if isinstance(ctx, commands.Context):
-        return get_personality(ctx)
-    class _S: pass
-    s = _S()
-    s.guild = ctx if isinstance(ctx, discord.Guild) else getattr(ctx, "guild", None)
-    return get_personality(s)
 
 
 msg = make_msg(MESSAGES)

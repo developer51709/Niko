@@ -6,7 +6,6 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from config.emojis import get_emoji
 
@@ -60,47 +59,6 @@ MESSAGES = {
             "cfg_show":          "### Configuración de Niveles — {guild}\n{body}",
         },
     },
-    "cafe": {
-        "en": {
-            "level_up":          "congratulations {mention}, you leveled up to level **{level}**! ☕✨",
-            "no_xp":             "{name} hasn't brewed any XP yet ☕😔",
-            "stats_title":       "☕ cozy level stats for {name}",
-            "stats_level":       "vibe-level",
-            "stats_xp":          "xp brewed",
-            "stats_rank":        "rank",
-            "leaderboard_title": "Cozy leaderboard — {guild}",
-            "leaderboard_empty": "no one has earned any xp in this server yet 😭",
-            "xp_disabled":       "xp tracking is off for this server",
-            "cfg_updated":       "✅ setting updated~",
-            "cfg_show":          "### cozy level config — {guild}\n{body}",
-        },
-        "de": {
-            "level_up":          "glückwunsch {mention}, du bist auf level **{level}** aufgestiegen! ☕✨",
-            "no_xp":             "{name} hat noch keine XP aufgebrüht ☕😔",
-            "stats_title":       "☕ gemütliche level-statistiken für {name}",
-            "stats_level":       "vibe-level",
-            "stats_xp":          "aufgebrühte xp",
-            "stats_rank":        "rang",
-            "leaderboard_title": "Gemütliche bestenliste — {guild}",
-            "leaderboard_empty": "niemand hat hier bisher xp gesammelt 😭",
-            "xp_disabled":       "xp-tracking ist für diesen server deaktiviert",
-            "cfg_updated":       "✅ einstellung aktualisiert~",
-            "cfg_show":          "### gemütliche level-config — {guild}\n{body}",
-        },
-        "es": {
-            "level_up":          "¡felicidades {mention}, subiste al nivel **{level}**! ☕✨",
-            "no_xp":             "{name} aún no ha preparado nada de xp ☕😔",
-            "stats_title":       "☕ estadísticas acogedoras de nivel para {name}",
-            "stats_level":       "nivel-vibe",
-            "stats_xp":          "xp preparada",
-            "stats_rank":        "rango",
-            "leaderboard_title": "Tabla acogedora — {guild}",
-            "leaderboard_empty": "nadie ha preparado xp en este servidor todavía 😭",
-            "xp_disabled":       "el sistema de xp está apagado en este servidor",
-            "cfg_updated":       "✅ configuración actualizada~",
-            "cfg_show":          "### config acogedora de niveles — {guild}\n{body}",
-        },
-    },
 }
 
 
@@ -120,7 +78,7 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
     "level_roles":      {},
     # Card customization
     "card_accent":      None,   # RGB tuple or None for the default theme accent
-    "card_bg_top":      None,   # RGB tuple or None for default espresso
+    "card_bg_top":      None,   # RGB tuple or None for the default graphite
     "card_bg_bottom":   None,   # RGB tuple or None for default dark
 }
 
@@ -191,7 +149,7 @@ def _lv_announcements_text(cfg: dict, guild: discord.Guild) -> str:
     lu_ch      = guild.get_channel(cfg.get("level_up_channel") or 0)
     lu_ch_s    = lu_ch.mention if lu_ch else "*(same channel as the message)*"
     custom_msg = cfg.get("level_up_message")
-    default_msg = "congratulations {mention}, you leveled up to level **{level}**! ☕✨"
+    default_msg = "Congratulations {mention}, you leveled up to level **{level}**!"
     msg_display = custom_msg if custom_msg else default_msg
     return (
         "### 📣 Announcement Settings\n"
@@ -250,7 +208,7 @@ def _lv_cardstyle_text(cfg: dict) -> str:
         "The gradient fills the card background.\n\n"
         "-# Use the buttons below to edit each colour.\n"
         "-# Enter hex codes like `#d96545` or `ff5500`.\n"
-        "-# Click **Reset Colours** to restore café defaults."
+        "-# Click **Reset Colours** to restore the default colours."
     )
 
 
@@ -272,7 +230,7 @@ class _LvSectionSelect(discord.ui.Select):
         self._guild_id = guild_id
         options = [
             discord.SelectOption(
-                label="Overview",       value="overview",      emoji="☕",
+                label="Overview",       value="overview",      emoji="📋",
                 description="All leveling settings at a glance",
                 default=(current == "overview")),
             discord.SelectOption(
@@ -411,7 +369,7 @@ class _LvSetChannelBtn(discord.ui.Button):
 class _LvMessageModal(discord.ui.Modal, title="Custom Level-Up Message"):
     message = discord.ui.TextInput(
         label="Level-up message template",
-        placeholder="congratulations {mention}, you reached level **{level}**! ☕",
+        placeholder="Congratulations {mention}, you reached level **{level}**!",
         style=discord.TextStyle.paragraph,
         max_length=400,
     )

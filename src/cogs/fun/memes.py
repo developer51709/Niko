@@ -2,8 +2,7 @@ import discord
 from discord.ext import commands
 import aiohttp
 import random
-from utils.ai.config import get_personality
-from utils.i18n import get_lang, make_msg
+from utils.i18n import make_msg
 
 # -----------------------------
 # MESSAGE DICTIONARY
@@ -26,26 +25,6 @@ MESSAGES = {
             "meme_title_prefix": "",
         },
     },
-
-    "cafe": {
-        "en": {
-            "fetch_fail": "aww i couldn’t fetch any memes rn 😭☕",
-            "no_safe_memes": "no safe memes in the café right now 😭☕",
-            "meme_title_prefix": "☕ meme of the moment — ",
-        },
-        "de": {
-            "fetch_fail": "aww ich konnte gerade keine memes holen 😭☕",
-            "no_safe_memes": "keine sicheren memes im café gerade 😭☕",
-            "meme_title_prefix": "☕ meme des moments — ",
-        },
-        "es": {
-            "fetch_fail": "ay no pude traer memes ahora 😭☕",
-            "no_safe_memes": "no hay memes seguros en el café ahora mismo 😭☕",
-            "meme_title_prefix": "☕ meme del momento — ",
-        },
-    },
-
-    # future personalities can be added here
 }
 
 msg = make_msg(MESSAGES)
@@ -55,14 +34,14 @@ msg = make_msg(MESSAGES)
 # MEME COG
 # -----------------------------
 class Meme(commands.Cog):
-    """Fetches memes with cozy café personality + bilingual support."""
+    """Fetches memes with bilingual support."""
 
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(
         name="meme",
-        help="{ 'en': 'get a cozy random meme ☕✨', 'de': 'holt ein zufälliges meme' }"
+        help="{ 'en': 'get a random meme', 'de': 'holt ein zufälliges meme' }"
     )
     async def meme(self, ctx):
         """Fetch a random meme using meme-api.com"""
@@ -85,10 +64,6 @@ class Meme(commands.Cog):
             return await ctx.send(msg(ctx, "no_safe_memes"))
 
         meme = random.choice(memes)
-
-        # personality-aware embed styling
-        personality = get_personality(ctx)
-        lang = get_lang(ctx)
 
         title_prefix = msg(ctx, "meme_title_prefix")
         title = f"{title_prefix}{meme['title']}"

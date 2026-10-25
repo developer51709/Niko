@@ -20,7 +20,6 @@ import aiosqlite
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from cogs.giveaway import cog as giveaway_cog  # noqa: E402
-from cogs.giveaway import views as giveaway_views  # noqa: E402
 from cogs.giveaway.cog import Giveaway  # noqa: E402
 from database import SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
@@ -42,10 +41,6 @@ class FakeChannel:
 
     async def send(self, content=None, **kwargs):
         self.sent.append(content)
-
-
-def _personality(obj):
-    return "normal"
 
 
 async def _memory_connection():
@@ -91,10 +86,9 @@ class GiveawayEndMessageTests(unittest.TestCase):
         ))
 
     def _end(self):
-        with patch.object(giveaway_views, "get_personality", _personality):
-            asyncio.run(Giveaway.end_giveaway(
-                self.cog, MESSAGE_ID, CHANNEL_ID, GUILD, "Nitro", 1, ADMIN,
-            ))
+        asyncio.run(Giveaway.end_giveaway(
+            self.cog, MESSAGE_ID, CHANNEL_ID, GUILD, "Nitro", 1, ADMIN,
+        ))
         return self.channel.sent[-1]
 
     def test_the_announcement_carries_the_copy_ready_reroll_command(self):

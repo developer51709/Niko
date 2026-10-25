@@ -34,29 +34,6 @@ MESSAGES = {
             "no_permission": "Necesitas permisos de administrador.",
         },
     },
-
-    "cafe": {
-        "en": {
-            "uwu_locked": "okay bestie… {mention} is now uwu‑locked ☕💖",
-            "uwu_unlocked": "un‑uwu’d {mention} — they’re free again ☕🌿",
-            "fetch_fail": "aww i couldn’t process that uwu message rn 😭☕",
-            "no_permission": "you need admin perms for this sweetie ☕💛",
-        },
-        "de": {
-            "uwu_locked": "okay liebchen… {mention} ist jetzt uwu‑gelockt ☕💖",
-            "uwu_unlocked": "{mention} wurde ent‑uwu’t — wieder frei ☕🌿",
-            "fetch_fail": "aww ich konnte die uwu‑nachricht gerade nicht verarbeiten 😭☕",
-            "no_permission": "du brauchst admin‑rechte dafür ☕💛",
-        },
-        "es": {
-            "uwu_locked": "okey amix… {mention} ya está uwu-bloqueado/a ☕💖",
-            "uwu_unlocked": "des-uwu-eado a {mention} — vuelve a ser libre ☕🌿",
-            "fetch_fail": "ay no pude procesar ese mensajito uwu 😭☕",
-            "no_permission": "necesitas perms de admin para esto cariño ☕💛",
-        },
-    },
-
-    # future personalities can be added here
 }
 
 msg = make_msg(MESSAGES)
@@ -66,7 +43,7 @@ msg = make_msg(MESSAGES)
 # UWU LOCK COG
 # -----------------------------
 class UwULock(commands.Cog):
-    """UwU-lock system with cozy café personality + bilingual support."""
+    """UwU-lock system with bilingual support."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -90,7 +67,7 @@ class UwULock(commands.Cog):
     # -----------------------------
     @commands.command(
         name="uwulock",
-        help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified ☕', 'de': 'uwu‑lockt einen nutzer' }"
+        help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified', 'de': 'uwu‑lockt einen nutzer' }"
     )
     @commands.guild_only()
     @commands.bot_has_permissions(manage_webhooks=True, manage_messages=True)

@@ -3,7 +3,6 @@ import asyncio
 import requests
 import discord
 import random
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 # -----------------------------
@@ -30,29 +29,6 @@ MESSAGES = {
             "sending_dog": "Aquí tienes un perro:",
         },
     },
-
-    "cafe": {
-        "en": {
-            "fetch_fail": "aww i couldn’t fetch a cute lil animal rn 😭☕",
-            "sending_random": "okay bestie, here’s a cozy lil {animal} for you ☕✨",
-            "sending_cat": "brewing a soft lil kitty just for you ☕🐱",
-            "sending_dog": "serving a warm fluffy doggo straight from the café counter ☕🐶",
-        },
-        "de": {
-            "fetch_fail": "aww ich konnte gerade kein süßes tierchen holen 😭☕",
-            "sending_random": "okay liebchen, hier ist ein gemütliches kleines {animal} für dich ☕✨",
-            "sending_cat": "brühe dir ein kleines kätzchen auf ☕🐱",
-            "sending_dog": "serviere dir einen warmen flauschigen hund aus dem café ☕🐶",
-        },
-        "es": {
-            "fetch_fail": "ay no pude traer un animalito ahora 😭☕",
-            "sending_random": "okey amix, aquí tienes un {animal} acogedor ☕✨",
-            "sending_cat": "te preparo un gatito bien suave ☕🐱",
-            "sending_dog": "te sirvo un perrito calentito recién salido del café ☕🐶",
-        },
-    },
-
-    # future personalities can be added here
 }
 
 msg = make_msg(MESSAGES)
@@ -62,7 +38,7 @@ msg = make_msg(MESSAGES)
 # CUTE ANIMALS COG
 # -----------------------------
 class CuteAnimals(commands.Cog):
-    """Cute animal image commands with cozy café personality + bilingual support."""
+    """Cute animal image commands with bilingual support."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -107,7 +83,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cuteanimal",
-        help="{ 'en': 'get a cozy random animal pic ☕✨', 'de': 'zeigt ein zufälliges süßes tier' }"
+        help="{ 'en': 'get a random animal pic', 'de': 'zeigt ein zufälliges süßes tier' }"
     )
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
@@ -145,7 +121,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cat",
-        help="{ 'en': 'get a cozy lil kitty ☕🐱', 'de': 'zeigt ein süßes kätzchen' }"
+        help="{ 'en': 'get a kitty pic', 'de': 'zeigt ein süßes kätzchen' }"
     )
     async def cat(self, ctx):
         """Sends a random cat image."""
@@ -172,7 +148,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="dog",
-        help="{ 'en': 'get a warm fluffy doggo ☕🐶', 'de': 'zeigt einen süßen hund' }"
+        help="{ 'en': 'get a dog pic', 'de': 'zeigt einen süßen hund' }"
     )
     async def dog(self, ctx):
         """Sends a random dog image."""

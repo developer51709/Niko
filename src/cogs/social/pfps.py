@@ -7,7 +7,6 @@ import discord
 from discord.ext import commands
 import os
 import random
-import asyncio
 from config.emojis import get_emoji
 from cogs.system.error_handler import is_owner
 from utils.image.extractor import extract_image_from_message, extract_images_from_message
@@ -15,6 +14,11 @@ from utils import logging
 from utils.prefix_manager import resolve_prefix
 
 PFPS_FOLDER = "src/assets/pfps"
+
+# Supported options, kept in one place so the selectors and the upload
+# validation can never disagree.
+GENDERS = ("male", "female")
+COUPLE_SUBFOLDERS = ("male-male", "male-female", "female-female")
 
 
 # ------------------------------
@@ -46,17 +50,9 @@ async def get_gender_pfp(ctx: commands.Context, gender: str):
 async def get_couple_pfps(ctx: commands.Context, gender1: str, gender2: str):
     """Get matching profile pictures with the specified genders."""
     gender_folder = f"{PFPS_FOLDER}/couples"
-    gender_subfolders = [
-        "male-male",
-        "male-female",
-        "female-female",
-        "non-binary-male",
-        "non-binary-female",
-        "non-binary-non-binary"
-    ]
     # get the subfolder that matches the genders (female-male is the same as male-female to avoid duplicates and reduce the number of folders)
     subfolder = f"{gender1}-{gender2}"
-    if subfolder not in gender_subfolders:
+    if subfolder not in COUPLE_SUBFOLDERS:
         subfolder = f"{gender2}-{gender1}"
     gender_folder_path = f"{gender_folder}/{subfolder}"
     # get a random image from the folder and its matching partner (both images are in the same folder under the same name but with _1 and _2 at the end)
@@ -193,9 +189,8 @@ class ColorSelectView(discord.ui.LayoutView):
 # folders are static meaning we can hardcode the options and just fetch the images from the existing folders as well as image count
 def get_gender_image_counts():
     gender_folder_path = f"{PFPS_FOLDER}/genders"
-    genders = ["male", "female", "non-binary"]
     counts = []
-    for gender in genders:
+    for gender in GENDERS:
         counts.append((gender, len(os.listdir(f"{gender_folder_path}/{gender}"))))
     return counts
 
@@ -204,7 +199,7 @@ class GenderSelect(discord.ui.Select):
         self.ctx = ctx
         options = []
         for gender, count in get_gender_image_counts():
-            options.append(discord.SelectOption(label=gender.capitalize(), value=gender, description=f"{count} images"))
+            options.append(discord.SelectOption(label=gender.capitalize(), value=gender, description=f"{count:,} images"))
         super().__init__(placeholder="Select a gender", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -293,8 +288,7 @@ class CoupleGenderSelect(discord.ui.Select):
         self.ctx = ctx
         options = [
             discord.SelectOption(label="Male", value="male"),
-            discord.SelectOption(label="Female", value="female"),
-            discord.SelectOption(label="Non-binary", value="non-binary")
+            discord.SelectOption(label="Female", value="female")
         ]
         super().__init__(placeholder="Select your gender", min_values=1, max_values=1, options=options)
 
@@ -320,8 +314,7 @@ class CoupleGenderSelect2(discord.ui.Select):
         self.ctx = ctx
         options = [
             discord.SelectOption(label="Male", value="male"),
-            discord.SelectOption(label="Female", value="female"),
-            discord.SelectOption(label="Non-binary", value="non-binary")
+            discord.SelectOption(label="Female", value="female")
         ]
         super().__init__(placeholder="Select your partner's gender", min_values=1, max_values=1, options=options)
 
@@ -378,9 +371,6 @@ class CoupleGenderSubmit(discord.ui.Button):
                 discord.ui.TextDisplay(
                     content=f"{get_emoji('cross')} We couldn't find any matching profile pictures for the selected genders."
                 ),
-                discord.ui.TextDisplay(
-                    content="-# **Note from Developers:**\n-# This feature is still really new and not all the combinations are available yet. If you would like to help contribute to this feature, please feel free to add me on Discord (my username is `nyxenwastaken`) and send me message asking for more details on how you can contribute to the project.\n-# ~Sincerely, Nyxen"
-                ),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -419,9 +409,6 @@ class CouplesGenderSelect(discord.ui.LayoutView):
             ),
             discord.ui.ActionRow(
                 CoupleGenderSubmit(ctx)
-            ),
-            discord.ui.TextDisplay(
-                content="-# **Note:**\n-# This feature is still in development and may not work as expected."
             )
         )
         self.add_item(container)
@@ -568,8 +555,7 @@ class PfpCog(commands.Cog):
     )
     @is_owner()
     async def upload_gender(self, ctx: commands.Context, gender: str):
-        # 3 genders are supported: male, female, non-binary
-        supported_genders = ["male", "female", "non-binary"]
+        supported_genders = list(GENDERS)
         if gender.lower() not in supported_genders:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -618,8 +604,7 @@ class PfpCog(commands.Cog):
     )
     @is_owner()
     async def upload_couple(self, ctx: commands.Context, gender1: str, gender2: str):
-        # 3 genders are supported: male, female, non-binary
-        supported_genders = ["male", "female", "non-binary"]
+        supported_genders = list(GENDERS)
         if gender1.lower() not in supported_genders or gender2.lower() not in supported_genders:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -644,17 +629,9 @@ class PfpCog(commands.Cog):
             return await ctx.send(view=view)
         # save the images to the folder
         gender_folder = f"{PFPS_FOLDER}/couples"
-        gender_subfolders = [
-            "male-male",
-            "male-female",
-            "female-female",
-            "non-binary-male",
-            "non-binary-female",
-            "non-binary-non-binary"
-        ]
         # get the subfolder that matches the genders (female-male is the same as male-female to avoid duplicates and reduce the number of folders)
         subfolder = f"{gender1}-{gender2}"
-        if subfolder not in gender_subfolders:
+        if subfolder not in COUPLE_SUBFOLDERS:
             subfolder = f"{gender2}-{gender1}"
         gender_folder_path = f"{gender_folder}/{subfolder}"
         # get the number of images in the folder

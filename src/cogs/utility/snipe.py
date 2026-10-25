@@ -5,7 +5,6 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
-from utils.ai.config import get_personality
 
 MAX_HISTORY = 10   # deleted messages kept per channel
 MAX_CONTENT = 900  # characters shown before truncation
@@ -46,41 +45,6 @@ MESSAGES = {
             "already_empty": "No hay nada que borrar — no hay mensajes eliminados recientemente en este canal.",
         },
     },
-    "cafe": {
-        "en": {
-            "empty":     "nothing was deleted here recently — the café is clean ☕✨",
-            "header":    "☕ sniped message",
-            "no_text":   "*(they said nothing, just silence ☕)*",
-            "attach":    "📎 {n} attachment(s) — gone like last night's pastries 🥐",
-            "footer":    "deleted message {cur} of {total} · gone but not forgotten ☕",
-            "sticker":   "🎟️ sticker: {name}",
-            "embed_msg": "*(had an embed — the mystery deepens ☕)*",
-            "cleared":   "🧹☕ swept the crumbs away — snipe history cleared for this channel.",
-            "already_empty": "nothing to sweep up — this channel's already spotless ☕✨",
-        },
-        "de": {
-            "empty":     "hier wurde kürzlich nichts gelöscht — das café ist sauber ☕✨",
-            "header":    "☕ abgefangene nachricht",
-            "no_text":   "*(sie haben nichts gesagt, nur stille ☕)*",
-            "attach":    "📎 {n} anhang/anhänge — weg wie gestern das gebäck 🥐",
-            "footer":    "gelöschte nachricht {cur} von {total} · weg, aber nicht vergessen ☕",
-            "sticker":   "🎟️ aufkleber: {name}",
-            "embed_msg": "*(hatte einen embed — das rätsel vertieft sich ☕)*",
-            "cleared":   "🧹☕ krümel weggefegt — snipe-verlauf für diesen kanal gelöscht.",
-            "already_empty": "nichts zu fegen — dieser kanal ist schon blitzsauber ☕✨",
-        },
-        "es": {
-            "empty":     "no se ha borrado nada por aquí últimamente — el café está limpio ☕✨",
-            "header":    "☕ mensaje cazado",
-            "no_text":   "*(no dijeron nada, solo silencio ☕)*",
-            "attach":    "📎 {n} adjunto(s) — se fueron como los pastelitos de ayer 🥐",
-            "footer":    "mensaje eliminado {cur} de {total} · ido pero no olvidado ☕",
-            "sticker":   "🎟️ pegatina: {name}",
-            "embed_msg": "*(tenía un embed — el misterio se profundiza ☕)*",
-            "cleared":   "🧹☕ se barrieron las migas — historial de mensajes cazados borrado en este canal.",
-            "already_empty": "nada que barrer — este canal ya está reluciente ☕✨",
-        },
-    },
 }
 
 
@@ -94,13 +58,7 @@ def get_lang(ctx: commands.Context) -> str:
 
 
 def msg_raw(ctx, key: str, **kwargs) -> str:
-    p = get_personality(ctx)
-    base = MESSAGES.get(p, {})
-    text = base.get(get_lang(ctx), {}).get(key)
-    if text is None:
-        text = base.get("en", {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"].get(ctx.lang, {}).get(key)
+    text = MESSAGES["normal"].get(get_lang(ctx), {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
     return text.format(**kwargs) if kwargs else text
@@ -275,7 +233,7 @@ class Snipe(commands.Cog):
     @commands.command(
         name="snipe",
         aliases=["sn", "s"],
-        help="{ 'en': 'see recently deleted messages ☕🔍', 'de': 'sieh kürzlich gelöschte nachrichten' }"
+        help="{ 'en': 'see recently deleted messages 🔍', 'de': 'sieh kürzlich gelöschte nachrichten' }"
     )
     async def snipe(self, ctx: commands.Context):
         """Show the last deleted messages in this channel."""
@@ -294,7 +252,7 @@ class Snipe(commands.Cog):
     @commands.command(
         name="clearsnipe",
         aliases=["cs"],
-        help="{ 'en': 'clear the deleted-message history for this channel ☕🧹', 'de': 'lösche den snipe-verlauf für diesen kanal' }"
+        help="{ 'en': 'clear the deleted-message history for this channel 🧹', 'de': 'lösche den snipe-verlauf für diesen kanal' }"
     )
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)

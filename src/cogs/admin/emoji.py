@@ -9,7 +9,6 @@ from typing import Optional
 import zipfile
 import asyncio
 from utils import logging as log
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.prefix_manager import resolve_prefix
 
@@ -70,62 +69,6 @@ MESSAGES = {
             "no_emojis": "Este servidor no tiene emojis personalizados."
         }
     },
-    "cafe": {
-        "en": {
-            "emojimanager_title": "Niko's Emoji Studio 🎨✨",
-            "emojimanager_description": "manage your café's aesthetics!",
-            "steal_description": "steal an emoji",
-            "sm_description": "steal many emojis",
-            "surl_description": "add from url",
-            "enlarge_description": "big emoji view",
-            "emojistats_description": "view slots",
-            "re_description": "remove emoji",
-            "emoji_added": "yay! added {emoji} (`:{name}:`) to the collection! 🎨✨",
-            "server_full": "oh no! the café is full! we hit the limit of {limit} emojis 🥐☕",
-            "no_perms": "i don't have the keys to the emoji cabinet! (need permissions) 🗝️🍰",
-            "error": "something went wrong in the kitchen: {error} 🥘💨",
-            "not_found": "i couldn't find that emoji! did you send the full code? (like `<:name:id>`) 🔍🥐",
-            "timeout": "too slow, bestie! the milk went cold. try again! ☕💤",
-            "invalid_name": "that name doesn't look right! keep it alphanumeric and cute (2-32 chars) ✨🥨",
-            "no_emojis": "the emoji tray is empty! let's add some treats 🥐✨"
-        },
-        "de": {
-            "emojimanager_title": "Nikos Emoji-Atelier 🎨✨️",
-            "emojimanager_description": "verwalte die Ästhetik deines Cafés!",
-            "steal_description": "stiehl ein Emoji",
-            "sm_description": "stiehl viele Emojis",
-            "surl_description": "von URL hinzufügen",
-            "enlarge_description": "Emoji groß anzeigen",
-            "emojistats_description": "Emoji-Slots ansehen",
-            "re_description": "Emoji entfernen",
-            "emoji_added": "yay! {emoji} (`:{name}:`) zur Sammlung hinzugefügt! 🎨✨",
-            "server_full": "oh nein! das Café ist voll! wir haben das Limit von {limit} Emojis erreicht 🥐☕",
-            "no_perms": "ich habe die Schlüssel zum Emoji-Schrank nicht! (Berechtigungen fehlen) 🗝️🍰",
-            "error": "in der Küche ist etwas schiefgelaufen: {error} 🥘💨",
-            "not_found": "ich konnte das Emoji nicht finden! hast du den vollen Code gesendet? (wie `<:name:id>`) 🔍🥐",
-            "timeout": "zu langsam! die Milch ist kalt geworden. versuch es nochmal! ☕💤",
-            "invalid_name": "der Name sieht nicht richtig aus! mach ihn alphanumerisch und süß (2-32 Zeichen) ✨🥨",
-            "no_emojis": "das Emoji-Tablett ist leer! lass uns ein paar Leckereien hinzufügen 🥐✨"
-        },
-        "es": {
-            "emojimanager_title": "Estudio de Emojis de Niko 🎨✨",
-            "emojimanager_description": "¡gestiona la estética de tu café!",
-            "steal_description": "robar un emoji",
-            "sm_description": "robar varios emojis",
-            "surl_description": "añadir desde URL",
-            "enlarge_description": "ver emoji grande",
-            "emojistats_description": "ver espacios",
-            "re_description": "quitar emoji",
-            "emoji_added": "¡yay! {emoji} (`:{name}:`) añadido a la colección 🎨✨",
-            "server_full": "¡oh no! ¡el café está lleno! llegamos al límite de {limit} emojis 🥐☕",
-            "no_perms": "¡no tengo las llaves del armario de emojis! (faltan permisos) 🗝️🍰",
-            "error": "algo salió mal en la cocina: {error} 🥘💨",
-            "not_found": "¡no encontré ese emoji! ¿enviaste el código completo? (como `<:nombre:id>`) 🔍🥐",
-            "timeout": "¡muy lento, amix! la leche se enfrió. ¡prueba otra vez! ☕💤",
-            "invalid_name": "¡ese nombre no se ve bien! mantenlo alfanumérico y bonito (2-32 caracteres) ✨🥨",
-            "no_emojis": "¡la bandeja de emojis está vacía! añadamos algunas delicias 🥐✨"
-        }
-    }
 }
 
 msg = make_msg(MESSAGES)
@@ -277,7 +220,7 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="emojistats", help="{ 'en': 'check how many treats you can add 📊✨', 'de': 'sieh nach, wie viele Emojis noch passen' }")
+    @commands.command(name="emojistats", help="{ 'en': 'check how many emoji slots you have 📊', 'de': 'sieh nach, wie viele Emojis noch passen' }")
     async def emoji_stats(self, ctx):
         guild = ctx.guild
         static = len([e for e in guild.emojis if not e.animated])
@@ -286,23 +229,23 @@ class EmojiManagerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### Emoji Pantry 📊✨️"
+                content="### Emoji Slots 📊"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Static**\n{static}/{limit} 🥐\n**Animated**\n{animated}/{limit} ☕️"
+                content=f"**Static**\n{static}/{limit}\n**Animated**\n{animated}/{limit}"
             )
         )
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="remove-emoji", aliases=["re"], help="{ 'en': 'remove a treat from the server 🗑️', 'de': 'entferne ein Emoji vom Server' }")
+    @commands.command(name="remove-emoji", aliases=["re"], help="{ 'en': 'remove an emoji from the server 🗑️', 'de': 'entferne ein Emoji vom Server' }")
     @has_permissions(manage_guild=True)
     async def remove_emoji(self, ctx, emoji: discord.Emoji):
         try:
             name = emoji.name
             await emoji.delete()
-            await ctx.send(f"🗑️ removed `:{name}:` from the tray!")
+            await ctx.send(f"🗑️ removed `:{name}:` from the server!")
         except:
             await ctx.send(msg(ctx, "no_perms"))
 

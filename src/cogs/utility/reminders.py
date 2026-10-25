@@ -22,7 +22,6 @@ import discord
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 DATA_FILE = "data/reminders.json"
@@ -69,44 +68,6 @@ MESSAGES = {
             "invalid_duration":"❌ Duración inválida. Usa `30s`, `10m`, `2h`, `1d`.",
             "remind_dm":       "### {icon} Recordatorio\n{text}\n-# Establecido hace {ago}.",
             "remind_chan":     "### {icon} Recordatorio para {mention}\n{text}\n-# Establecido hace {ago}.",
-        },
-    },
-    "cafe": {
-        "en": {
-            "set_ok":          "### {icon} reminder saved ☕\nI'll nudge you about **{text}** {ts} ✨",
-            "list_empty":      "no reminders yet — your café notebook is empty ☕",
-            "list_title":      "### {icon} your cozy reminders ☕",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ reminder `{id}` torn out of the notebook ☕",
-            "delete_missing":  "⚠️ couldn't find reminder `{id}` in your notebook hun~",
-            "clear_ok":        "✅ wiped your reminder notebook clean ☕",
-            "invalid_duration":"❌ that duration looks weird, try `30s`, `10m`, `2h`, `1d` ☕",
-            "remind_dm":       "### {icon} hey hey ☕\n{text}\n-# you saved this {ago} ago ✨",
-            "remind_chan":     "### {icon} hey {mention} ☕\n{text}\n-# saved {ago} ago ✨",
-        },
-        "de": {
-            "set_ok":          "### {icon} erinnerung gespeichert ☕\nich stupse dich an **{text}** {ts} ✨",
-            "list_empty":      "noch keine erinnerungen — dein café-notizbuch ist leer ☕",
-            "list_title":      "### {icon} deine gemütlichen erinnerungen ☕",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ erinnerung `{id}` aus dem notizbuch gerissen ☕",
-            "delete_missing":  "⚠️ konnte erinnerung `{id}` in deinem notizbuch nicht finden~",
-            "clear_ok":        "✅ dein notizbuch ist sauber ☕",
-            "invalid_duration":"❌ die dauer sieht komisch aus, versuch `30s`, `10m`, `2h`, `1d` ☕",
-            "remind_dm":       "### {icon} hey hey ☕\n{text}\n-# vor {ago} gespeichert ✨",
-            "remind_chan":     "### {icon} hey {mention} ☕\n{text}\n-# vor {ago} gespeichert ✨",
-        },
-        "es": {
-            "set_ok":          "### {icon} recordatorio guardado ☕\nte daré un toque sobre **{text}** {ts} ✨",
-            "list_empty":      "sin recordatorios aún — tu cuaderno del café está vacío ☕",
-            "list_title":      "### {icon} tus recordatorios acogedores ☕",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ recordatorio `{id}` arrancado del cuaderno ☕",
-            "delete_missing":  "⚠️ no encontré el recordatorio `{id}` en tu cuaderno~",
-            "clear_ok":        "✅ tu cuaderno está limpio ☕",
-            "invalid_duration":"❌ la duración se ve rara, prueba `30s`, `10m`, `2h`, `1d` ☕",
-            "remind_dm":       "### {icon} oye ☕\n{text}\n-# lo guardaste hace {ago} ✨",
-            "remind_chan":     "### {icon} oye {mention} ☕\n{text}\n-# guardado hace {ago} ✨",
         },
     },
 }
@@ -225,7 +186,7 @@ class Reminders(commands.Cog):
         if not user:
             return
         ago = humanize_delta(int((datetime.now(timezone.utc) - datetime.fromisoformat(r["created_at"])).total_seconds()))
-        # personality/lang shim (use guild if remembered, else cafe en)
+        # language shim (use the stored guild if remembered, else English)
         guild = self.bot.get_guild(r.get("guild_id") or 0)
 
         class _Shim:

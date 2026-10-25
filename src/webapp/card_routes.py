@@ -241,7 +241,7 @@ def card_shop():
         '<text x="36" y="48" fill="#' + accent + '" font-family="Space Mono, monospace" '
         'font-size="11" font-weight="700">SHOP &#8212; ' + cat_label + '</text>'
         '<text x="36" y="78" fill="#F4F5F7" font-family="Plus Jakarta Sans, sans-serif" '
-        'font-size="28" font-weight="700">Niko Boutique</text>'
+        'font-size="28" font-weight="700">Niko Shop</text>'
         + bal_text +
         '<line x1="36" y1="96" x2="' + str(W - 36) + '" y2="96" stroke="rgba(45,48,53,0.7)" stroke-width="1"/>'
         + rows_svg +

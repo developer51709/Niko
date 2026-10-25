@@ -22,7 +22,6 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 from utils.paginator import paginate, PaginatedView
 
@@ -74,50 +73,6 @@ MESSAGES = {
             "raw_title":    "### Raw `{name}`",
             "limit_hit":    "⚠️ Este servidor ya tiene {max} tags — elimina algunos antes de crear más.",
             "too_long":     "⚠️ El contenido del tag debe ser ≤ {n} caracteres.",
-        },
-    },
-    "cafe": {
-        "en": {
-            "created":      "✅ pinned tag **{name}** to the menu ☕",
-            "edited":       "✅ rewrote tag **{name}** in nicer handwriting ✨",
-            "deleted":      "✅ tag **{name}** wiped off the chalkboard ☕",
-            "exists":       "⚠️ tag **{name}** is already on the menu ☕",
-            "missing":      "⚠️ no tag **{name}** here, sweet bean ☕",
-            "no_perm":      "❌ you can only mess with your own tags ☕",
-            "list_empty":   "no tags yet — the chalkboard is empty ☕",
-            "list_title":   "### {icon} café tags ({n}) ☕",
-            "info":         "### {icon} tag `{name}` ☕\n**owner:** {owner}\n**sips:** {uses}\n**brewed:** <t:{created}:R>",
-            "raw_title":    "### raw `{name}` ☕",
-            "limit_hit":    "⚠️ chalkboard is full — {max} tags max, please erase some ☕",
-            "too_long":     "⚠️ that's a bit long — keep it under {n} characters ☕",
-        },
-        "de": {
-            "created":      "✅ tag **{name}** an die karte gepinnt ☕",
-            "edited":       "✅ tag **{name}** in schönerer schrift neu geschrieben ✨",
-            "deleted":      "✅ tag **{name}** von der tafel gewischt ☕",
-            "exists":       "⚠️ tag **{name}** steht schon auf der karte ☕",
-            "missing":      "⚠️ kein tag **{name}** hier, süßer ☕",
-            "no_perm":      "❌ du kannst nur deine eigenen tags bearbeiten ☕",
-            "list_empty":   "noch keine tags — die tafel ist leer ☕",
-            "list_title":   "### {icon} café-tags ({n}) ☕",
-            "info":         "### {icon} tag `{name}` ☕\n**besitzer:** {owner}\n**schlucke:** {uses}\n**gebraut:** <t:{created}:R>",
-            "raw_title":    "### roh `{name}` ☕",
-            "limit_hit":    "⚠️ tafel ist voll — max {max} tags, bitte einige wischen ☕",
-            "too_long":     "⚠️ ein bisschen lang — bleib unter {n} zeichen ☕",
-        },
-        "es": {
-            "created":      "✅ tag **{name}** colgado en la pizarra ☕",
-            "edited":       "✅ tag **{name}** reescrito con mejor letra ✨",
-            "deleted":      "✅ tag **{name}** borrado de la pizarra ☕",
-            "exists":       "⚠️ el tag **{name}** ya está en la pizarra ☕",
-            "missing":      "⚠️ no hay tag **{name}** aquí, cariño ☕",
-            "no_perm":      "❌ solo puedes editar tus propios tags ☕",
-            "list_empty":   "no hay tags aún — la pizarra está vacía ☕",
-            "list_title":   "### {icon} tags del café ({n}) ☕",
-            "info":         "### {icon} tag `{name}` ☕\n**dueño:** {owner}\n**sorbos:** {uses}\n**preparado:** <t:{created}:R>",
-            "raw_title":    "### crudo `{name}` ☕",
-            "limit_hit":    "⚠️ pizarra llena — máximo {max} tags, borra algunos ☕",
-            "too_long":     "⚠️ un poco largo — mantenlo bajo {n} caracteres ☕",
         },
     },
 }

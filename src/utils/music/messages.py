@@ -1,10 +1,8 @@
 """
-Music System — personality-aware user-facing messages (EN / DE / ES, normal
-and café personalities). Lives in utils/music so the message catalog stays
-independent of the Discord command layer.
+Music System — user-facing messages (EN / DE / ES). Lives in utils/music so
+the message catalog stays independent of the Discord command layer.
 """
 
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 MESSAGES = {
@@ -100,98 +98,6 @@ MESSAGES = {
             "spotify_fail":               "No pude resolver ese enlace de Spotify.",
         },
     },
-    "cafe": {
-        "en": {
-            "not_in_voice":               "hey bestie, you gotta hop into a voice channel first ☕💿",
-            "get_player_not_in_voice":    "you're not in a voice channel yet, i can't serve music there 😭☕",
-            "music_player_status_title":  "Café Music Player ☕",
-            "music_not_connected":        "hmm… not connected to any music servers, like a café with no music 😭",
-            "music_connected":            "yesss, connected and ready to pour some cozy tracks ☕✨",
-            "play_not_found":             "i couldn't find that song, like a drink that's not on the menu 😭",
-            "pause_nothing":              "there's nothing playing to pause, just quiet café air rn 😭",
-            "pause_ok":                   "pausing the vibes for a moment 🌿☕",
-            "resume_nothing":             "there's nothing paused to resume 😭",
-            "resume_ok":                  "bringing the warm café vibes back on 🎶☕",
-            "skip_nothing":               "skip what… the silence? the playlist is empty 😭",
-            "skip_ok":                    "skipping to the next flavor on the menu 🍰✨",
-            "stop_nothing":               "nothing to stop, the speakers are already quiet 🌙",
-            "stop_ok":                    "okay okay, stopping everything and clearing the tray ☕💛",
-            "queue_empty":                "the queue is emptier than a café at closing time 😭",
-            "queue_header":               "☕ **current cozy queue:**",
-            "volume_nothing":             "no active player, no music brewing yet 😭",
-            "volume_set":                 "volume set to **{vol}%** — adjusting the café ambiance ✨",
-            "disconnect_nothing":         "i'm not even in a voice channel rn 😭",
-            "disconnect_ok":              "leaving like a soft barista wave, see you soon ☕🌿",
-            "autoplay_on":                "autoplay is on! i'll keep the vibes going with similar tracks 🎶✨",
-            "autoplay_off":               "autoplay off — queue it yourself, bestie 🍵",
-            "autoplay_unavailable":       "autoplay isn't set up (no Last.fm key) 😭",
-            "loop_on":                    "looping this track on repeat like a cozy café playlist 🔁☕",
-            "loop_off":                   "loop off, moving on to the next track 🍵",
-            "spotify_disabled":           "spotify support isn't set up right now 😭",
-            "spotify_resolving":          "brewing that spotify link… ☕",
-            "spotify_fail":               "couldn't resolve that spotify link 😭",
-        },
-        "de": {
-            "not_in_voice":               "hey liebchen, du musst erst in einen Sprachkanal gehen ☕💿",
-            "get_player_not_in_voice":    "du bist noch in keinem Sprachkanal, ich kann dort keine musik servieren 😭☕",
-            "music_player_status_title":  "Café-Musik-Player ☕",
-            "music_not_connected":        "hmm… mit keinem musikserver verbunden, wie ein café ohne musik 😭",
-            "music_connected":            "yesss, verbunden und bereit für cozy tracks ☕✨",
-            "play_not_found":             "ich konnte den song nicht finden, wie ein drink der nicht auf der karte steht 😭",
-            "pause_nothing":              "es läuft nichts zum pausieren 😭",
-            "pause_ok":                   "pausiere kurz die vibes 🌿☕",
-            "resume_nothing":             "es gibt nichts fortzusetzen 😭",
-            "resume_ok":                  "die warmen café-vibes laufen wieder 🎶☕",
-            "skip_nothing":               "was soll ich skippen… die stille? 😭",
-            "skip_ok":                    "zum nächsten track auf der karte 🍰✨",
-            "stop_nothing":               "nichts zu stoppen, die lautsprecher sind schon ruhig 🌙",
-            "stop_ok":                    "okay, stoppe alles und leere die warteschlange ☕💛",
-            "queue_empty":                "die warteschlange ist leerer als ein café nach feierabend 😭",
-            "queue_header":               "☕ **aktuelle cozy-warteschlange:**",
-            "volume_nothing":             "kein aktiver player 😭",
-            "volume_set":                 "lautstärke auf **{vol}%** — café-stimmung angepasst ✨",
-            "disconnect_nothing":         "ich bin gar nicht im sprachkanal 😭",
-            "disconnect_ok":              "ich verlasse den vc wie ein leiser barista-wink ☕🌿",
-            "autoplay_on":                "autoplay an! ich halte die vibes mit ähnlichen tracks am laufen 🎶✨",
-            "autoplay_off":               "autoplay aus — füg selbst hinzu, liebchen 🍵",
-            "autoplay_unavailable":       "autoplay ist nicht eingerichtet (kein Last.fm-Schlüssel) 😭",
-            "loop_on":                    "dieser track läuft auf repeat wie eine cozy café-playlist 🔁☕",
-            "loop_off":                   "loop aus, weiter zum nächsten track 🍵",
-            "spotify_disabled":           "spotify-unterstützung ist nicht eingerichtet 😭",
-            "spotify_resolving":          "löse den spotify-link auf… ☕",
-            "spotify_fail":               "spotify-link konnte nicht aufgelöst werden 😭",
-        },
-        "es": {
-            "not_in_voice":               "ey amix, tienes que entrar a un canal de voz primero ☕💿",
-            "get_player_not_in_voice":    "todavía no estás en un canal de voz, no puedo servir música allí 😭☕",
-            "music_player_status_title":  "Reproductor del Café ☕",
-            "music_not_connected":        "hmm… no conectado a ningún servidor de música, como un café sin música 😭",
-            "music_connected":            "yesss, conectado y listo para servir tracks acogedores ☕✨",
-            "play_not_found":             "no encontré esa canción, como una bebida que no está en el menú 😭",
-            "pause_nothing":              "no hay nada reproduciéndose para pausar, solo aire silencioso del café 😭",
-            "pause_ok":                   "pausando los vibes un momento 🌿☕",
-            "resume_nothing":             "no hay nada pausado para reanudar 😭",
-            "resume_ok":                  "trayendo los vibes calentitos del café de vuelta 🎶☕",
-            "skip_nothing":               "¿saltar qué… el silencio? la playlist está vacía 😭",
-            "skip_ok":                    "saltando al siguiente sabor del menú 🍰✨",
-            "stop_nothing":               "nada que detener, los altavoces ya están en silencio 🌙",
-            "stop_ok":                    "vale vale, deteniendo todo y limpiando la bandeja ☕💛",
-            "queue_empty":                "la cola está más vacía que un café a la hora de cierre 😭",
-            "queue_header":               "☕ **cola acogedora actual:**",
-            "volume_nothing":             "no hay reproductor activo, no se está preparando música 😭",
-            "volume_set":                 "volumen a **{vol}%** — ajustando el ambiente del café ✨",
-            "disconnect_nothing":         "ni siquiera estoy en un canal de voz ahora mismo 😭",
-            "disconnect_ok":              "me voy con un suave saludito de barista, ¡nos vemos pronto! ☕🌿",
-            "autoplay_on":                "¡autoplay activado! mantendré los vibes con canciones similares 🎶✨",
-            "autoplay_off":               "autoplay apagado — añádelas tú, amix 🍵",
-            "autoplay_unavailable":       "autoplay no está configurado (sin clave de Last.fm) 😭",
-            "loop_on":                    "repitiendo esta canción como una playlist acogedora del café 🔁☕",
-            "loop_off":                   "loop apagado, pasando a la siguiente canción 🍵",
-            "spotify_disabled":           "el soporte para spotify no está configurado ahora mismo 😭",
-            "spotify_resolving":          "preparando ese enlace de spotify… ☕",
-            "spotify_fail":               "no pude resolver ese enlace de spotify 😭",
-        },
-    },
 }
 
 # ── Liked songs / favorites (added on top of the original catalog) ──────────
@@ -228,39 +134,6 @@ MESSAGES["normal"]["es"].update({
     "unlike_invalid":       "Ese no es un número de like válido — revisa `.liked`.",
     "likes_cleared":        "Se eliminaron {count} canciones favoritas.",
 })
-MESSAGES["cafe"]["en"].update({
-    "like_on":              "adding **{title}** to your favorites, bestie ♥☕",
-    "like_off":             "taking **{title}** off your favorites 🍵",
-    "like_nothing":         "there's nothing playing to like rn 😭",
-    "liked_header":         "☕ **your favorite brews:**",
-    "liked_empty":          "you haven't liked anything yet — play a song and hit `.like` or the ♥ button on the music panel 🎶",
-    "unlike_ok":            "removed **{title}** from your favorites 🍵",
-    "unlike_nothing":       "you don't have any favorite songs yet 😭",
-    "unlike_invalid":       "that's not a valid number — check `.liked` bestie 😭",
-    "likes_cleared":        "cleared all {count} favorites, fresh start ☕",
-})
-MESSAGES["cafe"]["de"].update({
-    "like_on":              "füge **{title}** zu deinen favorites hinzu ♥☕",
-    "like_off":             "nehme **{title}** von deinen favorites 🍵",
-    "like_nothing":         "es läuft gerade nichts zum liken 😭",
-    "liked_header":         "☕ **deine lieblings-drinks:**",
-    "liked_empty":          "du hast noch nichts geliked — spiel was ab und nutze `.like` oder den ♥-button im musik-panel 🎶",
-    "unlike_ok":            "**{title}** von deinen favorites entfernt 🍵",
-    "unlike_nothing":       "du hast noch keine favorites 😭",
-    "unlike_invalid":       "das ist keine gültige nummer — schau bei `.liked` nach, liebchen 😭",
-    "likes_cleared":        "alle {count} favorites gelöscht, neuanfang ☕",
-})
-MESSAGES["cafe"]["es"].update({
-    "like_on":              "añadiendo **{title}** a tus favoritos ♥☕",
-    "like_off":             "quitando **{title}** de tus favoritos 🍵",
-    "like_nothing":         "no hay nada reproduciéndose para dar like 😭",
-    "liked_header":         "☕ **tus brebajes favoritos:**",
-    "liked_empty":          "todavía no has dado like a nada — reproduce algo y usa `.like` o el botón ♥ del panel de música 🎶",
-    "unlike_ok":            "**{title}** quitada de tus favoritos 🍵",
-    "unlike_nothing":       "no tienes canciones favoritas todavía 😭",
-    "unlike_invalid":       "ese no es un número válido — revisa `.liked`, amix 😭",
-    "likes_cleared":        "se eliminaron {count} favoritas, nuevo comienzo ☕",
-})
 
 
 # Playback was accepted by the node but never actually started streaming.
@@ -272,15 +145,6 @@ MESSAGES["normal"]["de"].update({
 })
 MESSAGES["normal"]["es"].update({
     "music_start_failed": "No se pudo iniciar la reproducción en el servidor de música — inténtalo de nuevo con `.play`.",
-})
-MESSAGES["cafe"]["en"].update({
-    "music_start_failed": "the music server went quiet on me 😭 try `.play` again and i'll pour it fresh ☕",
-})
-MESSAGES["cafe"]["de"].update({
-    "music_start_failed": "der musikserver ist still geworden 😭 probier `.play` nochmal, ich schenk frisch ein ☕",
-})
-MESSAGES["cafe"]["es"].update({
-    "music_start_failed": "el servidor de música se quedó callado 😭 prueba `.play` otra vez y lo sirvo de nuevo ☕",
 })
 
 msg = make_msg(MESSAGES)

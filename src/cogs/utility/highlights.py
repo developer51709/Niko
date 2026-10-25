@@ -27,7 +27,6 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ai.config import get_personality
 from utils.i18n import make_msg
 
 DATA_FILE = "data/highlights.json"
@@ -86,56 +85,6 @@ MESSAGES = {
             "notify_body":     "**En:** {channel} de **{guild}**\n**Por:** {author}\n\n{quote}\n\n[Saltar al mensaje]({link})",
         },
     },
-    "cafe": {
-        "en": {
-            "added":           "✅ pinned **`{kw}`** to your highlight board ☕",
-            "removed":         "✅ took **`{kw}`** off your highlight board ☕",
-            "exists":          "⚠️ **`{kw}`** is already on your board ☕",
-            "missing":         "⚠️ no **`{kw}`** on your board hun~",
-            "limit":           "⚠️ board is full ({max} pins) — take some down first ☕",
-            "list_empty":      "your highlight board is empty ☕",
-            "list_title":      "### {icon} your highlight board ☕",
-            "cleared":         "✅ wiped your highlight board clean ☕",
-            "ignore_user_ok":  "✅ ignoring {user} from now on ☕",
-            "ignore_chan_ok":  "✅ ignoring {channel} from now on ☕",
-            "unignore_user_ok":"✅ listening to {user} again ☕",
-            "unignore_chan_ok":"✅ listening to {channel} again ☕",
-            "notify_title":    "### {icon} highlight! `{kw}` ☕",
-            "notify_body":     "**in:** {channel} of **{guild}**\n**by:** {author}\n\n{quote}\n\n[hop over]({link}) ✨",
-        },
-        "de": {
-            "added":           "✅ **`{kw}`** an dein highlight-board gepinnt ☕",
-            "removed":         "✅ **`{kw}`** vom highlight-board genommen ☕",
-            "exists":          "⚠️ **`{kw}`** ist schon auf deinem board ☕",
-            "missing":         "⚠️ kein **`{kw}`** auf deinem board~",
-            "limit":           "⚠️ board ist voll ({max} pins) — nimm zuerst welche ab ☕",
-            "list_empty":      "dein highlight-board ist leer ☕",
-            "list_title":      "### {icon} dein highlight-board ☕",
-            "cleared":         "✅ dein highlight-board ist sauber ☕",
-            "ignore_user_ok":  "✅ ignoriere {user} ab jetzt ☕",
-            "ignore_chan_ok":  "✅ ignoriere {channel} ab jetzt ☕",
-            "unignore_user_ok":"✅ höre {user} wieder zu ☕",
-            "unignore_chan_ok":"✅ höre {channel} wieder zu ☕",
-            "notify_title":    "### {icon} highlight! `{kw}` ☕",
-            "notify_body":     "**in:** {channel} auf **{guild}**\n**von:** {author}\n\n{quote}\n\n[hin springen]({link}) ✨",
-        },
-        "es": {
-            "added":           "✅ **`{kw}`** pegada en tu tablero de highlights ☕",
-            "removed":         "✅ **`{kw}`** quitada del tablero ☕",
-            "exists":          "⚠️ **`{kw}`** ya está en tu tablero ☕",
-            "missing":         "⚠️ no hay **`{kw}`** en tu tablero~",
-            "limit":           "⚠️ el tablero está lleno ({max}) — quita algunos primero ☕",
-            "list_empty":      "tu tablero de highlights está vacío ☕",
-            "list_title":      "### {icon} tu tablero de highlights ☕",
-            "cleared":         "✅ tablero de highlights limpio ☕",
-            "ignore_user_ok":  "✅ ignorando a {user} desde ahora ☕",
-            "ignore_chan_ok":  "✅ ignorando {channel} desde ahora ☕",
-            "unignore_user_ok":"✅ volviendo a escuchar a {user} ☕",
-            "unignore_chan_ok":"✅ volviendo a escuchar {channel} ☕",
-            "notify_title":    "### {icon} ¡highlight! `{kw}` ☕",
-            "notify_body":     "**en:** {channel} de **{guild}**\n**por:** {author}\n\n{quote}\n\n[saltar]({link}) ✨",
-        },
-    },
 }
 
 
@@ -145,15 +94,6 @@ def _lang(ctx) -> str:
         if l.startswith("de"): return "de"
         if l.startswith("es"): return "es"
     return "en"
-
-
-def _personality(ctx) -> str:
-    if isinstance(ctx, commands.Context):
-        return get_personality(ctx)
-    class _S: pass
-    s = _S()
-    s.guild = ctx if isinstance(ctx, discord.Guild) else getattr(ctx, "guild", None)
-    return get_personality(s)
 
 
 msg = make_msg(MESSAGES)

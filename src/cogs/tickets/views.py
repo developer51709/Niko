@@ -38,7 +38,6 @@ from utils.tickets.utils import (
     find_open_ticket,
 )
 from utils.tickets.config import TicketConfig
-from utils.ai.config import get_personality
 from config.emojis import get_emoji
 
 
@@ -253,212 +252,6 @@ MESSAGES = {
             "users_removed":        "✅ {users} perdió el acceso a este ticket.",
         },
     },
-    "cafe": {
-        "en": {
-            "panel_default_title":  "open a cozy ticket ☕",
-            "panel_default_desc":   "pick a category or tap the button below — we'll grab a chair for you ✨",
-            "open_btn":             "create ticket",
-            "select_category":      "### pick a flavor ☕",
-            "select_placeholder":   "choose category...",
-            "ticket_welcome":       "### {icon} {category} ticket\nhey {mention} ☕ pull up a chair, the staff will be with you in a moment ✨",
-            "ticket_created":       "✅ your cozy ticket is ready over at {channel} ☕",
-            "panel_updated":        "✅ ticket panel polished and updated ✨",
-            "panel_posted":         "✅ ticket panel served fresh in {channel} ☕",
-            "category_added":       "✅ added **{name}** to the menu ☕",
-            "category_removed":     "✅ took **{name}** off the menu",
-            "category_exists":      "⚠️ **{name}** is already on the menu ☕",
-            "category_missing":     "⚠️ no **{name}** on the menu hun~",
-            "categories_empty":     "no categories yet — tickets will open under a default 'General' tag ☕",
-            "categories_list":      "### ticket menu ☕\n{list}",
-            "support_added":        "✅ welcome {role} to the staff lounge ☕",
-            "support_removed":      "✅ removed {role} from the staff lounge",
-            "support_exists":       "⚠️ {role} is already in the staff lounge ☕",
-            "support_missing":      "⚠️ {role} isn't in the staff lounge",
-            "support_empty":        "the staff lounge is empty for now ☕",
-            "support_list":         "### staff lounge ☕\n{list}",
-            "not_in_ticket":        "❌ this only works inside a ticket booth, sweet bean ☕",
-            "no_perm_close":        "❌ you can't close tickets, sorry ☕",
-            "no_perm_delete":       "❌ you can't delete tickets, sorry ☕",
-            "no_perm_manage":       "❌ you can't manage this ticket, sorry ☕",
-            "user_added":           "✅ pulled up a chair for {user} ☕",
-            "user_removed":         "✅ {user} stepped out of the booth",
-            "user_already_added":   "⚠️ {user} is already in the booth ☕",
-            "user_not_in_ticket":   "⚠️ {user} isn't in this booth",
-            "renamed":              "✅ ticket renamed to **{name}** ✨",
-            "claimed":              "✅ {user} grabbed this ticket ☕",
-            "already_claimed":      "⚠️ {user} already grabbed this one ☕",
-            "transcript_built":     "📝 transcript brewed and ready ☕",
-            "closing":              "{loading} closing the booth gently…",
-            "closed":               "🔒 closed by {user} — see ya next time ☕",
-            "deleting":             "🗑️ wiping the table in {seconds}s…",
-            "setup_title":          "### {icon} ticket system setup ☕",
-            "setup_desc":           "set up your ticket booth below — add menu items, invite staff, then post the cute panel ✨",
-            "btn_add":              "invite more friends ☕",
-            "btn_cancel":           "nevermind",
-            "btn_claim":            "grab it ☕",
-            "btn_close":            "close the booth",
-            "btn_confirm_delete":   "yes, wipe the table",
-            "btn_delete":           "delete",
-            "btn_remove":           "ask someone to leave",
-            "btn_staff":            "staff panel",
-            "btn_transfer":         "pass it on",
-            "deleting_panel":       "🗑️ wiping the table…",
-            "header_details":       "### {icon} booth details ☕\n**menu pick:** {category}\n**guest:** {opener}\n**booth:** {channel}\n**opened:** {opened}\n**status:** {status}\n**grabbed by:** {claim}",
-            "no_users_added":       "⚠️ everyone you picked already had a seat ☕",
-            "no_users_removed":     "⚠️ none of those folks were in the booth ☕",
-            "not_support_target":   "⚠️ {user} isn't on the team, sorry — transfer cancelled ☕",
-            "panel_title":          "### {icon} staff panel — {channel} ☕",
-            "prompt_add":           "who should get a seat in **{channel}**? you can pick a few ☕",
-            "prompt_delete":        "sure you want to wipe **{channel}**? there's no coming back from this one ☕",
-            "prompt_remove":        "who should step out of **{channel}**?",
-            "prompt_transfer":      "who should take over the booth **{channel}**?",
-            "sel_staff":            "pick a staffie…",
-            "sel_user":             "pick your guests…",
-            "staff_panel_only":     "❌ sorry, only the staff can peek at the panel ☕",
-            "status_closed":        "closed",
-            "status_open":          "open",
-            "transferred":          "✅ booth passed to {user} ☕",
-            "unclaimed":            "up for grabs",
-            "users_added":          "✅ pulled up a seat for {users} ☕",
-            "users_removed":        "✅ asked {users} to step out ☕",
-        },
-        "de": {
-            "panel_default_title":  "ein gemütliches ticket öffnen ☕",
-            "panel_default_desc":   "wähle eine kategorie oder tippe den button unten — wir holen dir nen stuhl ✨",
-            "open_btn":             "ticket erstellen",
-            "select_category":      "### wähl ne sorte ☕",
-            "select_placeholder":   "kategorie wählen...",
-            "ticket_welcome":       "### {icon} {category} ticket\nhey {mention} ☕ mach's dir gemütlich, jemand vom team kommt gleich ✨",
-            "ticket_created":       "✅ dein gemütliches ticket wartet drüben in {channel} ☕",
-            "panel_updated":        "✅ ticket-panel poliert und aktualisiert ✨",
-            "panel_posted":         "✅ ticket-panel frisch serviert in {channel} ☕",
-            "category_added":       "✅ **{name}** zur karte hinzugefügt ☕",
-            "category_removed":     "✅ **{name}** von der karte genommen",
-            "category_exists":      "⚠️ **{name}** steht schon auf der karte ☕",
-            "category_missing":     "⚠️ kein **{name}** auf der karte~",
-            "categories_empty":     "noch keine kategorien — tickets öffnen sich mit standard 'Allgemein' ☕",
-            "categories_list":      "### ticket-karte ☕\n{list}",
-            "support_added":        "✅ willkommen {role} im personal-lounge ☕",
-            "support_removed":      "✅ {role} aus der personal-lounge entfernt",
-            "support_exists":       "⚠️ {role} ist schon in der personal-lounge ☕",
-            "support_missing":      "⚠️ {role} ist nicht in der personal-lounge",
-            "support_empty":        "die personal-lounge ist noch leer ☕",
-            "support_list":         "### personal-lounge ☕\n{list}",
-            "not_in_ticket":        "❌ das geht nur in einer ticket-nische, süßer ☕",
-            "no_perm_close":        "❌ du kannst keine tickets schließen, sorry ☕",
-            "no_perm_delete":       "❌ du kannst keine tickets löschen, sorry ☕",
-            "no_perm_manage":       "❌ du kannst dieses ticket nicht verwalten, sorry ☕",
-            "user_added":           "✅ einen stuhl für {user} rangezogen ☕",
-            "user_removed":         "✅ {user} ist aus der nische gegangen",
-            "user_already_added":   "⚠️ {user} ist schon in der nische ☕",
-            "user_not_in_ticket":   "⚠️ {user} ist nicht in dieser nische",
-            "renamed":              "✅ ticket umbenannt zu **{name}** ✨",
-            "claimed":              "✅ {user} hat dieses ticket übernommen ☕",
-            "already_claimed":      "⚠️ {user} hat das schon übernommen ☕",
-            "transcript_built":     "📝 transkript frisch aufgebrüht ☕",
-            "closing":              "{loading} schließe die nische sanft…",
-            "closed":               "🔒 geschlossen von {user} — bis bald ☕",
-            "deleting":             "🗑️ tisch wird in {seconds}s abgewischt…",
-            "setup_title":          "### {icon} ticketsystem-setup ☕",
-            "setup_desc":           "richte deine ticket-nische ein — kategorien hinzufügen, personal einladen, dann das süße panel posten ✨",
-            "btn_add":              "gäste reinholen ☕",
-            "btn_cancel":           "doch nicht",
-            "btn_claim":            "übernehmen ☕",
-            "btn_close":            "nische schließen",
-            "btn_confirm_delete":   "ja, tisch abwischen",
-            "btn_delete":           "löschen",
-            "btn_remove":           "gast rausbitten",
-            "btn_staff":            "personal-panel",
-            "btn_transfer":         "weiterreichen",
-            "deleting_panel":       "🗑️ tisch wird abgewischt…",
-            "header_details":       "### {icon} nischen-details ☕\n**auswahl:** {category}\n**gast:** {opener}\n**nische:** {channel}\n**geöffnet:** {opened}\n**status:** {status}\n**übernommen von:** {claim}",
-            "no_users_added":       "⚠️ alle ausgewählten hatten schon einen platz ☕",
-            "no_users_removed":     "⚠️ keiner davon war in der nische ☕",
-            "not_support_target":   "⚠️ {user} gehört nicht zum team, sorry — übertragung abgebrochen ☕",
-            "panel_title":          "### {icon} personal-panel — {channel} ☕",
-            "prompt_add":           "wer soll in **{channel}** einen platz bekommen? du kannst ein paar wählen ☕",
-            "prompt_delete":        "wirklich **{channel}** abwischen? das gibt's nicht zurück ☕",
-            "prompt_remove":        "wer soll aus **{channel}** raus?",
-            "prompt_transfer":      "wer soll die nische **{channel}** übernehmen?",
-            "sel_staff":            "team-mitglied wählen…",
-            "sel_user":             "gäste wählen…",
-            "staff_panel_only":     "❌ sorry, nur das personal darf ins panel ☕",
-            "status_closed":        "geschlossen",
-            "status_open":          "offen",
-            "transferred":          "✅ nische an {user} übergeben ☕",
-            "unclaimed":            "zu haben",
-            "users_added":          "✅ stuhl für {users} rangezogen ☕",
-            "users_removed":        "✅ {users} rausgebeten ☕",
-        },
-        "es": {
-            "panel_default_title":  "abre un ticket acogedor ☕",
-            "panel_default_desc":   "elige una categoría o pulsa el botón — te traemos una silla ✨",
-            "open_btn":             "crear ticket",
-            "select_category":      "### elige un sabor ☕",
-            "select_placeholder":   "elegir categoría...",
-            "ticket_welcome":       "### {icon} ticket de {category}\nholi {mention} ☕ acomódate, el staff vendrá enseguida ✨",
-            "ticket_created":       "✅ tu ticket acogedor te espera en {channel} ☕",
-            "panel_updated":        "✅ panel de tickets pulido y actualizado ✨",
-            "panel_posted":         "✅ panel de tickets servido fresquito en {channel} ☕",
-            "category_added":       "✅ **{name}** añadida al menú ☕",
-            "category_removed":     "✅ **{name}** quitada del menú",
-            "category_exists":      "⚠️ **{name}** ya está en el menú ☕",
-            "category_missing":     "⚠️ no hay **{name}** en el menú~",
-            "categories_empty":     "aún no hay categorías — los tickets abren con la categoría 'General' por defecto ☕",
-            "categories_list":      "### menú de tickets ☕\n{list}",
-            "support_added":        "✅ bienvenida {role} a la sala del staff ☕",
-            "support_removed":      "✅ {role} retirada de la sala del staff",
-            "support_exists":       "⚠️ {role} ya está en la sala del staff ☕",
-            "support_missing":      "⚠️ {role} no está en la sala del staff",
-            "support_empty":        "la sala del staff está vacía por ahora ☕",
-            "support_list":         "### sala del staff ☕\n{list}",
-            "not_in_ticket":        "❌ esto solo funciona dentro de un cubículo de ticket, cariño ☕",
-            "no_perm_close":        "❌ no puedes cerrar tickets, lo siento ☕",
-            "no_perm_delete":       "❌ no puedes eliminar tickets, lo siento ☕",
-            "no_perm_manage":       "❌ no puedes gestionar este ticket, lo siento ☕",
-            "user_added":           "✅ acerqué una silla para {user} ☕",
-            "user_removed":         "✅ {user} salió del cubículo",
-            "user_already_added":   "⚠️ {user} ya está en el cubículo ☕",
-            "user_not_in_ticket":   "⚠️ {user} no está en este cubículo",
-            "renamed":              "✅ ticket renombrado a **{name}** ✨",
-            "claimed":              "✅ {user} tomó este ticket ☕",
-            "already_claimed":      "⚠️ {user} ya tomó este ☕",
-            "transcript_built":     "📝 transcripción recién hecha ☕",
-            "closing":              "{loading} cerrando el cubículo con cuidado…",
-            "closed":               "🔒 cerrado por {user} — nos vemos pronto ☕",
-            "deleting":             "🗑️ limpiando la mesa en {seconds}s…",
-            "setup_title":          "### {icon} configuración del sistema de tickets ☕",
-            "setup_desc":           "configura tu cubículo de tickets — añade categorías, invita staff y luego publica el panel adorable ✨",
-            "btn_add":              "traer más amigos ☕",
-            "btn_cancel":           "mejor no",
-            "btn_claim":            "tomarlo ☕",
-            "btn_close":            "cerrar el cubículo",
-            "btn_confirm_delete":   "sí, limpiar la mesa",
-            "btn_delete":           "eliminar",
-            "btn_remove":           "pedir que salga",
-            "btn_staff":            "panel del staff",
-            "btn_transfer":         "pasarlo",
-            "deleting_panel":       "🗑️ limpiando la mesa…",
-            "header_details":       "### {icon} detalles del cubículo ☕\n**selección:** {category}\n**invitado:** {opener}\n**cubículo:** {channel}\n**abierto:** {opened}\n**estado:** {status}\n**tomado por:** {claim}",
-            "no_users_added":       "⚠️ todos los elegidos ya tenían asiento ☕",
-            "no_users_removed":     "⚠️ ninguno de esos estaba en el cubículo ☕",
-            "not_support_target":   "⚠️ {user} no es del equipo, lo siento — transferencia cancelada ☕",
-            "panel_title":          "### {icon} panel del staff — {channel} ☕",
-            "prompt_add":           "¿quién merece un asiento en **{channel}**? puedes elegir a varios ☕",
-            "prompt_delete":        "¿seguro que quieres limpiar **{channel}**? no hay vuelta atrás ☕",
-            "prompt_remove":        "¿quién debería salir de **{channel}**?",
-            "prompt_transfer":      "¿quién se hace cargo del cubículo **{channel}**?",
-            "sel_staff":            "elige a alguien del equipo…",
-            "sel_user":             "elige invitados…",
-            "staff_panel_only":     "❌ lo siento, solo el staff puede ver el panel ☕",
-            "status_closed":        "cerrado",
-            "status_open":          "abierto",
-            "transferred":          "✅ cubículo pasado a {user} ☕",
-            "unclaimed":            "disponible",
-            "users_added":          "✅ trajimos silla para {users} ☕",
-            "users_removed":        "✅ {users} salió del cubículo ☕",
-        },
-    },
 }
 
 
@@ -479,23 +272,15 @@ def _ctx_lang(ctx_or_int) -> str:
     return "en"
 
 
-def _ctx_personality(ctx_or_int) -> str:
-    if isinstance(ctx_or_int, commands.Context):
-        return get_personality(ctx_or_int)
-    # interaction-like
-    class _Shim:
-        guild = ctx_or_int.guild if hasattr(ctx_or_int, "guild") else None
-    return get_personality(_Shim())
-
-
 def msg(ctx_or_int, key: str, **kwargs) -> str:
-    p = _ctx_personality(ctx_or_int)
+    """Resolve a ticket message in the guild's language.
+
+    The café voice was retired, so every guild gets the same wording; only the
+    language changes.
+    """
     lang = _ctx_lang(ctx_or_int)
-    table = MESSAGES.get(p, MESSAGES["normal"])
     text = (
-        table.get(lang, {}).get(key)
-        or table.get("en", {}).get(key)
-        or MESSAGES["normal"].get(lang, {}).get(key)
+        MESSAGES["normal"].get(lang, {}).get(key)
         or MESSAGES["normal"]["en"].get(key, key)
     )
     return text.format(**kwargs) if kwargs else text
@@ -666,8 +451,8 @@ class TicketPanelView(discord.ui.LayoutView):
         cfg = cfg or get_ticket_config(guild_id)
         guild = None  # we don't have a context here; localise with default fallback
         # Default fallback to english panel labels — admins can override via the modal
-        title = cfg.panel_title or MESSAGES["cafe"]["en"]["panel_default_title"]
-        desc = cfg.panel_description or MESSAGES["cafe"]["en"]["panel_default_desc"]
+        title = cfg.panel_title or MESSAGES["normal"]["en"]["panel_default_title"]
+        desc = cfg.panel_description or MESSAGES["normal"]["en"]["panel_default_desc"]
 
         # The configured color is the container's accent bar. It used to be
         # appended to the title as a literal `#RRGGBB` code, which is why an
@@ -685,7 +470,7 @@ class TicketPanelView(discord.ui.LayoutView):
             )
         container.add_item(
             discord.ui.ActionRow(
-                OpenTicketBtn(guild_id, label=MESSAGES["cafe"]["en"]["open_btn"])
+                OpenTicketBtn(guild_id, label=MESSAGES["normal"]["en"]["open_btn"])
             )
         )
         self.add_item(container)
