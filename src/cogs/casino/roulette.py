@@ -522,6 +522,8 @@ class Roulette(commands.Cog):
             await msg.edit(view=view)
             await view.wait()
             inside_type = view.choice
+            if inside_type is None:
+                return await ctx.send("Timed out.")
 
             count_map = {"straight": 1, "split": 2, "street": 3, "corner": 4, "line": 6}
             count = count_map[inside_type]
@@ -532,9 +534,19 @@ class Roulette(commands.Cog):
 
             bet_type = inside_type
             numbers = view.choice
+            # An abandoned number pick would otherwise resolve as a loss and
+            # quietly take the stake without ever spinning.
+            if numbers is None:
+                return await ctx.send("Timed out.")
 
         else:
             return await ctx.send("Invalid bet type.")
+
+        # Every sub-step is a 30 second menu. If the player let one expire,
+        # `bet_type` is None; ending here keeps the rest of the round from
+        # running with no bet and crashing the result card.
+        if bet_type is None:
+            return await ctx.send("Timed out.")
 
         # STEP 3 — CHIP AMOUNT
         view = build_chip_view(ctx)

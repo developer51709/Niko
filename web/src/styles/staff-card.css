@@ -1,0 +1,127 @@
+/* GitHub README card: a collapsed, expandable section at the bottom of the
+   staff public-profile tab. The card itself is rendered server-side as SVG. */
+
+.dashboard-layout .staff-card-section {
+  margin-top: 18px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.dashboard-layout .staff-card-section > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+  transition: background .18s ease;
+}
+
+.dashboard-layout .staff-card-section > summary::-webkit-details-marker { display: none; }
+.dashboard-layout .staff-card-section > summary:hover { background: var(--surface-muted); }
+.dashboard-layout .staff-card-section > summary:focus-visible {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: -2px;
+}
+
+.dashboard-layout .staff-card-section-copy { display: grid; gap: 4px; min-width: 0; }
+.dashboard-layout .staff-card-section-copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: -.025em;
+}
+.dashboard-layout .staff-card-section-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.dashboard-layout .staff-card-section-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font: 10px "Space Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.dashboard-layout .staff-card-section-hint::after {
+  content: "▾";
+  font-size: 12px;
+  transition: transform .18s ease;
+}
+.dashboard-layout .staff-card-section[open] .staff-card-section-hint::after { transform: rotate(180deg); }
+.dashboard-layout .staff-card-section[open] > summary { border-bottom: 1px solid var(--line-soft); }
+
+.dashboard-layout .staff-card-body {
+  display: grid;
+  gap: 18px;
+  padding: 18px 20px 20px;
+}
+
+.dashboard-layout .staff-card-preview-block { display: grid; gap: 8px; }
+.dashboard-layout .staff-card-preview {
+  display: block;
+  width: 100%;
+  max-width: 620px;
+  height: auto;
+  background: #0A0B0E;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.dashboard-layout .staff-card-preview-caption { color: var(--dim); font-size: 10px; line-height: 1.5; }
+
+.dashboard-layout .staff-card-controls {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+}
+.dashboard-layout .staff-card-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 16px;
+}
+
+.dashboard-layout .staff-card-markdown { display: grid; gap: 8px; }
+.dashboard-layout .staff-card-snippet {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dashboard-layout .staff-card-snippet input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 11px;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 10.5px "Space Mono", monospace;
+}
+.dashboard-layout .staff-card-snippet .button { flex: 0 0 auto; white-space: nowrap; }
+.dashboard-layout .staff-card-markdown .form-hint { margin: 0; }
+
+/* The card has its own save action, kept visually apart from the README
+   snippet so it never reads as part of the public-listing form. */
+.dashboard-layout .staff-card-controls .staff-card-footer {
+  margin-top: 2px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.dashboard-layout .staff-card-footer > span { max-width: 460px; line-height: 1.55; }
+
+@media (max-width: 760px) {
+  .dashboard-layout .staff-card-section > summary { align-items: flex-start; flex-direction: column; gap: 10px; padding: 16px; }
+  .dashboard-layout .staff-card-body { padding: 15px 16px 16px; }
+  .dashboard-layout .staff-card-fields { grid-template-columns: 1fr; }
+  .dashboard-layout .staff-card-snippet { align-items: stretch; flex-direction: column; }
+  .dashboard-layout .staff-card-snippet .button { justify-content: center; }
+}

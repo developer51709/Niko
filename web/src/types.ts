@@ -594,6 +594,12 @@ export type StaffMember = {
   status_changed_at?: number | null;
   /** The member's own public-listing switch, before staff status is applied. */
   profile_visible?: boolean;
+  /** Presentation for the SVG card at /staff/<id>/card.svg. */
+  card?: {
+    theme: "dark" | "light";
+    accent?: string | null;
+    show_status?: boolean;
+  };
 };
 
 export type StaffRosterRole = {

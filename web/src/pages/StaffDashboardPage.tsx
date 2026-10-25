@@ -10,6 +10,7 @@ import type { GuildLockdownSummary } from "../utils/guildBlacklist";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
 import { Switch } from "../components/dashboard/Switch";
+import { ColorPicker } from "../components/dashboard/ColorPicker";
 import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
@@ -78,19 +79,35 @@ function tabFromTabButton(button: HTMLButtonElement): StaffTab | null {
   return name && name in TAB_ROLES ? name : null;
 }
 
+/** The brand accent the staff card uses when no custom colour is saved. */
+const CARD_ACCENT_FALLBACK = "#C8A882";
+
 export function StaffDashboardPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [staff, setStaff] = useState<{ role: string; role_label: string; profile: StaffMember } | null>(null);
   const [stats, setStats] = useState<BotStats | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [form, setForm] = useState({ public_bio: "", public_banner_url: "", public_visible: true });
+  const [form, setForm] = useState({
+    public_bio: "",
+    public_banner_url: "",
+    public_visible: true,
+    card_theme: "dark" as "dark" | "light",
+    card_accent: CARD_ACCENT_FALLBACK,
+    card_show_status: true,
+  });
   const [links, setLinks] = useState<PublicProfileLink[]>([]);
+  // The card endpoint is never cached, so each tick pulls the current Discord
+  // presence into the dashboard preview while the profile tab is open.
+  const [cardPreviewStamp, setCardPreviewStamp] = useState(() => Date.now());
   const [global, setGlobal] = useState({ avatar_url: "", banner_url: "" });
   // Staff access is the only failure that replaces the whole page; every result
   // a staff member triggers from a tab is reported as a toast instead.
   const [accessError, setAccessError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Card settings have their own save so a README card change never depends on
+  // (or gets bundled with) the public listing form.
+  const [savingCard, setSavingCard] = useState(false);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [activeTab, setActiveTab] = useState<StaffTab>(() => tabFromHash(window.location.hash, null) ?? "profile");
   const [nikoApplications, setNikoApplications] = useState<TeamRecruitmentOpening[]>([]);
@@ -169,6 +186,9 @@ export function StaffDashboardPage() {
         public_bio: staffStatus.profile.bio || "",
         public_banner_url: staffStatus.profile.public_banner_url || "",
         public_visible: staffStatus.profile.visible !== false,
+        card_theme: staffStatus.profile.card?.theme === "light" ? "light" : "dark",
+        card_accent: staffStatus.profile.card?.accent ? `#${staffStatus.profile.card.accent}` : CARD_ACCENT_FALLBACK,
+        card_show_status: staffStatus.profile.card?.show_status !== false,
       });
       setLinks(staffStatus.profile.public_links || []);
       if (staffStatus.role === "owner") {
@@ -229,6 +249,21 @@ export function StaffDashboardPage() {
     else if (activeTab === "data-removal") void refreshDataRemoval();
   }, [staff?.role, activeTab]);
 
+  useEffect(() => {
+    if (activeTab !== "profile") return;
+    const refresh = () => {
+      if (!document.hidden) setCardPreviewStamp(Date.now());
+    };
+    const timer = window.setInterval(refresh, 30000);
+    // A tab that was hidden for a while shows the status from when it left;
+    // refresh as soon as it is visible again.
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [activeTab]);
+
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Verifying your account and staff access…</p></div>;
   if (accessError || !staff || !auth?.authenticated) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff workspace</div><h1>{!auth && accessError ? "Staff access unavailable." : "Private team area."}</h1><p>{!auth && accessError ? accessError : !auth?.authenticated ? "You are not logged in. Sign in with Discord to continue to staff settings." : accessError || "This area is only available to official Niko staff."}</p>{auth && !auth.authenticated && <a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff">Continue with Discord</a>}<button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
 
@@ -237,6 +272,23 @@ export function StaffDashboardPage() {
   const signedInAvatar = signedInUser.avatar
     ? `https://cdn.discordapp.com/avatars/${signedInUser.id}/${signedInUser.avatar}.png?size=128`
     : discordDefaultAvatar;
+  // The preview follows the unsaved draft, so a theme, accent, or status change
+  // is visible before the listing is saved. The embedded card caches for a
+  // minute on GitHub and uses the saved values from the same profile row.
+  const cardBaseUrl = `${window.location.origin}/staff/${staff.profile.id}/card.svg`;
+  const cardPreviewUrl = `${cardBaseUrl}?theme=${form.card_theme}&accent=${encodeURIComponent(form.card_accent.replace(/^#/, "").toUpperCase())}&status=${form.card_show_status ? 1 : 0}&t=${cardPreviewStamp}`;
+  // The image itself is the link, so clicking the card on GitHub opens the
+  // member's public staff profile instead of the raw SVG.
+  const cardProfileUrl = `${window.location.origin}/team/${staff.profile.id}`;
+  const cardMarkdown = `[![Niko staff card](${cardBaseUrl})](${cardProfileUrl})`;
+  const copyCardMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(cardMarkdown);
+      notifySuccess("Card markdown copied — paste it into your GitHub profile README.", "staff-card");
+    } catch {
+      notifyError("Clipboard access was blocked. Select the snippet and copy it manually.", "staff-card");
+    }
+  };
   const canManageGlobal = tabAllowedForRole(staff.role, "global");
   const canManageGuilds = tabAllowedForRole(staff.role, "guilds");
   const canReviewAppeals = tabAllowedForRole(staff.role, "appeals");
@@ -267,9 +319,31 @@ export function StaffDashboardPage() {
       return;
     }
     setSaving(true); notifyLoading("Saving your public listing…", "staff-profile");
-    try { await saveStaffProfile({ ...form, public_links: linksToSave }, auth.csrf_token); notifySuccess("Your public team listing was saved.", "staff-profile"); }
+    const payload = {
+      public_bio: form.public_bio,
+      public_banner_url: form.public_banner_url,
+      public_visible: form.public_visible,
+      public_links: linksToSave,
+    };
+    try { await saveStaffProfile(payload, auth.csrf_token); notifySuccess("Your public team listing was saved.", "staff-profile"); }
     catch (reason) { notifyError(reason instanceof Error ? reason.message : "Could not save listing.", "staff-profile"); }
     finally { setSaving(false); }
+  };
+  const saveCard = async () => {
+    if (savingCard) return;
+    setSavingCard(true); notifyLoading("Saving your card settings…", "staff-card-settings");
+    // The API stores the accent as bare hex digits and treats an empty value as
+    // "back to the default"; normalise here so the card matches the picker.
+    try {
+      await saveStaffProfile({
+        card_theme: form.card_theme,
+        card_accent: form.card_accent.replace(/^#/, "").toUpperCase(),
+        card_show_status: form.card_show_status,
+      }, auth.csrf_token);
+      notifySuccess("Card settings saved. Your README card picks them up on its next refresh.", "staff-card-settings");
+    } catch (reason) {
+      notifyError(reason instanceof Error ? reason.message : "Could not save card settings.", "staff-card-settings");
+    } finally { setSavingCard(false); }
   };
   // Both blacklist entry points run the same flow for guilds, so a server is
   // never blacklisted with its features still answering. The name is only used
@@ -649,9 +723,51 @@ export function StaffDashboardPage() {
             <div className={`staff-profile-preview-visibility${form.public_visible ? " is-visible" : ""}`}><i />{form.public_visible ? "Visible on Team page" : "Hidden from Team page"}</div>
           </div>
         </section>
-        <div className="staff-profile-rules"><span className="panel-kicker">Profile rules</span><h3>Stay consistent with Discord</h3><p>Your global display name and profile picture sync automatically, so updates made in Discord are reflected here without another form.</p><div className="staff-rule"><span>Identity</span><strong>Discord synced</strong></div><div className="staff-rule"><span>Editable</span><strong>Bio · banner · links · visibility</strong></div></div>
+        <div className="staff-profile-rules"><span className="panel-kicker">Profile rules</span><h3>Stay consistent with Discord</h3><p>Your global display name and profile picture sync automatically, so updates made in Discord are reflected here without another form.</p><div className="staff-rule"><span>Identity</span><strong>Discord synced</strong></div><div className="staff-rule"><span>Editable</span><strong>Bio · banner · links · GitHub card · visibility</strong></div></div>
       </aside>
-    </div></section>}
+    </div>
+    <details className="staff-card-section">
+      <summary>
+        <span className="staff-card-section-copy">
+          <span className="panel-kicker">GitHub README</span>
+          <strong>Add your staff card to GitHub</strong>
+          <small>A live SVG card with your Discord status and Niko staff role. Expand it to preview the card and copy the markdown.</small>
+        </span>
+        <span className="staff-card-section-hint">Card settings</span>
+      </summary>
+      <div className="staff-card-body">
+        <div className="staff-card-preview-block">
+          <img className="staff-card-preview" src={cardPreviewUrl} alt={`Niko staff card preview for ${staff.profile.name}`} />
+          <span className="staff-card-preview-caption">Live preview, refreshed every 30 seconds · GitHub re-fetches the card instead of caching an old status. The card follows your Team page visibility.</span>
+        </div>
+        <div className="staff-card-controls">
+          <div className="staff-card-fields">
+            <label className="form-field"><span className="form-label">Card theme</span><select value={form.card_theme} onChange={(event) => update("card_theme", event.target.value)}><option value="dark">Dark</option><option value="light">Light</option></select></label>
+            <div className="form-field"><span className="form-label">Accent color</span><ColorPicker label="Staff card accent color" value={form.card_accent} onChange={(hex) => update("card_accent", hex)} /></div>
+          </div>
+          <SettingCards>
+            <SettingCard
+              title="Show my live Discord status"
+              hint="Turn this off to keep only your name and staff role on the card."
+              action={<Switch checked={form.card_show_status} onCheckedChange={(value) => update("card_show_status", value)} aria-label="Show my live Discord status on the card" />}
+            />
+          </SettingCards>
+          <div className="staff-card-markdown">
+            <span className="form-label">Markdown for your README</span>
+            <div className="staff-card-snippet">
+              <input readOnly value={cardMarkdown} aria-label="Markdown snippet for your GitHub README" onFocus={(event) => event.currentTarget.select()} />
+              <button type="button" className="button button-muted" onClick={() => void copyCardMarkdown()}>Copy markdown</button>
+            </div>
+            <small className="form-hint">Clicking the card on GitHub opens your staff profile.</small>
+          </div>
+          <div className="staff-panel-footer staff-card-footer">
+            <span>Card settings save on their own — your public listing and README snippet stay untouched.</span>
+            <button type="button" className="button button-primary" onClick={saveCard} disabled={savingCard}>{savingCard ? "Saving…" : "Save card settings"}</button>
+          </div>
+        </div>
+      </div>
+    </details>
+    </section>}
 
     {activeTab === "global" && canManageGlobal && <section id="staff-global-panel" role="tabpanel" aria-labelledby="staff-global-tab" className="staff-panel staff-global-panel"><div className="staff-panel-heading"><div><span className="panel-kicker">Graphic direction</span><h2>Global Niko profile</h2><p>Reserved for Graphic Designers, Head Admins, and owners. Paste publicly reachable image URLs.</p></div><span className="staff-step">02</span></div><div className="staff-fields staff-fields-two"><label className="form-field"><span className="form-label">Bot avatar URL</span><input value={global.avatar_url} onChange={(e) => setGlobal({ ...global, avatar_url: e.target.value })} placeholder="https://…" /></label><label className="form-field"><span className="form-label">Bot banner URL</span><input value={global.banner_url} onChange={(e) => setGlobal({ ...global, banner_url: e.target.value })} placeholder="https://…" /></label></div><div className="staff-panel-footer"><span>Updates the bot-wide Discord profile.</span><button type="button" className="button button-primary" onClick={saveGlobal} disabled={savingGlobal}>{savingGlobal ? "Updating…" : "Update global profile"}</button></div></section>}
     {activeTab === "guilds" && canManageGuilds && <section id="staff-guilds-panel" role="tabpanel" aria-labelledby="staff-guilds-tab" className="staff-guild-operations">
