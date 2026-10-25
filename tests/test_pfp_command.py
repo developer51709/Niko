@@ -7,10 +7,13 @@ much larger now: pictures from the piccdn library are downloaded into
 """
 
 import asyncio
+import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import discord
 
@@ -68,6 +71,119 @@ class PfpCopyTests(unittest.TestCase):
         source = (ROOT / "src" / "cogs" / "social" / "pfps.py").read_text(encoding="utf-8").lower()
         for marker in ("note from developers", "still in development", "nyxen"):
             self.assertNotIn(marker, source)
+
+
+class BulkUploadTests(unittest.TestCase):
+    def test_the_image_suffix_comes_from_the_file_signature(self):
+        self.assertEqual(pfps._image_suffix(b"\x89PNG\r\n\x1a\nrest"), ".png")
+        self.assertEqual(pfps._image_suffix(b"\xff\xd8\xffrest"), ".jpg")
+        self.assertEqual(pfps._image_suffix(b"GIF89arest"), ".gif")
+        self.assertEqual(pfps._image_suffix(b"RIFF\x00\x00\x00\x00WEBPVP8 "), ".webp")
+        self.assertIsNone(pfps._image_suffix(b"not an image"))
+
+    def test_a_bulk_upload_saves_every_image_after_the_existing_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "1.png").write_bytes(b"\x89PNG\r\n\x1a\nold")
+            images = [
+                io.BytesIO(b"\x89PNG\r\n\x1a\nnew1"),
+                io.BytesIO(b"\xff\xd8\xffnew2"),
+                io.BytesIO(b"GIF89anew3"),
+            ]
+            self.assertEqual(pfps.save_pfp_images(str(folder), images), 3)
+            self.assertEqual(
+                sorted(path.name for path in folder.iterdir()),
+                ["1.png", "2.png", "3.jpg", "4.gif"],
+            )
+            self.assertEqual((folder / "2.png").read_bytes(), b"\x89PNG\r\n\x1a\nnew1")
+
+    def test_non_image_attachments_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            images = [io.BytesIO(b"PK\x03\x04zip"), io.BytesIO(b"\x89PNG\r\n\x1a\nok")]
+            self.assertEqual(pfps.save_pfp_images(str(folder), images), 1)
+            self.assertEqual([path.name for path in folder.iterdir()], ["1.png"])
+
+    def test_an_empty_batch_writes_nothing_and_creates_no_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "purple"
+            self.assertEqual(pfps.save_pfp_images(str(folder), []), 0)
+            self.assertFalse(folder.exists())
+
+
+class _Attachment:
+    def __init__(self, data: bytes):
+        self._data = data
+
+    async def read(self) -> bytes:
+        return self._data
+
+
+class _Message:
+    def __init__(self, *payloads: bytes):
+        self.attachments = [_Attachment(payload) for payload in payloads]
+        self.embeds = []
+        self.stickers = []
+        self.content = ""
+        self.reference = None
+
+
+class _Ctx:
+    def __init__(self, *payloads: bytes):
+        self.message = _Message(*payloads)
+        self.sent = []
+
+    async def send(self, **kwargs):
+        self.sent.append(kwargs)
+
+
+def _view_text(view: discord.ui.LayoutView) -> str:
+    return "\n".join(
+        child.content
+        for container in view.children
+        for child in getattr(container, "children", [])
+        if isinstance(getattr(child, "content", None), str)
+    )
+
+
+class UploadCommandTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.folder = Path(self._tmp.name)
+        patcher = mock.patch.object(pfps, "PFPS_FOLDER", str(self.folder))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_upload_color_saves_every_attachment_in_one_command(self):
+        ctx = _Ctx(
+            b"\x89PNG\r\n\x1a\nfirst",
+            b"\xff\xd8\xffsecond",
+            b"\x89PNG\r\n\x1a\nthird",
+        )
+        asyncio.run(pfps.PfpCog.upload_color.callback(None, ctx, "Purple"))
+        saved = sorted(path.name for path in (self.folder / "colors" / "purple").iterdir())
+        self.assertEqual(saved, ["1.png", "2.jpg", "3.png"])
+        self.assertIn("Uploaded 3 profile pictures", _view_text(ctx.sent[-1]["view"]))
+
+    def test_upload_gender_saves_a_batch_and_reports_the_count(self):
+        ctx = _Ctx(b"\x89PNG\r\n\x1a\none", b"\x89PNG\r\n\x1a\ntwo")
+        asyncio.run(pfps.PfpCog.upload_gender.callback(None, ctx, "female"))
+        saved = sorted(path.name for path in (self.folder / "genders" / "female").iterdir())
+        self.assertEqual(saved, ["1.png", "2.png"])
+        self.assertIn("Uploaded 2 profile pictures", _view_text(ctx.sent[-1]["view"]))
+
+    def test_upload_gender_still_rejects_an_unsupported_gender(self):
+        ctx = _Ctx(b"\x89PNG\r\n\x1a\none")
+        asyncio.run(pfps.PfpCog.upload_gender.callback(None, ctx, "non-binary"))
+        self.assertFalse((self.folder / "genders" / "non-binary").exists())
+        self.assertIn("not supported", _view_text(ctx.sent[-1]["view"]))
+
+    def test_upload_color_reports_when_nothing_is_attached(self):
+        ctx = _Ctx()
+        asyncio.run(pfps.PfpCog.upload_color.callback(None, ctx, "purple"))
+        self.assertFalse((self.folder / "colors" / "purple").exists())
+        self.assertIn("No image found", _view_text(ctx.sent[-1]["view"]))
 
 
 class GenderAssetTests(unittest.TestCase):

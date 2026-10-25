@@ -9,7 +9,7 @@ import os
 import random
 from config.emojis import get_emoji
 from cogs.system.error_handler import is_owner
-from utils.image.extractor import extract_image_from_message, extract_images_from_message
+from utils.image.extractor import extract_images_from_message
 from utils import logging
 from utils.prefix_manager import resolve_prefix
 
@@ -19,6 +19,55 @@ PFPS_FOLDER = "src/assets/pfps"
 # validation can never disagree.
 GENDERS = ("male", "female")
 COUPLE_SUBFOLDERS = ("male-male", "male-female", "female-female")
+
+
+def _image_suffix(data: bytes) -> str | None:
+    """Return the file extension for image bytes, or None for other files."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _next_image_number(folder_path: str) -> int:
+    numbers = []
+    for name in os.listdir(folder_path):
+        stem, _ = os.path.splitext(name)
+        if stem.isdigit():
+            numbers.append(int(stem))
+    return max(numbers, default=0) + 1
+
+
+def save_pfp_images(folder_path: str, images) -> int:
+    """Save every image in *images* into *folder_path* and return the count.
+
+    Uploads are numbered after the highest existing file, so a bulk upload can
+    never overwrite pictures that are already in the folder.
+    """
+    saved = 0
+    number = 0
+    for image in images:
+        data = image.read()
+        suffix = _image_suffix(data) if data else None
+        if suffix is None:
+            continue
+        if saved == 0:
+            # Only create the folder once there is a picture to put in it, so
+            # an empty upload cannot add a zero-image color category.
+            os.makedirs(folder_path, exist_ok=True)
+            number = _next_image_number(folder_path)
+        while os.path.exists(os.path.join(folder_path, f"{number}{suffix}")):
+            number += 1
+        with open(os.path.join(folder_path, f"{number}{suffix}"), "wb") as handle:
+            handle.write(data)
+        number += 1
+        saved += 1
+    return saved
 
 
 # ------------------------------
@@ -477,7 +526,7 @@ class PfpCog(commands.Cog):
     # owner only upload subgroup
     @pfp.group(
         name="upload",
-        help="{ 'en': 'Upload a profile picture.', 'de': 'Lade ein Profilbild hoch.' }",
+        help="{ 'en': 'Upload profile pictures.', 'de': 'Lade Profilbilder hoch.' }",
         invoke_without_command=True
     )
     @is_owner()
@@ -487,10 +536,10 @@ class PfpCog(commands.Cog):
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=f"### {get_emoji('image')} Upload Profile Picture\n"
-                f"Upload a profile picture.\n\n"
+                f"Upload one or more profile pictures at once.\n\n"
                 f"**Subcommands:**\n"
-                f"`{prefix}pfp upload color <color>` - Upload a profile picture with the specified color.\n"
-                f"`{prefix}pfp upload gender` - Upload a profile picture with the specified gender.\n"
+                f"`{prefix}pfp upload color <color>` - Upload one or more profile pictures with the specified color.\n"
+                f"`{prefix}pfp upload gender` - Upload one or more profile pictures with the specified gender.\n"
                 f"`{prefix}pfp upload couple` - Upload matching profile pictures with the specified genders.\n"
             )
         )
@@ -501,13 +550,14 @@ class PfpCog(commands.Cog):
     @upload.command(
         name="color",
         aliases=["colour"],
-        help="{ 'en': 'Upload a profile picture with the specified color.', 'de': 'Lade ein Profilbild mit der angegebenen Farbe hoch.' }"
+        help="{ 'en': 'Upload one or more profile pictures with the specified color.', 'de': 'Lade ein oder mehrere Profilbilder mit der angegebenen Farbe hoch.' }"
     )
     @is_owner()
     async def upload_color(self, ctx: commands.Context, color: str):
-        # get the image from the message
-        image = await extract_image_from_message(ctx.message)
-        if not image:
+        # every image in the message (or its gallery, embeds, links or reply)
+        images = await extract_images_from_message(ctx.message)
+        saved = save_pfp_images(f"{PFPS_FOLDER}/colors/{color.lower()}", images or [])
+        if not saved:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -517,30 +567,11 @@ class PfpCog(commands.Cog):
             )
             view.add_item(container)
             return await ctx.send(view=view)
-        try:
-            # save the image to the folder
-            color_folder_path = f"{PFPS_FOLDER}/colors/{color.lower()}"
-            # get the number of images in the folder
-            number_of_images = len(os.listdir(color_folder_path))
-            # save the image to the folder
-            with open(f"{color_folder_path}/{number_of_images + 1}.png", "wb") as f:
-                f.write(image.read())
-        # handle missing folder error
-        except FileNotFoundError:
-            # create the folder
-            os.mkdir(f"{PFPS_FOLDER}/colors/{color.lower()}")
-            # save the image to the folder
-            color_folder_path = f"{PFPS_FOLDER}/colors/{color.lower()}"
-            # get the number of images in the folder
-            number_of_images = len(os.listdir(f"{PFPS_FOLDER}/colors/{color.lower()}"))
-            # save the image to the folder
-            with open(f"{color_folder_path}/{number_of_images + 1}.png", "wb") as f:
-                f.write(image.read())
         # send a success message
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} The profile picture has been uploaded successfully."
+                content=f"{get_emoji('tick')} Uploaded {saved} profile picture{'s' if saved != 1 else ''} to the **{color.lower()}** collection."
             ),
             accent_colour=discord.Color.green()
         )
@@ -551,7 +582,7 @@ class PfpCog(commands.Cog):
     @upload.command(
         name="gender",
         aliases=["sex"],
-        help="{ 'en': 'Upload a profile picture with the specified gender.', 'de': 'Lade ein Profilbild mit dem angegebenen Geschlecht hoch.' }"
+        help="{ 'en': 'Upload one or more profile pictures with the specified gender.', 'de': 'Lade ein oder mehrere Profilbilder mit dem angegebenen Geschlecht hoch.' }"
     )
     @is_owner()
     async def upload_gender(self, ctx: commands.Context, gender: str):
@@ -566,9 +597,10 @@ class PfpCog(commands.Cog):
             )
             view.add_item(container)
             return await ctx.send(view=view)
-        # get the image from the message
-        image = await extract_image_from_message(ctx.message)
-        if not image:
+        # every image in the message (or its gallery, embeds, links or reply)
+        images = await extract_images_from_message(ctx.message)
+        saved = save_pfp_images(f"{PFPS_FOLDER}/genders/{gender.lower()}", images or [])
+        if not saved:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
@@ -578,18 +610,11 @@ class PfpCog(commands.Cog):
             )
             view.add_item(container)
             return await ctx.send(view=view)
-        # save the image to the folder
-        gender_folder_path = f"{PFPS_FOLDER}/genders/{gender.lower()}"
-        # get the number of images in the folder
-        number_of_images = len(os.listdir(gender_folder_path))
-        # save the image to the folder
-        with open(f"{gender_folder_path}/{number_of_images + 1}.png", "wb") as f:
-            f.write(image.read())
         # send a success message
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} The profile picture has been uploaded successfully."
+                content=f"{get_emoji('tick')} Uploaded {saved} profile picture{'s' if saved != 1 else ''} to the **{gender.lower()}** collection."
             ),
             accent_colour=discord.Color.green()
         )
