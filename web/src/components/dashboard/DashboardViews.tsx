@@ -6,6 +6,8 @@ import { formatNumber } from "../../utils/format";
 import { displayName } from "../../utils/format";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { GuildIcon } from "./GuildIcon";
+import { Switch } from "./Switch";
+import { SettingCard, SettingCards } from "./SettingCards";
 import { MemberAvatar, UserAvatar } from "./UserAvatar";
 import type { Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
 import { LevelingSettings } from "./SettingsViews";
@@ -98,7 +100,13 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
     </div>
     <section className="dash-panel economy-privacy-panel">
       <div className="panel-heading"><div><span className="panel-kicker">Leaderboard privacy</span><h3>Choose who sees your identity</h3></div><span className="panel-icon"><Icon name="shield" /></span></div>
-      <label className="setting-row"><span><strong>Hide my profile on the public leaderboard</strong><small>You’ll remain ranked, but your avatar, username, and display name are shown only to you, official Niko staff, and people who share a guild with you.</small></span><input type="checkbox" checked={privateLeaderboard} onChange={(event) => updatePrivacy(event.target.checked)} /><i aria-hidden="true" /></label>
+      <SettingCards>
+        <SettingCard
+          title="Hide my profile on the public leaderboard"
+          hint="You’ll remain ranked, but your avatar, username, and display name are shown only to you, official Niko staff, and people who share a guild with you."
+          action={<Switch checked={privateLeaderboard} onCheckedChange={(value) => updatePrivacy(value)} aria-label="Hide my profile on the public leaderboard" />}
+        />
+      </SettingCards>
     </section>
     <div className="dash-columns overview-columns">
       <section className="dash-panel">

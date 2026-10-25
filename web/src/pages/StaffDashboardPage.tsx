@@ -9,6 +9,8 @@ import { LOCKDOWN_STATUS_LABELS, blacklistGuildWithLockdown, groupLockdownSteps 
 import type { GuildLockdownSummary } from "../utils/guildBlacklist";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
+import { Switch } from "../components/dashboard/Switch";
+import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
 import type { AuthStatus, StandbyFailoverStatus, StandbyInstance, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
@@ -623,7 +625,13 @@ export function StaffDashboardPage() {
           </section>
           <label className="form-field staff-bio-field"><span className="form-label">Extended introduction</span><textarea value={form.public_bio} onChange={(e) => update("public_bio", e.target.value)} maxLength={1200} placeholder="Tell the community what you do…" /><small>{form.public_bio.length}/1200 characters</small></label>
         </div>
-        <label className="setting-row staff-visibility"><span><strong>Show me on the public Team page</strong><small>Hide your listing without removing your staff access.</small></span><input type="checkbox" checked={form.public_visible} onChange={(e) => update("public_visible", e.target.checked)} /><i /></label>
+        <SettingCards className="staff-visibility">
+          <SettingCard
+            title="Show me on the public Team page"
+            hint="Hide your listing without removing your staff access."
+            action={<Switch checked={form.public_visible} onCheckedChange={(value) => update("public_visible", value)} aria-label="Show me on the public Team page" />}
+          />
+        </SettingCards>
         <div className="staff-panel-footer"><span>Changes apply immediately to your public profile.</span><button type="button" className="button button-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save public listing"}</button></div>
       </section>
 

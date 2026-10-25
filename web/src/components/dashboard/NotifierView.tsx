@@ -12,6 +12,8 @@ import { Icon } from "../Icon";
 import { RoleSelect } from "./RoleSelect";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
+import { Switch } from "./Switch";
+import { SettingCard, SettingCards } from "./SettingCards";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type Draft = { channel_id: string; ping_role_id: string; template: string };
@@ -332,10 +334,13 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
             <RoleSelect roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder="No ping" onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: String(value) })} />
           </Field>
         </div>
-        <label className="setting-row">
-          <span><strong>Post new content automatically</strong><small>Turn this off to pause every announcement without removing your accounts</small></span>
-          <input type="checkbox" checked={configDraft.enabled} onChange={(event) => setConfigDraft({ ...configDraft, enabled: event.target.checked })} /><i aria-hidden="true" />
-        </label>
+        <SettingCards>
+          <SettingCard
+            title="Post new content automatically"
+            hint="Turn this off to pause every announcement without removing your accounts"
+            action={<Switch checked={configDraft.enabled} onCheckedChange={(value) => setConfigDraft({ ...configDraft, enabled: value })} aria-label="Post new content automatically" />}
+          />
+        </SettingCards>
         <div className="setting-footer">
           <span role="status">{savingConfig ? "Saving…" : `${data.follows.length} of ${data.limits.max_follows} account slots used`}</span>
           <button className="button button-primary" type="submit" disabled={savingConfig}>{savingConfig ? "Saving…" : "Save settings"}</button>
