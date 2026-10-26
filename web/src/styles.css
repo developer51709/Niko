@@ -3,7 +3,7 @@
 @import "./styles/changelog.css";
 @import "./styles/server-stats.css";
 @import "./styles/proxy-workers.css";
-@import "./glass-landing.css";
+@import "./styles/glass-landing.css";
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;

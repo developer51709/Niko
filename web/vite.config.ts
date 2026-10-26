@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
-import sharp from "sharp";
 import * as fontkit from "fontkit";
 import { CHANGELOG, type ChangelogEntry } from "./src/data/changelog";
 
@@ -214,16 +213,10 @@ function staticMetadataPlugin(): Plugin {
       // Generating cards there would write into a half-cleaned dist and print
       // a progress bar for work the failed build never produced.
       if (!buildStarted || buildFailed) return;
+      // The favicon and every PWA icon are generated before the build by
+      // scripts/generate_site_icons.mjs, so the public directory already holds
+      // the final PNGs Vite copies into dist.
       const dist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/website/dist");
-      const faviconSvg = fs.readFileSync(path.join(dist, "favicon.svg"));
-      const iconDirectory = path.join(dist, "icons");
-      fs.mkdirSync(iconDirectory, { recursive: true });
-      for (const size of [192, 512]) {
-        await sharp(faviconSvg)
-          .resize(size, size, { fit: "contain" })
-          .png()
-          .toFile(path.join(iconDirectory, `niko-${size}.png`));
-      }
       const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       writeMachineReadableContent(dist);
       const totalPages = PAGE_METADATA.length;
