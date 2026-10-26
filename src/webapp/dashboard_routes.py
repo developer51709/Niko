@@ -590,7 +590,7 @@ def api_save_automod(guild_id):
 def api_save_server(guild_id):
     """Persist prefixes, onboarding, logging, and ticket settings."""
     body = request.get_json(silent=True) or {}
-    from utils.prefix_manager import add_prefix, reset_prefixes
+    from utils.prefix_manager import DEFAULT_PREFIXES, PREFIX_OVERRIDE, set_prefixes
     from utils.onboarding.config import load_config, save_config
     from cogs.logging.formatters import _load_log_config, _guild_config, _save_guild_log_config, CATEGORIES
     from utils.tickets.utils import get_ticket_config, update_ticket_config
@@ -602,6 +602,8 @@ def api_save_server(guild_id):
 
     prefixes = body.get("prefixes")
     if prefixes is not None:
+        if PREFIX_OVERRIDE:
+            return jsonify({"error": "Prefix changes are disabled because this deployment uses a fixed command prefix."}), 403
         if not isinstance(prefixes, list):
             return jsonify({"error": "Prefixes must be a list."}), 400
         cleaned = []
@@ -613,10 +615,17 @@ def api_save_server(guild_id):
                 cleaned.append(value)
         if not cleaned:
             return jsonify({"error": "At least one prefix is required."}), 400
-        reset_prefixes(numeric_guild_id)
-        for prefix in cleaned:
-            if prefix != ".":
-                add_prefix(numeric_guild_id, prefix)
+        try:
+            configured_prefixes = list(dict.fromkeys([*DEFAULT_PREFIXES, *cleaned]))
+            run_on_bot_loop(
+                set_prefixes(
+                    numeric_guild_id,
+                    configured_prefixes,
+                    getattr(_discord_bot, "cxn", None),
+                )
+            )
+        except Exception as error:
+            return jsonify({"error": f"Command prefixes could not be saved: {error}"}), 503
 
     channel_ids, role_ids = _guild_resource_ids(numeric_guild_id)
     if channel_ids == set() and role_ids == set():

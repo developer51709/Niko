@@ -310,6 +310,36 @@
 .personality-mark { color: var(--surface); background: var(--accent); border-radius: 7px; }
 .form-grid { gap: 19px 16px; }
 .server-settings-stack { max-width: 900px; }
+.prefix-settings-edit-area { position: relative; }
+/* A deployment-wide fixed prefix makes this card uneditable: strip its colour
+   and contrast so it reads as disabled instead of like a normal form. */
+.prefix-settings-development {
+  filter: grayscale(1);
+  border-color: var(--line-soft);
+  box-shadow: none;
+}
+.prefix-settings-development > .panel-heading,
+.prefix-settings-development .prefix-settings-edit-area { opacity: .45; }
+.prefix-settings-development .form-field input,
+.prefix-settings-development .form-field small,
+.prefix-settings-development .settings-option-remove,
+.prefix-settings-development .settings-option-add { cursor: not-allowed; }
+.prefix-development-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+.prefix-development-note > .lucide { flex: 0 0 auto; margin-top: 1px; }
+.prefix-development-note strong,
+.prefix-development-note small { display: block; }
+.prefix-development-note strong { color: var(--muted); font-size: 11px; }
+.prefix-development-note small { margin-top: 4px; color: var(--dim); font-size: 10px; line-height: 1.5; }
 .server-logging-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
 .server-logging-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, .65fr); align-items: end; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--line-soft); }
 .server-logging-toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--line-soft); border-radius: 9px; }

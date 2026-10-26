@@ -474,6 +474,9 @@ export type GlobalProfile = {
 
 export type ServerConfig = {
   prefixes: string[];
+  development?: boolean;
+  default_prefix?: string;
+  prefix_override?: string;
   onboarding: OnboardingConfig;
   logging: LoggingConfig;
   tickets: TicketConfig;

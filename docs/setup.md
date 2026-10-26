@@ -21,6 +21,8 @@ pip install -r requirements.txt
 Create a `.env` file or set the following environment variables:
 - `DISCORD_BOT_TOKEN`: Your bot's secret token.
 - `DISCORD_PUBLIC_KEY` *(optional)*: Your application's **Public Key** from the Developer Portal. Required by the Interactions Endpoint URL (see below); the bot also reads it from the application object when it is unset, and caches what it read.
+- `DEVELOPMENT` *(optional)*: Set to `true`, `1`, `yes` or `on` for the public beta deployment. It selects the dedicated development status rotation in `src/config/status.py` and forces the command prefix to `!`, overriding server settings; leave unset or false for production behavior. Development instances also stop awarding XP and stop recording message activity (`src/config/environment.py`), so running one against production's MongoDB cannot overwrite live levels or double-count the dashboard.
+- `COMMAND_PREFIX` *(optional)*: Force one command prefix across all servers and DMs, overriding per-server dashboard and `.prefix` settings. Leave unset to use each server's configured prefixes and the default prefix.
 - `DISCORD_INTERACTION_BUDGET_SECONDS` *(optional)*: How long the interactions endpoint waits for a handler before answering Discord with `202` (default `2.0`, maximum `3.0`).
 - `FAL_KEY` *(optional, required for premium image moderation)*: API key from [fal.ai](https://fal.ai/dashboard/keys). The **NSFW image filter** calls `fal-ai/imageutils/nsfw` and is a premium perk, so a guild only runs it while its subscription is active.
 - `FAL_NSFW_URL` / `NSFW_THRESHOLD` *(optional)*: Override the model endpoint and the confidence threshold (`0.85` by default) for the image filter.
