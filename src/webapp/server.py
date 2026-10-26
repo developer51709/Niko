@@ -141,6 +141,22 @@ def run_on_bot_loop(awaitable, timeout: float = 8):
     return future.result(timeout=timeout)
 
 
+# Delivery jobs (staff broadcasts) outlive the request that starts them, so the
+# futures are kept referenced until they finish. Losing the reference would let
+# the garbage collector cancel a run halfway through a broadcast.
+_background_jobs: set = set()
+
+
+def schedule_on_bot_loop(awaitable):
+    """Queue a coroutine on the bot loop without blocking the Flask worker."""
+    if _discord_bot is None or not _discord_bot.loop.is_running():
+        raise RuntimeError("The Discord bot is not running.")
+    future = asyncio.run_coroutine_threadsafe(awaitable, _discord_bot.loop)
+    _background_jobs.add(future)
+    future.add_done_callback(_background_jobs.discard)
+    return future
+
+
 def _serialize_level_config(config) -> dict:
     """Keep Discord snowflake IDs exact when sending leveling data to JS."""
     serialized = dict(config or {})

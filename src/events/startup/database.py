@@ -200,6 +200,87 @@ async def _create_tables(bot):
         )
     """)
 
+    # ── Official staff broadcasts (dashboard composer) ─────────────────────
+    # The composer lives in the staff workspace now, so a broadcast is a stored
+    # record rather than a Discord view. Media is kept base64-encoded beside the
+    # row and re-uploaded as a real attachment for every delivery, so a copy
+    # never depends on a CDN URL that may expire.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_broadcasts (
+            broadcast_id TEXT PRIMARY KEY,
+            title        TEXT NOT NULL DEFAULT '',
+            body         TEXT NOT NULL DEFAULT '',
+            accent       TEXT NOT NULL DEFAULT 'C8A882',
+            footer       TEXT NOT NULL DEFAULT 'Official Niko staff announcement',
+            status       TEXT NOT NULL DEFAULT 'draft',
+            created_by   INTEGER NOT NULL,
+            created_at   REAL NOT NULL,
+            updated_at   REAL NOT NULL,
+            target_count INTEGER NOT NULL DEFAULT 0,
+            sent_count   INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            edited_count INTEGER NOT NULL DEFAULT 0,
+            last_error   TEXT
+        )
+    """)
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_broadcast_media (
+            media_id     TEXT PRIMARY KEY,
+            broadcast_id TEXT NOT NULL,
+            filename     TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            size         INTEGER NOT NULL DEFAULT 0,
+            position     INTEGER NOT NULL DEFAULT 0,
+            data         TEXT NOT NULL,
+            created_at   REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_broadcast_media "
+        "ON staff_broadcast_media (broadcast_id, position)"
+    )
+    # One row per guild that was eligible when the broadcast started. The
+    # snapshot is what makes an edit deterministic: only messages recorded here
+    # are updated when the copy changes.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_broadcast_targets (
+            broadcast_id TEXT NOT NULL,
+            guild_id     INTEGER NOT NULL,
+            channel_id   INTEGER NOT NULL,
+            message_id   INTEGER,
+            status       TEXT NOT NULL DEFAULT 'pending',
+            error        TEXT,
+            updated_at   REAL,
+            PRIMARY KEY (broadcast_id, guild_id)
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_broadcast_targets "
+        "ON staff_broadcast_targets (broadcast_id, status)"
+    )
+    # A delivery or copy update runs on the bot loop. If the process stopped
+    # mid-run, the row would otherwise stay "sending" and block every later
+    # edit, so the leftover is marked failed for the owner to retry.
+    try:
+        stale_before = time.time() - 300
+        await bot.cxn.execute(
+            "UPDATE staff_broadcasts SET status = 'failed', "
+            "last_error = 'The bot restarted before this broadcast finished.', "
+            "updated_at = $1 WHERE status = 'sending' AND updated_at < $2",
+            time.time(), stale_before,
+        )
+        # A copy update that was interrupted still has every delivered message
+        # on Discord, so the broadcast returns to a normal "sent" state.
+        await bot.cxn.execute(
+            "UPDATE staff_broadcasts SET status = 'sent', "
+            "last_error = 'The bot restarted before every delivered copy was updated.', "
+            "updated_at = $1 WHERE status = 'syncing' AND updated_at < $2",
+            time.time(), stale_before,
+        )
+    except Exception:
+        pass
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS support_server_config (
             guild_id INTEGER PRIMARY KEY,

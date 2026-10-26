@@ -21,6 +21,7 @@ import type {
   StaffGuild,
   StaffBlacklist,
   StaffBillingResponse,
+  StaffBroadcast,
   LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
@@ -210,3 +211,35 @@ export const updateNotifierFollow = (
 ) => api<{ ok: boolean; follow: NotifierFollow }>(`/api/guild/${id}/notifier/follows/update`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const removeNotifierFollow = (id: string, platform: string, username: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/guild/${id}/notifier/follows/${encodeURIComponent(platform)}/${encodeURIComponent(username)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const testNotifierFollow = (id: string, platform: string, username: string, csrfToken?: string) => api<{ ok: boolean; delivered: boolean; message?: string; channel?: string }>(`/api/guild/${id}/notifier/test`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ platform, username }) });
+
+// ── Staff broadcast studio ───────────────────────────────────────────────────
+// Uploads are the only multipart calls in the dashboard: a JSON content type
+// would swallow the file, so they build their own request and skip `api()`.
+
+export async function uploadStaffBroadcastMedia(broadcastId: string, file: File, csrfToken?: string) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`/api/staff/broadcasts/${encodeURIComponent(broadcastId)}/media`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    body: form,
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+      ? payload.error
+      : response.statusText || "The image could not be uploaded.";
+    throw new ApiError(message, response.status);
+  }
+  return payload as { broadcast: StaffBroadcast; syncing: boolean };
+}
+
+export const getStaffBroadcasts = () => api<{ broadcasts: StaffBroadcast[] }>("/api/staff/broadcasts");
+export const getStaffBroadcast = (id: string) => api<{ broadcast: StaffBroadcast }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`);
+export const createStaffBroadcast = (csrfToken?: string) => api<{ broadcast: StaffBroadcast }>("/api/staff/broadcasts", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+export const updateStaffBroadcast = (id: string, body: { title: string; body: string; accent: string; footer: string }, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const deleteStaffBroadcast = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const deleteStaffBroadcastMedia = (id: string, mediaId: string, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}/media/${encodeURIComponent(mediaId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const sendStaffBroadcast = (id: string, csrfToken?: string) => api<{ broadcast: StaffBroadcast }>(`/api/staff/broadcasts/${encodeURIComponent(id)}/send`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });

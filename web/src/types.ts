@@ -784,6 +784,39 @@ export type DocCategory =
   | "dashboard"
   | "tips";
 
+// ── Staff broadcast studio ───────────────────────────────────────────────────
+// A broadcast is stored server-side; ``status`` moves draft → sending → sent and
+// briefly to syncing while an edit is pushed to every delivered copy.
+
+export type StaffBroadcastStatus = "draft" | "sending" | "sent" | "syncing" | "failed";
+
+export type StaffBroadcastMedia = {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string;
+};
+
+export type StaffBroadcast = {
+  id: string;
+  title: string;
+  body: string;
+  accent: string;
+  footer: string;
+  status: StaffBroadcastStatus;
+  created_by: string;
+  created_at: number;
+  updated_at: number;
+  target_count: number;
+  sent_count: number;
+  failed_count: number;
+  skipped_count: number;
+  edited_count: number;
+  last_error: string | null;
+  media: StaffBroadcastMedia[];
+};
+
 export type DocPage = {
   slug: string;
   title: string;

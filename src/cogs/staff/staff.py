@@ -54,7 +54,7 @@ STAFF_STATUSES = {STAFF_STATUS_ACTIVE, STAFF_STATUS_SUSPENDED, STAFF_STATUS_FORM
 # stripped during registration, so code execution is guarded as ``exec``/``say``
 # rather than ``devexec``/``devsay``.
 OWNER_ONLY_COMMANDS = {
-    "broadcast", "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
+    "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
     "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "exec",
     "say", "dev01", "shardinfo", "shardstats", "shardhealth",
     "sendpanel", "supportsetup", "supportupdate",
@@ -667,8 +667,8 @@ class StaffCog(commands.Cog):
                 # Command callbacks retrieved from a Cog are unbound
                 # functions. Once moved under StaffCog, discord.py supplies
                 # StaffCog as ``self``; explicitly forward the callback to
-                # the source cog instance or commands such as broadcast lose
-                # their original ``ctx`` argument.
+                # the source cog instance or the forwarded command loses its
+                # original ``ctx`` argument.
                 def _forward_command_tree(subcommand):
                     source_callback = subcommand.callback
                     original_params = subcommand.params.copy()
