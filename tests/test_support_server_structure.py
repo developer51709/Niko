@@ -14,7 +14,7 @@ sys.path.insert(0, "src")
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp import team_recruitment_routes
-from cogs.staff.support_server import CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_ICON_ASSETS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportGuidePanel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
+from cogs.staff.support_server import CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_ICON_ASSETS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -348,6 +348,67 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertIn("Confidentiality & representation", text)
         self.assertIn("Team conduct", text)
         self.assertGreaterEqual(sum(isinstance(item, discord.ui.Separator) for item in view.walk_children()), 1)
+
+    def test_support_rules_panel_prints_every_rule_without_navigation_buttons(self):
+        import cogs.staff.owner as owner_module
+
+        view = owner_module._build_rules_panel(SimpleNamespace(user=None))
+        text = "\n".join(
+            component.content
+            for component in view.walk_children()
+            if isinstance(component, discord.ui.TextDisplay)
+        )
+        # Rules have to be readable without pressing anything, and Components V2
+        # caps a whole message at 4,000 characters of text.
+        for rule in range(1, 21):
+            self.assertIn(f"**{rule}.", text)
+        self.assertLessEqual(len(text), 4000)
+        buttons = [
+            item.item
+            for item in view.walk_children()
+            if isinstance(item, discord.ui.DynamicItem) and isinstance(item.item, discord.ui.Button)
+        ]
+        self.assertEqual([button.label for button in buttons], ["Important links", "Not ours to fix"])
+        # The panel's buttons must open ephemeral cards, never external links.
+        self.assertTrue(all(button.url is None for button in buttons))
+
+    def test_forum_guidelines_are_pinned_before_they_are_archived(self):
+        async def check():
+            edits = []
+
+            class FakeThread:
+                async def edit(self, **kwargs):
+                    edits.append(kwargs)
+                    return SimpleNamespace(flags=SimpleNamespace(pinned=True))
+
+            with patch.object(staff_module, "_support_api_pause", new=AsyncMock()):
+                self.assertTrue(await staff_module._pin_forum_post(FakeThread()))
+            self.assertEqual(len(edits), 2)
+            self.assertTrue(edits[0]["pinned"])
+            self.assertFalse(edits[0]["archived"])
+            self.assertTrue(edits[1]["archived"])
+            self.assertTrue(edits[1]["locked"])
+            self.assertNotIn("pinned", edits[1])
+
+        asyncio.run(check())
+
+    def test_scam_reports_channel_adopts_the_old_review_channel(self):
+        self.assertEqual(CHANNEL_SPECS["scam_review"][1], "scam-reports")
+        self.assertIn("scam-review", CHANNEL_RENAMES["scam_review"])
+
+        async def check():
+            channel = SimpleNamespace(id=41, name="scam-review", edit=AsyncMock())
+            category = SimpleNamespace(channels=[channel])
+            guild = SimpleNamespace(channels=[])
+            with patch("cogs.staff.support_server._pace", new=AsyncMock()):
+                adopted = await _adopt_renamed_channel(guild, category, "scam_review")
+            self.assertIs(adopted, channel)
+            channel.edit.assert_awaited_once_with(
+                name="scam-reports",
+                reason="Rename support channel to scam-reports",
+            )
+
+        asyncio.run(check())
 
     def test_support_commands_are_private_and_owner_only(self):
         async def check():

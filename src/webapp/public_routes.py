@@ -127,6 +127,84 @@ def api_economy_leaderboard():
     return response
 
 
+@app.route("/api/levels/<guild_id>")
+def api_public_guild_levels(guild_id):
+    """Return one live page of a server's leveling standings.
+
+    The page is public: a server's own board is already visible to everyone in
+    it, and `/leveling leaderboard` now links here instead of rendering a
+    static image. The bot must still be in the guild, so a server Niko has left
+    reports its unknown-server state rather than showing stale standings.
+    """
+    try:
+        numeric_guild_id = int(guild_id)
+        page = int(request.args.get("page", "1"))
+        if page < 1:
+            raise ValueError("page must be positive")
+    except (TypeError, ValueError):
+        return jsonify({"error": "Server and page must be positive integers."}), 400
+
+    guild = None
+    if _discord_bot is not None:
+        try:
+            guild = _discord_bot.get_guild(numeric_guild_id)
+        except Exception:
+            guild = None
+    if guild is None:
+        return jsonify({
+            "error": "Niko isn't in this server, or it is not available right now.",
+            "unknown_guild": True,
+        }), 404
+
+    page_size = 25
+    result = get_runtime_guild_level_page(guild_id, (page - 1) * page_size, page_size)
+    if result is None:
+        return jsonify({"error": "This server's leaderboard is temporarily unavailable."}), 503
+    rows, total = result
+
+    user_ids = {row["user_id"] for row in rows}
+    identities = get_runtime_member_metadata(guild_id, user_ids)
+    missing = user_ids - set(identities)
+    if missing:
+        # Members who left the guild still own their XP, so their identity is
+        # resolved from the bot's user cache, which skips the guild member list.
+        identities.update(_resolve_leaderboard_identities(missing))
+
+    icon = getattr(guild, "icon", None)
+    entries = []
+    for rank, row in enumerate(rows, start=(page - 1) * page_size + 1):
+        identity = identities.get(row["user_id"]) or {}
+        entries.append({
+            # Opaque, stable per process so the browser can animate a row that
+            # changes rank without the API handing out Discord user ids.
+            "key": leaderboard_cache.profile_key(row["user_id"]),
+            "rank": rank,
+            "level": row["level"],
+            "xp": row["xp"],
+            "xp_for_next": level_xp_for_next(row["level"]),
+            "username": identity.get("username"),
+            "display_name": identity.get("display_name"),
+            "avatar_url": identity.get("avatar_url"),
+        })
+
+    return jsonify({
+        "guild": {
+            "id": str(guild.id),
+            "name": guild.name,
+            "icon_url": str(icon.url) if icon is not None else None,
+            "member_count": int(
+                getattr(guild, "member_count", 0) or len(getattr(guild, "members", []) or [])
+            ),
+        },
+        "leveling_enabled": bool(get_runtime_level_config(guild_id).get("xp_enabled", True)),
+        "entries": entries,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "pages": (total + page_size - 1) // page_size,
+    })
+
+
 @app.route("/api/commands")
 def api_commands():
     """Public endpoint — returns public bot commands from the startup registry."""

@@ -163,6 +163,9 @@ def _serialize_level_config(config) -> dict:
     channel_id = serialized.get("level_up_channel")
     if channel_id is not None:
         serialized["level_up_channel"] = str(channel_id)
+    excluded = serialized.get("xp_excluded_channels") or []
+    serialized["xp_excluded_channels"] = [str(cid) for cid in excluded]
+    serialized["xp_vc_enabled"] = bool(serialized.get("xp_vc_enabled", False))
     return serialized
 
 
@@ -185,6 +188,7 @@ def get_runtime_level_config(guild_id: str) -> dict:
             cur.execute(
                 "SELECT xp_enabled, xp_multiplier, xp_cooldown, "
                 "       level_up_channel, level_up_message, level_roles, "
+                "       xp_excluded_channels, xp_vc_enabled, "
                 "       card_accent, card_bg_top, card_bg_bottom "
                 "FROM level_config WHERE guild_id = ?",
                 (int(guild_id),),
@@ -198,15 +202,32 @@ def get_runtime_level_config(guild_id: str) -> dict:
                     "level_up_channel": str(row[3]) if row[3] else None,
                     "level_up_message": row[4],
                     "level_roles": json.loads(row[5] or "{}"),
-                    "card_accent": json.loads(row[6]) if row[6] else None,
-                    "card_bg_top": json.loads(row[7]) if row[7] else None,
-                    "card_bg_bottom": json.loads(row[8]) if row[8] else None,
+                    "xp_excluded_channels": json.loads(row[6] or "[]"),
+                    "xp_vc_enabled": bool(row[7]),
+                    "card_accent": json.loads(row[8]) if row[8] else None,
+                    "card_bg_top": json.loads(row[9]) if row[9] else None,
+                    "card_bg_bottom": json.loads(row[10]) if row[10] else None,
                 }
             conn.close()
         except Exception:
             conn.close()
 
     return _serialize_level_config(level_cfg or load_json(LEVELCFG_JSON, {}).get(guild_id, {}))
+
+
+def level_xp_for_next(level: int) -> int:
+    """XP a member needs to leave *level*, via the leveling cog's own curve.
+
+    The public leaderboard draws a progress bar for every row, so it asks the
+    cog that awards the XP instead of keeping a second copy of the formula.
+    """
+    leveling = _discord_bot.get_cog("Leveling") if _discord_bot is not None else None
+    if leveling is not None and hasattr(leveling, "get_xp_for_level"):
+        try:
+            return max(1, int(leveling.get_xp_for_level(max(0, int(level)))))
+        except Exception:
+            pass
+    return max(1, 5 * (int(level) ** 2) + 50 * int(level) + 100)
 
 
 # Only the primary's own owner-control plane (standby and proxy-worker
@@ -599,6 +620,119 @@ def get_runtime_leaderboard_page(offset: int, limit: int) -> tuple[list[dict], i
         return None
     finally:
         conn.close()
+
+
+def get_runtime_guild_level_page(guild_id: str, offset: int, limit: int) -> tuple[list[dict], int] | None:
+    """Read one page of a server's leveling standings, bounded in the database.
+
+    Guild boards are small next to the global economy board, but the public
+    page polls while it is open, so only the requested slice is read and the
+    total is counted separately. Ranking is by level and then XP, the same
+    order the server's `/leveling rank` position uses.
+    """
+    offset = max(0, int(offset))
+    limit = max(1, min(int(limit), 100))
+    numeric_guild_id = int(guild_id)
+
+    def as_int(value) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return 0
+
+    def normalize(rows) -> list[dict]:
+        return [
+            {
+                "user_id": str(row.get("user_id")),
+                "xp": as_int(row.get("xp")),
+                "level": as_int(row.get("level")),
+            }
+            for row in rows
+            if row.get("user_id") is not None
+        ]
+
+    pool = getattr(_discord_bot, "cxn", None) if _discord_bot is not None else None
+    if pool is not None:
+        async def read_page():
+            if getattr(pool, "db_type", None) == "mongodb" and hasattr(pool, "collection"):
+                # Older Mongo records may hold the guild id as text, and the
+                # composite ``guild_user`` document id can be the only place the
+                # guild is recorded, so both spellings are read before sorting.
+                documents = await pool.collection("levels").find({
+                    "$or": [
+                        {"guild_id": numeric_guild_id},
+                        {"guild_id": str(numeric_guild_id)},
+                        {"_id": {"$regex": rf"^{numeric_guild_id}_"}},
+                    ]
+                }).to_list(length=None)
+                rows = []
+                for document in documents:
+                    row = dict(document)
+                    stored_guild_id = row.get("guild_id")
+                    document_id = row.get("_id")
+                    if isinstance(document_id, str) and "_" in document_id:
+                        composite_guild_id, composite_user_id = document_id.split("_", 1)
+                        if stored_guild_id is None:
+                            stored_guild_id = composite_guild_id
+                        if row.get("user_id") is None:
+                            row["user_id"] = composite_user_id
+                    if str(stored_guild_id) != str(numeric_guild_id):
+                        continue
+                    rows.append(row)
+                rows.sort(
+                    key=lambda row: (as_int(row.get("level")), as_int(row.get("xp"))),
+                    reverse=True,
+                )
+                return rows[offset:offset + limit], len(rows)
+
+            page = await pool.fetch(
+                "SELECT user_id, xp, level FROM levels "
+                "WHERE guild_id = $1 ORDER BY level DESC, xp DESC LIMIT $2 OFFSET $3",
+                numeric_guild_id, limit, offset,
+            )
+            total = await pool.fetchval(
+                "SELECT COUNT(*) FROM levels WHERE guild_id = $1", numeric_guild_id,
+            )
+            return page, int(total or 0)
+
+        try:
+            rows, total = run_on_bot_loop(read_page())
+            return normalize(rows), total
+        except Exception:
+            return None
+
+    conn = sqlite_connect()
+    if conn is not None:
+        try:
+            cursor = conn.execute(
+                "SELECT user_id, xp, level FROM levels "
+                "WHERE guild_id = ? ORDER BY level DESC, xp DESC LIMIT ? OFFSET ?",
+                (numeric_guild_id, limit, offset),
+            )
+            rows = [
+                {"user_id": row[0], "xp": row[1], "level": row[2]}
+                for row in cursor.fetchall()
+            ]
+            total = conn.execute(
+                "SELECT COUNT(*) FROM levels WHERE guild_id = ?", (numeric_guild_id,),
+            ).fetchone()[0]
+            return normalize(rows), int(total or 0)
+        except sqlite3.Error:
+            return None
+        finally:
+            conn.close()
+
+    # JSON fallback for a deployment still on the migrated snapshot.
+    snapshot = load_json(LEVELS_JSON, {}).get(str(guild_id), {})
+    rows = [
+        {"user_id": user_id, "xp": value.get("xp", 0), "level": value.get("level", 0)}
+        for user_id, value in snapshot.items()
+    ]
+    rows.sort(key=lambda row: (as_int(row["level"]), as_int(row["xp"])), reverse=True)
+    return normalize(rows[offset:offset + limit]), len(rows)
 
 
 def get_mutual_leaderboard_identity_ids(target_user_ids: set[str]) -> set[str] | None:
@@ -2269,130 +2403,12 @@ def serve_spa_shell():
     return send_from_directory(WEB_DIST_DIR, "index.html")
 
 
-
-
-
-
-
-
-
-
-
-def _svg_wrap(body: str, width: int, height: int):
-    """Wrap SVG body markup in a complete, embeddable image response.
-
-    The card markup names the Plus Jakarta Sans / Space Mono webfonts, so the
-    document imports them; wsrv.nl rasterizes the external stylesheet when it
-    converts a card to PNG for Discord.
-    """
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}">'
-        '<style>'
-        '@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap");'
-        '</style>'
-        f'{body}</svg>'
-    )
-    return Response(svg, mimetype="image/svg+xml")
-
 def _hex_color(val, fallback):
     """Validate and return a hex color string, stripping # if present."""
     val = str(val).lstrip("#")
     if len(val) == 6 and all(c in "0123456789ABCDEFabcdef" for c in val):
         return val
     return fallback
-
-
-def _int_param(val, default=0):
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return default
-
-
-def _format_num(n):
-    n = int(n)
-    if abs(n) >= 1_000_000_000:
-        return "{:.2f}B".format(n / 1_000_000_000)
-    if abs(n) >= 1_000_000:
-        return "{:.2f}M".format(n / 1_000_000)
-    if abs(n) >= 10_000:
-        return "{:.1f}K".format(n / 1_000)
-    return "{:,}".format(n)
-
-
-def _safe(text):
-    """Escape XML special characters."""
-    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-# ── SVG Card Routes ─────────────────────────────────────────────────────────────
-
-def _db_query(sql, params=None):
-    """Synchronous SQLite query helper for card routes."""
-    import sqlite3
-    db = sqlite3.connect(DATABASE_PATH)
-    db.row_factory = sqlite3.Row
-    try:
-        cur = db.execute(sql, params or ())
-        return [dict(row) for row in cur.fetchall()]
-    except Exception:
-        return []
-    finally:
-        db.close()
-
-
-def _db_fetchone(sql, params=None):
-    """Synchronous SQLite fetchone helper."""
-    rows = _db_query(sql, params)
-    return rows[0] if rows else None
-
-
-def _get_guild_card_colors(guild_id):
-    """Return (accent_hex, bg_top_hex, bg_bot_hex) for a guild's level config."""
-    row = _db_fetchone(
-        "SELECT card_accent, card_bg_top, card_bg_bottom FROM level_config WHERE guild_id = ?",
-        (int(guild_id),),
-    )
-    if row:
-        def _parse(val, default):
-            if not val:
-                return default
-            try:
-                import json
-                rgb = json.loads(val) if isinstance(val, str) else val
-                if isinstance(rgb, (list, tuple)) and len(rgb) >= 3:
-                    return f"{int(rgb[0]):02X}{int(rgb[1]):02X}{int(rgb[2]):02X}"
-            except Exception:
-                pass
-            return default
-        return (_parse(row.get("card_accent"), "D5D9DF"),
-                _parse(row.get("card_bg_top"), "111316"),
-                _parse(row.get("card_bg_bottom"), "050607"))
-    # A guild without custom card colours gets the website theme palette.
-    return ("D5D9DF", "111316", "050607")
-
-
-def _get_user_economy(user_id):
-    """Fetch economy data for a user."""
-    return _db_fetchone("SELECT * FROM economy_users WHERE user_id = ?", (int(user_id),))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def static_proxy(path):

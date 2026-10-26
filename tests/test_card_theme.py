@@ -6,22 +6,28 @@ renderers fails here instead of shipping mismatched images.  They also guard
 against the old café palette creeping back in.
 """
 
+import os
 import re
 import sys
 import unittest
 from io import BytesIO
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from webapp import app  # noqa: E402
 from utils.image import blackjack  # noqa: E402
 from utils.image import economy_card as ec  # noqa: E402
 from utils.image import level_card  # noqa: E402
-from cogs.economy.data import ACCENT_BROWN  # noqa: E402
+from config.links import WEBSITE  # noqa: E402
+from cogs.economy.data import ACCENT_BROWN, LOADING_CARD_TYPES, _loading_card_view  # noqa: E402
+from cogs.leveling.cog import (  # noqa: E402
+    LEVELING_LOADING_CARD_TYPES,
+    _loading_card_view as _leveling_loading_card_view,
+)
 from cogs.casino import blackjack as casino_blackjack  # noqa: E402
 from cogs.tickets import views as ticket_views  # noqa: E402
 from utils.tickets.config import TicketConfig  # noqa: E402
@@ -102,12 +108,6 @@ class PaletteMatchesWebsiteTests(unittest.TestCase):
             (ec.ACCENT_BRIGHT, ec.CANVAS_TOP, ec.CANVAS_BOT),
         )
 
-    def test_guild_card_colour_fallback_is_themed(self):
-        # `_get_guild_card_colors` needs a database connection, so the fallback a
-        # guild without custom colours receives is asserted from the source.
-        source = (ROOT / "src" / "webapp" / "server.py").read_text(encoding="utf-8")
-        self.assertIn('return ("D5D9DF", "111316", "050607")', source)
-
 
 class RenderedCardTests(unittest.TestCase):
     def test_balance_card_draws_only_theme_colours(self):
@@ -170,35 +170,90 @@ class RenderedCardTests(unittest.TestCase):
                 self.assertEqual(counts.get(rgb, 0), 0, f"café colour {rgb} in the placeholder avatar")
 
 
-class SvgCardRouteTests(unittest.TestCase):
-    PATHS = (
-        "/api/cards/economy?user=1",
-        "/api/cards/daily?user=1&reward=100",
-        "/api/cards/work?user=1&reward=100",
-        "/api/cards/inventory?user=1",
-        "/api/cards/shop",
-        "/api/cards/coinflip?user=1&amount=10&payout=20",
-        "/api/cards/leaderboard?type=economy",
-        "/api/cards/rank?guild=1&user=1",
-    )
+class EconomyLoadingCardTests(unittest.TestCase):
+    """The bot's loading state and the generated GIFs must stay in step."""
 
-    def test_every_card_route_serves_the_theme_palette(self):
-        client = app.test_client()
-        for path in self.PATHS:
-            with self.subTest(path=path):
-                response = client.get(path)
-                self.assertEqual(response.status_code, 200)
-                body = response.get_data(as_text=True)
-                self.assertIn("#111316", body)
-                self.assertIn("#050607", body)
-                self.assertIn("#D5D9DF", body)
-                for literal in ("FFC45C", "261A16", "120C0A", "F5E8D2", "C8BBA8", "rgba(50,36,30", "rgba(110,78,50"):
-                    self.assertNotIn(literal, body, f"{path} still renders the café palette")
+    def test_every_loading_card_type_has_an_animated_gif(self):
+        folder = ROOT / "web" / "public" / "assets" / "loading-cards" / "economy"
+        for card_type in sorted(LOADING_CARD_TYPES):
+            with self.subTest(card_type=card_type):
+                path = folder / f"{card_type}.gif"
+                self.assertTrue(
+                    path.is_file(),
+                    f"{path} is missing — run scripts/generate_economy_loading_cards.py",
+                )
+                image = Image.open(path)
+                self.assertEqual(image.format, "GIF")
+                self.assertGreater(getattr(image, "n_frames", 1), 1)
+                image.close()
 
-    def test_economy_cards_use_the_niko_wordmark(self):
-        body = app.test_client().get("/api/cards/economy?user=1").get_data(as_text=True)
-        self.assertIn("NIKO ECONOMY", body)
-        self.assertNotIn("CAFE ECONOMY", body)
+    def test_loading_view_uses_the_public_gif_url(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PUBLIC_URL", None)
+            for card_type in sorted(LOADING_CARD_TYPES):
+                with self.subTest(card_type=card_type):
+                    view = _loading_card_view(card_type)
+                    gallery = view.children[0].children[0]
+                    self.assertEqual(
+                        str(gallery.items[0].media.url),
+                        f"{WEBSITE}/assets/loading-cards/economy/{card_type}.gif",
+                    )
+
+    def test_loading_view_follows_public_url_for_beta_instances(self):
+        with mock.patch.dict(
+            os.environ, {"PUBLIC_URL": "https://beta.example.com/"}, clear=False,
+        ):
+            for card_type in sorted(LOADING_CARD_TYPES):
+                with self.subTest(card_type=card_type):
+                    view = _loading_card_view(card_type)
+                    gallery = view.children[0].children[0]
+                    self.assertEqual(
+                        str(gallery.items[0].media.url),
+                        f"https://beta.example.com/assets/loading-cards/economy/{card_type}.gif",
+                    )
+
+
+class LevelingLoadingCardTests(unittest.TestCase):
+    """The leveling loading state and the generated GIFs must stay in step."""
+
+    def test_every_loading_card_type_has_an_animated_gif(self):
+        folder = ROOT / "web" / "public" / "assets" / "loading-cards" / "leveling"
+        for card_type in sorted(LEVELING_LOADING_CARD_TYPES):
+            with self.subTest(card_type=card_type):
+                path = folder / f"{card_type}.gif"
+                self.assertTrue(
+                    path.is_file(),
+                    f"{path} is missing — run scripts/generate_leveling_loading_cards.py",
+                )
+                image = Image.open(path)
+                self.assertEqual(image.format, "GIF")
+                self.assertGreater(getattr(image, "n_frames", 1), 1)
+                image.close()
+
+    def test_loading_view_uses_the_public_gif_url(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PUBLIC_URL", None)
+            for card_type in sorted(LEVELING_LOADING_CARD_TYPES):
+                with self.subTest(card_type=card_type):
+                    view = _leveling_loading_card_view(card_type)
+                    gallery = view.children[0].children[0]
+                    self.assertEqual(
+                        str(gallery.items[0].media.url),
+                        f"{WEBSITE}/assets/loading-cards/leveling/{card_type}.gif",
+                    )
+
+    def test_loading_view_follows_public_url_for_beta_instances(self):
+        with mock.patch.dict(
+            os.environ, {"PUBLIC_URL": "https://beta.example.com/"}, clear=False,
+        ):
+            for card_type in sorted(LEVELING_LOADING_CARD_TYPES):
+                with self.subTest(card_type=card_type):
+                    view = _leveling_loading_card_view(card_type)
+                    gallery = view.children[0].children[0]
+                    self.assertEqual(
+                        str(gallery.items[0].media.url),
+                        f"https://beta.example.com/assets/loading-cards/leveling/{card_type}.gif",
+                    )
 
 
 class OldCafeThemeRemovedTests(unittest.TestCase):
@@ -206,7 +261,6 @@ class OldCafeThemeRemovedTests(unittest.TestCase):
         "src/utils/image/economy_card.py",
         "src/utils/image/level_card.py",
         "src/utils/image/blackjack.py",
-        "src/webapp/card_routes.py",
         "src/webapp/server.py",
         "src/cogs/economy/data.py",
         "src/cogs/economy/commands/shop.py",
@@ -266,7 +320,6 @@ class OldCafeThemeRemovedTests(unittest.TestCase):
         files = {
             "src/cogs/economy/commands/shop.py": ("boutique", "Boutique"),
             "src/utils/image/economy_card.py": ("Boutique", "Treats", "\U0001F950"),
-            "src/webapp/card_routes.py": ("Boutique", "boutique", "\U0001F950"),
         }
         for relative, literals in files.items():
             text = (ROOT / relative).read_text(encoding="utf-8")

@@ -20,7 +20,7 @@ The `.onboarding` command group includes `.onboarding setup`, `.onboarding role-
 
 ## Encourage healthy participation
 
-Niko's leveling commands are available through `/leveling`, including `/leveling rank`, `/leveling leaderboard`, and `/leveling config`. Use a sensible XP cooldown and multiplier, and make role rewards achievable without encouraging spam.
+Niko's leveling commands are available through `/leveling`, including `/leveling rank`, `/leveling leaderboard`, and `/leveling config`. `/leveling leaderboard` returns a link to the server's public, live leaderboard page, which you can pin in a channel or add to your server's sidebar. Use a sensible XP cooldown and multiplier, and make role rewards achievable without encouraging spam.
 
 For community activities, use tools such as polls, suggestions, birthdays, and giveaways when they fit your members' interests. Participation should be optional and accessible; avoid treating activity counts as a measure of member value.
 

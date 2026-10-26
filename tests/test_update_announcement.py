@@ -88,18 +88,30 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     # The update announcement carries exactly the two links it is announced
     # with: the docs page and the changelog entry. (The Support Server button
     # belongs to the policy notice, which ``_policy_view`` still carries.)
-    assert view_labels(view) == ["Read the docs", "What's new"]
+    assert view_labels(view) == ["Leveling docs", "What's new"]
 
     text = view_text(view)
-    assert "Niko Premium is live" in text
-    assert "$15/month" in text
-    assert "/premium gift" in text
-    # The release that made a feature premium has to say what stayed free.
-    assert "free for every server" in text
-    assert "NSFW image filter" in text
-    # Premium and the legal update ship together, so the announcement names both.
-    assert "legal update" in text.lower()
-    assert links.DATA_REMOVAL in text
+    assert "Faster cards" in text
+    assert "animated card-shaped placeholder" in text
+    assert "config exclude" in text
+    assert "voicexp" in text
+    assert "own live board" in text
+    # The update stays free, and the announcement says so up front.
+    assert "The bot stays free" in text
+    assert "ships for every server" in text
+
+
+def test_changelog_entry_covers_the_current_update():
+    """The announced entry must describe the features the announcement names."""
+    changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
+    entry = changelog.split('slug: "loading-cards-live-leaderboards-voice-xp"', 1)[1].split("\n  },", 1)[0]
+    lowered = entry.lower()
+
+    assert "loading card" in lowered
+    assert "/levels/" in entry
+    assert "voice xp" in lowered
+    assert "excluded channels" in lowered
+    assert "scam-reports" in entry
 
 
 def test_changelog_entry_covers_the_legal_update():

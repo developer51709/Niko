@@ -30,6 +30,7 @@ def changelog_markdown(slug):
 
 @app.route("/commands")
 @app.route("/leaderboard")
+@app.route("/levels")
 @app.route("/docs")
 @app.route("/team")
 @app.route("/support")
@@ -47,6 +48,7 @@ def public_spa_route(path=None):
     return serve_spa_shell()
 
 @app.route("/commands/<path:path>")
+@app.route("/levels/<path:path>")
 @app.route("/docs/<path:path>")
 @app.route("/team/<path:path>")
 @app.route("/changelog/<path:path>")

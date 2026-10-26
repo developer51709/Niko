@@ -68,7 +68,7 @@ CHANNEL_SPECS = {
     "message_logs": ("Logs", "message-logs", "text", True),
     "channel_logs": ("Logs", "server-change-logs", "text", True),
     "automod_logs": ("Logs", "automod-logs", "text", True),
-    "scam_review": ("Logs", "scam-review", "text", True),
+    "scam_review": ("Logs", "scam-reports", "text", True),
     "voice_join": ("Voice", "Join to Create", "voice", False),
     "voice_lounge": ("Voice", "Community Voice", "voice", False),
     "voice_panel": ("Voice", "voice-master", "text", False),
@@ -87,6 +87,13 @@ _LEGACY_CATEGORY_NAMES = {
     "COMMUNITY · CHAT", "COMMUNITY · CREATIONS", "COMMUNITY · IDEAS",
     "COMMUNITY · EVENTS", "SUPPORT", "STAFF", "STAFF · LOGS", "VOICE MASTER",
 } - {category for category, *_ in CHANNEL_SPECS.values()}
+
+# Channels that were renamed without changing their config key. The reconcile
+# adopts the old channel so its history and stored ID survive the rename
+# instead of creating a second channel next to it.
+CHANNEL_RENAMES = {
+    "scam_review": ("scam-review",),
+}
 
 LEGACY_CHANNEL_SPECS = {
     "raffles": ("Events", "giveaways", "COMMUNITY · EVENTS", "giveaways"),
@@ -126,7 +133,7 @@ CHANNEL_TOPICS = {
     "message_logs": "Internal message edit and deletion records.",
     "channel_logs": "Internal channel and role change records.",
     "automod_logs": "Internal automod actions and alerts.",
-    "scam_review": "Private review queue for reported scam images.",
+    "scam_review": "Private queue for scam reports and the images attached to them.",
     "voice_panel": "Create a temporary voice channel by joining the voice room below.",
 }
 
@@ -422,6 +429,23 @@ def _everyone_channel_overwrite(key: str, staff_only: bool) -> discord.Permissio
     )
 
 
+async def _adopt_renamed_channel(
+    guild: discord.Guild, category: discord.CategoryChannel, key: str
+) -> discord.abc.GuildChannel | None:
+    """Rename a channel whose display name changed instead of duplicating it."""
+    target_name = CHANNEL_SPECS[key][1]
+    for legacy_name in CHANNEL_RENAMES.get(key, ()):
+        channel = discord.utils.get(category.channels, name=legacy_name)
+        if channel is None:
+            channel = discord.utils.get(guild.channels, name=legacy_name)
+        if channel is None:
+            continue
+        await channel.edit(name=target_name, reason=f"Rename support channel to {target_name}")
+        await _pace()
+        return channel
+    return None
+
+
 async def _move_channel_to_category_top(channel: discord.abc.GuildChannel, category: discord.CategoryChannel) -> None:
     """Keep a designated channel before the other channels in its category."""
     siblings = [item for item in category.channels if item.id != channel.id]
@@ -577,6 +601,9 @@ async def reconcile_structure(guild: discord.Guild, *, destructive: bool = False
         if channel is None:
             # Reuse the old channel when a category is renamed or reorganized.
             channel = discord.utils.get(guild.channels, name=name)
+        if channel is None:
+            # Reuse a channel that was renamed, keeping its history and ID.
+            channel = await _adopt_renamed_channel(guild, category, key)
         # Explicit per-channel grants make read-only rules hold even for staff
         # who inherit broader permissions from roles or categories.
         overwrites = _staff_channel_overwrites(guild, roles, everyone, bot_member, key, staff_only)

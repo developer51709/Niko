@@ -91,7 +91,7 @@ Members can check their stats with an image card:
 
 ## Card Customisation
 
-The `/leveling rank` and `/leveling leaderboard` commands render beautiful image cards. Server admins can customise the card colours through the management panel:
+The `/leveling rank` command renders a beautiful image card, and `/leveling leaderboard` links to the server's live leaderboard page. Server admins can customise the colours used by both through the management panel:
 
 ```
 /leveling panel
@@ -104,7 +104,7 @@ Navigate to **Card Style** to edit:
 - **Background Bottom** — gradient bottom colour
 - **Reset Colours** — restore the default theme colours
 
-Each server's colours are stored independently, so different servers can have unique card themes. Unless you pick your own colours, cards are drawn in the same graphite, steel and sage palette as the website, and a test keeps the two in sync.
+Each server's colours are stored independently, so different servers can have unique card themes. Unless you pick your own colours, cards are drawn in the same graphite, steel and sage palette as the website, and a test keeps the two in sync. The public leaderboard page follows the website palette, so its rows stay readable in any theme.
 
 ## Resetting Leveling Data
 

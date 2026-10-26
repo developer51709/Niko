@@ -76,6 +76,10 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
     "level_up_channel": None,
     "level_up_message": None,
     "level_roles":      {},
+    # Channels that never award XP. Ticket channels are excluded separately.
+    "xp_excluded_channels": [],
+    # Voice XP is opt-in: members earn XP for time spent in voice channels.
+    "xp_vc_enabled":    False,
     # Card customization
     "card_accent":      None,   # RGB tuple or None for the default theme accent
     "card_bg_top":      None,   # RGB tuple or None for the default graphite
@@ -113,6 +117,7 @@ def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
     accent = cfg.get("card_accent")
     accent_s = f"#{accent[0]:02x}{accent[1]:02x}{accent[2]:02x}" if accent else "*(default gold)*"
 
+    excluded = cfg.get("xp_excluded_channels") or []
     return (
         "### Leveling Management Panel\n"
         "Manage all your server's leveling settings from one place.\n\n"
@@ -120,6 +125,10 @@ def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
         f"{_lv_icon(cfg.get('xp_enabled', True))} XP enabled  •  "
         f"Multiplier: `{cfg.get('xp_multiplier', 1.0)}x`  •  "
         f"Cooldown: `{cfg.get('xp_cooldown', 0)}s`\n\n"
+        "**📡 Channels & Voice**\n"
+        f"Channels excluded from XP: `{len(excluded)}`  •  "
+        f"Voice XP: {_lv_icon(cfg.get('xp_vc_enabled', False))}\n"
+        "-# Ticket channels never award XP.\n\n"
         "**📣 Announcements**\n"
         f"Level-up channel: {lu_ch_s}\n"
         f"Custom message: {msg_s}\n\n"
@@ -141,7 +150,8 @@ def _lv_xp_text(cfg: dict) -> str:
         f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
         f"Each message earns `15–25 × multiplier` XP at random.\n\n"
         f"**XP Cooldown:** {cd_s}\n"
-        "Minimum time between XP gains per member (0 = every message)."
+        "Minimum time between XP gains per member (0 = every message).\n\n"
+        "-# Use **Channels & Voice** to exclude channels from XP or enable passive voice XP."
     )
 
 
@@ -184,6 +194,32 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
     )
 
 
+def _lv_channels_text(cfg: dict, guild: discord.Guild) -> str:
+    excluded_ids = cfg.get("xp_excluded_channels") or []
+    if excluded_ids:
+        lines = []
+        for cid in excluded_ids:
+            channel = guild.get_channel(int(cid))
+            lines.append(f"• {channel.mention}" if channel else f"• *(deleted channel `{cid}`)*")
+        excluded_body = "\n".join(lines)
+    else:
+        excluded_body = "*No channels excluded — every channel can award XP.*"
+
+    vc_enabled = bool(cfg.get("xp_vc_enabled", False))
+    return (
+        "### 📡 Channels & Voice\n"
+        "Control where members can earn XP.\n\n"
+        "**Excluded Channels**\n"
+        f"{excluded_body}\n"
+        "-# Messages and time spent in these channels never award XP.\n"
+        "-# Ticket channels are always excluded automatically.\n\n"
+        f"**Voice XP:** {_lv_icon(vc_enabled)}\n"
+        "-# When enabled, members earn XP for every minute they spend in a voice channel. "
+        "AFK channels never award XP.\n\n"
+        "-# Use the selector below to change the excluded channels."
+    )
+
+
 def _lv_cardstyle_text(cfg: dict) -> str:
     accent = cfg.get("card_accent")
     bg_top = cfg.get("card_bg_top")
@@ -214,6 +250,7 @@ def _lv_cardstyle_text(cfg: dict) -> str:
 
 def _lv_section_text(cfg: dict, section: str, guild: discord.Guild) -> str:
     if section == "xp":            return _lv_xp_text(cfg)
+    if section == "channels":      return _lv_channels_text(cfg, guild)
     if section == "announcements": return _lv_announcements_text(cfg, guild)
     if section == "level_roles":   return _lv_roles_text(cfg, guild)
     if section == "card_style":    return _lv_cardstyle_text(cfg)
@@ -237,6 +274,10 @@ class _LvSectionSelect(discord.ui.Select):
                 label="XP Settings",    value="xp",            emoji="📊",
                 description="Toggle XP, multiplier, cooldown",
                 default=(current == "xp")),
+            discord.SelectOption(
+                label="Channels & Voice", value="channels",     emoji="📡",
+                description="Exclude channels from XP, enable voice XP",
+                default=(current == "channels")),
             discord.SelectOption(
                 label="Announcements",  value="announcements", emoji="📣",
                 description="Level-up channel and custom message",
@@ -314,6 +355,128 @@ class _LvEditXPBtn(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
         await interaction.response.send_modal(_LvXPSettingsModal(self._cog, self._guild_id, cfg))
+
+
+# ── Channels & Voice ─────────────────────────────
+
+class _LvExcludedChannelsSelect(discord.ui.ChannelSelect):
+    def __init__(self, cog, guild_id: int, cfg: dict):
+        super().__init__(
+            placeholder="Add channels to exclude from XP…",
+            channel_types=[
+                discord.ChannelType.text,
+                discord.ChannelType.voice,
+                discord.ChannelType.news,
+                discord.ChannelType.forum,
+                discord.ChannelType.stage_voice,
+            ],
+            min_values=1, max_values=25,
+        )
+        self._cog      = cog
+        self._guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        current = {int(cid) for cid in cfg.get("xp_excluded_channels") or []}
+        current.update({int(channel.id) for channel in self.values})
+        cfg["xp_excluded_channels"] = sorted(current)
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "channels", interaction.guild)
+        await interaction.response.edit_message(view=panel)
+
+
+class _LvRemoveExcludedSelect(discord.ui.Select):
+    def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
+        super().__init__(
+            placeholder="Choose channels to include again…",
+            min_values=1, max_values=len(options),
+            options=options,
+        )
+        self._cog      = cog
+        self._guild_id = guild_id
+        self.message   = message
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        removed = {int(value) for value in self.values}
+        cfg["xp_excluded_channels"] = [
+            cid for cid in cfg.get("xp_excluded_channels") or []
+            if int(cid) not in removed
+        ]
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('tick')} Removed `{len(removed)}` channel(s) from the XP exclusion list."
+            ),
+            accent_colour=discord.Color.green(),
+        ))
+        await interaction.response.edit_message(view=view)
+        panel = await _build_level_panel(self._cog, self._guild_id, "channels", interaction.guild)
+        await self.message.edit(view=panel)
+
+
+class _LvRemoveExcludedBtn(discord.ui.Button):
+    def __init__(self, cog, guild_id: int, has_excluded: bool):
+        self._cog      = cog
+        self._guild_id = guild_id
+        super().__init__(label="Remove Exclusion", style=discord.ButtonStyle.red, disabled=not has_excluded)
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        options = []
+        for cid in cfg.get("xp_excluded_channels") or []:
+            channel = interaction.guild.get_channel(int(cid))
+            name = f"#{channel.name}" if channel else f"Channel {cid}"
+            options.append(discord.SelectOption(
+                label=name[:100],
+                value=str(cid),
+                description=f"Channel ID: {cid}",
+            ))
+        if not options:
+            return await interaction.response.send_message(
+                "No channels are excluded from XP.", ephemeral=True)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="Select the channels that should award XP again:"),
+            discord.ui.ActionRow(
+                _LvRemoveExcludedSelect(self._cog, self._guild_id, options[:25], interaction.message)
+            ),
+        ))
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class _LvVCToggleBtn(discord.ui.Button):
+    def __init__(self, cog, guild_id: int, cfg: dict):
+        self._cog      = cog
+        self._guild_id = guild_id
+        enabled = bool(cfg.get("xp_vc_enabled", False))
+        super().__init__(
+            label="Voice XP",
+            style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
+            emoji=_lv_icon(enabled),
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        cfg["xp_vc_enabled"] = not bool(cfg.get("xp_vc_enabled", False))
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "channels", interaction.guild)
+        await interaction.response.edit_message(view=panel)
+
+
+class _LvClearExcludedBtn(discord.ui.Button):
+    def __init__(self, cog, guild_id: int, has_excluded: bool):
+        self._cog      = cog
+        self._guild_id = guild_id
+        super().__init__(label="Clear Exclusions", style=discord.ButtonStyle.red, disabled=not has_excluded)
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        cfg["xp_excluded_channels"] = []
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "channels", interaction.guild)
+        await interaction.response.edit_message(view=panel)
 
 
 # ── Announcements ──────────────────────────────────
@@ -706,6 +869,16 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
         container.add_item(discord.ui.ActionRow(
             _LvXPToggleBtn(cog, guild_id, cfg),
             _LvEditXPBtn(cog, guild_id),
+        ))
+
+    elif section == "channels":
+        container.add_item(discord.ui.ActionRow(
+            _LvExcludedChannelsSelect(cog, guild_id, cfg),
+        ))
+        container.add_item(discord.ui.ActionRow(
+            _LvVCToggleBtn(cog, guild_id, cfg),
+            _LvRemoveExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels"))),
+            _LvClearExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels"))),
         ))
 
     elif section == "announcements":

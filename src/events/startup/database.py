@@ -445,6 +445,8 @@ async def _create_tables(bot):
             level_up_channel INTEGER,
             level_up_message TEXT,
             level_roles      TEXT,
+            xp_excluded_channels TEXT,
+            xp_vc_enabled    INTEGER DEFAULT 0,
             card_accent      TEXT,
             card_bg_top      TEXT,
             card_bg_bottom   TEXT
@@ -453,6 +455,8 @@ async def _create_tables(bot):
 
     # ── Add card customization columns to existing databases ──
     for col_name, col_def in [
+        ("xp_excluded_channels", "TEXT"),
+        ("xp_vc_enabled",  "INTEGER DEFAULT 0"),
         ("card_accent",    "TEXT"),
         ("card_bg_top",    "TEXT"),
         ("card_bg_bottom", "TEXT"),

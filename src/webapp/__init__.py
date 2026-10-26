@@ -18,7 +18,6 @@ from . import (  # noqa: E402,F401
     privacy_routes,
     discord_text_routes,
     transcript_routes,
-    card_routes,
     application_routes,
     team_recruitment_routes,
     economy_routes,

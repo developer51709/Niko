@@ -11,6 +11,7 @@ import type {
   GuildOverview,
   GuildTicketsResponse,
   LevelRow,
+  GuildLevelsResponse,
   PublicConfig,
   UserOverview,
   StaffMember,
@@ -138,6 +139,7 @@ export const getOverview = (id: string) => api<GuildOverview>(`/api/guild/${id}/
 export const getMyEconomy = () => api<EconomyStanding>("/api/me/economy");
 export const getMyAchievements = () => api<AchievementsResponse>("/api/me/achievements");
 export const getLevels = (id: string) => api<LevelRow[]>(`/api/guild/${id}/levels`);
+export const getGuildLeaderboard = (id: string, page = 1) => api<GuildLevelsResponse>(`/api/levels/${encodeURIComponent(id)}?page=${page}`);
 export const getConfig = (id: string) => api<GuildConfig>(`/api/guild/${id}/config`);
 export const getResources = (id: string) => api<GuildResources>(`/api/guild/${id}/resources`);
 export const getBoosterSettings = (id: string) =>

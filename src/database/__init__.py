@@ -15,7 +15,7 @@ LIST_COLUMNS = {"roles"}
 # list/dict arguments on write and parses them back on read.
 JSON_COLUMNS = {
     "economy_users": ("inventory", "effects", "transactions", "achievements"),
-    "level_config": ("level_roles",),
+    "level_config": ("level_roles", "xp_excluded_channels"),
     "giveaways": ("requirements",),
     "ticket_config": ("panel_categories", "support_roles", "open_tickets"),
     "polls": ("options",),

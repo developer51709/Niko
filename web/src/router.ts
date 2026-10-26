@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -19,6 +19,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/appeals/blacklist") return "appeal";
   if (path === "/commands") return "commands";
   if (path === "/leaderboard") return "leaderboard";
+  if (path.startsWith("/levels/")) return "guild-leaderboard";
   if (path === "/docs") return "docs";
   if (path.startsWith("/docs/")) return "docs-detail";
   if (path === "/dashboard/staff" || path === "/dashboard/staff/") return "staff";

@@ -5,6 +5,7 @@ import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
+import { GuildLeaderboardPage } from "./pages/GuildLeaderboardPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
 import { BillingPage } from "./pages/BillingPage";
@@ -34,6 +35,10 @@ export function App() {
   let pageContent;
   if (page === "commands") pageContent = <CommandsPage />;
   else if (page === "leaderboard") pageContent = <LeaderboardPage />;
+  else if (page === "guild-leaderboard") {
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    pageContent = <GuildLeaderboardPage guildId={pathParts[1] || ""} />;
+  }
   else if (page === "docs-detail") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1] || ""} />;

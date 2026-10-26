@@ -37,10 +37,10 @@ class OwnerCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # Persistent rules-panel buttons survive restarts (static custom ids).
-        bot.add_dynamic_items(_RulesSectionButton, _RulesHomeButton)
+        bot.add_dynamic_items(_RulesLinksButton, _RulesScopeButton)
 
     async def cog_unload(self) -> None:
-        self.bot.remove_dynamic_items(_RulesSectionButton, _RulesHomeButton)
+        self.bot.remove_dynamic_items(_RulesLinksButton, _RulesScopeButton)
 
     # -------------------------------
     # Helper: Download image bytes
@@ -471,10 +471,9 @@ class OwnerCog(commands.Cog):
     #: The release ``.staff announce`` announces. The docs page and the changelog
     #: entry are named in one place, so the buttons can never point at a page that
     #: was renamed or retired alongside the update.
-    UPDATE_TITLE = "Niko Premium is live — plus a legal update"
-    UPDATE_DOCS_URL = f"{links.DOCS}/premium-overview"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/premium-subscriptions"
-    UPDATE_DATA_REMOVAL_URL = links.DATA_REMOVAL
+    UPDATE_TITLE = "Faster cards, live leaderboards & voice XP"
+    UPDATE_DOCS_URL = f"{links.DOCS}/leveling-overview"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/loading-cards-live-leaderboards-voice-xp"
 
     @commands.command(name="announce", help="Announce the latest Niko update (or `policy`) in this channel.")
     @is_owner()
@@ -507,37 +506,40 @@ class OwnerCog(commands.Cog):
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**The image filter you actually wanted is finally here.** Niko Premium is a "
-                    "**$15/month server subscription** that runs every image posted in your server "
-                    "through fal.ai's NSFW model and removes the ones that should never have been posted. "
-                    "Real detection, real moderation logs, and it works on the first upload.\n\n"
-                    "**And no, we did not paywall the bot.** Economy, leveling, tickets, giveaways, "
-                    "reminders, the social notifier, bot profile customization, and the scam image "
-                    "filter all stay **free for every server**. The one existing feature this touches is "
-                    "the NSFW image filter — which never worked reliably before this update. Now it does.\n\n"
-                    "**Also in this update: a legal update.** Our data-removal process is now spelled "
-                    "out in one policy page. Signed-in members can request deletion of their account "
-                    "data or a server they own — including after Niko has been removed, if they were "
-                    "the owner when it left. Moderation and safety records stay protected, and "
-                    "court-ordered requests go directly to the bot owner through a formal legal "
-                    f"process. Read the policy: <{self.UPDATE_DATA_REMOVAL_URL}>\n\n"
-                    "- **Premium:** AI image moderation with fal.ai's `imageutils/nsfw` model\n"
-                    "- **$15/month per server**, renewing monthly — no auto-charge, just a reminder DM "
-                    "three days before your term ends\n"
-                    "- **Checkout on our own page:** one glass card, crypto live now via OxaPay, card "
-                    "coming soon\n"
-                    "- **Gift a month** to any server you are in — its owner gets a DM telling them who sent it\n"
-                    "- **Manage everything** with `/premium status`, `/premium upgrade`, and `/premium gift`"
+                    "**Your cards no longer make you wait in the dark.** Balance, daily, work, "
+                    "shop, inventory and rank now open with an **animated card-shaped placeholder** "
+                    "while the real image renders, then swap it in place. The placeholder loads from "
+                    "our website, so it appears instantly. `/spotify` got the same treatment — plus a "
+                    "proper now-playing card with album art and a live progress bar. Blackjack's "
+                    "suits were redrawn as smooth vector shapes, and rounded cards finally keep their "
+                    "transparent corners.\n\n"
+                    "**The server leaderboard left Discord and moved to the web.** "
+                    "`/leveling leaderboard` now replies with your server's own live board on the "
+                    "website — it refreshes itself, animates members who climb past each other, "
+                    "and shows a clear \u201cNiko isn't in this server\u201d page when the bot has left. "
+                    "Share the link in a channel topic or announcement.\n\n"
+                    "**XP only where you want it.** Exclude text and voice channels with "
+                    "`/leveling config exclude`, whitelist them again with `include`, and turn on "
+                    "passive voice XP with `voicexp`. Both are also in the leveling panel and the "
+                    "dashboard. Ticket channels never award XP, and AFK channels never earn voice XP.\n\n"
+                    "**Smaller things worth noticing.** The help menu now groups polls, giveaways, "
+                    "leveling, tickets and onboarding under **Community** instead of scattering them "
+                    "across a dozen categories. The support rules panel prints all twenty rules in "
+                    "one message, with important links and \u201cnot ours to fix\u201d reports in private "
+                    "cards. Onboarding and ticket panels explain exactly how to ask for help, the "
+                    "reported-image channel is now **#scam-reports**, and the community-help "
+                    "guidelines post finally stays pinned.\n\n"
+                    "-# The bot stays free. Every feature above ships for every server."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Run `/premium upgrade` in your server, or read the full breakdown below."
+                content="-# Run `/leveling leaderboard` in your server, or read the full breakdown below."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Read the docs",
+                    label="Leveling docs",
                     style=discord.ButtonStyle.link,
                     url=self.UPDATE_DOCS_URL,
                     emoji=get_emoji("link")
@@ -1768,17 +1770,20 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
 # ────────────────────────────────────────────────────────────────────────────
 #  Persistent rules panel (support server)
 #
-#  The public panel message never changes — its buttons open *ephemeral*
-#  reader cards. Inside an ephemeral card, the buttons swap the card's
-#  content in place (that only edits the user's own ephemeral message).
+#  Every rule is printed in the public panel itself, so members never have to
+#  click through pages to read them. The panel's only buttons open *ephemeral*
+#  helper cards — important links, and the problems that are not ours to fix —
+#  which are answered privately to whoever clicked.
+#
+#  Components V2 caps a message at 4,000 characters of text, so the panel body
+#  is kept compact: the rule text plus a short intro and footer.
 # ────────────────────────────────────────────────────────────────────────────
 
 RULES_SECTIONS: dict[str, dict] = {
     "conduct": {
         "emoji": get_emoji("heart"),
         "label": "Conduct",
-        "summary": "respect, language, and staff authority (rules 1–5)",
-        "title": "Conduct rules",
+        "title": "Conduct rules — 1 to 5",
         "body": (
             "- **1. Be respectful.** No harassment, hate speech, discrimination, or personal attacks — treat everyone the way you'd like to be treated.\n"
             "- **2. Keep it appropriate.** No NSFW content anywhere in this server.\n"
@@ -1790,8 +1795,7 @@ RULES_SECTIONS: dict[str, dict] = {
     "content": {
         "emoji": get_emoji("scroll"),
         "label": "Content & channels",
-        "summary": "channels, spam, scams, and piracy (rules 6–10)",
-        "title": "Content & channel rules",
+        "title": "Content & channel rules — 6 to 10",
         "body": (
             "- **6. Right content in the right channel.** Keep questions in support channels, showcases in their dedicated channels, and memes in the lounge.\n"
             "- **7. No spam, flooding, or self-promotion without permission.** This includes unsolicited DMs and advertising other bots or servers.\n"
@@ -1803,8 +1807,7 @@ RULES_SECTIONS: dict[str, dict] = {
     "moderation": {
         "emoji": get_emoji("moderation"),
         "label": "Moderation",
-        "summary": "enforcement, appeals, and the blacklist (rules 11–15)",
-        "title": "Moderation & enforcement",
+        "title": "Moderation & enforcement — 11 to 15",
         "body": (
             "- **11. Moderators may act** on anything they judge to be against the spirit of these rules, even if it isn't listed.\n"
             "- **12. Escalation ladder.** Typical progression: verbal warning → formal warning → timeout → kick → ban. Severe violations (scams, malware, raids, CSAM) skip straight to a ban and are reported to Discord's Trust & Safety.\n"
@@ -1816,8 +1819,7 @@ RULES_SECTIONS: dict[str, dict] = {
     "bot": {
         "emoji": get_emoji("bot"),
         "label": "Bot rules",
-        "summary": "bot-specific expectations (rules 16–20)",
-        "title": "Bot-specific rules",
+        "title": "Bot-specific rules — 16 to 20",
         "body": (
             "- **16. Niko is a community project, not a product.** The operator provides no uptime guarantee; premium supports development but buys no SLA.\n"
             "- **17. Economy items have no real value.** Bot currency and items cannot be sold, traded for money, or refunded.\n"
@@ -1828,68 +1830,19 @@ RULES_SECTIONS: dict[str, dict] = {
     },
 }
 
-_RULES_HOME_ID = "niko:rules:home"
-_RULES_SECTION_PREFIX = "niko:rules:section:"
-_RULES_SECTION_IDS = list(RULES_SECTIONS.keys())
+_RULES_LINKS_ID = "niko:rules:links"
+_RULES_SCOPE_ID = "niko:rules:scope"
 
 
-def _rules_response_is_ephemeral(interaction: discord.Interaction) -> bool:
-    """True when the clicked message is already the user's ephemeral card."""
-    message = getattr(interaction, "message", None)
-    if message is None:
-        return False
-    try:
-        return bool(getattr(message.flags, "ephemeral", False))
-    except Exception:
-        return False
-
-
-async def _rules_swap_or_reply(interaction, view: discord.ui.LayoutView) -> None:
-    """Edit the ephemeral card in place, or open one from the public panel.
-
-    The public rules panel itself is never edited — every interaction on it
-    answers with a fresh ephemeral reader card instead.
-    """
-    if _rules_response_is_ephemeral(interaction):
-        await interaction.response.edit_message(view=view)
-    else:
-        await interaction.response.send_message(view=view, ephemeral=True)
-
-
-class _RulesSectionButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:section:[a-z]+"):
-    """Persistent 'view this rules section' button."""
-
-    def __init__(self, section_key: str) -> None:
-        meta = RULES_SECTIONS[section_key]
-        super().__init__(discord.ui.Button(
-            style=discord.ButtonStyle.secondary,
-            label=meta["label"],
-            emoji=meta["emoji"],
-            custom_id=_RULES_SECTION_PREFIX + section_key,
-        ))
-
-    @classmethod
-    async def from_custom_id(cls, interaction, item, match):
-        return cls(match.group(0).rsplit(":", 1)[1])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        section_key = self.custom_id.rsplit(":", 1)[1]
-        if section_key not in RULES_SECTIONS:
-            return await interaction.response.send_message(
-                f"{get_emoji('question')} Unknown rules section.", ephemeral=True
-            )
-        await _rules_swap_or_reply(interaction, _rules_section_view(interaction.client, section_key))
-
-
-class _RulesHomeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:home"):
-    """Persistent 'back to the rules overview' button."""
+class _RulesLinksButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:links"):
+    """Persistent shortcut to the ephemeral important-links card."""
 
     def __init__(self) -> None:
         super().__init__(discord.ui.Button(
-            style=discord.ButtonStyle.primary,
-            label="All rules",
-            emoji=get_emoji("home"),
-            custom_id=_RULES_HOME_ID,
+            style=discord.ButtonStyle.secondary,
+            label="Important links",
+            emoji=get_emoji("link"),
+            custom_id=_RULES_LINKS_ID,
         ))
 
     @classmethod
@@ -1897,7 +1850,30 @@ class _RulesHomeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"nik
         return cls()
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await _rules_swap_or_reply(interaction, _rules_home_view(interaction.client))
+        await interaction.response.send_message(
+            view=_rules_links_view(interaction.client), ephemeral=True
+        )
+
+
+class _RulesScopeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"niko:rules:scope"):
+    """Persistent shortcut to the ephemeral out-of-scope reporting card."""
+
+    def __init__(self) -> None:
+        super().__init__(discord.ui.Button(
+            style=discord.ButtonStyle.secondary,
+            label="Not ours to fix",
+            emoji=get_emoji("question"),
+            custom_id=_RULES_SCOPE_ID,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            view=_rules_scope_view(interaction.client), ephemeral=True
+        )
 
 
 def _rules_header(bot, title: str, subtitle: str) -> discord.ui.Item:
@@ -1914,91 +1890,115 @@ def _rules_header(bot, title: str, subtitle: str) -> discord.ui.Item:
     return header_text
 
 
-def _rules_link_row() -> discord.ui.ActionRow:
-    """Link buttons to the legal documents on the website."""
-    return discord.ui.ActionRow(
-        discord.ui.Button(
-            style=discord.ButtonStyle.link,
-            label="Privacy",
-            url=links.PRIVACY,
-            emoji=get_emoji("important"),
-        ),
-        discord.ui.Button(
-            style=discord.ButtonStyle.link,
-            label="Terms",
-            url=links.TOS,
-            emoji=get_emoji("docs"),
-        ),
-        discord.ui.Button(
-            style=discord.ButtonStyle.link,
-            label="Community",
-            url=links.COMMUNITY,
-            emoji=get_emoji("verified"),
-        ),
+DISCORD_SUPPORT_URL = "https://support.discord.com/hc/en-us/requests/new"
+DISCORD_REPORT_URL = "https://discord.com/safety/360044103651-reporting-abusive-behavior-to-discord"
+
+
+def _rules_panel_row() -> discord.ui.ActionRow:
+    """The public panel's only buttons: shortcuts to the helper cards."""
+    return discord.ui.ActionRow(_RulesLinksButton(), _RulesScopeButton())
+
+
+def _rules_links_view(bot) -> discord.ui.LayoutView:
+    """Ephemeral card listing every official Niko link."""
+    bot_id = getattr(getattr(bot, "user", None), "id", None)
+    invite = (
+        f"https://discord.com/oauth2/authorize?client_id={bot_id}&permissions=8&scope=bot%20applications.commands"
+        if bot_id else links.SUPPORT_SERVER
     )
-
-
-def _rules_section_row(skip: str | None = None) -> discord.ui.ActionRow:
-    """Row of section buttons (optionally skipping the active section)."""
-    row = discord.ui.ActionRow()
-    if skip is not None:
-        row.add_item(_RulesHomeButton())
-    for key in _RULES_SECTION_IDS:
-        if key != skip:
-            row.add_item(_RulesSectionButton(key))
-    return row
-
-
-def _rules_home_view(bot) -> discord.ui.LayoutView:
-    """The panel home: welcome text + rules-at-a-glance + interactive menu."""
-    glance = "\n".join(
-        f"> {meta['emoji']} **{meta['label']}** — {meta['summary']}"
-        for meta in RULES_SECTIONS.values()
-    )
-
     items: list = [
-        _rules_header(
-            bot,
-            "Niko Support — Server Rules",
-            "Welcome! Tap a topic for the full rules — everything lives in this one message.",
-        ),
+        _rules_header(bot, "Important links", "Every official Niko page in one place."),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=(
-            f"{get_emoji('welcome')} Hey, I'm **Niko** — a cozy Discord companion for communities that care.\n"
-            "This server is the place for support, suggestions, announcements, and community.\n\n"
-            f"### {get_emoji('notepad')} Rules at a glance\n"
-            f"{glance}\n\n"
-            f"-# {get_emoji('question')} Questions? Ask in the support channel or open a ticket."
+            "**Start here**\n"
+            f"- {get_emoji('website')} [Website]({links.WEBSITE}) — news, changelog and the server dashboard.\n"
+            f"- {get_emoji('docs')} [Documentation]({links.DOCS}) — setup guides and the full command reference.\n"
+            f"- {get_emoji('support')} [Support server]({links.SUPPORT_SERVER}) — this community's permanent invite.\n"
+            f"- {get_emoji('invite')} [Invite Niko]({invite}) — add the bot to your own server.\n\n"
+            "**Policies**\n"
+            f"- {get_emoji('docs')} [Terms of Service]({links.TOS})\n"
+            f"- {get_emoji('important')} [Privacy Policy]({links.PRIVACY})\n"
+            f"- {get_emoji('verified')} [Community Guidelines]({links.COMMUNITY})\n"
+            f"- {get_emoji('lock')} [Request removal of your data]({links.DATA_REMOVAL})\n\n"
+            "**Elsewhere**\n"
+            f"- {get_emoji('github')} [GitHub]({links.GITHUB}) — source, issues and release notes.\n"
+            f"- {get_emoji('topgg')} [Vote on top.gg]({links.TOPGG_VOTE_URL}) — a free way to help other servers find Niko."
         )),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        _rules_section_row(),
-        _rules_link_row(),
+        discord.ui.ActionRow(
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Website", url=links.WEBSITE),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Docs", url=links.DOCS),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Support server", url=links.SUPPORT_SERVER),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Privacy", url=links.PRIVACY),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Terms", url=links.TOS),
+        ),
     ]
-
-    view = discord.ui.LayoutView()
+    view = discord.ui.LayoutView(timeout=300)
     view.add_item(discord.ui.Container(*items, accent_colour=0xC8A882))
     return view
 
 
-def _rules_section_view(bot, section_key: str) -> discord.ui.LayoutView:
-    """One rules section with home/sibling navigation and legal links."""
-    meta = RULES_SECTIONS[section_key]
-
+def _rules_scope_view(bot) -> discord.ui.LayoutView:
+    """Ephemeral card for problems Niko's team cannot act on."""
     items: list = [
-        _rules_header(bot, f"Rules — {meta['label']}", meta["summary"]),
+        _rules_header(bot, "Not ours to fix", "Some reports belong to Discord or another team — here is where each one goes."),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=(
-            f"### {meta['emoji']} {meta['title']}\n\n"
-            f"{meta['body']}\n\n"
-            f"-# {get_emoji('important')} Moderators may always use their judgement — these pages cover the common cases."
+            "**Discord account & platform issues**\n"
+            "- Lost account, 2FA, a hacked account, Nitro or Discord billing, or a bug inside the Discord app "
+            f"→ [Discord Support]({DISCORD_SUPPORT_URL}). Niko staff cannot view or change your Discord account.\n"
+            "- A user, message or server breaking Discord's own rules "
+            f"→ [report it to Discord Trust & Safety]({DISCORD_REPORT_URL}), or use the in-app **Report** option. "
+            "We can only moderate inside this server.\n"
+            "- A different bot, bot list or third-party service "
+            "→ that project's own support server. We have no access to it.\n\n"
+            "**What we do handle**\n"
+            "- A Niko command failing, an error code, or a feature that does not work as documented "
+            "→ open a **Bug** post in the community-help forum with the exact error text.\n"
+            "- Anything tied to your account, a purchase, premium, appeals or data removal "
+            "→ open a private ticket and never post payment details in public.\n"
+            "- A member or post in this server that needs staff attention "
+            "→ mention a member of staff or open a ticket instead of confronting anyone publicly."
         )),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        _rules_section_row(skip=section_key),
-        _rules_link_row(),
+        discord.ui.ActionRow(
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Discord Support", url=DISCORD_SUPPORT_URL),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Report to Discord", url=DISCORD_REPORT_URL),
+            discord.ui.Button(style=discord.ButtonStyle.link, label="Niko docs", url=links.DOCS),
+        ),
     ]
+    view = discord.ui.LayoutView(timeout=300)
+    view.add_item(discord.ui.Container(*items, accent_colour=0x5865F2))
+    return view
+
+
+def _rules_home_view(bot) -> discord.ui.LayoutView:
+    """The public panel: every rule, printed inline, plus helper-card buttons."""
+    items: list = [
+        _rules_header(
+            bot,
+            "Niko Support — Server Rules",
+            "Everyone here, staff included. Reading these once is all it takes.",
+        ),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=(
+            f"{get_emoji('welcome')} Hey, I'm **Niko** — a cozy Discord companion for communities that care. "
+            "This is the official Niko support server: help, ideas, announcements and a friendly corner of Discord.\n"
+            "The twenty rules below apply everywhere in this server, so please read them before posting."
+        )),
+    ]
+    for meta in RULES_SECTIONS.values():
+        items.append(discord.ui.TextDisplay(content=f"### {meta['emoji']} {meta['title']}\n{meta['body']}"))
+    items.extend([
+        discord.ui.TextDisplay(content=(
+            f"-# {get_emoji('question')} Bot help belongs in the community-help forum; account or sensitive issues "
+            "belong in a ticket. Use the buttons below for important links, and for reports that are not ours to handle."
+        )),
+        _rules_panel_row(),
+    ])
 
     view = discord.ui.LayoutView()
-    view.add_item(discord.ui.Container(*items, accent_colour=0x5865F2))
+    view.add_item(discord.ui.Container(*items, accent_colour=0xC8A882))
     return view
 
 
