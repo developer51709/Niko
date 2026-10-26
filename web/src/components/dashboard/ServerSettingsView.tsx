@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
@@ -12,22 +13,23 @@ import { SettingCard, SettingCards } from "./SettingCards";
 type SaveState = { saving: boolean };
 const initialSave: SaveState = { saving: false };
 
-function StringOptionList({ label, hint, options, placeholder, onChange }: {
+function StringOptionList({ label, hint, options, placeholder, onChange, disabled = false }: {
   label: string;
   hint: string;
   options: string[];
   placeholder: string;
   onChange: (options: string[]) => void;
+  disabled?: boolean;
 }) {
   return <div className="form-field">
     <span className="form-label">{label}</span>
     <div className="settings-option-list">
       {options.map((option, index) => <div className="settings-option-row" key={`${label}-${index}`}>
-        <input aria-label={`${label} ${index + 1}`} value={option} maxLength={100} onChange={(event) => onChange(options.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`${placeholder} ${index + 1}`} />
-        <button type="button" className="settings-option-remove" onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}>Remove</button>
+        <input aria-label={`${label} ${index + 1}`} value={option} maxLength={100} onChange={(event) => onChange(options.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`${placeholder} ${index + 1}`} disabled={disabled} />
+        <button type="button" className="settings-option-remove" onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} disabled={disabled}>Remove</button>
       </div>)}
     </div>
-    <button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...options, ""])}>＋ Add option</button>
+    <button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...options, ""])} disabled={disabled}>＋ Add option</button>
     <small>{hint}</small>
   </div>;
 }
@@ -98,7 +100,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
     notifyLoading("Saving server settings…", "settings-save");
     const prefixes = values.prefixes.map((prefix) => prefix.trim()).filter(Boolean);
     saveConfig(guildId, "server", {
-      prefixes,
+      ...(config?.server?.prefix_override ? {} : { prefixes }),
       logging: {
         ...values.logging,
         disabled: values.disabled_logging,
@@ -118,7 +120,13 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
     <DashHeading eyebrow="Server settings" title="Make Niko fit your room." text="Manage the settings that shape how Niko behaves in this server. Economy balances remain global to each user and are not configured here." />
     <div className="settings-intro"><span className="settings-intro-icon"><Icon name="settings" /></span><div><span className="panel-kicker">Server control room</span><strong>{values.prefixes.filter((prefix) => prefix.trim()).length} command prefixes configured</strong><p>Command prefixes and log destinations live here.</p></div><span className="settings-intro-state"><span className="status-dot" /> Per server</span></div>
     <form onSubmit={submit} className="settings-stack server-settings-stack">
-      <section className="dash-panel settings-panel"><SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" /><StringOptionList label="Command prefixes" hint="The default prefix is ." options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} /></section>
+      <section className={`dash-panel settings-panel${config?.server?.prefix_override ? " prefix-settings-development" : ""}`} aria-disabled={config?.server?.prefix_override ? true : undefined}>
+        <SectionTitle label="Commands" title="Prefixes" detail="Add each command prefix separately. Niko will respond to all configured prefixes." icon="terminal" />
+        {config?.server?.prefix_override && <div className="prefix-development-note" role="note"><AlertTriangle size={16} /><span><strong>Prefix changes are disabled for this deployment.</strong><small>This instance uses the fixed prefix {config.server.prefix_override}.</small></span></div>}
+        <div className="prefix-settings-edit-area">
+          <StringOptionList label="Command prefixes" hint={`The default prefix is ${config?.server?.default_prefix || "."}`} options={values.prefixes} placeholder="Prefix" onChange={(prefixes) => setValue("prefixes", prefixes)} disabled={Boolean(config?.server?.prefix_override)} />
+        </div>
+      </section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
         {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}

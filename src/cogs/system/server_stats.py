@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from discord.ext import commands, tasks
 
+from config import environment
 from utils import logging
 
 
@@ -16,12 +17,18 @@ class ServerStats(commands.Cog):
         self.pending: dict[tuple[int, str], dict[str, int]] = defaultdict(
             lambda: {"messages": 0, "joins": 0, "leaves": 0}
         )
+        if environment.DEVELOPMENT:
+            logging.info("ServerStats", "DEVELOPMENT is set \u2014 message activity is not recorded.")
         self.flush_activity.start()
 
     def cog_unload(self):
         self.flush_activity.cancel()
 
     def _record(self, guild_id: int, **increments: int) -> None:
+        if environment.DEVELOPMENT:
+            # A beta instance shares production's database, so buffering here
+            # would double-count the same messages and joins on the dashboard.
+            return
         today = datetime.now(timezone.utc).date().isoformat()
         bucket = self.pending[(int(guild_id), today)]
         for key, amount in increments.items():

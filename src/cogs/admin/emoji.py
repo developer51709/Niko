@@ -2,13 +2,19 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import has_permissions, MissingPermissions, MissingRequiredArgument, EmojiNotFound
 import io
-import aiohttp
-import pathlib
+import os
 import re
-from typing import Optional
+import shutil
+import tempfile
+import time
 import zipfile
+from urllib.parse import unquote, urlparse
+import aiohttp
 import asyncio
+from typing import Optional
+from config.emojis import get_emoji
 from utils import logging as log
+from utils.archive_safety import scan_zip
 from utils.i18n import make_msg
 from utils.prefix_manager import resolve_prefix
 
@@ -17,7 +23,7 @@ MESSAGES = {
         "en": {
             "emojimanager_title": "Emoji Manager",
             "emojimanager_description": "Manage your server's emojis!",
-            "steal_description": "steal an emoji",
+            "steal_description": "steal an emoji, a link or a whole pack",
             "sm_description": "steal many emojis",
             "surl_description": "add from url",
             "enlarge_description": "big emoji view",
@@ -30,12 +36,40 @@ MESSAGES = {
             "not_found": "Could not find or download the emoji. Please ensure you provided the full emoji string (e.g., `<:name:id>`).",
             "timeout": "You took too long. Operation cancelled.",
             "invalid_name": "Invalid name. Please use alphanumeric characters (2-32 chars).",
-            "no_emojis": "This server has no custom emojis."
+            "no_emojis": "This server has no custom emojis.",
+            "steal_usage": "**Usage:** `{prefix}steal <emoji | link> [...]`\nYou can paste several emojis or links at once, or link a `.zip` emoji pack.",
+            "stealing_title": "Stealing emojis",
+            "steal_added": "Added **{count}** emoji(s).",
+            "steal_none_added": "No emojis were added.",
+            "steal_skip_line": "-# Skipped {count} ({reason}): {names}",
+            "steal_fail_line": "-# Failed {count} ({reason}): {names}",
+            "reason_too_large": "bigger than 256 KB",
+            "reason_unsupported": "not a png, gif or jpeg",
+            "reason_no_slots": "no emoji slots left",
+            "reason_invalid": "not an emoji or link",
+            "reason_download": "could not be downloaded",
+            "reason_zip_invalid": "not a valid zip",
+            "reason_zip_empty": "zip has no usable images",
+            "reason_zip_too_large": "download is too large",
+            "reason_zip_bomb": "looks like a zip bomb",
+            "reason_too_many": "too many files in one pack",
+            "rate_limited": "Discord is limiting emoji uploads — resuming automatically once the limit clears.",
+            "rate_limited_wait": "Discord is limiting emoji uploads — resuming automatically in {seconds}s.",
+            "steal_done": "Emojis stolen",
+            "steal_progress_count": "**{done}** of **{total}** processed",
+            "steal_progress_tally": "Added {added} · Skipped {skipped} · Failed {failed}",
+            "steal_overview_title": "Emoji steal complete",
+            "steal_overview_subtitle": "{guild} · {checked} processed",
+            "steal_overview_added": "Emoji added: **{count}**",
+            "steal_overview_slots": "Static {static}/{limit} · Animated {animated}/{limit} slots left",
+            "steal_aborted": "Uploading stopped — I can no longer manage emojis.",
+            "steal_nothing_title": "Nothing stolen",
+            "steal_full_title": "No emoji slots left"
         },
         "de": {
             "emojimanager_title": "Emoji-Verwaltung",
             "emojimanager_description": "Verwalte die Emojis deines Servers!",
-            "steal_description": "stiehl ein Emoji",
+            "steal_description": "stiehl ein Emoji, einen Link oder ein ganzes Paket",
             "sm_description": "stiehl viele Emojis",
             "surl_description": "von URL hinzufügen",
             "enlarge_description": "Emoji groß anzeigen",
@@ -48,12 +82,40 @@ MESSAGES = {
             "not_found": "Emoji konnte nicht gefunden oder heruntergeladen werden. Bitte gib den vollständigen Emoji-String an (z.B. `<:name:id>`).",
             "timeout": "Zeit abgelaufen. Vorgang abgebrochen.",
             "invalid_name": "Ungültiger Name. Bitte nutze alphanumerische Zeichen (2-32 Zeichen).",
-            "no_emojis": "Dieser Server hat keine benutzerdefinierten Emojis."
+            "no_emojis": "Dieser Server hat keine benutzerdefinierten Emojis.",
+            "steal_usage": "**Verwendung:** `{prefix}steal <Emoji | Link> [...]`\nDu kannst mehrere Emojis oder Links gleichzeitig einfügen oder ein `.zip`-Emoji-Paket verlinken.",
+            "stealing_title": "Emojis werden gestohlen",
+            "steal_added": "**{count}** Emoji(s) hinzugefügt.",
+            "steal_none_added": "Es wurden keine Emojis hinzugefügt.",
+            "steal_skip_line": "-# Übersprungen {count} ({reason}): {names}",
+            "steal_fail_line": "-# Fehlgeschlagen {count} ({reason}): {names}",
+            "reason_too_large": "größer als 256 KB",
+            "reason_unsupported": "kein png, gif oder jpeg",
+            "reason_no_slots": "keine Emoji-Slots mehr",
+            "reason_invalid": "kein Emoji oder Link",
+            "reason_download": "konnte nicht heruntergeladen werden",
+            "reason_zip_invalid": "keine gültige Zip",
+            "reason_zip_empty": "Zip enthält keine nutzbaren Bilder",
+            "reason_zip_too_large": "Download ist zu groß",
+            "reason_zip_bomb": "sieht wie eine Zip-Bombe aus",
+            "reason_too_many": "zu viele Dateien in einem Paket",
+            "rate_limited": "Discord limitiert Emoji-Uploads — es geht automatisch weiter, sobald das Limit abgelaufen ist.",
+            "rate_limited_wait": "Discord limitiert Emoji-Uploads — es geht automatisch in {seconds}s weiter.",
+            "steal_done": "Emojis gestohlen",
+            "steal_progress_count": "**{done}** von **{total}** verarbeitet",
+            "steal_progress_tally": "Hinzugefügt {added} · Übersprungen {skipped} · Fehlgeschlagen {failed}",
+            "steal_overview_title": "Emoji-Diebstahl abgeschlossen",
+            "steal_overview_subtitle": "{guild} · {checked} verarbeitet",
+            "steal_overview_added": "Emojis hinzugefügt: **{count}**",
+            "steal_overview_slots": "Statisch {static}/{limit} · Animiert {animated}/{limit} Slots frei",
+            "steal_aborted": "Upload gestoppt — ich kann keine Emojis mehr verwalten.",
+            "steal_nothing_title": "Nichts gestohlen",
+            "steal_full_title": "Keine Emoji-Slots mehr"
         },
         "es": {
             "emojimanager_title": "Gestor de Emojis",
             "emojimanager_description": "¡Gestiona los emojis de tu servidor!",
-            "steal_description": "robar un emoji",
+            "steal_description": "robar un emoji, un enlace o un paquete completo",
             "sm_description": "robar varios emojis",
             "surl_description": "añadir desde URL",
             "enlarge_description": "ver emoji grande",
@@ -66,7 +128,35 @@ MESSAGES = {
             "not_found": "No pude encontrar o descargar el emoji. Asegúrate de proporcionar el texto completo del emoji (p. ej. `<:nombre:id>`).",
             "timeout": "Tardaste demasiado. Operación cancelada.",
             "invalid_name": "Nombre inválido. Usa caracteres alfanuméricos (2-32 caracteres).",
-            "no_emojis": "Este servidor no tiene emojis personalizados."
+            "no_emojis": "Este servidor no tiene emojis personalizados.",
+            "steal_usage": "**Uso:** `{prefix}steal <emoji | enlace> [...]`\nPuedes pegar varios emojis o enlaces a la vez, o enlazar un paquete `.zip`.",
+            "stealing_title": "Robando emojis",
+            "steal_added": "Se añadieron **{count}** emoji(s).",
+            "steal_none_added": "No se añadió ningún emoji.",
+            "steal_skip_line": "-# Omitidos {count} ({reason}): {names}",
+            "steal_fail_line": "-# Fallaron {count} ({reason}): {names}",
+            "reason_too_large": "más de 256 KB",
+            "reason_unsupported": "no es png, gif o jpeg",
+            "reason_no_slots": "no quedan espacios de emoji",
+            "reason_invalid": "no es un emoji ni un enlace",
+            "reason_download": "no se pudo descargar",
+            "reason_zip_invalid": "no es un zip válido",
+            "reason_zip_empty": "el zip no tiene imágenes utilizables",
+            "reason_zip_too_large": "la descarga es demasiado grande",
+            "reason_zip_bomb": "parece una bomba zip",
+            "reason_too_many": "demasiados archivos en un paquete",
+            "rate_limited": "Discord está limitando las subidas de emojis — continuará automáticamente cuando pase el límite.",
+            "rate_limited_wait": "Discord está limitando las subidas de emojis — continuará automáticamente en {seconds}s.",
+            "steal_done": "Emojis robados",
+            "steal_progress_count": "**{done}** de **{total}** procesados",
+            "steal_progress_tally": "Añadidos {added} · Omitidos {skipped} · Fallidos {failed}",
+            "steal_overview_title": "Robo de emojis completado",
+            "steal_overview_subtitle": "{guild} · {checked} procesados",
+            "steal_overview_added": "Emojis añadidos: **{count}**",
+            "steal_overview_slots": "Estáticos {static}/{limit} · Animados {animated}/{limit} espacios libres",
+            "steal_aborted": "Subida detenida — ya no puedo gestionar emojis.",
+            "steal_nothing_title": "No se robó nada",
+            "steal_full_title": "No quedan espacios de emoji"
         }
     },
 }
@@ -74,7 +164,263 @@ MESSAGES = {
 msg = make_msg(MESSAGES)
 
 EMOJI_REGEX = re.compile(r"<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]+):(?P<id>[0-9]+)>")
-URL_REGEX = re.compile(r"https?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+")
+
+# Discord's emoji endpoints are strict and the bucket is easy to overshoot, so
+# bulk uploads are paced instead of fired off back to back.
+EMOJI_UPLOAD_INTERVAL = 1.5
+EMOJI_MAX_BYTES = 256 * 1024
+MAX_DOWNLOAD_BYTES = 40 * 1024 * 1024
+MAX_JOBS = 250
+IMAGE_EXTENSIONS = (".png", ".gif", ".jpg", ".jpeg")
+# discord.py retries 429s internally without telling anyone. When an upload
+# takes noticeably longer than expected we surface the throttle to the user.
+THROTTLE_NOTICE_SECONDS = 2.5
+
+# How a refused archive is explained to the user. ``scan_zip`` reports a
+# machine-readable code; every code has to map to a localized reason.
+ZIP_SCAN_REASONS = {
+    "invalid": "reason_zip_invalid",
+    "encrypted": "reason_zip_invalid",
+    "too_many_entries": "reason_too_many",
+    "entry_too_large": "reason_zip_bomb",
+    "too_large": "reason_zip_bomb",
+    "compression_ratio": "reason_zip_bomb",
+    "nested_archive": "reason_zip_bomb",
+}
+
+
+def _is_http_url(value: str) -> bool:
+    parsed = urlparse(value.strip())
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _normalise_name(raw: str) -> str:
+    """Turn a filename or emoji name into a valid Discord emoji name."""
+    base = unquote(raw).replace("\\", "/").rsplit("/", 1)[-1]
+    base = os.path.splitext(base)[0]
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", base).strip("_")
+    if len(base) > 32:
+        base = base[:32].rstrip("_")
+    if len(base) < 2:
+        base = f"{base}_emoji"[:32] if base else "emoji"
+    return base
+
+
+def _unique_name(name: str, used: set) -> str:
+    candidate = name
+    index = 2
+    while candidate.lower() in used:
+        suffix = f"_{index}"
+        candidate = f"{name[:32 - len(suffix)]}{suffix}"
+        index += 1
+    used.add(candidate.lower())
+    return candidate
+
+
+def _is_animated_image(data: bytes) -> bool:
+    return data[:6] in (b"GIF87a", b"GIF89a")
+
+
+def _names_preview(names, limit: int = 6) -> str:
+    shown = ", ".join(f"`{name}`" for name in names[:limit])
+    if len(names) > limit:
+        shown += f" +{len(names) - limit}"
+    return shown
+
+
+def _group_reasons(items) -> dict:
+    grouped: dict[str, list[str]] = {}
+    for name, reason in items:
+        grouped.setdefault(reason, []).append(name)
+    return grouped
+
+
+# ─────────────────────────────────────────
+#  Bulk upload cards (CV2)
+# ─────────────────────────────────────────
+
+STEAL_ACCENT = discord.Colour(0xC8A882)
+STEAL_ACCENT_OK = discord.Colour(0x57F287)
+STEAL_ACCENT_WARN = discord.Colour(0xFEE75C)
+STEAL_ACCENT_ERROR = discord.Colour(0xED4245)
+
+
+def _steal_view(*items, accent: discord.Colour) -> discord.ui.LayoutView:
+    """Wrap bulk-upload card items in one accented cv2 container."""
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(*items, accent_colour=accent))
+    return view
+
+
+def _progress_bar(done: int, total: int, width: int = 14) -> str:
+    """Discord has no progress component, so the bar is drawn with blocks."""
+    ratio = 0.0 if total <= 0 else min(1.0, done / total)
+    filled = int(round(ratio * width))
+    return "▰" * filled + "▱" * (width - filled)
+
+
+def _steal_progress_view(ctx, *, done, total, added, skipped, failed, notice) -> discord.ui.LayoutView:
+    """The live card shown while a bulk upload is running."""
+    percent = 0 if total <= 0 else min(100, round(done / total * 100))
+    items = [
+        discord.ui.TextDisplay(
+            content=f"### {get_emoji('paint')} {msg(ctx, 'stealing_title')}"
+        ),
+        discord.ui.TextDisplay(
+            content=msg(ctx, "steal_progress_count", done=done, total=total)
+        ),
+        discord.ui.TextDisplay(content=f"{_progress_bar(done, total)}  `{percent}%`"),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(
+            content=msg(ctx, "steal_progress_tally", added=added, skipped=skipped, failed=failed)
+        ),
+    ]
+    if notice:
+        items.append(discord.ui.TextDisplay(content=f"-# {notice}"))
+    return _steal_view(*items, accent=STEAL_ACCENT)
+
+
+def _steal_overview_view(ctx, *, checked, added, skipped, failed, notice,
+                         slots, limit, aborted, thumbnail_url) -> discord.ui.LayoutView:
+    """The final card: what was uploaded and everything that was refused."""
+    success = bool(added)
+    heading = [
+        discord.ui.TextDisplay(
+            content=f"### {get_emoji('tick') if success else get_emoji('warning')} "
+                    f"{msg(ctx, 'steal_overview_title')}"
+        ),
+        discord.ui.TextDisplay(
+            content=f"-# {msg(ctx, 'steal_overview_subtitle', guild=getattr(ctx.guild, 'name', 'this server'), checked=checked)}"
+        ),
+    ]
+    items = []
+    if thumbnail_url:
+        items.append(discord.ui.Section(*heading, accessory=discord.ui.Thumbnail(thumbnail_url)))
+    else:
+        items.extend(heading)
+    summary = msg(ctx, "steal_overview_added", count=len(added)) if success else msg(ctx, "steal_none_added")
+    if aborted:
+        summary += f"\n-# {msg(ctx, 'steal_aborted')}"
+    items.extend([
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=summary),
+        discord.ui.TextDisplay(
+            content=f"-# {msg(ctx, 'steal_overview_slots', static=slots[False], animated=slots[True], limit=limit)}"
+        ),
+    ])
+
+    for group, key in ((skipped, "steal_skip_line"), (failed, "steal_fail_line")):
+        lines = [
+            msg(ctx, key, count=len(names), reason=reason, names=_names_preview(names))
+            for reason, names in _group_reasons(group).items()
+        ]
+        if lines:
+            items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            items.append(discord.ui.TextDisplay(content="\n".join(lines)))
+
+    if notice:
+        items.append(discord.ui.TextDisplay(content=f"-# {notice}"))
+    return _steal_view(*items, accent=STEAL_ACCENT_OK if success else STEAL_ACCENT_WARN)
+
+
+def _retry_after_seconds(exc: Exception) -> float:
+    """Best-effort extraction of the wait time from a 429."""
+    retry_after = getattr(exc, "retry_after", None)
+    if isinstance(retry_after, (int, float)):
+        return max(0.0, float(retry_after))
+
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if headers:
+        for header in ("Retry-After", "X-RateLimit-Reset-After"):
+            raw = headers.get(header)
+            if raw:
+                try:
+                    return max(0.0, float(raw))
+                except (TypeError, ValueError):
+                    pass
+
+    match = re.search(r'"retry_after"\s*:\s*([0-9.]+)', getattr(exc, "text", "") or "")
+    if match:
+        return max(0.0, float(match.group(1)))
+    return 5.0
+
+
+def _safe_member_path(root: str, filename: str) -> Optional[str]:
+    """Resolve a zip member inside *root*, refusing path traversal."""
+    parts = [part for part in filename.replace("\\", "/").split("/") if part not in ("", ".", "..")]
+    if not parts:
+        return None
+    candidate = os.path.join(root, *parts)
+    try:
+        if os.path.commonpath([os.path.realpath(root), os.path.realpath(candidate)]) != os.path.realpath(root):
+            return None
+    except ValueError:
+        return None
+    return candidate
+
+
+def _extract_zip_images(data: bytes, target_dir: str):
+    """Extract supported images from a zip into *target_dir*.
+
+    Returns ``(extracted, skipped)`` where *extracted* is a list of
+    ``(filename, path)`` pairs (sorted so packs upload in a stable order) and
+    *skipped* is a list of ``(filename, reason)``.
+    """
+    extracted = []
+    skipped = []
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            name = member.filename.replace("\\", "/")
+            base = name.rsplit("/", 1)[-1]
+            if name.startswith("__MACOSX/") or base.startswith("."):
+                continue
+            if not name.lower().endswith(IMAGE_EXTENSIONS):
+                continue
+            if len(extracted) >= MAX_JOBS:
+                skipped.append((base, "reason_too_many"))
+                continue
+            if member.file_size > EMOJI_MAX_BYTES:
+                skipped.append((base, "reason_too_large"))
+                continue
+            path = _safe_member_path(target_dir, name)
+            if path is None:
+                continue
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            written = 0
+            oversized = False
+            with archive.open(member) as source, open(path, "wb") as destination:
+                while True:
+                    chunk = source.read(64 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > EMOJI_MAX_BYTES:
+                        # The header can lie about the size; never trust it.
+                        oversized = True
+                        break
+                    destination.write(chunk)
+            if oversized:
+                os.remove(path)
+                skipped.append((base, "reason_too_large"))
+                continue
+            extracted.append((base, path))
+    extracted.sort(key=lambda item: item[0].lower())
+    return extracted, skipped
+
+
+def _remaining_slots(guild) -> dict:
+    """Remaining emoji slots per animated flag.
+
+    Discord keeps separate buckets for static and animated emojis, so both are
+    tracked independently.
+    """
+    limit = getattr(guild, "emoji_limit", None) or 50
+    static = sum(1 for emoji in guild.emojis if not emoji.animated)
+    animated = sum(1 for emoji in guild.emojis if emoji.animated)
+    return {False: limit - static, True: limit - animated}
+
 
 # Prefix resolver (required for dynamic prefixes to work)
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
@@ -105,25 +451,290 @@ class EmojiManagerCog(commands.Cog):
                 if resp.status == 200:
                     image_data = await resp.read()
                     return emoji_name, image_data, animated, url
-        except:
+        except Exception:
             pass
         return emoji_name, None, animated, None
 
-    async def _add_emoji(self, ctx, name, image_data):
+    async def _download(self, url: str):
+        """Download *url*. Returns ``(data, error)`` with exactly one set."""
         try:
-            guild = ctx.guild
-            if len(guild.emojis) >= guild.emoji_limit:
-                await ctx.send(msg(ctx, "server_full", limit=guild.emoji_limit))
-                return False
+            async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status != 200:
+                    return None, "failed"
+                if resp.content_length and resp.content_length > MAX_DOWNLOAD_BYTES:
+                    return None, "too_large"
+                data = await resp.read()
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            return None, "failed"
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            return None, "too_large"
+        return data, None
 
-            new_emoji = await guild.create_custom_emoji(name=name, image=image_data)
-            await ctx.send(msg(ctx, "emoji_added", emoji=str(new_emoji), name=new_emoji.name))
-            return True
-        except discord.Forbidden:
-            await ctx.send(msg(ctx, "no_perms"))
-        except Exception as e:
-            await ctx.send(msg(ctx, "error", error=str(e)))
-        return False
+    async def _create_emoji(self, guild, name: str, image: bytes, on_throttle):
+        """Create one emoji, retrying politely when Discord rate limits us.
+
+        Returns ``(emoji, None)`` on success and ``(None, reason)`` otherwise.
+        """
+        for _ in range(6):
+            started = time.monotonic()
+            try:
+                emoji = await guild.create_custom_emoji(name=name, image=image)
+            except discord.RateLimited as exc:
+                wait = max(0.0, float(exc.retry_after))
+                await on_throttle(wait)
+                await asyncio.sleep(wait + 0.25)
+                continue
+            except discord.Forbidden:
+                return None, "forbidden"
+            except discord.HTTPException as exc:
+                if exc.status == 429:
+                    wait = _retry_after_seconds(exc)
+                    await on_throttle(wait)
+                    await asyncio.sleep(wait + 0.25)
+                    continue
+                if exc.status == 403:
+                    return None, "forbidden"
+                return None, f"HTTP {exc.status}"
+            if time.monotonic() - started >= THROTTLE_NOTICE_SECONDS:
+                # discord.py sat on a rate limit internally; let the user know.
+                await on_throttle(None)
+            return emoji, None
+        return None, "HTTP 429"
+
+    async def _collect_jobs(self, ctx, items, attachment_zips, temp_dirs):
+        """Resolve command arguments into ``(name_hint, payload)`` upload jobs.
+
+        ``payload`` is either raw image bytes or a path to an extracted file.
+        """
+        jobs = []
+        skipped = []
+
+        async def add_zip(data: bytes, label: str):
+            if len(data) > MAX_DOWNLOAD_BYTES:
+                skipped.append((label, msg(ctx, "reason_zip_too_large")))
+                return
+            # Screen the archive before opening it: a zip bomb is refused here,
+            # while it is still a few kilobytes of metadata.
+            report = await asyncio.to_thread(scan_zip, data)
+            if not report.ok:
+                log.warning("emoji", f"Refused archive {label!r} ({report.code}): {report.detail}")
+                skipped.append((label, msg(ctx, ZIP_SCAN_REASONS.get(report.code, "reason_zip_bomb"))))
+                return
+            target_dir = tempfile.mkdtemp(prefix="niko-emojis-")
+            temp_dirs.append(target_dir)
+            try:
+                extracted, refused = await asyncio.to_thread(_extract_zip_images, data, target_dir)
+            except zipfile.BadZipFile:
+                skipped.append((label, msg(ctx, "reason_zip_invalid")))
+                return
+            except (OSError, RuntimeError):
+                skipped.append((label, msg(ctx, "reason_download")))
+                return
+            skipped.extend((name, msg(ctx, reason)) for name, reason in refused)
+            if not extracted:
+                skipped.append((label, msg(ctx, "reason_zip_empty")))
+                return
+            jobs.extend(extracted)
+
+        for item in items:
+            cleaned = item.strip()
+            if EMOJI_REGEX.fullmatch(cleaned):
+                name, data, _animated, _url = await self._get_emoji_info(cleaned)
+                if data:
+                    jobs.append((name or cleaned, data))
+                else:
+                    skipped.append((name or cleaned, msg(ctx, "reason_download")))
+                continue
+            if not _is_http_url(cleaned):
+                skipped.append((cleaned[:32], msg(ctx, "reason_invalid")))
+                continue
+            data, error = await self._download(cleaned)
+            if error:
+                reason = "reason_zip_too_large" if error == "too_large" else "reason_download"
+                skipped.append((_normalise_name(cleaned), msg(ctx, reason)))
+                continue
+            if data[:4] == b"PK\x03\x04" or urlparse(cleaned).path.lower().endswith(".zip"):
+                await add_zip(data, _normalise_name(cleaned))
+            else:
+                jobs.append((_normalise_name(cleaned), data))
+
+        for attachment in attachment_zips:
+            if attachment.size and attachment.size > MAX_DOWNLOAD_BYTES:
+                skipped.append((attachment.filename, msg(ctx, "reason_zip_too_large")))
+                continue
+            try:
+                data = await attachment.read()
+            except discord.HTTPException:
+                skipped.append((attachment.filename, msg(ctx, "reason_download")))
+                continue
+            await add_zip(data, _normalise_name(attachment.filename))
+
+        return jobs[:MAX_JOBS], skipped
+
+    async def _steal(self, ctx, items, attachment_zips=(), override_name: Optional[str] = None):
+        """Shared steal pipeline for emoji strings, links and zip packs."""
+        guild = ctx.guild
+        temp_dirs = []
+        try:
+            jobs, skipped = await self._collect_jobs(ctx, items, attachment_zips, temp_dirs)
+            if override_name and jobs:
+                jobs = [(override_name, jobs[0][1])]
+
+            if not jobs:
+                return await ctx.send(view=self._no_jobs_view(ctx, skipped))
+
+            limit = getattr(guild, "emoji_limit", 50)
+            remaining = _remaining_slots(guild)
+            if remaining[False] <= 0 and remaining[True] <= 0:
+                return await ctx.send(view=_steal_view(
+                    discord.ui.TextDisplay(
+                        content=f"### {get_emoji('warning')} {msg(ctx, 'steal_full_title')}"
+                    ),
+                    discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    discord.ui.TextDisplay(content=msg(ctx, "server_full", limit=limit)),
+                    accent=STEAL_ACCENT_ERROR,
+                ))
+
+            total = len(jobs)
+            state = {
+                "done": 0,
+                "notice": "",
+                "added": 0,
+                "skipped": len(skipped),
+                "failed": 0,
+            }
+            progress = await ctx.send(view=_steal_progress_view(
+                ctx, done=0, total=total,
+                added=0, skipped=state["skipped"], failed=0, notice="",
+            ))
+            last_edit = 0.0
+
+            async def show(force: bool = False):
+                nonlocal last_edit
+                now = time.monotonic()
+                if not force and now - last_edit < 2.0:
+                    return
+                last_edit = now
+                try:
+                    await progress.edit(view=_steal_progress_view(
+                        ctx,
+                        done=state["done"],
+                        total=total,
+                        added=state["added"],
+                        skipped=state["skipped"],
+                        failed=state["failed"],
+                        notice=state["notice"],
+                    ))
+                except discord.HTTPException:
+                    pass
+
+            async def on_throttle(wait):
+                if wait is None:
+                    notice = msg(ctx, "rate_limited")
+                else:
+                    notice = msg(ctx, "rate_limited_wait", seconds=max(1, round(wait)))
+                if notice != state["notice"]:
+                    state["notice"] = notice
+                    await show(force=True)
+
+            used = {emoji.name.lower() for emoji in guild.emojis}
+            added, failed = [], []
+            aborted = False
+
+            for position, (name_hint, payload) in enumerate(jobs, start=1):
+                if isinstance(payload, str):
+                    try:
+                        with open(payload, "rb") as handle:
+                            data = handle.read()
+                    except OSError:
+                        failed.append((name_hint, msg(ctx, "reason_download")))
+                        state["failed"] += 1
+                        state["done"] = position
+                        await show()
+                        continue
+                else:
+                    data = payload
+
+                animated = _is_animated_image(data)
+                if len(data) > EMOJI_MAX_BYTES:
+                    skipped.append((name_hint, msg(ctx, "reason_too_large")))
+                    state["skipped"] += 1
+                    state["done"] = position
+                    await show()
+                    continue
+                if remaining[animated] <= 0:
+                    skipped.append((name_hint, msg(ctx, "reason_no_slots")))
+                    state["skipped"] += 1
+                    state["done"] = position
+                    await show()
+                    continue
+
+                name = _unique_name(_normalise_name(name_hint), used)
+                emoji, error = await self._create_emoji(guild, name, data, on_throttle)
+                state["done"] = position
+
+                if emoji is None:
+                    failed.append((name_hint, msg(ctx, "no_perms") if error == "forbidden" else error))
+                    state["failed"] += 1
+                    if error == "forbidden":
+                        aborted = True
+                        break
+                else:
+                    added.append(emoji.name)
+                    state["added"] += 1
+                    remaining[animated] -= 1
+
+                await show()
+                if position < total:
+                    await asyncio.sleep(EMOJI_UPLOAD_INTERVAL)
+
+            if aborted:
+                skipped.extend((hint, msg(ctx, "no_perms")) for hint, _payload in jobs[position:])
+                state["skipped"] += len(jobs) - position
+
+            overview = _steal_overview_view(
+                ctx,
+                checked=state["done"],
+                added=added,
+                skipped=skipped,
+                failed=failed,
+                notice=state["notice"],
+                slots=remaining,
+                limit=limit,
+                aborted=aborted,
+                thumbnail_url=guild.icon.url if guild.icon else self.bot.user.display_avatar.url,
+            )
+            try:
+                await progress.edit(view=overview)
+            except discord.HTTPException:
+                await ctx.send(view=overview)
+
+            if added:
+                log.success("Emoji", f"Stole {len(added)} emojis in {guild.name}")
+        finally:
+            for directory in temp_dirs:
+                shutil.rmtree(directory, ignore_errors=True)
+
+    @staticmethod
+    def _no_jobs_view(ctx, skipped) -> discord.ui.LayoutView:
+        """The card shown when nothing usable was collected from the message."""
+        if not skipped:
+            return _steal_view(
+                discord.ui.TextDisplay(content=msg(ctx, "not_found")),
+                accent=STEAL_ACCENT_ERROR,
+            )
+        lines = [
+            msg(ctx, "steal_skip_line", count=len(names), reason=reason, names=_names_preview(names))
+            for reason, names in _group_reasons(skipped).items()
+        ]
+        return _steal_view(
+            discord.ui.TextDisplay(
+                content=f"### {get_emoji('warning')} {msg(ctx, 'steal_nothing_title')}"
+            ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accent=STEAL_ACCENT_WARN,
+        )
 
     @commands.command(name="emojimanager", aliases=["em"], help="{ 'en': 'show emoji helper menu 🎨✨', 'de': 'zeige das Emoji-Hilfemenü' }")
     async def emojimanager_help(self, ctx):
@@ -143,8 +754,7 @@ class EmojiManagerCog(commands.Cog):
         )
         
         commands_list = [
-            (f"{prefix}steal <emoji>", f"{msg(ctx, 'steal_description')}"),
-            (f"{prefix}sm <emojis...>", f"{msg(ctx, 'sm_description')}"),
+            (f"{prefix}steal <emoji | link | .zip> [...]", f"{msg(ctx, 'steal_description')}"),
             (f"{prefix}surl <url> [name]", f"{msg(ctx, 'surl_description')}"),
             (f"{prefix}enlarge <emoji>", f"{msg(ctx, 'enlarge_description')}"),
             (f"{prefix}emojistats", f"{msg(ctx, 'emojistats_description')}"),
@@ -159,46 +769,37 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="steal", help="{ 'en': 'steal a cute emoji 🎨✨', 'de': 'stiehl ein süßes Emoji' }")
+    @commands.command(
+        name="steal",
+        aliases=["sm", "stealall", "steal-multiple"],
+        help="{ 'en': 'steal an emoji, a link or a whole pack 🎨✨', 'de': 'stiehl ein Emoji, einen Link oder ein ganzes Paket', 'es': 'robar un emoji, un enlace o un paquete completo' }"
+    )
     @has_permissions(manage_guild=True)
-    async def steal_emoji(self, ctx, emoji_string: str):
+    async def steal_emoji(self, ctx, *items: str):
+        """Steal one emoji, several emojis, image links or a whole zip pack."""
+        attachment_zips = [
+            attachment
+            for attachment in getattr(ctx.message, "attachments", []) or []
+            if attachment.filename.lower().endswith(".zip")
+        ]
+        if not items and not attachment_zips:
+            prefix = await _resolve_prefix(self.bot, ctx)
+            return await ctx.send(view=_steal_view(
+                discord.ui.TextDisplay(content=f"### {get_emoji('paint')} {msg(ctx, 'stealing_title')}"),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=msg(ctx, "steal_usage", prefix=prefix)),
+                accent=STEAL_ACCENT,
+            ))
         await ctx.typing()
-        name, image_data, animated, url = await self._get_emoji_info(emoji_string)
-        if not image_data:
-            return await ctx.send(msg(ctx, "not_found"))
-        await self._add_emoji(ctx, name, image_data)
-
-    @commands.command(name="steal-multiple", aliases=["sm", "stealall"], help="{ 'en': 'steal many cute emojis 🎨✨', 'de': 'stiehl viele süße Emojis' }")
-    @has_permissions(manage_guild=True)
-    async def steal_multiple_emojis(self, ctx, *emoji_strings: str):
-        if not emoji_strings:
-            return await ctx.send(msg(ctx, "not_found"))
-        await ctx.typing()
-        added = []
-        for s in emoji_strings:
-            name, data, _, _ = await self._get_emoji_info(s)
-            if data and await self._add_emoji(ctx, name, data):
-                added.append(name)
-        if added:
-            log.success("Emoji", f"Stole {len(added)} emojis in {ctx.guild.name}")
+        await self._steal(ctx, list(items), attachment_zips)
 
     @commands.command(name="steal-from-url", aliases=["surl"], help="{ 'en': 'add emoji from a link 🔗✨', 'de': 'Emoji von einem Link hinzufügen' }")
     @has_permissions(manage_guild=True)
     async def steal_from_url(self, ctx, url: str, name: Optional[str] = None):
-        if not URL_REGEX.match(url):
+        if not _is_http_url(url):
             return await ctx.send(msg(ctx, "error", error="Invalid URL"))
         await ctx.typing()
-        try:
-            async with self.session.get(url) as resp:
-                if resp.status == 200:
-                    data = await resp.read()
-                    if not name:
-                        name = url.split('/')[-1].split('.')[0] or "emoji"
-                    await self._add_emoji(ctx, name, data)
-                else:
-                    await ctx.send(msg(ctx, "error", error="Download failed"))
-        except Exception as e:
-            await ctx.send(msg(ctx, "error", error=str(e)))
+        await self._steal(ctx, [url], override_name=name)
 
     @commands.command(name="enlarge", help="{ 'en': 'see an emoji in big size 🔍✨', 'de': 'sieh ein Emoji in groß an' }")
     async def enlarge_emoji(self, ctx, emoji_string: str):
@@ -246,8 +847,9 @@ class EmojiManagerCog(commands.Cog):
             name = emoji.name
             await emoji.delete()
             await ctx.send(f"🗑️ removed `:{name}:` from the server!")
-        except:
+        except Exception:
             await ctx.send(msg(ctx, "no_perms"))
+
 
 async def setup(bot):
     await bot.add_cog(EmojiManagerCog(bot))

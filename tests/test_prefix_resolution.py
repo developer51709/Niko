@@ -19,6 +19,7 @@ import asyncio
 import gc
 import importlib
 import json
+import os
 import sys
 import unittest
 import warnings
@@ -28,6 +29,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from utils import prefix_manager  # noqa: E402
 from utils.prefix_manager import (  # noqa: E402
     DEFAULT_PREFIXES,
     FALLBACK_PREFIX,
@@ -60,6 +62,7 @@ class PrefixPool:
     def __init__(self, prefixes):
         self.prefixes = prefixes
         self.queries = []
+        self.writes = []
 
     async def fetchrow(self, sql, *values):
         self.queries.append((sql, values))
@@ -68,6 +71,9 @@ class PrefixPool:
             return None
         stored = self.prefixes if isinstance(self.prefixes, str) else json.dumps(self.prefixes)
         return {"prefixes": stored}
+
+    async def execute(self, sql, *values):
+        self.writes.append((sql, values))
 
 
 def bot_with(command_prefix, pool=None):
@@ -132,6 +138,88 @@ class DynamicPrefixTest(unittest.TestCase):
 
     def test_unreadable_target_falls_back(self):
         self.assertEqual(asyncio.run(resolve_prefix(self.bot, SimpleNamespace())), FALLBACK_PREFIX)
+
+
+class DevelopmentDefaultPrefixTests(unittest.TestCase):
+    def tearDown(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEVELOPMENT", None)
+            importlib.reload(prefix_manager)
+
+    def test_development_uses_bang_for_unspecified_guild_and_dm_prefixes(self):
+        with patch.dict(os.environ, {"DEVELOPMENT": "true"}):
+            config = importlib.reload(prefix_manager)
+            self.assertEqual(config.DEFAULT_PREFIXES, ["!"])
+            self.assertEqual(config.FALLBACK_PREFIX, "!")
+            self.assertEqual(
+                asyncio.run(config.dynamic_prefix(bot_with(config.dynamic_prefix), SimpleNamespace(guild=None))),
+                ["!"],
+            )
+            self.assertEqual(
+                asyncio.run(config.dynamic_prefix(
+                    bot_with(config.dynamic_prefix),
+                    SimpleNamespace(guild=SimpleNamespace(id=GUILD_ID)),
+                )),
+                ["!"],
+            )
+
+    def test_production_default_remains_period(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEVELOPMENT", None)
+            config = importlib.reload(prefix_manager)
+        self.assertEqual(config.DEFAULT_PREFIXES, ["."])
+        self.assertEqual(config.FALLBACK_PREFIX, ".")
+
+class PrefixOverrideWriteGuardTest(unittest.TestCase):
+    """A beta/COMMAND_PREFIX run must never write prefixes to the database."""
+
+    def setUp(self):
+        self.env = patch.dict(os.environ, {"DEVELOPMENT": "true"})
+        self.env.start()
+        self.config = importlib.reload(prefix_manager)
+        self.pool = PrefixPool([".", "?"])
+
+    def tearDown(self):
+        self.env.stop()
+        os.environ.pop("DEVELOPMENT", None)
+        importlib.reload(prefix_manager)
+
+    def test_override_is_what_commands_use(self):
+        self.assertEqual(self.config.PREFIX_OVERRIDE, "!")
+        self.assertEqual(
+            asyncio.run(self.config.get_prefixes(GUILD_ID, self.pool)), ["!"]
+        )
+
+    def test_every_write_path_is_a_no_op(self):
+        calls = (
+            ("set", lambda: self.config.set_prefixes(GUILD_ID, ["!"], self.pool)),
+            ("add", lambda: self.config.add_prefix(GUILD_ID, "!", self.pool)),
+            ("remove", lambda: self.config.remove_prefix(GUILD_ID, ".", self.pool)),
+            ("reset", lambda: self.config.reset_prefixes(GUILD_ID, self.pool)),
+        )
+        for name, call in calls:
+            with self.subTest(call=name):
+                self.assertEqual(asyncio.run(call()), ["!"])
+        self.assertEqual(self.pool.writes, [])
+        self.assertEqual(self.pool.prefixes, [".", "?"])
+
+
+class PrefixStoreTest(unittest.TestCase):
+    """Without an override the stored prefixes are still written normally."""
+
+    def tearDown(self):
+        importlib.reload(prefix_manager)
+
+    def test_production_still_writes_prefixes(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEVELOPMENT", None)
+            config = importlib.reload(prefix_manager)
+        self.assertEqual(config.PREFIX_OVERRIDE, "")
+        pool = PrefixPool([])
+        self.assertEqual(
+            asyncio.run(config.set_prefixes(GUILD_ID, ["!", "?"], pool)), ["!", "?"]
+        )
+        self.assertEqual(len(pool.writes), 1)
 
 
 class StaticPrefixTest(unittest.TestCase):

@@ -2033,7 +2033,8 @@ def _save_runtime_guild_profile(guild_id: int, profile: dict) -> None:
 
 def _get_runtime_server_config(guild_id: str) -> dict:
     """Read all server-management settings from their existing owners."""
-    from utils.prefix_manager import get_prefixes
+    from utils.prefix_manager import DEFAULT_PREFIX, PREFIX_OVERRIDE, get_prefixes
+    from config.status import DEVELOPMENT
     from utils.guild_privacy import get_guild_privacy
     from utils.onboarding.config import load_config
     from cogs.logging.formatters import _load_log_config, _guild_config
@@ -2049,6 +2050,9 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "prefixes": run_on_bot_loop(
             get_prefixes(int(guild_id), getattr(_discord_bot, "cxn", None))
         ),
+        "development": DEVELOPMENT,
+        "default_prefix": DEFAULT_PREFIX,
+        "prefix_override": PREFIX_OVERRIDE,
         "onboarding": _serialize_onboarding_config(onboarding),
         "logging": logging_config,
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),

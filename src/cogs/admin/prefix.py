@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from config.emojis import get_emoji
 from utils.prefix_manager import (
+    PREFIX_OVERRIDE,
     get_prefixes,
     add_prefix,
     remove_prefix,
@@ -14,6 +15,24 @@ async def build_prefix_panel(bot, guild_id):
     return PrefixConfigPanel(bot, guild_id, prefixes)
 
 
+def _development_notice_view():
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Production Only"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(content="Prefix changes are disabled in Development. Switch to the Production version to change this server’s prefixes."),
+        accent_colour=discord.Color.orange(),
+    ))
+    return view
+
+
+async def _development_blocked(interaction: discord.Interaction) -> bool:
+    if not PREFIX_OVERRIDE:
+        return False
+    await interaction.response.send_message(view=_development_notice_view(), ephemeral=True)
+    return True
+
+
 class AddPrefixModal(discord.ui.Modal, title="Add Prefix"):
     prefix = discord.ui.TextInput(label="Prefix", max_length=10)
 
@@ -23,6 +42,8 @@ class AddPrefixModal(discord.ui.Modal, title="Add Prefix"):
         self.guild_id = guild_id
 
     async def on_submit(self, interaction: discord.Interaction):
+        if await _development_blocked(interaction):
+            return
         await add_prefix(self.guild_id, str(self.prefix), getattr(self.bot, "cxn", None))
         await interaction.response.edit_message(
             view=await build_prefix_panel(self.bot, self.guild_id)
@@ -38,6 +59,8 @@ class RemovePrefixSelect(discord.ui.Select):
         super().__init__(placeholder="Select a prefix to remove", options=options)
 
     async def callback(self, interaction: discord.Interaction):
+        if await _development_blocked(interaction):
+            return
         prefix = self.values[0]
         await remove_prefix(self.guild_id, prefix, getattr(self.bot, "cxn", None))
 
@@ -60,6 +83,8 @@ class AddPrefixButton(discord.ui.Button):
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if await _development_blocked(interaction):
+            return
         if not interaction.user.guild_permissions.manage_guild:
             view = _permission_error_view()
             return await interaction.response.send_message(view=view, ephemeral=True)
@@ -74,6 +99,8 @@ class RemovePrefixButton(discord.ui.Button):
         self.prefixes = prefixes
 
     async def callback(self, interaction: discord.Interaction):
+        if await _development_blocked(interaction):
+            return
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(view=_permission_error_view(), ephemeral=True)
 
@@ -95,6 +122,8 @@ class ResetPrefixButton(discord.ui.Button):
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
+        if await _development_blocked(interaction):
+            return
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(view=_permission_error_view(), ephemeral=True)
         await reset_prefixes(self.guild_id, getattr(self.bot, "cxn", None))
@@ -139,6 +168,9 @@ class PrefixConfig(commands.Cog):
     @commands.command(name="prefix", help="Configure custom prefixes for this server.")
     @commands.has_permissions(manage_guild=True)
     async def prefix_config(self, ctx):
+        if PREFIX_OVERRIDE:
+            await ctx.send(view=_development_notice_view())
+            return
         await ctx.send(view=await build_prefix_panel(self.bot, ctx.guild.id))
 
 

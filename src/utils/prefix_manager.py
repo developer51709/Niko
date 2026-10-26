@@ -2,15 +2,22 @@
 
 import inspect
 import json
+import os
 from types import SimpleNamespace
 
 import database
 
-DEFAULT_PREFIXES = ["."]
+DEVELOPMENT = (os.getenv("DEVELOPMENT") or "").strip().lower() in {"1", "true", "yes", "on"}
+COMMAND_PREFIX = (os.getenv("COMMAND_PREFIX") or "").strip()
+DEFAULT_PREFIX = COMMAND_PREFIX or ("!" if DEVELOPMENT else ".")
+DEFAULT_PREFIXES = [DEFAULT_PREFIX]
+# Development deployments always use !; COMMAND_PREFIX can force any other
+# deployment-wide prefix. Either override takes precedence over saved prefixes.
+PREFIX_OVERRIDE = COMMAND_PREFIX or ("!" if DEVELOPMENT else "")
 
 # Used when nothing else resolves a prefix: an unknown guild, an unreadable
 # message, or a prefix callable that raised.
-FALLBACK_PREFIX = "."
+FALLBACK_PREFIX = DEFAULT_PREFIX
 
 
 def _pool(pool=None):
@@ -29,7 +36,9 @@ def _decode_prefixes(value):
 
 
 async def get_prefixes(guild_id: int, pool=None) -> list[str]:
-    """Return configured prefixes, falling back to the default prefix."""
+    """Return configured prefixes, unless a deployment-wide override is active."""
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     pool = _pool(pool)
     if pool is None:
         return DEFAULT_PREFIXES.copy()
@@ -41,7 +50,15 @@ async def get_prefixes(guild_id: int, pool=None) -> list[str]:
 
 
 async def set_prefixes(guild_id: int, prefixes: list[str], pool=None) -> list[str]:
-    """Replace a guild's configured prefixes and return the stored list."""
+    """Replace a guild's configured prefixes and return the stored list.
+
+    While a deployment-wide override is active (a beta or ``COMMAND_PREFIX``
+    run) the prefix is fixed, so this is a no-op: writing here would store the
+    override - ``!`` on the beta - as the guild's prefix and clobber whichever
+    prefixes production has saved. Nothing is read or written in that case.
+    """
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     pool = _pool(pool)
     cleaned = list(dict.fromkeys(prefix for prefix in prefixes if isinstance(prefix, str)))
     if pool is None:
@@ -55,6 +72,8 @@ async def set_prefixes(guild_id: int, prefixes: list[str], pool=None) -> list[st
 
 
 async def add_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     prefixes = await get_prefixes(guild_id, pool)
     if prefix not in prefixes:
         prefixes.append(prefix)
@@ -62,6 +81,8 @@ async def add_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
 
 
 async def remove_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     prefixes = await get_prefixes(guild_id, pool)
     if prefix in prefixes:
         prefixes.remove(prefix)
@@ -69,11 +90,15 @@ async def remove_prefix(guild_id: int, prefix: str, pool=None) -> list[str]:
 
 
 async def reset_prefixes(guild_id: int, pool=None) -> list[str]:
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     return await set_prefixes(guild_id, DEFAULT_PREFIXES.copy(), pool)
 
 
 async def dynamic_prefix(bot, message):
     """Async command-prefix callable used by discord.py."""
+    if PREFIX_OVERRIDE:
+        return [PREFIX_OVERRIDE]
     if not message.guild:
         return DEFAULT_PREFIXES.copy()
     return await get_prefixes(message.guild.id, getattr(bot, "cxn", None))

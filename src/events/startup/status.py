@@ -1,9 +1,8 @@
 """
 Startup — Discord presence / status setter.
 
-Status configuration is read from src.config.status so it can be edited in one
-place instead of via environment variables. Multi-message rotation is supported
-when STATUS_ROTATE is enabled in that config.
+Status configuration is read from src.config.status. The DEVELOPMENT environment
+flag selects the dedicated beta rotation; otherwise the production rotation runs.
 
 Status messages support the following placeholder variables, which are
 substituted with live bot values every time the presence updates:
@@ -81,7 +80,7 @@ def _build_activity(text: str, status_type: str, status_link: str) -> discord.Ba
 
 
 async def set_status(bot):
-    """Set the bot's initial presence and, if configured, start status rotation.
+    """Set the bot's initial presence and start the selected status rotation.
 
     This is called from the ``on_ready`` path. Any failure here is logged but
     does not take down the rest of startup.
@@ -95,7 +94,8 @@ async def set_status(bot):
     except Exception as exc:
         logging.error("status", f"Failed to set initial bot status: {exc}")
 
-    if not status_config.STATUS_ROTATE:
+    # STATUS_MESSAGE is a fixed override, so do not let rotation replace it.
+    if status_config.STATUS_MESSAGE_OVERRIDE or not status_config.STATUS_ROTATE:
         return
 
     if not _should_run_rotation():
@@ -278,8 +278,13 @@ def stop_status_rotation(bot) -> None:
 def start_status_rotation(bot) -> None:
     """Public entrypoint for starting status rotation outside of initial startup.
 
-    Safe to call at any time after the bot has a running event loop.
+    Safe to call at any time after the bot has a running event loop. Rotation is
+    skipped entirely when it is disabled in the config, which is also how a
+    DEVELOPMENT selects the secondary beta status rotation.
     """
+    if status_config.STATUS_MESSAGE_OVERRIDE or not status_config.STATUS_ROTATE:
+        return
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:

@@ -1,4 +1,5 @@
 from .panel import *
+from config import environment
 import asyncio
 import json
 import os
@@ -17,6 +18,8 @@ class Leveling(commands.Cog):
 
     async def cog_load(self):
         """Migrate legacy JSON data into the central database (one-time)."""
+        if environment.DEVELOPMENT:
+            log.info("Leveling", "DEVELOPMENT is set \u2014 XP gains are disabled to keep production's levels intact.")
         await self._migrate_levels_json()
         await self._migrate_level_config_json()
 
@@ -155,6 +158,11 @@ class Leveling(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
+            return
+
+        # A development instance shares production's database, so awarding XP
+        # here would overwrite live levels with test traffic.
+        if environment.DEVELOPMENT:
             return
 
         guild_id = message.guild.id
