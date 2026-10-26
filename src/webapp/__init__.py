@@ -8,6 +8,7 @@ from . import (  # noqa: E402,F401
     auth_routes,
     team_routes,
     staff_management_routes,
+    staff_broadcast_routes,
     public_routes,
     dashboard_routes,
     notifier_routes,

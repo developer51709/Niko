@@ -466,25 +466,21 @@ class LockdownGuardTests(LockdownTestCase):
         self.assertIn("is_guild_blacklisted", block)
 
     def test_official_broadcasts_skip_blacklisted_servers(self):
-        from cogs.staff.owner import BroadcastBuilder
+        from utils.broadcast import split_targets
 
         manager = BlacklistManager()
         manager.blacklist["guilds"] = [{"id": GUILD, "reason": "abuse", "timestamp": 0.0, "added_by": None}]
-        asyncio.run(self.pool.execute("INSERT OR REPLACE INTO notification_channels (guild_id, channel_id) VALUES ($1, $2)", GUILD, STARBOARD_CHANNEL))
-        asyncio.run(self.pool.execute("INSERT OR REPLACE INTO notification_channels (guild_id, channel_id) VALUES ($1, $2)", OTHER_GUILD, INVITE_CHANNEL))
+        rows = [
+            {"guild_id": GUILD, "channel_id": STARBOARD_CHANNEL},
+            {"guild_id": OTHER_GUILD, "channel_id": INVITE_CHANNEL},
+        ]
 
-        blocked_channel = FakeChannel(STARBOARD_CHANNEL)
-        allowed_channel = FakeChannel(INVITE_CHANNEL)
-        bot = FakeBot(self.pool, channels={STARBOARD_CHANNEL: blocked_channel, INVITE_CHANNEL: allowed_channel})
-        interaction = FakeInteraction()
-        asyncio.run(BroadcastBuilder(bot, owner_id=7, title="Maintenance", body="Back shortly.", image_urls=[]).publish(interaction))
+        eligible, skipped = split_targets(rows, manager.is_guild_blacklisted)
 
-        self.assertEqual(blocked_channel.views, [])
-        self.assertEqual(len(allowed_channel.views), 1)
-        summary = interaction.sent[-1]
-        self.assertIn("**1** configured server", summary)
-        self.assertIn("1 blacklisted server", summary)
-        self.assertIn("were skipped", summary)
+        # The blacklisted guild never reaches the delivery queue, and the run
+        # reports it as skipped instead of silently dropping the server.
+        self.assertEqual([row["guild_id"] for row in eligible], [OTHER_GUILD])
+        self.assertEqual(skipped, 1)
 
 
 class LockdownRouteTests(LockdownTestCase):

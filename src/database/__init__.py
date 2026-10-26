@@ -194,6 +194,10 @@ PRIMARY_KEYS: dict = {
     "staff_application_submissions": ("application_id", "user_id"),
     "staff_team_openings": "id",
     "staff_team_submissions": ("opening_id", "user_id"),
+    "staff_broadcasts": "broadcast_id",
+    "staff_broadcast_media": "media_id",
+    "staff_broadcast_targets": ("broadcast_id", "guild_id"),
+    "notification_channels": "guild_id",
     "mrbeast_scams": "image_hash",
     "mrbeast_scam_reports": "report_id",
     # Dedicated music database (utils.music.database) — same cluster on
@@ -638,9 +642,21 @@ class MongoPool:
 
         m = re.search(r"COUNT\s*\(\s*(\*|\w+)\s*\)", columns_raw, re.IGNORECASE)
         if not m:
-            raise NotImplementedError(
-                f"Unsupported aggregate SELECT: {columns_raw}"
-            )
+            # SUM(...) without a COUNT beside it, e.g. the total number of
+            # bytes attached to one broadcast. NULL values are ignored, as in
+            # SQL, so a row without the column does not skew the total.
+            m = re.search(r"SUM\s*\(\s*(\w+)\s*\)", columns_raw, re.IGNORECASE)
+            if not m:
+                raise NotImplementedError(
+                    f"Unsupported aggregate SELECT: {columns_raw}"
+                )
+            column = m.group(1)
+            total = 0
+            async for doc in self._db[table].find(filter_dict):
+                value = doc.get(column)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    total += value
+            return [Row({"SUM": total, column: total})]
         target = m.group(1)
         if target == "*":
             count = await self._db[table].count_documents(filter_dict)
