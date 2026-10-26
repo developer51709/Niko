@@ -2,14 +2,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
-import "./guild-settings.css";
-import "./color-picker.css";
-import "./switch.css";
-import "./billing.css";
-import "./data-removal.css";
-import "./broadcast-studio.css";
+import "./styles/guild-settings.css";
+import "./styles/color-picker.css";
+import "./styles/switch.css";
+import "./styles/billing.css";
+import "./styles/data-removal.css";
+import "./styles/broadcast-studio.css";
 import "./styles/staff-card.css";
-import "./discord-name-fonts.css";
+import "./styles/discord-name-fonts.css";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

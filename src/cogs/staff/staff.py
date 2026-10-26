@@ -18,7 +18,8 @@ from discord.ext import commands
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from config.links import WEBSITE
 from cogs.staff.support_server import (
-    CHANNEL_SPECS, ROLE_SPECS, SupportGuidePanel, SupportPingPanel, apply_role_icons,
+    CHANNEL_SPECS, ROLE_SPECS, SupportAgePanel, SupportGuidePanel, SupportPingPanel,
+    SupportPronounPanel, apply_role_icons,
     assign_support_roles, create_support_invite, get_support_ids, persist_support_ids,
     reconcile_structure, role_icons_available, support_rules_text,
 )
@@ -937,6 +938,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     await post("partnership_info", partnership_info, channel_key="partnership_info")
     await post("support_guide", SupportGuidePanel(channels), channel_key="support_guide")
     roles_message = await post("notification_roles", SupportPingPanel(), channel_key="roles")
+    pronoun_message = await post("pronoun_roles", SupportPronounPanel(), channel_key="roles")
+    age_message = await post("age_roles", SupportAgePanel(), channel_key="roles")
     ticket_message = await post("tickets", TicketPanelView(guild.id, get_ticket_config(guild.id)))
     ticket_cfg = get_ticket_config(guild.id)
     ticket_cfg.panel_channel_id = ticket_message.channel.id
@@ -991,6 +994,8 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     bot.add_view(VoiceMasterInterface(), message_id=voice_message.id)
     bot.add_view(TicketPanelView(guild.id, get_ticket_config(guild.id)), message_id=ticket_message.id)
     bot.add_view(SupportPingPanel(), message_id=roles_message.id)
+    bot.add_view(SupportPronounPanel(), message_id=pronoun_message.id)
+    bot.add_view(SupportAgePanel(), message_id=age_message.id)
 
 
 async def _support_api_pause():
@@ -1037,7 +1042,10 @@ def _staff_rules_panel():
         discord.ui.TextDisplay(content="# Staff guidelines\n-# Niko Support · Internal team handbook"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
     ]
-    items.extend(discord.ui.TextDisplay(content=section) for section in sections)
+    for index, section in enumerate(sections):
+        if index:
+            items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        items.append(discord.ui.TextDisplay(content=section))
     view.add_item(discord.ui.Container(*items, accent_colour=0xC8A882))
     return view
 

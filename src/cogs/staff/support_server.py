@@ -30,6 +30,47 @@ ROLE_SPECS = {
     "events_ping": ("Events", 0x1ABC9C, False),
     "community_ping": ("Community", 0xE91E63, False),
     "polls_ping": ("Polls", 0x9B59B6, False),
+    # Cosmetic identity roles. They are opt-in from #roles, single-choice per
+    # panel, and never mentionable so they cannot be used as pings.
+    "pronouns_he_him": ("He/Him", 0, False),
+    "pronouns_she_her": ("She/Her", 0, False),
+    "pronouns_they_them": ("They/Them", 0, False),
+    "pronouns_xe_xem": ("Xe/Xem", 0, False),
+    "pronouns_any": ("Any Pronouns", 0, False),
+    "age_13_15": ("13–15", 0, False),
+    "age_16_17": ("16–17", 0, False),
+    "age_18_20": ("18–20", 0, False),
+    "age_21_24": ("21–24", 0, False),
+    "age_25_plus": ("25+", 0, False),
+}
+
+# Roles handed out with a staff roster entry. The shared Niko Staff role is
+# not listed: every staff member holds it, so it must stay permission-free.
+STAFF_ROLE_KEYS = (
+    "owner", "head_admin", "moderator", "head_support", "graphic_designer",
+    "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager",
+)
+
+# Channel access granted by the role itself. Roles not listed here still reach
+# the general staff channels through STAFF_ROLE_KEYS, but the operational logs
+# stay with moderation, the administrators, and the team leads.
+LOG_CHANNEL_KEYS = frozenset({"logs", "member_logs", "message_logs", "channel_logs", "automod_logs"})
+LOG_ROLE_KEYS = ("owner", "head_admin", "moderator", "head_support", "partnerships_promotions_lead")
+
+# A team lead is a low-ranking leadership position: enough moderation to keep
+# their own group in line and handle escalations, but no administrative power.
+_LEAD_PERMISSIONS = discord.Permissions(
+    moderate_members=True,
+    manage_messages=True,
+    manage_threads=True,
+)
+
+# Only the roles above get reconciled permissions. Everything else keeps
+# whatever the owner configured by hand.
+ROLE_PERMISSIONS = {
+    "staff": discord.Permissions.none(),
+    "head_support": _LEAD_PERMISSIONS,
+    "partnerships_promotions_lead": _LEAD_PERMISSIONS,
 }
 
 # Channel blueprint: key -> (category, name, kind, staff_only)
@@ -363,13 +404,27 @@ async def _ensure_role(guild: discord.Guild, key: str) -> discord.Role:
     name, colour, hoist = ROLE_SPECS[key]
     mentionable = key == "staff" or key.endswith("_ping")
     role_colour = discord.Colour.default() if colour == 0 else discord.Colour(colour)
+    permissions = ROLE_PERMISSIONS.get(key)
     role = discord.utils.get(guild.roles, name=name)
     if role is None:
-        role = await guild.create_role(name=name, colour=role_colour, hoist=hoist, mentionable=mentionable, reason="Niko support server structure")
+        role = await guild.create_role(
+            name=name, colour=role_colour, hoist=hoist, mentionable=mentionable,
+            permissions=permissions or discord.Permissions.none(),
+            reason="Niko support server structure",
+        )
         await _pace()
     else:
-        if role.colour.value != colour or role.hoist != hoist or role.mentionable != mentionable:
-            await role.edit(colour=role_colour, hoist=hoist, mentionable=mentionable, reason="Reconcile Niko support server role")
+        edits = {}
+        if role.colour.value != colour:
+            edits["colour"] = role_colour
+        if role.hoist != hoist:
+            edits["hoist"] = hoist
+        if role.mentionable != mentionable:
+            edits["mentionable"] = mentionable
+        if permissions is not None and role.permissions != permissions:
+            edits["permissions"] = permissions
+        if edits:
+            await role.edit(**edits, reason="Reconcile Niko support server role")
             await _pace()
     return role
 
@@ -385,11 +440,23 @@ def _staff_channel_overwrites(guild: discord.Guild, roles: dict, everyone: disco
     }
     if owner_role:
         overwrites[owner_role] = discord.PermissionOverwrite(view_channel=True, send_messages=not is_partnership_channel, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True)
+    if key in LOG_CHANNEL_KEYS:
+        # The Logs category grants every staff role access, so the roles that do
+        # not need operational logs need an explicit deny on each log channel.
+        for staff_key in STAFF_ROLE_KEYS:
+            if staff_key in LOG_ROLE_KEYS:
+                continue
+            role_id = roles.get(staff_key)
+            role = guild.get_role(int(role_id)) if role_id else None
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=False)
     restricted_posts = key in {"staff_rules", "staff_announcements"}
-    staff_keys = ("owner", "head_admin") if restricted_posts else (
-        "owner", "head_admin", "moderator", "head_support", "graphic_designer",
-        "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager",
-    )
+    if key in LOG_CHANNEL_KEYS:
+        staff_keys = LOG_ROLE_KEYS
+    elif restricted_posts:
+        staff_keys = ("owner", "head_admin")
+    else:
+        staff_keys = STAFF_ROLE_KEYS
     if key == "events":
         staff_keys = ("owner", "head_admin", "event_coordinator")
     if is_partnership_channel:
@@ -729,7 +796,7 @@ async def assign_join_roles(bot, member: discord.Member, roles: dict) -> None:
             staff_key = None
         if member.id in OWNER_IDS:
             staff_key = "owner"
-        if staff_key in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
+        if staff_key in STAFF_ROLE_KEYS:
             if roles.get("staff"):
                 shared = member.guild.get_role(int(roles["staff"]))
                 if shared and shared not in member.roles:
@@ -759,7 +826,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
             inactive_staff_ids.add(user_id)
         else:
             staff_by_user[user_id] = str(row["role"])
-    supported_staff_keys = {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}
+    supported_staff_keys = set(STAFF_ROLE_KEYS)
     from config.ids import OWNER_IDS
     for owner_id in OWNER_IDS:
         staff_by_user[int(owner_id)] = "owner"
@@ -781,7 +848,7 @@ async def assign_support_roles(bot, guild: discord.Guild, roles: dict) -> None:
         if shared_staff and member.id in staff_by_user and shared_staff not in member.roles:
             add.append(shared_staff)
         staff_key = staff_by_user.get(member.id)
-        if staff_key not in {"owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator", "partnerships_promotions_lead", "partnership_manager"}:
+        if staff_key not in STAFF_ROLE_KEYS:
             staff_key = None
         if staff_key and roles.get(staff_key):
             specific = guild.get_role(int(roles[staff_key]))
@@ -869,26 +936,101 @@ class SupportPingPanel(discord.ui.LayoutView):
         await interaction.response.send_message(message, ephemeral=True)
 
 
+PRONOUN_ROLE_KEYS = ("pronouns_he_him", "pronouns_she_her", "pronouns_they_them", "pronouns_xe_xem", "pronouns_any")
+AGE_GROUP_ROLE_KEYS = ("age_13_15", "age_16_17", "age_18_20", "age_21_24", "age_25_plus")
+
+
+async def _toggle_cosmetic_role(interaction: discord.Interaction, group_keys: tuple[str, ...]) -> None:
+    """Toggle one opt-in role, keeping the group to a single choice."""
+    if not interaction.guild or interaction.guild.id != SUPPORT_GUILD or not isinstance(interaction.user, discord.Member):
+        return await interaction.response.send_message("This panel only works in the official support server.", ephemeral=True)
+    key = str(interaction.data.get("custom_id", "")).rsplit(":", 1)[-1]
+    if key not in group_keys:
+        return await interaction.response.send_message("That role option is no longer available.", ephemeral=True)
+    guild = interaction.guild
+    ids = (await get_support_ids(interaction.client))["roles"]
+    group_roles = [guild.get_role(int(ids[key_])) if ids.get(key_) else None for key_ in group_keys]
+    role = group_roles[group_keys.index(key)]
+    if role is None:
+        return await interaction.response.send_message("This role is not configured yet. Please contact staff.", ephemeral=True)
+    member = interaction.user
+    if role in member.roles:
+        await member.remove_roles(role, reason="Support server role preference")
+        message = f"Removed **{role.name}**."
+    else:
+        stale = [other for other in group_roles if other and other != role and other in member.roles]
+        if stale:
+            await member.remove_roles(*stale, reason="Support server role preference")
+        await member.add_roles(role, reason="Support server role preference")
+        message = f"Added **{role.name}**."
+    await interaction.response.send_message(message, ephemeral=True)
+
+
+class _RoleChoicePanel(discord.ui.LayoutView):
+    """Persistent single-choice role picker shared by the identity panels."""
+
+    title = ""
+    description = ""
+    role_keys: tuple[str, ...] = ()
+
+    def __init__(self):
+        super().__init__(timeout=None)
+        row = discord.ui.ActionRow()
+        for key in self.role_keys:
+            button = discord.ui.Button(
+                label=ROLE_SPECS[key][0],
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"niko:support:role:{key}",
+            )
+            button.callback = self._toggle
+            row.add_item(button)
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"## {self.title}\n{self.description}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            row,
+            accent_colour=0xC8A882,
+        ))
+
+    async def _toggle(self, interaction: discord.Interaction) -> None:
+        await _toggle_cosmetic_role(interaction, self.role_keys)
+
+
+class SupportPronounPanel(_RoleChoicePanel):
+    """Opt-in pronoun roles for members."""
+
+    title = "Pronouns"
+    description = "Pick the pronoun role that fits you. Choose one - tap it again to remove it."
+    role_keys = PRONOUN_ROLE_KEYS
+
+
+class SupportAgePanel(_RoleChoicePanel):
+    """Opt-in age-range roles. Cosmetic only, never pinged."""
+
+    title = "Age group"
+    description = "Share your age range if you like. These roles are cosmetic and are never pinged. Choose one - tap it again to remove it."
+    role_keys = AGE_GROUP_ROLE_KEYS
+
+
 def support_rules_text() -> str:
     return (
         "## Our purpose\n"
-        "Help make the Niko community safe, welcoming, and useful. Treat every member with patience and dignity, whether they are new, frustrated, or asking a basic question.\n\n"
+        "Keep the Niko community safe, welcoming, and useful. Stay patient with every member, including newcomers and people who are frustrated.\n\n"
         "## Member support\n"
-        "- Listen first, ask clarifying questions, and give accurate steps without talking down to anyone.\n"
-        "- Keep public help in the support forum; move account-specific or sensitive cases into a private ticket.\n"
-        "- Never ask members to post passwords, tokens, payment details, or other private information.\n\n"
+        "- **Listen first**, then give clear, accurate steps.\n"
+        "- **Use the right space:** public help in the support forum, sensitive cases in a private ticket.\n"
+        "- **Never request secrets** such as passwords, tokens, or payment details.\n\n"
         "## Moderation & safety\n"
-        "- Apply the community rules consistently and proportionately. Explain decisions calmly and avoid public arguments.\n"
-        "- Preserve relevant context, document significant actions in the appropriate log, and do not delete evidence of an active safety incident.\n"
-        "- Escalate credible threats, exploitation, privacy risks, and uncertain high-impact cases to the owner or head admin promptly.\n\n"
+        "- **Be consistent and proportionate.** Explain decisions calmly and avoid public arguments.\n"
+        "- **Document actions** in the relevant log and preserve evidence during active incidents.\n"
+        "- **Escalate promptly** on threats, exploitation, privacy risks, or high-impact cases you are unsure about.\n\n"
         "## Confidentiality & representation\n"
-        "- Keep tickets, applications, reports, staff chat, and member data inside authorized staff spaces. Share only what is necessary to resolve a case.\n"
-        "- Do not share screenshots or quote private conversations outside the team without approval.\n"
-        "- You speak for Niko only when authorized: do not promise features, release dates, uptime, refunds, or outcomes.\n\n"
+        "- **Keep it internal.** Tickets, applications, reports, and member data stay in authorized staff spaces.\n"
+        "- **Do not share private conversations** outside the team without approval.\n"
+        "- **Only speak for Niko when authorized** - never promise features, dates, uptime, refunds, or outcomes.\n\n"
         "## Team conduct\n"
-        "- Be respectful with teammates, accept feedback, and resolve disagreements privately and constructively.\n"
-        "- Use staff announcements for official updates, staff chat for coordination, and the log channels for operational records.\n"
-        "- If you make a mistake, own it, tell the appropriate lead, and help correct the impact. When unsure, pause and ask a lead before acting."
+        "- **Respect teammates,** accept feedback, and settle disagreements privately.\n"
+        "- **Use the right channel:** staff announcements for updates, staff chat for coordination, logs for records.\n"
+        "- **Own mistakes,** tell your lead, and help fix the impact. When in doubt, pause and ask."
     )
 
 

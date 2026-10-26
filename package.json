@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config web/vite.config.ts",
-    "prebuild": "python3 scripts/generate_economy_loading_cards.py && python3 scripts/generate_leveling_loading_cards.py && python3 scripts/generate_spotify_loading_card.py",
+    "prebuild": "node scripts/generate_site_icons.mjs && python3 scripts/generate_economy_loading_cards.py && python3 scripts/generate_leveling_loading_cards.py && python3 scripts/generate_spotify_loading_card.py && python3 scripts/generate_ticket_banner.py",
     "build": "vite build --config web/vite.config.ts",
     "typecheck": "tsc --noEmit"
   },

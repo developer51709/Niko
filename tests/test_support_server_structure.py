@@ -14,7 +14,7 @@ sys.path.insert(0, "src")
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp import team_recruitment_routes
-from cogs.staff.support_server import CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, ROLE_ICON_ASSETS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
+from cogs.staff.support_server import CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportAgePanel, SupportGuidePanel, SupportPronounPanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -112,6 +112,49 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertTrue(guidelines[roles[2]].send_messages)
         self.assertNotIn(roles[5], guidelines)
         self.assertEqual(ROLE_SPECS["staff"][1:], (0, False))
+
+    def test_log_channels_exclude_support_team_and_partnership_managers(self):
+        role_ids = {key: index for index, key in enumerate(ROLE_SPECS, 1)}
+        roles = {key: discord.Object(id=value) for key, value in role_ids.items()}
+        by_id = {role.id: role for role in roles.values()}
+        everyone = discord.Object(id=999)
+        bot_member = discord.Object(id=998)
+        guild = SimpleNamespace(get_role=lambda role_id: by_id.get(role_id))
+        for key in LOG_CHANNEL_KEYS:
+            with self.subTest(channel=key):
+                overwrites = _staff_channel_overwrites(guild, role_ids, everyone, bot_member, key, True)
+                for role_key in ("support", "partnership_manager", "graphic_designer", "event_coordinator"):
+                    self.assertFalse(overwrites[roles[role_key]].view_channel)
+                for role_key in LOG_ROLE_KEYS:
+                    self.assertTrue(overwrites[roles[role_key]].view_channel)
+        staff_chat = _staff_channel_overwrites(guild, role_ids, everyone, bot_member, "staff_chat", True)
+        self.assertTrue(staff_chat[roles["support"]].view_channel)
+        self.assertNotIn(roles["staff"], staff_chat)
+
+    def test_shared_staff_role_has_no_permissions_while_leads_can_moderate(self):
+        self.assertEqual(ROLE_PERMISSIONS["staff"], discord.Permissions.none())
+        for key in ("head_support", "partnerships_promotions_lead"):
+            with self.subTest(role=key):
+                permissions = ROLE_PERMISSIONS[key]
+                self.assertTrue(permissions.moderate_members)
+                self.assertTrue(permissions.manage_messages)
+                self.assertFalse(permissions.administrator)
+                self.assertFalse(permissions.manage_guild)
+
+    def test_identity_panels_offer_single_choice_pronoun_and_age_roles(self):
+        panels = (
+            (SupportPronounPanel(), ["He/Him", "She/Her", "They/Them", "Xe/Xem", "Any Pronouns"]),
+            (SupportAgePanel(), ["13–15", "16–17", "18–20", "21–24", "25+"]),
+        )
+        for panel, expected in panels:
+            with self.subTest(panel=type(panel).__name__):
+                self.assertIsNone(panel.timeout)
+                buttons = [item for item in panel.walk_children() if isinstance(item, discord.ui.Button)]
+                self.assertEqual([button.label for button in buttons], expected)
+                for button in buttons:
+                    key = button.custom_id.rsplit(":", 1)[-1]
+                    self.assertEqual(ROLE_SPECS[key][1:], (0, False))
+                    self.assertFalse(key.endswith("_ping"))
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):
         async def check():
