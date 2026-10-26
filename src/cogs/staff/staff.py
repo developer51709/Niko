@@ -729,10 +729,31 @@ async def _configure_support_systems(bot, guild, roles, channels):
     from utils.onboarding.utils import get_config, update_config
     from utils.tickets.utils import get_ticket_config, async_update_ticket_config
 
+    def channel_ref(key: str, fallback: str) -> str:
+        channel_id = channels.get(key)
+        return f"<#{int(channel_id)}>" if channel_id else fallback
+
     onboarding = await get_config(guild.id)
     onboarding.welcome_channel = int(channels["welcome"])
     onboarding.welcome_title = "Welcome to the Niko community"
-    onboarding.welcome_description = "Welcome {user}! Start with the rules, choose your notification roles, and ask for help any time."
+    onboarding.welcome_description = (
+        "Welcome {user} to the official Niko server — glad you made it here!\n\n"
+        "**Get set up**\n"
+        f"- Read {channel_ref('rules', '#rules')} once; it takes a minute and covers everything.\n"
+        f"- Pick the pings you actually want in {channel_ref('roles', '#roles')} — announcements, events, polls and community news.\n"
+        f"- Say hi in {channel_ref('introductions', '#introductions')} if you'd like to meet people.\n\n"
+        "**Getting help with Niko**\n"
+        f"- Setup questions, errors and feature ideas belong in the {channel_ref('help', '#community-help')} forum. "
+        "Search first, then pick the closest tag — **Bug**, **Setup**, **Account** or **Feature request**.\n"
+        f"- Account, billing, appeal or other private matters need a ticket in {channel_ref('tickets', '#create-a-ticket')}. "
+        "Staff will follow up there, so you never have to share private details in public.\n\n"
+        "**A few small things**\n"
+        "- Never share passwords, tokens or payment details, and redact personal information from screenshots.\n"
+        "- If someone breaks the rules, report it to staff instead of replying to them.\n"
+        "- Keep support questions in the support channels so everyone can find the answers later.\n"
+        "- Niko is a community project run by volunteers: there is no uptime guarantee, and bot currency has no real-world value.\n\n"
+        "Take a look around, and welcome home!"
+    )
     onboarding.autorole_ids = [int(roles["member"])]
     onboarding.welcome_color = 0xC8A882
     onboarding.welcome_image = None
@@ -757,7 +778,19 @@ async def _configure_support_systems(bot, guild, roles, channels):
 
     ticket_cfg = get_ticket_config(guild.id)
     ticket_cfg.panel_title = "Contact Niko Support"
-    ticket_cfg.panel_description = "Open a private ticket for account help, bot troubleshooting, safety concerns, or other questions that need staff attention."
+    ticket_cfg.panel_description = (
+        "Open a private ticket and our support team will help you as soon as someone is available.\n\n"
+        "**Before you open a ticket**\n"
+        "- Check the community-help forum first — most setup questions already have an answer there.\n"
+        "- Keep it to one issue per ticket, with a short and specific subject.\n"
+        "- Include what you expected, what actually happened, and any error text or screenshots.\n\n"
+        "**Please keep in mind**\n"
+        "- Never post passwords, tokens, payment details or other private information. Niko staff will never ask for them.\n"
+        "- Tickets are answered by volunteers, so response times vary. Opening duplicates slows everyone down.\n"
+        "- Abusing the ticket system — spam, harassment or fake reports — can lead to restrictions.\n\n"
+        "**Not for Discord-wide issues.** Account recovery, Nitro billing and reports about other users or servers "
+        "go to Discord Support, not here."
+    )
     ticket_cfg.panel_categories = ["General Support", "Bug Report", "Account & Billing", "Moderation Appeal"]
     ticket_cfg.support_roles = [int(roles[key]) for key in ("staff", "head_admin", "moderator", "head_support", "support")]
     ticket_cfg.panel_channel_id = int(channels["tickets"])
@@ -917,6 +950,13 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     old_guidelines = await pool.fetchrow("SELECT message_id FROM support_server_panels WHERE guild_id = $1 AND panel_key = 'forum-guidelines'", guild.id)
     if old_guidelines:
         old_thread = guild.get_thread(int(old_guidelines["message_id"]))
+        if old_thread is None:
+            # Archived posts are not in the thread cache, and a repost on every
+            # refresh would leave a pile of stale guidelines posts behind.
+            try:
+                old_thread = await bot.fetch_channel(int(old_guidelines["message_id"]))
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                old_thread = None
         if old_thread:
             try:
                 await old_thread.delete(reason="Refresh support forum guidelines")
@@ -942,11 +982,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
         reason="Publish community-help post guidelines",
     )
     await _support_api_pause()
-    await guideline_post.thread.edit(
-        pinned=True, locked=True, archived=True,
-        reason="Pin and lock the read-only community-help post guidelines",
-    )
-    await _support_api_pause()
+    await _pin_forum_post(guideline_post.thread)
     await _save_support_panel_record(
         pool, guild.id, "forum-guidelines", forum.id, guideline_post.thread.id,
     )
@@ -959,6 +995,39 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
 
 async def _support_api_pause():
     await asyncio.sleep(0.35)
+
+
+async def _pin_forum_post(thread) -> bool:
+    """Pin a forum post, then lock and archive it.
+
+    Discord ignores the pinned flag when ``archived`` is sent in the same
+    request, which is why the community-help guidelines post was published
+    without ever showing up in the forum's pinned list. Pinning first — while
+    the post is still active — then archiving keeps it pinned.
+    """
+    try:
+        pinned = await thread.edit(
+            archived=False, pinned=True,
+            reason="Pin the read-only community-help post guidelines",
+        )
+    except discord.HTTPException as exc:
+        logging.warning("SupportServer", f"Could not pin the community-help guidelines post: {exc}")
+        return False
+    pin_kept = bool(getattr(getattr(pinned, "flags", None), "pinned", False))
+    if not pin_kept:
+        logging.warning("SupportServer", "Discord did not keep the community-help guidelines post pinned.")
+    await _support_api_pause()
+    # Lock and archive either way: an unlocked guidelines post invites replies
+    # that nobody monitors, even if the pin above needs a manual retry.
+    try:
+        await thread.edit(
+            archived=True, locked=True,
+            reason="Lock the read-only community-help post guidelines",
+        )
+    except discord.HTTPException as exc:
+        logging.warning("SupportServer", f"Could not lock the community-help post guidelines: {exc}")
+    await _support_api_pause()
+    return pin_kept
 
 
 def _staff_rules_panel():

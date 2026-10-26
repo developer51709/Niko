@@ -425,6 +425,7 @@ def api_guild_resources(guild_id):
     if guild is not None:
         cached_channels = list(guild.text_channels)
         channels = cached_channels
+        voice_channels = list(guild.voice_channels)
         if _discord_bot.loop.is_running():
             try:
                 fetched_channels = run_on_bot_loop(guild.fetch_channels())
@@ -432,11 +433,19 @@ def api_guild_resources(guild_id):
                     channel for channel in fetched_channels
                     if getattr(getattr(channel, "type", None), "name", "") in {"text", "news"}
                 ]
+                voice_channels = [
+                    channel for channel in fetched_channels
+                    if getattr(getattr(channel, "type", None), "name", "") in {"voice", "stage_voice"}
+                ]
             except Exception:
                 pass
         channels = [
             {"id": str(channel.id), "name": str(channel.name)}
             for channel in channels
+        ]
+        voice_channels = [
+            {"id": str(channel.id), "name": str(channel.name)}
+            for channel in voice_channels
         ]
         roles = [
             {"id": str(role.id), "name": role.name}
@@ -445,8 +454,8 @@ def api_guild_resources(guild_id):
         ]
         # A cached guild can exist briefly before its channels are populated.
         # Let the Discord API fallback below resolve names during that window.
-        if channels:
-            return jsonify({"channels": channels, "roles": roles})
+        if channels or voice_channels:
+            return jsonify({"channels": channels, "voice_channels": voice_channels, "roles": roles})
 
     # The web process can briefly start before the gateway cache is ready. Use
     # Discord's bot endpoint in that case so saved channel IDs still resolve to
@@ -468,11 +477,16 @@ def api_guild_resources(guild_id):
                         for channel in channels
                         if channel.get("id") and channel.get("type") in {0, 5, 10, 11, 12}
                     ],
+                    "voice_channels": [
+                        {"id": str(channel["id"]), "name": str(channel.get("name") or "")}
+                        for channel in channels
+                        if channel.get("id") and channel.get("type") in {2, 13}
+                    ],
                     "roles": [],
                 })
         except Exception:
             pass
-    return jsonify({"channels": [], "roles": []})
+    return jsonify({"channels": [], "voice_channels": [], "roles": []})
 
 @app.route("/api/guild/<guild_id>/config/automod", methods=["POST"])
 @require_auth
@@ -1019,7 +1033,10 @@ def api_save_ai(guild_id):
 @require_csrf
 def api_save_leveling(guild_id):
     body = request.get_json(silent=True) or {}
-    allowed_actions = {"xp_enabled", "xp_multiplier", "xp_cooldown", "level_up_channel", "level_up_message"}
+    allowed_actions = {
+        "xp_enabled", "xp_multiplier", "xp_cooldown", "level_up_channel",
+        "level_up_message", "xp_excluded_channels", "xp_vc_enabled",
+    }
     unknown = set(body) - allowed_actions
     if unknown:
         return jsonify({"error": f"Unsupported leveling fields: {', '.join(sorted(unknown))}"}), 400
@@ -1039,6 +1056,25 @@ def api_save_leveling(guild_id):
     if message is not None and len(str(message)) > 1000:
         return jsonify({"error": "Level-up message must be 1000 characters or fewer."}), 400
 
+    excluded = None
+    if body.get("xp_excluded_channels") is not None:
+        raw_excluded = body["xp_excluded_channels"]
+        if isinstance(raw_excluded, str):
+            raw_excluded = raw_excluded.split(",")
+        if not isinstance(raw_excluded, (list, tuple)):
+            return jsonify({"error": "Excluded channels must be a list of channel IDs."}), 400
+        excluded = set()
+        for value in raw_excluded:
+            text = str(value).strip()
+            if not text:
+                continue
+            if not text.isdigit():
+                return jsonify({"error": "Excluded channels must be valid channel IDs."}), 400
+            excluded.add(int(text))
+        if len(excluded) > 50:
+            return jsonify({"error": "You can exclude up to 50 channels from XP."}), 400
+        excluded = sorted(excluded)
+
     leveling = _discord_bot.get_cog("Leveling") if _discord_bot is not None else None
     if leveling is not None and hasattr(leveling, "_guild_cfg") and hasattr(leveling, "_save_guild_cfg"):
         try:
@@ -1049,9 +1085,12 @@ def api_save_leveling(guild_id):
                 "xp_cooldown": cooldown,
                 "level_up_channel": int(channel) if channel else None,
                 "level_up_message": message,
+                "xp_vc_enabled": bool(body.get("xp_vc_enabled", current.get("xp_vc_enabled", False))),
             })
+            if excluded is not None:
+                current["xp_excluded_channels"] = excluded
             run_on_bot_loop(leveling._save_guild_cfg(int(guild_id), current))
-            return jsonify({"ok": True, "config": current})
+            return jsonify({"ok": True, "config": _serialize_level_config(current)})
         except Exception:
             return jsonify({"error": "The leveling settings could not be saved through the live bot."}), 503
 
@@ -1061,14 +1100,24 @@ def api_save_leveling(guild_id):
     try:
         conn.execute(
             "INSERT OR REPLACE INTO level_config "
-            "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, level_up_channel, level_up_message, level_roles) "
-            "VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT level_roles FROM level_config WHERE guild_id = ?), '{}'))",
+            "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, level_up_channel, level_up_message, "
+            " level_roles, xp_excluded_channels, xp_vc_enabled) "
+            "VALUES (?, ?, ?, ?, ?, ?, "
+            "        COALESCE((SELECT level_roles FROM level_config WHERE guild_id = ?), '{}'), "
+            "        COALESCE((SELECT xp_excluded_channels FROM level_config WHERE guild_id = ?), '[]'), "
+            "        ?)",
             (
                 int(guild_id), int(bool(body.get("xp_enabled", True))),
                 multiplier, cooldown, int(channel) if channel else None, message,
-                int(guild_id),
+                int(guild_id), int(guild_id),
+                int(bool(body.get("xp_vc_enabled", False))),
             ),
         )
+        if excluded is not None:
+            conn.execute(
+                "UPDATE level_config SET xp_excluded_channels = ? WHERE guild_id = ?",
+                (json.dumps(excluded), int(guild_id)),
+            )
         conn.commit()
     except sqlite3.Error:
         conn.rollback()

@@ -375,6 +375,34 @@ export type LevelRow = {
   level: number;
 };
 
+// One row of a guild's public leveling page. `key` is an opaque, stable row
+// key so the page can animate members who change rank between polls.
+export type GuildLevelEntry = {
+  key: string;
+  rank: number;
+  level: number;
+  xp: number;
+  xp_for_next: number;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
+export type GuildLevelsResponse = {
+  guild: {
+    id: string;
+    name: string;
+    icon_url: string | null;
+    member_count: number;
+  };
+  leveling_enabled: boolean;
+  entries: GuildLevelEntry[];
+  page: number;
+  page_size: number;
+  total: number;
+  pages: number;
+};
+
 export type ServerStats = {
   member_count: number;
   channel_count: number;
@@ -548,12 +576,15 @@ export type GuildConfig = {
     xp_cooldown?: number;
     level_up_channel?: string | null;
     level_up_message?: string;
+    xp_excluded_channels?: string[];
+    xp_vc_enabled?: boolean;
   };
   premium?: PremiumSubscription;
 };
 
 export type GuildResources = {
   channels: { id: string; name: string }[];
+  voice_channels?: { id: string; name: string }[];
   roles: { id: string; name: string }[];
 };
 

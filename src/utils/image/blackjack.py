@@ -17,7 +17,9 @@ keep their classic colours.
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import asyncio
+import math
 import os
+from functools import lru_cache
 from utils.image._font_resolver import get_bold
 
 
@@ -54,68 +56,131 @@ def _font(size: int) -> ImageFont.ImageFont:
 
 
 # ── Suit drawing (vector — no glyph dependency) ─────────────────────────────
+#
+# Each suit is rasterised once as a high-resolution mask and downsampled with
+# Lanczos, so the edges are properly anti-aliased instead of stair-stepping.
+# The silhouettes come from parametric curves (not a few straight polygons),
+# which keeps the lobes, tips and tapers smooth at every size.
 
-def _draw_heart(d: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color):
-    s = size
-    r = s * 0.30
-    d.ellipse([cx - s*0.5,        cy - s*0.45, cx - s*0.5 + 2*r, cy - s*0.45 + 2*r], fill=color)
-    d.ellipse([cx + s*0.5 - 2*r,  cy - s*0.45, cx + s*0.5,       cy - s*0.45 + 2*r], fill=color)
-    d.polygon([
-        (cx - s*0.55, cy - s*0.10),
-        (cx + s*0.55, cy - s*0.10),
-        (cx,          cy + s*0.55),
-    ], fill=color)
+_SUIT_SS     = 4                                    # supersampling factor
+_SUIT_ASPECT = {"H": 0.88, "D": 0.76, "S": 0.88, "C": 0.88}  # width / height
 
 
-def _draw_diamond(d, cx, cy, size, color):
-    s = size * 0.55
-    d.polygon([
-        (cx,         cy - s),
-        (cx + s*0.7, cy),
-        (cx,         cy + s),
-        (cx - s*0.7, cy),
-    ], fill=color)
+def _sgn_pow(value: float, exponent: float) -> float:
+    """Sign-preserving power — used for superellipse (diamond) outlines."""
+    if value == 0:
+        return 0.0
+    return math.copysign(abs(value) ** exponent, value)
 
 
-def _draw_spade(d, cx, cy, size, color):
-    s = size
-    r = s * 0.30
-    # inverted heart shape (point up)
-    d.polygon([
-        (cx,          cy - s*0.55),
-        (cx - s*0.55, cy + s*0.10),
-        (cx + s*0.55, cy + s*0.10),
-    ], fill=color)
-    d.ellipse([cx - s*0.5,       cy + s*0.10 - 2*r*0.6, cx - s*0.5 + 2*r,  cy + s*0.10 + 2*r*0.4], fill=color)
-    d.ellipse([cx + s*0.5 - 2*r, cy + s*0.10 - 2*r*0.6, cx + s*0.5,        cy + s*0.10 + 2*r*0.4], fill=color)
-    # stem
-    d.polygon([
-        (cx - s*0.16, cy + s*0.30),
-        (cx + s*0.16, cy + s*0.30),
-        (cx + s*0.34, cy + s*0.62),
-        (cx - s*0.34, cy + s*0.62),
-    ], fill=color)
+def _fit(points, width: float, height: float):
+    """Scale a point cloud to exactly fill a width x height box."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    x0, x1 = min(xs), max(xs)
+    y0, y1 = min(ys), max(ys)
+    sx = width / (x1 - x0) if x1 > x0 else 1.0
+    sy = height / (y1 - y0) if y1 > y0 else 1.0
+    return [((x - x0) * sx, (y - y0) * sy) for x, y in points]
 
 
-def _draw_club(d, cx, cy, size, color):
-    s = size
-    r = s * 0.30
-    d.ellipse([cx - r,           cy - s*0.55 - r, cx + r,           cy - s*0.55 + r], fill=color)
-    d.ellipse([cx - s*0.45 - r,  cy - r,          cx - s*0.45 + r,  cy + r],          fill=color)
-    d.ellipse([cx + s*0.45 - r,  cy - r,          cx + s*0.45 + r,  cy + r],          fill=color)
-    d.polygon([
-        (cx - s*0.16, cy + s*0.05),
-        (cx + s*0.16, cy + s*0.05),
-        (cx + s*0.34, cy + s*0.62),
-        (cx - s*0.34, cy + s*0.62),
-    ], fill=color)
+def _heart_outline(inverted: bool = False, steps: int = 180):
+    """Classic heart curve; inverted turns the tip up for a spade body."""
+    points = []
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2*t) - 2 * math.cos(3*t) - math.cos(4*t)
+        points.append((x, y if inverted else -y))
+    return points
 
 
-_SUIT_FNS = {"H": _draw_heart, "D": _draw_diamond, "S": _draw_spade, "C": _draw_club}
+def _stem(d, cx: float, y_top: float, y_bottom: float,
+          top_half: float, bottom_half: float, flare: float = 0.45, steps: int = 24):
+    """Narrow shaft that curves out into a flared base (spade / club)."""
+    left, right = [], []
+    for i in range(steps + 1):
+        t = i / steps
+        y = y_top + (y_bottom - y_top) * t
+        u = max(0.0, (t - flare) / (1.0 - flare))
+        half = top_half + (bottom_half - top_half) * (u ** 1.6)
+        left.append((cx - half, y))
+        right.append((cx + half, y))
+    d.polygon(left + right[::-1], fill=255)
+
+
+def _shape_heart(d, w: float, h: float):
+    d.polygon(_fit(_heart_outline(), w, h), fill=255)
+
+
+def _shape_diamond(d, w: float, h: float):
+    # Superellipse with the exponent just short of 2: straight sides, soft tips.
+    a, b = w / 2, h / 2
+    points = []
+    steps = 200
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        points.append((
+            a + a * _sgn_pow(math.cos(t), 1.95),
+            b + b * _sgn_pow(math.sin(t), 1.95),
+        ))
+    d.polygon(points, fill=255)
+
+
+def _shape_spade(d, w: float, h: float):
+    # Inverted heart body with a short flared stem wedged between the lobes.
+    body_h = h * 0.84
+    d.polygon(_fit(_heart_outline(inverted=True), w, body_h), fill=255)
+    _stem(d, w / 2, body_h * 0.50, h * 0.99, w * 0.045, w * 0.24, flare=0.55)
+
+
+def _shape_club(d, w: float, h: float):
+    # Three equal circles on an equilateral triangle (spacing 1.65r) plus a stem.
+    r = h * 0.239
+    spacing = 1.65 * r
+    circum = spacing / math.sqrt(3)
+    cy = circum + r          # centre of the triangle, so the top lobe starts at y=0
+    for cx, top in (
+        (w / 2, cy - circum),                    # top lobe
+        (w / 2 - spacing / 2, cy + circum / 2),  # bottom-left lobe
+        (w / 2 + spacing / 2, cy + circum / 2),  # bottom-right lobe
+    ):
+        d.ellipse([cx - r, top - r, cx + r, top + r], fill=255)
+    _stem(d, w / 2, h * 0.50, h * 0.99, w * 0.06, w * 0.20, flare=0.45)
+
+
+_SUIT_SHAPES = {
+    "H": _shape_heart,
+    "D": _shape_diamond,
+    "S": _shape_spade,
+    "C": _shape_club,
+}
 
 
 def _suit_color(suit: str):
     return SUIT_RED if suit in ("H", "D") else SUIT_BLK
+
+
+@lru_cache(maxsize=128)
+def _suit_sprite(suit: str, size: int, color: tuple) -> Image.Image:
+    """Anti-aliased RGBA suit glyph, *size* pixels tall, cached per size/colour."""
+    h = max(3, int(size))
+    w = max(3, int(round(h * _SUIT_ASPECT[suit])))
+    ss = _SUIT_SS
+    mask = Image.new("L", (w * ss, h * ss), 0)
+    _SUIT_SHAPES[suit](ImageDraw.Draw(mask), w * ss, h * ss)
+    mask = mask.resize((w, h), Image.LANCZOS)
+    sprite = Image.new("RGBA", (w, h), color + (255,))
+    sprite.putalpha(mask)
+    return sprite
+
+
+def _draw_suit(img: Image.Image, suit: str, cx: float, cy: float, size: float, color):
+    sprite = _suit_sprite(suit, int(round(size)), tuple(color))
+    img.alpha_composite(
+        sprite,
+        (int(round(cx - sprite.width / 2)), int(round(cy - sprite.height / 2))),
+    )
 
 
 # ── Card images ─────────────────────────────────────────────────────────────
@@ -141,25 +206,30 @@ def _make_card_face(rank: str, suit: str) -> Image.Image:
     )
 
     color = _suit_color(suit)
-    suit_fn = _SUIT_FNS[suit]
 
     rank_font = _font(26 if rank == "10" else 30)
-    rank_text = rank
+    corner_cx = 22
+
+    def draw_corner(target: Image.Image):
+        cd = ImageDraw.Draw(target)
+        # Centre the rank ink on the same axis as the suit below it.
+        box = cd.textbbox((0, 0), rank, font=rank_font)
+        cd.text(
+            (corner_cx - (box[0] + box[2]) / 2, 4 - box[1]),
+            rank, fill=color, font=rank_font,
+        )
+        _draw_suit(target, suit, corner_cx, 44, 18, color)
 
     # Top-left rank + small suit
-    draw.text((9, 5), rank_text, fill=color, font=rank_font)
-    suit_fn(draw, 21, 50, 16, color)
+    draw_corner(img)
 
     # Center large suit
-    suit_fn(draw, CARD_W // 2, CARD_H // 2 + 4, 46, color)
+    _draw_suit(img, suit, CARD_W // 2, CARD_H // 2 + 4, 46, color)
 
     # Bottom-right (rotated copy of top-left)
     bot = Image.new("RGBA", (CARD_W, CARD_H), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bot)
-    bd.text((9, 5), rank_text, fill=color, font=rank_font)
-    suit_fn(bd, 21, 50, 16, color)
-    bot = bot.rotate(180)
-    img = Image.alpha_composite(img, bot)
+    draw_corner(bot)
+    img = Image.alpha_composite(img, bot.rotate(180))
 
     return img
 

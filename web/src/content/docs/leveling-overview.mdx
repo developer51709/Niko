@@ -8,7 +8,7 @@ order: 1
 ---
 # Leveling System Overview
 
-Niko's leveling system rewards members for participating in your server with XP, level-ups, and beautiful image cards.
+Niko's leveling system rewards members for participating in your server with XP, level-ups, rank cards, and a live server leaderboard.
 
 ## How Leveling Works
 
@@ -53,7 +53,7 @@ This renders a beautiful image card showing:
 /leveling leaderboard
 ```
 
-Shows a paginated image leaderboard of the top leveled members with avatars, levels, and XP. Use the ◀ and ▶ buttons to navigate pages.
+Replies with a link to the server's own public leaderboard page at `https://niko.sryze.cc/levels/<server id>`. The page lists ranked members with avatars, levels, and XP progress, and it refreshes itself while it is open, so the standings stay current as members earn XP. Share the link in an announcement or channel topic; anyone can open it in a browser.
 
 ### Open Management Panel
 ```
@@ -117,7 +117,7 @@ When a member reaches the configured level, the role is automatically assigned.
 
 ## Card Customisation
 
-The `/leveling rank` and `/leveling leaderboard` commands render image cards with Pillow. Server admins can customise the colours through the management panel:
+The `/leveling rank` command renders an image card with Pillow, and the leaderboard page borrows the same server colours. Server admins can customise those colours through the management panel:
 
 - **Accent Colour** — controls borders, level numbers, and the progress bar
 - **Background Top** — gradient top colour

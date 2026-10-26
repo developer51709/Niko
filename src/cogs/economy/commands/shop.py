@@ -285,11 +285,10 @@ class ShopMixin:
         if not items:
             view = _info_view("🛒 Empty shelves", "Nothing in stock for that category.")
         else:
+            message = await self._show_loading_card(ctx, "shop")
             card = await render_shop_card(items=items, balance=int(data.get("balance", 0)), category=cat_filter)
             view = _ShopActionView(self, image_name="shop.png")
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=view, file=discord.File(card, "shop.png"))
-            return await ctx.send(view=view, file=discord.File(card, "shop.png"))
+            return await message.edit(view=view, attachments=[discord.File(card, "shop.png")])
         if ctx.interaction:
             await ctx.interaction.followup.send(view=view)
         else:
@@ -518,6 +517,8 @@ class ShopMixin:
             else:
                 return await ctx.send(view=_info_view("🎒 Empty bag", "Nothing here yet — try the `shop`!"))
 
+        message = await self._show_loading_card(ctx, "inventory")
+
         # Fetch avatar for the card
         avatar_url = str(getattr(target.display_avatar, "url", "")) or None
         avatar_bytes = await fetch_avatar_bytes(avatar_url)
@@ -554,7 +555,4 @@ class ShopMixin:
             sections=sections,
         )
         view = _card_view(f"🎒 {target.display_name}'s Bag", "inventory.png", [])
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=view, file=discord.File(card, "inventory.png"))
-        else:
-            await ctx.send(view=view, file=discord.File(card, "inventory.png"))
+        await message.edit(view=view, attachments=[discord.File(card, "inventory.png")])

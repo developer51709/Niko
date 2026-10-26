@@ -15,7 +15,7 @@ Make sure Niko can view the channels where it should work and send the response 
 - **Moderation:** run `.automod` to open the AutoMod panel and choose the protections you want.
 - **Onboarding:** use `.onboarding setup` to configure onboarding. Related options include `.onboarding role-menu`, `.onboarding autoroles`, and `.onboarding captcha`.
 - **Logging:** run `.logging status` to review server event logging configuration.
-- **Leveling:** use `/leveling config` to review leveling settings. `/leveling rank` and `/leveling leaderboard` show member progress.
+- **Leveling:** use `/leveling config` to review leveling settings. `/leveling rank` shows a member's stats, and `/leveling leaderboard` opens the server's live leaderboard page.
 - **Dashboard:** open the dashboard from the website to configure supported server settings visually.
 
 These are real command entry points; individual controls may be in their interactive panels rather than separate commands. Use the [live command directory](/commands) to confirm current names, invocation type, and options.

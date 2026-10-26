@@ -159,7 +159,10 @@ class Starboard(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     @commands.guild_only()
     async def starboard(self, ctx: commands.Context):
-        await ctx.send_help(self.starboard)
+        help_cmd = self.bot.get_command("help")
+        if help_cmd is None:
+            return await ctx.send_help(self.starboard)
+        await ctx.invoke(help_cmd, command_name="starboard")
 
     @starboard.command(
         name="channel",

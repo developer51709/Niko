@@ -180,7 +180,21 @@ class EconomyCog(
                 return i
         return None
 
+    async def _show_loading_card(self, ctx, card_type: str):
+        """Show the matching animated loading card while a render is in flight.
+
+        The public GIF is sent first and then edited into the finished PNG card,
+        so a slow avatar fetch never leaves the member with a bare "thinking"
+        state. Prefix commands get a new message; slash commands reuse the
+        deferred response, so neither path leaves a duplicate card behind.
+        """
+        view = _loading_card_view(card_type)
+        if ctx.interaction:
+            return await ctx.interaction.edit_original_response(view=view)
+        return await ctx.send(view=view)
+
     async def _send_balance_card(self, ctx, target: discord.Member, *, title: str = "Wallet"):
+        message = await self._show_loading_card(ctx, "balance")
         data = await self.get_user_economy_data(target.id)
         avatar_bytes = await fetch_avatar_bytes(str(target.display_avatar.replace(size=256, format="png")), size=256)
 
@@ -218,10 +232,7 @@ class EconomyCog(
                 f"-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend.",
             ],
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "balance.png"))
-        else:
-            await ctx.send(view=view, file=discord.File(buf, "balance.png"))
+        await message.edit(view=view, attachments=[discord.File(buf, "balance.png")])
 
     async def _send_reward_card(
         self,
@@ -234,6 +245,7 @@ class EconomyCog(
         footer: str = "",
         announce: str | None = None,
     ):
+        message = await self._show_loading_card(ctx, "reward")
         data = await self.get_user_economy_data(ctx.author.id)
         avatar_bytes = await fetch_avatar_bytes(
             str(ctx.author.display_avatar.replace(size=256, format="png")), size=256
@@ -254,10 +266,7 @@ class EconomyCog(
             image_name="reward.png",
             footer_lines=[announce] if announce else [],
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=view, file=discord.File(buf, "reward.png"))
-        else:
-            await ctx.send(view=view, file=discord.File(buf, "reward.png"))
+        await message.edit(view=view, attachments=[discord.File(buf, "reward.png")])
 
     # ── Lottery announcements ────────────────────────────────────────────────
     async def _lottery_channel(self):

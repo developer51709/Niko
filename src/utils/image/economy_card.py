@@ -27,7 +27,7 @@ import unicodedata
 from io import BytesIO
 from typing import Iterable
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 from utils.image._font_resolver import (
     get_bold,
     get_reg,
@@ -129,7 +129,13 @@ def _make_canvas(width: int, height: int, radius: int = 26) -> Image.Image:
     overlay.putalpha(ImageOps.invert(vignette))
     grad = Image.alpha_composite(grad, overlay)
 
-    # gold hairline border
+    # The vignette overlay covers the whole rectangle, so compositing it fills
+    # the space outside the rounded corners back in.  Clip the alpha to the
+    # rounded shape again so the corner cutouts stay transparent in the saved
+    # image instead of only being suggested by the border line.
+    grad.putalpha(ImageChops.multiply(grad.getchannel("A"), _rounded_mask((width, height), radius)))
+
+    # hairline border
     bd = ImageDraw.Draw(grad)
     bd.rounded_rectangle(
         [0, 0, width - 1, height - 1],
@@ -594,7 +600,7 @@ def _render_balance_sync(
     _progress_bar(canvas, 40, bar_y, CARD_W - 80, 16, pct, fill_top=ACCENT_BRIGHT, fill_bot=ACCENT)
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
@@ -707,7 +713,7 @@ def _render_reward_sync(
         # d.text((36, REWARD_H - 38), footer, fill=DIM, font=_reg(14))
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
@@ -818,7 +824,7 @@ def _render_leaderboard_sync(
     draw_text_with_fallback(d, (36, height - 36), "use ‹ › below to navigate", size=13, fill=DIM)
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
@@ -879,7 +885,7 @@ def _render_shop_sync(items: list[dict], balance: int, category: str | None = No
         y += row_h
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
@@ -972,7 +978,7 @@ def _render_inventory_sync(
     draw_text_with_fallback(d, (38, height - 36), footer, size=13, fill=DIM)
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
