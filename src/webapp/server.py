@@ -2519,7 +2519,7 @@ def _guild_embed_context(guild_id: str) -> dict | None:
         "title": f"{guild.name} — Level leaderboard",
         "description": description,
         "name": guild.name,
-        "section": "LEVEL LEADERBOARD",
+        "section": "Level Leaderboard",
         "thumbnail": str(icon.url) if icon is not None else "",
         "accent": None,
         "lines": lines,
@@ -2604,7 +2604,7 @@ def _social_invite_url() -> str:
     return "https://discord.com/oauth2/authorize?" + urlencode({
         "client_id": DISCORD_CLIENT_ID,
         "permissions": "8",
-        "scope": "bot applications commands",
+        "scope": "bot applications.commands",
     })
 
 
