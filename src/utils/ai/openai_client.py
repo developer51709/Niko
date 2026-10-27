@@ -59,6 +59,39 @@ _CTX_MSG_MAX_PER_LINE = 120  # chars per context-message line
 _CTX_MSG_MAX_LINES    = 3    # max channel-history lines passed
 _REPLIED_CONTENT_MAX  = 200  # chars for replied-message snippet
 
+# ── Completion budget ─────────────────────────────────────────────────────────
+# gpt-oss is a reasoning model and its reasoning tokens are billed against the
+# completion budget, so a small cap gets spent on thinking and the visible reply
+# is cut off mid-sentence.  Measured against the live API, the previous
+# max_tokens=300 ended with finish_reason="length" after ~870 characters of an
+# answer that needs ~3,300.  The budget, the reasoning effort, and the
+# continuation loop below keep whole answers intact.
+_COMPLETION_TOKENS     = 1024   # per request (override: GROQ_MAX_COMPLETION_TOKENS)
+_COMPLETION_TOKENS_MIN = 256
+_COMPLETION_TOKENS_MAX = 8192
+_REASONING_EFFORT      = "low"  # override: GROQ_REASONING_EFFORT (low|medium|high)
+_MAX_REPLY_REQUESTS    = 3      # the answer plus up to two continuations
+_REQUEST_ATTEMPTS      = 3      # attempts per request on transient failures
+_RETRY_BACKOFF_SECS    = 0.6
+_CONTINUE_PROMPT = (
+    "Continue your previous reply from exactly where it stopped. "
+    "Do not repeat anything you already wrote."
+)
+
+
+def _int_setting(name: str, default: int, minimum: int, maximum: int) -> int:
+    """Read a positive int from the environment, clamped to a sane range."""
+    try:
+        value = int(str(os.environ.get(name, "")).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(value, maximum))
+
+
+def _reasoning_effort() -> str:
+    value = os.environ.get("GROQ_REASONING_EFFORT", _REASONING_EFFORT).strip().lower()
+    return value if value in {"low", "medium", "high"} else _REASONING_EFFORT
+
 
 def _get_client():
     global client
@@ -416,6 +449,61 @@ def _message_requests_action(message: str) -> bool:
     return False
 
 
+def _create_completion(*, model: str, messages: list, with_tools: bool = False):
+    """Send one chat completion, retrying transient connection/5xx failures.
+
+    Rate limits are re-raised so the caller can apply the per-user cooldown
+    instead of hammering the endpoint, and 4xx answers are returned to the
+    caller immediately because retrying a deterministic rejection cannot help.
+    """
+    last_error = None
+    for attempt in range(_REQUEST_ATTEMPTS):
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            # Current parameter name, with a budget the visible answer fits in.
+            "max_completion_tokens": _int_setting(
+                "GROQ_MAX_COMPLETION_TOKENS", _COMPLETION_TOKENS,
+                _COMPLETION_TOKENS_MIN, _COMPLETION_TOKENS_MAX,
+            ),
+            "temperature": 0.7,
+            "extra_body": {
+                "reasoning_effort": _reasoning_effort(),
+                "include_reasoning": False,
+            },
+        }
+        if with_tools:
+            kwargs["tools"]       = _AI_ACTIONS_TOOLS
+            kwargs["tool_choice"] = "auto"
+        try:
+            return _get_client().chat.completions.create(**kwargs)
+        except RateLimitError:
+            raise
+        except (APIConnectionError, APIStatusError) as error:
+            if isinstance(error, APIStatusError) and error.status_code < 500:
+                raise
+            last_error = error
+            # The connection may be stale after a network hiccup; rebuild it.
+            _reset_client()
+            if attempt < _REQUEST_ATTEMPTS - 1:
+                time.sleep(min(_RETRY_BACKOFF_SECS * (2 ** attempt), 2.0))
+    raise last_error
+
+
+def _action_payload(tool_call) -> dict:
+    """Turn a tool call into the action dict the dispatcher expects."""
+    import json
+
+    try:
+        arguments = json.loads(tool_call.function.arguments)
+    except Exception:
+        arguments = {}
+    payload = {"action": tool_call.function.name}
+    if isinstance(arguments, dict):
+        payload.update(arguments)
+    return payload
+
+
 def generate_reply_openai(
     bot, user_id: int, server, message: str, username: str, SYSTEM_PROMPT: str,
     *,
@@ -425,8 +513,6 @@ def generate_reply_openai(
     image_urls: list[str] | None = None,
     transcribed_audio: str | None = None,
 ):
-    import json as _json
-
     server_name  = server.name if server else "DM"
     member_count = len(server.members) if server else 0
 
@@ -496,28 +582,51 @@ def generate_reply_openai(
         remaining = int(cooldown_until - now)
         return f"ai_error:rate_limit:{remaining}"
 
-    try:
-        create_kwargs = dict(
-            model=(
-                _model_setting("GROQ_VISION_MODEL", GROQ_VISION_MODEL)
-                if image_urls
-                else _model_setting("GROQ_MODEL", GROQ_MODEL)
-            ),
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": user_content},
-            ],
-            max_tokens=300,
-            temperature=0.7,
-        )
-        # Only attach tool definitions when the message actually requests an
-        # action.  Sending 18 tool schemas on every casual chat message
-        # burns ~2,000 input tokens per request with no benefit.
-        if ai_actions_enabled and _message_requests_action(message):
-            create_kwargs["tools"]       = _AI_ACTIONS_TOOLS
-            create_kwargs["tool_choice"] = "auto"
+    model = (
+        _model_setting("GROQ_VISION_MODEL", GROQ_VISION_MODEL)
+        if image_urls
+        else _model_setting("GROQ_MODEL", GROQ_MODEL)
+    )
+    # Only attach tool definitions when the message actually requests an
+    # action.  Sending 18 tool schemas on every casual chat message
+    # burns ~2,000 input tokens per request with no benefit.
+    wants_action = ai_actions_enabled and _message_requests_action(message)
+    conversation = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user",   "content": user_content},
+    ]
+    answers: list[str] = []
 
-        response = _get_client().chat.completions.create(**create_kwargs)
+    try:
+        # An answer that runs into the token budget comes back with
+        # finish_reason="length".  Ask for the rest of it instead of serving a
+        # reply that stops mid-sentence.
+        for request_index in range(_MAX_REPLY_REQUESTS):
+            response = _create_completion(
+                model=model,
+                messages=conversation,
+                with_tools=wants_action and request_index == 0,
+            )
+            choice = response.choices[0]
+
+            # ── Safety filter: model declined via finish_reason ────────────
+            if choice.finish_reason == "content_filter":
+                print(f"[AI] Content filter finish_reason for user {user_id}")
+                return "ai_error:safety"
+
+            # ── Handle AI Actions tool call ────────────────────────────────
+            if wants_action and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+                return _action_payload(choice.message.tool_calls[0])
+
+            text = (choice.message.content or "").strip()
+            if text:
+                answers.append(text)
+
+            if choice.finish_reason != "length":
+                break
+            if text:
+                conversation.append({"role": "assistant", "content": text})
+                conversation.append({"role": "user", "content": _CONTINUE_PROMPT})
 
     except RateLimitError as e:
         # 429 — do NOT reset the client (it's fine), do NOT retry.
@@ -562,28 +671,15 @@ def generate_reply_openai(
         print(f"[AI] Unexpected error: {e}")
         return "ai_error:generic"
 
-    choice = response.choices[0]
-
-    # ── Safety filter: model declined via finish_reason ────────────────
-    if choice.finish_reason == "content_filter":
-        print(f"[AI] Content filter finish_reason for user {user_id}")
-        return "ai_error:safety"
-
-    # ── Handle AI Actions tool call ────────────────────────────────────
-    if ai_actions_enabled and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
-        tool_call = choice.message.tool_calls[0]
-        fn_name   = tool_call.function.name
-        try:
-            fn_args = _json.loads(tool_call.function.arguments)
-        except Exception:
-            fn_args = {}
-
-        action_payload = {"action": fn_name}
-        if isinstance(fn_args, dict):
-            action_payload.update(fn_args)
-        return action_payload
-
-    clean = (choice.message.content or "").strip()
+    clean = " ".join(answers).strip()
+    if not clean:
+        # The model returned no text at all.  Reasoning can consume the entire
+        # budget (and an empty completion is not an error), so answer with the
+        # canned line instead of leaving the user with nothing.
+        reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
+        _fallback_idx += 1
+        print(f"[AI] Empty completion for user {user_id} — sending fallback reply")
+        return reply
 
     update_user_memory(user_id, message, role=username)
     update_user_memory(user_id, clean,   role="Niko")

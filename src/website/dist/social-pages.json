@@ -1,0 +1,642 @@
+{
+  "site": "https://niko.sryze.cc",
+  "pages": {
+    "/": {
+      "title": "Niko — Discord companion",
+      "description": "Niko is the warm, capable Discord companion for communities that care.",
+      "section": "Discord companion",
+      "landing": true,
+      "image": "https://niko.sryze.cc/og/home.png"
+    },
+    "/commands": {
+      "title": "Commands — Niko",
+      "description": "Browse every slash, prefix, hybrid, and context command available in Niko.",
+      "section": "Command reference",
+      "landing": true,
+      "image": "https://niko.sryze.cc/og/commands.png"
+    },
+    "/team": {
+      "title": "Team — Niko",
+      "description": "Meet the owners, developers, moderators, support staff, and creatives behind Niko.",
+      "section": "Niko team",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/team.png"
+    },
+    "/team/apply": {
+      "title": "Join the Niko Team — Staff Applications",
+      "description": "Explore open staff roles and apply to help build a safer, friendlier Niko community.",
+      "section": "Staff applications",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/team/apply.png"
+    },
+    "/leaderboard": {
+      "title": "Global Economy Leaderboard — Niko",
+      "description": "See the global Niko economy standings and discover who has earned the most coins.",
+      "section": "Global leaderboard",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/leaderboard.png"
+    },
+    "/levels": {
+      "title": "Server Leaderboard — Niko",
+      "description": "Live leveling standings for one Discord server, ranked by level and XP.",
+      "section": "Server leaderboard",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/levels.png"
+    },
+    "/support": {
+      "title": "Support — Niko",
+      "description": "Find answers, browse Niko documentation, and connect with the community for help.",
+      "section": "Niko support",
+      "landing": true,
+      "image": "https://niko.sryze.cc/og/support.png"
+    },
+    "/discord": {
+      "title": "Niko support server",
+      "description": "Join the official Niko Discord support server for help, community updates, and feedback.",
+      "section": "Join the community",
+      "landing": true,
+      "image": "https://niko.sryze.cc/og/discord.png"
+    },
+    "/docs": {
+      "title": "Documentation — Niko",
+      "description": "Guides, command references, and practical tips for getting the most out of Niko.",
+      "section": "Documentation center",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs.png"
+    },
+    "/changelog": {
+      "title": "Changelog — Niko",
+      "description": "A clear record of every improvement, fix, and new feature added to Niko.",
+      "section": "What's new",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog.png"
+    },
+    "/privacy": {
+      "title": "Privacy policy — Niko",
+      "description": "Learn what information Niko uses and how it supports Discord communities.",
+      "section": "Niko legal",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/privacy.png"
+    },
+    "/terms": {
+      "title": "Terms of service — Niko",
+      "description": "The terms that apply when you use Niko in a Discord server.",
+      "section": "Niko legal",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/terms.png"
+    },
+    "/data-removal": {
+      "title": "Data removal — Niko",
+      "description": "Request deletion of your Niko account data or a server you own, and read the strict policy that protects moderation records.",
+      "section": "Privacy",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/data-removal.png"
+    },
+    "/community": {
+      "title": "Community policy — Niko",
+      "description": "The community expectations for every server using Niko.",
+      "section": "Niko legal",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/community.png"
+    },
+    "/docs/ai-overview": {
+      "title": "AI Features and Configuration — Niko docs",
+      "description": "Learn how Niko's AI chat and multimodal features are configured, what providers are supported, and how to keep API credentials private.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/ai-overview.png"
+    },
+    "/docs/automod-anti-nuke": {
+      "title": "Anti-Nuke Protection — Niko docs",
+      "description": "Protect your server from destructive nuke attacks with Niko's anti-nuke system.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/automod-anti-nuke.png"
+    },
+    "/docs/automod-anti-raid": {
+      "title": "Anti-Raid Protection — Niko docs",
+      "description": "Configure anti-raid features to protect your server from coordinated attacks.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/automod-anti-raid.png"
+    },
+    "/docs/automod-anti-spam": {
+      "title": "Anti-Spam Configuration — Niko docs",
+      "description": "Configure Niko's anti-spam features to keep your chat clean.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/automod-anti-spam.png"
+    },
+    "/docs/automod-overview": {
+      "title": "AutoMod Overview — Niko docs",
+      "description": "Learn about Niko's automated moderation features including anti-spam and content filtering.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/automod-overview.png"
+    },
+    "/docs/blacklist-and-appeals": {
+      "title": "Blacklists and Appeals — Niko docs",
+      "description": "What happens when a server is blacklisted from Niko, what stays saved, and how an appeal gives it back.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/blacklist-and-appeals.png"
+    },
+    "/docs/booster-roles": {
+      "title": "Boost Notifications and Booster Roles — Niko docs",
+      "description": "Thank server boosters with custom announcements and personal roles they can style and share.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/booster-roles.png"
+    },
+    "/docs/dashboard-customization": {
+      "title": "Customize Niko's Server Profile — Niko docs",
+      "description": "Personalize Niko's display name, profile images, bio, font, and name colors for one Discord server.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard-customization.png"
+    },
+    "/docs/dashboard-economy": {
+      "title": "Dashboard: Economy & Achievements — Niko docs",
+      "description": "Follow your global economy standing and badges on your own dashboard profile.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard-economy.png"
+    },
+    "/docs/dashboard-leveling": {
+      "title": "Dashboard: Leveling Settings — Niko docs",
+      "description": "Configure leveling settings through the web dashboard.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard-leveling.png"
+    },
+    "/docs/dashboard-overview": {
+      "title": "Dashboard Overview — Niko docs",
+      "description": "Learn how to use the web dashboard to configure your server.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard-overview.png"
+    },
+    "/docs/dashboard-staff-applications": {
+      "title": "Staff Applications — Niko docs",
+      "description": "Create role-specific staff application forms, share an applicant link, and review responses from your server dashboard.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard-staff-applications.png"
+    },
+    "/docs/dashboard": {
+      "title": "Using the Web Dashboard — Niko docs",
+      "description": "Sign in with Discord, select a server you can manage, and configure its Niko settings from the web dashboard.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/dashboard.png"
+    },
+    "/docs/economy-banking": {
+      "title": "Banking and Interest — Niko docs",
+      "description": "Understand the banking system and how to earn passive income through interest.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-banking.png"
+    },
+    "/docs/economy-gambling": {
+      "title": "Gambling and Mini-Games — Niko docs",
+      "description": "Try your luck with Niko's gambling mini-games including slots, blackjack, and roulette.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-gambling.png"
+    },
+    "/docs/economy-jobs": {
+      "title": "Jobs and Earning Guide — Niko docs",
+      "description": "Learn about the different jobs available and how to maximize your earnings.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-jobs.png"
+    },
+    "/docs/economy-overview": {
+      "title": "Economy System Overview — Niko docs",
+      "description": "Comprehensive guide to Niko's economy features including jobs, banking, shop, and more.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-overview.png"
+    },
+    "/docs/economy-shop": {
+      "title": "Shop and Items Guide — Niko docs",
+      "description": "Browse and purchase items from Niko's economy shop.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-shop.png"
+    },
+    "/docs/economy-voting": {
+      "title": "Voting Rewards & Streaks — Niko docs",
+      "description": "Vote for Niko on top.gg to earn coins, build a streak and unlock voting badges.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/economy-voting.png"
+    },
+    "/docs/giveaway-overview": {
+      "title": "Giveaway System — Niko docs",
+      "description": "Run interactive giveaways with join requirements, timed entries, and automatic winner selection.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/giveaway-overview.png"
+    },
+    "/docs/invite": {
+      "title": "Inviting Niko to Your Server — Niko docs",
+      "description": "Learn how to invite Niko to your Discord server and set it up.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/invite.png"
+    },
+    "/docs/leveling-configuration": {
+      "title": "Leveling Configuration Guide — Niko docs",
+      "description": "Detailed guide to configuring every aspect of the leveling system.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/leveling-configuration.png"
+    },
+    "/docs/leveling-overview": {
+      "title": "Leveling System Overview — Niko docs",
+      "description": "Learn about Niko's XP and leveling system and how to configure it.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/leveling-overview.png"
+    },
+    "/docs/logging-overview": {
+      "title": "Logging System — Niko docs",
+      "description": "Comprehensive server event logging with per-category channels, rich embeds, and detailed audit trails.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/logging-overview.png"
+    },
+    "/docs/moderation-mutes": {
+      "title": "Mute System Guide — Niko docs",
+      "description": "Understand how Niko's mute system works and how to use temporary and permanent mutes.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/moderation-mutes.png"
+    },
+    "/docs/moderation-overview": {
+      "title": "Moderation Tools Overview — Niko docs",
+      "description": "Comprehensive guide to Niko's moderation features including warns, mutes, and moderation commands.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/moderation-overview.png"
+    },
+    "/docs/moderation-warnings": {
+      "title": "Warning System Guide — Niko docs",
+      "description": "Learn how to use and manage the warning system for tracking member infractions.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/moderation-warnings.png"
+    },
+    "/docs/prefix-setup": {
+      "title": "Setting Up Prefix Commands — Niko docs",
+      "description": "Configure how you want to interact with Niko using prefix commands.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/prefix-setup.png"
+    },
+    "/docs/premium-overview": {
+      "title": "Niko Premium — Niko docs",
+      "description": "AI image moderation for your server, billed monthly — plus everything that stays free.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/premium-overview.png"
+    },
+    "/docs/roles-and-permissions": {
+      "title": "Roles and Permissions Guide — Niko docs",
+      "description": "Understand how Niko interacts with Discord roles and permissions.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/roles-and-permissions.png"
+    },
+    "/docs/server-configuration": {
+      "title": "Server Configuration Basics — Niko docs",
+      "description": "Learn the essentials of configuring Niko for your server.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/server-configuration.png"
+    },
+    "/docs/setup-and-permissions": {
+      "title": "Setup and Permissions — Niko docs",
+      "description": "Invite Niko with the current Discord OAuth flow, grant only the permissions your enabled features need, and verify role hierarchy before configuring the bot.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/setup-and-permissions.png"
+    },
+    "/docs/social-birthdays": {
+      "title": "Birthday System Guide — Niko docs",
+      "description": "Set up and manage the birthday tracking system for your server.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-birthdays.png"
+    },
+    "/docs/social-notifier": {
+      "title": "Social Media Notifier — Niko docs",
+      "description": "Get automatic notifications when creators go live or post new content on YouTube, Twitch, Twitter, TikTok, Bluesky, or Reddit.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-notifier.png"
+    },
+    "/docs/social-overview": {
+      "title": "Social Features Overview — Niko docs",
+      "description": "Explore Niko's social features including birthdays, polls, suggestions, and more.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-overview.png"
+    },
+    "/docs/social-polls": {
+      "title": "Poll System Guide — Niko docs",
+      "description": "Create and manage polls to gather community opinions.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-polls.png"
+    },
+    "/docs/social-roleplay-blocks": {
+      "title": "Roleplay Blocking (rpblock & rpunblock) — Niko docs",
+      "description": "Stop specific members from using roleplay commands on you with .rpblock and .rpunblock.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-roleplay-blocks.png"
+    },
+    "/docs/social-starboard": {
+      "title": "Starboard — Niko docs",
+      "description": "Highlight popular messages in a dedicated starboard channel based on reaction counts.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-starboard.png"
+    },
+    "/docs/social-suggestions": {
+      "title": "Suggestions — Niko docs",
+      "description": "Let members submit suggestions with up/down voting and admin approval or denial.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/social-suggestions.png"
+    },
+    "/docs/tickets-guide": {
+      "title": "Ticket System Guide — Niko docs",
+      "description": "Set up a support ticket system with categories, support roles, and private ticket channels.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/tickets-guide.png"
+    },
+    "/docs/tickets-transcripts": {
+      "title": "Ticket Web Transcripts — Niko docs",
+      "description": "Generate shareable web transcripts of your tickets and download them as TXT, HTML, CSV, or JSON.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/tickets-transcripts.png"
+    },
+    "/docs/tips-community-management": {
+      "title": "Practical Community Setup Tips — Niko docs",
+      "description": "A practical checklist for configuring Niko's current moderation, onboarding, leveling, and logging tools.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/tips-community-management.png"
+    },
+    "/docs/tips-getting-started": {
+      "title": "Quick Start Guide — Niko docs",
+      "description": "A current checklist for inviting Niko, verifying permissions, and enabling the features your server needs.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/tips-getting-started.png"
+    },
+    "/docs/utility-overview": {
+      "title": "Utility Features Overview — Niko docs",
+      "description": "Discover Niko's utility features including reminders, tags, and other helpful tools.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/utility-overview.png"
+    },
+    "/docs/utility-reminders": {
+      "title": "Reminders Guide — Niko docs",
+      "description": "Set up and manage reminders to never miss important events.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/utility-reminders.png"
+    },
+    "/docs/utility-tags": {
+      "title": "Tags System Guide — Niko docs",
+      "description": "Create and manage custom tags for quick access to frequently used information.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/utility-tags.png"
+    },
+    "/docs/voice-overview": {
+      "title": "Voice Features Overview — Niko docs",
+      "description": "Learn about Niko's voice and music features.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/voice-overview.png"
+    },
+    "/docs/welcome": {
+      "title": "Welcome to Niko — Niko docs",
+      "description": "New to Niko? Start here to understand what the bot can do for your server.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/welcome.png"
+    },
+    "/changelog/loading-cards-live-leaderboards-voice-xp": {
+      "title": "Faster Cards, Live Server Leaderboards & Voice XP — Niko changelog",
+      "description": "Image cards no longer leave you staring at a spinner: economy, leveling, and Spotify commands open with an animated card-shaped placeholder and edit it into the finished render. The leveling leaderboard moved to a live page at /levels/<server id>, servers can exclude channels from XP and opt into passive voice XP, and the support server got clearer panels and a rules page that prints all twenty rules in one message.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/loading-cards-live-leaderboards-voice-xp.png"
+    },
+    "/changelog/booster-roles-and-notifications": {
+      "title": "Booster Roles and Boost Announcements — Niko changelog",
+      "description": "Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/booster-roles-and-notifications.png"
+    },
+    "/changelog/premium-subscriptions": {
+      "title": "Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update — Niko changelog",
+      "description": "Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/premium-subscriptions.png"
+    },
+    "/changelog/giveaway-bans": {
+      "title": "Giveaway Bans Keep Ban-Dodgers Out of Your Giveaways — Niko changelog",
+      "description": "Servers can now ban a member from their giveaways with `.giveaway ban`, and lift it with `.giveaway unban`. A ban is per server, clears the entries the member already holds, and is enforced at the draw as well as on the Join button, so a banned member cannot win by entering before the ban or during a giveaway's final seconds.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/giveaway-bans.png"
+    },
+    "/changelog/notifier-health-and-defaults": {
+      "title": "The Notifier Keeps Quiet Channels and Uses Your Default Channel — Niko changelog",
+      "description": "Quiet channels are no longer mistaken for broken ones: a YouTube channel with no uploads, an offline Twitch channel with no VODs and an empty subreddit all stay healthy, and a successful check clears the failed-check count. Adding an account also no longer demands a channel when the server has a default channel saved — leave the picker on the default and the follow posts there, and the picker only becomes required again once that default is cleared.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/notifier-health-and-defaults.png"
+    },
+    "/changelog/seasonal-badges-in-season": {
+      "title": "Seasonal Badges Only Progress Inside Their Season — Niko changelog",
+      "description": "Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/seasonal-badges-in-season.png"
+    },
+    "/changelog/ticket-panel-accent-color": {
+      "title": "The Ticket Panel Now Wears Its Accent Color — Niko changelog",
+      "description": "Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/ticket-panel-accent-color.png"
+    },
+    "/changelog/guild-settings-tidy-up": {
+      "title": "Server Settings Hand Tickets and Onboarding to Their Own Tabs — Niko changelog",
+      "description": "The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/guild-settings-tidy-up.png"
+    },
+    "/changelog/blacklist-lockdown": {
+      "title": "Blacklisting a Server Now Pauses Its Features Instead of Erasing Them — Niko changelog",
+      "description": "Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/blacklist-lockdown.png"
+    },
+    "/changelog/notifier-dashboard-tab": {
+      "title": "Twitch Live Alerts and a Dashboard Tab for Social Notifications — Niko changelog",
+      "description": "Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/notifier-dashboard-tab.png"
+    },
+    "/changelog/team-profile-cards": {
+      "title": "Team Profiles Get Platform Cards and a Spotify Progress Bar — Niko changelog",
+      "description": "Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/team-profile-cards.png"
+    },
+    "/changelog/personal-economy-tabs": {
+      "title": "Economy & Achievements Move to Your Profile — Niko changelog",
+      "description": "The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/personal-economy-tabs.png"
+    },
+    "/changelog/economy-card-theme-refresh": {
+      "title": "Economy & Leveling Cards Match the Website Theme — Niko changelog",
+      "description": "Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/economy-card-theme-refresh.png"
+    },
+    "/changelog/topgg-voting-rewards-and-achievements": {
+      "title": "top.gg Voting Rewards & Café Achievements — Niko changelog",
+      "description": "Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/topgg-voting-rewards-and-achievements.png"
+    },
+    "/changelog/global-economy-leaderboard-privacy": {
+      "title": "Global Economy Leaderboard & Privacy — Niko changelog",
+      "description": "The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/global-economy-leaderboard-privacy.png"
+    },
+    "/changelog/dashboard-and-community-experience-refresh": {
+      "title": "Dashboard & Community Experience Refresh — Niko changelog",
+      "description": "A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/dashboard-and-community-experience-refresh.png"
+    },
+    "/changelog/scam-image-filter": {
+      "title": "Scam Image Filter (Experimental) — Niko changelog",
+      "description": "A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/scam-image-filter.png"
+    },
+    "/changelog/staff-applications": {
+      "title": "Staff Applications — Niko changelog",
+      "description": "Guild dashboards can now manage multiple staff role openings with shareable web forms, Discord membership and eligibility checks, and reusable application links.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/staff-applications.png"
+    },
+    "/changelog/server-logging-onboarding-updates": {
+      "title": "Logging Reliability & Onboarding Rules — Niko changelog",
+      "description": "Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/server-logging-onboarding-updates.png"
+    },
+    "/changelog/uwulock-starboard-overhaul": {
+      "title": "UwU Lock Rebuilt & Starboard Persistence — Niko changelog",
+      "description": "The UwU Lock command has been completely rebuilt around the main database with immediate webhook reposts, reliable message transforms, and full Starboard integration — with proper author attribution that persists cleanly across restarts.",
+      "section": "Changelog · v2.11.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/uwulock-starboard-overhaul.png"
+    },
+    "/changelog/guild-server-pulse-stats": {
+      "title": "Guild Server Pulse Stats — Niko changelog",
+      "description": "Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/guild-server-pulse-stats.png"
+    },
+    "/changelog/team-page-ai-name-config": {
+      "title": "Team Profiles & Custom AI Names — Niko changelog",
+      "description": "Niko's public website now introduces the people behind the bot, while server owners can give their AI a custom name and manage its experimental capabilities from the dashboard.",
+      "section": "Changelog · v2.10.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/team-page-ai-name-config.png"
+    },
+    "/changelog/september-platform-updates": {
+      "title": "September Platform Updates — Niko changelog",
+      "description": "A broad set of public improvements landed across Niko: richer ticket transcripts, a multimodal AI experiment, more reliable music playback, a redesigned dashboard experience, persistent giveaways and suggestions, and a refreshed public website with dynamic social previews.",
+      "section": "Changelog · v2.9.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/september-platform-updates.png"
+    },
+    "/changelog/economy-leveling-overhaul": {
+      "title": "Economy Items, Leveling Cards & Subcommands — Niko changelog",
+      "description": "The economy shop expanded with four new consumable items that affect gameplay — Rigged Coin, Streak Insurance, Double Down Token, and Lucky Horseshoe — plus daily streak milestone bonuses at 7, 14, 30, 60, and 90 days. The leveling system now renders rank cards and leaderboards as customizable image cards, and all leveling commands live under a single `/leveling` group with subcommands.",
+      "section": "Changelog · v2.8.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/economy-leveling-overhaul.png"
+    },
+    "/changelog/database-migration": {
+      "title": "Database Migration to MongoDB — Niko changelog",
+      "description": "Every major system has been migrated from SQLite to MongoDB. The migration covered economy, leveling, moderation, tickets, birthdays, AFK, sticky messages, warns, mutes, and the blacklist — with a custom interpreter that translates SQLite-style writes to MongoDB operations.",
+      "section": "Changelog · v2.7.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/database-migration.png"
+    },
+    "/changelog/ticket-system-transcripts": {
+      "title": "Ticket Transcripts & VoiceMaster — Niko changelog",
+      "description": "The ticket system gained a web-based transcript viewer that renders ticket conversations as styled HTML pages. The VoiceMaster was also improved with better reliability and database usage. Ticket transcripts can now be downloaded as HTML or viewed online.",
+      "section": "Changelog · v2.6.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/ticket-system-transcripts.png"
+    },
+    "/changelog/roleplay-music-status": {
+      "title": "Roleplay, Music & Status Rotation — Niko changelog",
+      "description": "The roleplay cog was completely rewritten to use nekos.best API GIFs with CV2 layout messages and a persistent 'hug back' button. The music cog was restructured with a ghost queue feature and fixed autoplay/Spotify playback. A status message rotation system was added with a configurable timer.",
+      "section": "Changelog · v2.5.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/roleplay-music-status.png"
+    },
+    "/changelog/moderation-logging-dashboard": {
+      "title": "Logging, Moderation & Documentation — Niko changelog",
+      "description": "Logging got two major improvements: deleted message logs now show image attachments in a MediaGallery component, and the Member category now tracks avatar changes using a Section with Thumbnail accessory. The documentation page was fully rebuilt with search, filters, and a card-based layout.",
+      "section": "Changelog · v2.4.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/moderation-logging-dashboard.png"
+    },
+    "/changelog/website-launch-donation": {
+      "title": "Website, Donation System & API — Niko changelog",
+      "description": "The public website and documentation portal launched with a React + Vite frontend, documentation center with search, and a commands reference page. The donation system gained a dashboard customization page, and the Flask API backend was fixed to use proper database calls.",
+      "section": "Changelog · v2.3.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/website-launch-donation.png"
+    }
+  }
+}

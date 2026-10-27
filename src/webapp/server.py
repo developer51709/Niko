@@ -24,6 +24,7 @@ Routes:
 import os
 import json
 import glob
+import re
 import time
 import secrets
 import traceback
@@ -59,7 +60,7 @@ from cogs.donations.oxapay import OxaPayClient
 from config.ids import OWNER_IDS
 from cogs.staff.staff import STAFF_ROLES
 from utils.ai.config import get_ai_config, set_ai_config
-from . import leaderboard_cache
+from . import leaderboard_cache, social_preview
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,14 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 _discord_bot = None
 _WEB_STARTED_AT = time.time()
+# Landing-page counts for the Discord embeds, refreshed at most once a minute.
+_SOCIAL_STATS_TTL = 60
+_social_stats_cache: tuple[float, dict] | None = None
+# Per-page subject data (a server's leaderboard, a team profile). Slower moving
+# than the counts, and cached per route.
+_SOCIAL_CONTEXT_TTL = 300
+_SOCIAL_CONTEXT_CACHE_LIMIT = 256
+_social_context_cache: dict = {}
 _member_metadata_cache: dict[str, tuple[float, dict[str, dict]]] = {}
 _staff_user_identity_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
 _STAFF_USER_IDENTITY_CACHE_TTL = 600
@@ -166,6 +175,15 @@ def _serialize_level_config(config) -> dict:
     excluded = serialized.get("xp_excluded_channels") or []
     serialized["xp_excluded_channels"] = [str(cid) for cid in excluded]
     serialized["xp_vc_enabled"] = bool(serialized.get("xp_vc_enabled", False))
+    # Level-role IDs are snowflakes as well: JSON numbers above 2^53 lose their
+    # trailing digits in JavaScript, so both sides of the mapping go out as text.
+    try:
+        assigned_roles = dict(serialized.get("level_roles") or {})
+    except (TypeError, ValueError):
+        assigned_roles = {}
+    serialized["level_roles"] = {
+        str(level): str(role) for level, role in assigned_roles.items()
+    }
     return serialized
 
 
@@ -1952,8 +1970,8 @@ def _serialize_onboarding_config(cfg) -> dict:
     from dataclasses import asdict
     serialized = asdict(cfg)
     for field in (
-        "welcome_channel", "rules_channel", "rules_role_id", "rules_message_id",
-        "captcha_channel_id", "captcha_panel_message_id",
+        "welcome_channel", "goodbye_channel", "rules_channel", "rules_role_id",
+        "rules_message_id", "captcha_channel_id", "captcha_panel_message_id",
     ):
         if serialized.get(field) is not None:
             serialized[field] = str(serialized[field])
@@ -2394,13 +2412,236 @@ async def _confirm_donation_from_webhook(track_id: str, payload: dict):
 
 
 
+def _social_stats() -> dict:
+    """Command, server and member counts for the landing pages' embeds.
+
+    Serving a page must not wait on the bot loop, so the result is cached for a
+    minute: the first landing-page request after each window is the only one
+    that asks the bot, and everything else is answered from the cache or from
+    the startup snapshot on disk.
+    """
+    global _social_stats_cache
+    now = time.time()
+    cached = _social_stats_cache
+    if cached is not None and now - cached[0] < _SOCIAL_STATS_TTL:
+        return cached[1]
+    stats = None
+    try:
+        from .public_routes import _live_bot_stats
+        live = _live_bot_stats()
+        try:
+            stats = run_on_bot_loop(live, timeout=2)
+        except Exception:
+            # Nothing was scheduled (no bot loop, or the future raised), so
+            # close the coroutine instead of leaving it un-awaited.
+            live.close()
+            stats = None
+    except Exception:
+        stats = None
+    if not stats:
+        snapshot = load_json(BOT_STATS, {})
+        stats = {
+            "command_count": snapshot.get("command_count", 0),
+            "guild_count":   snapshot.get("guild_count", 0),
+            "user_count":    snapshot.get("user_count", 0),
+        }
+    _social_stats_cache = (now, stats)
+    return stats
+
+
+# Pages whose subject is something other than Niko itself. Each one gets its
+# own container instead of the standard branded card, built from data the page
+# already publishes: a server's leaderboard shows the server, a team profile
+# shows that member.
+_GUILD_PAGE = re.compile(r"^/levels/(\d+)$")
+_STAFF_PAGE = re.compile(r"^/team/([^/]+)$")
+
+
+def _staff_card_accent(member: dict) -> int | None:
+    """A team member's own card colour, as the integer Discord wants."""
+    raw = str((member.get("card") or {}).get("accent") or "").strip().lstrip("#")
+    if len(raw) != 6:
+        return None
+    try:
+        return int(raw, 16)
+    except ValueError:
+        return None
+
+
+def _guild_embed_context(guild_id: str) -> dict | None:
+    """The server a leveling leaderboard belongs to.
+
+    Everything here is already public on that page (its own API returns the
+    name, icon, member count and ranked total), and a guild the bot is not in
+    has nothing to describe, so it keeps the section's generic copy.
+    """
+    if _discord_bot is None or not guild_id.isdigit():
+        return None
+    try:
+        guild = _discord_bot.get_guild(int(guild_id))
+    except Exception:
+        guild = None
+    if guild is None:
+        return None
+    icon = getattr(guild, "icon", None)
+    members = int(getattr(guild, "member_count", 0) or 0)
+    ranked = None
+    try:
+        # The reader schedules the bot loop itself and only counts the total, so
+        # one row is all this needs to read.
+        page = get_runtime_guild_level_page(guild_id, 0, 1)
+    except Exception:
+        page = None
+    if isinstance(page, tuple) and len(page) == 2:
+        ranked = int(page[1] or 0)
+    stats = []
+    if members:
+        stats.append(f"**{members:,}** members")
+    if ranked:
+        stats.append(f"**{ranked:,}** ranked by XP" if members else f"**{ranked:,}** members ranked by XP")
+    lines = [" · ".join(stats)] if stats else []
+    paused = False
+    try:
+        paused = not bool(get_runtime_level_config(guild_id).get("xp_enabled", True))
+    except Exception:
+        paused = False
+    if paused:
+        lines.append("-# XP earning is currently paused in this server.")
+    if ranked is None:
+        description = f"Leveling standings for {guild.name}, ranked by level and XP."
+    elif members:
+        description = f"Leveling standings for {guild.name} — {members:,} members, {ranked:,} ranked by XP."
+    else:
+        description = f"Leveling standings for {guild.name} — {ranked:,} members ranked by XP."
+    return {
+        "kind": "guild",
+        "template": "/levels",
+        "title": f"{guild.name} — Level leaderboard",
+        "description": description,
+        "name": guild.name,
+        "section": "LEVEL LEADERBOARD",
+        "thumbnail": str(icon.url) if icon is not None else "",
+        "accent": None,
+        "lines": lines,
+    }
+
+
+def _staff_embed_context(member_id: str) -> dict | None:
+    """One team member, from the public roster only.
+
+    ``_load_staff_rows`` is the same list the team page itself serves, so a
+    hidden or suspended profile has no context and falls back to the section's
+    generic copy rather than leaking through the preview.
+    """
+    if not member_id or not member_id.isdigit():
+        return None
+    try:
+        member = next((item for item in _load_staff_rows() if str(item.get("id")) == member_id), None)
+    except Exception:
+        member = None
+    if not member:
+        return None
+    name = str(member.get("name") or member.get("username") or "Niko staff")
+    role_label = str(member.get("role_label") or "Staff")
+    bio = " ".join(str(member.get("bio") or "").split())
+    if len(bio) > 180:
+        bio = bio[:177].rstrip() + "…"
+    lines = []
+    links = [link for link in (member.get("public_links") or []) if isinstance(link, dict) and link.get("url")]
+    if links:
+        label = "link" if len(links) == 1 else "links"
+        lines.append(f"-# {len(links)} public {label} · niko.sryze.cc/team")
+    return {
+        "kind": "staff",
+        "template": "/team",
+        "title": f"{name} — Niko team",
+        "description": bio or f"{role_label} on the Niko team. Say hi in the support server.",
+        "name": name,
+        "section": f"{role_label.upper()} · STAFF",
+        "thumbnail": str(member.get("avatar_url") or ""),
+        # Each profile carries the member's own card colour, so no two staff
+        # previews look the same.
+        "accent": _staff_card_accent(member),
+        "lines": lines,
+    }
+
+
+def _social_context(route: str) -> dict | None:
+    """The subject of a page, when it is not Niko itself (cached briefly).
+
+    Resolving a subject can touch the bot loop or the roster, so the result is
+    cached: link previews are not latency sensitive, and Discord re-crawls the
+    same URLs.
+    """
+    key = social_preview.route_key(route)
+    now = time.time()
+    cached = _social_context_cache.get(key)
+    if cached is not None and now - cached[0] < _SOCIAL_CONTEXT_TTL:
+        return cached[1]
+    context = None
+    match = _GUILD_PAGE.match(key)
+    if match:
+        # No server data (the bot is not in it, or it is not reachable) still
+        # borrows the leaderboard section's copy.
+        context = _guild_embed_context(match.group(1)) or {"template": "/levels"}
+    else:
+        match = _STAFF_PAGE.match(key)
+        if match:
+            context = _staff_embed_context(match.group(1)) or {"template": "/team"}
+    if len(_social_context_cache) >= _SOCIAL_CONTEXT_CACHE_LIMIT:
+        _social_context_cache.clear()
+    _social_context_cache[key] = (now, context)
+    return context
+
+
+def _social_invite_url() -> str:
+    """The invite for the embed's Add Niko button.
+
+    Built the same way /api/config builds it, from this process's own
+    application id, so the button lands on the same OAuth screen the site's own
+    Add Niko button uses.
+    """
+    return "https://discord.com/oauth2/authorize?" + urlencode({
+        "client_id": DISCORD_CLIENT_ID,
+        "permissions": "8",
+        "scope": "bot applications commands",
+    })
+
+
+def render_site_shell(path: str = None):
+    """Serve the React shell with this route's social metadata rendered in.
+
+    One shell is served for every route and decorated here, per request: the
+    per-page HTML, the invite link and the live counts used to be baked into the
+    build, so they only changed on a deploy. The page copy comes from the build
+    manifest (src/webapp/social_preview.py), everything request-dependent is
+    filled in now.
+    """
+    route = request.path if path is None else path
+    shell_path = os.path.join(WEB_DIST_DIR, "index.html")
+    try:
+        with open(shell_path, "r", encoding="utf-8") as handle:
+            shell = handle.read()
+    except OSError:
+        return jsonify({"error": "The site build is unavailable."}), 503
+    body = social_preview.inject(
+        shell,
+        WEB_DIST_DIR,
+        route,
+        _social_invite_url(),
+        stats_provider=_social_stats,
+        context_provider=_social_context,
+    )
+    response = Response(body, mimetype="text/html")
+    # The served head depends on the request (and, on landing pages, on live
+    # counts), so it is revalidated rather than cached blind.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 def serve_spa_shell():
-    """Serve generated route metadata HTML, falling back to the React shell."""
-    route = request.path.strip("/")
-    route_html = os.path.join(WEB_DIST_DIR, route, "index.html") if route else ""
-    if route_html and os.path.isfile(route_html):
-        return send_from_directory(WEB_DIST_DIR, f"{route}/index.html")
-    return send_from_directory(WEB_DIST_DIR, "index.html")
+    """Every public SPA route is the same shell with its own metadata."""
+    return render_site_shell()
 
 
 def _hex_color(val, fallback):
@@ -2424,7 +2665,7 @@ def spa_not_found(error):
     if request.path.startswith("/api/") or request.path.startswith("/auth/"):
         return jsonify({"error": "Not found"}), 404
     if request.accept_mimetypes.accept_html:
-        return send_from_directory(WEB_DIST_DIR, "index.html")
+        return render_site_shell()
     return error
 
 

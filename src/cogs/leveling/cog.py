@@ -57,6 +57,31 @@ def _loading_card_view(card_type: str) -> discord.ui.LayoutView:
     return view
 
 
+class _KeepUnknownPlaceholders(dict):
+    """Substitution map that leaves ``{unknown}`` tokens in the template."""
+
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _fill_level_up_template(template: str, member, level: int, guild) -> str:
+    """Fill a custom level-up message without ever raising on bad input.
+
+    ``str.format`` used to raise on an unknown placeholder (or a stray brace),
+    which aborted the whole level-up — no announcement and no role reward.
+    """
+    values = _KeepUnknownPlaceholders(
+        mention=getattr(member, "mention", ""),
+        level=level,
+        name=getattr(member, "display_name", "") or getattr(member, "name", ""),
+        guild=getattr(guild, "name", ""),
+    )
+    try:
+        return template.format_map(values)
+    except Exception:
+        return template
+
+
 def _channel_id_list(value) -> list:
     """Normalise a stored channel list into a list of integer IDs."""
     if isinstance(value, str):
@@ -306,12 +331,7 @@ class Leveling(commands.Cog):
         try:
             custom_template = cfg.get("level_up_message")
             if custom_template:
-                lu_text = custom_template.format(
-                    mention=member.mention,
-                    level=current_level,
-                    name=member.display_name,
-                    guild=guild.name,
-                )
+                lu_text = _fill_level_up_template(custom_template, member, current_level, guild)
             else:
                 # The message resolver reads the guild's preferred locale from
                 # ``ctx.guild``, so give it a minimal context object.
@@ -325,7 +345,9 @@ class Leveling(commands.Cog):
                 await lu_channel.send(view=view)
                 self.bot.dispatch("sticky_feature_message", guild.id, lu_channel.id)
             log.debug("Leveling", f"User {member} leveled up to {current_level} in {guild.name}")
-        except discord.Forbidden:
+        except (discord.Forbidden, discord.HTTPException):
+            # A missing permission or a deleted announcement channel must not
+            # stop the level-up itself from being recorded.
             pass
 
         # Assign level roles

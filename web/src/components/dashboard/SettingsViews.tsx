@@ -9,7 +9,7 @@ import { SettingCard, SettingCards, type SettingCardFlag } from "./SettingCards"
 import { RoleSelect } from "./RoleSelect";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { X } from "lucide-react";
-import type { GlobalProfile, GuildConfig, GuildResources, GuildProfile, GuildTicketsResponse } from "../../types";
+import type { GlobalProfile, GuildConfig, GuildResources, GuildProfile, GuildTicketsResponse, PresetFilter } from "../../types";
 import { DashHeading } from "./DashboardViews";
 import { navigate } from "../../router";
 
@@ -46,6 +46,13 @@ function channelsWithSelected(resources: GuildResources | null, selected: string
   const channels = resources?.channels || [];
   if (!selectedId || channels.some((channel) => String(channel.id) === selectedId)) return channels;
   return [{ id: selectedId, name: `Saved channel · ${selectedId}` }, ...channels];
+}
+
+/** Level → role assignments in level order, as editable rows. */
+function levelRewardRows(levelRoles: Record<string, string> | undefined) {
+  return Object.entries(levelRoles || {})
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([level, role]) => ({ level: String(level), role: String(role) }));
 }
 
 function SettingsIntro({ icon, label, title, text, className }: { icon: string; label: string; title: string; text: string; className?: string }) {
@@ -85,14 +92,14 @@ function TicketCategoryList({ categories, onChange }: { categories: string[]; on
 
 export function OnboardingView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const onboarding = config?.server?.onboarding || {};
-  const [values, setValues] = useState({ welcome_channel: "", welcome_title: "", welcome_description: "", welcome_color: "#5865f2", welcome_image: "", rules_channel: "", rules_text: "", rules_role_id: "", autorole_ids: [] as string[], bot_autorole_ids: [] as string[], captcha_enabled: false, captcha_channel_id: "", captcha_add_role_ids: [] as string[], captcha_remove_role_ids: [] as string[], captcha_kick_on_fail: false });
+  const [values, setValues] = useState({ welcome_channel: "", welcome_title: "", welcome_description: "", welcome_color: "#5865f2", welcome_image: "", goodbye_channel: "", goodbye_title: "", goodbye_description: "", goodbye_color: "#ed4245", goodbye_image: "", rules_channel: "", rules_text: "", rules_role_id: "", autorole_ids: [] as string[], bot_autorole_ids: [] as string[], captcha_enabled: false, captcha_channel_id: "", captcha_add_role_ids: [] as string[], captcha_remove_role_ids: [] as string[], captcha_kick_on_fail: false });
   const [state, setState] = useState(initialSave);
-  useEffect(() => setValues({ welcome_channel: onboarding.welcome_channel ? String(onboarding.welcome_channel) : "", welcome_title: onboarding.welcome_title || "", welcome_description: onboarding.welcome_description || "", welcome_color: `#${Number(onboarding.welcome_color ?? 0x5865f2).toString(16).padStart(6, "0")}`, welcome_image: onboarding.welcome_image || "", rules_channel: onboarding.rules_channel ? String(onboarding.rules_channel) : "", rules_text: onboarding.rules_text || "", rules_role_id: onboarding.rules_role_id ? String(onboarding.rules_role_id) : "", autorole_ids: (onboarding.autorole_ids || []).map(String), bot_autorole_ids: (onboarding.bot_autorole_ids || []).map(String), captcha_enabled: Boolean(onboarding.captcha_enabled), captcha_channel_id: onboarding.captcha_channel_id ? String(onboarding.captcha_channel_id) : "", captcha_add_role_ids: (onboarding.captcha_add_role_ids || []).map(String), captcha_remove_role_ids: (onboarding.captcha_remove_role_ids || []).map(String), captcha_kick_on_fail: Boolean(onboarding.captcha_kick_on_fail) }), [config]);
+  useEffect(() => setValues({ welcome_channel: onboarding.welcome_channel ? String(onboarding.welcome_channel) : "", welcome_title: onboarding.welcome_title || "", welcome_description: onboarding.welcome_description || "", welcome_color: `#${Number(onboarding.welcome_color ?? 0x5865f2).toString(16).padStart(6, "0")}`, welcome_image: onboarding.welcome_image || "", goodbye_channel: onboarding.goodbye_channel ? String(onboarding.goodbye_channel) : "", goodbye_title: onboarding.goodbye_title || "", goodbye_description: onboarding.goodbye_description || "", goodbye_color: `#${Number(onboarding.goodbye_color ?? 0xed4245).toString(16).padStart(6, "0")}`, goodbye_image: onboarding.goodbye_image || "", rules_channel: onboarding.rules_channel ? String(onboarding.rules_channel) : "", rules_text: onboarding.rules_text || "", rules_role_id: onboarding.rules_role_id ? String(onboarding.rules_role_id) : "", autorole_ids: (onboarding.autorole_ids || []).map(String), bot_autorole_ids: (onboarding.bot_autorole_ids || []).map(String), captcha_enabled: Boolean(onboarding.captcha_enabled), captcha_channel_id: onboarding.captcha_channel_id ? String(onboarding.captcha_channel_id) : "", captcha_add_role_ids: (onboarding.captcha_add_role_ids || []).map(String), captcha_remove_role_ids: (onboarding.captcha_remove_role_ids || []).map(String), captcha_kick_on_fail: Boolean(onboarding.captcha_kick_on_fail) }), [config]);
   const set = (key: keyof typeof values, value: unknown) => setValues((current) => ({ ...current, [key]: value }));
   const submit = (event: FormEvent) => { event.preventDefault(); setState({ saving: true }); notifyLoading("Saving onboarding settings…", "settings-save"); saveConfig(guildId, "server", { onboarding: { ...values, autorole_ids: values.autorole_ids, bot_autorole_ids: values.bot_autorole_ids, captcha_add_role_ids: values.captcha_add_role_ids, captcha_remove_role_ids: values.captcha_remove_role_ids } }, csrfToken).then(() => { setState({ saving: false }); notifySuccess("Onboarding settings saved.", "settings-save"); }).catch((error) => { setState({ saving: false }); notifyError(error instanceof Error ? error.message : "Could not save onboarding settings.", "settings-save"); }); };
   const channels = resources?.channels || [];
   const roles = resources?.roles || [];
-  return <><DashHeading eyebrow="Onboarding" title="Make every arrival feel intentional." text="Tune the welcome, verification, and role experience for new members and bots." /><SettingsIntro icon="users" label="First impressions" title="A calmer front door" text="Configure welcome messages, rules, captcha, and separate role assignments for people and bots." /><form onSubmit={submit} className="settings-stack guild-feature-settings onboarding-settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Welcome" title="Welcome message" detail="Choose the channel and message new members see when they join." icon="users" /><div className="form-grid"><Field label="Welcome channel"><select value={values.welcome_channel} onChange={(event) => set("welcome_channel", event.target.value)}><option value="">Disabled</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Welcome title"><input maxLength={200} value={values.welcome_title} onChange={(event) => set("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field><Field label="Welcome message" hint="Use {user} or {name}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => set("welcome_description", event.target.value)} placeholder="Welcome {user}!" /></Field><Field label="Welcome accent color" hint="Six-digit hex color, for example 5865F2"><ColorPicker label="Welcome accent color" value={values.welcome_color} onChange={(value) => set("welcome_color", value)} /></Field><Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => set("welcome_image", event.target.value)} placeholder="https://…" /></Field></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Join roles" title="Member and bot autoroles" detail="Keep human member roles and bot-specific roles independent." icon="users" /><div className="form-grid"><Field label="Member autoroles" hint="Assigned to people as they join."><RoleSelect roles={roles} value={values.autorole_ids} multiple ariaLabel="Member autoroles" onChange={(value) => set("autorole_ids", value)} /></Field><Field label="Bot autoroles" hint="Assigned only when another bot joins."><RoleSelect roles={roles} value={values.bot_autorole_ids} multiple ariaLabel="Bot autoroles" onChange={(value) => set("bot_autorole_ids", value)} /></Field></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Rules and verification" title="A guided first step" detail="Set a rules channel and optional captcha gate." icon="shield" /><div className="form-grid"><Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => set("rules_channel", event.target.value)}><option value="">Not configured</option>{channelsWithSelected(resources, values.rules_channel).map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Rules acknowledgment role"><RoleSelect roles={roles} value={values.rules_role_id} placeholder="No role" onChange={(value) => set("rules_role_id", value)} /></Field><Field label="Rules text"><textarea rows={4} maxLength={4000} value={values.rules_text} onChange={(event) => set("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." /></Field><Field label="Verification panel channel" hint="Save to post or refresh the public Verify panel in this channel. Clicking Verify always starts the captcha challenge in DMs."><select value={values.captcha_channel_id} onChange={(event) => set("captcha_channel_id", event.target.value)}><option value="">Not set</option>{channelsWithSelected(resources, values.captcha_channel_id).map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Roles after verification"><RoleSelect roles={roles} value={values.captcha_add_role_ids} multiple ariaLabel="Roles granted after captcha" onChange={(value) => set("captcha_add_role_ids", value)} /></Field><Field label="Roles removed after verification"><RoleSelect roles={roles} value={values.captcha_remove_role_ids} multiple ariaLabel="Roles removed after captcha" onChange={(value) => set("captcha_remove_role_ids", value)} /></Field></div><SettingCards><SettingCard title="Enable captcha verification" hint="Members click Verify in the public panel and complete the challenge in DMs; this channel only controls where that panel is posted" action={<Switch checked={values.captcha_enabled} onCheckedChange={(value) => set("captcha_enabled", value)} aria-label="Enable captcha verification" />} /><SettingCard title="Kick members who fail verification" hint="Remove users after their verification attempts are exhausted" action={<Switch checked={values.captcha_kick_on_fail} onCheckedChange={(value) => set("captcha_kick_on_fail", value)} aria-label="Kick members who fail verification" />} /></SettingCards></section><SaveFooter state={state} /></form></>;
+  return <><DashHeading eyebrow="Onboarding" title="Make every arrival feel intentional." text="Tune the welcome, goodbye, verification, and role experience for new members and bots." /><SettingsIntro icon="users" label="First impressions" title="A calmer front door" text="Configure the welcome and goodbye messages, rules, captcha, and separate role assignments for people and bots." /><form onSubmit={submit} className="settings-stack guild-feature-settings onboarding-settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Welcome" title="Welcome message" detail="Choose the channel and message new members see when they join." icon="users" /><div className="form-grid"><Field label="Welcome channel"><select value={values.welcome_channel} onChange={(event) => set("welcome_channel", event.target.value)}><option value="">Disabled</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Welcome title"><input maxLength={200} value={values.welcome_title} onChange={(event) => set("welcome_title", event.target.value)} placeholder="Welcome to the server" /></Field><Field label="Welcome message" hint="Use {user}, {name}, or {guild}"><textarea rows={4} maxLength={2000} value={values.welcome_description} onChange={(event) => set("welcome_description", event.target.value)} placeholder="Welcome {user}!" /></Field><Field label="Welcome accent color" hint="Six-digit hex color, for example 5865F2"><ColorPicker label="Welcome accent color" value={values.welcome_color} onChange={(value) => set("welcome_color", value)} /></Field><Field label="Welcome image URL"><input type="url" value={values.welcome_image} onChange={(event) => set("welcome_image", event.target.value)} placeholder="https://…" /></Field></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Goodbye" title="Goodbye message" detail="Posted in the channel you pick when a member leaves. Leave the channel unset and Niko stays quiet." icon="logout" /><div className="form-grid"><Field label="Goodbye channel"><select value={values.goodbye_channel} onChange={(event) => set("goodbye_channel", event.target.value)}><option value="">Disabled</option>{channelsWithSelected(resources, values.goodbye_channel).map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Goodbye title"><input maxLength={200} value={values.goodbye_title} onChange={(event) => set("goodbye_title", event.target.value)} placeholder="Goodbye!" /></Field><Field label="Goodbye message" hint="Use {user}, {name}, or {guild}"><textarea rows={4} maxLength={2000} value={values.goodbye_description} onChange={(event) => set("goodbye_description", event.target.value)} placeholder="See you around, {name}." /></Field><Field label="Goodbye accent color" hint="Six-digit hex color, for example ED4245"><ColorPicker label="Goodbye accent color" value={values.goodbye_color} onChange={(value) => set("goodbye_color", value)} /></Field><Field label="Goodbye image URL"><input type="url" value={values.goodbye_image} onChange={(event) => set("goodbye_image", event.target.value)} placeholder="https://…" /></Field></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Join roles" title="Member and bot autoroles" detail="Keep human member roles and bot-specific roles independent." icon="users" /><div className="form-grid"><Field label="Member autoroles" hint="Assigned to people as they join."><RoleSelect roles={roles} value={values.autorole_ids} multiple ariaLabel="Member autoroles" onChange={(value) => set("autorole_ids", value)} /></Field><Field label="Bot autoroles" hint="Assigned only when another bot joins."><RoleSelect roles={roles} value={values.bot_autorole_ids} multiple ariaLabel="Bot autoroles" onChange={(value) => set("bot_autorole_ids", value)} /></Field></div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Rules and verification" title="A guided first step" detail="Set a rules channel and optional captcha gate." icon="shield" /><div className="form-grid"><Field label="Rules channel"><select value={values.rules_channel} onChange={(event) => set("rules_channel", event.target.value)}><option value="">Not configured</option>{channelsWithSelected(resources, values.rules_channel).map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Rules acknowledgment role"><RoleSelect roles={roles} value={values.rules_role_id} placeholder="No role" onChange={(value) => set("rules_role_id", value)} /></Field><Field label="Rules text"><textarea rows={4} maxLength={4000} value={values.rules_text} onChange={(event) => set("rules_text", event.target.value)} placeholder="Write the rules members should acknowledge." /></Field><Field label="Verification panel channel" hint="Save to post or refresh the public Verify panel in this channel. Clicking Verify always starts the captcha challenge in DMs."><select value={values.captcha_channel_id} onChange={(event) => set("captcha_channel_id", event.target.value)}><option value="">Not set</option>{channelsWithSelected(resources, values.captcha_channel_id).map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></Field><Field label="Roles after verification"><RoleSelect roles={roles} value={values.captcha_add_role_ids} multiple ariaLabel="Roles granted after captcha" onChange={(value) => set("captcha_add_role_ids", value)} /></Field><Field label="Roles removed after verification"><RoleSelect roles={roles} value={values.captcha_remove_role_ids} multiple ariaLabel="Roles removed after captcha" onChange={(value) => set("captcha_remove_role_ids", value)} /></Field></div><SettingCards><SettingCard title="Enable captcha verification" hint="Members click Verify in the public panel and complete the challenge in DMs; this channel only controls where that panel is posted" action={<Switch checked={values.captcha_enabled} onCheckedChange={(value) => set("captcha_enabled", value)} aria-label="Enable captcha verification" />} /><SettingCard title="Kick members who fail verification" hint="Remove users after their verification attempts are exhausted" action={<Switch checked={values.captcha_kick_on_fail} onCheckedChange={(value) => set("captcha_kick_on_fail", value)} aria-label="Kick members who fail verification" />} /></SettingCards></section><SaveFooter state={state} /></form></>;
 }
 
 export function TicketsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
@@ -170,11 +177,20 @@ export function TicketsView({ guildId, config, resources, csrfToken }: { guildId
 
 export function ModerationView({ guildId, config, csrfToken }: { guildId: string; config: GuildConfig | null; csrfToken?: string }) {
   const [values, setValues] = useState<Record<string, any>>({});
+  const [wordDraft, setWordDraft] = useState("");
   const [state, setState] = useState(initialSave);
-  useEffect(() => {
-    const moderation = config?.moderation || {};
+  const [presetCatalog, setPresetCatalog] = useState<PresetFilter[]>([]);
+  const applyConfig = (moderation: Record<string, any>) => {
+    // The preset catalog rides along with the config as reference data. It is
+    // kept out of `values` so it is never posted back as a saved setting.
+    if (Array.isArray(moderation.preset_filters)) setPresetCatalog(moderation.preset_filters);
     setValues({
       automod: { ...(moderation.automod || {}) },
+      // Word entries arrive as text; the API normalizes them again on save.
+      blocked_words: (moderation.blocked_words || []).map(String),
+      badwords_presets: (moderation.badwords_presets || []).map(String),
+      badwords_action: moderation.badwords_action === "censor" ? "censor" : "delete",
+      badwords_mask: moderation.badwords_mask ?? "*",
       spam_threshold: moderation.spam_threshold ?? 6,
       spam_interval: moderation.spam_interval ?? 7,
       max_mentions: moderation.max_mentions ?? 5,
@@ -182,25 +198,32 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
       antiraid: { ...(moderation.antiraid || {}) },
       antiraid_ext: { ...(moderation.antiraid_ext || {}) },
     });
-  }, [config]);
+  };
+  useEffect(() => { applyConfig(config?.moderation || {}); }, [config]);
   const updateNested = (section: string, key: string, value: unknown) => setValues((current) => ({ ...current, [section]: { ...current[section], [key]: value } }));
+  const blockedWords: string[] = values.blocked_words || [];
+  const addBlockedWord = () => {
+    const word = wordDraft.trim().toLowerCase();
+    setWordDraft("");
+    if (!word || blockedWords.includes(word)) return;
+    setValues({ ...values, blocked_words: [...blockedWords, word] });
+  };
+  const removeBlockedWord = (word: string) => setValues({ ...values, blocked_words: blockedWords.filter((entry) => entry !== word) });
+  const enabledPresets: string[] = values.badwords_presets || [];
+  const togglePreset = (key: string) => setValues({
+    ...values,
+    badwords_presets: enabledPresets.includes(key)
+      ? enabledPresets.filter((entry) => entry !== key)
+      : [...enabledPresets, key],
+  });
   const submit = (event: FormEvent) => {
     event.preventDefault(); setState({ saving: true }); notifyLoading("Saving moderation settings…", "settings-save");
     saveConfig(guildId, "automod", values, csrfToken).then((result) => {
-      const moderation = result.config || {};
-      setValues({
-        automod: { ...(moderation.automod || {}) },
-        spam_threshold: moderation.spam_threshold ?? 6,
-        spam_interval: moderation.spam_interval ?? 7,
-        max_mentions: moderation.max_mentions ?? 5,
-        antinuke: { ...(moderation.antinuke || {}) },
-        antiraid: { ...(moderation.antiraid || {}) },
-        antiraid_ext: { ...(moderation.antiraid_ext || {}) },
-      });
+      applyConfig(result.config || {});
       setState({ saving: false }); notifySuccess("Moderation settings saved to Niko.", "settings-save");
     }).catch((error) => { setState({ saving: false }); notifyError(error instanceof Error ? error.message : "Could not save settings.", "settings-save"); });
   };
-  const flags = [["antispam", "Anti-spam", "Detect repeated messages"], ["antilink", "Invite links", "Remove Discord invite links"], ["badwords", "Blocked words", "Filter words from the server list"], ["massmention", "Mass mentions", "Limit mention floods"], ["scam_image_filter", "Scam image filter", "Delete known MrBeast scam images"], ["nsfw_image_filter", "NSFW image filter", "AI-detect and delete NSFW images"], ["antinuke", "Anti-nuke", "Protect channels and roles"], ["antiraid", "Join raid protection", "React to sudden join waves"], ["antiraid_ext", "External app protection", "Detect user-installed app abuse"]] as const;
+  const flags = [["antispam", "Anti-spam", "Detect repeated messages"], ["antilink", "Invite links", "Remove Discord invite links"], ["badwords", "Blocked words", "Filter the words listed below"], ["massmention", "Mass mentions", "Limit mention floods"], ["scam_image_filter", "Scam image filter", "Delete known MrBeast scam images"], ["nsfw_image_filter", "NSFW image filter", "AI-detect and delete NSFW images"], ["antinuke", "Anti-nuke", "Protect channels and roles"], ["antiraid", "Join raid protection", "React to sudden join waves"], ["antiraid_ext", "External app protection", "Detect user-installed app abuse"]] as const;
   // Only the scam-image filter is still experimental. The NSFW filter runs on
   // fal.ai's dedicated model behind premium, so it no longer carries the badge.
   const experimentalFlags = new Set(["scam_image_filter"]);
@@ -247,6 +270,56 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
         </SettingCards>
         {experimentalFlags.size > 0 && <p className="setting-note setting-card-note">The scam image filter is still in early testing and may have some reliability issues.</p>}
       </section>
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Word filter" title="Blocked words" detail="Niko handles messages containing these words when the “Blocked words” switch above is on." icon="shield" />
+        <div className="settings-category-editor">
+          <div className="settings-option-list">
+            {blockedWords.length === 0 && <p className="setting-note">No blocked words yet — add one below. The same list is editable with <code>!badwords</code> in Discord.</p>}
+            {blockedWords.map((word) => <div className="settings-option-row blocked-word-row" key={word}>
+              <code className="blocked-word-value">{word}</code>
+              <button type="button" className="settings-option-remove" onClick={() => removeBlockedWord(word)} aria-label={`Remove the blocked word ${word}`}>Remove</button>
+            </div>)}
+          </div>
+          <div className="settings-category-actions blocked-word-actions">
+            <input
+              value={wordDraft}
+              maxLength={60}
+              placeholder="Add a word or phrase"
+              aria-label="Add a blocked word"
+              onChange={(event) => setWordDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addBlockedWord(); } }}
+            />
+            <button type="button" className="button button-muted button-small settings-option-add" onClick={addBlockedWord} disabled={!wordDraft.trim()}>＋ Add word</button>
+          </div>
+          <div className="form-grid">
+            <Field label="Response" hint="What Niko does with a message that uses a blocked word">
+              <select value={values.badwords_action || "delete"} onChange={(event) => setValues({ ...values, badwords_action: event.target.value })}>
+                <option value="delete">Delete the message</option>
+                <option value="censor">Censor &amp; repost it</option>
+              </select>
+            </Field>
+            {values.badwords_action === "censor" && <Field label="Censor mask" hint="Replaces each blocked word; a single character repeats to match its length">
+              <input value={values.badwords_mask ?? "*"} maxLength={16} placeholder="*" onChange={(event) => setValues({ ...values, badwords_mask: event.target.value })} />
+            </Field>}
+          </div>
+          {values.badwords_action === "censor" && <p className="setting-note">Censoring deletes the flagged message and reposts the text through a webhook in that channel using the member&apos;s name and avatar, so Niko needs <strong>Manage Webhooks</strong> in the channels you want censored. If the webhook cannot be created the message is deleted instead.</p>}
+          <small>Matching is whole-word and case-insensitive, like Discord: blocking <code>ass</code> leaves “class” and “grass” alone. End a word with <code>*</code> to also catch longer forms (<code>fuck*</code> blocks “fucking”), and wrap it as <code>*word*</code> to match it anywhere. Separators between letters are ignored, so <code>a.s.s</code> is still caught.</small>
+        </div>
+      </section>
+      <section className="dash-panel settings-panel">
+        <SettingsSectionTitle label="Preset filters" title="Curated regex filters" detail="Turn on ready-made filters for slurs and other content. Each one is a regular expression, so it also catches the spellings people use to slip past a word list." icon="shield" />
+        {presetCatalog.length === 0
+          ? <p className="setting-note">Preset filters are unavailable right now — reload the page to try again.</p>
+          : <SettingCards>
+            {presetCatalog.map((preset) => <SettingCard
+              key={preset.key}
+              title={preset.label}
+              hint={preset.description}
+              action={<Switch checked={enabledPresets.includes(preset.key)} onCheckedChange={() => togglePreset(preset.key)} aria-label={preset.label} />}
+            />)}
+          </SettingCards>}
+        <p className="setting-note setting-card-note">Presets run with the same response as the word list above: delete the message, or censor and repost it. They tolerate leet substitutions (<code>n1gg3r</code>), separators (<code>n i g g e r</code>), repeated letters, self-censored letters (<code>sh*t</code>), look-alike unicode characters and fullwidth forms — while leaving ordinary words such as “class”, “analysis” and “spices” untouched. Matching is deliberately aggressive: a term is blocked wherever it stands on its own, so “Niger” on its own trips the slur preset.</p>
+      </section>
       <section className="dash-panel settings-panel"><SettingsSectionTitle label="Thresholds" title="Choose when protection steps in" detail="These limits apply across the server." /><div className="form-grid">
         <Field label="Spam messages" hint="Messages inside the spam interval"><input type="number" min="1" max="100" value={values.spam_threshold ?? 6} onChange={(e) => setValues({ ...values, spam_threshold: e.target.value })} /></Field>
         <Field label="Spam interval (seconds)"><input type="number" min="1" max="3600" value={values.spam_interval ?? 7} onChange={(e) => setValues({ ...values, spam_interval: e.target.value })} /></Field>
@@ -274,6 +347,7 @@ export function AiView({ guildId, config, csrfToken }: { guildId: string; config
 export function LevelingSettings({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
   const level = config?.leveling || {};
   const [values, setValues] = useState({ xp_enabled: true, xp_multiplier: 1, xp_cooldown: 0, level_up_channel: "", level_up_message: "", xp_excluded_channels: [] as string[], xp_vc_enabled: false });
+  const [rewards, setRewards] = useState<{ level: string; role: string }[]>([]);
   const [state, setState] = useState(initialSave);
   const applyConfig = (next: GuildConfig["leveling"]) => setValues({
     xp_enabled: next.xp_enabled !== false,
@@ -284,14 +358,19 @@ export function LevelingSettings({ guildId, config, resources, csrfToken }: { gu
     xp_excluded_channels: (next.xp_excluded_channels || []).map(String),
     xp_vc_enabled: next.xp_vc_enabled === true,
   });
-  useEffect(() => applyConfig(level), [config]);
-  const submit = (event: FormEvent) => { event.preventDefault(); setState({ saving: true }); notifyLoading("Saving leveling settings…", "settings-save"); saveConfig(guildId, "leveling", values, csrfToken).then((result) => { applyConfig(result.config || {}); setState({ saving: false }); notifySuccess("Leveling settings saved to Niko.", "settings-save"); }).catch((error) => { setState({ saving: false }); notifyError(error instanceof Error ? error.message : "Could not save settings.", "settings-save"); }); };
+  const applyRewards = (levelRoles: Record<string, string> | undefined) => setRewards(levelRewardRows(levelRoles));
+  useEffect(() => { applyConfig(level); applyRewards(level.level_roles); }, [config]);
+  const submit = (event: FormEvent) => { event.preventDefault(); setState({ saving: true }); notifyLoading("Saving leveling settings…", "settings-save"); saveConfig(guildId, "leveling", { ...values, level_roles: rewardPayload }, csrfToken).then((result) => { applyConfig(result.config || {}); applyRewards((result.config || {}).level_roles); setState({ saving: false }); notifySuccess("Leveling settings saved to Niko.", "settings-save"); }).catch((error) => { setState({ saving: false }); notifyError(error instanceof Error ? error.message : "Could not save settings.", "settings-save"); }); };
   const levelUpChannels = channelsWithSelected(resources, values.level_up_channel);
   const channels = [...(resources?.channels || []), ...(resources?.voice_channels || []).map((channel) => ({ ...channel, name: `🔊 ${channel.name}` }))];
   const channelName = (id: string) => channels.find((channel) => String(channel.id) === id)?.name || `Channel ${id}`;
   const toggleExcluded = (id: string) => setValues({ ...values, xp_excluded_channels: values.xp_excluded_channels.includes(id) ? values.xp_excluded_channels.filter((selected) => selected !== id) : [...values.xp_excluded_channels, id] });
+  const roles = resources?.roles || [];
+  // Rows the member has not finished filling in are dropped rather than sent.
+  const rewardPayload = Object.fromEntries(rewards.filter((row) => row.level.trim() && row.role).map((row) => [String(Number(row.level)), row.role]));
+  const updateReward = (index: number, patch: Partial<{ level: string; role: string }>) => setRewards(rewards.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   return <><SettingsIntro className="leveling-settings-intro" icon="spark" label="Participation desk" title={values.xp_enabled ? "XP is flowing" : "XP is paused"} text="Set a pace that rewards regulars without turning every message into a transaction." /><form onSubmit={submit} className="settings-stack"><section className="dash-panel settings-panel"><SettingsSectionTitle label="Leveling settings" title="Shape the pace" detail="These controls apply to every member in this server." icon="spark" /><SettingCards><SettingCard title="Enable XP" hint="Track activity and award levels" action={<Switch checked={values.xp_enabled} onCheckedChange={(value) => setValues({ ...values, xp_enabled: value })} aria-label="Enable XP" />} /></SettingCards><div className="form-grid"><Field label="XP multiplier" hint="From 0.1× to 10×"><input type="number" min="0.1" max="10" step="0.1" value={values.xp_multiplier} onChange={(e) => setValues({ ...values, xp_multiplier: e.target.value as unknown as number })} /></Field><Field label="Cooldown (seconds)" hint="0 disables the cooldown"><input type="number" min="0" max="86400" value={values.xp_cooldown} onChange={(e) => setValues({ ...values, xp_cooldown: e.target.value as unknown as number })} /></Field><Field label="Level-up channel"><select value={values.level_up_channel} onChange={(e) => setValues({ ...values, level_up_channel: e.target.value })}><option value="">Same channel</option>{levelUpChannels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></Field>        <Field label="Level-up message" hint="Use {mention}, {level}, {name}, or {guild}"><textarea rows={3} maxLength={1000} value={values.level_up_message} onChange={(e) => setValues({ ...values, level_up_message: e.target.value })} placeholder="Leave blank for Niko's default message" />{values.level_up_message.trim() && <DiscordMarkdown text={values.level_up_message.replace(/\{mention\}/g, "@member").replace(/\{level\}/g, "12").replace(/\{name\}/g, "member").replace(/\{guild\}/g, "your server")} className="role-select-preview" interactiveUsers={false} />}</Field>
-</div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Channels & voice" title="Choose where XP counts" detail="Excluded channels never award XP, and ticket channels are always excluded automatically." icon="settings" /><SettingCards><SettingCard title="Voice XP" hint="Earn XP for every minute spent in a voice channel. AFK channels never count." action={<Switch checked={values.xp_vc_enabled} onCheckedChange={(value) => setValues({ ...values, xp_vc_enabled: value })} aria-label="Enable voice XP" />} /></SettingCards><Field label="Excluded channels" hint="Select the channels that should never award XP."><div className="role-select role-select-multiple"><span className="role-select-control"><select multiple value={values.xp_excluded_channels} onChange={(event) => setValues({ ...values, xp_excluded_channels: Array.from(event.currentTarget.selectedOptions, (option) => option.value) })} size={Math.min(Math.max(channels.length, 3), 7)} aria-label="Channels excluded from XP">{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></span>{values.xp_excluded_channels.length > 0 && <div className="role-select-selected" aria-label={`${values.xp_excluded_channels.length} channels excluded from XP`}>{values.xp_excluded_channels.map((id) => <span className="role-select-chip" key={id}>#{channelName(id)}<button type="button" onClick={() => toggleExcluded(id)} aria-label={`Stop excluding #${channelName(id)}`}><X size={12} aria-hidden="true" /></button></span>)}</div>}</div></Field><SaveFooter state={state} /></section></form></>;
+</div></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Channels & voice" title="Choose where XP counts" detail="Excluded channels never award XP, and ticket channels are always excluded automatically." icon="settings" /><SettingCards><SettingCard title="Voice XP" hint="Earn XP for every minute spent in a voice channel. AFK channels never count." action={<Switch checked={values.xp_vc_enabled} onCheckedChange={(value) => setValues({ ...values, xp_vc_enabled: value })} aria-label="Enable voice XP" />} /></SettingCards><Field label="Excluded channels" hint="Select the channels that should never award XP."><div className="role-select role-select-multiple"><span className="role-select-control"><select multiple value={values.xp_excluded_channels} onChange={(event) => setValues({ ...values, xp_excluded_channels: Array.from(event.currentTarget.selectedOptions, (option) => option.value) })} size={Math.min(Math.max(channels.length, 3), 7)} aria-label="Channels excluded from XP">{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></span>{values.xp_excluded_channels.length > 0 && <div className="role-select-selected" aria-label={`${values.xp_excluded_channels.length} channels excluded from XP`}>{values.xp_excluded_channels.map((id) => <span className="role-select-chip" key={id}>#{channelName(id)}<button type="button" onClick={() => toggleExcluded(id)} aria-label={`Stop excluding #${channelName(id)}`}><X size={12} aria-hidden="true" /></button></span>)}</div>}</div></Field></section><section className="dash-panel settings-panel"><SettingsSectionTitle label="Rewards" title="Level role rewards" detail="Niko grants these roles automatically when a member reaches the level. The same list is editable with /leveling panel in Discord." icon="spark" /><div className="settings-category-editor"><div className="settings-option-list">{rewards.map((row, index) => <div className="settings-option-row level-role-row" key={`${row.role}-${index}`}><input aria-label={`Reward level ${index + 1}`} type="number" min="1" max="1000" value={row.level} onChange={(event) => updateReward(index, { level: event.target.value })} placeholder="Level" /><RoleSelect roles={roles} value={row.role} placeholder="Choose a role" ariaLabel={`Role awarded at level ${row.level || index + 1}`} onChange={(value) => updateReward(index, { role: String(value) })} /><button type="button" className="settings-option-remove" onClick={() => setRewards(rewards.filter((_, rowIndex) => rowIndex !== index))} aria-label={`Remove the level ${row.level || index + 1} reward`}>Remove</button></div>)}</div><div className="settings-category-actions"><button type="button" className="button button-muted button-small settings-option-add" onClick={() => setRewards([...rewards, { level: "", role: "" }])}>＋ Add level reward</button></div><small>Members keep roles they have already earned, so removing a reward here stops Niko from awarding it but does not take it back.</small></div></section><SaveFooter state={state} /></form></>;
 }
 
 export function CustomizationSettings({ guildId, config, csrfToken }: { guildId: string; config: GuildConfig | null; csrfToken?: string }) {

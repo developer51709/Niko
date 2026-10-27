@@ -10,7 +10,9 @@ globals().update({
 
 @app.route("/")
 def root():
-    return send_from_directory(WEB_DIST_DIR, "index.html")
+    # The home page's own Open Graph card and Discord component embed, rendered
+    # from the build manifest at request time.
+    return render_site_shell("/")
 
 @app.route("/dashboard")
 def dashboard_redirect():

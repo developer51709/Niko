@@ -2,8 +2,18 @@ import discord
 from discord.ext import commands
 import json
 import os
+import re
 import asyncio
+import unicodedata
 from datetime import datetime, timedelta, timezone
+
+from ._presets import (
+    PRESETS_BY_KEY,
+    PRESET_KEYS,
+    build_preset_regex,
+    normalize_presets,
+    preset_catalog,
+)
 
 DATA_DIR = "data"
 CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
@@ -92,6 +102,15 @@ DEFAULT_GUILD_CONFIG = {
     "spam_interval": 7,
     "max_mentions": 5,
     "blocked_words": [],
+    # Curated regex filters (see cogs/moderation/_presets.py) switched on for
+    # this server, by key. They catch the leet, spaced-out and look-alike
+    # spellings that a plain keyword entry cannot.
+    "badwords_presets": [],
+    # What happens to a message that trips the blocked-word filter: "delete"
+    # removes it, "censor" reposts it through a webhook as the author with the
+    # matching words replaced by ``badwords_mask``.
+    "badwords_action": "delete",
+    "badwords_mask": "*",
     "whitelist_users": [],
     "whitelist_roles": [],
     "antinuke": {
@@ -148,6 +167,7 @@ def _migrate_guild_config(cfg: dict) -> dict:
         am.setdefault(key, val)
 
     for key in ("spam_threshold", "spam_interval", "max_mentions", "blocked_words",
+                "badwords_presets", "badwords_action", "badwords_mask",
                 "whitelist_users", "whitelist_roles"):
         cfg.setdefault(key, DEFAULT_GUILD_CONFIG[key])
 
@@ -166,6 +186,116 @@ def _migrate_guild_config(cfg: dict) -> dict:
     return cfg
 
 
+# ---------- BLOCKED WORDS ----------
+# Entries follow Discord's keyword rules: a plain word matches whole words only,
+# a trailing "*" also matches longer words starting with it ("fuck*" catches
+# "fucking"), and a leading "*" drops the word-start requirement ("*ass*"
+# matches anywhere). Substring matching used to delete innocent messages
+# (blocking "ass" removed "class", "grass" and "assistant") while spaced-out or
+# punctuated words slipped straight through. Discord's own limits are 1000 terms
+# of up to 60 characters each.
+MAX_BLOCKED_WORDS = 1000
+MAX_BLOCKED_WORD_LENGTH = 60
+MAX_BADWORDS_MASK_LENGTH = 16
+BADWORDS_ACTIONS = ("delete", "censor")
+DEFAULT_BADWORDS_ACTION = "delete"
+DEFAULT_BADWORDS_MASK = "*"
+MAX_CACHED_GUILD_PATTERNS = 64
+_ZERO_WIDTH_CHARS = ("\u200b", "\u200c", "\u200d", "\u2060", "\ufeff")
+# At most three separator characters may sit between two letters: enough for
+# "a.s.s" or "a s s", without letting a stray letter match one much further on.
+_MAX_INNER_SEPARATORS = 3
+
+
+def normalize_blocked_word(word) -> str | None:
+    """Lowercase/strip a blocked word, or None when nothing usable is left.
+
+    Returning None for blanks matters: an empty string in the list matches every
+    message, which would delete every message in the server.
+    """
+    if not isinstance(word, str):
+        return None
+    cleaned = " ".join(unicodedata.normalize("NFKC", word).strip().lower().split())
+    if not cleaned or len(cleaned) > MAX_BLOCKED_WORD_LENGTH:
+        return None
+    return cleaned
+
+
+def normalize_badwords_action(value) -> str:
+    """The configured blocked-word response, defaulting to a plain delete."""
+    text = str(value if value is not None else "").strip().lower()
+    return text if text in BADWORDS_ACTIONS else DEFAULT_BADWORDS_ACTION
+
+
+def normalize_badwords_mask(value) -> str:
+    """The text that replaces a blocked word in a censored message.
+
+    ``None`` keeps the default; an explicitly blank mask removes the word
+    entirely. A one-character mask is repeated to cover the whole match, so a
+    censored word keeps its shape.
+    """
+    if value is None:
+        return DEFAULT_BADWORDS_MASK
+    return " ".join(str(value).split())[:MAX_BADWORDS_MASK_LENGTH]
+
+
+def normalize_message_content(content: str) -> str:
+    """Fold away the tricks used to smuggle a filtered word past matching."""
+    text = unicodedata.normalize("NFKC", content)
+    for char in _ZERO_WIDTH_CHARS:
+        if char in text:
+            text = text.replace(char, "")
+    return text
+
+
+def _blocked_word_alternative(word: str) -> str | None:
+    """One regex alternative for a blocked entry, following Discord's rules.
+
+    Separators between letters are tolerated, so "a.s.s" and "a s s" are caught
+    even though the entry is just "ass".
+    """
+    matches_anywhere = word.startswith("*")
+    prefix_match = word.endswith("*")
+    tokens = [token for token in re.split(r"[\W_]+", word.strip("*")) if token]
+    if not tokens:
+        return None
+    gap = r"[\W_]{0,%d}" % _MAX_INNER_SEPARATORS
+    spaced = [gap.join(re.escape(char) for char in token) for token in tokens]
+    source = r"[\W_]+".join(spaced)
+    if prefix_match:
+        source += r"\w*"
+    start = "" if matches_anywhere else r"(?<!\w)"
+    return start + r"(?:" + source + r")(?!\w)"
+
+
+def build_blocked_word_regex(words):
+    """Compile blocked words into one case-insensitive pattern."""
+    alternatives = []
+    for entry in words if isinstance(words, (list, tuple, set)) else ():
+        normalized = normalize_blocked_word(entry)
+        if not normalized:
+            continue
+        alternative = _blocked_word_alternative(normalized)
+        if alternative:
+            alternatives.append(alternative)
+    if not alternatives:
+        return None
+    return re.compile("|".join(alternatives), re.IGNORECASE)
+
+
+def _mask_substitution(replacement: str):
+    """A regex replacement callable that applies the censor mask.
+
+    A one-character mask is repeated to cover the match, so a censored word
+    keeps the shape it had; anything longer replaces the whole match.
+    """
+    if len(replacement) == 1:
+        return lambda match: replacement * max(1, len(match.group(0)))
+    # A replacement function (rather than a template string) keeps backslashes
+    # in the mask literal instead of being read as regex escapes.
+    return lambda match: replacement
+
+
 class ModerationUtils(commands.Cog):
     """Backend utilities for moderation and automod."""
 
@@ -176,6 +306,9 @@ class ModerationUtils(commands.Cog):
         # Guild IDs whose config was created in-memory before the initial
         # database load finished; reconciled once the load completes.
         self._stale_entries: set = set()
+        # Blocked-word regexes keyed by the guild's word tuple, so the filter
+        # does not recompile a pattern for every message.
+        self._blocked_patterns: dict = {}
         # Gate for the initial database load. Until it completes, new guild
         # entries must NOT be persisted — otherwise a message arriving before
         # the load finishes would write DEFAULT_GUILD_CONFIG over the real
@@ -504,32 +637,156 @@ class ModerationUtils(commands.Cog):
 
     # ---------- BLOCKED WORDS ----------
 
-    def get_blocked_words(self, guild_id: int):
-        return self.get_guild_config(guild_id).get("blocked_words", [])
+    def get_blocked_words(self, guild_id: int) -> list:
+        """The guild's blocked words, normalized and de-duplicated.
+
+        Entries are sanitised on read, so a word stored by an older version
+        (with stray whitespace, mixed case, or an empty string) starts working
+        as soon as this runs instead of silently never matching.
+        """
+        raw = self.get_guild_config(guild_id).get("blocked_words", [])
+        if not isinstance(raw, (list, tuple)):
+            return []
+        words: list = []
+        for entry in raw:
+            word = normalize_blocked_word(entry)
+            if word and word not in words:
+                words.append(word)
+        return words
+
+    def blocked_word_pattern(self, guild_id: int):
+        """Compiled whole-word pattern for the guild, or None when none is set."""
+        words = tuple(self.get_blocked_words(guild_id))
+        if not words:
+            return None
+        if words in self._blocked_patterns:
+            return self._blocked_patterns[words]
+        pattern = build_blocked_word_regex(words)
+        if len(self._blocked_patterns) >= MAX_CACHED_GUILD_PATTERNS:
+            self._blocked_patterns.clear()
+        self._blocked_patterns[words] = pattern
+        return pattern
 
     def add_blocked_word(self, guild_id: int, word: str):
+        """Add a blocked word. Blank or oversized input is ignored rather than
+        stored, because an empty entry would match every message."""
+        word = normalize_blocked_word(word)
+        if word is None:
+            return
         cfg = self.get_guild_config(guild_id)
-        w = word.lower()
-        cfg["blocked_words"] = list(cfg.get("blocked_words", []))
-        if w not in cfg["blocked_words"]:
-            cfg["blocked_words"].append(w)
+        current = self.get_blocked_words(guild_id)
+        if word in current or len(current) >= MAX_BLOCKED_WORDS:
+            return
+        cfg["blocked_words"] = current + [word]
         self.save_config()
 
     def remove_blocked_word(self, guild_id: int, word: str):
         cfg = self.get_guild_config(guild_id)
-        w = word.lower()
-        if w in cfg.get("blocked_words", []):
-            cfg["blocked_words"].remove(w)
+        word = normalize_blocked_word(word)
+        if word is None:
+            return
+        cfg["blocked_words"] = [entry for entry in self.get_blocked_words(guild_id) if entry != word]
         self.save_config()
 
     def clear_blocked_words(self, guild_id: int):
         self.get_guild_config(guild_id)["blocked_words"] = []
         self.save_config()
 
-    def contains_blocked_word(self, guild_id: int, content: str):
-        words = self.get_guild_config(guild_id).get("blocked_words", [])
-        lowered = content.lower()
-        return any(w in lowered for w in words)
+    # ---------- BLOCKED WORD PRESET FILTERS ----------
+
+    def get_badwords_presets(self, guild_id: int) -> list:
+        """Preset filter keys enabled for this guild, in catalog order."""
+        return normalize_presets(self.get_guild_config(guild_id).get("badwords_presets"))
+
+    def set_badwords_preset(self, guild_id: int, key: str, enabled: bool = True) -> bool:
+        """Switch one preset filter on or off. Returns whether anything changed."""
+        key = str(key if key is not None else "").strip().lower()
+        if key not in PRESET_KEYS:
+            return False
+        current = self.get_badwords_presets(guild_id)
+        if bool(enabled):
+            if key in current:
+                return False
+            updated = [preset for preset in PRESET_KEYS if preset in current or preset == key]
+        else:
+            if key not in current:
+                return False
+            updated = [preset for preset in current if preset != key]
+        self.get_guild_config(guild_id)["badwords_presets"] = updated
+        self.save_config()
+        return True
+
+    def set_badwords_presets(self, guild_id: int, keys) -> list:
+        """Replace the whole enabled set at once (one save, one config write)."""
+        presets = normalize_presets(keys)
+        self.get_guild_config(guild_id)["badwords_presets"] = presets
+        self.save_config()
+        return presets
+
+    def toggle_badwords_preset(self, guild_id: int, key: str) -> bool | None:
+        """Flip one preset filter, returning its new state (None if unknown)."""
+        key = str(key if key is not None else "").strip().lower()
+        if key not in PRESET_KEYS:
+            return None
+        enabled = not (key in self.get_badwords_presets(guild_id))
+        self.set_badwords_preset(guild_id, key, enabled)
+        return enabled
+
+    def badwords_patterns(self, guild_id: int) -> list:
+        """Every pattern a message is checked against for this guild.
+
+        The custom word list and the preset filters are independent, so a
+        server can run either, both, or neither.
+        """
+        patterns = []
+        custom = self.blocked_word_pattern(guild_id)
+        if custom is not None:
+            patterns.append(custom)
+        presets = self.get_badwords_presets(guild_id)
+        if presets:
+            preset_pattern = build_preset_regex(presets)
+            if preset_pattern is not None:
+                patterns.append(preset_pattern)
+        return patterns
+
+    def get_badwords_action(self, guild_id: int) -> str:
+        return normalize_badwords_action(self.get_guild_config(guild_id).get("badwords_action"))
+
+    def get_badwords_mask(self, guild_id: int) -> str:
+        return normalize_badwords_mask(self.get_guild_config(guild_id).get("badwords_mask"))
+
+    def censor_blocked_words(self, guild_id: int, content, mask=None) -> str:
+        """Return ``content`` with every blocked word replaced by ``mask``.
+
+        Uses the same matchers as :meth:`contains_blocked_word` — the custom
+        whole-word list and the preset regex filters — so what gets masked is
+        exactly what would have triggered a delete, including words spaced or
+        punctuated out, the wildcard forms, and preset spellings like "n1gg3r".
+        """
+        text = normalize_message_content(content) if isinstance(content, str) else ""
+        if not text:
+            return text
+        patterns = self.badwords_patterns(guild_id)
+        if not patterns:
+            return text
+        replacement = self.get_badwords_mask(guild_id) if mask is None else normalize_badwords_mask(mask)
+        substitute = _mask_substitution(replacement)
+        for pattern in patterns:
+            text = pattern.sub(substitute, text)
+        return text
+
+    def contains_blocked_word(self, guild_id: int, content) -> bool:
+        """Whether ``content`` trips the guild's blocked-word or preset filter.
+
+        Custom words match whole-word, so blocking "ass" no longer deletes
+        "class", "grass" or "assistant" — but separators between the letters
+        are tolerated, so "a.s.s" and "a s s" are still caught. Preset filters
+        add leet substitutions, repeated letters and unicode look-alikes.
+        """
+        if not isinstance(content, str) or not content:
+            return False
+        text = normalize_message_content(content)
+        return any(pattern.search(text) for pattern in self.badwords_patterns(guild_id))
 
     # ---------- WHITELIST ----------
 

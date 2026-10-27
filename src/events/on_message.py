@@ -12,7 +12,8 @@ from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_message_blacklist
 from utils.abuse_detection import record_request, strike_notice
 from utils.ai.config import get_ai_config
-from utils.ai.reply import generate_reply, ANSWER_REPLYS
+from utils.ai.reply import generate_reply, split_reply, ANSWER_REPLYS
+from utils.ratelimit import reply_limiter
 from utils import logging
 
 
@@ -223,11 +224,19 @@ async def handle_message(bot, msg: discord.Message):
             if DEBUG_MODE:
                 logging.error("AIGeneration", "Empty response generated.")
 
-        if len(reply) > 1800:
-            reply = reply[:1800] + "..."
-
+        # Discord caps a message at 2000 characters: a long answer is posted as
+        # consecutive messages rather than cut off at 1800.
+        chunks = split_reply(reply) or ["An error occurred... 🥀"]
         mentions = discord.AllowedMentions.none()
         try:
-            await msg.reply(reply, allowed_mentions=mentions)
+            await msg.reply(chunks[0], allowed_mentions=mentions)
         except Exception:
-            await msg.channel.send(reply, allowed_mentions=mentions)
+            await msg.channel.send(chunks[0], allowed_mentions=mentions)
+
+        for chunk in chunks[1:]:
+            try:
+                await reply_limiter.acquire(msg.channel.id)
+                await msg.channel.send(chunk, allowed_mentions=mentions)
+            except Exception as error:
+                logging.warning("AIGeneration", f"Could not send reply continuation: {error}")
+                break
