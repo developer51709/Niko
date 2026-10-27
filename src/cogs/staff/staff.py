@@ -58,6 +58,9 @@ OWNER_ONLY_COMMANDS = {
     "setpfp", "setbanner", "setusername", "setstatus", "setactivity",
     "load", "unload", "reload", "restart", "shutdown", "sync", "eval", "exec",
     "say", "dev01", "shardinfo", "shardstats", "shardhealth",
+    # replaceemojis deletes and re-uploads every application emoji and rewrites
+    # the ids the rest of the bot sends, so it stays with the owner.
+    "replaceemojis",
     "sendpanel", "supportsetup", "supportupdate",
 }
 

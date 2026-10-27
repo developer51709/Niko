@@ -125,6 +125,76 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Voice Leave": "voice",
     "Voice Move": "voice",
 }
+# One emoji per log message type. Two entries in a log channel never share an
+# icon, so the icon alone tells a moderator what happened, and a new log type
+# adds one line here rather than another branch in the view builder. The
+# artwork is the generated Lucide set in src/assets/emojis (see
+# scripts/build-emoji-icons.mjs); a title that is missing here falls back to its
+# category emoji, so an unmapped log type still renders.
+LOG_EMOJI_KEYS: dict[str, str] = {
+    # Moderation
+    "Kick": "log_kick",
+    "Ban": "log_ban",
+    "Unban": "log_unban",
+    "Warn": "log_warn",
+    "Clear Warnings": "log_clear_warnings",
+    "Mute": "log_mute",
+    "Tempmute": "log_tempmute",
+    "Unmute": "log_unmute",
+    "Nickname Changed": "log_nickname",
+    "Timeout": "log_timeout",
+    "Timeout Removed": "log_timeout_removed",
+    "Clear": "log_clear",
+    "Purge": "log_purge",
+    # AutoMod
+    "Anti-Spam": "log_anti_spam",
+    "Anti-Link": "log_anti_link",
+    "Bad Word Filter": "log_bad_words",
+    "Mass Mention": "log_mass_mention",
+    "NSFW Filter": "log_nsfw_filter",
+    "User-Installed App Detected": "log_app_detected",
+    "User-Installed App Action Taken": "log_app_action",
+    "Interaction Flood Raid Detected": "log_interaction_flood",
+    "Anti-Nuke Triggered": "log_anti_nuke",
+    "Anti-Raid Triggered": "log_anti_raid",
+    # Messages
+    "Message Deleted": "log_message_deleted",
+    "Message Edited": "log_message_edited",
+    # Channels
+    "Channel Created": "log_channel_created",
+    "Channel Deleted": "log_channel_deleted",
+    "Channel Updated": "log_channel_updated",
+    "Lock": "log_lock",
+    "Unlock": "log_unlock",
+    # Members
+    "Member Joined": "log_member_join",
+    "Member Left": "log_member_leave",
+    "Member Updated": "log_member_updated",
+    "Avatar Updated": "log_avatar",
+    # Captcha
+    "Captcha Passed": "log_captcha_passed",
+    "Captcha Failed": "log_captcha_failed",
+    "Captcha Kicked": "log_captcha_kicked",
+    # Invites
+    "Invite Created": "log_invite_created",
+    "Invite Deleted": "log_invite_deleted",
+    "Invite Used": "log_invite_used",
+    "Vanity Invite Used": "log_vanity_invite",
+    "Unknown Join Method": "log_unknown_join",
+    # Roles
+    "Role Created": "log_role_created",
+    "Role Deleted": "log_role_deleted",
+    "Role Updated": "log_role_updated",
+    # Server
+    "Server Updated": "log_server_updated",
+    "Emoji Updated": "log_emoji_updated",
+    "Sticker Updated": "log_sticker_updated",
+    # Voice
+    "Voice Join": "log_voice_join",
+    "Voice Leave": "log_voice_leave",
+    "Voice Move": "log_voice_move",
+}
+
 _AUTOMOD_SUBSTRINGS = ("Anti-Nuke", "Anti-Raid", "User-Installed", "Interaction Flood", "Nuke", "Raid")
 
 # Which action titles get quick-action buttons and which button set
@@ -395,21 +465,17 @@ def _build_log_view(
     files: list[discord.File] | None = None,
 ) -> discord.ui.LayoutView:
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
-    emoji = get_emoji(cat_info["emoji_key"])
     color = discord.Colour(cat_info["color"])
     # discord timestamp types
     # relative: <t:1711234567:R> → "2 months ago"
     # full: <t:1711234567:F> → "March 23, 2024 12:36 AM"
     timestamp = f"-# <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n-# <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
-    # set type specific emojis
-    if title == "Member Joined":
-        emoji = get_emoji("join")
-    if title == "Member Left":
-        emoji = get_emoji("leave")
-    if action_key == "Ban":
-        emoji = get_emoji("ban")
-    if title == "Avatar Updated":
-        emoji = get_emoji("image")
+    # The message type's own emoji, keyed by the title the caller logged (the
+    # action key too, for the callers that pass a shorter one such as
+    # "member_join"). A type without an entry keeps its category emoji.
+    emoji = get_emoji(LOG_EMOJI_KEYS.get(title) or LOG_EMOJI_KEYS.get(action_key or ""))
+    if not emoji:
+        emoji = get_emoji(cat_info["emoji_key"])
 
     buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
 

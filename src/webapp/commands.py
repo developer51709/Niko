@@ -18,7 +18,7 @@ _LEGACY_INTERNAL_COMMAND_NAMES = {
     "devhelp", "devload", "devunload", "devreload", "devping", "devlatency",
     "devuptime", "devmem", "devtasks", "devguild", "devchannels", "devroles",
     "devmembers", "deveval", "devexec", "devsay", "devshutdown", "syncemojis",
-    "appemojis", "emojistatus", "staff", "staff help", "staff manage",
+    "replaceemojis", "appemojis", "emojistatus", "staff", "staff help", "staff manage",
 }
 
 
