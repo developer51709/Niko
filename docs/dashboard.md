@@ -33,7 +33,7 @@ through `src/api_server.py`. Do not create a second website workflow.
 
 ## Backend conventions
 
-- Flask app entrypoint: `src/webapp/__init__.py`; shared app setup: `src/webapp/server.py`; focused Flask routes live in `src/webapp/*_routes.py`.
+- Flask app entrypoint: `src/webapp/__init__.py`; shared app setup and helpers live in `src/webapp/server.py` and its sibling modules (`auth.py`, `database.py`, `discord_api.py`, `staff.py`, `guilds.py`, `social.py`); focused Flask routes live in `src/webapp/routes/*_routes.py`.
 - Personal (account-level) routes read the signed-in user only: `/api/me/...` with `@require_auth`. Anything that is the same in every server — the economy, achievements, leaderboard privacy — belongs here, never behind a server.
 - Private guild routes must check the user’s Discord permissions on the server.
 - Return JSON errors for API failures; do not silently write malformed config.
@@ -69,6 +69,6 @@ that does not exist.
 ```bash
 npm run typecheck
 npm run build
-python3 -m py_compile src/api_server.py src/webapp/*.py src/website/__init__.py src/bot.py
+python3 -m py_compile src/api_server.py src/webapp/*.py src/webapp/routes/*.py src/website/__init__.py src/bot.py
 ```Then start `Run the bot`, check `/api/health`, and open the preview. If the
 preview is blank, check workflow logs before changing frontend code.

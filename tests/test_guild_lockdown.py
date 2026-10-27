@@ -404,7 +404,7 @@ class LockdownRestoreTests(LockdownTestCase):
     def test_approved_appeal_restores_features(self):
         # The appeal route is the one place a locked guild is released without a
         # staff member visiting the blacklist tab, so it must call restore.
-        source = (ROOT / "src/webapp/appeal_routes.py").read_text(encoding="utf-8")
+        source = (ROOT / "src/webapp/routes/appeal_routes.py").read_text(encoding="utf-8")
         # The last branch is the handler itself; the earlier ones are the
         # database write inside `review()`.
         block = source.split("if status == \"approved\":")[-1].split("return jsonify", 1)[0]
@@ -491,7 +491,7 @@ class LockdownRouteTests(LockdownTestCase):
         import time
 
         from webapp import app as flask_app
-        from webapp import team_routes
+        from webapp.routes import team_routes
 
         self.routes = team_routes
         self.client = flask_app.test_client()

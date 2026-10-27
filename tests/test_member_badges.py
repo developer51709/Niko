@@ -222,7 +222,7 @@ def test_every_boosting_tier_has_its_own_emoji_and_art():
 def test_the_bot_card_and_the_web_api_share_one_boosting_lookup():
     """One tier helper, so the card and the popups can never disagree."""
     cog = (ROOT / "src" / "cogs" / "info" / "cog.py").read_text(encoding="utf-8")
-    routes = (ROOT / "src" / "webapp" / "discord_text_routes.py").read_text(encoding="utf-8")
+    routes = (ROOT / "src" / "webapp" / "routes" / "discord_text_routes.py").read_text(encoding="utf-8")
 
     assert "boosting_badge_key(" in cog
     assert "boosting_badge_key(" in routes

@@ -30,7 +30,7 @@ from cogs.economy.data import (  # noqa: E402
 from database import SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
 from utils.economy_jobs import LOTTERY_HOUSE_RAKE, LOTTERY_TICKET_PRICE  # noqa: E402
-from webapp.economy_routes import _ACCOUNT_COLUMNS, achievement_entries  # noqa: E402
+from webapp.routes.economy_routes import _ACCOUNT_COLUMNS, achievement_entries  # noqa: E402
 
 USER = 42
 POT = 10_000

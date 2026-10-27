@@ -200,6 +200,26 @@ async def _create_tables(bot):
         )
     """)
 
+    # Web verification challenges. The link a member opens is answered on the
+    # website, which is a different thread (and, after a failover, a different
+    # process) from the button that issued it, so the code and the attempt count
+    # live here rather than in memory. Rows are single-use and expire.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS verification_challenges (
+            token      TEXT PRIMARY KEY,
+            guild_id   INTEGER NOT NULL,
+            user_id    INTEGER NOT NULL,
+            code       TEXT NOT NULL,
+            attempts   INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS verification_challenges_user "
+        "ON verification_challenges (user_id)"
+    )
+
     # ── Official staff broadcasts (dashboard composer) ─────────────────────
     # The composer lives in the staff workspace now, so a broadcast is a stored
     # record rather than a Discord view. Media is kept base64-encoded beside the
@@ -2082,7 +2102,7 @@ async def init_database(bot):
             )
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
-        from webapp.standby_routes import initialize_standby_registry
+        from webapp.routes.standby_routes import initialize_standby_registry
         await initialize_standby_registry(bot)
         # Eagerly load the blacklist cache from the database so hot-path
         # sync reads (message/interaction checks) work immediately.

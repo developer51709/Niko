@@ -11,7 +11,8 @@ import discord
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
-from webapp import discord_text_routes as routes
+from webapp import discord_api, runtime, staff  # noqa: E402
+from webapp.routes import discord_text_routes as routes
 
 
 class FakeGuild:
@@ -97,7 +98,7 @@ def test_discord_text_endpoint_uses_discord_api_when_bot_cache_misses(monkeypatc
             return FakeResponse({"id": "888", "name": "fetched-channel", "guild_id": "123"})
         raise AssertionError(f"Unexpected Discord API URL: {url}")
 
-    monkeypatch.setattr(routes._server.req, "get", fake_get)
+    monkeypatch.setattr(discord_api.req, "get", fake_get)
     response = app.test_client().post(
         "/api/discord/text",
         json={"guild_id": "123", "text": "<@999> <#888>"},
@@ -113,7 +114,7 @@ def test_discord_text_endpoint_uses_discord_api_when_bot_cache_misses(monkeypatc
 
 def test_transcript_endpoint_resolves_message_author_profiles(monkeypatch):
     """The web transcript gets avatars and names for its message authors."""
-    from webapp import transcript_routes
+    from webapp.routes import transcript_routes
 
     messages = [
         {"timestamp": "2026-10-15 15:03:00 UTC", "author": "Soren", "author_id": 101, "content": "hello"},
@@ -318,10 +319,10 @@ def test_staff_cards_drop_the_custom_status_placeholder_text(monkeypatch):
     activity = discord.CustomActivity(name="Custom Status", emoji="\U0001f319")
     member = _presence_member(user, status="online", activities=[activity])
     bot = _presence_bot([member], user)
-    monkeypatch.setattr(routes._server, "_discord_bot", bot)
-    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+    monkeypatch.setattr(runtime, "_discord_bot", bot)
+    monkeypatch.setattr(runtime, "run_on_bot_loop", _run_on_loop)
 
-    identity = routes._server._staff_identity("456")
+    identity = staff._staff_identity("456")
 
     assert identity["custom_status"]["text"] is None
     assert identity["custom_status"]["emoji"]["value"] == "\U0001f319"
@@ -503,14 +504,17 @@ def test_profile_popup_and_staff_cards_share_one_presence_lookup(monkeypatch):
     active = _presence_member(user, status="idle", activities=[custom])
     bot = _presence_bot([quiet, active], user)
     monkeypatch.setattr(routes, "_discord_bot", bot)
-    monkeypatch.setattr(routes._server, "_discord_bot", bot)
+    # The route reaches the loop through the shared namespace; the staff helper
+    # the card is built from reads it from `runtime`.
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+    monkeypatch.setattr(runtime, "_discord_bot", bot)
+    monkeypatch.setattr(runtime, "run_on_bot_loop", _run_on_loop)
 
     popup = app.test_client().get("/api/discord/users/456").get_json()
-    staff = routes._server._staff_identity("456")
+    card = staff._staff_identity("456")
 
-    assert popup["status"] == staff["status"] == "idle"
-    assert popup["custom_status"]["text"] == staff["custom_status"]["text"] == "Writing docs"
+    assert popup["status"] == card["status"] == "idle"
+    assert popup["custom_status"]["text"] == card["custom_status"]["text"] == "Writing docs"
 
 
 def test_profile_badges_list_every_public_flag_discord_draws():

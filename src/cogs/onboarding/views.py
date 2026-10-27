@@ -20,7 +20,11 @@ from utils.onboarding.config import (
     format_hex_color,
     normalize_hex_color,
 )
-from utils.onboarding.captcha import generate_captcha
+from utils.onboarding.captcha import generate_captcha, new_captcha_code
+from utils.verification import links as verification_links
+from utils.verification import modes as verification_modes
+from utils.verification import service as verification_service
+from utils.verification import store as verification_store
 from utils.ratelimit import role_assign_limiter, welcome_limiter
 from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji
@@ -1487,6 +1491,16 @@ class DeleteMenuBtn(discord.ui.Button):
 
 # --------- CAPTCHA VERIFY BUTTON & PANEL ---------
 
+def _captcha_notice(content: str, colour: discord.Color = None) -> discord.ui.LayoutView:
+    """A one-line CV2 reply, the shape every branch of the panel answers with."""
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=content),
+        accent_colour=colour,
+    ))
+    return view
+
+
 class CaptchaVerifyButton(discord.ui.Button):
     def __init__(self, guild_id: int):
         super().__init__(
@@ -1513,6 +1527,12 @@ class CaptchaVerifyButton(discord.ui.Button):
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
+
+        mode = verification_modes.normalize_mode(cfg.captcha_mode)
+        if mode == verification_modes.CLICK:
+            return await self._verify_immediately(interaction, guild_id, user)
+        if mode == verification_modes.WEB:
+            return await self._send_web_challenge(interaction, guild_id, user)
 
         if user.id in _pending_verifications:
             view = discord.ui.LayoutView()
@@ -1576,21 +1596,83 @@ class CaptchaVerifyButton(discord.ui.Button):
             error_view.add_item(container)
             await interaction.response.send_message(view=error_view, ephemeral=True)
 
+    async def _verify_immediately(self, interaction: discord.Interaction, guild_id: int, user) -> None:
+        """One-click mode: the click *is* the verification."""
+        await interaction.response.defer(ephemeral=True)
+        result = await verification_service.complete(
+            interaction.client, guild_id, user.id, source=verification_modes.LABELS[verification_modes.CLICK],
+        )
+        if result["problem"] == "guild":
+            content = f"{get_emoji('tick')} Verification passed! However, I could not find the server to apply roles."
+        elif result["problem"] == "member":
+            content = f"{get_emoji('tick')} Verification passed! However, I could not find you in the server."
+        else:
+            lines = ["### " + get_emoji('tick') + " Verification complete!", "You have been verified."]
+            if result["applied"]:
+                lines.append(f"Roles added: {', '.join(result['applied'])}")
+            if result["removed"]:
+                lines.append(f"Roles removed: {', '.join(result['removed'])}")
+            content = "\n".join(lines)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=content),
+            accent_colour=discord.Color.green(),
+        ))
+        await interaction.followup.send(view=view, ephemeral=True)
 
-class CaptchaPanelView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int):
-        super().__init__(timeout=None)
-        self.guild_id = guild_id
+    async def _send_web_challenge(self, interaction: discord.Interaction, guild_id: int, user) -> None:
+        """Website mode: hand the member a single-use link to the captcha page."""
+        pool = getattr(interaction.client, "cxn", None)
+        try:
+            challenge = await verification_store.create(pool, guild_id, user.id, new_captcha_code())
+        except verification_store.VerificationUnavailable:
+            return await interaction.response.send_message(
+                view=_captcha_notice(
+                    f"{get_emoji('cross')} The verification page is unavailable right now. Please try again in a moment.",
+                    discord.Color.red(),
+                ),
+                ephemeral=True,
+            )
 
-        container = discord.ui.Container(
+        link = verification_links.verification_url(challenge["token"])
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content="### Human Verification"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
-                    "Before you can access this server, you need to prove you're human.\n\n"
-                    "Click **Verify** below and the bot will send you a DM with a captcha image. "
-                    "Reply to the DM with the code shown in the image."
+                    "Open the page below and type the code it shows.\n\n"
+                    "The roles you need are added automatically as soon as the page confirms you."
                 )
+            ),
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="Open verification page",
+                    style=discord.ButtonStyle.link,
+                    url=link,
+                    emoji=get_emoji('tick'),
+                )
+            ),
+            discord.ui.TextDisplay(
+                content="-# The link is personal to you and expires in 30 minutes."
+            ),
+            accent_colour=discord.Colour(0x57F287),
+        ))
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class CaptchaPanelView(discord.ui.LayoutView):
+    def __init__(self, guild_id: int, mode: str = None):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        self.mode = verification_modes.normalize_mode(mode)
+
+        prompt = verification_modes.PANEL_PROMPTS[self.mode]
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(content="### Human Verification"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=f"Before you can access this server, you need to prove you're human.\n\n{prompt}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(CaptchaVerifyButton(guild_id)),
@@ -1699,6 +1781,73 @@ class CaptchaRemoveRolesView(discord.ui.ActionRow):
         self.add_item(CaptchaRemoveRolesSelect(guild_id, message))
 
 
+async def refresh_captcha_panel(interaction: discord.Interaction, guild_id: int, cfg: OnboardingConfig) -> bool:
+    """Re-render the posted Verify panel after its mode changes.
+
+    The panel's wording is the member's first instruction, so it cannot keep
+    describing a challenge the server no longer uses. Failures are silent: the
+    setting is already saved, and the panel is re-rendered the next time it is
+    posted or the bot restarts.
+    """
+    if not (cfg.captcha_channel_id and cfg.captcha_panel_message_id):
+        return False
+    guild = interaction.guild
+    channel = guild.get_channel(cfg.captcha_channel_id) if guild is not None else None
+    if channel is None:
+        return False
+    try:
+        message = await channel.fetch_message(cfg.captcha_panel_message_id)
+        view = CaptchaPanelView(guild_id, mode=cfg.captcha_mode)
+        await message.edit(view=view)
+        interaction.client.add_view(view, message_id=message.id)
+        return True
+    except Exception:
+        return False
+
+
+class CaptchaModeSelect(discord.ui.Select):
+    def __init__(self, guild_id: int, message: discord.Message, current: str):
+        current = verification_modes.normalize_mode(current)
+        super().__init__(
+            placeholder="Choose how members prove they are human…",
+            options=[
+                discord.SelectOption(
+                    label=verification_modes.LABELS[mode],
+                    value=mode,
+                    description=verification_modes.DESCRIPTIONS[mode].replace("**", "")[:100],
+                    default=(mode == current),
+                )
+                for mode in verification_modes.MODES
+            ],
+        )
+        self.guild_id = guild_id
+        self.message = message
+
+    async def callback(self, interaction: discord.Interaction):
+        mode = verification_modes.normalize_mode(self.values[0])
+        cfg = await get_config(self.guild_id)
+        cfg.captcha_mode = mode
+        await update_config(self.guild_id, cfg)
+        await refresh_captcha_panel(interaction, self.guild_id, cfg)
+        await interaction.response.send_message(
+            view=_captcha_notice(
+                f"{get_emoji('tick')} Verification method set to **{verification_modes.LABELS[mode]}**.\n"
+                f"{verification_modes.describe(mode)}",
+                discord.Color.green(),
+            ),
+            ephemeral=True,
+        )
+        await self.message.edit(view=CaptchaSetupView(
+            self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id),
+        ))
+
+
+class CaptchaModeView(discord.ui.ActionRow):
+    def __init__(self, guild_id: int, message: discord.Message, current: str):
+        super().__init__()
+        self.add_item(CaptchaModeSelect(guild_id, message, current))
+
+
 class CaptchaSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig):
         super().__init__(timeout=None)
@@ -1706,11 +1855,22 @@ class CaptchaSetupView(discord.ui.LayoutView):
         self.author = author
         self.guild = guild
 
+        mode = verification_modes.normalize_mode(cfg.captcha_mode)
         status = f"{get_emoji('tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('cross')} Disabled"
         channel_text = (
             f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
         )
-        delivery_text = "DM (always; independent of panel channel)"
+        delivery_text = f"**{verification_modes.LABELS[mode]}**\n{verification_modes.describe(mode)}"
+        restrictions = []
+        if cfg.captcha_block_proxies:
+            restrictions.append("proxies, VPNs and Tor exits")
+        if cfg.captcha_block_vpn:
+            restrictions.append("hosting and datacenter IP ranges")
+        restrictions_text = (
+            f"Refused: {', '.join(restrictions)}" if restrictions else "None"
+        )
+        if restrictions and mode != verification_modes.WEB:
+            restrictions_text += "\n-# Only the website method can apply these, since it is the only one with an IP address."
         add_roles = (
             ", ".join(f"<@&{r}>" for r in cfg.captcha_add_role_ids)
             if cfg.captcha_add_role_ids
@@ -1726,7 +1886,8 @@ class CaptchaSetupView(discord.ui.LayoutView):
         info = (
             f"**Status:** {status}\n"
             f"**Verification panel channel:** {channel_text}\n"
-            f"**Captcha challenge delivery:** {delivery_text}\n"
+            f"**Verification method:** {delivery_text}\n"
+            f"**Proxy and VPN restrictions:** {restrictions_text}\n"
             f"**Roles to add:** {add_roles}\n"
             f"**Roles to remove:** {remove_roles}\n"
             f"**Kick on 3 failed attempts:** {kick_text}"
@@ -1788,7 +1949,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
                 c = await get_config(self_inner.guild_id)
-                panel_view = CaptchaPanelView(self_inner.guild_id)
+                panel_view = CaptchaPanelView(self_inner.guild_id, mode=c.captcha_mode)
                 msg = None
                 if c.captcha_channel_id == interaction.channel.id and c.captcha_panel_message_id:
                     try:
@@ -1973,6 +2134,72 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 await interaction.response.send_message(view=view, ephemeral=True)
                 await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
 
+        class ChangeMethodBtn(discord.ui.Button):
+            def __init__(self_inner):
+                super().__init__(label="Change Method", style=discord.ButtonStyle.primary, emoji="🔀")
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
+                c = await get_config(self_inner.guild_id)
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{get_emoji('settings')} Choose how members prove they are human:"
+                    ),
+                    CaptchaModeView(self_inner.guild_id, interaction.message, c.captcha_mode),
+                )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
+
+        class ToggleRestrictionBtn(discord.ui.Button):
+            """One toggle per web-only restriction, so the pair stay independent."""
+
+            def __init__(self_inner, field: str, label: str, emoji: str, noun: str):
+                super().__init__(label=label, style=discord.ButtonStyle.secondary, emoji=emoji)
+                self_inner.guild_id = guild_id
+                self_inner.author = author
+                self_inner.field = field
+                self_inner.noun = noun
+
+            async def callback(self_inner, interaction: discord.Interaction):
+                if interaction.user != self_inner.author:
+                    view = discord.ui.LayoutView()
+                    container = discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                        ),
+                        accent_colour=discord.Color.red()
+                    )
+                    view.add_item(container)
+                    return await interaction.response.send_message(view=view, ephemeral=True)
+                c = await get_config(self_inner.guild_id)
+                setattr(c, self_inner.field, not getattr(c, self_inner.field))
+                await update_config(self_inner.guild_id, c)
+                enabled = getattr(c, self_inner.field)
+                emoji = get_emoji('tick') if enabled else get_emoji('cross')
+                color = discord.Color.green() if enabled else discord.Color.red()
+                view = discord.ui.LayoutView()
+                container = discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=f"{emoji} Blocking {self_inner.noun} **{'enabled' if enabled else 'disabled'}**."
+                    ),
+                    accent_colour=color
+                )
+                view.add_item(container)
+                await interaction.response.send_message(view=view, ephemeral=True)
+                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+
         container = discord.ui.Container(
             discord.ui.TextDisplay(content="### Captcha Verification Setup"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -1981,6 +2208,11 @@ class CaptchaSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(ToggleCaptchaBtn(), PostPanelBtn()),
             discord.ui.ActionRow(SetAddRolesBtn(), SetRemoveRolesBtn()),
             discord.ui.ActionRow(ToggleKickBtn(), ClearAddRolesBtn(), ClearRemoveRolesBtn()),
+            discord.ui.ActionRow(
+                ChangeMethodBtn(),
+                ToggleRestrictionBtn("captcha_block_proxies", "Block Proxies", "🛡️", "proxies and VPNs"),
+                ToggleRestrictionBtn("captcha_block_vpn", "Block VPNs", "🌐", "hosting addresses"),
+            ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"

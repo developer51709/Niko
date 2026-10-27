@@ -26,7 +26,7 @@ import discord
 from discord.webhook.async_ import AsyncWebhookAdapter, interaction_message_response_params
 
 from utils import interaction_endpoint
-from webapp import interaction_routes
+from webapp.routes import interaction_routes
 
 ENDPOINT = "/api/discord/interactions"
 TIMESTAMP = "1700000000"

@@ -78,10 +78,15 @@ class Onboarding(commands.Cog):
         if guess == correct:
             _pending_verifications.pop(user_id, None)
             guild_id = pending["guild_id"]
-            guild = self.bot.get_guild(guild_id)
-            cfg = await get_config(guild_id)
 
-            if guild is None:
+            # Roles, the audit log, and the guild/member lookups are shared with
+            # the one-click and website modes (utils/verification/service.py).
+            result = await verification_service.complete(
+                self.bot, guild_id, user_id,
+                source=verification_modes.LABELS[verification_modes.IMAGE],
+            )
+
+            if result["problem"] == "guild":
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -92,8 +97,7 @@ class Onboarding(commands.Cog):
                 view.add_item(container)
                 return await message.channel.send(view=view)
 
-            member = guild.get_member(user_id)
-            if member is None:
+            if result["problem"] == "member":
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
@@ -103,29 +107,6 @@ class Onboarding(commands.Cog):
                 )
                 view.add_item(container)
                 return await message.channel.send(view=view)
-
-            applied = []
-            removed = []
-
-            if cfg.captcha_add_role_ids:
-                for rid in cfg.captcha_add_role_ids:
-                    role = guild.get_role(rid)
-                    if role:
-                        try:
-                            await member.add_roles(role, reason="Captcha verification passed")
-                            applied.append(role.name)
-                        except discord.Forbidden:
-                            pass
-
-            if cfg.captcha_remove_role_ids:
-                for rid in cfg.captcha_remove_role_ids:
-                    role = guild.get_role(rid)
-                    if role and role in member.roles:
-                        try:
-                            await member.remove_roles(role, reason="Captcha verification passed")
-                            removed.append(role.name)
-                        except discord.Forbidden:
-                            pass
 
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
@@ -137,27 +118,13 @@ class Onboarding(commands.Cog):
                     content="You have been verified."
                 )
             )
-            if applied:
-                container.add_item(discord.ui.TextDisplay(f"Roles added: {', '.join(applied)}"))
-            if removed:
-                container.add_item(discord.ui.TextDisplay(f"Roles removed: {', '.join(removed)}"))
+            if result["applied"]:
+                container.add_item(discord.ui.TextDisplay(f"Roles added: {', '.join(result['applied'])}"))
+            if result["removed"]:
+                container.add_item(discord.ui.TextDisplay(f"Roles removed: {', '.join(result['removed'])}"))
             view.add_item(container)
 
             await message.channel.send(view=view)
-
-            # Log captcha pass
-            logger = self.bot.get_cog("ServerLogger")
-            if logger and guild and member:
-                pass_body = (
-                    f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-                    f"**Result:** Passed\n"
-                    f"**Roles Added:** {', '.join(applied) if applied else 'None'}\n"
-                    f"**Roles Removed:** {', '.join(removed) if removed else 'None'}"
-                )
-                await logger.log_event(
-                    guild, "captcha", "Captcha Passed", pass_body,
-                    target_id=member.id
-                )
 
         else:
             pending["attempts"] += 1
@@ -186,28 +153,11 @@ class Onboarding(commands.Cog):
                 view.add_item(container)
                 await message.channel.send(view=view)
 
-                will_kick = guild and cfg and cfg.captcha_kick_on_fail
-
-                # Log captcha fail / kick
-                logger = self.bot.get_cog("ServerLogger")
-                if logger and guild:
-                    log_title = "Captcha Kicked" if will_kick else "Captcha Failed"
-                    fail_body = (
-                        f"**User:** <@{user_id}> (ID: `{user_id}`)\n"
-                        f"**Result:** {'Failed all 3 attempts and kicked' if will_kick else 'Failed all 3 attempts'}"
-                    )
-                    await logger.log_event(
-                        guild, "captcha", log_title, fail_body,
-                        target_id=user_id, action_key=log_title
-                    )
-
-                if will_kick:
-                    member = guild.get_member(user_id)
-                    if member:
-                        try:
-                            await member.kick(reason="Failed captcha verification (3 wrong attempts)")
-                        except discord.Forbidden:
-                            pass
+                await verification_service.fail(
+                    self.bot, guild_id, user_id,
+                    kick=bool(cfg and cfg.captcha_kick_on_fail),
+                    source=verification_modes.LABELS[verification_modes.IMAGE],
+                )
             else:
                 code, img_bytes = generate_captcha()
                 pending["code"] = code
@@ -317,4 +267,7 @@ async def setup(bot):
                 bot.add_view(RoleMenuView(guild_id, menu_id, cfg=cfg), message_id=menu["message_id"])
 
         if cfg.captcha_channel_id and cfg.captcha_panel_message_id:
-            bot.add_view(CaptchaPanelView(guild_id), message_id=cfg.captcha_panel_message_id)
+            bot.add_view(
+                CaptchaPanelView(guild_id, mode=cfg.captcha_mode),
+                message_id=cfg.captcha_panel_message_id,
+            )

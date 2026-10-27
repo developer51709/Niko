@@ -8,6 +8,10 @@ import database as database_module
 
 COLLECTION = "onboarding"
 
+# Kept as a literal so this module stays importable without utils.verification
+# (which pulls in the Discord client for its service helpers).
+VALID_VERIFICATION_MODES = ("click", "image", "web")
+
 # ── Role menu types ──────────────────────────────────────────────────────────
 MENU_TYPE_LABELS = {
     "select_multi":  "Dropdown — Multiple Roles",
@@ -71,13 +75,17 @@ class OnboardingConfig:
     autorole_ids: list[int] | None = None
     bot_autorole_ids: list[int] | None = None
 
-    # Captcha verification
+    # Human verification — one mode (see utils/verification/modes) plus the
+    # restrictions only the website challenge can enforce.
     captcha_enabled: bool = False
+    captcha_mode: str = "image"  # click | image | web
     captcha_channel_id: int | None = None
     captcha_panel_message_id: int | None = None
     captcha_add_role_ids: list[int] | None = None
     captcha_remove_role_ids: list[int] | None = None
     captcha_kick_on_fail: bool = False
+    captcha_block_proxies: bool = False
+    captcha_block_vpn: bool = False
 
 
 _KNOWN_FIELDS = {f.name for f in fields(OnboardingConfig)}
@@ -151,6 +159,10 @@ async def load_config(guild_id: int) -> OnboardingConfig:
 def _normalize(cfg: OnboardingConfig) -> OnboardingConfig:
     """Migrate legacy values and single role-menu shape into current config form."""
     defaults = OnboardingConfig()
+    # An unset mode is a server that predates modes: it was doing the DM image
+    # challenge, and an unknown value must never silently disable verification.
+    if getattr(cfg, "captcha_mode", None) not in VALID_VERIFICATION_MODES:
+        cfg.captcha_mode = defaults.captcha_mode
     for field_name in _COLOR_FIELDS:
         value = getattr(cfg, field_name)
         if value is None:

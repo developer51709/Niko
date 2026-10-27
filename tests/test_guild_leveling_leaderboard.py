@@ -15,8 +15,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from webapp import database, runtime  # noqa: E402
 from webapp import app
-from webapp import public_routes as routes
+from webapp.routes import public_routes as routes
 from webapp.server import get_runtime_guild_level_page, level_xp_for_next
 
 
@@ -69,8 +70,8 @@ def leaderboard_client(rows, *, bot, total=None):
         patch.object(routes, "run_on_bot_loop", side_effect=lambda task: asyncio.run(task)),
         # The shared runtime helpers live in `server`, so their lookups use that
         # module's own bot and loop bridge.
-        patch("webapp.server._discord_bot", bot),
-        patch("webapp.server.run_on_bot_loop", side_effect=lambda task: asyncio.run(task)),
+        patch("webapp.runtime._discord_bot", bot),
+        patch("webapp.runtime.run_on_bot_loop", side_effect=lambda task: asyncio.run(task)),
     ]
     for active_patch in patches:
         active_patch.start()
@@ -108,8 +109,13 @@ class GuildLeaderboardRouteTests(unittest.TestCase):
         self.assertEqual(entry["rank"], 26)
         self.assertEqual(entry["display_name"], "Ada")
         self.assertEqual(entry["xp_for_next"], 295)
-        # The public payload never carries the Discord id itself.
-        self.assertNotIn("41", entry["key"])
+        # The public payload never carries the Discord id itself: the row key is
+        # an opaque digest, so it is not the id and carries no part of it as a
+        # prefix or suffix. (Asserting the id is absent as a substring anywhere
+        # in the digest was a coin flip: a salted hex digest contains "41" by
+        # chance often enough to fail roughly one run in twenty.)
+        self.assertNotEqual(entry["key"], "41")
+        self.assertRegex(entry["key"], r"\A[0-9a-f]{16}\Z")
         self.assertNotIn("user_id", entry)
 
     def test_unknown_guild_is_a_404_with_its_own_flag(self):
@@ -148,15 +154,15 @@ class GuildLevelPageTests(unittest.TestCase):
             ],
         )
 
-        with patch("webapp.server.sqlite_connect", return_value=connection), \
-                patch("webapp.server._discord_bot", None):
+        with patch("webapp.database.sqlite_connect", return_value=connection), \
+                patch("webapp.runtime._discord_bot", None):
             rows, total = get_runtime_guild_level_page("555", offset=0, limit=2)
 
         self.assertEqual(total, 3)
         self.assertEqual([row["user_id"] for row in rows], ["2", "3"])
 
     def test_xp_target_follows_the_leveling_curve(self):
-        with patch("webapp.server._discord_bot", None):
+        with patch("webapp.runtime._discord_bot", None):
             self.assertEqual(level_xp_for_next(3), 5 * 9 + 50 * 3 + 100)
 
 

@@ -13,7 +13,7 @@ sys.path.insert(0, "src")
 
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
-from webapp import team_recruitment_routes
+from webapp.routes import team_recruitment_routes
 from cogs.staff.support_server import CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportAgePanel, SupportGuidePanel, SupportPronounPanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool

@@ -528,7 +528,8 @@ class _FakeModerationCog:
 
 def save_automod(body, cog):
     """Call the AutoMod save route directly, bypassing auth and CSRF decorators."""
-    from webapp import app, dashboard_routes
+    from webapp import app
+    from webapp.routes import dashboard_routes
 
     original_bot = dashboard_routes._discord_bot
     original_reader = dashboard_routes.get_runtime_moderation_config
@@ -811,7 +812,8 @@ def test_the_dashboard_receives_the_catalog_without_storing_it():
 def test_the_config_payload_carries_the_preset_catalog():
     from unittest.mock import patch
 
-    from webapp import app, dashboard_routes
+    from webapp import app
+    from webapp.routes import dashboard_routes
 
     class _Cog:
         def get_guild_config(self, guild_id):

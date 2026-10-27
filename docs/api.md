@@ -128,8 +128,9 @@ instance so a standby that owns the gateway cannot change the registry.
 ## Adding an endpoint
 
 The Flask app entrypoint is `src/webapp/__init__.py`; shared setup and helpers
-live in `src/webapp/server.py`, and routes are grouped in focused modules such
-as `dashboard_routes.py` and `auth_routes.py`. Add new routes
+live in `src/webapp/server.py` and its sibling helper modules, and routes are
+grouped in focused modules under `src/webapp/routes/`, such as
+`dashboard_routes.py` and `auth_routes.py`. Add new routes
 to the relevant module, keep static fallback routing last, use `@require_auth`
 and `@require_guild_access` for private guild data, validate request JSON, and
 return explicit error responses. Update `web/src/api.ts`, `web/src/types.ts`,

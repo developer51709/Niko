@@ -176,12 +176,12 @@ if __name__ == "__main__":
             else:
                 if not standby_mode:
                     try:
-                        from webapp.standby_routes import initialize_standby_registry
+                        from webapp.routes.standby_routes import initialize_standby_registry
                         await initialize_standby_registry(bot)
                     except Exception as e:
                         logging.warning("StandbyFailover", f"Could not preload standby instances: {e}")
                 try:
-                    from webapp.proxy_worker_routes import initialize_proxy_worker_registry
+                    from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
                     await initialize_proxy_worker_registry(bot)
                 except Exception as e:
                     logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
@@ -234,7 +234,7 @@ if __name__ == "__main__":
                 # the database pool is live.
                 if getattr(getattr(bot, "cxn", None), "db_type", None) == "mongodb":
                     try:
-                        from webapp.proxy_worker_routes import initialize_proxy_worker_registry
+                        from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
                         await initialize_proxy_worker_registry(bot)
                     except Exception as e:
                         logging.warning("DiscordProxy", f"Could not load proxy workers after login: {e}")

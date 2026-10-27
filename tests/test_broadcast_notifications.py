@@ -58,7 +58,7 @@ def test_old_channel_command_is_replaced_by_the_staff_tab():
 
 
 def test_broadcast_routes_are_owner_only_and_csrf_guarded():
-    routes = (ROOT / "src/webapp/staff_broadcast_routes.py").read_text(encoding="utf-8")
+    routes = (ROOT / "src/webapp/routes/staff_broadcast_routes.py").read_text(encoding="utf-8")
     assert '"/api/staff/broadcasts"' in routes
     assert "def _require_owner" in routes
     assert '!= "owner"' in routes
@@ -79,7 +79,7 @@ def test_broadcast_row_without_mongo_defaults_still_serialises():
     Reading them positionally failed the whole list request, and the studio
     showed "Broadcasts could not be loaded." instead of the editor.
     """
-    from webapp import staff_broadcast_routes as routes
+    from webapp.routes import staff_broadcast_routes as routes
 
     row = database.Row({
         "broadcast_id": "abc123",

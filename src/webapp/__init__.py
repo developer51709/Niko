@@ -4,7 +4,7 @@ from .server import app, configure_bot, public_base_url, redirect_uri
 
 # Import routes after the shared application setup so decorators register them
 # on the same Flask instance exposed to the API server.
-from . import (  # noqa: E402,F401
+from .routes import (  # noqa: E402,F401
     auth_routes,
     team_routes,
     staff_management_routes,
@@ -27,6 +27,7 @@ from . import (  # noqa: E402,F401
     standby_routes,
     proxy_worker_routes,
     interaction_routes,
+    verification_routes,
 )
 
 __all__ = ["app", "configure_bot", "public_base_url", "redirect_uri"]

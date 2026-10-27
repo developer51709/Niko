@@ -443,6 +443,12 @@ export type OnboardingConfig = {
   captcha_add_role_ids?: number[];
   captcha_remove_role_ids?: number[];
   captcha_kick_on_fail?: boolean;
+  /** How members prove they are human: an immediate click, a DM captcha, or the website page. */
+  captcha_mode?: "click" | "image" | "web";
+  /** Website method only: refuse proxy, VPN, and Tor connections. */
+  captcha_block_proxies?: boolean;
+  /** Website method only: refuse hosting and datacenter address ranges. */
+  captcha_block_vpn?: boolean;
 };
 
 export type LoggingConfig = Record<string, string | number | null> & {
