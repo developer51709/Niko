@@ -287,7 +287,7 @@ def write_commands(bot):
             "devhelp", "devload", "devunload", "devreload", "devping", "devlatency",
             "devuptime", "devmem", "devtasks", "devguild", "devchannels", "devroles",
             "devmembers", "deveval", "devexec", "devsay", "devshutdown", "syncemojis",
-            "appemojis", "emojistatus", "staff", "staff help", "staff manage",
+            "replaceemojis", "appemojis", "emojistatus", "staff", "staff help", "staff manage",
         }
         public_command_count = sum(
             1 for command in commands_data

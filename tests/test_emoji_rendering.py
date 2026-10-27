@@ -12,8 +12,11 @@ import re
 import sys
 from pathlib import Path
 
+import discord
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from config.emojis import get_emoji  # noqa: E402
 from utils.tickets.transcripts import _md_to_html, export_html  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -233,6 +236,94 @@ def test_every_markdown_marker_is_a_capture_group():
         ("12", "strike"),
         ("13", "spoiler"),
     ]
+
+
+# ── The generated icon emojis ────────────────────────────────────────────────
+
+#: A name from the families scripts/build-emoji-icons.mjs must never write.
+PROTECTED_EMOJI = re.compile(r"(?:badge|c4|white|logo|loading)", re.I)
+
+
+def test_the_emoji_icon_script_owns_only_the_main_and_log_emojis():
+    """Badge art, Connect Four, the logo and the loading emojis are off limits.
+
+    Each of those comes from a different owner (build-badge-art.mjs, the game
+    sprites, the hand-exported brand marks, the spinner frames), and a script
+    that rewrites them silently replaces artwork nobody asked it to touch. The
+    script refuses those names outright, so the table cannot grow into them.
+    """
+    source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
+    emojis = re.findall(r'\["([a-z_0-9]+)", "[a-z0-9-]+", [A-Z]+\]', source)
+
+    assert len(emojis) > 100
+    assert len(emojis) == len(set(emojis)), "an emoji is listed twice"
+    # The general-purpose set and the per-message-type log set.
+    assert {"tick", "cross", "warning"} <= set(emojis)
+    assert sum(1 for name in emojis if name.startswith("log_")) > 40
+    # Every table entry goes through the guard, and the guard names all four
+    # protected families.
+    assert "assertWritable(name)" in source
+    for family in ("badge art", "Connect Four", "logo", "loading spinner"):
+        assert family in source, family
+
+    for name in emojis:
+        assert not PROTECTED_EMOJI.search(name), f"{name} belongs to a family the script must not write"
+        # The sync uploads art by name, so an emoji with no art never reaches
+        # Discord; one with no config entry can never be sent at all.
+        assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), name
+        assert get_emoji(name), name
+
+
+def test_every_log_message_type_has_its_own_emoji():
+    """Two log entries in a channel never share an icon.
+
+    The heading used to be the category's emoji, so every moderation entry
+    looked the same and a channel of them read as one repeated picture.
+    """
+    from cogs.logging.formatters import LOG_EMOJI_KEYS
+
+    names = list(LOG_EMOJI_KEYS.values())
+    assert len(names) > 40
+    assert len(names) == len(set(names)), "two log message types share an emoji"
+    for title, name in LOG_EMOJI_KEYS.items():
+        assert not PROTECTED_EMOJI.search(name), title
+        assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), title
+        # A typo here is a heading that renders the literal text `:log_kick:`.
+        assert f":{name}:" in (get_emoji(name) or ""), title
+
+
+def test_the_log_emoji_ids_are_unique_until_the_sync_uploads_the_art():
+    """The startup sync keys on the id, so two entries must never share one.
+
+    A duplicate id makes the sync parse a single emoji, upload only the first
+    name, and rewrite both config entries to it. The ids are stubs on a fresh
+    checkout and live application-emoji ids after the first sync; both have to
+    stay unique.
+    """
+    source = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+    ids = re.findall(r'return "<:log_[a-z0-9_]+:(\d+)>"', source)
+
+    assert len(ids) > 40
+    assert len(ids) == len(set(ids)), "two log emojis share an id"
+
+
+def test_a_log_entry_is_headed_by_its_message_types_emoji():
+    from cogs.logging import formatters
+
+    def heading(title, action_key=None):
+        view = formatters._build_log_view(
+            category="moderation", title=title, body="body", guild_id=1, action_key=action_key
+        )
+        return [
+            item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)
+        ][0]
+
+    assert get_emoji("log_kick") in heading("Kick")
+    assert get_emoji("log_ban") in heading("Ban")
+    # The action key counts too: the gateway join event logs a shorter one.
+    assert get_emoji("log_member_join") in heading("Member Joined", action_key="member_join")
+    # A type with no entry of its own still renders, with its category emoji.
+    assert get_emoji("moderation") in heading("Something New")
 
 
 def test_the_render_lab_tests_emoji_rendering_with_the_bots_own_emojis():

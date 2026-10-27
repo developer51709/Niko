@@ -13,6 +13,8 @@ term here is expanded into a regular expression that tolerates:
   (and emoji, which are ``\\W`` as well)
 * repeated letters — ``niiiigger``, ``fuuuuck``
 * a letter hidden behind a self-censoring asterisk — ``sh*t``, ``f*ck``, ``n*gga``
+  (a word still has to start with a real letter, so a bare run of mask
+  characters such as ``****`` or ``###`` is never a match)
 * a dropped doubled letter — ``niger``, ``shiting`` (the country name ``Niger``
   is flagged along with it)
 * unicode look-alikes — Cyrillic ``а е о р с х у і`` in place of the Latin
@@ -55,11 +57,17 @@ _SIBILANT_INFLECTIONS = "(?:es|s|ed|d|ing|er|ers|ies|y)?"
 # those for.
 EXACT_PREFIX = "="
 
-# Letters sharing a shape, a keyboard run, or a common leet substitution, plus
-# the placeholders people use to censor a letter themselves. ``re.escape`` is
-# applied per character when a class is built, so entries like "(" or "$" stay
-# literal.
+# The characters people use to hide a letter themselves — "sh*t", "n#gga".
+# They are only offered for a letter *inside* a word: a word has to start with a
+# real letter, because a bare run of them is not a word at all. It is what a
+# censor mask leaves behind, and "###" is Discord's own heading marker. Letting a
+# leading letter be a placeholder made masked text match the term it masked, so
+# a censored repost was censored again — the same text, forever.
 _PLACEHOLDERS = "*#"
+
+# Letters sharing a shape, a keyboard run, or a common leet substitution.
+# ``re.escape`` is applied per character when a class is built, so entries like
+# "(" or "$" stay literal.
 _LETTER_VARIANTS = {
     "a": "a4@а",
     "b": "b8",
@@ -240,9 +248,14 @@ def normalize_presets(value) -> list[str]:
     return [key for key in PRESET_KEYS if key in enabled]
 
 
-def _letter_class(char: str) -> str:
-    """A repeatable class of every spelling of one letter."""
-    variants = _LETTER_VARIANTS.get(char, char) + _PLACEHOLDERS
+def _letter_class(char: str, *, leading: bool = False) -> str:
+    """A repeatable class of every spelling of one letter.
+
+    ``leading`` drops the self-censoring placeholders: the first letter of a
+    word has to be a real one, or a run of mask characters (``****``, ``###``)
+    satisfies a term on its own.
+    """
+    variants = _LETTER_VARIANTS.get(char, char) + ("" if leading else _PLACEHOLDERS)
     unique = dict.fromkeys(variants)
     return "[" + "".join(re.escape(variant) for variant in unique) + "]+"
 
@@ -267,8 +280,8 @@ def _token_source(token: str, gap: str) -> str:
     allowing the letters to be separated, so "n i g g e r" matches too.
     """
     parts = []
-    for letter, run in _run_lengths(token):
-        klass = _letter_class(letter)
+    for position, (letter, run) in enumerate(_run_lengths(token)):
+        klass = _letter_class(letter, leading=position == 0)
         parts.append(f"{klass}(?:{gap}{klass}){{0,{run - 1}}}" if run > 1 else klass)
     return gap.join(parts)
 

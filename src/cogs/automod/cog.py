@@ -34,6 +34,11 @@ class AutoMod(commands.Cog):
         # channel_id -> the webhook used to repost censored messages as their
         # author. Created on demand, since most servers never enable censoring.
         self._censor_webhooks: dict[int, discord.Webhook] = {}
+        # The ids of those webhooks, so a censored repost — which arrives as a
+        # message from a webhook user, not from Niko's own account — can be told
+        # apart from everyone else's messages. Kept for the process lifetime:
+        # one int per channel ever censored, and an empty set costs nothing.
+        self._censor_webhook_ids: set[int] = set()
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
@@ -101,6 +106,12 @@ class AutoMod(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.id == self.bot.user.id:
+            return
+        if getattr(message, "webhook_id", None) in self._censor_webhook_ids:
+            # Niko's own censored repost. Filtering it again would delete the
+            # copy and post the same text once more, and that copy would come
+            # back the same way: a loop that only ends when an admin changes the
+            # censor mask.
             return
         if not message.guild:
             return
@@ -248,6 +259,12 @@ class AutoMod(commands.Cog):
             f"{message.author.mention} used a blocked word in {message.channel.mention}.\n\n"
             f"**Message:**\n{content}")
 
+    def _remember_censor_webhook(self, channel_id: int, webhook) -> discord.Webhook:
+        """Cache a channel's censor webhook and remember its id."""
+        self._censor_webhook_ids.add(webhook.id)
+        self._censor_webhooks[channel_id] = webhook
+        return webhook
+
     async def _censor_webhook(self, channel) -> discord.Webhook | None:
         """A cached webhook in this channel for reposting censored messages."""
         cached = self._censor_webhooks.get(channel.id)
@@ -268,8 +285,7 @@ class AutoMod(commands.Cog):
                 continue
             if bot_user is not None and getattr(webhook.user, "id", None) != bot_user.id:
                 continue
-            self._censor_webhooks[channel.id] = webhook
-            return webhook
+            return self._remember_censor_webhook(channel.id, webhook)
         try:
             webhook = await channel.create_webhook(
                 name=_CENSOR_WEBHOOK_NAME, reason="Niko blocked-word filter")
@@ -281,8 +297,7 @@ class AutoMod(commands.Cog):
             return None
         if len(self._censor_webhooks) >= _CENSOR_WEBHOOK_CACHE_LIMIT:
             self._censor_webhooks.clear()
-        self._censor_webhooks[channel.id] = webhook
-        return webhook
+        return self._remember_censor_webhook(channel.id, webhook)
 
     async def _censor_message(self, message: discord.Message, utils, content: str) -> bool:
         """Repost a flagged message as its author with the blocked words masked.
@@ -410,7 +425,7 @@ class AutoMod(commands.Cog):
             )
             await utils.log_action(
                 message.guild,
-                "🤖 User-Installed App Detected",
+                "User-Installed App Detected",
                 f"{triggering_user.mention} used a **user-installed** external application "
                 f"command in {message.channel.mention}.\n"
                 f"App ID: `{message.application_id}`\n"
@@ -429,7 +444,7 @@ class AutoMod(commands.Cog):
             )
             await utils.log_action(
                 message.guild,
-                "🚫 User-Installed App Action Taken",
+                "User-Installed App Action Taken",
                 f"**{triggering_user.mention}** fired `{count}` user-installed app commands "
                 f"within `{window}s`.\n"
                 f"App ID: `{message.application_id}`\n"
@@ -519,7 +534,7 @@ class AutoMod(commands.Cog):
         raider_mentions = ", ".join(f"<@{uid}>" for uid in raider_ids)
         await self.utils().log_action(
             guild,
-            "🤖 Interaction Flood Raid Detected",
+            "Interaction Flood Raid Detected",
             f"**{len(raider_ids)}** recently-joined members fired bot interactions "
             f"simultaneously — consistent with an external raid tool.\n\n"
             f"**Suspected Operator:** {op_mention}\n"
@@ -719,7 +734,7 @@ class AutoMod(commands.Cog):
         async def _do_log():
             await self.utils().log_action(
                 guild,
-                "💣 Anti-Nuke Triggered",
+                "Anti-Nuke Triggered",
                 f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
                 f"within `{interval}s`.\n**Action:** `{nuke_action}`",
             )
@@ -801,7 +816,7 @@ class AutoMod(commands.Cog):
         async def _do_log():
             await self.utils().log_action(
                 guild,
-                "🌊 Anti-Raid Triggered",
+                "Anti-Raid Triggered",
                 f"**{join_count}** members joined within `{interval}s`. "
                 f"Actioned `{len(recent_members)}` member(s). Executing `{action}`.",
             )

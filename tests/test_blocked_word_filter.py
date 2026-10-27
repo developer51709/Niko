@@ -228,11 +228,13 @@ class _Channel:
 
 
 class _Message:
-    def __init__(self, content, author, channel=None):
+    def __init__(self, content, author, channel=None, webhook_id=None):
         self.content = content
         self.author = author
         self.guild = SimpleNamespace(id=GUILD_ID)
         self.channel = channel if channel is not None else _Channel()
+        # Set on messages posted through a webhook, None on everyone else's.
+        self.webhook_id = webhook_id
         self.deleted = False
 
     async def delete(self):
@@ -350,8 +352,10 @@ def test_censoring_content_without_blocked_words_is_unchanged():
 
 
 class _Webhook:
-    def __init__(self, name="Niko Censor"):
+    def __init__(self, name="Niko Censor", webhook_id=900):
         self.name = name
+        # A real webhook always has an id; Niko keys its own reposts off it.
+        self.id = webhook_id
         self.user = SimpleNamespace(id=7)
         self.sent = []
 
@@ -413,13 +417,56 @@ class _CensorUtils:
         self.logged.append((title, description))
 
 
-def make_censor_automod(blocked_words, action="censor", mask="*"):
+def make_censor_automod(blocked_words, action="censor", mask="*", presets=None):
     from cogs.automod.cog import AutoMod
 
     cog = AutoMod.__new__(AutoMod)
     cog.bot = SimpleNamespace(user=SimpleNamespace(id=7))
     cog._censor_webhooks = {}
-    return cog, _CensorUtils(make_utils(blocked_words, action=action, mask=mask))
+    cog._censor_webhook_ids = set()
+    return cog, _CensorUtils(make_utils(blocked_words, action=action, mask=mask, presets=presets))
+
+
+@async_test
+async def test_nikos_own_censored_repost_is_left_alone():
+    """The repost is a webhook message, so it arrives through on_message too.
+
+    Filtering it again deleted the copy and posted the same masked text, which
+    came back the same way: an endless delete-and-repost loop that only stopped
+    once an admin changed the censor mask. The text below is one the filter
+    genuinely flags, so it is the exact round trip that used to loop.
+    """
+    cog, utils = make_censor_automod([], presets=PRESET_KEYS)
+    channel = make_channel()
+    repost = _Message("you are a ******", _Author(), channel, webhook_id=991)
+    assert utils.contains_blocked_word(GUILD_ID, repost.content) is True
+    cog._censor_webhook_ids.add(991)
+
+    await cog.on_message(repost)
+
+    assert repost.deleted is False
+    assert utils.logged == []
+    assert _WEBHOOK_STATE[channel.id]["existing"] == []
+
+
+@async_test
+async def test_another_webhooks_message_is_still_filtered():
+    """Only Niko's own censor webhook is skipped.
+
+    User-installed apps post through webhooks of their own, and those are
+    exactly the messages the filter has to see.
+    """
+    cog, utils = make_censor_automod(["ass"])
+    channel = make_channel()
+    cog.utils = lambda: utils
+    cog.get_cfg = lambda guild_id: {"automod": {"badwords": True}}
+    cog._msg_history = {}
+    message = _Message("you are an ass", _Author(bot=True), channel, webhook_id=1234)
+
+    await cog.on_message(message)
+
+    assert message.deleted is True
+    assert utils.logged[0][0] == "Bad Word Filter"
 
 
 @async_test
@@ -750,6 +797,33 @@ def test_the_catalog_describes_every_filter_in_three_languages():
 def test_censoring_masks_preset_matches_too(text, expected):
     cog = make_utils(presets=PRESET_KEYS)
     assert cog.censor_blocked_words(GUILD_ID, text) == expected
+
+
+def test_a_run_of_mask_characters_is_never_a_match():
+    """The censor mask must not look like a blocked word.
+
+    ``*`` and ``#`` are accepted in place of a letter, so masking spelled a term
+    with the mask: blocking "shit" at the default mask left "****" behind, which
+    the preset matched all over again. Worse, anything the mask could not change
+    — "###", Discord's own heading marker, masked back to "***" — was deleted
+    and reposted unchanged, forever. A word now has to begin with a real letter
+    for the placeholders to mean anything.
+    """
+    everyone = make_utils(presets=PRESET_KEYS)
+    for text in ("***", "###", "****", "#####", "### Heading", "# a heading",
+                 "a *** and a ###", "***bold italic***"):
+        assert everyone.contains_blocked_word(GUILD_ID, text) is False, text
+        assert everyone.censor_blocked_words(GUILD_ID, text) == text, text
+
+
+def test_masking_replaces_the_whole_match_without_leaving_a_match_behind():
+    """The masked text of a term is a bare run of the mask, never the term."""
+    cog = make_utils(presets=PRESET_KEYS)
+    for text in ("sh1t", "n1gg3r", "n*gga", "kill yourself", "n i g g e r"):
+        censored = cog.censor_blocked_words(GUILD_ID, text)
+        assert censored != text, text
+        assert set(censored) == {"*"} or set(censored) <= {"*", " "}, censored
+        assert cog.contains_blocked_word(GUILD_ID, censored) is False, censored
 
 
 def test_censoring_covers_presets_and_the_word_list_together():

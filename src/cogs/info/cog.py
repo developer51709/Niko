@@ -34,8 +34,14 @@ MESSAGES = {
             "userinfo_id": "User ID",
             "userinfo_created": "Account Created",
             "userinfo_joined": "Joined Server",
+            "userinfo_position": "Join Position",
+            "userinfo_nickname": "Nickname",
             "userinfo_toprole": "Top Role",
             "userinfo_roles": "Roles",
+            "userinfo_boosting": "Boosting Since",
+            "userinfo_permissions": "Key Permissions",
+            "userinfo_discord_badges": "Discord Badges",
+            "userinfo_niko_badges": "Niko Badges",
 
             "avatar_title": "{user}'s Avatar",
 
@@ -127,8 +133,14 @@ MESSAGES = {
             "userinfo_id": "Benutzer-ID",
             "userinfo_created": "Account erstellt",
             "userinfo_joined": "Beigetreten",
+            "userinfo_position": "Beitrittsposition",
+            "userinfo_nickname": "Spitzname",
             "userinfo_toprole": "Höchste Rolle",
             "userinfo_roles": "Rollen",
+            "userinfo_boosting": "Boostet seit",
+            "userinfo_permissions": "Wichtige Berechtigungen",
+            "userinfo_discord_badges": "Discord-Abzeichen",
+            "userinfo_niko_badges": "Niko-Abzeichen",
 
             "avatar_title": "{user}s Avatar",
 
@@ -218,8 +230,14 @@ MESSAGES = {
             "userinfo_id": "ID de Usuario",
             "userinfo_created": "Cuenta Creada",
             "userinfo_joined": "Se Unió al Servidor",
+            "userinfo_position": "Posición de Ingreso",
+            "userinfo_nickname": "Apodo",
             "userinfo_toprole": "Rol Más Alto",
             "userinfo_roles": "Roles",
+            "userinfo_boosting": "Impulsando Desde",
+            "userinfo_permissions": "Permisos Clave",
+            "userinfo_discord_badges": "Insignias de Discord",
+            "userinfo_niko_badges": "Insignias de Niko",
 
             "avatar_title": "Avatar de {user}",
 
@@ -356,6 +374,11 @@ def cv2_text(text, thumbnail_url=None):
     return view
 
 
+def _divider() -> discord.ui.Separator:
+    """The thin rule the info cards put between their blocks."""
+    return discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
+
+
 def cv2_image(text, image_url):
     """Build a LayoutView with text container + MediaGallery image."""
     view = discord.ui.LayoutView()
@@ -411,9 +434,26 @@ async def _get_badges(bot: commands.Bot, user_id: int) -> list[str]:
     ]
 
 
+# The permissions worth naming on the userinfo card, in the order they read
+# best. A member without any of them gets no permissions line at all, so an
+# ordinary profile does not carry a row of "none".
+_KEY_PERMISSIONS = (
+    "administrator",
+    "manage_guild",
+    "manage_roles",
+    "manage_channels",
+    "kick_members",
+    "ban_members",
+    "moderate_members",
+    "manage_messages",
+    "mention_everyone",
+)
+
+
 # The avatar panel's buttons carry the target's user id in their custom id, so
 # they resolve the right person after a restart without any message state.
 _AVATAR_SERVER_TEMPLATE = r"avatar:server:(?P<user_id>\d+)"
+_AVATAR_USER_TEMPLATE = r"avatar:user:(?P<user_id>\d+)"
 _AVATAR_BANNER_TEMPLATE = r"avatar:banner:(?P<user_id>\d+)"
 
 
@@ -463,25 +503,65 @@ class _ServerAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_A
         return cls(int(match["user_id"]))
 
     async def callback(self, interaction: discord.Interaction):
+        # Acknowledge before anything else: resolving the member and the user is
+        # a Discord round trip, and the panel must not greet a slow one with
+        # "This interaction failed".
+        await interaction.response.defer(ephemeral=True)
         member = await _avatar_member(interaction, self.user_id)
         if member is None:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "This user is no longer in this server.", ephemeral=True
             )
         if not member.guild_avatar:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "This user doesn't have a different server avatar.", ephemeral=True
             )
-        await interaction.response.send(
+        await interaction.followup.send(
             view=_avatar_image_view("Server Avatar", member.guild_avatar.url), ephemeral=True
         )
 
 
-class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_BANNER_TEMPLATE):
+class _UserAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_USER_TEMPLATE):
     def __init__(self, user_id: int):
         super().__init__(discord.ui.Button(
+            label="Profile Picture",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"avatar:user:{int(user_id)}",
+        ))
+        self.user_id = int(user_id)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(int(match["user_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        user = interaction.client.get_user(self.user_id)
+        if user is None:
+            try:
+                user = await interaction.client.fetch_user(self.user_id)
+            except discord.HTTPException:
+                user = None
+        if user is None:
+            return await interaction.followup.send(
+                "I couldn't find that user anymore.", ephemeral=True
+            )
+        # display_avatar is never empty, so a user without an uploaded picture
+        # still gets the default avatar Discord draws for them.
+        await interaction.followup.send(
+            view=_avatar_image_view("Profile Picture", user.display_avatar.url), ephemeral=True
+        )
+
+
+class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_BANNER_TEMPLATE):
+    def __init__(self, user_id: int, style: discord.ButtonStyle = discord.ButtonStyle.success):
+        # The /avatar panel posts its controls green and keeps the default; the
+        # userinfo card passes the secondary style. The style only matters when
+        # the panel is sent: an item rebuilt from a custom id handles the click
+        # on a message that already carries the colours it was posted with.
+        super().__init__(discord.ui.Button(
             label="User Banner",
-            style=discord.ButtonStyle.success,
+            style=style,
             custom_id=f"avatar:banner:{int(user_id)}",
         ))
         self.user_id = int(user_id)
@@ -491,6 +571,7 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
         return cls(int(match["user_id"]))
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         user = interaction.client.get_user(self.user_id)
         if user is None:
             try:
@@ -498,14 +579,14 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
             except discord.HTTPException:
                 user = None
         if user is None:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "I couldn't find that user anymore.", ephemeral=True
             )
         if not user.banner:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "This user doesn't have a banner.", ephemeral=True
             )
-        await interaction.response.send(
+        await interaction.followup.send(
             view=_avatar_image_view("User Banner", user.banner.url), ephemeral=True
         )
 
@@ -520,12 +601,24 @@ class AvatarButtons(discord.ui.ActionRow):
         self.add_item(_UserBannerButton(self.user_id))
 
 
+class UserInfoButtons(discord.ui.ActionRow):
+    """Userinfo card controls: the profile picture and the banner of the user
+    the card is showing, keyed to them so they survive a restart."""
+
+    def __init__(self, user_id: int):
+        super().__init__()
+        self.user_id = int(user_id)
+        self.add_item(_UserAvatarButton(self.user_id))
+        self.add_item(_UserBannerButton(self.user_id, style=discord.ButtonStyle.secondary))
+
+
 def register_avatar_persistent_views(bot) -> None:
-    """Register both avatar custom-id patterns so the buttons keep responding
+    """Register every avatar custom-id pattern so the buttons keep responding
     after a restart for panels posted before it."""
     registry = discord.ui.LayoutView(timeout=None)
     registry.add_item(discord.ui.Container(discord.ui.ActionRow(
         _ServerAvatarButton(0),
+        _UserAvatarButton(0),
         _UserBannerButton(0),
     )))
     bot.add_view(registry)
@@ -584,7 +677,9 @@ class InfoCog(commands.Cog):
             await ctx.defer()
 
         target = member or ctx.author
-        avatar_url = target.avatar.url if target.avatar else None
+        # display_avatar is always set, so a member who never uploaded a picture
+        # still has one to draw in the header.
+        avatar_url = target.display_avatar.url
 
         # ── Status ────────────────────────────────────────────────────────
         is_streaming = any(isinstance(a, discord.Streaming) for a in target.activities)
@@ -637,11 +732,15 @@ class InfoCog(commands.Cog):
         # ── Niko badges ───────────────────────────────────────────────────
         niko_badges = await _get_badges(self.bot, target.id)
 
-        badges_section = ""
+        badge_lines = []
         if disc_badges:
-            badges_section += f"\n**Discord Badges:** {' '.join(disc_badges)}"
+            badge_lines.append(
+                f"**{msg(ctx, 'userinfo_discord_badges')}:** {' '.join(disc_badges)}"
+            )
         if niko_badges:
-            badges_section += f"\n**Niko Badges:** {' '.join(niko_badges)}"
+            badge_lines.append(
+                f"**{msg(ctx, 'userinfo_niko_badges')}:** {' '.join(niko_badges)}"
+            )
 
         # ── Server info ───────────────────────────────────────────────────
         joined = (
@@ -665,31 +764,71 @@ class InfoCog(commands.Cog):
 
         nickname = f"`{target.nick}`" if target.nick else "*none*"
 
-        boost_line = ""
-        if target.premium_since:
-            boost_line = (
-                f"\n**Boosting Since:** "
-                f"<t:{int(target.premium_since.timestamp())}:R>"
-            )
+        # The permissions worth naming: Administrator implies all the others, so
+        # it is the only one shown when it is set.
+        if target.guild_permissions.administrator:
+            key_perms = ["Administrator"]
+        else:
+            key_perms = [
+                name.replace("_", " ").title()
+                for name in _KEY_PERMISSIONS
+                if getattr(target.guild_permissions, name, False)
+            ]
 
         bot_tag = f" {get_emoji('bot')}" if target.bot else ""
+        created = int(target.created_at.timestamp())
 
-        text = (
-            f"## {target.display_name}{bot_tag}\n"
-            f"{status_emoji} **{status_text}**  ·  `@{target.name}`\n"
-            f"**User ID:** `{target.id}`\n"
-            f"**Account Created:** <t:{int(target.created_at.timestamp())}:f>"
-            f" (<t:{int(target.created_at.timestamp())}:R>)\n"
-            f"\n"
-            f"**Joined Server:** {joined}\n"
-            f"**Join Position:** `#{join_pos}` of `{len(ctx.guild.members)}`\n"
-            f"**Nickname:** {nickname}\n"
-            f"**Top Role:** {target.top_role.mention}\n"
-            f"**Roles ({len(roles)}):** {role_display if roles else '*none*'}"
-            f"{boost_line}"
-            f"{badges_section}"
+        # The account's own facts, then its facts in this server: two blocks
+        # with a rule between them read as a profile instead of one wall of
+        # bold labels.
+        identity = (
+            f"**{msg(ctx, 'userinfo_id')}:** `{target.id}`\n"
+            f"**{msg(ctx, 'userinfo_username')}:** `@{target.name}`\n"
+            f"**{msg(ctx, 'userinfo_created')}:** <t:{created}:f> (<t:{created}:R>)"
         )
-        await ctx.send(view=cv2_text(text, thumbnail_url=avatar_url), allowed_mentions=discord.AllowedMentions.none())
+
+        membership = [
+            f"**{msg(ctx, 'userinfo_nickname')}:** {nickname}",
+            f"**{msg(ctx, 'userinfo_joined')}:** {joined}",
+            f"**{msg(ctx, 'userinfo_position')}:** `#{join_pos}` / `{len(ctx.guild.members)}`",
+            f"**{msg(ctx, 'userinfo_toprole')}:** {target.top_role.mention}",
+            f"**{msg(ctx, 'userinfo_roles')} ({len(roles)}):** {role_display if roles else '*none*'}",
+        ]
+        if target.premium_since:
+            membership.append(
+                f"**{msg(ctx, 'userinfo_boosting')}:** "
+                f"<t:{int(target.premium_since.timestamp())}:R>"
+            )
+        if key_perms:
+            membership.append(
+                f"**{msg(ctx, 'userinfo_permissions')}:** {', '.join(key_perms)}"
+            )
+
+        children = [
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    content=(
+                        f"## {target.display_name}{bot_tag}\n"
+                        f"{status_emoji} **{status_text}**  ·  `@{target.name}`"
+                    )
+                ),
+                accessory=discord.ui.Thumbnail(avatar_url),
+            ),
+            _divider(),
+            discord.ui.TextDisplay(content=identity),
+            _divider(),
+            discord.ui.TextDisplay(content="\n".join(membership)),
+        ]
+        if badge_lines:
+            children.append(_divider())
+            children.append(discord.ui.TextDisplay(content="\n".join(badge_lines)))
+        children.append(UserInfoButtons(target.id))
+
+        # No accent colour: normal command responses stay on Discord's neutral
+        # container, so the card is not the odd one out.
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.Container(*children))
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # AVATAR
