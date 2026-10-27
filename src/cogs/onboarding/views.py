@@ -7,6 +7,7 @@ from utils.onboarding.utils import (
     get_config,
     update_config,
     build_welcome_view,
+    build_goodbye_view,
 )
 from utils.onboarding.config import (
     OnboardingConfig,
@@ -112,7 +113,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         self.desc_input = TextInput(
             label="Description",
             style=discord.TextStyle.long,
-            placeholder="Use {user} for mention, {name} for username.",
+            placeholder="Use {user} for mention, {name} for username, {guild} for the server.",
             required=False,
             default=cfg.welcome_description or None
         )
@@ -495,6 +496,103 @@ class SetWelcomeChannelBtn(discord.ui.Button):
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class GoodbyeMessageModal(Modal, title="Set Goodbye Message"):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig):
+        super().__init__()
+        self.guild_id = guild_id
+
+        self.title_input = TextInput(
+            label="Title",
+            required=False,
+            default=cfg.goodbye_title or None
+        )
+        self.desc_input = TextInput(
+            label="Description",
+            style=discord.TextStyle.long,
+            placeholder="Use {user} for mention, {name} for username, {guild} for the server.",
+            required=False,
+            default=cfg.goodbye_description or None
+        )
+        self.image_input = TextInput(
+            label="Image URL",
+            required=False,
+            default=cfg.goodbye_image or None
+        )
+        self.color_input = TextInput(
+            label="Color (hex)",
+            required=False,
+            placeholder="RRGGBB or #RRGGBB",
+            default=format_hex_color(cfg.goodbye_color),
+        )
+
+        self.add_item(self.title_input)
+        self.add_item(self.desc_input)
+        self.add_item(self.image_input)
+        self.add_item(self.color_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        cfg = await get_config(self.guild_id)
+
+        # Unlike the welcome modal these clear when left blank, so a goodbye
+        # title an admin typed once can be removed again.
+        cfg.goodbye_title = self.title_input.value or None
+        cfg.goodbye_description = self.desc_input.value or None
+        cfg.goodbye_image = self.image_input.value or None
+
+        color_text = self.color_input.value.strip()
+        if color_text:
+            color = normalize_hex_color(color_text)
+            if color is None:
+                return await interaction.response.send_message(
+                    view=feedback_view(
+                        "Color must be a six-digit hex value such as `ED4245` or `#ED4245`.",
+                        ok=False,
+                    ),
+                    ephemeral=True,
+                )
+            cfg.goodbye_color = color
+        else:
+            cfg.goodbye_color = None
+
+        await update_config(self.guild_id, cfg)
+        await interaction.response.send_message(
+            view=feedback_view("Goodbye message updated."),
+            ephemeral=True,
+        )
+
+
+class SetGoodbyeMsgBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Set Goodbye Message", style=discord.ButtonStyle.primary)
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if not await check_author(interaction, self.author):
+            return
+        await interaction.response.send_modal(
+            GoodbyeMessageModal(self.guild_id, await get_config(self.guild_id))
+        )
+
+
+class SetGoodbyeChannelBtn(discord.ui.Button):
+    def __init__(self, guild_id: int, author: discord.Member):
+        super().__init__(label="Set Goodbye Channel", style=discord.ButtonStyle.secondary)
+        self.guild_id = guild_id
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        if not await check_author(interaction, self.author):
+            return
+        cfg = await get_config(self.guild_id)
+        cfg.goodbye_channel = interaction.channel.id
+        await update_config(self.guild_id, cfg)
+        await interaction.response.send_message(
+            view=feedback_view(f"Goodbye channel set to {interaction.channel.mention}."),
+            ephemeral=True,
+        )
 
 
 class SetRulesTextBtn(discord.ui.Button):
@@ -2235,6 +2333,10 @@ class OnboardingSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(
                 SetWelcomeMsgBtn(guild_id, author),
                 SetWelcomeChannelBtn(guild_id, author),
+            ),
+            discord.ui.ActionRow(
+                SetGoodbyeMsgBtn(guild_id, author),
+                SetGoodbyeChannelBtn(guild_id, author),
             ),
             discord.ui.ActionRow(
                 SetRulesTextBtn(guild_id, author),

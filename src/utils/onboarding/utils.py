@@ -12,14 +12,31 @@ async def update_config(guild_id: int, cfg: OnboardingConfig):
     await save_config(guild_id, cfg)
 
 
-def build_welcome_view(cfg: OnboardingConfig, member: discord.Member | None = None) -> discord.ui.LayoutView:
-    desc = cfg.welcome_description or "Welcome to the server!"
-    if member:
-        desc = desc.replace("{user}", member.mention).replace("{name}", member.name)
+def fill_greeting_placeholders(
+    text: str,
+    member: discord.Member | None = None,
+    guild: discord.Guild | None = None,
+) -> str:
+    """Replace the documented ``{user}``, ``{name}`` and ``{guild}`` tokens.
 
-    title = cfg.welcome_title or "Welcome!"
-    color = discord.Colour(cfg.welcome_color) if cfg.welcome_color else None
+    Welcome and goodbye messages share this so an admin only has to learn one
+    set of placeholders.
+    """
+    if member is not None:
+        text = text.replace("{user}", member.mention).replace("{name}", member.name)
+    guild = guild or getattr(member, "guild", None)
+    if guild is not None:
+        text = text.replace("{guild}", guild.name)
+    return text
 
+
+def _build_greeting_view(
+    title: str,
+    description: str,
+    color: int | None,
+    image: str | None,
+) -> discord.ui.LayoutView:
+    """The shared card shape used by both the welcome and goodbye messages."""
     view = discord.ui.LayoutView()
     container = discord.ui.Container(
         discord.ui.TextDisplay(
@@ -27,25 +44,62 @@ def build_welcome_view(cfg: OnboardingConfig, member: discord.Member | None = No
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
-            content=desc
+            content=description
         )
     )
-    if cfg.welcome_image:
+    if image:
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small)
         )
         container.add_item(
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
-                    media=cfg.welcome_image
+                    media=image
                 )
             )
         )
     if color:
-        container.accent_colour = color
+        container.accent_colour = discord.Colour(color)
 
     view.add_item(container)
     return view
+
+
+def build_welcome_view(
+    cfg: OnboardingConfig,
+    member: discord.Member | None = None,
+    guild: discord.Guild | None = None,
+) -> discord.ui.LayoutView:
+    desc = fill_greeting_placeholders(
+        cfg.welcome_description or "Welcome to the server!", member, guild
+    )
+    return _build_greeting_view(
+        cfg.welcome_title or "Welcome!",
+        desc,
+        cfg.welcome_color,
+        cfg.welcome_image,
+    )
+
+
+def build_goodbye_view(
+    cfg: OnboardingConfig,
+    member: discord.Member | None = None,
+    guild: discord.Guild | None = None,
+) -> discord.ui.LayoutView:
+    """The leave message, styled with the guild's own goodbye settings.
+
+    Only sent when a goodbye channel is configured, so servers that have not
+    opted in keep posting nothing when a member leaves.
+    """
+    desc = fill_greeting_placeholders(
+        cfg.goodbye_description or "A member has left the server.", member, guild
+    )
+    return _build_greeting_view(
+        cfg.goodbye_title or "Goodbye!",
+        desc,
+        cfg.goodbye_color,
+        cfg.goodbye_image,
+    )
 
 
 def build_rules_view(cfg: OnboardingConfig) -> discord.ui.LayoutView:

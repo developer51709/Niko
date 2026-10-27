@@ -11,6 +11,47 @@ AI_ENABLED = True
 AI_MODE = "GROQ"
 ANSWER_REPLYS = True
 
+# Discord refuses a message over 2000 characters. Replies longer than that are
+# sent as consecutive messages instead of being truncated mid-sentence.
+DISCORD_MESSAGE_LIMIT = 2000
+REPLY_CHUNK_LIMIT = 1900
+
+
+def split_reply(text: str, limit: int = REPLY_CHUNK_LIMIT) -> list[str]:
+    """Split an AI reply into chunks Discord will accept.
+
+    Chunks break on a paragraph, then a line, then a sentence, then a word
+    boundary so markdown blocks and words stay intact; only a single
+    uninterrupted run longer than ``limit`` is split hard.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > limit:
+        window = remaining[:limit]
+        split_at = 0
+        for separator in ("\n\n", "\n", ". ", "! ", "? ", " "):
+            index = window.rfind(separator)
+            # Ignore boundaries that would leave a tiny chunk behind.
+            if index >= limit // 2:
+                split_at = index + len(separator)
+                break
+        if split_at <= 0:
+            split_at = limit
+        chunk = remaining[:split_at].strip()
+        if chunk:
+            chunks.append(chunk)
+        remaining = remaining[split_at:].lstrip()
+
+    if remaining.strip():
+        chunks.append(remaining.strip())
+    return chunks
+
 
 def generate_reply(
     bot,

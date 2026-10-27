@@ -3,6 +3,13 @@ from utils.premium import is_premium
 
 from .views import *
 
+# The webhook used to repost censored messages. Matching it by name lets an
+# existing one be reused instead of a new webhook per restart.
+_CENSOR_WEBHOOK_NAME = "Niko Censor"
+# Bound the per-channel webhook cache so it cannot grow without limit.
+_CENSOR_WEBHOOK_CACHE_LIMIT = 1024
+
+
 class AutoMod(commands.Cog):
     """Automatic moderation: spam, links, badwords, mass mention,
     anti-nuke, anti-raid, interaction-flood, and user-installed app abuse."""
@@ -24,6 +31,9 @@ class AutoMod(commands.Cog):
         self._ext_app_history = {}  # guild_id -> user_id -> [timestamps]
         self._invite_cache = {}  # guild_id -> {invite_code: uses}
         self._missing_perms_warned = set()  # guild_ids where we've already logged a missing-perm warning
+        # channel_id -> the webhook used to repost censored messages as their
+        # author. Created on demand, since most servers never enable censoring.
+        self._censor_webhooks: dict[int, discord.Webhook] = {}
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
@@ -146,14 +156,7 @@ class AutoMod(commands.Cog):
 
         if cfg["automod"].get("badwords", True):
             if utils.contains_blocked_word(message.guild.id, content):
-                try:
-                    await message.delete()
-                except Exception:
-                    pass
-                await utils.log_action(
-                    message.guild, "Bad Word Filter",
-                    f"{message.author.mention} used a blocked word in {message.channel.mention}.\n\n"
-                    f"**Message:**\n{content}")
+                await self._handle_blocked_message(message, utils, content)
                 return
 
         if cfg["automod"].get("massmention", True):
@@ -194,6 +197,143 @@ class AutoMod(commands.Cog):
                     f"{message.author.mention} posted a flagged image in {message.channel.mention}.\n\n"
                     f"**File:** `{filename or 'unknown'}`  •  Confidence: `{score:.0%}`")
                 return
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        """Re-check an edited message against the blocked word list.
+
+        Discord applies its own keyword filter to sends *and* edits. Without
+        this, a clean message could be edited into a blocked one and stay up,
+        which is also the easiest way to walk around the filter.
+        """
+        if not after.guild or after.author.bot:
+            return
+        if (after.content or "") == (before.content or ""):
+            return
+
+        utils = self.utils()
+        if utils is None or utils.is_whitelisted(after.guild.id, after.author):
+            return
+        cfg = self.get_cfg(after.guild.id)
+        if not cfg["automod"].get("badwords", True):
+            return
+
+        content = after.content or ""
+        if utils.contains_blocked_word(after.guild.id, content):
+            await self._handle_blocked_message(after, utils, content)
+
+    async def _handle_blocked_message(self, message: discord.Message, utils, content: str) -> None:
+        """Apply the configured blocked-word response to a flagged message.
+
+        Servers choose between deleting the message and censoring it, which
+        reposts the text through a webhook carrying the author's name and avatar
+        with the matching words masked.
+        """
+        if utils.get_badwords_action(message.guild.id) == "censor":
+            if await self._censor_message(message, utils, content):
+                return
+        # Censoring needs Manage Webhooks and a real text channel; anything that
+        # stops the repost falls back to removing the message, because leaving
+        # the word up is never the right outcome.
+        await self._remove_blocked_message(message, utils, content)
+
+    async def _remove_blocked_message(self, message: discord.Message, utils, content: str) -> None:
+        """Delete a message that tripped the blocked word filter and log it."""
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await utils.log_action(
+            message.guild, "Bad Word Filter",
+            f"{message.author.mention} used a blocked word in {message.channel.mention}.\n\n"
+            f"**Message:**\n{content}")
+
+    async def _censor_webhook(self, channel) -> discord.Webhook | None:
+        """A cached webhook in this channel for reposting censored messages."""
+        cached = self._censor_webhooks.get(channel.id)
+        if cached is not None:
+            return cached
+        # Threads cannot own a webhook, and the parent channel's webhook needs a
+        # thread target, so censoring simply falls back to deleting there.
+        if not isinstance(channel, discord.TextChannel):
+            return None
+        bot_user = getattr(self.bot, "user", None)
+        try:
+            webhooks = await channel.webhooks()
+        except (discord.Forbidden, discord.HTTPException) as error:
+            log.warning("Bad Words", f"Could not list webhooks in {channel.mention}: {error}")
+            return None
+        for webhook in webhooks:
+            if webhook.name != _CENSOR_WEBHOOK_NAME:
+                continue
+            if bot_user is not None and getattr(webhook.user, "id", None) != bot_user.id:
+                continue
+            self._censor_webhooks[channel.id] = webhook
+            return webhook
+        try:
+            webhook = await channel.create_webhook(
+                name=_CENSOR_WEBHOOK_NAME, reason="Niko blocked-word filter")
+        except (discord.Forbidden, discord.HTTPException) as error:
+            log.warning(
+                "Bad Words",
+                f"Cannot create a webhook in {channel.mention} ({error}) — blocked messages "
+                f"will be deleted instead. Grant Niko **Manage Webhooks** to censor them.")
+            return None
+        if len(self._censor_webhooks) >= _CENSOR_WEBHOOK_CACHE_LIMIT:
+            self._censor_webhooks.clear()
+        self._censor_webhooks[channel.id] = webhook
+        return webhook
+
+    async def _censor_message(self, message: discord.Message, utils, content: str) -> bool:
+        """Repost a flagged message as its author with the blocked words masked.
+
+        Returns False when the censored copy could not be posted.
+        """
+        censored = utils.censor_blocked_words(message.guild.id, content)
+        webhook = await self._censor_webhook(message.channel)
+        if webhook is None:
+            return False
+
+        author = message.author
+        avatar_url = None
+        try:
+            avatar_url = str(author.display_avatar.url)
+        except Exception:
+            avatar_url = None
+        payload = {
+            "content": censored,
+            "username": (getattr(author, "display_name", None) or author.name)[:80],
+            "avatar_url": avatar_url,
+            "allowed_mentions": discord.AllowedMentions.none(),
+        }
+
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        for attempt in range(2):
+            try:
+                await webhook.send(**payload)
+                break
+            except discord.NotFound:
+                # The webhook was deleted or its token rotated; rebuild it once.
+                self._censor_webhooks.pop(message.channel.id, None)
+                if attempt:
+                    log.warning("Bad Words", f"Censored message was not posted in {message.channel.mention}: webhook gone")
+                    return False
+                webhook = await self._censor_webhook(message.channel)
+                if webhook is None:
+                    return False
+            except (discord.Forbidden, discord.HTTPException) as error:
+                log.warning("Bad Words", f"Censored message was not posted in {message.channel.mention}: {error}")
+                return False
+
+        await utils.log_action(
+            message.guild, "Bad Word Filter",
+            f"{message.author.mention} used a blocked word in {message.channel.mention}. "
+            f"The message was censored and reposted.\n\n**Censored message:**\n{censored}")
+        return True
 
     async def _premium_active(self, guild_id: int) -> bool:
         """Whether this guild's premium subscription covers AI moderation."""

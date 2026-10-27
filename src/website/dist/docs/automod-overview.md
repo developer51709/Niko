@@ -102,6 +102,10 @@ Manage the custom blocked word list:
 .badwords clear
 ```
 
+The response is configurable in the dashboard's AutoMod tab or with `/automod` → Message Filter → Set Response. **Delete the message** removes it and records the event in the mod log. **Censor & repost it** deletes it and reposts the text through a webhook using the member's name and avatar, with every blocked word replaced by the censor mask (default `*`). Censoring needs Niko's **Manage Webhooks** permission in that channel — without it Niko deletes the message instead.
+
+The list is also editable from the dashboard's AutoMod tab. Matching follows Discord's keyword rules: entries match whole words, a trailing `*` also catches longer words starting with it (`fuck*` blocks "fucking"), and a leading `*` matches anywhere (`*ass*`). Matching is case-insensitive, and spaces or punctuation between the letters are ignored, so `a.s.s` is still caught.
+
 ## AutoMod Best Practices
 
 1. **Start conservative**: Enable features one at a time

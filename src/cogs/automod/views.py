@@ -56,7 +56,13 @@ MESSAGES = {
         "antispam_desc":     "**Anti-Spam** — mutes members who send messages too fast",
         "antispam_thresh":   "  Threshold: `{msgs}` msgs / `{secs}s`",
         "antilink_desc":     "**Anti-Link** — deletes Discord invite links",
-        "badwords_desc":     "**Bad Words** — deletes blocked words (manage with `!badwords`)",
+        "badwords_desc":     "**Bad Words** — handles blocked words (manage the list with `!badwords`)",
+        "badwords_mode":     "  Response: `{mode}`",
+        "badwords_action":   "Set Response",
+        "badwords_action_prompt": "Choose what Niko does when a blocked word is used:",
+        "badwords_action_invalid": "That blocked-word response is not supported.",
+        "badwords_action_delete":  "Delete message",
+        "badwords_action_censor":  "Censor & repost",
         "massmention_desc":  "**Mass Mention** — mutes members who mass-mention",
         "massmention_max":   "  Max mentions: `{max}`",
         "scamimg_desc":      "**Scam Image Filter** — deletes known MrBeast scam images",
@@ -162,7 +168,13 @@ MESSAGES = {
         "antispam_desc":     "**Anti-Spam** — stummt Mitglieder, die zu schnell Nachrichten senden",
         "antispam_thresh":   "  Schwellenwert: `{msgs}` Nachrichten / `{secs}s`",
         "antilink_desc":     "**Anti-Link** — löscht Discord-Einladungslinks",
-        "badwords_desc":     "**Verbotene Wörter** — löscht gesperrte Wörter (verwalten mit `!badwords`)",
+        "badwords_desc":     "**Verbotene Wörter** — behandelt gesperrte Wörter (Liste verwalten mit `!badwords`)",
+        "badwords_mode":     "  Reaktion: `{mode}`",
+        "badwords_action":   "Reaktion festlegen",
+        "badwords_action_prompt": "Wähle, was Niko bei einem blockierten Wort tut:",
+        "badwords_action_invalid": "Diese Reaktion für blockierte Wörter wird nicht unterstützt.",
+        "badwords_action_delete":  "Nachricht löschen",
+        "badwords_action_censor":  "Zensieren & erneut senden",
         "massmention_desc":  "**Massen-Erwähnung** — stummt Mitglieder bei Massen-Mentions",
         "massmention_max":   "  Max. Erwähnungen: `{max}`",
         "scamimg_desc":      "**Scam-Bildfilter** — löscht bekannte MrBeast-Betrugsbilder",
@@ -267,7 +279,13 @@ MESSAGES = {
         "antispam_desc":     "**Anti-Spam** — silencia a miembros que envían mensajes muy rápido",
         "antispam_thresh":   "  Umbral: `{msgs}` msgs / `{secs}s`",
         "antilink_desc":     "**Anti-Link** — borra enlaces de invitación de Discord",
-        "badwords_desc":     "**Palabras Prohibidas** — borra palabras bloqueadas (gestiona con `!badwords`)",
+        "badwords_desc":     "**Palabras Prohibidas** — gestiona palabras bloqueadas (gestiona la lista con `!badwords`)",
+        "badwords_mode":     "  Respuesta: `{mode}`",
+        "badwords_action":   "Definir respuesta",
+        "badwords_action_prompt": "Elige qué hace Niko cuando se usa una palabra bloqueada:",
+        "badwords_action_invalid": "Esa respuesta para palabras bloqueadas no es compatible.",
+        "badwords_action_delete":  "Eliminar mensaje",
+        "badwords_action_censor":  "Censurar y reenviar",
         "massmention_desc":  "**Menciones Masivas** — silencia a quien hace menciones masivas",
         "massmention_max":   "  Máx menciones: `{max}`",
         "scamimg_desc":      "**Filtro de Imágenes de Estafa** — borra imágenes de estafa de MrBeast conocidas",
@@ -449,6 +467,13 @@ def _build_overview_text(cfg: dict, lang: str = "en") -> str:
     )
 
 
+def _badwords_mode_label(cfg: dict, lang: str = "en") -> str:
+    """How the blocked-word filter responds, as translated panel text."""
+    action = str(cfg.get("badwords_action", "delete") or "delete").strip().lower()
+    key = "badwords_action_censor" if action == "censor" else "badwords_action_delete"
+    return _t(lang, key)
+
+
 def _build_filter_text(cfg: dict, lang: str = "en") -> str:
     am = cfg["automod"]
     return (
@@ -457,7 +482,8 @@ def _build_filter_text(cfg: dict, lang: str = "en") -> str:
         f"{_icon(am.get('antispam'))} {_t(lang, 'antispam_desc')}\n"
         f"{_t(lang, 'antispam_thresh', msgs=cfg.get('spam_threshold', 6), secs=cfg.get('spam_interval', 7))}\n\n"
         f"{_icon(am.get('antilink'))} {_t(lang, 'antilink_desc')}\n\n"
-        f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n\n"
+        f"{_icon(am.get('badwords'))} {_t(lang, 'badwords_desc')}\n"
+        f"{_t(lang, 'badwords_mode', mode=_badwords_mode_label(cfg, lang))}\n\n"
         f"{_icon(am.get('massmention'))} {_t(lang, 'massmention_desc')}\n"
         f"{_t(lang, 'massmention_max', max=cfg.get('max_mentions', 5))}"
     )
@@ -1600,6 +1626,7 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         ))
         container.add_item(discord.ui.ActionRow(
             EditThresholdsButton(self, guild_id, section),
+            BadWordsActionButton(self, guild_id, section),
         ))
 
     elif section == "image_filter":
@@ -1711,6 +1738,81 @@ class AntiNukeActionSelect(discord.ui.Select):
         await interaction.response.edit_message(view=view)
         await self.message.edit(
             view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
+
+
+class BadWordsActionSelect(discord.ui.Select):
+    """Chooses whether blocked words are deleted or censored and reposted."""
+
+    def __init__(self, automod_cog, guild_id: int, message):
+        self._cog = automod_cog
+        self._guild_id = guild_id
+        self.message = message
+        options = [
+            discord.SelectOption(
+                label="Delete message", value="delete",
+                description="Remove the message and log it"),
+            discord.SelectOption(
+                label="Censor & repost", value="censor",
+                description="Repost it through a webhook as the author, words masked"),
+        ]
+        super().__init__(placeholder="Choose response…", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red(),
+            ))
+            return await interaction.response.send_message(view=view, ephemeral=True)
+
+        val = self.values[0]
+        lang = get_lang(interaction.guild)
+        if val not in ("delete", "censor"):
+            return await interaction.response.send_message(
+                _t(lang, "badwords_action_invalid"), ephemeral=True)
+        utils = self._cog.utils()
+        cfg = utils.get_guild_config(self._guild_id)
+        cfg["badwords_action"] = val
+        utils.save_config()
+        mode = _t(lang, "badwords_action_censor" if val == "censor" else "badwords_action_delete")
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"{get_emoji('tick')} Blocked words response set to **{mode}**"),
+            accent_colour=discord.Color.green(),
+        ))
+        await interaction.response.edit_message(view=view)
+        await self.message.edit(view=_build_panel(self._cog, self._guild_id, "filter", interaction.guild))
+
+
+class BadWordsActionButton(discord.ui.Button):
+    """Opens the blocked-word response picker from the filter section."""
+
+    def __init__(self, automod_cog, guild_id: int, section: str):
+        super().__init__(label="Set Response", style=discord.ButtonStyle.gray, emoji=get_emoji("utility"))
+        self._cog = automod_cog
+        self._guild_id = guild_id
+        self._section = section
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            view = discord.ui.LayoutView()
+            view.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
+                ),
+                accent_colour=discord.Color.red(),
+            ))
+            return await interaction.response.send_message(view=view, ephemeral=True)
+        lang = get_lang(interaction.guild)
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=_t(lang, "badwords_action_prompt")),
+            discord.ui.ActionRow(BadWordsActionSelect(self._cog, self._guild_id, interaction.message)),
+        ))
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class _NukeActionButton(discord.ui.Button):

@@ -268,13 +268,37 @@ class Onboarding(commands.Cog):
         if not channel:
             return
 
-        view = build_welcome_view(cfg, member)
+        view = build_welcome_view(cfg, member, member.guild)
         # allow user and role mentions but not everyone and here
         welcome_mentions = discord.AllowedMentions(everyone=False, roles=True, users=True)
         # Throttle welcome sends per-guild so raids can't spam the channel.
         await welcome_limiter.acquire(member.guild.id)
         try:
             await channel.send(view=view, allowed_mentions=welcome_mentions)
+        except discord.HTTPException:
+            pass
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        """Post the guild's goodbye message when a member leaves.
+
+        Servers only get one if they set a goodbye channel, so the default is
+        still silence. Joins and leaves share the same send limiter because both
+        are bursts on the same channel.
+        """
+        cfg = await get_config(member.guild.id)
+        if not cfg.goodbye_channel:
+            return
+
+        channel = member.guild.get_channel(cfg.goodbye_channel)
+        if not channel:
+            return
+
+        view = build_goodbye_view(cfg, member, member.guild)
+        goodbye_mentions = discord.AllowedMentions(everyone=False, roles=True, users=True)
+        await welcome_limiter.acquire(member.guild.id)
+        try:
+            await channel.send(view=view, allowed_mentions=goodbye_mentions)
         except discord.HTTPException:
             pass
 

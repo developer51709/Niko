@@ -16,13 +16,14 @@ class SettingsMixin:
                            help="{ 'en': 'Manage the blocked word list.', 'de': 'Verwalte die Liste blockierter Wörter.', 'es': 'Gestiona la lista de palabras bloqueadas.' }")
     @commands.has_permissions(manage_guild=True)
     async def badwords(self, ctx):
-        utils = self.utils()
-        words = utils.get_blocked_words(ctx.guild.id)
-        if not words:
-            return await ctx.send(f"{msg(ctx, 'badwords_none')}\n-# Use `{ctx.prefix}badwords add <word>` to add a word.")
-        text = "### 🚫 Blocked Words\n" + "\n".join(f"- {w}" for w in words)
-        text += f"\n\n-# Use `{ctx.prefix}badwords add <word>` to add a word."
-        await ctx.send(view=_cv2(text))
+        """The interactive blocked-words panel: word list, preset filters,
+        and the delete/censor response, all editable in place."""
+        from ._badwords_panel import build_panel
+
+        await ctx.send(
+            view=build_panel(self.utils(), ctx.guild.id, "overview", ctx.guild),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     @badwords.command(name="add", description="Add a blocked word")
     @commands.has_permissions(manage_guild=True)

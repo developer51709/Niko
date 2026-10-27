@@ -306,7 +306,10 @@ def _guild_premium_view(guild_id) -> dict:
 @require_auth
 @require_guild_access
 def api_guild_config(guild_id):
-    modcfg  = get_runtime_moderation_config(guild_id)
+    # Copied before decorating: the live config object is handed straight back
+    # by the runtime reader, and the preset catalog is reference data that must
+    # never be persisted alongside it.
+    modcfg  = {**get_runtime_moderation_config(guild_id), "preset_filters": _preset_filter_catalog()}
     premium_cfg = _guild_premium_view(guild_id)
     aicfg   = get_ai_config(int(guild_id))
     level_cfg = get_runtime_level_config(guild_id)
@@ -488,6 +491,16 @@ def api_guild_resources(guild_id):
             pass
     return jsonify({"channels": [], "voice_channels": [], "roles": []})
 
+def _preset_filter_catalog() -> list:
+    """The blocked-word preset filters, for the dashboard to render.
+
+    Served from the bot's own catalog, so the dashboard can never offer a
+    preset the filter does not implement.
+    """
+    from cogs.moderation.utils import preset_catalog
+    return preset_catalog()
+
+
 @app.route("/api/guild/<guild_id>/config/automod", methods=["POST"])
 @require_auth
 @require_guild_access
@@ -576,6 +589,60 @@ def api_save_automod(guild_id):
         if section == "antiraid_ext" and "ext_app_detection" in incoming:
             target["ext_app_detection"] = bool(incoming["ext_app_detection"])
 
+    if body.get("blocked_words") is not None:
+        from cogs.moderation.utils import MAX_BLOCKED_WORDS, normalize_blocked_word
+        raw_words = body["blocked_words"]
+        if isinstance(raw_words, str):
+            raw_words = raw_words.split(",")
+        if not isinstance(raw_words, (list, tuple)):
+            return jsonify({"error": "Blocked words must be a list of words."}), 400
+        if len(raw_words) > MAX_BLOCKED_WORDS:
+            return jsonify({"error": f"You can block up to {MAX_BLOCKED_WORDS} words."}), 400
+        blocked_words = []
+        for value in raw_words:
+            word = normalize_blocked_word(value)
+            if word is None:
+                # Blank entries are dropped rather than saved: an empty word
+                # would match every message in the server.
+                if isinstance(value, str) and value.strip():
+                    return jsonify({"error": "Each blocked word must be 60 characters or fewer."}), 400
+                continue
+            if word not in blocked_words:
+                blocked_words.append(word)
+        guild_config["blocked_words"] = blocked_words
+
+    if body.get("badwords_action") is not None:
+        from cogs.moderation.utils import BADWORDS_ACTIONS, normalize_badwords_action
+        action = str(body["badwords_action"]).strip().lower()
+        if action not in BADWORDS_ACTIONS:
+            return jsonify({"error": "Blocked word response must be 'delete' or 'censor'."}), 400
+        guild_config["badwords_action"] = normalize_badwords_action(action)
+
+    if body.get("badwords_mask") is not None:
+        from cogs.moderation.utils import MAX_BADWORDS_MASK_LENGTH, normalize_badwords_mask
+        raw_mask = str(body["badwords_mask"])
+        if len(raw_mask) > MAX_BADWORDS_MASK_LENGTH:
+            return jsonify({
+                "error": f"The censor mask must be {MAX_BADWORDS_MASK_LENGTH} characters or fewer.",
+            }), 400
+        guild_config["badwords_mask"] = normalize_badwords_mask(raw_mask)
+
+    if body.get("badwords_presets") is not None:
+        from cogs.moderation.utils import PRESET_KEYS, normalize_presets
+        raw_presets = body["badwords_presets"]
+        if isinstance(raw_presets, str):
+            raw_presets = [entry for entry in raw_presets.split(",")]
+        if not isinstance(raw_presets, (list, tuple)):
+            return jsonify({"error": "Preset filters must be a list of filter names."}), 400
+        unknown = next(
+            (name for name in (str(entry).strip().lower() for entry in raw_presets)
+             if name and name not in PRESET_KEYS),
+            None,
+        )
+        if unknown is not None:
+            return jsonify({"error": f"Unknown preset filter: {unknown}."}), 400
+        guild_config["badwords_presets"] = normalize_presets(raw_presets)
+
     if moderation is not None:
         moderation.config[str(guild_id)] = guild_config
         moderation.save_config(int(guild_id))
@@ -595,7 +662,9 @@ def api_save_automod(guild_id):
             return jsonify({"error": "The moderation settings could not be saved."}), 500
         finally:
             conn.close()
-    return jsonify({"ok": True, "config": guild_config})
+    # The preset catalog is reference data rather than stored config, so it is
+    # attached to the response only — never written into the guild's config.
+    return jsonify({"ok": True, "config": {**guild_config, "preset_filters": _preset_filter_catalog()}})
 
 @app.route("/api/guild/<guild_id>/config/server", methods=["POST"])
 @require_auth
@@ -658,12 +727,14 @@ def api_save_server(guild_id):
             "rules_role_id", "autorole_ids", "bot_autorole_ids", "captcha_enabled",
             "captcha_channel_id", "captcha_add_role_ids", "captcha_remove_role_ids",
             "captcha_kick_on_fail",
+            "goodbye_channel", "goodbye_title", "goodbye_description",
+            "goodbye_color", "goodbye_image",
         }
         for key in set(onboarding_data) - allowed:
             return jsonify({"error": f"Unsupported onboarding field: {key}"}), 400
         id_fields = {
             "welcome_channel", "rules_channel", "rules_role_id",
-            "captcha_channel_id",
+            "captcha_channel_id", "goodbye_channel",
         }
         for key, value in onboarding_data.items():
             if key in id_fields:
@@ -681,14 +752,14 @@ def api_save_server(guild_id):
                     setattr(onboarding, key, int(value))
                 else:
                     return jsonify({"error": f"{key} must be a valid Discord ID."}), 400
-            elif key == "welcome_color":
+            elif key in {"welcome_color", "goodbye_color"}:
                 try:
                     color = int(str(value).replace("#", ""), 16) if value not in (None, "") else None
                 except ValueError:
-                    return jsonify({"error": "Welcome color must be a hexadecimal value."}), 400
+                    return jsonify({"error": f"{key} must be a hexadecimal value."}), 400
                 if color is not None and not 0 <= color <= 0xFFFFFF:
-                    return jsonify({"error": "Welcome color must be a valid hexadecimal color."}), 400
-                onboarding.welcome_color = color
+                    return jsonify({"error": f"{key} must be a valid hexadecimal color."}), 400
+                setattr(onboarding, key, color)
             elif key in {"autorole_ids", "bot_autorole_ids", "captcha_add_role_ids", "captcha_remove_role_ids"}:
                 if not isinstance(value, list) or any(not str(item).isdigit() for item in value):
                     return jsonify({"error": f"{key} must contain valid Discord IDs."}), 400
@@ -702,7 +773,7 @@ def api_save_server(guild_id):
             elif key in {"captcha_enabled", "captcha_kick_on_fail"}:
                 setattr(onboarding, key, bool(value))
             else:
-                max_length = 4000 if key == "rules_text" else 2000 if key == "welcome_description" else 200
+                max_length = 4000 if key == "rules_text" else 2000 if key in {"welcome_description", "goodbye_description"} else 200
                 if value is not None and len(str(value)) > max_length:
                     return jsonify({"error": f"{key} is too long."}), 400
                 setattr(onboarding, key, value or None)
@@ -1036,6 +1107,7 @@ def api_save_leveling(guild_id):
     allowed_actions = {
         "xp_enabled", "xp_multiplier", "xp_cooldown", "level_up_channel",
         "level_up_message", "xp_excluded_channels", "xp_vc_enabled",
+        "level_roles",
     }
     unknown = set(body) - allowed_actions
     if unknown:
@@ -1075,6 +1147,26 @@ def api_save_leveling(guild_id):
             return jsonify({"error": "You can exclude up to 50 channels from XP."}), 400
         excluded = sorted(excluded)
 
+    level_roles = None
+    if body.get("level_roles") is not None:
+        raw_roles = body["level_roles"]
+        if not isinstance(raw_roles, dict):
+            return jsonify({"error": "Level roles must map a level to a role ID."}), 400
+        if len(raw_roles) > 50:
+            return jsonify({"error": "You can assign up to 50 level roles."}), 400
+        level_roles = {}
+        for level_value, role_value in raw_roles.items():
+            level_text = str(level_value).strip()
+            role_text = str(role_value or "").strip()
+            if not level_text.isdigit() or not 1 <= int(level_text) <= 1000:
+                return jsonify({"error": "Levels must be whole numbers between 1 and 1000."}), 400
+            if not role_text.isdigit():
+                return jsonify({"error": "Each level reward must point at a role from this server."}), 400
+            level_roles[str(int(level_text))] = int(role_text)
+        _, valid_role_ids = _guild_resource_ids(int(guild_id))
+        if valid_role_ids and any(str(role) not in valid_role_ids for role in level_roles.values()):
+            return jsonify({"error": "Each level reward must point at a role from this server."}), 400
+
     leveling = _discord_bot.get_cog("Leveling") if _discord_bot is not None else None
     if leveling is not None and hasattr(leveling, "_guild_cfg") and hasattr(leveling, "_save_guild_cfg"):
         try:
@@ -1089,6 +1181,8 @@ def api_save_leveling(guild_id):
             })
             if excluded is not None:
                 current["xp_excluded_channels"] = excluded
+            if level_roles is not None:
+                current["level_roles"] = level_roles
             run_on_bot_loop(leveling._save_guild_cfg(int(guild_id), current))
             return jsonify({"ok": True, "config": _serialize_level_config(current)})
         except Exception:
@@ -1117,6 +1211,11 @@ def api_save_leveling(guild_id):
             conn.execute(
                 "UPDATE level_config SET xp_excluded_channels = ? WHERE guild_id = ?",
                 (json.dumps(excluded), int(guild_id)),
+            )
+        if level_roles is not None:
+            conn.execute(
+                "UPDATE level_config SET level_roles = ? WHERE guild_id = ?",
+                (json.dumps({level: role for level, role in level_roles.items()}), int(guild_id)),
             )
         conn.commit()
     except sqlite3.Error:

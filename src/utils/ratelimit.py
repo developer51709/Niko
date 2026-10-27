@@ -89,6 +89,11 @@ welcome_limiter = RateLimiter(rate=3, per=5.0)
 # doesn't burn through the guild's role-edit budget.
 role_assign_limiter = RateLimiter(rate=5, per=5.0)
 
+# One bucket per channel — used for AI replies. A long answer is sent as
+# several consecutive messages, and a busy channel can have several answers in
+# flight, so stay inside Discord's ~5 sends / 5 seconds per-channel budget.
+reply_limiter = RateLimiter(rate=4, per=5.0)
+
 # One bucket per channel — used by purge/clear commands.
 # Discord's bulk-delete endpoint allows ~1 request per second per channel;
 # we stay just below that to prevent rate-limit warning floods in the console

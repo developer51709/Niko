@@ -13,6 +13,9 @@ from config.emojis import get_emoji
 # custom card colours.
 ACCENT_BRAND = 0xC8A882
 
+# Discord's hard limit for both the option list and ``max_values`` of a select.
+MAX_SELECT_OPTIONS = 25
+
 # ───────────────────────────────────────────────────
 #  MESSAGE TABLE
 # ───────────────────────────────────────────────────
@@ -102,12 +105,26 @@ def _colour_hex(rgb):
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
 
 
+def _lv_role_mention(guild: discord.Guild, role_id) -> str:
+    """Mention a configured level role, or name it plainly once it is gone.
+
+    A deleted role must never break the panel: ``discord.Object`` has no
+    ``mention``, so rendering one directly used to raise and take the whole
+    section down with it.
+    """
+    try:
+        role = guild.get_role(int(role_id))
+    except (TypeError, ValueError):
+        role = None
+    return role.mention if role else f"*(deleted role `{role_id}`)*"
+
+
 def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
     lu_ch   = guild.get_channel(cfg.get("level_up_channel") or 0)
     lu_ch_s = lu_ch.mention if lu_ch else "*(same channel)*"
     lr      = cfg.get("level_roles", {})
     lr_s    = ", \n".join(
-        f"  Level {lvl} → {(guild.get_role(int(rid)) or discord.Object(rid)).mention}"
+        f"  Level {lvl} → {_lv_role_mention(guild, rid)}"
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0]))
     ) or "  *(none)*"
     custom_msg = cfg.get("level_up_message")
@@ -178,9 +195,7 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
     if lr:
         lines = []
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0])):
-            role  = guild.get_role(int(rid))
-            rname = role.mention if role else f"*(unknown role {rid})*"
-            lines.append(f"**Level {lvl}** → {rname}")
+            lines.append(f"**Level {lvl}** → {_lv_role_mention(guild, rid)}")
         roles_body = "\n".join(lines)
     else:
         roles_body = "*No level roles configured yet.*"
@@ -260,6 +275,33 @@ def _lv_section_text(cfg: dict, section: str, guild: discord.Guild) -> str:
 # ───────────────────────────────────────────────────
 #  PANEL INTERACTIVE COMPONENTS
 # ───────────────────────────────────────────────────
+
+class _LevelPanelView(discord.ui.LayoutView):
+    """The panel itself, guarded for everyone except Manage Server holders.
+
+    The panel is posted in the channel instead of as an ephemeral message, so
+    without this check any member able to see the channel could flip XP off or
+    reconfigure the server. Every control on the panel goes through here.
+    """
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        permissions = getattr(interaction.user, "guild_permissions", None)
+        if permissions is not None and permissions.manage_guild:
+            return True
+
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                content=(
+                    f"{get_emoji('cross')} You need the **Manage Server** permission "
+                    "to change this server's leveling settings."
+                )
+            ),
+            accent_colour=discord.Color.red(),
+        ))
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return False
+
 
 class _LvSectionSelect(discord.ui.Select):
     def __init__(self, cog, guild_id: int, current: str):
@@ -387,6 +429,10 @@ class _LvExcludedChannelsSelect(discord.ui.ChannelSelect):
 
 class _LvRemoveExcludedSelect(discord.ui.Select):
     def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
+        # Discord caps a select at 25 options and 25 max_values. Clamping both
+        # together matters: a guild with more exclusions than that used to hand
+        # ``max_values`` a value the select refuses to accept.
+        options = list(options)[:MAX_SELECT_OPTIONS]
         super().__init__(
             placeholder="Choose channels to include again…",
             min_values=1, max_values=len(options),
@@ -440,7 +486,7 @@ class _LvRemoveExcludedBtn(discord.ui.Button):
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content="Select the channels that should award XP again:"),
             discord.ui.ActionRow(
-                _LvRemoveExcludedSelect(self._cog, self._guild_id, options[:25], interaction.message)
+                _LvRemoveExcludedSelect(self._cog, self._guild_id, options, interaction.message)
             ),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -584,7 +630,7 @@ class _LvResetMessageBtn(discord.ui.Button):
 # ── Level Roles ────────────────────────────────────
 
 class _LvRoleAssignSelect(discord.ui.RoleSelect):
-    def __init__(self, cog, guild_id: int, level: int, message: discord.Message):
+    def __init__(self, cog, guild_id: int, level: int, message: discord.Message | None):
         super().__init__(placeholder="Choose a role to award…", min_values=1, max_values=1)
         self._cog      = cog
         self._guild_id = guild_id
@@ -605,8 +651,9 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
         )
         view.add_item(container)
         await interaction.response.edit_message(view=view)
-        panel = await _build_level_panel(self._cog, self._guild_id, "level_roles", interaction.guild)
-        await self.message.edit(view=panel)
+        if self.message is not None:
+            panel = await _build_level_panel(self._cog, self._guild_id, "level_roles", interaction.guild)
+            await self.message.edit(view=panel)
 
 
 class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
@@ -615,10 +662,13 @@ class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
         min_length=1, max_length=4,
     )
 
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, panel_message: discord.Message | None = None):
         super().__init__()
-        self._cog      = cog
-        self._guild_id = guild_id
+        self._cog          = cog
+        self._guild_id     = guild_id
+        # Carried over from the button instead of read off the modal submit
+        # interaction, which does not reliably include the panel message.
+        self._panel_message = panel_message
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -632,7 +682,7 @@ class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
                 content=f"Now select the role to award at **Level {lvl}**"
             ),
             discord.ui.ActionRow(
-                _LvRoleAssignSelect(self._cog, self._guild_id, lvl, interaction.message)
+                _LvRoleAssignSelect(self._cog, self._guild_id, lvl, self._panel_message)
             )
         )
         view.add_item(container)
@@ -646,11 +696,16 @@ class _LvAddRoleBtn(discord.ui.Button):
         super().__init__(label="Add Role", style=discord.ButtonStyle.green, emoji=get_emoji("plus"))
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(_LvAddRoleModal(self._cog, self._guild_id))
+        await interaction.response.send_modal(
+            _LvAddRoleModal(self._cog, self._guild_id, interaction.message)
+        )
 
 
 class _LvRemoveRoleSelect(discord.ui.Select):
     def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
+        # See _LvRemoveExcludedSelect: options and max_values share Discord's
+        # hard limit of 25.
+        options = list(options)[:MAX_SELECT_OPTIONS]
         super().__init__(
             placeholder="Choose level role(s) to remove…",
             min_values=1, max_values=len(options),
@@ -852,7 +907,7 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
     cfg  = await cog._guild_cfg(guild_id)
     text = _lv_section_text(cfg, section, guild)
 
-    view      = discord.ui.LayoutView(timeout=300)
+    view      = _LevelPanelView(timeout=300)
 
     # Card accent for the CV2 container
     accent_rgb = cfg.get("card_accent")

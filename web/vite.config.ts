@@ -12,10 +12,36 @@ const DOC_CONTENT_DIRECTORY = path.resolve(fileURLToPath(new URL(".", import.met
 const DOC_FRONTMATTER_FIELD = /^([a-z_]+):\s*(.*)$/;
 const DEFAULT_DESCRIPTION = "Niko is the warm, capable Discord companion for communities that care.";
 
-type PageMetadata = { path: string; title: string; description: string; section: string };
+// A page the backend renders a social preview, and a Discord component embed,
+// for at request time. `landing` marks the pages that also advertise the live
+// command, server, and member counts.
+// https://docs.discord.com/developers/link-previews/component-embeds
+type PageMetadata = { path: string; title: string; description: string; section: string; landing?: boolean };
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// The page list the backend renders social previews from. Discord reads the
+// component embed out of the served HTML, and rendering it per request is what
+// keeps the invite link and the live counts current — so the build only has to
+// hand over each page's copy and the card image it uses.
+// src/webapp/social_preview.py consumes this file.
+function writeSocialPagesManifest(dist: string) {
+  const pages = Object.fromEntries(PAGE_METADATA.map((metadata) => {
+    const asset = metadata.path === "/" ? "home" : metadata.path.slice(1);
+    return [metadata.path, {
+      title: metadata.title,
+      description: metadata.description,
+      section: metadata.section,
+      landing: Boolean(metadata.landing),
+      image: `${SITE_URL}/og/${asset}.png`,
+    }];
+  }));
+  fs.writeFileSync(
+    path.join(dist, "social-pages.json"),
+    `${JSON.stringify({ site: SITE_URL, pages }, null, 2)}\n`,
+  );
 }
 
 function docsMetadata(): PageMetadata[] {
@@ -114,14 +140,21 @@ function writeMachineReadableContent(dist: string) {
   fs.writeFileSync(path.join(dist, "llms.txt"), index);
 }
 
+// `landing: true` marks the pages that pitch Niko itself — they carry the live
+// command, server, and member counts in their Discord embed.
 const PAGE_METADATA: PageMetadata[] = [
-  { path: "/", title: "Niko — Discord companion", description: DEFAULT_DESCRIPTION, section: "Discord companion" },
-  { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference" },
+  { path: "/", title: "Niko — Discord companion", description: DEFAULT_DESCRIPTION, section: "Discord companion", landing: true },
+  { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference", landing: true },
   { path: "/team", title: "Team — Niko", description: "Meet the owners, developers, moderators, support staff, and creatives behind Niko.", section: "Niko team" },
   { path: "/team/apply", title: "Join the Niko Team — Staff Applications", description: "Explore open staff roles and apply to help build a safer, friendlier Niko community.", section: "Staff applications" },
   { path: "/leaderboard", title: "Global Economy Leaderboard — Niko", description: "See the global Niko economy standings and discover who has earned the most coins.", section: "Global leaderboard" },
-  { path: "/support", title: "Support — Niko", description: "Find answers, browse Niko documentation, and connect with the community for help.", section: "Niko support" },
-  { path: "/discord", title: "Niko support server", description: "Join the official Niko Discord support server for help, community updates, and feedback.", section: "Join the community" },
+  // The base copy for a server's own board, `/levels/<id>`. The backend
+  // renders that page from the server it belongs to (guild name, icon,
+  // member and ranked counts), so this entry is only what non-Discord
+  // clients and an unknown server see.
+  { path: "/levels", title: "Server Leaderboard — Niko", description: "Live leveling standings for one Discord server, ranked by level and XP.", section: "Server leaderboard" },
+  { path: "/support", title: "Support — Niko", description: "Find answers, browse Niko documentation, and connect with the community for help.", section: "Niko support", landing: true },
+  { path: "/discord", title: "Niko support server", description: "Join the official Niko Discord support server for help, community updates, and feedback.", section: "Join the community", landing: true },
   { path: "/docs", title: "Documentation — Niko", description: "Guides, command references, and practical tips for getting the most out of Niko.", section: "Documentation center" },
   { path: "/changelog", title: "Changelog — Niko", description: "A clear record of every improvement, fix, and new feature added to Niko.", section: "What's new" },
   { path: "/privacy", title: "Privacy policy — Niko", description: "Learn what information Niko uses and how it supports Discord communities.", section: "Niko legal" },
@@ -217,8 +250,10 @@ function staticMetadataPlugin(): Plugin {
       // scripts/generate_site_icons.mjs, so the public directory already holds
       // the final PNGs Vite copies into dist.
       const dist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/website/dist");
-      const shell = fs.readFileSync(path.join(dist, "index.html"), "utf8");
       writeMachineReadableContent(dist);
+      // One HTML shell is served for every route and decorated per request by
+      // the backend, so nothing here writes a page.
+      writeSocialPagesManifest(dist);
       const totalPages = PAGE_METADATA.length;
       const progressStartedAt = Date.now();
       const colorEnabled = Boolean(process.stdout.isTTY)
@@ -228,18 +263,11 @@ function staticMetadataPlugin(): Plugin {
       const barWidth = Math.max(8, Math.min(30, (process.stdout.columns ?? 80) - 52));
       for (const [index, metadata] of PAGE_METADATA.entries()) {
         const route = metadata.path === "/" ? "" : metadata.path.slice(1);
-        const htmlPath = path.join(dist, route, "index.html");
         const assetPath = route || "home";
         const svgPath = path.join(dist, "og", `${assetPath}.svg`);
         const pngPath = path.join(dist, "og", `${assetPath}.png`);
-        const canonical = `${SITE_URL}${metadata.path}`;
-        const image = `${SITE_URL}/og/${assetPath}.png`;
-        const tags = `<link rel="icon" type="image/svg+xml" href="${SITE_URL}/favicon.svg" /><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}" /><link rel="canonical" href="${canonical}" /><meta property="og:type" content="website" /><meta property="og:url" content="${canonical}" /><meta property="og:title" content="${escapeHtml(metadata.title)}" /><meta property="og:description" content="${escapeHtml(metadata.description)}" /><meta property="og:image" content="${escapeHtml(image)}" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content="${escapeHtml(metadata.title)}" /><meta name="twitter:description" content="${escapeHtml(metadata.description)}" /><meta name="twitter:image" content="${escapeHtml(image)}" />`;
-        const generated = shell.replace(/<meta name="description"[\s\S]*?<title>.*?<\/title>/, tags);
         const svg = createOgCardSvg(metadata);
-        fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
         fs.mkdirSync(path.dirname(svgPath), { recursive: true });
-        fs.writeFileSync(htmlPath, generated);
         fs.writeFileSync(svgPath, svg);
         const fontRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../node_modules/@fontsource/inter/files");
         // Remove native SVG text before adding outlined glyph paths so the PNG

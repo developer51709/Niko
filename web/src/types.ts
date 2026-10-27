@@ -428,6 +428,11 @@ export type OnboardingConfig = {
   welcome_description?: string | null;
   welcome_color?: number | null | string;
   welcome_image?: string | null;
+  goodbye_channel?: number | null;
+  goodbye_title?: string | null;
+  goodbye_description?: string | null;
+  goodbye_color?: number | null | string;
+  goodbye_image?: string | null;
   rules_channel?: number | null;
   rules_text?: string | null;
   rules_role_id?: number | null;
@@ -559,6 +564,22 @@ export type StaffBillingResponse = {
   gateway: { configured: boolean; model: string };
 };
 
+/**
+ * One blocked-word preset filter.
+ *
+ * Served by the bot inside the moderation payload (`preset_filters`) and used
+ * by the dashboard to render the toggles, so the list can never drift from the
+ * patterns the filter actually runs. Toggling one saves its `key` in
+ * `badwords_presets`.
+ */
+export type PresetFilter = {
+  key: string;
+  label: string;
+  description: string;
+  /** How many base terms the filter expands, shown as a size hint. */
+  terms?: number;
+};
+
 export type GuildConfig = {
   moderation: Record<string, any>;
   server: ServerConfig;
@@ -578,6 +599,8 @@ export type GuildConfig = {
     level_up_message?: string;
     xp_excluded_channels?: string[];
     xp_vc_enabled?: boolean;
+    /** Level number → role ID, both as strings so snowflakes stay exact in JS. */
+    level_roles?: Record<string, string>;
   };
   premium?: PremiumSubscription;
 };

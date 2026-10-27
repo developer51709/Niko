@@ -51,6 +51,13 @@ class OnboardingConfig:
     welcome_color: int | None = 0x5865F2
     welcome_image: str | None = None
 
+    # Goodbye — posted when a member leaves, with its own channel and styling
+    goodbye_channel: int | None = None
+    goodbye_title: str | None = None
+    goodbye_description: str | None = None
+    goodbye_color: int | None = 0xED4245
+    goodbye_image: str | None = None
+
     # Rules
     rules_channel: int | None = None
     rules_message_id: int | None = None
@@ -79,7 +86,11 @@ _KNOWN_FIELDS = {f.name for f in fields(OnboardingConfig)}
 _INT_FIELDS = {
     "welcome_channel", "welcome_color", "rules_channel", "rules_message_id",
     "rules_role_id", "captcha_channel_id", "captcha_panel_message_id",
+    "goodbye_channel", "goodbye_color",
 }
+
+# Message accents that accept a user-entered hex colour (see _normalize).
+_COLOR_FIELDS = ("welcome_color", "goodbye_color")
 
 
 def _to_doc(guild_id: int, cfg: OnboardingConfig) -> dict:
@@ -139,11 +150,15 @@ async def load_config(guild_id: int) -> OnboardingConfig:
 
 def _normalize(cfg: OnboardingConfig) -> OnboardingConfig:
     """Migrate legacy values and single role-menu shape into current config form."""
-    if cfg.welcome_color is not None:
-        if isinstance(cfg.welcome_color, str):
-            cfg.welcome_color = normalize_hex_color(cfg.welcome_color)
-        elif isinstance(cfg.welcome_color, bool) or not isinstance(cfg.welcome_color, int) or not 0 <= cfg.welcome_color <= 0xFFFFFF:
-            cfg.welcome_color = OnboardingConfig().welcome_color
+    defaults = OnboardingConfig()
+    for field_name in _COLOR_FIELDS:
+        value = getattr(cfg, field_name)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            setattr(cfg, field_name, normalize_hex_color(value))
+        elif isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFF:
+            setattr(cfg, field_name, getattr(defaults, field_name))
 
     if not cfg.role_menus and getattr(cfg, "_legacy_role_menu_options", None):
         cfg.role_menus = {
