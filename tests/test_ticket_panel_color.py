@@ -23,8 +23,9 @@ from cogs.tickets import views as ticket_views  # noqa: E402
 from utils.tickets import utils as ticket_utils  # noqa: E402
 from utils.tickets.config import TicketConfig  # noqa: E402
 from webapp import app  # noqa: E402
-from webapp import dashboard_routes  # noqa: E402
+from webapp.routes import dashboard_routes  # noqa: E402
 from webapp import server  # noqa: E402
+from webapp import runtime  # noqa: E402
 
 BLURPLE = 0x5865F2
 HEX_CODE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -110,7 +111,7 @@ class TicketPanelColorRouteTests(unittest.TestCase):
                 lambda: mock.Mock(get_guild_entry=lambda guild_id: None),
             ),
             mock.patch.object(dashboard_routes, "run_on_bot_loop", self._no_bot_loop),
-            mock.patch.object(server, "run_on_bot_loop", self._no_bot_loop),
+            mock.patch.object(runtime, "run_on_bot_loop", self._no_bot_loop),
         ]
         for patch in self._patches:
             patch.start()
@@ -182,8 +183,8 @@ class TicketPanelColorRouteTests(unittest.TestCase):
         bot = mock.Mock(get_guild=lambda guild_id: _Guild(), standby_failover=None)
         # The same handoff the bot process performs on startup, so every route
         # module sees this bot exactly as it would in production.
-        server.configure_bot(bot)
-        self.addCleanup(server.configure_bot, None)
+        runtime.configure_bot(bot)
+        self.addCleanup(runtime.configure_bot, None)
         ticket_utils._ticket_configs[111] = TicketConfig(
             guild_id=111, panel_title="Open a Ticket", panel_channel_id=5, panel_message_id=6
         )

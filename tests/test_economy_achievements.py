@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from database import SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
 from webapp import app  # noqa: E402
-from webapp.economy_routes import (  # noqa: E402
+from webapp.routes.economy_routes import (  # noqa: E402
     TOPGG_LOGO_URL,
     achievement_entries,
     economy_summary,
@@ -43,7 +43,7 @@ from utils.economy_jobs import (  # noqa: E402
     LOTTERY_DRAW_INTERVAL,
     LOTTERY_TICKET_PRICE,
 )
-from webapp import economy_routes as economy_routes_module  # noqa: E402
+from webapp.routes import economy_routes as economy_routes_module  # noqa: E402
 
 VOTE_FIELDS = ("votes", "vote_streak", "best_vote_streak", "last_vote")
 

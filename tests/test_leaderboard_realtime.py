@@ -17,8 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
 from webapp import leaderboard_cache
-from webapp import public_routes as routes
+from webapp.routes import public_routes as routes
 from webapp import server as server_routes
+from webapp import auth  # noqa: E402
+from webapp import discord_api  # noqa: E402
 
 
 class Avatar:
@@ -165,8 +167,8 @@ class LeaderboardPollingCostTests(unittest.TestCase):
 
         client, patches = leaderboard_client(rows, viewer="900", bot=bot)
         try:
-            with patch.object(server_routes, "ensure_access_token", return_value=True), patch.object(
-                server_routes, "discord_get", side_effect=fake_guilds
+            with patch.object(auth, "ensure_access_token", return_value=True), patch.object(
+                discord_api, "discord_get", side_effect=fake_guilds
             ):
                 for _ in range(3):
                     self.assertEqual(client.get("/api/economy/leaderboard").status_code, 200)

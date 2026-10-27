@@ -12,8 +12,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
-from webapp import application_routes as routes
+from webapp.routes import application_routes as routes
 from webapp import server as server_routes
+from webapp import auth  # noqa: E402
 
 REVIEW_URL = "/api/guild/123/applications/abc/submissions/123/review"
 SUBMISSIONS_URL = "/api/guild/123/applications/abc/submissions"
@@ -74,13 +75,13 @@ class StaffApplicationReviewTests(unittest.TestCase):
     @contextlib.contextmanager
     def environment(self, pool):
         with contextlib.ExitStack() as stack:
-            stack.enter_context(patch.object(server_routes, "_current_user_blacklist_entry", return_value=None))
+            stack.enter_context(patch.object(auth, "_current_user_blacklist_entry", return_value=None))
             stack.enter_context(
-                patch.object(server_routes, "managed_guild_ids", side_effect=lambda: self.guild_ids)
+                patch.object(auth, "managed_guild_ids", side_effect=lambda: self.guild_ids)
             )
             stack.enter_context(
                 patch.object(
-                    server_routes,
+                    auth,
                     "_load_blacklist_manager",
                     return_value=SimpleNamespace(get_guild_entry=lambda guild_id: None),
                 )

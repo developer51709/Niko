@@ -15,8 +15,9 @@ import cogs.staff.staff as staff_cog  # noqa: E402
 import utils.data_removal as removal  # noqa: E402
 from config.ids import OWNER_IDS, SUPPORT_GUILD  # noqa: E402
 from webapp import app  # noqa: E402
+from webapp import auth, database, runtime, staff  # noqa: E402
 from webapp import server as server_routes  # noqa: E402
-from webapp import staff_management_routes as management_routes  # noqa: E402
+from webapp.routes import staff_management_routes as management_routes  # noqa: E402
 
 
 class SqlitePool:
@@ -127,18 +128,18 @@ def test_website_staff_authorization_denies_suspended_and_former_records(monkeyp
     _seed(pool, user_id=11, role="support", status="former")
     _seed(pool, user_id=12, role="head_support", status="active")
     monkeypatch.setattr(
-        server_routes, "_discord_bot", SimpleNamespace(cxn=pool, guilds=[]),
+        runtime, "_discord_bot", SimpleNamespace(cxn=pool, guilds=[]),
     )
-    monkeypatch.setattr(server_routes, "run_on_bot_loop", lambda awaitable: asyncio.run(awaitable))
-    monkeypatch.setattr(server_routes, "sqlite_connect", lambda: None)
+    monkeypatch.setattr(runtime, "run_on_bot_loop", lambda awaitable: asyncio.run(awaitable))
+    monkeypatch.setattr(database, "sqlite_connect", lambda: None)
 
     with app.test_request_context("/"):
         flask_session["user"] = {"id": "10"}
-        assert server_routes._current_staff_role() is None
+        assert staff._current_staff_role() is None
         flask_session["user"] = {"id": "11"}
-        assert server_routes._current_staff_role() is None
+        assert staff._current_staff_role() is None
         flask_session["user"] = {"id": "12"}
-        assert server_routes._current_staff_role() == "head_support"
+        assert staff._current_staff_role() == "head_support"
 
 
 def test_demotion_retains_the_profile_and_hides_the_role():
@@ -233,12 +234,12 @@ def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
     _seed(pool, user_id=104, role="graphic_designer", status="former", visible=1)
 
     monkeypatch.setattr(
-        server_routes, "_discord_bot", SimpleNamespace(cxn=pool, guilds=[]),
+        runtime, "_discord_bot", SimpleNamespace(cxn=pool, guilds=[]),
     )
-    monkeypatch.setattr(server_routes, "run_on_bot_loop", lambda awaitable: asyncio.run(awaitable))
-    monkeypatch.setattr(server_routes, "sqlite_connect", lambda: None)
+    monkeypatch.setattr(runtime, "run_on_bot_loop", lambda awaitable: asyncio.run(awaitable))
+    monkeypatch.setattr(database, "sqlite_connect", lambda: None)
     monkeypatch.setattr(
-        server_routes,
+        staff,
         "_staff_identity",
         lambda user_id: {
             "id": str(user_id), "name": f"Staff {user_id}", "username": None,
@@ -247,21 +248,21 @@ def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
         },
     )
 
-    public = server_routes._load_staff_rows()
+    public = staff._load_staff_rows()
     ids = {member["id"] for member in public}
     assert "101" in ids
     assert "102" not in ids  # member hid their own listing
     assert "103" not in ids  # suspended access is hidden
     assert "104" not in ids  # former staff profile is retained but hidden
 
-    management = server_routes._load_staff_management_rows()
+    management = staff._load_staff_management_rows()
     managed = {member["id"]: member for member in management}
     assert managed["103"]["staff_status"] == "suspended"
     assert managed["104"]["staff_status"] == "former"
     assert managed["104"]["profile_visible"] is True
     assert managed["104"]["visible"] is False
 
-    hidden = server_routes._load_staff_rows()
+    hidden = staff._load_staff_rows()
     assert all(member["staff_status"] == "active" for member in hidden)
 
 
@@ -299,7 +300,7 @@ def _signed_in_client():
 
 def test_staff_management_api_is_owner_only_and_records_the_action(monkeypatch):
     client = _signed_in_client()
-    monkeypatch.setattr(server_routes, "_current_user_blacklist_entry", lambda: None)
+    monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
 
     monkeypatch.setattr(management_routes, "_current_staff_role", lambda: "head_admin")
     assert client.get("/api/staff/members").status_code == 403
@@ -349,7 +350,7 @@ def test_staff_management_api_is_owner_only_and_records_the_action(monkeypatch):
 
 def test_owner_accounts_cannot_be_managed_through_the_roster(monkeypatch):
     client = _signed_in_client()
-    monkeypatch.setattr(server_routes, "_current_user_blacklist_entry", lambda: None)
+    monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
     monkeypatch.setattr(management_routes, "_current_staff_role", lambda: "owner")
     monkeypatch.setattr(management_routes, "_discord_bot", SimpleNamespace())
     owner_id = next(iter(OWNER_IDS))

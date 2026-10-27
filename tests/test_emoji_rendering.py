@@ -116,7 +116,7 @@ def test_the_react_markdown_writes_the_emoji_name_out_when_it_cannot_load():
 def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
     markdown = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
     page = (ROOT / "web" / "src" / "pages" / "TranscriptPage.tsx").read_text(encoding="utf-8")
-    route = (ROOT / "src" / "webapp" / "transcript_routes.py").read_text(encoding="utf-8")
+    route = (ROOT / "src" / "webapp" / "routes" / "transcript_routes.py").read_text(encoding="utf-8")
 
     # The generated bot emoji list decides the popup layout, so an app emoji
     # never has to be guessed from its name.

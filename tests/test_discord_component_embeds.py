@@ -30,6 +30,8 @@ MANIFEST = DIST / "social-pages.json"
 SHELL = DIST / "index.html"
 sys.path.insert(0, str(ROOT / "src"))
 
+from webapp import social  # noqa: E402
+from webapp import database, runtime, social, staff  # noqa: E402
 from webapp import social_preview  # noqa: E402
 
 EMBED_SCRIPT = re.compile(
@@ -381,11 +383,11 @@ def _fresh_social_caches():
     """Both resolvers cache per route; every test starts from a cold cache."""
     from webapp import server
 
-    server._social_context_cache.clear()
-    server._social_stats_cache = None
+    social._social_context_cache.clear()
+    social._social_stats_cache = None
     yield
-    server._social_context_cache.clear()
-    server._social_stats_cache = None
+    social._social_context_cache.clear()
+    social._social_stats_cache = None
 
 
 def serve(path: str) -> str:
@@ -402,19 +404,19 @@ def test_the_server_describes_a_guild_leaderboard_from_its_own_bot(monkeypatch):
         icon=SimpleNamespace(url="https://cdn.discordapp.com/icons/123/sage.png"),
         member_count=12480,
     )
-    monkeypatch.setattr(server, "_discord_bot", SimpleNamespace(get_guild=lambda guild_id: guild if guild_id == 123456 else None))
-    monkeypatch.setattr(server, "get_runtime_guild_level_page", lambda guild_id, offset, limit: ([], 1204))
-    monkeypatch.setattr(server, "get_runtime_level_config", lambda guild_id: {"xp_enabled": True})
+    monkeypatch.setattr(runtime, "_discord_bot", SimpleNamespace(get_guild=lambda guild_id: guild if guild_id == 123456 else None))
+    monkeypatch.setattr(database, "get_runtime_guild_level_page", lambda guild_id, offset, limit: ([], 1204))
+    monkeypatch.setattr(database, "get_runtime_level_config", lambda guild_id: {"xp_enabled": True})
 
-    context = server._guild_embed_context("123456")
+    context = social._guild_embed_context("123456")
     assert context["name"] == "Sage Gardens"
     assert context["template"] == "/levels"
     assert context["thumbnail"].endswith("sage.png")
     assert "12,480" in context["lines"][0] and "1,204" in context["lines"][0]
     assert "12,480 members, 1,204 ranked" in context["description"]
     # A guild the bot is not in has nothing to describe.
-    assert server._guild_embed_context("999") is None
-    assert server._staff_embed_context("not-a-number") is None
+    assert social._guild_embed_context("999") is None
+    assert social._staff_embed_context("not-a-number") is None
 
     html = serve("/levels/123456")
     payload = embed(html)
@@ -423,9 +425,9 @@ def test_the_server_describes_a_guild_leaderboard_from_its_own_bot(monkeypatch):
     assert "<title>Sage Gardens — Level leaderboard</title>" in html
 
     # XP paused is called out rather than shown as an empty board.
-    monkeypatch.setattr(server, "get_runtime_level_config", lambda guild_id: {"xp_enabled": False})
-    server._social_context_cache.clear()
-    paused = server._guild_embed_context("123456")
+    monkeypatch.setattr(database, "get_runtime_level_config", lambda guild_id: {"xp_enabled": False})
+    social._social_context_cache.clear()
+    paused = social._guild_embed_context("123456")
     assert any("paused" in line for line in paused["lines"])
 
     # An unknown server keeps the leaderboard section's copy in the standard layout.
@@ -446,18 +448,18 @@ def test_the_server_describes_a_team_profile_from_the_public_roster(monkeypatch)
         {"id": "10", "name": "Bo", "role_label": "Moderator", "bio": None,
          "avatar_url": None, "public_links": [], "card": {"accent": None}},
     ]
-    monkeypatch.setattr(server, "_load_staff_rows", lambda: roster)
+    monkeypatch.setattr(staff, "_load_staff_rows", lambda: roster)
 
-    aiko = server._staff_embed_context("9")
+    aiko = social._staff_embed_context("9")
     assert aiko["section"] == "HEAD SUPPORT · STAFF"
     assert aiko["accent"] == 0xC8A882
     assert aiko["description"] == "Support lead, fond of tea and tidy ticket queues."
     assert aiko["lines"] == ["-# 1 public link · niko.sryze.cc/team"]
-    bo = server._staff_embed_context("10")
+    bo = social._staff_embed_context("10")
     assert bo["accent"] is None and bo["lines"] == []
     assert bo["description"] == "Moderator on the Niko team. Say hi in the support server."
     # Someone off the public roster is not described at all (hidden or former).
-    assert server._staff_embed_context("404") is None
+    assert social._staff_embed_context("404") is None
 
     html = serve("/team/9")
     payload = embed(html)
@@ -472,17 +474,21 @@ def test_the_server_describes_a_team_profile_from_the_public_roster(monkeypatch)
     # `/team/apply` is a page of its own, not a member id, and keeps its copy.
     application = serve("/team/apply")
     assert "<title>Join the Niko Team — Staff Applications</title>" in application
-    assert [component["type"] for component in embed(application)["component"]["components"]] == [10, 12, 14, 1]
+    # It describes the open roles rather than Niko, so it leads with a Section.
+    # The list of roles is covered by test_team_applications_embed.py.
+    components = embed(application)["component"]["components"]
+    assert components[0]["type"] == 9
+    assert components[-1]["type"] == 1
 
 
 def test_a_long_staff_bio_is_trimmed_for_the_preview(monkeypatch):
     from webapp import server
 
-    monkeypatch.setattr(server, "_load_staff_rows", lambda: [
+    monkeypatch.setattr(staff, "_load_staff_rows", lambda: [
         {"id": "9", "name": "Aiko", "role_label": "Head Support", "bio": "tea " * 400,
          "avatar_url": None, "public_links": [], "card": {}},
     ])
-    context = server._staff_embed_context("9")
+    context = social._staff_embed_context("9")
     assert len(context["description"]) <= 180
     assert context["description"].endswith("…")
     assert context["description"].count("  ") == 0
@@ -492,10 +498,10 @@ def test_subject_contexts_are_cached_per_route(monkeypatch):
     from webapp import server
 
     calls = []
-    monkeypatch.setattr(server, "_guild_embed_context", lambda guild_id: (calls.append(guild_id), GUILD_CONTEXT)[1])
-    server._social_context("/levels/123456")
-    server._social_context("/levels/123456")
+    monkeypatch.setattr(social, "_guild_embed_context", lambda guild_id: (calls.append(guild_id), GUILD_CONTEXT)[1])
+    social._social_context("/levels/123456")
+    social._social_context("/levels/123456")
     assert len(calls) == 1
-    server._social_context("/levels/999")
+    social._social_context("/levels/999")
     assert len(calls) == 2
-    assert server._social_context("/commands") is None
+    assert social._social_context("/commands") is None

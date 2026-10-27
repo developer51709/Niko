@@ -10,7 +10,7 @@ from cogs.admin import customization
 from utils import discord_proxy
 from utils.discord_proxy import DiscordProxyManager, _RelayedAiohttpResponse, is_discord_api_url
 from utils.proxy_manager import WebshareProxyManager
-from webapp import server as server_routes
+from webapp import discord_api, runtime  # noqa: E402
 from utils.proxy_worker_registry import (
     add_proxy_worker,
     init_proxy_worker_registry,
@@ -376,8 +376,8 @@ class DiscordProxyDashboardIntegrationTests(unittest.TestCase):
         proxy = FakeProxyWorkers(response=proxied)
         bot = SimpleNamespace(http=None, standby_failover=FakeFailover(), discord_proxy=proxy)
 
-        with patch.object(server_routes, "_discord_bot", bot), patch.object(server_routes.req, "get") as direct:
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+        with patch.object(runtime, "_discord_bot", bot), patch.object(discord_api.req, "get") as direct:
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(proxied, response)
         direct.assert_not_called()
@@ -388,10 +388,10 @@ class DiscordProxyDashboardIntegrationTests(unittest.TestCase):
         proxy = FakeProxyWorkers(error=RuntimeError("workers unavailable"))
         bot = SimpleNamespace(http=None, standby_failover=FakeFailover(), discord_proxy=proxy)
 
-        with patch.object(server_routes, "_discord_bot", bot), patch.object(
-            server_routes.req, "get", return_value=direct_response
+        with patch.object(runtime, "_discord_bot", bot), patch.object(
+            discord_api.req, "get", return_value=direct_response
         ) as direct:
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(direct_response, response)
         direct.assert_called_once()

@@ -12,9 +12,11 @@ import aiosqlite
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
-from webapp import dashboard_routes
-from webapp import public_routes as routes
+from webapp.routes import dashboard_routes
+from webapp.routes import public_routes as routes
 from webapp import server as server_routes
+from webapp import database, runtime  # noqa: E402
+from webapp import auth, runtime  # noqa: E402
 from webapp.server import get_runtime_leaderboard_page
 from cogs.economy.commands.leaderboard import LeaderboardMixin
 from database import MongoPool, SQLitePool
@@ -116,7 +118,7 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
             [(user_id, 100 - user_id, user_id, 100, 0) for user_id in range(1, 26)],
         )
 
-        with patch("webapp.server.sqlite_connect", return_value=connection):
+        with patch("webapp.database.sqlite_connect", return_value=connection):
             rows, total = get_runtime_leaderboard_page(offset=20, limit=20)
 
         self.assertEqual(total, 25)
@@ -305,7 +307,7 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
 
                 try:
                     with patch.object(
-                        server_routes, "_current_user_blacklist_entry", return_value=None
+                        auth, "_current_user_blacklist_entry", return_value=None
                     ), patch.object(dashboard_routes, "_discord_bot", Bot()), patch.object(
                         dashboard_routes, "run_on_bot_loop", side_effect=run_task
                     ):
@@ -368,9 +370,9 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
 
         try:
             with patch.object(
-                server_routes, "_current_user_blacklist_entry", return_value=None
-            ), patch.object(server_routes, "_discord_bot", Bot()), patch.object(
-                server_routes, "run_on_bot_loop", side_effect=run_task
+                auth, "_current_user_blacklist_entry", return_value=None
+            ), patch.object(runtime, "_discord_bot", Bot()), patch.object(
+                runtime, "run_on_bot_loop", side_effect=run_task
             ), patch.object(dashboard_routes, "_discord_bot", Bot()), patch.object(
                 dashboard_routes, "run_on_bot_loop", side_effect=run_task
             ):

@@ -5,7 +5,7 @@ Covers the three pieces the dashboard's notifications tab depends on:
 * ``utils.social.follows`` — the shared store both the cog and the web routes
   use, including the column migration for databases created before the
   management features existed,
-* ``webapp.notifier_routes`` — the JSON API behind the dashboard tab,
+* ``webapp.routes.notifier_routes`` — the JSON API behind the dashboard tab,
 * ``Notifier.poll_once`` — one poll cycle: per-account fetch deduplication,
   silent seeding of a brand-new follow, and auto-pausing an account that keeps
   failing instead of hammering a platform that no longer answers.
@@ -23,8 +23,10 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app
-from webapp import notifier_routes as routes
+from webapp.routes import notifier_routes as routes
 from webapp import server as server_routes
+from webapp import auth, discord_api, runtime  # noqa: E402
+from webapp import auth  # noqa: E402
 
 from cogs.notifier import cog as notifier
 import database
@@ -841,7 +843,7 @@ class UnblacklistedGuildResumesOnlyWhenSwitchedBackOn(unittest.TestCase):
 
 
 def run_awaitable(awaitable, timeout=8):
-    """Stand-in for ``server.run_on_bot_loop`` without a gateway loop."""
+    """Stand-in for ``runtime.run_on_bot_loop`` without a gateway loop."""
     return asyncio.run(awaitable)
 
 
@@ -863,11 +865,11 @@ def notifier_client(pool, guild_id=GUILD, *, bot=None, allowed=True, csrf="test-
         patch.object(routes, "run_on_bot_loop", side_effect=run_awaitable),
         patch.object(routes, "_guild_resource_ids", return_value=({"10", "20"}, {"900"})),
         patch.object(
-            server_routes,
+            auth,
             "managed_guild_ids",
             return_value={str(guild_id)} if allowed else set(),
         ),
-        patch.object(server_routes, "_load_blacklist_manager", return_value=manager),
+        patch.object(auth, "_load_blacklist_manager", return_value=manager),
     ]
     for active_patch in patches:
         active_patch.start()
@@ -1175,8 +1177,8 @@ class BotHandoffTests(unittest.TestCase):
 
     Reported bug: while a proxy was handling Discord's global rate limits the
     Notifications tab only ever showed "Couldn't load social notifications. The
-    Discord bot is not available." — ``webapp.notifier_routes`` snapshots the
-    shared names at import time, and ``server.configure_bot`` used to update a
+    Discord bot is not available." — ``webapp.routes.notifier_routes`` snapshots the
+    shared names at import time, and ``runtime.configure_bot`` used to update a
     hand-kept list of route modules that did not include it, so this module kept
     the ``_discord_bot = None`` from before the bot existed and every notifier
     endpoint answered 503 with exactly that message. The other notifier tests
@@ -1199,9 +1201,9 @@ class BotHandoffTests(unittest.TestCase):
     def test_every_route_module_that_holds_a_bot_receives_the_live_one(self):
         bot = SimpleNamespace(cxn=None)
 
-        server_routes.configure_bot(bot)
+        runtime.configure_bot(bot)
 
-        self.assertIs(server_routes._discord_bot, bot)
+        self.assertIs(runtime._discord_bot, bot)
         holders = [
             name
             for name, module in sys.modules.items()
@@ -1209,8 +1211,8 @@ class BotHandoffTests(unittest.TestCase):
             and module is not None
             and hasattr(module, "_discord_bot")
         ]
-        self.assertIn("webapp.notifier_routes", holders)
-        self.assertIn("webapp.dashboard_routes", holders)
+        self.assertIn("webapp.routes.notifier_routes", holders)
+        self.assertIn("webapp.routes.dashboard_routes", holders)
         for name in holders:
             with self.subTest(module=name):
                 self.assertIs(sys.modules[name]._discord_bot, bot)
@@ -1248,16 +1250,16 @@ class BotHandoffTests(unittest.TestCase):
 
         patches = [
             patch.object(routes, "run_on_bot_loop", side_effect=run_awaitable),
-            patch.object(server_routes, "managed_guild_ids", return_value={str(GUILD)}),
-            patch.object(server_routes, "_load_blacklist_manager", return_value=manager),
-            patch.object(server_routes, "discord_request", side_effect=offline),
-            patch.object(server_routes, "discord_get", side_effect=offline),
+            patch.object(auth, "managed_guild_ids", return_value={str(GUILD)}),
+            patch.object(auth, "_load_blacklist_manager", return_value=manager),
+            patch.object(discord_api, "discord_request", side_effect=offline),
+            patch.object(discord_api, "discord_get", side_effect=offline),
             patch.object(routes, "discord_request", side_effect=offline),
             patch.object(routes, "discord_get", side_effect=offline),
         ]
         for active_patch in patches:
             active_patch.start()
-        server_routes.configure_bot(bot)
+        runtime.configure_bot(bot)
         try:
             response = client.get(f"/api/guild/{GUILD}/notifier")
         finally:

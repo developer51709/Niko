@@ -19,7 +19,7 @@ from xml.etree import ElementTree
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import staff_card  # noqa: E402
-from webapp import team_routes  # noqa: E402
+from webapp.routes import team_routes  # noqa: E402
 from webapp.server import app  # noqa: E402
 
 

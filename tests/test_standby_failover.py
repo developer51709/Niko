@@ -15,8 +15,10 @@ from utils.standby_failover import _dispatch_web_request, _handle_client, _is_al
 from utils.standby_manager import StandbyFailoverManager
 from webapp import app
 from webapp import server as server_routes
-from webapp import standby_routes as standby_routes
-from webapp.standby_routes import _is_own_origin, _sync_standby_manager, _verification_matches
+from webapp import auth, discord_api, runtime  # noqa: E402
+from webapp import auth, runtime  # noqa: E402
+from webapp.routes import standby_routes as standby_routes
+from webapp.routes.standby_routes import _is_own_origin, _sync_standby_manager, _verification_matches
 
 
 class FakeWriter:
@@ -510,9 +512,9 @@ class StandbyFailoverTests(unittest.TestCase):
         client = Mock(return_value=fake_upstream(status_code=200, content=b"{}"))
 
         with patch.object(
-            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
-        ), patch.object(server_routes.req, "get", client):
-            server_routes.discord_request(
+            runtime, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(discord_api.req, "get", client):
+            discord_api.discord_request(
                 "GET", "https://discord.com/api/v10/users/@me", headers={"Authorization": "Bearer token"}
             )
 
@@ -533,9 +535,9 @@ class StandbyFailoverTests(unittest.TestCase):
         client = Mock(side_effect=[direct, proxied])
 
         with patch.object(
-            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
-        ), patch.object(server_routes.req, "get", client):
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+            runtime, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(discord_api.req, "get", client):
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(proxied, response)
         self.assertNotIn("proxies", client.call_args_list[0].kwargs)
@@ -553,7 +555,7 @@ class StandbyFailoverTests(unittest.TestCase):
         traffic to Webshare — team applications then could not check support server
         membership at all. It shares the bot's egress now.
         """
-        from webapp import team_recruitment_routes as routes
+        from webapp.routes import team_recruitment_routes as routes
 
         http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
         manager = StandbyFailoverManager()
@@ -564,9 +566,9 @@ class StandbyFailoverTests(unittest.TestCase):
             return blocked_upstream()
 
         client = owner_dashboard_client()
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
-            server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
-        ), patch.object(routes, "DISCORD_BOT_TOKEN", "bot-token"), patch.object(server_routes.req, "get", side_effect=call):
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
+            runtime, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)
+        ), patch.object(routes, "DISCORD_BOT_TOKEN", "bot-token"), patch.object(discord_api.req, "get", side_effect=call):
             response = client.get("/api/team-recruitment/membership")
 
         self.assertEqual(200, response.status_code)
@@ -574,7 +576,7 @@ class StandbyFailoverTests(unittest.TestCase):
 
     def test_oauth_token_exchange_retries_over_the_bots_proxy(self):
         """Login has no failover of its own: a blocked token exchange is retried."""
-        from webapp import auth_routes
+        from webapp.routes import auth_routes
 
         http = SimpleNamespace(user_agent="DiscordBot (https://example.invalid, 2.7.1)", proxy="http://proxy.example:8080")
         manager = StandbyFailoverManager()
@@ -588,8 +590,8 @@ class StandbyFailoverTests(unittest.TestCase):
         client = app.test_client()
         with client.session_transaction() as session:
             session["oauth_state"] = "callback-state"
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)), patch.object(
-            server_routes.req, "post", side_effect=post
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(http=http, standby_failover=manager)), patch.object(
+            discord_api.req, "post", side_effect=post
         ), patch.object(auth_routes, "discord_get", return_value={"id": "1", "username": "user"}):
             response = client.get("/auth/callback?code=abc&state=callback-state")
 
@@ -605,10 +607,10 @@ class StandbyFailoverTests(unittest.TestCase):
         manager.request_via_standby = Mock(side_effect=AssertionError("relay must not be attempted"))
         self.assertFalse(manager.relay_configured())
 
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "get", return_value=blocked
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "get", return_value=blocked
         ):
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(blocked, response)
         manager.request_via_standby.assert_not_called()
@@ -619,9 +621,9 @@ class StandbyFailoverTests(unittest.TestCase):
         manager.request_via_standby = Mock(side_effect=RuntimeError("Standby API relay is not configured."))
 
         with relay_secrets(), patch.object(
-            server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
-        ), patch.object(server_routes.req, "get", return_value=blocked):
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+            runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)
+        ), patch.object(discord_api.req, "get", return_value=blocked):
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(blocked, response)
         self.assertEqual("Standby API relay failed (RuntimeError).", manager.last_error)
@@ -633,15 +635,15 @@ class StandbyFailoverTests(unittest.TestCase):
         manager.request_via_standby = Mock(return_value=relayed)
 
         with relay_secrets(), patch.object(
-            server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
-        ), patch.object(server_routes.req, "get", return_value=blocked):
-            response = server_routes.discord_request("GET", "https://discord.com/api/v10/users/@me")
+            runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)
+        ), patch.object(discord_api.req, "get", return_value=blocked):
+            response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
 
         self.assertIs(relayed, response)
         self.assertTrue(manager.relay_configured())
 
     def test_auth_callback_redirects_a_failed_token_exchange_instead_of_returning_500(self):
-        from webapp import auth_routes
+        from webapp.routes import auth_routes
 
         client = app.test_client()
         # No standby origin is active, so the request stays on this instance and
@@ -655,7 +657,7 @@ class StandbyFailoverTests(unittest.TestCase):
             # The deployed instance has both relay secrets but no standby origin
             # registered, which is exactly how the 500 was reached.
             with relay_secrets(), patch.object(
-                server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)
+                runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)
             ), patch.object(auth_routes.req, "post", post):
                 return client.get("/auth/callback?code=abc&state=callback-state")
 
@@ -809,8 +811,8 @@ class StandbyFailoverTests(unittest.TestCase):
             "headers": {"Content-Type": "application/json", "X-Backend": "standby"},
             "close": lambda self: None,
         })()
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request", return_value=upstream
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request", return_value=upstream
         ) as request_upstream:
             with app.test_client() as client:
                 response = client.post(
@@ -846,8 +848,8 @@ class StandbyFailoverTests(unittest.TestCase):
             "headers": {"Content-Type": "text/javascript", "Cache-Control": "public, max-age=60"},
             "close": lambda self: None,
         })()
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request", return_value=upstream
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request", return_value=upstream
         ) as request_upstream:
             with app.test_client() as client:
                 response = client.get("/assets/app.js?v=123")
@@ -870,8 +872,8 @@ class StandbyFailoverTests(unittest.TestCase):
             "headers": {"Content-Type": "text/html"},
             "close": lambda self: None,
         })()
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request", return_value=upstream
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request", return_value=upstream
         ) as request_upstream:
             with app.test_client() as client:
                 response = client.get(
@@ -921,8 +923,8 @@ class StandbyFailoverTests(unittest.TestCase):
             "headers": {"Content-Type": "application/json"},
             "close": lambda self: None,
         })()
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request", return_value=upstream
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request", return_value=upstream
         ) as request_upstream:
             with app.test_client() as client:
                 health_response = client.get("/health")
@@ -938,8 +940,8 @@ class StandbyFailoverTests(unittest.TestCase):
 
     def test_no_active_standby_answers_health_locally_and_relay_with_503(self):
         manager = SimpleNamespace(active_origin=None, origins=["https://standby.example"])
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request"
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request"
         ) as request_upstream:
             with app.test_client() as client:
                 health_response = client.get("/health")
@@ -955,8 +957,8 @@ class StandbyFailoverTests(unittest.TestCase):
             active_origin="https://standby.example",
             origins=["https://standby.example"],
         )
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request"
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request"
         ) as request_upstream:
             with app.test_client() as client:
                 response = client.get("/api/staff/standbys")
@@ -969,8 +971,8 @@ class StandbyFailoverTests(unittest.TestCase):
             active_origin="https://standby.example",
             origins=["https://standby.example"],
         )
-        with patch.object(server_routes, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
-            server_routes.req, "request", side_effect=requests.RequestException("unavailable")
+        with patch.object(runtime, "_discord_bot", SimpleNamespace(standby_failover=manager)), patch.object(
+            discord_api.req, "request", side_effect=requests.RequestException("unavailable")
         ):
             with app.test_client() as client:
                 response = client.get("/api/team")
@@ -1146,7 +1148,7 @@ class StandbyFailoverTests(unittest.TestCase):
         client = owner_dashboard_client()
 
         with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes.requests, "request", return_value=upstream
         ) as forwarded, patch.object(standby_routes, "run_on_bot_loop") as runner:
@@ -1184,7 +1186,7 @@ class StandbyFailoverTests(unittest.TestCase):
         client = owner_dashboard_client()
 
         with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes.requests, "request", return_value=upstream
         ) as forwarded:
@@ -1251,7 +1253,7 @@ class StandbyFailoverTests(unittest.TestCase):
             return upstream
 
         with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes.requests, "request", side_effect=dispatch
         ):
@@ -1271,7 +1273,7 @@ class StandbyFailoverTests(unittest.TestCase):
         with patch.dict(os.environ, {"STANDBY_MODE": "true"}, clear=False), patch.dict(
             os.environ, {"STANDBY_PRIMARY_URL": "", "PUBLIC_URL": ""}, clear=False
         ), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes, "announced_primary_origin", Mock(return_value=None)
         ), patch.object(
@@ -1290,7 +1292,7 @@ class StandbyFailoverTests(unittest.TestCase):
         with patch.dict(os.environ, {
             "STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "", "PUBLIC_URL": "",
         }, clear=False), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes, "announced_primary_origin", Mock(return_value=None)
         ), patch.object(
@@ -1310,7 +1312,7 @@ class StandbyFailoverTests(unittest.TestCase):
         with patch.dict(os.environ, {
             "STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "", "PUBLIC_URL": "",
         }, clear=False), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes, "announced_primary_origin", Mock(return_value=None)
         ), patch.object(
@@ -1329,7 +1331,7 @@ class StandbyFailoverTests(unittest.TestCase):
         client = owner_dashboard_client()
 
         with patch.dict(os.environ, {"STANDBY_MODE": "true", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes.requests, "request"
         ) as forwarded:
@@ -1347,7 +1349,7 @@ class StandbyFailoverTests(unittest.TestCase):
 
         manager.probe_all = Mock(return_value={})
         with patch.dict(os.environ, {"STANDBY_MODE": "false", "STANDBY_PRIMARY_URL": "https://primary.example"}), patch.object(
-            server_routes, "_current_user_blacklist_entry", return_value=None
+            auth, "_current_user_blacklist_entry", return_value=None
         ), patch.object(standby_routes, "_discord_bot", bot), patch.object(
             standby_routes, "_current_staff_role", return_value="owner"
         ), patch.object(

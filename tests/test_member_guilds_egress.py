@@ -27,7 +27,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from webapp import app, dashboard_routes, server  # noqa: E402
+from webapp import app  # noqa: E402
+from webapp import auth, discord_api, runtime  # noqa: E402
+from webapp import config as webapp_config  # noqa: E402
+from webapp.routes import dashboard_routes  # noqa: E402
 
 USER_AGENT = "DiscordBot (https://niko.sryze.cc, 2.7.1)"
 PROXY = "http://user:pass@p.webshare.io:80"
@@ -83,8 +86,8 @@ def http_with(session, proxy=None):
 
 def run_fetch(session, proxy=None):
     """Run the bot-loop fetch coroutine against a fake session."""
-    with mock.patch.object(server, "_discord_bot", SimpleNamespace(http=http_with(session, proxy))):
-        return asyncio.run(server._member_guilds_via_bot("user-token"))
+    with mock.patch.object(runtime, "_discord_bot", SimpleNamespace(http=http_with(session, proxy))):
+        return asyncio.run(auth._member_guilds_via_bot("user-token"))
 
 
 def start_loop(testcase):
@@ -136,8 +139,8 @@ class BotSessionFetchTests(unittest.TestCase):
                 http.proxy = PROXY
 
         http._HTTPClient__session.on_request = arm_proxy
-        with mock.patch.object(server, "_discord_bot", SimpleNamespace(http=http)):
-            self.assertEqual(GUILDS, asyncio.run(server._member_guilds_via_bot("user-token")))
+        with mock.patch.object(runtime, "_discord_bot", SimpleNamespace(http=http)):
+            self.assertEqual(GUILDS, asyncio.run(auth._member_guilds_via_bot("user-token")))
 
         calls = http._HTTPClient__session.calls
         self.assertEqual(2, len(calls))
@@ -154,7 +157,7 @@ class BotSessionFetchTests(unittest.TestCase):
         async def fake_sleep(delay):
             delays.append(delay)
 
-        with mock.patch.object(server.asyncio, "sleep", fake_sleep):
+        with mock.patch.object(asyncio, "sleep", fake_sleep):
             self.assertEqual(GUILDS, run_fetch(session))
 
         self.assertEqual([2.5], delays)
@@ -174,10 +177,10 @@ class BotSessionFetchTests(unittest.TestCase):
         async def fake_sleep(delay):
             delays.append(delay)
 
-        with mock.patch.object(server, "_discord_bot", SimpleNamespace(http=http)), mock.patch.object(
-            server.asyncio, "sleep", fake_sleep
+        with mock.patch.object(runtime, "_discord_bot", SimpleNamespace(http=http)), mock.patch.object(
+            asyncio, "sleep", fake_sleep
         ):
-            self.assertEqual(GUILDS, asyncio.run(server._member_guilds_via_bot("user-token")))
+            self.assertEqual(GUILDS, asyncio.run(auth._member_guilds_via_bot("user-token")))
 
         self.assertEqual([1.0], delays)
         self.assertEqual(PROXY, http._HTTPClient__session.calls[1][1]["proxy"])
@@ -185,8 +188,8 @@ class BotSessionFetchTests(unittest.TestCase):
     def test_a_dead_connection_is_an_error_not_an_empty_list(self):
         session = FakeSession([OSError("proxy refused the connection")])
 
-        with mock.patch.object(server.asyncio, "sleep", mock.AsyncMock()):
-            with self.assertRaises(server.DiscordEgressError) as raised:
+        with mock.patch.object(asyncio, "sleep", mock.AsyncMock()):
+            with self.assertRaises(auth.DiscordEgressError) as raised:
                 run_fetch(session)
 
         self.assertIn("request failed", str(raised.exception))
@@ -195,7 +198,7 @@ class BotSessionFetchTests(unittest.TestCase):
     def test_a_refused_request_without_recovery_is_an_error_not_an_empty_list(self):
         session = FakeSession([(403, "Attention Required!")])
 
-        with self.assertRaises(server.DiscordEgressError) as raised:
+        with self.assertRaises(auth.DiscordEgressError) as raised:
             run_fetch(session)
 
         self.assertIn("403", str(raised.exception))
@@ -204,7 +207,7 @@ class BotSessionFetchTests(unittest.TestCase):
     def test_an_expired_token_is_not_retried(self):
         session = FakeSession([(401, json.dumps({"message": "401: Unauthorized"}))])
 
-        with self.assertRaises(server.DiscordEgressError):
+        with self.assertRaises(auth.DiscordEgressError):
             run_fetch(session)
 
         self.assertEqual(1, len(session.calls))
@@ -212,13 +215,13 @@ class BotSessionFetchTests(unittest.TestCase):
     def test_a_challenge_page_with_a_200_status_is_not_a_server_list(self):
         session = FakeSession([(200, "<!DOCTYPE html><html>Just a moment...</html>")])
 
-        with self.assertRaises(server.DiscordEgressError):
+        with self.assertRaises(auth.DiscordEgressError):
             run_fetch(session)
 
     def test_an_unexpected_payload_shape_is_not_a_server_list(self):
         session = FakeSession([(200, json.dumps({"message": "401: Unauthorized"}))])
 
-        with self.assertRaises(server.DiscordEgressError):
+        with self.assertRaises(auth.DiscordEgressError):
             run_fetch(session)
 
 
@@ -226,33 +229,33 @@ class MemberGuildsRoutingTests(unittest.TestCase):
     """``member_guilds`` is the sync seam the routes call."""
 
     def setUp(self):
-        self._bot = server._discord_bot
-        self.addCleanup(setattr, server, "_discord_bot", self._bot)
+        self._bot = runtime._discord_bot
+        self.addCleanup(setattr, runtime, "_discord_bot", self._bot)
 
     def test_the_fetch_runs_on_the_bots_event_loop(self):
         loop, loop_thread = start_loop(self)
         session = FakeSession([(200, json.dumps(GUILDS))])
-        server._discord_bot = SimpleNamespace(loop=loop, http=http_with(session, PROXY))
+        runtime._discord_bot = SimpleNamespace(loop=loop, http=http_with(session, PROXY))
 
-        self.assertEqual(GUILDS, server.member_guilds("user-token"))
+        self.assertEqual(GUILDS, auth.member_guilds("user-token"))
         # The request was issued from the bot's loop thread, not Flask's thread.
         self.assertEqual([loop_thread], session.threads)
         self.assertNotEqual(threading.get_ident(), session.threads[0])
         self.assertEqual(PROXY, session.calls[0][1]["proxy"])
 
     def test_a_web_only_process_still_reads_the_list_directly(self):
-        server._discord_bot = None
-        with mock.patch.object(server, "discord_get", return_value=GUILDS) as direct:
-            self.assertEqual(GUILDS, server.member_guilds("user-token"))
+        runtime._discord_bot = None
+        with mock.patch.object(discord_api, "discord_get", return_value=GUILDS) as direct:
+            self.assertEqual(GUILDS, auth.member_guilds("user-token"))
         direct.assert_called_once_with("/users/@me/guilds", "user-token")
 
     def test_a_bot_that_is_not_running_yet_reads_the_list_directly(self):
         loop = asyncio.new_event_loop()  # never started
         self.addCleanup(loop.close)
-        server._discord_bot = SimpleNamespace(loop=loop, http=http_with(FakeSession([(200, "[]")])))
+        runtime._discord_bot = SimpleNamespace(loop=loop, http=http_with(FakeSession([(200, "[]")])))
 
-        with mock.patch.object(server, "discord_get", return_value=GUILDS) as direct:
-            self.assertEqual(GUILDS, server.member_guilds("user-token"))
+        with mock.patch.object(discord_api, "discord_get", return_value=GUILDS) as direct:
+            self.assertEqual(GUILDS, auth.member_guilds("user-token"))
         direct.assert_called_once()
 
 
@@ -260,14 +263,14 @@ class GuildListRouteTests(unittest.TestCase):
     """``GET /api/guilds`` must not answer an empty list when the read fails."""
 
     def setUp(self):
-        self._bot = server._discord_bot
+        self._bot = runtime._discord_bot
         self._blacklist = dashboard_routes._load_blacklist_manager
-        server._discord_bot = None
+        runtime._discord_bot = None
         self._member_guilds = dashboard_routes.member_guilds
         self.addCleanup(self._restore)
 
     def _restore(self):
-        server._discord_bot = self._bot
+        runtime._discord_bot = self._bot
         dashboard_routes.member_guilds = self._member_guilds
         dashboard_routes._load_blacklist_manager = self._blacklist
 
@@ -281,7 +284,7 @@ class GuildListRouteTests(unittest.TestCase):
 
     def test_a_failed_read_is_reported_as_an_error(self):
         def unavailable(token):
-            raise server.DiscordEgressError("Discord answered HTTP 403 for the server list.")
+            raise auth.DiscordEgressError("Discord answered HTTP 403 for the server list.")
 
         dashboard_routes.member_guilds = unavailable
         response = self._client().get("/api/guilds")
@@ -300,7 +303,7 @@ class GuildListRouteTests(unittest.TestCase):
 
     def test_a_revoked_session_asks_for_a_new_login_instead_of_blaming_discord(self):
         def revoked(token):
-            raise server.DiscordEgressError("Discord answered HTTP 401 for the server list.", status=401)
+            raise auth.DiscordEgressError("Discord answered HTTP 401 for the server list.", status=401)
 
         dashboard_routes.member_guilds = revoked
         response = self._client().get("/api/guilds")
@@ -314,7 +317,7 @@ class GuildListRouteTests(unittest.TestCase):
         """End to end: the page's own request goes through the bot's egress."""
         loop, loop_thread = start_loop(self)
         session = FakeSession([(200, json.dumps(GUILDS))])
-        server._discord_bot = SimpleNamespace(
+        runtime._discord_bot = SimpleNamespace(
             loop=loop,
             http=http_with(session, PROXY),
             guilds=[SimpleNamespace(id=111)],
@@ -343,18 +346,18 @@ class RejectedTokenRecoveryTests(unittest.TestCase):
     """
 
     def setUp(self):
-        self._once = server._member_guilds_once
-        self._refresh = server.ensure_access_token
+        self._once = auth._member_guilds_once
+        self._refresh = auth.ensure_access_token
         self.addCleanup(self._restore)
 
     def _restore(self):
-        server._member_guilds_once = self._once
-        server.ensure_access_token = self._refresh
+        auth._member_guilds_once = self._once
+        auth.ensure_access_token = self._refresh
 
     def test_a_rejected_token_reports_its_status(self):
         session = FakeSession([(401, json.dumps({"message": "401: Unauthorized"}))])
 
-        with self.assertRaises(server.DiscordEgressError) as raised:
+        with self.assertRaises(auth.DiscordEgressError) as raised:
             run_fetch(session)
 
         self.assertEqual(401, raised.exception.status)
@@ -367,7 +370,7 @@ class RejectedTokenRecoveryTests(unittest.TestCase):
         def once(token):
             tokens.append(token)
             if len(tokens) == 1:
-                raise server.DiscordEgressError(
+                raise auth.DiscordEgressError(
                     "Discord answered HTTP 401 for the server list.", status=401
                 )
             return GUILDS
@@ -378,12 +381,12 @@ class RejectedTokenRecoveryTests(unittest.TestCase):
             refreshes.append(force)
             return True
 
-        server._member_guilds_once = once
-        server.ensure_access_token = refresh
+        auth._member_guilds_once = once
+        auth.ensure_access_token = refresh
 
         with app.test_request_context("/dashboard/servers"):
             flask_session["access_token"] = "fresh-token"
-            self.assertEqual(GUILDS, server.member_guilds("revoked-token"))
+            self.assertEqual(GUILDS, auth.member_guilds("revoked-token"))
 
         # The retry left over the refreshed token, not the one Discord refused.
         self.assertEqual(["revoked-token", "fresh-token"], tokens)
@@ -395,15 +398,15 @@ class RejectedTokenRecoveryTests(unittest.TestCase):
 
         def once(token):
             calls.append(token)
-            raise server.DiscordEgressError(
+            raise auth.DiscordEgressError(
                 "Discord answered HTTP 401 for the server list.", status=401
             )
 
-        server._member_guilds_once = once
-        server.ensure_access_token = lambda force=False: False
+        auth._member_guilds_once = once
+        auth.ensure_access_token = lambda force=False: False
 
-        with self.assertRaises(server.DiscordEgressError) as raised:
-            server.member_guilds("revoked-token")
+        with self.assertRaises(auth.DiscordEgressError) as raised:
+            auth.member_guilds("revoked-token")
 
         self.assertEqual(1, len(calls))
         self.assertEqual(401, raised.exception.status)
@@ -414,15 +417,15 @@ class RejectedTokenRecoveryTests(unittest.TestCase):
 
         def once(token):
             calls.append(token)
-            raise server.DiscordEgressError(
+            raise auth.DiscordEgressError(
                 "Discord answered HTTP 403 for the server list.", status=403
             )
 
-        server._member_guilds_once = once
-        server.ensure_access_token = lambda force=False: refreshes.append(force) or True
+        auth._member_guilds_once = once
+        auth.ensure_access_token = lambda force=False: refreshes.append(force) or True
 
-        with self.assertRaises(server.DiscordEgressError):
-            server.member_guilds("user-token")
+        with self.assertRaises(auth.DiscordEgressError):
+            auth.member_guilds("user-token")
 
         self.assertEqual(1, len(calls))
         self.assertEqual([], refreshes)
@@ -443,7 +446,7 @@ class ForcedTokenRefreshTests(unittest.TestCase):
             response.raise_for_status.return_value = None
             return response
 
-        return mock.patch.object(server, "discord_request", fake_request)
+        return mock.patch.object(discord_api, "discord_request", fake_request)
 
     def test_a_clock_fresh_token_is_left_alone_unless_forced(self):
         from flask import session as flask_session
@@ -455,7 +458,7 @@ class ForcedTokenRefreshTests(unittest.TestCase):
             flask_session["refresh_token"] = "refresh-1"
             flask_session["token_exp"] = time.time() + 3600
             with self._patch_token_exchange(seen):
-                self.assertTrue(server.ensure_access_token())
+                self.assertTrue(auth.ensure_access_token())
                 self.assertEqual("stale-token", flask_session["access_token"])
 
         self.assertEqual([], seen)
@@ -470,9 +473,9 @@ class ForcedTokenRefreshTests(unittest.TestCase):
             flask_session["refresh_token"] = "refresh-1"
             flask_session["token_exp"] = time.time() + 3600
             with self._patch_token_exchange(seen), mock.patch.object(
-                server, "DISCORD_CLIENT_SECRET", "secret"
+                webapp_config, "DISCORD_CLIENT_SECRET", "secret"
             ):
-                self.assertTrue(server.ensure_access_token(force=True))
+                self.assertTrue(auth.ensure_access_token(force=True))
                 self.assertEqual("new-token", flask_session["access_token"])
                 self.assertEqual("rotated-token", flask_session["refresh_token"])
 

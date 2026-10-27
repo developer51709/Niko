@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from webapp import app
-from webapp import server as server_routes
+from webapp import runtime, staff  # noqa: E402
 
 from utils.social import profiles, twitch
 
@@ -197,12 +197,12 @@ class SpotifyPresenceTests(unittest.TestCase):
         )
         guild = SimpleNamespace(get_member=lambda user_id: member)
         bot = SimpleNamespace(guilds=[guild])
-        previous = server_routes._discord_bot
-        server_routes._discord_bot = bot
+        previous = runtime._discord_bot
+        runtime._discord_bot = bot
         try:
-            identity = server_routes._staff_identity("42")
+            identity = staff._staff_identity("42")
         finally:
-            server_routes._discord_bot = previous
+            runtime._discord_bot = previous
 
         self.assertEqual(len(identity["activities"]), 1)
         activity = identity["activities"][0]
@@ -235,12 +235,12 @@ class SpotifyPresenceTests(unittest.TestCase):
             _user=None,
         )
         guild = SimpleNamespace(get_member=lambda user_id: member)
-        previous = server_routes._discord_bot
-        server_routes._discord_bot = SimpleNamespace(guilds=[guild])
+        previous = runtime._discord_bot
+        runtime._discord_bot = SimpleNamespace(guilds=[guild])
         try:
-            identity = server_routes._staff_identity("43")
+            identity = staff._staff_identity("43")
         finally:
-            server_routes._discord_bot = previous
+            runtime._discord_bot = previous
 
         activity = identity["activities"][0]
         self.assertIsNone(activity["start"])

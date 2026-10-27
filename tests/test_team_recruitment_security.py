@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from config.ids import OWNER_IDS
 from webapp import app
 from webapp import server as server_routes
-from webapp import team_recruitment_routes as routes
+from webapp import auth, runtime, staff  # noqa: E402
+from webapp import runtime  # noqa: E402
+from webapp.routes import team_recruitment_routes as routes
 
 
 class StaffIdentityFallbackTests(unittest.TestCase):
@@ -34,11 +36,11 @@ class StaffIdentityFallbackTests(unittest.TestCase):
                     display_avatar=SimpleNamespace(url="https://cdn.example/staff-avatar.png"),
                 )
 
-        with patch.object(server_routes, "_discord_bot", FakeBot()), patch.object(
-            server_routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
-        ), patch.dict(server_routes._staff_user_identity_cache, {}, clear=True):
-            first_identity = server_routes._staff_identity("123456789")
-            second_identity = server_routes._staff_identity("123456789")
+        with patch.object(runtime, "_discord_bot", FakeBot()), patch.object(
+            runtime, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
+        ), patch.dict(staff._staff_user_identity_cache, {}, clear=True):
+            first_identity = staff._staff_identity("123456789")
+            second_identity = staff._staff_identity("123456789")
 
         self.assertEqual([123456789], fetched_ids)
         for identity in (first_identity, second_identity):
@@ -154,7 +156,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -238,7 +240,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -316,7 +318,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -383,7 +385,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -464,7 +466,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -512,7 +514,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -578,7 +580,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -631,7 +633,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
             session["token_exp"] = time.time() + 3600
             session["csrf_token"] = "test-csrf"
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", return_value=FakePool()
         ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
             routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)
@@ -665,7 +667,7 @@ class TeamRecruitmentAuthorizationTests(unittest.TestCase):
         def unexpected_database_access():
             raise AssertionError("A non-owner reached official recruitment data")
 
-        with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+        with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
             routes, "_pool", side_effect=unexpected_database_access
         ):
             client = app.test_client()
@@ -713,7 +715,7 @@ def test_suspended_staff_cannot_be_reapproved_until_the_hold_is_lifted():
         session["token_exp"] = time.time() + 3600
         session["csrf_token"] = "test-csrf"
 
-    with patch.object(server_routes, "_current_user_blacklist_entry", return_value=None), patch.object(
+    with patch.object(auth, "_current_user_blacklist_entry", return_value=None), patch.object(
         routes, "_pool", return_value=FakePool()
     ), patch.object(routes, "_discord_bot", FakeBot()), patch.object(
         routes, "run_on_bot_loop", side_effect=lambda awaitable: asyncio.run(awaitable)

@@ -19,7 +19,8 @@ longer the critical path.
 ``discord.py`` always builds a callback as an outbound REST call, so the one
 function that does that (``AsyncWebhookAdapter.create_interaction_response``)
 is wrapped: while an interaction arrived over HTTP, the body it would have sent
-is kept and handed to ``webapp.interaction_routes`` to return in the response,
+is kept and handed to ``webapp.routes.interaction_routes`` to return in the
+response,
 and the library is given the callback response Discord would have returned.  The
 sink is a ``ContextVar``, so exactly the handler for that interaction — and the
 tasks it spawns — is captured; anything else still talks to Discord normally.

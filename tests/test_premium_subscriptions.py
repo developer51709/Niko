@@ -337,7 +337,7 @@ def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
     """The browser may choose a currency, never the amount or the term."""
     from flask import session
 
-    from webapp import premium_routes
+    from webapp.routes import premium_routes
 
     guild = SimpleNamespace(
         id=42, name="Test server", owner_id=7, get_member=lambda user_id: SimpleNamespace(id=user_id)
@@ -396,7 +396,7 @@ def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
 
 
 def test_the_webhook_rejects_a_bad_signature(monkeypatch):
-    from webapp import premium_routes
+    from webapp.routes import premium_routes
 
     monkeypatch.setattr(premium_routes, "merchant_key", lambda: "merchant-key")
     client = premium_routes.app.test_client()
@@ -406,7 +406,7 @@ def test_the_webhook_rejects_a_bad_signature(monkeypatch):
 
 
 def test_the_webhook_accepts_a_valid_signature_and_updates_status(monkeypatch):
-    from webapp import premium_routes
+    from webapp.routes import premium_routes
 
     key = "merchant-key"
     monkeypatch.setattr(premium_routes, "merchant_key", lambda: key)

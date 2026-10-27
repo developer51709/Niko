@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import utils.data_removal as removal  # noqa: E402
 from webapp import app  # noqa: E402
-from webapp import privacy_routes as routes  # noqa: E402
+from webapp.routes import privacy_routes as routes  # noqa: E402
 
 
 class SqlitePool:
@@ -262,8 +262,8 @@ def test_the_page_and_api_are_wired_together():
     root = ROOT
     router = (root / "web" / "src" / "router.ts").read_text(encoding="utf-8")
     app = (root / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
-    routes = (root / "src" / "webapp" / "privacy_routes.py").read_text(encoding="utf-8")
-    site = (root / "src" / "webapp" / "site_routes.py").read_text(encoding="utf-8")
+    routes = (root / "src" / "webapp" / "routes" / "privacy_routes.py").read_text(encoding="utf-8")
+    site = (root / "src" / "webapp" / "routes" / "site_routes.py").read_text(encoding="utf-8")
     page = (root / "web" / "src" / "pages" / "DataRemovalPage.tsx").read_text(encoding="utf-8")
 
     assert '"/data-removal"' in router

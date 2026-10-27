@@ -29,6 +29,9 @@ what ``context`` carries in:
 * ``kind="staff"`` — a team member's profile. Also a Section with a thumbnail
   accessory, but coloured with that member's own card accent and carrying their
   role, bio and links, so no two profiles read the same.
+* ``kind="applications"`` — the staff applications page. Lists the roles that
+  are open, each linked to its own form, so a reader can pick one from the
+  preview without opening the page first.
 
 A context is only ever built from data the page itself already publishes.
 
@@ -197,7 +200,10 @@ def _subject_components(context: dict, description: str, invite_url: str) -> lis
     """A page about a subject rather than about Niko.
 
     No branded card and no page title block: the subject leads, with its own
-    thumbnail, and the button row still closes the embed.
+    thumbnail, and the button row still closes the embed. A subject that lists
+    things — the open staff roles on the applications page — puts each entry in
+    its own text display below the introduction, so the list reads as a list
+    instead of running into the paragraph above it.
     """
     lines = [f"# {context['name']}"]
     if context.get("section"):
@@ -205,11 +211,12 @@ def _subject_components(context: dict, description: str, invite_url: str) -> lis
     if description:
         lines.append(description)
     lines.extend(line for line in context.get("lines", ()) if line)
-    return [
-        _section("\n".join(lines), context.get("thumbnail")),
-        {"type": SEPARATOR},
-        _link_buttons(invite_url),
-    ]
+    components = [_section("\n".join(lines), context.get("thumbnail"))]
+    entries = [entry for entry in context.get("list", ()) if entry]
+    if entries:
+        components.append({"type": TEXT_DISPLAY, "content": "\n".join(entries)})
+    components.extend(({"type": SEPARATOR}, _link_buttons(invite_url)))
+    return components
 
 
 def component_embed_payload(
