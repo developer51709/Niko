@@ -507,7 +507,12 @@ class ServerLogger(commands.Cog):
         )
         try:
             await log_channel_limiter.acquire((guild.id, pending.channel_id))
-            await pending.message.edit(view=view)
+            # An edit defaults to allowing every mention in the new render, and
+            # the merged body names roles and members. Without this the bot
+            # pings every role the entry mentions, once per merged change.
+            await pending.message.edit(
+                view=view, allowed_mentions=discord.AllowedMentions.none()
+            )
         except Exception as e:
             logging.warning(
                 "logging_cog",

@@ -142,22 +142,41 @@ def api_premium_plans():
 @app.route("/api/premium/gift-targets")
 @require_auth
 def api_premium_gift_targets():
-    """Servers the signed-in member belongs to, with their premium state.
+    """Every mutual server the signed-in member belongs to, with premium state.
 
-    Gifting only needs membership, not Manage Server, so this reads the
-    gateway's member cache instead of the OAuth manage list.
+    Gifting needs membership rather than Manage Server, so the manage list is
+    the wrong source. The gateway's member cache is the wrong source too: it
+    only holds the members a guild has been chunked with, so a large server the
+    member is in silently vanished from the gift page. The member's own OAuth
+    guild list covers every server they are in, and intersecting it with the
+    guilds Niko is in gives exactly the mutual servers a gift can be bought
+    for.
     """
     user_id = _user_id()
     if user_id is None:
         return jsonify({"error": "Not authenticated"}), 401
     if _discord_bot is None:
         return jsonify({"error": "The Discord bot is not available."}), 503
+    try:
+        joined = member_guilds(session.get("access_token", ""))
+    except Exception as exc:
+        if getattr(exc, "status", 0) == 401:
+            return jsonify({
+                "error": "Your Discord session expired. Sign in again to load your servers.",
+                "login_url": "/auth/login",
+            }), 401
+        return jsonify({"error": "Your servers could not be loaded right now."}), 503
+
+    mutual_ids = {
+        str(guild["id"]) for guild in joined if guild.get("id")
+    } & {str(guild_id) for guild_id in bot_guild_ids()}
 
     async def collect():
         bot = _billing_bot()
         rows = []
-        for guild in bot.guilds:
-            if guild.get_member(user_id) is None:
+        for guild_id in mutual_ids:
+            guild = bot.get_guild(int(guild_id))
+            if guild is None:
                 continue
             sub = await billing.get_subscription(bot.cxn, guild.id)
             rows.append({

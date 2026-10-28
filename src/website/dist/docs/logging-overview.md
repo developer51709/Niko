@@ -6,7 +6,7 @@ Niko's logging system provides comprehensive server event logging across ten cat
 
 | Category | Events Logged |
 |----------|--------------|
-| **Moderation** | Kicks, bans, unbans, timeouts applied/removed, nickname changes by staff |
+| **Moderation** | Kicks, bans, unbans, timeouts applied/removed, nickname changes by staff, giveaway bans and unbans |
 | **AutoMod** | Niko's own filters (spam, links, bad words, mass mentions, anti-nuke, anti-raid) and rules fired by Discord's native AutoMod |
 | **Messages** | Message edits, message deletions (images inline, other attachments re-uploaded), bulk clears and purges |
 | **Channels** | Channel and thread create/delete/update, permission overwrite changes, webhook changes, pinned and unpinned messages, plus restore/revert buttons |
@@ -77,6 +77,7 @@ Edits respect the same per-channel rate limit as new entries, and a merged entry
 - **Profile Banner Updated** — The global profile banner changed; both banners are archived on the entry
 - **Role Changes** — Roles added and removed, plus the staff member who changed them (read from the audit log)
 - **Nickname Changes** — Old and new nickname, attributed to the staff member who changed it
+- **Giveaway Ban / Unban** — A member was kept out of (or let back into) every giveaway in the server, with the staff member who did it and how many open entries the ban removed. It is logged under **Moderation** rather than Members because the member keeps their access to the server
 
 ## Message Logging
 

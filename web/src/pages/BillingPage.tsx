@@ -316,7 +316,7 @@ export function BillingPage() {
                     </p>
                   ) : (
                     <div className="billing-targets" role="radiogroup" aria-label="Server">
-                      {targets.slice(0, 8).map((target) => (
+                      {targets.map((target) => (
                         <button
                           key={target.id}
                           type="button"
