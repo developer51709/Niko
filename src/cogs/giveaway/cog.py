@@ -10,6 +10,26 @@ from utils.prefix_manager import get_prefixes
 _ACTIVE_GIVEAWAY_FILTER = "(ended = 0 OR ended = FALSE)"
 
 
+def _reply_card(*, ok: bool, title: str, body: str) -> discord.ui.LayoutView:
+    """Components v2 reply card for the ban and unban commands.
+
+    These two commands answered in plain text, and the success reply prefixed
+    the message with ``get_emoji('check')`` — a key the catalog does not have
+    (it is ``tick``), so a successful ban or unban began with the literal word
+    "None". The card uses the status glyph the rest of the bot uses and an
+    accent colour that says whether the action went through, matching the
+    giveaway panels instead of a bare message.
+    """
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(
+            content=f"### {get_emoji('tick') if ok else get_emoji('cross')} {title}\n{body}"
+        ),
+        accent_colour=discord.Color.green() if ok else discord.Color.red(),
+    ))
+    return view
+
+
 class Giveaway(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -252,7 +272,9 @@ class Giveaway(commands.Cog):
     async def ban(self, ctx, member: discord.Member):
         """Ban a member from joining giveaways in this server."""
         if member.bot:
-            return await ctx.send(f"{get_emoji('cross')} {msg(ctx, 'join_bot')}")
+            return await ctx.send(view=_reply_card(
+                ok=False, title="Giveaway ban", body=msg(ctx, "join_bot")
+            ))
 
         guild_id = ctx.guild.id
         existing = await self.bot.cxn.fetchval(
@@ -260,9 +282,10 @@ class Giveaway(commands.Cog):
             guild_id, member.id,
         )
         if existing is not None:
-            return await ctx.send(
-                f"{get_emoji('cross')} {msg(ctx, 'ban_already', user=member.display_name)}"
-            )
+            return await ctx.send(view=_reply_card(
+                ok=False, title="Giveaway ban",
+                body=msg(ctx, "ban_already", user=member.display_name),
+            ))
 
         await self.bot.cxn.execute(
             "INSERT INTO giveaway_bans (guild_id, user_id, banned_by, created_at) "
@@ -273,9 +296,10 @@ class Giveaway(commands.Cog):
         # Existing entries would still be eligible at the draw, so a ban also
         # removes what the member already holds.
         cleared = await self._clear_entries(guild_id, member.id)
-        await ctx.send(
-            f"{get_emoji('check')} {msg(ctx, 'ban_success', user=member.display_name, count=cleared)}"
-        )
+        await ctx.send(view=_reply_card(
+            ok=True, title="Giveaway ban",
+            body=msg(ctx, "ban_success", user=member.display_name, count=cleared),
+        ))
         await self._log_ban_change(ctx, member, banned=True, cleared=cleared)
 
     @giveaway.command(name="unban")
@@ -288,17 +312,19 @@ class Giveaway(commands.Cog):
             guild_id, member.id,
         )
         if existing is None:
-            return await ctx.send(
-                f"{get_emoji('cross')} {msg(ctx, 'unban_not_banned', user=member.display_name)}"
-            )
+            return await ctx.send(view=_reply_card(
+                ok=False, title="Giveaway unban",
+                body=msg(ctx, "unban_not_banned", user=member.display_name),
+            ))
 
         await self.bot.cxn.execute(
             "DELETE FROM giveaway_bans WHERE guild_id = $1 AND user_id = $2",
             guild_id, member.id,
         )
-        await ctx.send(
-            f"{get_emoji('check')} {msg(ctx, 'unban_success', user=member.display_name)}"
-        )
+        await ctx.send(view=_reply_card(
+            ok=True, title="Giveaway unban",
+            body=msg(ctx, "unban_success", user=member.display_name),
+        ))
         await self._log_ban_change(ctx, member, banned=False)
 
     # ─── BACKGROUND TASK ─────────────────────────────────────

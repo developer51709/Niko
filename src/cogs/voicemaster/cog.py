@@ -12,6 +12,7 @@ from utils import logging
 import utils.emojis as E
 from config.emojis import get_emoji
 from config import links
+from .messages import command_help, language_of, msg, text
 
 COLOR_DEFAULT = 0xFFFFFF
 COLOR_SUCCESS = 0x00CC66
@@ -32,21 +33,22 @@ def make_container(text: str, accent: int = COLOR_DEFAULT) -> ui.LayoutView:
 
 
 class DisconnectMemberSelect(discord.ui.Select):
-    def __init__(self, members: list):
+    def __init__(self, members: list, lang: str = "en"):
         options = [
             discord.SelectOption(
                 label=member.display_name,
-                description=f"Disconnect {member.display_name}",
+                description=text(lang, "disconnect_option", user=member.display_name),
                 value=str(member.id)
             )
             for member in members[:25]
         ]
         super().__init__(
-            placeholder="Choose members to disconnect...",
+            placeholder=text(lang, "disconnect_placeholder"),
             min_values=1,
             max_values=min(len(options), 25),
             options=options
         )
+        self.lang = lang
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -62,42 +64,62 @@ class DisconnectMemberSelect(discord.ui.Select):
 
             parts = []
             if disconnected:
-                parts.append(f"{get_emoji('tick')} Disconnected: {', '.join(disconnected)}")
+                parts.append(
+                    f"{get_emoji('tick')} "
+                    f"{text(self.lang, 'disconnect_done', users=', '.join(disconnected))}"
+                )
             if failed:
-                parts.append(f"{get_emoji('cross')} Failed: {', '.join(failed)}")
+                parts.append(
+                    f"{get_emoji('cross')} "
+                    f"{text(self.lang, 'disconnect_failed', users=', '.join(failed))}"
+                )
 
-            msg = "\n".join(parts) or f"{get_emoji('cross')} No members were disconnected."
+            body = "\n".join(parts) or (
+                f"{get_emoji('cross')} {text(self.lang, 'disconnect_none')}"
+            )
             await interaction.response.edit_message(
                 content=None,
-                view=make_container(f"-# {msg}")
+                view=make_container(f"-# {body}")
             )
         except Exception as e:
             logging.error("VoiceMaster", f"Disconnect callback error: {e}")
             await interaction.response.edit_message(
                 content=None,
-                view=make_container(f"-# {get_emoji('cross')} An error occurred.", accent=COLOR_ERROR)
+                view=make_container(
+                    f"-# {get_emoji('cross')} {text(self.lang, 'error_generic')}",
+                    accent=COLOR_ERROR,
+                )
             )
 
 
 class DisconnectMemberView(discord.ui.View):
-    def __init__(self, members: list, owner: discord.Member):
+    def __init__(self, members: list, owner: discord.Member, lang: str = "en"):
         super().__init__(timeout=60)
-        self.add_item(DisconnectMemberSelect(members))
+        self.add_item(DisconnectMemberSelect(members, lang))
 
 
-INTERFACE_TITLE = "## VoiceMaster | Interface"
+def _interface_commands(lang: str) -> str:
+    """The legend under the panel title.
 
-INTERFACE_COMMANDS = (
-    f"{get_emoji('lock')} — [`Lock`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('unlock')} — [`Unlock`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('hide')} — [`Hide`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('unhide')} — [`Reveal`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('owner_icon')} — [`Claim`]({SUPPORT_URL}) the voice channel\n"
-    f"{get_emoji('disconnect')} — [`Disconnect`]({SUPPORT_URL}) a member\n"
-    f"{get_emoji('question')} — [`View`]({SUPPORT_URL}) channel information\n"
-    f"{get_emoji('plus')} — [`Increase`]({SUPPORT_URL}) the user limit\n"
-    f"{get_emoji('minus')} — [`Decrease`]({SUPPORT_URL}) the user limit"
-)
+    Command names stay as written — they are literal commands — while the
+    description beside each one follows the guild's language.
+    """
+    rows = (
+        ("lock", "Lock", "interface_lock"),
+        ("unlock", "Unlock", "interface_unlock"),
+        ("hide", "Hide", "interface_hide"),
+        ("unhide", "Reveal", "interface_reveal"),
+        ("owner_icon", "Claim", "interface_claim"),
+        ("disconnect", "Disconnect", "interface_disconnect"),
+        ("question", "View", "interface_view"),
+        ("plus", "Increase", "interface_increase"),
+        ("minus", "Decrease", "interface_decrease"),
+    )
+    return "\n".join(
+        f"{get_emoji(emoji)} — [`{label}`]({SUPPORT_URL}) {text(lang, key)}"
+        for emoji, label, key in rows
+    )
+
 
 async def success(ctx: commands.Context, message: str):
     view = discord.ui.LayoutView()
@@ -123,7 +145,7 @@ async def fail(ctx: commands.Context, message: str):
 
 
 class VoiceMasterInterface(discord.ui.LayoutView):
-    def __init__(self):
+    def __init__(self, lang: str = "en"):
         super().__init__(timeout=None)
 
         btn_lock       = discord.ui.Button(emoji=get_emoji('lock'),       style=discord.ButtonStyle.gray, custom_id="lock")
@@ -148,9 +170,9 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         btn_decrease.callback   = self._on_decrease
 
         container = ui.Container()
-        container.add_item(ui.TextDisplay(INTERFACE_TITLE))
+        container.add_item(ui.TextDisplay(f"## {text(lang, 'interface_title')}"))
         container.add_item(ui.Separator())
-        container.add_item(ui.TextDisplay(INTERFACE_COMMANDS))
+        container.add_item(ui.TextDisplay(_interface_commands(lang)))
         container.add_item(ui.Separator())
         container.add_item(ui.ActionRow(btn_lock, btn_unlock, btn_ghost, btn_reveal, btn_claim))
         container.add_item(ui.ActionRow(btn_disconnect, btn_info, btn_increase, btn_decrease))
@@ -187,19 +209,28 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         members = [m for m in channel.members if m != interaction.user and not m.bot]
         if not members:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('cross')} No members to disconnect.", accent=COLOR_ERROR),
+                view=make_container(
+                    f"-# {get_emoji('cross')} "
+                    f"{msg(interaction, 'interface_no_members_to_disconnect')}",
+                    accent=COLOR_ERROR,
+                ),
                 ephemeral=True
             )
             return
         await interaction.response.send_message(
-            view=DisconnectMemberView(members, interaction.user),
+            view=DisconnectMemberView(
+                members, interaction.user, language_of(interaction)
+            ),
             ephemeral=True
         )
 
     async def _resolve(self, interaction: discord.Interaction, *, owner_required: bool = True):
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('cross')} You must be in a voice channel.", accent=COLOR_ERROR),
+                view=make_container(
+                    f"-# {get_emoji('cross')} {msg(interaction, 'interface_not_in_voice')}",
+                    accent=COLOR_ERROR,
+                ),
                 ephemeral=True
             )
             return None, None, True
@@ -207,7 +238,10 @@ class VoiceMasterInterface(discord.ui.LayoutView):
         cog = interaction.client.get_cog("VoiceMaster")
         if not cog:
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('cross')} VoiceMaster is not available.", accent=COLOR_ERROR),
+                view=make_container(
+                    f"-# {get_emoji('cross')} {msg(interaction, 'interface_unavailable')}",
+                    accent=COLOR_ERROR,
+                ),
                 ephemeral=True
             )
             return None, None, True
@@ -216,7 +250,10 @@ class VoiceMasterInterface(discord.ui.LayoutView):
 
         if owner_required and not await cog.is_channel_owner(interaction.user.id, channel.id):
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('cross')} You don't own this voice channel.", accent=COLOR_ERROR),
+                view=make_container(
+                    f"-# {get_emoji('cross')} {msg(interaction, 'interface_not_owner')}",
+                    accent=COLOR_ERROR,
+                ),
                 ephemeral=True
             )
             return None, None, True
@@ -236,50 +273,77 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             if action == "lock":
                 await cog.lock_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('lock')} Voice channel locked.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('lock')} {msg(interaction, 'action_locked')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
             elif action == "unlock":
                 await cog.unlock_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('unlock')} Voice channel unlocked.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('unlock')} {msg(interaction, 'action_unlocked')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
             elif action == "ghost":
                 await cog.ghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('hide')} Voice channel hidden.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('hide')} {msg(interaction, 'action_hidden')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
             elif action == "unghost":
                 await cog.unghost_channel(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('unhide')} Voice channel revealed.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('unhide')} {msg(interaction, 'action_revealed')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
             elif action == "claim":
                 if await cog.claim_channel(channel, interaction.user):
                     await interaction.response.send_message(
-                        view=make_container(f"-# {get_emoji('owner_icon')} Voice channel claimed.", accent=COLOR_SUCCESS), ephemeral=True
+                        view=make_container(
+                            f"-# {get_emoji('owner_icon')} {msg(interaction, 'action_claimed')}",
+                            accent=COLOR_SUCCESS,
+                        ), ephemeral=True
                     )
                 else:
                     await interaction.response.send_message(
-                        view=make_container(f"-# {get_emoji('cross')} Cannot claim this channel.", accent=COLOR_ERROR), ephemeral=True
+                        view=make_container(
+                            f"-# {get_emoji('cross')} {msg(interaction, 'action_claim_failed')}",
+                            accent=COLOR_ERROR,
+                        ), ephemeral=True
                     )
             elif action == "info":
                 await interaction.response.send_message(
-                    view=await cog.get_channel_info(channel), ephemeral=True
+                    view=await cog.get_channel_info(channel, interaction), ephemeral=True
                 )
             elif action == "increase_limit":
                 await cog.increase_limit(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('plus')} User limit increased.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('plus')} {msg(interaction, 'action_limit_increased')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
             elif action == "decrease_limit":
                 await cog.decrease_limit(channel, interaction.user)
                 await interaction.response.send_message(
-                    view=make_container(f"-# {get_emoji('minus')} User limit decreased.", accent=COLOR_SUCCESS), ephemeral=True
+                    view=make_container(
+                        f"-# {get_emoji('minus')} {msg(interaction, 'action_limit_decreased')}",
+                        accent=COLOR_SUCCESS,
+                    ), ephemeral=True
                 )
         except Exception as exc:
             logging.error("VoiceMaster", f"Interface action '{action}' error: {exc}")
             await interaction.response.send_message(
-                view=make_container(f"-# {get_emoji('cross')} An error occurred.", accent=COLOR_ERROR), ephemeral=True
+                view=make_container(
+                    f"-# {get_emoji('cross')} {msg(interaction, 'error_generic')}",
+                    accent=COLOR_ERROR,
+                ), ephemeral=True
             )
 
 
@@ -288,7 +352,8 @@ async def _allow_setup_interaction(ctx: commands.Context, interaction: discord.I
     if interaction.user.id != ctx.author.id:
         await interaction.response.send_message(
             view=make_container(
-                f"-# {get_emoji('cross')} Only {ctx.author.mention} can use this setup prompt.",
+                f"-# {get_emoji('cross')} "
+                f"{msg(interaction, 'setup_only_author', user=ctx.author.mention)}",
                 accent=COLOR_ERROR,
             ),
             ephemeral=True,
@@ -297,7 +362,7 @@ async def _allow_setup_interaction(ctx: commands.Context, interaction: discord.I
     if not interaction.user.guild_permissions.manage_guild:
         await interaction.response.send_message(
             view=make_container(
-                f"-# {get_emoji('cross')} You need the **Manage Server** permission to configure VoiceMaster.",
+                f"-# {get_emoji('cross')} {msg(interaction, 'setup_needs_manage')}",
                 accent=COLOR_ERROR,
             ),
             ephemeral=True,
@@ -306,16 +371,21 @@ async def _allow_setup_interaction(ctx: commands.Context, interaction: discord.I
     return True
 
 
-def _setup_success_view(join_channel: discord.VoiceChannel, category, prefix: str) -> ui.LayoutView:
+def _setup_success_view(join_channel: discord.VoiceChannel, category, prefix: str,
+                        context) -> ui.LayoutView:
     view = ui.LayoutView(timeout=None)
     container = ui.Container(accent_color=COLOR_SUCCESS)
-    container.add_item(ui.TextDisplay(f"## {get_emoji('tick')} VoiceMaster Setup Complete"))
-    container.add_item(ui.Separator())
     container.add_item(ui.TextDisplay(
-        f"**Join Channel:** {join_channel.mention}\n"
-        f"**Category:** {category.name if category else 'No category'}\n\n"
-        f"-# Use `{prefix}voicemaster sendinterface` to send the control panel."
+        f"## {get_emoji('tick')} {msg(context, 'setup_success_title')}"
     ))
+    container.add_item(ui.Separator())
+    container.add_item(ui.TextDisplay(msg(
+        context,
+        "setup_success_body",
+        channel=join_channel.mention,
+        category=category.name if category else msg(context, "setup_no_category"),
+        prefix=prefix,
+    )))
     view.add_item(container)
     return view
 
@@ -326,12 +396,13 @@ class VoiceMasterChannelSelect(ui.Select):
             discord.SelectOption(
                 label=channel.name[:100],
                 value=str(channel.id),
-                description=(f"Category: {channel.category.name}" if channel.category else "No category")[:100],
+                description=(msg(ctx, "channel_select_category", category=channel.category.name)
+                             if channel.category else msg(ctx, "setup_no_category"))[:100],
             )
             for channel in channels[:25]
         ]
         super().__init__(
-            placeholder="Select the voice channel to use...",
+            placeholder=msg(ctx, "channel_select_placeholder"),
             min_values=1,
             max_values=1,
             options=options,
@@ -344,7 +415,8 @@ class VoiceMasterChannelSelect(ui.Select):
         channel = interaction.guild.get_channel(int(self.values[0]))
         if not isinstance(channel, discord.VoiceChannel):
             await interaction.edit_original_response(view=make_container(
-                f"-# {get_emoji('cross')} That voice channel is no longer available.", accent=COLOR_ERROR
+                f"-# {get_emoji('cross')} {msg(interaction, 'channel_select_unavailable')}",
+                accent=COLOR_ERROR,
             ))
             return
         try:
@@ -352,11 +424,14 @@ class VoiceMasterChannelSelect(ui.Select):
         except Exception as exc:
             logging.error("VoiceMaster", f"Existing-channel setup error: {exc}")
             await interaction.edit_original_response(view=make_container(
-                f"-# {get_emoji('cross')} Failed to save that channel. Please check my permissions.", accent=COLOR_ERROR
+                f"-# {get_emoji('cross')} {msg(interaction, 'channel_select_save_failed')}",
+                accent=COLOR_ERROR,
             ))
             return
         await interaction.edit_original_response(
-            view=_setup_success_view(channel, channel.category, self.ctx.prefix)
+            view=_setup_success_view(
+                channel, channel.category, self.ctx.prefix, self.ctx
+            )
         )
 
 
@@ -365,13 +440,11 @@ class VoiceMasterChannelSelectView(ui.LayoutView):
         super().__init__(timeout=180)
         self.ctx = ctx
         container = ui.Container(
-            ui.TextDisplay(f"## {BOT_NAME} | Choose a hub channel"),
-            ui.Separator(),
             ui.TextDisplay(
-                "Pick the voice channel members should join to get their own temporary channel. "
-                "New channels are created in that channel's category.\n\n"
-                f"-# Run `{ctx.prefix}voicemaster setup` again to have Niko create a new one instead."
+                f"## {BOT_NAME} | {msg(ctx, 'channel_select_title')}"
             ),
+            ui.Separator(),
+            ui.TextDisplay(msg(ctx, "channel_select_body", prefix=ctx.prefix)),
             ui.Separator(),
             ui.ActionRow(VoiceMasterChannelSelect(cog, ctx, channels)),
             accent_color=COLOR_DEFAULT,
@@ -391,30 +464,26 @@ class VoiceMasterSetupView(ui.LayoutView):
         self.ctx = ctx
 
         btn_create = ui.Button(
-            label="Create a new channel", style=discord.ButtonStyle.success, custom_id="vm_setup_create"
+            label=msg(ctx, "setup_create_channel"),
+            style=discord.ButtonStyle.success,
+            custom_id="vm_setup_create",
         )
         btn_existing = ui.Button(
-            label="Use an existing channel", style=discord.ButtonStyle.secondary, custom_id="vm_setup_existing"
+            label=msg(ctx, "setup_use_existing"),
+            style=discord.ButtonStyle.secondary,
+            custom_id="vm_setup_existing",
         )
         btn_create.callback = self._create_new_channel
         btn_existing.callback = self._choose_existing_channel
 
-        current = ""
+        body = msg(ctx, "setup_body")
         if current_hub is not None:
-            current = (
-                f"\n\n-# VoiceMaster is currently using {current_hub.mention}. "
-                "Running setup again replaces that choice."
-            )
+            body += "\n\n-# " + msg(ctx, "setup_current_hub", channel=current_hub.mention)
 
         container = ui.Container(
-            ui.TextDisplay(f"## {BOT_NAME} | VoiceMaster Setup"),
+            ui.TextDisplay(f"## {BOT_NAME} | {msg(ctx, 'setup_title')}"),
             ui.Separator(),
-            ui.TextDisplay(
-                "VoiceMaster gives every member their own temporary voice channel. "
-                "When someone joins your **hub** channel, Niko creates a channel for them and deletes it once it is empty.\n\n"
-                "Would you like Niko to create a hub channel for you, or would you like to use a channel you already have?"
-                f"{current}"
-            ),
+            ui.TextDisplay(body),
             ui.Separator(),
             ui.ActionRow(btn_create, btn_existing),
             accent_color=COLOR_DEFAULT,
@@ -433,12 +502,12 @@ class VoiceMasterSetupView(ui.LayoutView):
         except Exception as exc:
             logging.error("VoiceMaster", f"Setup error: {exc}")
             await interaction.edit_original_response(view=make_container(
-                f"-# {get_emoji('cross')} Failed to set up VoiceMaster. Please check my permissions.",
+                f"-# {get_emoji('cross')} {msg(interaction, 'setup_failed')}",
                 accent=COLOR_ERROR,
             ))
             return
         await interaction.edit_original_response(
-            view=_setup_success_view(channel, category, self.ctx.prefix)
+            view=_setup_success_view(channel, category, self.ctx.prefix, self.ctx)
         )
 
     async def _choose_existing_channel(self, interaction: discord.Interaction):
@@ -446,8 +515,7 @@ class VoiceMasterSetupView(ui.LayoutView):
         if not channels:
             await interaction.response.send_message(
                 view=make_container(
-                    f"-# {get_emoji('cross')} This server has no voice channels yet. "
-                    "Choose **Create a new channel** instead.",
+                    f"-# {get_emoji('cross')} {msg(interaction, 'setup_no_voice_channels')}",
                     accent=COLOR_ERROR,
                 ),
                 ephemeral=True,
@@ -615,7 +683,9 @@ class VoiceMaster(commands.Cog):
         current = channel.user_limit
         await channel.edit(user_limit=0 if current <= 1 else current - 1)
 
-    async def get_channel_info(self, channel: discord.VoiceChannel) -> ui.LayoutView:
+    async def get_channel_info(self, channel: discord.VoiceChannel,
+                               context=None) -> ui.LayoutView:
+        """The channel card, in the language of whoever asked for it."""
         owner_id = await self.bot.cxn.fetchval(
             "SELECT owner_id FROM voicemaster_channels WHERE channel_id = $1", channel.id
         )
@@ -624,19 +694,29 @@ class VoiceMaster(commands.Cog):
         perms = channel.overwrites_for(channel.guild.default_role)
         status_parts = []
         if perms.connect is False:
-            status_parts.append("Locked")
+            status_parts.append(msg(context, "info_locked"))
         if perms.view_channel is False:
-            status_parts.append("Hidden")
-        ch_status = " · ".join(status_parts) if status_parts else "Open"
+            status_parts.append(msg(context, "info_hidden"))
+        ch_status = " · ".join(status_parts) if status_parts else msg(context, "info_open")
+
+        limit = str(channel.user_limit) if channel.user_limit else msg(context, "info_no_limit")
+        region = (
+            str(channel.rtc_region).title() if channel.rtc_region
+            else msg(context, "info_automatic")
+        )
 
         details = []
         if owner:
-            details.append(f"> - **Owner:** {owner.mention}")
-        details.append(f"> - **Members:** {len(channel.members)}")
-        details.append(f"> - **Limit:** {channel.user_limit if channel.user_limit else 'No limit'}")
-        details.append(f"> - **Bitrate:** {channel.bitrate // 1000} kbps")
-        details.append(f"> - **Region:** {str(channel.rtc_region).title() if channel.rtc_region else 'Automatic'}")
-        details.append(f"> - **Status:** {ch_status}")
+            details.append(f"> - **{msg(context, 'info_owner')}:** {owner.mention}")
+        details.append(
+            f"> - **{msg(context, 'info_members')}:** {len(channel.members)}"
+        )
+        details.append(f"> - **{msg(context, 'info_limit')}:** {limit}")
+        details.append(
+            f"> - **{msg(context, 'info_bitrate')}:** {channel.bitrate // 1000} kbps"
+        )
+        details.append(f"> - **{msg(context, 'info_region')}:** {region}")
+        details.append(f"> - **{msg(context, 'info_status')}:** {ch_status}")
 
         view = ui.LayoutView(timeout=None)
         container = ui.Container(accent_color=COLOR_DEFAULT)
@@ -665,7 +745,7 @@ class VoiceMaster(commands.Cog):
     @decorators.group(
         name="voicemaster",
         aliases=["j2c", "vm", "join2create"],
-        help="Create and manage temporary voice channels in your server."
+        help=command_help("group"),
     )
     @checks.cooldown()
     async def _voicemaster(self, ctx):
@@ -674,23 +754,19 @@ class VoiceMaster(commands.Cog):
             container = ui.Container()
             container.add_item(ui.TextDisplay(f"## {BOT_NAME} | VoiceMaster"))
             container.add_item(ui.Separator())
-            container.add_item(ui.TextDisplay(
-                "Create and manage temporary voice channels in your server.\n\n"
-                "**Getting Started**\n"
-                f"-# Use `voicemaster setup` to configure VoiceMaster for your server\n\n"
-                "**Popular Commands**\n"
-                f"-# `voicemaster lock` — Lock your channel\n"
-                f"-# `voicemaster claim` — Claim an inactive channel\n"
-                f"-# `voicemaster limit <number>` — Set user limit"
-            ))
+            container.add_item(ui.TextDisplay(msg(ctx, "help_body")))
             container.add_item(ui.Separator())
             container.add_item(ui.ActionRow(
-                ui.Button(label="Support", style=discord.ButtonStyle.link, url=SUPPORT_URL),
+                ui.Button(
+                    label=msg(ctx, "help_support_button"),
+                    style=discord.ButtonStyle.link,
+                    url=SUPPORT_URL,
+                ),
             ))
             view.add_item(container)
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @_voicemaster.command(help="Configure VoiceMaster for your server")
+    @_voicemaster.command(help=command_help("setup"))
     @checks.has_perms(manage_guild=True)
     async def setup(self, ctx):
         current_hub = None
@@ -702,12 +778,12 @@ class VoiceMaster(commands.Cog):
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
-    @_voicemaster.command(help="Send the VoiceMaster control panel")
+    @_voicemaster.command(help=command_help("sendinterface"))
     @checks.has_perms(manage_guild=True)
     async def sendinterface(self, ctx):
-        await ctx.send(view=VoiceMasterInterface())
+        await ctx.send(view=VoiceMasterInterface(language_of(ctx)))
 
-    @_voicemaster.command(help="Reset VoiceMaster configuration for this server")
+    @_voicemaster.command(help=command_help("reset"))
     @checks.has_perms(manage_guild=True)
     async def reset(self, ctx):
         try:
@@ -737,34 +813,45 @@ class VoiceMaster(commands.Cog):
             await self.bot.cxn.execute("DELETE FROM voicemaster_settings WHERE guild_id = $1", ctx.guild.id)
             self._bust_cache(ctx.guild.id)
 
-            await success(ctx, f"{get_emoji('refresh')} VoiceMaster has been reset.")
+            await success(ctx, f"{get_emoji('refresh')} {msg(ctx, 'reset_success')}")
         except Exception as e:
             logging.error("VoiceMaster", f"Reset error: {e}")
-            await fail(ctx, "Failed to reset VoiceMaster.")
+            await fail(ctx, msg(ctx, "reset_failed"))
 
-    @_voicemaster.command(help="Set the category for temporary voice channels")
+    @_voicemaster.command(help=command_help("category"))
     @checks.has_perms(manage_guild=True)
-    async def category(self, ctx, cat: discord.CategoryChannel = None):
+    async def category(
+        self,
+        ctx,
+        cat: discord.CategoryChannel = commands.parameter(
+            default=None,
+            description="Category for new voice channels; leave empty to create them without one.",
+        ),
+    ):
         try:
             await self.bot.cxn.execute(
                 "UPDATE voicemaster_settings SET category_id = $1 WHERE guild_id = $2",
                 cat.id if cat else None, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            msg = f"{get_emoji('categories')} Voice channels will be created in: **{cat.name}**" if cat \
-                else f"{get_emoji('categories')} Voice channels will be created without a specific category."
-            await success(ctx, msg)
+            line = (
+                f"{get_emoji('categories')} "
+                f"{msg(ctx, 'category_set', category=cat.name)}"
+                if cat else
+                f"{get_emoji('categories')} {msg(ctx, 'category_cleared')}"
+            )
+            await success(ctx, line)
         except Exception as e:
             logging.error("VoiceMaster", f"Category error: {e}")
-            await fail(ctx, "Failed to set category.")
+            await fail(ctx, msg(ctx, "category_failed"))
 
-    @_voicemaster.group(help="Configure default settings for new voice channels")
+    @_voicemaster.group(help=command_help("default"))
     @checks.has_perms(manage_guild=True)
     async def default(self, ctx):
         if not ctx.invoked_subcommand:
             settings = await self.get_guild_settings(ctx.guild.id)
             if not settings:
-                await fail(ctx, "VoiceMaster is not set up. Use `voicemaster setup` first.")
+                await fail(ctx, msg(ctx, "default_not_set_up"))
                 return
 
             default_limit   = settings.get('default_limit', 0)
@@ -773,55 +860,82 @@ class VoiceMaster(commands.Cog):
 
             view = ui.LayoutView(timeout=None)
             container = ui.Container(accent_color=COLOR_DEFAULT)
-            container.add_item(ui.TextDisplay(f"## {BOT_NAME} | Default Settings"))
+            container.add_item(ui.TextDisplay(
+                f"## {BOT_NAME} | {msg(ctx, 'defaults_title')}"
+            ))
             container.add_item(ui.Separator())
             container.add_item(ui.TextDisplay(
-                f"**{get_emoji('edit')} Default Name:** {default_name}\n"
-                f"**{E.LIMIT} Default Limit:** {default_limit or 'No limit'}\n"
-                f"**{E.BITRATE} Default Bitrate:** {default_bitrate} kbps"
+                f"**{get_emoji('edit')} {msg(ctx, 'defaults_name')}:** {default_name}\n"
+                f"**{E.LIMIT} {msg(ctx, 'defaults_limit')}:** "
+                f"{default_limit or msg(ctx, 'no_limit')}\n"
+                f"**{E.BITRATE} {msg(ctx, 'defaults_bitrate')}:** {default_bitrate} kbps"
             ))
             view.add_item(container)
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @default.command(name="name", help="Set default name for new voice channels")
+    @default.command(name="name", help=command_help("default_name"))
     @checks.has_perms(manage_guild=True)
-    async def default_name(self, ctx, *, name: str):
+    async def default_name(
+        self,
+        ctx,
+        *,
+        name: str = commands.parameter(
+            description="Default channel name. {user} is replaced with the member name.",
+        ),
+    ):
         if len(name) > 100:
-            await fail(ctx, "Default name must be 100 characters or less.")
+            await fail(ctx, msg(ctx, "default_name_too_long"))
             return
         try:
             await self.bot.cxn.execute(
                 "UPDATE voicemaster_settings SET default_name = $1 WHERE guild_id = $2", name, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            await success(ctx, f"{get_emoji('edit')} Default channel name set to: **{name}**")
+            await success(
+                ctx,
+                f"{get_emoji('edit')} {msg(ctx, 'default_name_set', name=name)}",
+            )
         except Exception as e:
             logging.error("VM", f"Default name error: {e}")
-            await fail(ctx, "Failed to set default name.")
+            await fail(ctx, msg(ctx, "default_name_failed"))
 
-    @default.command(name="limit", help="Set default user limit for new voice channels")
+    @default.command(name="limit", help=command_help("default_limit"))
     @checks.has_perms(manage_guild=True)
-    async def default_limit(self, ctx, limit: int):
+    async def default_limit(
+        self,
+        ctx,
+        limit: int = commands.parameter(
+            description="Default user limit, 0 for no limit (max 99).",
+        ),
+    ):
         if limit < 0 or limit > 99:
-            await fail(ctx, "Limit must be between 0 and 99.")
+            await fail(ctx, msg(ctx, "default_limit_invalid"))
             return
         try:
             await self.bot.cxn.execute(
                 "UPDATE voicemaster_settings SET default_limit = $1 WHERE guild_id = $2", limit, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            msg = f"{E.LIMIT} Default user limit set to: **No limit**" if limit == 0 \
-                else f"{E.LIMIT} Default user limit set to: **{limit}**"
-            await success(ctx, msg)
+            value = msg(ctx, "no_limit") if limit == 0 else str(limit)
+            await success(
+                ctx,
+                f"{E.LIMIT} {msg(ctx, 'default_limit_set', value=value)}",
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Default limit error: {e}")
-            await fail(ctx, "Failed to set default limit.")
+            await fail(ctx, msg(ctx, "default_limit_failed"))
 
-    @default.command(name="bitrate", help="Set default bitrate for new voice channels")
+    @default.command(name="bitrate", help=command_help("default_bitrate"))
     @checks.has_perms(manage_guild=True)
-    async def default_bitrate(self, ctx, bitrate: int):
+    async def default_bitrate(
+        self,
+        ctx,
+        bitrate: int = commands.parameter(
+            description="Default bitrate in kbps, between 8 and 384.",
+        ),
+    ):
         if bitrate < 8 or bitrate > 384:
-            await fail(ctx, "Bitrate must be between 8 and 384 kbps.")
+            await fail(ctx, msg(ctx, "default_bitrate_invalid"))
             return
         try:
             await self.bot.cxn.execute(
@@ -829,21 +943,34 @@ class VoiceMaster(commands.Cog):
                 bitrate * 1000, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            await success(ctx, f"{E.BITRATE} Default bitrate set to: **{bitrate} kbps**")
+            await success(
+                ctx,
+                f"{E.BITRATE} {msg(ctx, 'default_bitrate_set', value=bitrate)}",
+            )
         except Exception as e:
             logging.error("VM", f"Default bitrate error: {e}")
-            await fail(ctx, "Failed to set default bitrate.")
+            await fail(ctx, msg(ctx, "default_bitrate_failed"))
 
-    @default.command(name="region", help="Set default region for new voice channels")
+    @default.command(name="region", help=command_help("default_region"))
     @checks.has_perms(manage_guild=True)
-    async def default_region(self, ctx, region: str = None):
+    async def default_region(
+        self,
+        ctx,
+        region: str = commands.parameter(
+            default=None,
+            description="Voice region such as europe or us-east; leave empty for automatic.",
+        ),
+    ):
         valid_regions = [
             'us-west', 'us-east', 'us-central', 'us-south',
             'singapore', 'southafrica', 'sydney', 'europe',
             'brazil', 'hongkong', 'russia', 'japan', 'india',
         ]
         if region and region.lower() not in valid_regions:
-            await fail(ctx, f"Invalid region. Valid options: {', '.join(valid_regions)}")
+            await fail(
+                ctx,
+                msg(ctx, "default_region_invalid", regions=", ".join(valid_regions)),
+            )
             return
         try:
             await self.bot.cxn.execute(
@@ -851,170 +978,205 @@ class VoiceMaster(commands.Cog):
                 region.lower() if region else None, ctx.guild.id
             )
             self._bust_cache(ctx.guild.id)
-            msg = f"{E.REGION} Default region set to: **{region.title()}**" if region \
-                else f"{E.REGION} Default region set to: **Automatic**"
-            await success(ctx, msg)
+            value = region.title() if region else msg(ctx, "info_automatic")
+            await success(
+                ctx,
+                f"{E.REGION} {msg(ctx, 'default_region_set', value=value)}",
+            )
         except Exception as e:
             logging.error("VM", f"Default region error: {e}")
-            await fail(ctx, "Failed to set default region.")
+            await fail(ctx, msg(ctx, "default_region_failed"))
 
-    @_voicemaster.command(help="View current voice channel configuration")
+    @_voicemaster.command(help=command_help("configuration"))
     async def configuration(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
-        await ctx.send(view=await self.get_channel_info(channel), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(
+            view=await self.get_channel_info(channel, ctx),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
-    @_voicemaster.command(help="Lock your voice channel")
+    @_voicemaster.command(help=command_help("lock"))
     async def lock(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await self.lock_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('lock')} Voice channel locked.")
+            await success(ctx, f"{get_emoji('lock')} {msg(ctx, 'locked')}")
         except Exception as e:
             logging.error("VM", f"Lock error: {e}")
-            await fail(ctx, "Failed to lock the voice channel.")
+            await fail(ctx, msg(ctx, "lock_failed"))
 
-    @_voicemaster.command(help="Unlock your voice channel")
+    @_voicemaster.command(help=command_help("unlock"))
     async def unlock(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await self.unlock_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('unlock')} Voice channel unlocked.")
+            await success(ctx, f"{get_emoji('unlock')} {msg(ctx, 'unlocked')}")
         except Exception as e:
             logging.error("VoiceMaster", f"Unlock error: {e}")
-            await fail(ctx, "Failed to unlock the voice channel.")
+            await fail(ctx, msg(ctx, "unlock_failed"))
 
-    @_voicemaster.command(help="Hide your voice channel")
+    @_voicemaster.command(help=command_help("ghost"))
     async def ghost(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await self.ghost_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('hide')} Voice channel hidden.")
+            await success(ctx, f"{get_emoji('hide')} {msg(ctx, 'hidden')}")
         except Exception as e:
             logging.error("VoiceMaster", f"Ghost error: {e}")
-            await fail(ctx, "Failed to hide the voice channel.")
+            await fail(ctx, msg(ctx, "ghost_failed"))
 
-    @_voicemaster.command(help="Unhide your voice channel")
+    @_voicemaster.command(help=command_help("unghost"))
     async def unghost(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await self.unghost_channel(channel, ctx.author)
-            await success(ctx, f"{get_emoji('unhide')} Voice channel revealed.")
+            await success(ctx, f"{get_emoji('unhide')} {msg(ctx, 'revealed')}")
         except Exception as e:
             logging.error("VoiceMaster", f"Unghost error: {e}")
-            await fail(ctx, "Failed to reveal the voice channel.")
+            await fail(ctx, msg(ctx, "unghost_failed"))
 
-    @_voicemaster.command(help="Claim an inactive voice channel")
+    @_voicemaster.command(help=command_help("claim"))
     async def claim(self, ctx):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         if await self.claim_channel(ctx.author.voice.channel, ctx.author):
-            await success(ctx, f"{get_emoji('owner_icon')} Voice channel claimed.")
+            await success(ctx, f"{get_emoji('owner_icon')} {msg(ctx, 'claimed')}")
         else:
-            await fail(ctx, "Cannot claim this channel. The owner may still be present.")
+            await fail(ctx, msg(ctx, "claim_failed"))
 
-    @_voicemaster.command(help="Set a user limit on your voice channel")
-    async def limit(self, ctx, limit: int):
+    @_voicemaster.command(help=command_help("limit"))
+    async def limit(
+        self,
+        ctx,
+        limit: int = commands.parameter(
+            description="User limit for your channel, 0 for no limit (max 99).",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         if limit < 0 or limit > 99:
-            await fail(ctx, "Limit must be between 0 and 99.")
+            await fail(ctx, msg(ctx, "limit_invalid"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.edit(user_limit=limit)
-            msg = f"{E.LIMIT} User limit removed." if limit == 0 else f"{E.LIMIT} User limit set to {limit}."
-            await success(ctx, msg)
+            line = (
+                f"{E.LIMIT} {msg(ctx, 'limit_removed')}" if limit == 0
+                else f"{E.LIMIT} {msg(ctx, 'limit_set', limit=limit)}"
+            )
+            await success(ctx, line)
         except Exception as e:
             logging.error("VoiceMaster", f"Limit error: {e}")
-            await fail(ctx, "Failed to set user limit.")
+            await fail(ctx, msg(ctx, "limit_failed"))
 
-    @_voicemaster.command(help="Rename your voice channel")
-    async def name(self, ctx, *, name: str):
+    @_voicemaster.command(help=command_help("name"))
+    async def name(
+        self,
+        ctx,
+        *,
+        name: str = commands.parameter(
+            description="New name for your voice channel (100 characters max).",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         if len(name) > 100:
-            await fail(ctx, "Channel name must be 100 characters or less.")
+            await fail(ctx, msg(ctx, "name_too_long"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.edit(name=name)
-            await success(ctx, f"{get_emoji('edit')} Channel renamed to **{name}**.")
+            await success(ctx, f"{get_emoji('edit')} {msg(ctx, 'renamed', name=name)}")
         except Exception as e:
             logging.error("VoiceMaster", f"Rename error: {e}")
-            await fail(ctx, "Failed to rename the voice channel.")
+            await fail(ctx, msg(ctx, "rename_failed"))
 
-    @_voicemaster.command(help="Set bitrate of your voice channel")
-    async def bitrate(self, ctx, bitrate: int):
+    @_voicemaster.command(help=command_help("bitrate"))
+    async def bitrate(
+        self,
+        ctx,
+        bitrate: int = commands.parameter(
+            description="New bitrate in kbps, between 8 and 384.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         if bitrate < 8 or bitrate > 384:
-            await fail(ctx, "Bitrate must be between 8 and 384 kbps.")
+            await fail(ctx, msg(ctx, "bitrate_invalid"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.edit(bitrate=bitrate * 1000)
-            await success(ctx, f"{E.BITRATE} Bitrate set to {bitrate} kbps.")
+            await success(
+                ctx, f"{E.BITRATE} {msg(ctx, 'bitrate_set', value=bitrate)}"
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Bitrate error: {e}")
-            await fail(ctx, "Failed to set bitrate.")
+            await fail(ctx, msg(ctx, "bitrate_failed"))
 
-    @_voicemaster.command(help="Transfer ownership of your channel")
-    async def transfer(self, ctx, member: discord.Member):
+    @_voicemaster.command(help=command_help("transfer"))
+    async def transfer(
+        self,
+        ctx,
+        member: discord.Member = commands.parameter(
+            description="Member who should become the channel owner.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         if member == ctx.author:
-            await fail(ctx, "You cannot transfer ownership to yourself.")
+            await fail(ctx, msg(ctx, "transfer_self"))
             return
         if not member.voice or member.voice.channel != ctx.author.voice.channel:
-            await fail(ctx, "That member must be in your voice channel.")
+            await fail(ctx, msg(ctx, "transfer_not_in_channel"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await self.bot.cxn.execute(
@@ -1025,94 +1187,148 @@ class VoiceMaster(commands.Cog):
                 member, manage_channels=True, manage_permissions=True,
                 move_members=True, mute_members=True, deafen_members=True
             )
-            await success(ctx, f"{get_emoji('owner_icon')} Ownership transferred to **{member.display_name}**.")
+            await success(
+                ctx,
+                f"{get_emoji('owner_icon')} "
+                f"{msg(ctx, 'transferred', user=member.display_name)}",
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Transfer error: {e}")
-            await fail(ctx, "Failed to transfer ownership.")
+            await fail(ctx, msg(ctx, "transfer_failed"))
 
-    @_voicemaster.command(help="Allow a member or role to join your VC")
-    async def permit(self, ctx, target: Union[converters.DiscordMember, discord.Role]):
+    @_voicemaster.command(help=command_help("permit"))
+    async def permit(
+        self,
+        ctx,
+        target: Union[converters.DiscordMember, discord.Role] = commands.parameter(
+            description="Member or role that may join your channel.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.set_permissions(target, connect=True)
-            target_name = target.display_name if isinstance(target, discord.Member) else "Members with this role"
-            await success(ctx, f"{get_emoji('tick')} **{target_name}** can now join your voice channel.")
+            target_name = (
+                target.display_name if isinstance(target, discord.Member)
+                else msg(ctx, "permit_role")
+            )
+            await success(
+                ctx,
+                f"{get_emoji('tick')} {msg(ctx, 'permitted', target=target_name)}",
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Permit error: {e}")
-            await fail(ctx, "Failed to permit access.")
+            await fail(ctx, msg(ctx, "permit_failed"))
 
-    @_voicemaster.command(help="Block a member or role from joining your VC")
-    async def reject(self, ctx, target: Union[converters.DiscordMember, discord.Role]):
+    @_voicemaster.command(help=command_help("reject"))
+    async def reject(
+        self,
+        ctx,
+        target: Union[converters.DiscordMember, discord.Role] = commands.parameter(
+            description="Member or role blocked from joining your channel.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.set_permissions(target, connect=False)
             if isinstance(target, discord.Member) and target.voice and target.voice.channel == channel:
                 await target.move_to(None)
-            target_name = target.display_name if isinstance(target, discord.Member) else "Members with this role"
-            await success(ctx, f"{get_emoji('cross')} **{target_name}** can no longer join your voice channel.")
+            target_name = (
+                target.display_name if isinstance(target, discord.Member)
+                else msg(ctx, "permit_role")
+            )
+            await success(
+                ctx,
+                f"{get_emoji('cross')} {msg(ctx, 'rejected', target=target_name)}",
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Reject error: {e}")
-            await fail(ctx, "Failed to reject access.")
+            await fail(ctx, msg(ctx, "reject_failed"))
 
-    @_voicemaster.command(help="Set a status message for your voice channel")
-    async def status(self, ctx, *, status: str = None):
+    @_voicemaster.command(help=command_help("status"))
+    async def status(
+        self,
+        ctx,
+        *,
+        status: str = commands.parameter(
+            default=None,
+            description="Status text under the channel name; leave empty to clear it.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         try:
             await channel.edit(status=status)
-            msg = f"{E.STATUS} Channel status set to: **{status}**" if status \
-                else f"{E.STATUS} Channel status cleared."
-            await success(ctx, msg)
+            line = (
+                f"{E.STATUS} {msg(ctx, 'status_set', status=status)}" if status
+                else f"{E.STATUS} {msg(ctx, 'status_cleared')}"
+            )
+            await success(ctx, line)
         except Exception as e:
             logging.error("VoiceMaster", f"Status error: {e}")
-            await fail(ctx, "Failed to set channel status.")
+            await fail(ctx, msg(ctx, "status_failed"))
 
-    @_voicemaster.command(help="Disconnect a member from your voice channel", hidden=True)
-    async def disconnect(self, ctx, member: converters.DiscordMember):
+    @_voicemaster.command(help=command_help("disconnect"), hidden=True)
+    async def disconnect(
+        self,
+        ctx,
+        member: converters.DiscordMember = commands.parameter(
+            description="Member to disconnect from your channel.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
         if not member.voice or member.voice.channel != channel:
-            await fail(ctx, "That member is not in your voice channel.")
+            await fail(ctx, msg(ctx, "disconnect_not_in_channel"))
             return
         try:
             await member.move_to(None)
-            await success(ctx, f"{get_emoji('disconnect')} **{member.display_name}** has been disconnected.")
+            await success(
+                ctx,
+                f"{get_emoji('disconnect')} "
+                f"{msg(ctx, 'disconnected', user=member.display_name)}",
+            )
         except Exception as e:
             logging.error("VoiceMaster", f"Disconnect error: {e}")
-            await fail(ctx, "Failed to disconnect the member.")
+            await fail(ctx, msg(ctx, "disconnect_member_failed"))
 
-    @_voicemaster.command(help="Configure a role for your voice channel members")
-    async def role(self, ctx, role: discord.Role):
+    @_voicemaster.command(help=command_help("role"))
+    async def role(
+        self,
+        ctx,
+        role: discord.Role = commands.parameter(
+            description="Role to configure for the members of your channel.",
+        ),
+    ):
         if not ctx.author.voice or not ctx.author.voice.channel:
-            await fail(ctx, "You must be in a voice channel to use this command.")
+            await fail(ctx, msg(ctx, "not_in_voice"))
             return
         channel = ctx.author.voice.channel
         if not await self.is_channel_owner(ctx.author.id, channel.id):
-            await fail(ctx, "You don't own this voice channel.")
+            await fail(ctx, msg(ctx, "not_owner"))
             return
-        await success(ctx, f"{E.ROLE} Role management for **{role.name}** configured.")
+        await success(ctx, f"{E.ROLE} {msg(ctx, 'role_configured', role=role.name)}")
 
 
 async def setup(bot):

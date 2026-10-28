@@ -740,7 +740,8 @@ class SupportServerStructureTests(unittest.TestCase):
                     self.guild_id = guild_id
                     self.cfg = cfg
             class FakeVoiceMasterInterface:
-                pass
+                def __init__(self, lang="en"):
+                    self.lang = lang
             channels = {key: index for index, key in enumerate(("status", "rules", "staff_rules", "staff_announcements", "partnership_ad", "partnership_info", "welcome", "roles", "tickets", "support_guide", "voice_panel", "help", "announcements"), 100)}
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value=None), execute=AsyncMock())
             panel_calls = []
@@ -801,6 +802,8 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual(ticket_cfg.panel_channel_id, message.channel.id)
             self.assertEqual(ticket_cfg.panel_message_id, message.id)
             self.assertEqual(panel_calls, [(44, message.channel.id, message.id)])
+            # The seeded control panel follows the support server's language.
+            self.assertEqual(sent_views[channels["voice_panel"]].lang, "en")
             # #roles is filled by onboarding role menus, posted through the same
             # path an admin's menu uses and recorded in the onboarding config.
             self.assertEqual(
