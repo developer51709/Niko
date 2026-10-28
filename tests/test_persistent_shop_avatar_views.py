@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cogs.economy.commands import shop  # noqa: E402
-from cogs.info import cog as info  # noqa: E402
+from cogs.info import _avatars as info  # noqa: E402
 
 SHOP_IDS = {"economy:shop:buy", "economy:shop:sell"}
 

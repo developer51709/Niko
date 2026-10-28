@@ -2,7 +2,7 @@
 
 A worker receives the complete Discord REST request as a signed envelope and
 performs it from Cloudflare's Worker egress. The bot keeps its normal
-direct/standby/Webshare path as the fallback, so proxy workers stay optional.
+direct/Webshare path as the fallback, so proxy workers stay optional.
 """
 
 from __future__ import annotations

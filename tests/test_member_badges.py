@@ -40,6 +40,14 @@ def _guild(role_ids):
     return SimpleNamespace(get_member=lambda user_id: member)
 
 
+def _info_cards_source() -> str:
+    """Every module of the info cog: its cards are split by subject."""
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src" / "cogs" / "info").glob("*.py"))
+    )
+
+
 @pytest.fixture
 def support_roles(monkeypatch):
     """Wire the configured support-server role ids without a database."""
@@ -145,7 +153,7 @@ def test_badges_come_back_in_display_order(support_roles, supporter, staff_role)
 
 
 def test_every_badge_key_has_emoji_art_and_a_web_asset():
-    from cogs.info.cog import _NIKO_BADGE_EMOJIS
+    from cogs.info._badges import _NIKO_BADGE_EMOJIS
 
     # The bot's card maps each badge key to an emoji name, and no key is lost.
     assert set(_NIKO_BADGE_EMOJIS) == set(NIKO_BADGE_ORDER)
@@ -163,7 +171,7 @@ def test_every_badge_key_has_emoji_art_and_a_web_asset():
 
 def test_the_bot_cards_emoji_names_all_resolve():
     """A typo here means a missing emoji in the middle of a profile card."""
-    source = (ROOT / "src" / "cogs" / "info" / "cog.py").read_text(encoding="utf-8")
+    source = _info_cards_source()
     names = set(re.findall(r'get_emoji\("([A-Za-z0-9_]+)"\)', source))
 
     assert names
@@ -221,7 +229,7 @@ def test_every_boosting_tier_has_its_own_emoji_and_art():
 
 def test_the_bot_card_and_the_web_api_share_one_boosting_lookup():
     """One tier helper, so the card and the popups can never disagree."""
-    cog = (ROOT / "src" / "cogs" / "info" / "cog.py").read_text(encoding="utf-8")
+    cog = _info_cards_source()
     routes = (ROOT / "src" / "webapp" / "routes" / "discord_text_routes.py").read_text(encoding="utf-8")
 
     assert "boosting_badge_key(" in cog

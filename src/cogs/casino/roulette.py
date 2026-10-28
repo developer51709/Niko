@@ -15,7 +15,7 @@ from utils.cooldown import cooldown_ready_at, cooldown_view
 #  CONSTANTS
 # ============================
 
-ROULETTE_COOLDOWN = 60
+ROULETTE_COOLDOWN = 30
 
 EUROPEAN_WHEEL = [
     0,

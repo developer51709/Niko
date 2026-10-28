@@ -54,13 +54,12 @@ Deploy more than one worker for extra egress diversity. Each additional Worker
 needs its own `name` in `wrangler.toml` (Cloudflare cannot create two Workers
 with the same name) and its own copy of the same `AUTH_TOKEN` secret. Register
 each URL in the owner dashboard; Niko rotates through the registered workers
-and falls back to the next worker, then to its normal direct/standby route, if
+and falls back to the next worker, then to its normal direct/Webshare route, if
 one is unreachable.
 
 ## Connect the bot
 
-Set these on every host that can serve Discord traffic — the primary bot and any
-standby that may take the gateway (Freebuff: Settings → Environment, or
+Set these on the bot host (Freebuff: Settings → Environment, or
 `freebuff-deploy env set` for production):
 
 | Variable             | Required | Description |
@@ -76,14 +75,13 @@ Then open **Staff workspace → Discord proxy** as the bot owner:
 
 The feature stays disabled until that switch is on, so existing deployments are
 unaffected. Removing every worker or switching routing off returns to the
-normal direct/standby/Webshare path.
+normal direct/Webshare path.
 
 ## Notes
 
 - Workers relay Discord **REST** traffic, including dashboard and OAuth calls.
   The Discord gateway is a long-lived WebSocket and stays on the bot's normal
-  connection because a Worker cannot proxy that socket; gateway ownership still
-  follows the existing direct/standby failover path.
+  connection because a Worker cannot proxy that socket.
 - The worker never stores Discord request bodies or responses. Telemetry is
   kept in memory per isolate and is only a live operational view.
 - Webhook and interaction tokens in request paths are redacted before they

@@ -254,7 +254,7 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
         </div>
         <div className={`proxy-routing-badge${routing?.enabled ? " is-on" : ""}`}>
           <i />
-          <span><small>Routing</small><strong>{routing?.enabled ? "Workers active" : "Direct / standby"}</strong></span>
+          <span><small>Routing</small><strong>{routing?.enabled ? "Workers active" : "Direct"}</strong></span>
         </div>
       </header>
 
@@ -266,7 +266,7 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
       )}
 
       <div className="proxy-toolbar">
-        <span className="proxy-live-label"><i />{routing?.enabled ? "Live" : "Standby"} · {refreshedAt ? `updated ${new Date(refreshedAt).toLocaleTimeString()}` : "connecting…"}</span>
+        <span className="proxy-live-label"><i />{routing?.enabled ? "Live" : "Idle"} · {refreshedAt ? `updated ${new Date(refreshedAt).toLocaleTimeString()}` : "connecting…"}</span>
         <div className="proxy-toolbar-actions">
           <button type="button" className={`button button-small ${routing?.enabled ? "button-danger" : "button-primary"}`} disabled={busy || loading || !routing || (!routing.enabled && workers.length === 0)} onClick={() => void toggleRouting()}>
             <Icon name="spark" />{routing?.enabled ? "Disable worker routing" : "Route Discord through workers"}

@@ -155,6 +155,7 @@ PRIMARY_KEYS: dict = {
     "ai_memory": ("guild_id", "user_id"),
     "logging_config": "guild_id",
     "logging_webhooks": ("guild_id", "channel_id"),
+    "logging_snapshots": "snapshot_id",
     "moderation_config": "guild_id",
     "modlog": "guild_id",
     "guild_profiles": "guild_id",

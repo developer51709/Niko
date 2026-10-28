@@ -11,7 +11,7 @@ from utils.prefix_manager import resolve_prefix
 
 # Seconds between spins. Kept numeric so the cooldown is compared as a time,
 # not as concatenated strings.
-slots_cooldown = float(os.getenv("SLOTS_COOLDOWN") or 60)
+slots_cooldown = float(os.getenv("SLOTS_COOLDOWN") or 30)
 
 # Symbol tiers and the weighted pool the machine draws from. The rarer a symbol,
 # the more a line of it pays: common 2x, uncommon 3x, rare 5x, jackpot 25x, and

@@ -351,7 +351,7 @@ class Tickets(commands.Cog):
 
         # Build the web transcript URL
         from utils.tickets.transcripts import export_txt
-        base_url = os.environ.get("DONATION_SITE_URL") or os.environ.get("PUBLIC_URL") or ""
+        base_url = (os.environ.get("PUBLIC_URL") or "").rstrip("/")
         if not base_url:
             try:
                 from website import public_base_url as _pbu

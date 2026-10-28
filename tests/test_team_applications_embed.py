@@ -88,7 +88,7 @@ def test_the_list_is_kept_out_of_the_introduction(monkeypatch):
 
     intro = container["components"][0]
     assert intro["type"] == social_preview.SECTION
-    assert "STAFF APPLICATIONS" in texts(container)[0]
+    assert "Staff applications" in texts(container)[0]
     assert "team/apply/" not in texts(container)[0]
     # The intro names the count, the list names the roles.
     assert "2 open roles" in texts(container)[0]

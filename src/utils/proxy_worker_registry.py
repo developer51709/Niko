@@ -1,7 +1,7 @@
 """Durable registry for optional Discord API proxy workers.
 
-Like the standby registry this is MongoDB-only: a proxy registration is shared
-by every instance and must survive stateless web-service restarts. The routing
+This registry is MongoDB-only: a proxy registration is shared by every instance
+and must survive stateless web-service restarts. The routing
 switch is stored beside the registrations so a restart cannot silently start
 sending Discord traffic through a worker the owner turned off.
 """

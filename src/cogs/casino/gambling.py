@@ -7,16 +7,10 @@ import discord
 from discord.ext import commands
 import random
 import json
-import os
 import time
 import asyncio
 import math
 from discord.ui import Button, View
-
-# Cooldowns
-slots_cooldown = os.getenv("SLOTS_COOLDOWN") or 60
-blackjack_cooldown = os.getenv("BLACKJACK_COOLDOWN") or 60
-roulette_cooldown = os.getenv("ROULETTE_COOLDOWN") or 60
 
 class GamblingCog(commands.Cog):
     def __init__(self, bot):

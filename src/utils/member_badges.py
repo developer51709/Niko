@@ -9,7 +9,7 @@ the caller is actually doing.
 
 Badge keys match the artwork names the popups own
 (``web/public/assets/badges/niko_*.svg``); the bot's emoji names are mapped
-from these keys in ``cogs/info/cog.py``.
+from these keys in ``cogs/info/_badges.py``.
 """
 
 from __future__ import annotations

@@ -17,6 +17,7 @@ from utils import logging
 from config import links
 from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
+from .revert import RestoreChannelButton, RestoreRoleButton, RevertChannelButton
 
 # ── Constants ─────────────────────────────────────
 
@@ -131,6 +132,8 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Channel Created": "channels",
     "Channel Deleted": "channels",
     "Channel Updated": "channels",
+    "Channel Restored": "channels",
+    "Channel Reverted": "channels",
     "Channel Permissions Updated": "channels",
     "Thread Created": "channels",
     "Thread Deleted": "channels",
@@ -142,6 +145,7 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Role Created": "roles",
     "Role Deleted": "roles",
     "Role Updated": "roles",
+    "Role Restored": "roles",
     "Server Updated": "server",
     "Emoji Updated": "server",
     "Sticker Updated": "server",
@@ -154,6 +158,7 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Member Left": "members",
     "Member Updated": "members",
     "Avatar Updated": "members",
+    "Server Avatar Updated": "members",
     "Username Updated": "members",
     "Member Boosted": "members",
     "Boost Removed": "members",
@@ -212,6 +217,8 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     "Channel Created": "log_channel_created",
     "Channel Deleted": "log_channel_deleted",
     "Channel Updated": "log_channel_updated",
+    "Channel Restored": "unhide",
+    "Channel Reverted": "arrow_left",
     "Channel Permissions Updated": "lock",
     "Thread Created": "plus",
     "Thread Deleted": "minus",
@@ -227,6 +234,7 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     "Member Left": "log_member_leave",
     "Member Updated": "log_member_updated",
     "Avatar Updated": "log_avatar",
+    "Server Avatar Updated": "image",
     "Username Updated": "user",
     "Member Boosted": "boost",
     "Boost Removed": "star",
@@ -244,6 +252,7 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     "Role Created": "log_role_created",
     "Role Deleted": "log_role_deleted",
     "Role Updated": "log_role_updated",
+    "Role Restored": "rewind",
     # Server
     "Server Updated": "log_server_updated",
     "Emoji Updated": "log_emoji_updated",
@@ -513,8 +522,24 @@ class UnlockButton(discord.ui.Button):
             await interaction.response.send_message("I don't have permission to unlock that channel.", ephemeral=True)
 
 
-def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None, channel_id: int | None = None) -> list[discord.ui.Button]:
-    btns = []
+#: A snapshot-carrying button per revertable log type. The snapshot id is all
+#: the button stores, so the entry keeps working after a restart.
+_REVERT_BUTTONS = {
+    "role": RestoreRoleButton,
+    "channel": RestoreChannelButton,
+    "channel-update": RevertChannelButton,
+}
+
+
+def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None, channel_id: int | None = None,
+                          revert: tuple[str, str] | None = None) -> list[discord.ui.Button]:
+    btns: list[discord.ui.Button] = []
+    # The revert button reads first: undoing the event beats acting on the person
+    # or channel afterwards, and it is the reason the entry is actionable.
+    if revert:
+        builder = _REVERT_BUTTONS.get(revert[0])
+        if builder is not None:
+            btns.append(builder(revert[1]))
     wanted = _ACTION_BUTTONS.get(action_key, [])
     if not wanted and any(s in action_key for s in _AUTOMOD_SUBSTRINGS):
         wanted = _AUTOMOD_DEFAULT_BUTTONS
@@ -542,9 +567,11 @@ def _build_log_view(
     target_id: int | None = None,
     action_key: str | None = None,
     channel_id: int | None = None,
-    media_urls: list[str] | None = None,
+    media_urls: list[str | tuple[str, str]] | None = None,
     thumbnail_url: str | None = None,
     files: list[discord.File] | None = None,
+    file_components: bool = True,
+    revert: tuple[str, str] | None = None,
 ) -> discord.ui.LayoutView:
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
     color = discord.Colour(cat_info["color"])
@@ -565,7 +592,8 @@ def _build_log_view(
     if not emoji:
         emoji = get_emoji(cat_info["emoji_key"])
 
-    buttons = _build_action_buttons(action_key or title, guild_id, target_id, channel_id)
+    buttons = _build_action_buttons(
+        action_key or title, guild_id, target_id, channel_id, revert)
 
     children: list[discord.ui.Item] = [
         discord.ui.TextDisplay(content=f"### {emoji} {title}"),
@@ -587,13 +615,21 @@ def _build_log_view(
     children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     if media_urls:
-        # Deleted-message image attachments render inline in a media gallery.
-        children.append(
-            discord.ui.MediaGallery(*[MediaGalleryItem(media=url) for url in media_urls])
-        )
+        # Deleted-message image attachments render inline in a media gallery; a
+        # re-uploaded asset (a replaced avatar) passes its attachment URI with a
+        # caption saying which side of the change it is. Discord caps a gallery
+        # at ten items, so a mass delete of images cannot make the send fail.
+        items = []
+        for entry in media_urls[:10]:
+            url, caption = entry if isinstance(entry, (tuple, list)) else (entry, None)
+            if caption:
+                items.append(MediaGalleryItem(media=url, description=str(caption)[:256]))
+            else:
+                items.append(MediaGalleryItem(media=url))
+        children.append(discord.ui.MediaGallery(*items))
         children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
-    if files:
+    if files and file_components:
         # Deleted-message file attachments render inline as file components.
         # The bytes are uploaded via send(files=...) — the components reference
         # them through their attachment:// URI.

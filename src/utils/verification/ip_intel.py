@@ -54,9 +54,9 @@ def _is_private(ip: str) -> bool:
 def client_ip(remote_addr: str | None, forwarded_for: str | None = None) -> str:
     """The address to judge, from the proxy chain the deployment forwards.
 
-    The site runs behind a reverse proxy (and, on a standby, an internal relay),
-    so ``remote_addr`` is the proxy itself. The left-most ``X-Forwarded-For``
-    entry is the original client — the one a proxy or VPN would be visible on.
+    The site runs behind a reverse proxy, so ``remote_addr`` is the proxy
+    itself. The left-most ``X-Forwarded-For`` entry is the original client — the
+    one a proxy or VPN would be visible on.
     """
     for candidate in (forwarded_for or "").split(","):
         candidate = candidate.strip()

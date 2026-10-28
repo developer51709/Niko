@@ -1,112 +1,67 @@
+"""AI image tools.
+
+Generation runs on Pollinations' free, keyless endpoint: no API key, no
+per-image bill. That is also why it is rate limited — every render is a request
+to a shared public service, and one person spamming it gets everyone throttled.
+
+Image editing used to call paid image-to-image models. It is retired: no free
+provider produced results worth shipping, so /edit now explains that and points
+people at the support server to suggest one.
+"""
+
+import io
+import os
+import random
+from urllib.parse import quote
+
+import aiohttp
 import discord
 from discord.ext import commands
-import aiohttp
-import os
-import io
-import json
-import base64
-import asyncio
-import random
-from urllib.parse import urlparse
-from utils import logging
-from utils.image.extractor import extract_image_from_message
+
+from config import links
 from config.emojis import get_emoji
+from utils import logging
 
-HF_API_KEY        = os.environ.get("HUGGINGFACE_API_KEY", "")
-FAL_API_KEY       = os.environ.get("FAL_API_KEY", "")
-EDIT_MODELS = [
-    # black-forest-labs/FLUX.2-klein-9B
-    "https://router.huggingface.co/fal-ai/fal-ai/flux-2/klein/9b/edit?_subdomain=queue",
-    "https://router.huggingface.co/replicate/v1/models/black-forest-labs/flux-2-klein-9b/predictions",
-    # Qwen/Qwen-Image-Edit
-    "https://router.huggingface.co/fal-ai/fal-ai/qwen-image-edit?_subdomain=queue",
-    "https://router.huggingface.co/wavespeed/api/v3/wavespeed-ai/qwen-image/edit",
-    "https://router.huggingface.co/replicate/v1/models/qwen/qwen-image-edit/predictions",
-]
+PROVIDER_URL = "https://image.pollinations.ai/prompt"
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
 
-from utils.premium_manager import PremiumManager
+#: Seconds one member must wait between generations. `IMAGE_GEN_COOLDOWN=15`
+#: makes it faster; there is no way to turn the limit off. The cooldown applies
+#: per user across every server, so switching channels does not reset it.
+USER_COOLDOWN = max(1, int(os.getenv("IMAGE_GEN_COOLDOWN") or 30))
 
 
 class AiImageTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.session = aiohttp.ClientSession()
 
-    async def cog_unload(self):
-        await self.session.close()
+    # ── Provider ──────────────────────────────────
 
-    # ── API methods ───────────────────────────────
+    async def generate_image(self, prompt: str) -> tuple[io.BytesIO | None, str | None]:
+        """Render one image, returning ``(image, error)``."""
+        url = f"{PROVIDER_URL}/{quote(prompt.strip(), safe='')}"
+        try:
+            async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+                async with session.get(url, params={"seed": random.randint(1, 1_000_000)}) as response:
+                    if response.status != 200:
+                        detail = (await response.text())[:160]
+                        logging.warning(
+                            "AiImageTools", f"Provider returned {response.status}: {detail}"
+                        )
+                        return None, "The image provider is busy right now. Try again in a moment."
+                    data = await response.read()
+        except Exception as error:
+            logging.warning("AiImageTools", f"Generation request failed: {error}")
+            return None, "The image provider could not be reached. Try again in a moment."
 
-    async def GenerateImage(self, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
-        async with aiohttp.ClientSession() as session:
-            while True:
-                seed = random.randint(1, 100000)
-                image_url = f"https://image.pollinations.ai/prompt/{prompt}?seed={seed}"
-                async with session.get(image_url) as response:
-                    image_data = await response.read()
-                    return io.BytesIO(image_data), None
+        if not data:
+            logging.warning("AiImageTools", "Provider returned an empty body.")
+            return None, "The image provider sent back an empty image. Try again in a moment."
+        return io.BytesIO(data), None
 
-    async def EditImage(self, image_bytes: bytes, prompt: str) -> tuple[io.BytesIO, None] | tuple[None, str]:
-        """
-        Edit an image via image-to-image models.
-        """
-        return None, "This feature has been temporarily removed until a reliable long term fix can be implemented."
-        if not HF_API_KEY:
-            return None, "No `HUGGINGFACE_API_KEY` is configured. Ask a bot owner to add it."
+    # ── Response builders ─────────────────────────
 
-        mime = self._detect_mime(image_bytes)
-        b64_image = await asyncio.to_thread(lambda: base64.b64encode(image_bytes).decode())
-        data_uri = f"data:{mime};base64,{b64_image}"
-
-        errors = {}
-        for model in EDIT_MODELS:
-            url = f"{model}"
-            # fal-ai FLUX.2 [klein] edit models expect a flat payload (not the
-            # generic HF "inputs"/"parameters" envelope): top-level "prompt"
-            # (required) and "image_urls" (required list, URL or data URI).
-            payload = {
-                "prompt": prompt,
-                "image_urls": [data_uri],
-                "num_inference_steps": 4,
-            }
-            try:
-                async with self.session.post(url, headers=self._hf_headers(), json=payload) as resp:
-                    raw = await resp.read()
-                    content_type = resp.content_type or ""
-                    logging.debug("AiImageTools", f"[edit-debug] submit POST {url} payload={payload} -> status={resp.status} content_type={content_type} body={raw.decode(errors='replace')[:500]}")
-                    if resp.ok:
-                        if "json" in content_type:
-                            try:
-                                data = json.loads(raw)
-                            except Exception:
-                                data = {}
-
-                            response_url = data.get("response_url") or data.get("responseUrl")
-                            if response_url:
-                                if status_message:
-                                    await self._update_queue_message(
-                                        status_message,
-                                        prompt,
-                                        "Queued",
-                                        request_id=data.get("request_id") or data.get("requestId"),
-                                        position=data.get("queue_position") or data.get("position"),
-                                        detail=data.get("message") or data.get("estimated_time"),
-                                    )
-                                return await self._poll_hf_queue(url, data, prompt, status_message)
-
-                        image = await self._parse_hf_image_response(raw, content_type)
-                        if image:
-                            return image, None
-                    errors[model] = f"{resp.status}: {raw.decode(errors='replace')[:120]}"
-            except Exception as e:
-                errors[model] = str(e)
-
-        lines = "\n".join(f"- `{m}`: `{e}`" for m, e in errors.items())
-        return None, f"All edit models failed.\n{lines}"
-
-    # ── CV2 response builder ──────────────────────
-
-    def build_cv2_container(self, title: str, message: str, file: discord.File):
+    def build_cv2_container(self, title: str, message: str, filename: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=f"### {title}"),
@@ -114,7 +69,11 @@ class AiImageTools(commands.Cog):
         )
         if message:
             container.add_item(discord.ui.TextDisplay(content=message))
-        container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=file)))
+        container.add_item(
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=f"attachment://{filename}")
+            )
+        )
         view.add_item(container)
         return view
 
@@ -129,21 +88,6 @@ class AiImageTools(commands.Cog):
         view.add_item(container)
         return view
 
-    # ── Premium check ─────────────────────────────
-
-    async def check_premium(self, member: discord.Member) -> bool:
-        return await PremiumManager.is_premium(self.bot.cxn, member.id)
-
-    def _premium_required_view(self, detail: str) -> discord.ui.LayoutView:
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Premium Required"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=detail),
-        )
-        view.add_item(container)
-        return view
-
     # ── Commands ──────────────────────────────────
 
     @commands.command(
@@ -151,84 +95,63 @@ class AiImageTools(commands.Cog):
         help="Generate an image using AI.",
         aliases=["imagen", "imagine"],
     )
+    @commands.cooldown(1, USER_COOLDOWN, commands.BucketType.user)
     async def generate(self, ctx: commands.Context, *, prompt: str):
-        if not await self.check_premium(ctx.author):
-            return await ctx.send(view=self._premium_required_view(
-                "Due to the cost of AI image generation, this command is only available to premium users.\n\n"
-                "You can get premium by joining the support server and boosting."
-            ))
-
         async with ctx.typing():
-            image, err = await self.GenerateImage(prompt)
+            image, error = await self.generate_image(prompt)
 
-        if err:
+        if error or image is None:
+            detail = error or "The image provider returned nothing. Try again in a moment."
             try:
-                return await ctx.reply(view=self._error_view(err))
+                return await ctx.reply(view=self._error_view(detail))
             except Exception:
-                return await ctx.send(view=self._error_view(err))
+                return await ctx.send(view=self._error_view(detail))
 
+        image.seek(0)
         file = discord.File(image, filename="generated_image.png")
         view = self.build_cv2_container(
             f"{get_emoji('image')} Generated Image",
-            f"-# Prompt: *{prompt[:200]}*",
-            file,
+            f"-# Prompt: *{discord.utils.escape_markdown(prompt[:200])}*",
+            file.filename,
         )
-        image.seek(0)
-        file2 = discord.File(image, filename="generated_image.png")
         try:
-            await ctx.reply(view=view, file=file2)
+            await ctx.reply(view=view, file=file)
         except Exception:
-            await ctx.send(view=view, file=file2)
+            await ctx.send(view=view, file=file)
 
     @commands.command(
         name="edit",
-        help="Edit an image using AI. Attach an image or reply to one.",
+        help="Image editing was retired — this explains why.",
         aliases=["aiedit", "editimage"],
+        hidden=True,
     )
-    async def edit(self, ctx: commands.Context, *, prompt: str):
-        if not await self.check_premium(ctx.author):
-            return await ctx.send(view=self._premium_required_view(
-                "AI image editing is a premium-only feature.\n\n"
-                "Join the support server and boost to unlock it."
-            ))
-
-        image_bytes = await extract_image_from_message(ctx.message)
-        if image_bytes is None:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} No Image Found"),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content="Please attach an image or reply to one so I can edit it."),
-            )
-            view.add_item(container)
-            return await ctx.send(view=view)
-
-        raw_bytes = image_bytes.getvalue()
-
-        async with ctx.typing():
-            result, err = await self.EditImage(raw_bytes, prompt)
-
-        if err:
-            try:
-                return await ctx.reply(view=self._error_view(err))
-            except Exception:
-                return await ctx.send(view=self._error_view(err))
-
-        result.seek(0)
-        file = discord.File(result, filename="edited_image.png")
-        view = self.build_cv2_container(
-            f"{get_emoji('image')} Edited Image",
-            f"-# Prompt: *{prompt[:200]}*",
-            file,
-        )
-        file2 = discord.File(result, filename="edited_image.png")
-        try:
-            await status_message.edit(view=view, attachments=[file2])
-        except Exception:
-            try:
-                await ctx.reply(view=view, file=file2)
-            except Exception:
-                await ctx.send(view=view, file=file2)
+    async def edit(self, ctx: commands.Context, *, prompt: str | None = None):
+        """/edit is gone; keep the name so old muscle memory gets an answer."""
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {get_emoji('image')} Image editing was removed"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                content=(
+                    "AI image editing was retired because the hosted models charged "
+                    "per edit, and we have not found a free provider that produces "
+                    "results we would be happy to ship.\n\n"
+                    f"Image **generation** is still free and unlimited-ish — try "
+                    f"`{ctx.prefix}imagine <prompt>`.\n\n"
+                    "If you know a provider worth trying (a generous free tier or "
+                    "something we could self-host), join the support server and leave "
+                    "a suggestion. We would genuinely like to bring editing back."
+                )
+            ),
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="Suggest a provider",
+                    style=discord.ButtonStyle.link,
+                    url=links.SUPPORT_SERVER,
+                )
+            ),
+        ))
+        await ctx.reply(view=view)
 
 
 async def setup(bot: commands.Bot):

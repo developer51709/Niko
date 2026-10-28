@@ -3,6 +3,7 @@ Donation database and payment-link helpers.
 Used by the donations cog, website webhook, and supporter badge lookup.
 """
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -11,6 +12,40 @@ import os
 import secrets
 import time
 from urllib.parse import quote
+
+#: Currencies both checkouts offer. Kept in one place so the donation page, the
+#: premium checkout, and the Discord pickers cannot drift apart.
+CRYPTO_CURRENCIES = ("USDT", "ETH", "BTC", "BNB", "LTC", "DOGE", "TRX", "XMR")
+
+#: Suggested one-off amounts (USD) shown on the donation page.
+DONATION_PRESET_AMOUNTS = (3, 5, 10, 25, 50)
+DONATION_MIN_AMOUNT = 1.0
+DONATION_MAX_AMOUNT = 10_000.0
+
+
+def donation_goal_cents() -> int:
+    """Monthly running-cost goal in cents, or 0 when no goal is configured."""
+    try:
+        return max(0, int(float(os.getenv("DONATION_GOAL_USD") or 0) * 100))
+    except (TypeError, ValueError):
+        return 0
+
+
+# In-flight confirmations keyed by track ID. The webhook and the poll loop run
+# on the same event loop, so a per-track lock makes a double-confirmed payment
+# impossible without needing a compare-and-swap the storage backends lack.
+_confirm_locks: dict[str, asyncio.Lock] = {}
+
+
+def _confirm_lock(track_id: str) -> asyncio.Lock:
+    lock = _confirm_locks.get(track_id)
+    if lock is None:
+        if len(_confirm_locks) > 1024:
+            for key, entry in list(_confirm_locks.items()):
+                if not entry.locked():
+                    _confirm_locks.pop(key, None)
+        lock = _confirm_locks[track_id] = asyncio.Lock()
+    return lock
 
 
 def _signing_secret() -> bytes:
@@ -152,11 +187,11 @@ async def get_pending_invoices(bot) -> list:
 
 
 async def update_invoice_status(bot, track_id: str, status: str) -> None:
-    """Store a non-terminal provider status."""
+    """Store a non-terminal provider status without un-paying an invoice."""
     if not getattr(bot, "cxn", None):
         return
     await bot.cxn.execute(
-        "UPDATE donation_invoices SET status = $1 WHERE track_id = $2",
+        "UPDATE donation_invoices SET status = $1 WHERE track_id = $2 AND status <> 'Paid'",
         status, track_id,
     )
 
@@ -164,18 +199,48 @@ async def update_invoice_status(bot, track_id: str, status: str) -> None:
 async def confirm_invoice(bot, track_id: str, provider_data: dict | None = None) -> tuple[dict | None, bool]:
     """Mark an invoice paid once and return ``(invoice, newly_confirmed)``.
 
-    The read/update guard makes repeated OxaPay callbacks harmless. The donor
-    side effect is only called by the caller when ``newly_confirmed`` is true.
+    Repeated OxaPay callbacks, a webhook racing the poll loop, and a poller that
+    restarts mid-payment all funnel through here: only the call that flips the
+    invoice from an unpaid status returns ``newly_confirmed=True``, so the
+    donor record, the DM, and the public thank-you happen exactly once.
     """
-    invoice = await get_invoice(bot, track_id=track_id)
-    if invoice is None or str(invoice.get("status", "")).lower() == "paid":
-        return invoice, False
-    await bot.cxn.execute(
-        "UPDATE donation_invoices SET status = 'Paid', paid_at = datetime('now') WHERE track_id = $1",
-        track_id,
-    )
-    refreshed = await get_invoice(bot, track_id=track_id) or invoice
-    return refreshed, True
+    if not getattr(bot, "cxn", None) or not track_id:
+        return None, False
+    async with _confirm_lock(track_id):
+        invoice = await get_invoice(bot, track_id=track_id)
+        if invoice is None:
+            return None, False
+        if str(invoice.get("status", "")).lower() == "paid":
+            return invoice, False
+        await bot.cxn.execute(
+            "UPDATE donation_invoices SET status = 'Paid', paid_at = datetime('now') "
+            "WHERE track_id = $1 AND status <> 'Paid'",
+            track_id,
+        )
+        refreshed = await get_invoice(bot, track_id=track_id) or invoice
+        return refreshed, True
+
+
+async def get_donation_totals(bot) -> dict:
+    """Paid invoice totals across the whole deployment."""
+    totals = {"total_cents": 0, "donation_count": 0, "donor_count": 0}
+    if not getattr(bot, "cxn", None):
+        return totals
+    try:
+        paid = await bot.cxn.fetchval(
+            "SELECT SUM(amount) FROM donation_invoices WHERE status = 'Paid'"
+        )
+        count = await bot.cxn.fetchval(
+            "SELECT COUNT(*) FROM donation_invoices WHERE status = 'Paid'"
+        )
+        donors = await bot.cxn.fetchval("SELECT COUNT(*) FROM donors")
+    except Exception:
+        return totals
+    totals["total_cents"] = int(round(float(paid or 0) * 100))
+    totals["donation_count"] = int(count or 0)
+    totals["donor_count"] = int(donors or 0)
+    return totals
+
 
 
 async def get_total_donated(bot, user_id: int) -> float:

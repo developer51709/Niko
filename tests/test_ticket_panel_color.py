@@ -180,7 +180,7 @@ class TicketPanelColorRouteTests(unittest.TestCase):
             def get_channel(self, channel_id):
                 return _Channel()
 
-        bot = mock.Mock(get_guild=lambda guild_id: _Guild(), standby_failover=None)
+        bot = mock.Mock(get_guild=lambda guild_id: _Guild())
         # The same handoff the bot process performs on startup, so every route
         # module sees this bot exactly as it would in production.
         runtime.configure_bot(bot)

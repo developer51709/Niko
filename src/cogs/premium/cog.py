@@ -3,7 +3,7 @@ Premium server subscriptions.
 
   /premium status    → current plan, expiry, and what premium unlocks
   /premium upgrade   → white-label crypto checkout link for this server
-  /premium gift      → gift a month of premium to a server the user is in
+  /premium gift      → gift 1, 3, 6, or 12 months to a server the user is in
 
 A background loop expires lapsed terms and DMs the server owner a few days
 before the term ends, so the server can renew before moderation pauses. The
@@ -38,16 +38,17 @@ ACCENT = 0xC8A882
 
 def site_base() -> str:
     """Public origin used by links sent from Discord."""
-    base = os.getenv("PUBLIC_URL") or os.getenv("DONATION_SITE_URL")
+    base = os.getenv("PUBLIC_URL")
     if not base and os.getenv("REPLIT_DEV_DOMAIN"):
         base = f"https://{os.getenv('REPLIT_DEV_DOMAIN')}"
     return (base or "https://niko.sryze.cc").rstrip("/")
 
 
 def billing_url(guild_id: int | str, *, gift: bool = False) -> str:
-    """Public billing page for one guild (gift mode prefills the intent)."""
-    url = f"{site_base()}/billing?guild={guild_id}"
-    return f"{url}&gift=1" if gift else url
+    """Public checkout for one guild; gifts have their own page."""
+    if gift:
+        return f"{site_base()}/billing/gift?guild={guild_id}"
+    return f"{site_base()}/billing?guild={guild_id}"
 
 
 def _expiry_label(value) -> str:
@@ -358,7 +359,7 @@ class PremiumCog(commands.Cog, name="Premium"):
         )
         await interaction.followup.send(view=view, ephemeral=True)
 
-    @premium.command(name="gift", description="Gift a month of premium to a server you are in")
+    @premium.command(name="gift", description="Gift premium to a server you are a member of")
     @app_commands.describe(server_id="Server ID to gift (defaults to this server)")
     async def premium_gift(self, interaction: discord.Interaction, server_id: str | None = None):
         await interaction.response.defer(ephemeral=True)
@@ -401,8 +402,9 @@ class PremiumCog(commands.Cog, name="Premium"):
                         f"**{target.name}**\n"
                         f"**{price_label()} / month**"
                         + ("\n\n-# This adds another month on top of the current subscription." if already else "")
-                        + "\n\nYour gift stays active even if you leave the server. "
-                        "The owner is told who gifted it."
+                        + "\n\nYou can gift one, three, six or twelve months on the "
+                        "next screen. Your gift stays active even if you leave the "
+                        "server, and the owner is told who sent it."
                     )
                 ),
                 discord.ui.ActionRow(

@@ -72,16 +72,25 @@ performed server-side; the frontend must not be treated as the security boundary
 | POST | `/api/guild/<id>/config/leveling` | Update leveling controls |
 | POST | `/api/guild/<id>/config/server` | Update prefixes, onboarding, logging, and ticket settings |
 | GET | `/api/premium/guild/<id>` | Premium subscription state and perks for one managed server |
-| POST | `/api/premium/checkout` | Start a white-label premium purchase or gift; returns the crypto address, amount, and QR code |
+| GET | `/api/premium/guilds` | Servers the signed-in member can upgrade, with premium state |
+| POST | `/api/premium/checkout` | Start a one-month white-label purchase; returns the crypto address, amount, and QR code |
 | GET | `/api/premium/orders/<order_id>` | Poll a checkout and the guild's resulting term |
 | GET | `/api/premium/gift-targets` | Servers the signed-in member belongs to, with premium state |
+| POST | `/api/premium/gift/checkout` | Start a gift for 1, 3, 6, or 12 months on a server the payer belongs to |
+| GET | `/api/premium/gift/orders/<order_id>` | Poll a gift and the recipient's resulting term |
+| GET | `/api/donations/meta` | Presets, currencies, totals, and goal for the donation page |
 | POST | `/api/donations/invoice` | Create a white-label donation quote from a signed `/donate` token |
-| GET | `/api/donations/<order_id>` | Donation payment status |
+| GET | `/api/donations/<order_id>` | Donation payment status, reconciled with the provider while open |
 
 The premium checkout stores nothing the browser sends about money: the price,
-currency, and month length come from `utils/premium.py`. An OxaPay callback is
-the only thing that extends a term, and `confirm_payment` makes a repeated
-callback a no-op, so a retried provider notification cannot add a second month.
+currency, and month length come from `utils/premium.py`. Buying and gifting are
+separate endpoints — the purchase route only accepts `purchase` and always
+charges one month, while the gift route requires membership instead of Manage
+Server and only accepts the offered terms. An OxaPay callback is the only thing
+that extends a term, and `confirm_payment` makes a repeated callback a no-op, so
+a retried provider notification cannot add a second month. Donations are
+credited through a single locked confirmation, so a webhook retry and the
+bot's poller can never both count the same payment.
 
 POST requests use JSON and return `{ "ok": true }` on success. The API only
 accepts the documented configuration keys and converts booleans/numbers before
@@ -106,17 +115,12 @@ deleted until the bot owner approves the request in the owner-only queue.
 
 ### Owner operations
 
-The bot owner can manage standby instances and optional Discord proxy workers.
-These routes require a staff session with the owner role; mutations also need
-the CSRF token returned by `/auth/status`. They are answered by the primary
-instance so a standby that owns the gateway cannot change the registry.
+The bot owner can manage optional Discord proxy workers. These routes require a
+staff session with the owner role; mutations also need the CSRF token returned
+by `/auth/status`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/staff/standbys` | Verified standby instances, live health, and failover state |
-| POST | `/api/staff/standbys` | Verify and register a standby |
-| DELETE | `/api/staff/standbys/<id>` | Remove a standby |
-| POST | `/api/staff/standbys/failover` | Set mode or activate/rotate a route |
 | GET | `/api/staff/proxy-workers` | Worker health, latency buckets, recent requests/errors, and aggregate usage |
 | POST | `/api/staff/proxy-workers` | Verify and register a proxy worker |
 | DELETE | `/api/staff/proxy-workers/<id>` | Remove a proxy worker |

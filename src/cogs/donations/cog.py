@@ -2,14 +2,16 @@
 Donations cog — OxaPay crypto donation system.
 
 Flow:
-  /donate [amount]  →  currency picker  →  invoice link (ephemeral)
-  Background loop polls OxaPay every 30 s for payment confirmation.
-  On Paid: records in DB, DMs the user, grants supporter role in support server.
+  /donate [amount]  →  link to the white-label page (ephemeral)
+  /donationstatus [track_id]  →  provider status, reconciled with the database
+  Every 45 s the background loop re-reads unpaid invoices from the database and
+  asks OxaPay about them, so a restart or a missed webhook cannot lose a payment.
+  On Paid (once per invoice): records the donor, DMs a receipt, grants the
+  supporter role in the support server, and thanks the channel it started in.
   on_member_join: auto-grants supporter role to known donors joining the support server.
 """
 
 import os
-from datetime import datetime
 from urllib.parse import quote
 
 import discord
@@ -18,20 +20,31 @@ from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
 from config.ids import SUPPORT_GUILD
-from cogs.staff.support_server import support_role, get_support_ids
+from cogs.staff.support_server import support_role
 from utils import logging
-from utils.donations import add_donor, create_donation_token, get_total_donated, is_supporter
+from utils.donations import (
+    DONATION_MAX_AMOUNT,
+    DONATION_MIN_AMOUNT,
+    DONATION_PRESET_AMOUNTS,
+    add_donor,
+    confirm_invoice,
+    create_donation_token,
+    get_invoice,
+    get_pending_invoices,
+    get_total_donated,
+    is_supporter,
+    update_invoice_status,
+)
 from .oxapay import OxaPayClient
 
 # OxaPay key type: use your MERCHANT API key (Dashboard → Merchant → API Key).
 # NOT the Sandbox key (testing only) and NOT the Payout API key (for sending crypto).
 OXAPAY_KEY: str = os.getenv("OXAPAY_API_KEY", "")
-INVOICE_LIFETIME: int = 60  # minutes
 
 
 def _site_base() -> str:
     """Public origin of the white-label payment page."""
-    base = os.getenv("PUBLIC_URL") or os.getenv("DONATION_SITE_URL")
+    base = os.getenv("PUBLIC_URL")
     if not base and os.getenv("REPLIT_DEV_DOMAIN"):
         base = f"https://{os.getenv('REPLIT_DEV_DOMAIN')}"
     return (base or "https://niko.sryze.cc").rstrip("/")
@@ -42,85 +55,11 @@ def donation_checkout_url(user_id: int, amount: float) -> str:
     token = create_donation_token(user_id)
     return f"{_site_base()}/billing?token={quote(token, safe='')}&amount={amount:.2f}"
 
-CURRENCIES = [
-    ("USDT", "Tether",   f"{get_emoji('crypto_tether_usdt')}"),
-    ("ETH",  "Ethereum", f"{get_emoji('crypto_ethereum')}"),
-    ("BTC",  "Bitcoin",  f"{get_emoji('crypto_bitcoin')}"),
-    ("BNB",  "BNB",      f"{get_emoji('crypto_bnb')}"),
-    ("LTC",  "Litecoin", f"{get_emoji('crypto_ltc')}"),
-    ("DOGE", "Dogecoin", f"{get_emoji('crypto_dogecoin')}"),
-    ("TRX",  "TRON",     f"{get_emoji('crypto_tron')}"),
-    ("XMR",  "Monero",   f"{get_emoji('crypto_monero')}"),
-]
-
-
-# ─────────────────── UI helpers ───────────────────
-
-def _currency_select(cog: "DonationCog", amount: float, user_id: int) -> discord.ui.ActionRow:
-    """Return a View containing a currency Select for `amount` USD."""
-    row = discord.ui.ActionRow()
-    options = [
-        discord.SelectOption(
-            label=f"{label} ({code})",
-            value=code,
-            emoji=emoji,
-            description=f"Pay ${amount:.2f} worth of {code}",
-        )
-        for code, label, emoji in CURRENCIES
-    ]
-    sel = discord.ui.Select(placeholder="Choose a cryptocurrency…", options=options)
-
-    async def _cb(interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        if interaction.user.id != user_id:
-            return await interaction.followup.send_message(
-                "This isn't your donation menu!", ephemeral=True
-            )
-        await cog._handle_currency_choice(interaction, amount, user_id, sel.values[0])
-
-    sel.callback = _cb
-    row.add_item(sel)
-    return row
-
-
-def _payment_layout(
-    amount: float, currency: str, track_id: str, pay_link: str
-) -> discord.ui.LayoutView:
-    """LayoutView showing invoice details + Pay Now link button."""
-    view = discord.ui.LayoutView()
-    view.add_item(
-        discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=(
-                    f"### {get_emoji('heart')} Donation Invoice Created\n"
-                    f"**Amount:** `${amount:.2f} USD` in **{currency}**\n"
-                    f"**Track ID:** `{track_id}`\n"
-                    f"**Expires in:** `{INVOICE_LIFETIME} minutes`\n\n"
-                    f"Once your payment is confirmed on-chain you'll automatically receive "
-                    f"the {get_emoji('badge_supporter_role')} **Supporter** badge."
-                )
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(
-                discord.ui.Button(
-                    label="Pay Now",
-                    style=discord.ButtonStyle.link,
-                    url=pay_link,
-                    emoji=get_emoji("oxapay"),
-                )
-            ),
-        )
-    )
-    return view
-
-
 # ─────────────────── Cog ───────────────────
 
 class DonationCog(commands.Cog, name="DonationCog"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # track_id → {user_id, amount, currency, channel_id}
-        self._pending: dict[str, dict] = {}
         self._poll_loop.start()
 
     def cog_unload(self):
@@ -128,25 +67,39 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
     # ── Background payment poller ──────────────────
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=45)
     async def _poll_loop(self):
-        if not self._pending or not OXAPAY_KEY:
+        """Reconcile unpaid invoices straight from the database.
+
+        Reading the pending set from storage instead of memory means a restart
+        between "address shown" and "network settled" no longer loses the
+        donation, and the webhook and this loop cannot both credit a payment
+        because both go through :meth:`_on_payment_confirmed`.
+        """
+        if not OXAPAY_KEY:
+            return
+        try:
+            invoices = await get_pending_invoices(self.bot)
+        except Exception as exc:
+            logging.warning("Donations", f"Could not read pending invoices: {exc}")
+            return
+        if not invoices:
             return
         client = OxaPayClient(OXAPAY_KEY)
-        completed: list[str] = []
-        for track_id, data in list(self._pending.items()):
+        for invoice in invoices:
+            track_id = str(invoice["track_id"] or "")
+            if not track_id:
+                continue
             try:
-                result = await client.check_payment(track_id)
-                status = result.get("status", "")
-                if status == "Paid":
-                    await self._on_payment_confirmed(track_id, data)
-                    completed.append(track_id)
-                elif status in ("Expired", "Failed"):
-                    completed.append(track_id)
+                result = await client.check_white_label(track_id)
             except Exception as exc:
                 logging.warning("Donations", f"Poll error for {track_id}: {exc}")
-        for tid in completed:
-            self._pending.pop(tid, None)
+                continue
+            status = str(result.get("status") or "")
+            if status == "Paid":
+                await self._on_payment_confirmed(track_id)
+            elif status in ("Expired", "Failed"):
+                await update_invoice_status(self.bot, track_id, status)
 
     @_poll_loop.before_loop
     async def _before_poll(self):
@@ -154,11 +107,24 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
     # ── Payment confirmed handler ──────────────────
 
-    async def _on_payment_confirmed(self, track_id: str, data: dict):
-        user_id: int = data["user_id"]
-        amount: float = data["amount"]
-        currency: str = data["currency"]
-        channel_id: int | None = data.get("channel_id")
+    async def _on_payment_confirmed(self, track_id: str, data: dict | None = None) -> bool:
+        """Credit a confirmed donation exactly once and thank the donor.
+
+        Returns True only for the call that flipped the invoice to paid, so a
+        retried webhook, a duplicate callback, or the poller catching up on the
+        same payment never credits the donor twice.
+        """
+        invoice, newly_confirmed = await confirm_invoice(self.bot, track_id, data)
+        if invoice is None:
+            logging.warning("Donations", f"Paid invoice {track_id} is not in the database.")
+            return False
+        if not newly_confirmed:
+            return False
+
+        user_id = int(invoice["user_id"])
+        amount = float(invoice["amount"])
+        currency = str(invoice.get("pay_currency") or invoice.get("currency") or "USD")
+        channel_id = invoice.get("channel_id")
 
         try:
             await add_donor(self.bot, user_id, amount, currency, track_id)
@@ -209,6 +175,11 @@ class DonationCog(commands.Cog, name="DonationCog"):
             except Exception:
                 pass
 
+        logging.success(
+            "Donations", f"Confirmed ${amount:.2f} donation from {user_id} ({track_id})"
+        )
+        return True
+
     # ── Role helpers ──────────────────────────────
 
     async def _grant_supporter_role(self, user_id: int):
@@ -226,54 +197,6 @@ class DonationCog(commands.Cog, name="DonationCog"):
             pass
         except Exception as exc:
             logging.warning("Donations", f"Could not grant supporter role to {user_id}: {exc}")
-
-    # ── Currency-select callback ──────────────────
-
-    async def _handle_currency_choice(
-        self,
-        interaction: discord.Interaction,
-        amount: float,
-        user_id: int,
-        currency: str,
-    ):
-        if not OXAPAY_KEY:
-            return await interaction.followup.send(
-                f"{get_emoji('danger')} Donations are not configured yet. "
-                "Please try again later.",
-                ephemeral=True,
-            )
-
-        client = OxaPayClient(OXAPAY_KEY)
-        result = await client.create_invoice(
-            amount=amount,
-            currency="USD",
-            pay_currency=currency,
-            lifetime=INVOICE_LIFETIME,
-            description=f"Niko Bot Donation — ${amount:.2f} USD",
-            order_id=f"{user_id}_{int(datetime.utcnow().timestamp())}",
-        )
-
-        if not result["success"]:
-            return await interaction.followup.send(
-                f"{get_emoji('danger')} Could not create invoice: "
-                f"{result.get('message', 'Unknown error')}",
-                ephemeral=True,
-            )
-
-        track_id: str = result["trackId"]
-        pay_link: str = result["payLink"]
-
-        self._pending[track_id] = {
-            "user_id": user_id,
-            "amount": amount,
-            "currency": currency,
-            "channel_id": interaction.channel_id,
-        }
-
-        await interaction.followup.send(
-            view=_payment_layout(amount, currency, track_id, pay_link),
-            ephemeral=True,
-        )
 
     # ── Commands ──────────────────────────────────
 
@@ -323,8 +246,22 @@ class DonationCog(commands.Cog, name="DonationCog"):
                         emoji=get_emoji("oxapay"),
                     )
                 ),
+                # One click for the usual amounts; /donate amount still takes
+                # anything between the minimum and the maximum.
+                discord.ui.ActionRow(*[
+                    discord.ui.Button(
+                        label=f"${preset}",
+                        style=discord.ButtonStyle.link,
+                        url=donation_checkout_url(ctx.author.id, preset),
+                    )
+                    for preset in DONATION_PRESET_AMOUNTS
+                ]),
                 discord.ui.TextDisplay(
-                    content=f"-# {get_emoji('oxapay')} Powered by OxaPay"
+                    content=(
+                        f"-# Any amount from ${DONATION_MIN_AMOUNT:,.0f} to "
+                        f"${DONATION_MAX_AMOUNT:,.0f} works too: `/donate amount:`\n"
+                        f"-# {get_emoji('oxapay')} Powered by OxaPay"
+                    )
                 )
             )
         )
@@ -344,23 +281,42 @@ class DonationCog(commands.Cog, name="DonationCog"):
         if ctx.interaction:
             await ctx.defer(ephemeral=True)
 
-        if not OXAPAY_KEY:
+        invoice = await get_invoice(self.bot, track_id=track_id)
+        if invoice is not None and str(invoice["user_id"]) != str(ctx.author.id):
+            return await ctx.send(
+                f"{get_emoji('danger')} That track ID belongs to another donation.",
+                ephemeral=bool(ctx.interaction),
+            )
+
+        status = str(invoice.get("status")) if invoice is not None else "Unknown"
+        if OXAPAY_KEY:
+            result = await OxaPayClient(OXAPAY_KEY).check_white_label(track_id)
+            status = str(result.get("status") or status)
+            # Keep the stored copy current so the website and the poller agree.
+            if invoice is not None and status in ("Expired", "Failed"):
+                await update_invoice_status(self.bot, track_id, status)
+        elif invoice is None:
             return await ctx.send(
                 f"{get_emoji('danger')} Donations are not configured.",
                 ephemeral=bool(ctx.interaction),
             )
 
-        client = OxaPayClient(OXAPAY_KEY)
-        result = await client.check_payment(track_id)
-        status = result.get("status", "Unknown")
-
         icons = {
             "Paid":    get_emoji("tick"),
             "Waiting": get_emoji("loading"),
+            "Paying":  get_emoji("loading"),
+            "Confirming": get_emoji("loading"),
             "Expired": get_emoji("cross"),
             "Failed":  get_emoji("danger"),
         }
         icon = icons.get(status, "❓")
+        details = ""
+        if invoice is not None:
+            pay_currency = invoice.get("pay_currency") or "USD"
+            details = f"\n**Amount:** `${float(invoice['amount']):.2f} USD` in **{pay_currency}**"
+            created = invoice.get("created_at")
+            if hasattr(created, "timestamp"):
+                details += f"\n**Created:** <t:{int(created.timestamp())}:R>"
 
         view = discord.ui.LayoutView()
         view.add_item(
@@ -369,7 +325,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                     content=(
                         f"### {get_emoji('heart')} Donation Status\n"
                         f"**Track ID:** `{track_id}`\n"
-                        f"**Status:** {icon} `{status}`"
+                        f"**Status:** {icon} `{status}`{details}"
                     )
                 )
             )

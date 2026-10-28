@@ -44,13 +44,28 @@ type OrderStatus = {
   subscription?: { expires_at?: string | null } | null;
 };
 
-type GiftTarget = {
+type PlanGuild = {
   id: string;
   name: string;
   icon_url: string | null;
   member_count: number;
   premium: { active: boolean; expires_at?: string | null } | null;
 };
+
+type DonationMeta = {
+  presets: number[];
+  min_amount: number;
+  max_amount: number;
+  totals: { total_cents: number; donation_count: number; donor_count: number };
+  goal_cents: number;
+  progress: number | null;
+  your_total_cents: number;
+  configured: boolean;
+};
+
+function formatUsd(cents: number) {
+  return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 const CURRENCY_LABELS: Record<string, { name: string; mark: string }> = {
   USDT: { name: "Tether", mark: "₮" },
@@ -85,9 +100,16 @@ export function BillingPage() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token") || "";
   const guildParam = (params.get("guild") || "").trim();
-  const wantsGift = params.get("gift") === "1";
   const amountParam = params.get("amount") || "";
   const isDonation = Boolean(token);
+  // Links from before the split used /billing?...&gift=1.
+  const legacyGift = params.get("gift") === "1";
+
+  useEffect(() => {
+    if (legacyGift) {
+      window.location.replace(`/billing/gift${guildParam ? `?guild=${guildParam}` : ""}`);
+    }
+  }, [guildParam, legacyGift]);
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [amount, setAmount] = useState(() => {
@@ -96,9 +118,9 @@ export function BillingPage() {
   });
   const [currency, setCurrency] = useState("USDT");
   const [guildId, setGuildId] = useState(guildParam);
-  const [gift, setGift] = useState(wantsGift);
-  const [targets, setTargets] = useState<GiftTarget[] | null>(null);
+  const [targets, setTargets] = useState<PlanGuild[] | null>(null);
   const [targetsError, setTargetsError] = useState("");
+  const [meta, setMeta] = useState<DonationMeta | null>(null);
   const [step, setStep] = useState<"method" | "asset" | "pay" | "done">("method");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [paid, setPaid] = useState(false);
@@ -139,7 +161,9 @@ export function BillingPage() {
         return;
       }
       setCsrf(auth.csrf_token || "");
-      const result = await api<{ guilds: GiftTarget[] }>("/api/premium/gift-targets");
+      // Only servers the member manages can be upgraded; gifting has its own
+      // page and its own (membership-based) list.
+      const result = await api<{ guilds: PlanGuild[] }>("/api/premium/guilds");
       setTargets(result.guilds);
       if (!guildId && result.guilds.length === 1) setGuildId(result.guilds[0].id);
     } catch (reason) {
@@ -148,10 +172,21 @@ export function BillingPage() {
     }
   }, [guildId]);
 
+  const loadMeta = useCallback(async () => {
+    if (!isDonation) return;
+    try {
+      const query = new URLSearchParams({ token });
+      setMeta(await api<DonationMeta>(`/api/donations/meta?${query.toString()}`));
+    } catch {
+      // Totals are garnish; the checkout still works without them.
+    }
+  }, [isDonation, token]);
+
   useEffect(() => {
     void loadPlan();
+    void loadMeta();
     if (!isDonation) void loadTargets();
-  }, [isDonation, loadPlan, loadTargets]);
+  }, [isDonation, loadMeta, loadPlan, loadTargets]);
 
   // Countdown for the quoted address; the provider stops accepting it after this.
   useEffect(() => {
@@ -205,11 +240,7 @@ export function BillingPage() {
         : await api<Checkout>("/api/premium/checkout", {
             method: "POST",
             headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
-            body: JSON.stringify({
-              guild_id: guildId,
-              kind: gift ? "gift" : "purchase",
-              pay_currency: currency,
-            }),
+            body: JSON.stringify({ guild_id: guildId, pay_currency: currency }),
           });
       setCheckout(result);
       setStep("pay");
@@ -235,13 +266,13 @@ export function BillingPage() {
     }
   };
 
-  const canPay = isDonation ? Number.parseFloat(amount) >= 1 : Boolean(guildId);
+  const canPay = isDonation
+    ? Number.parseFloat(amount) >= (meta?.min_amount ?? 1)
+    : Boolean(guildId);
 
-  const heading = isDonation
-    ? "Support Niko"
-    : gift
-      ? "Gift Niko Premium"
-      : "Niko Premium";
+  const heading = isDonation ? "Support Niko" : "Niko Premium";
+
+  if (legacyGift) return null;
 
   return (
     <>
@@ -258,9 +289,7 @@ export function BillingPage() {
             <p>
               {isDonation
                 ? "Every dollar covers hosting, the AI moderation API, and the new niko.sryze.cc domain."
-                : gift
-                  ? "Give a server a month of AI powered moderation. The owner is told who sent it."
-                  : "AI image moderation for your community, billed monthly. Cancel by simply not renewing."}
+                : "AI image moderation for your community, billed monthly. Cancel by simply not renewing."}
             </p>
           </header>
 
@@ -293,7 +322,7 @@ export function BillingPage() {
                           role="radio"
                           aria-checked={guildId === target.id}
                           className={`billing-target${guildId === target.id ? " is-selected" : ""}`}
-                          onClick={() => { setGuildId(target.id); setGift(wantsGift); }}
+                          onClick={() => setGuildId(target.id)}
                         >
                           <span className="billing-target-icon">
                             {target.icon_url ? <img src={target.icon_url} alt="" /> : <b>{target.name.slice(0, 1)}</b>}
@@ -312,18 +341,14 @@ export function BillingPage() {
                     </div>
                   )}
                   {targetsError && <p className="billing-error" role="alert">{targetsError}</p>}
-                  {!gift && guildParam && !selectedTarget && targets && targets.length > 0 && (
+                  {guildParam && !selectedTarget && targets && targets.length > 0 && (
                     <p className="billing-hint">That server is not one you can manage. Pick another below.</p>
                   )}
-                  {!isDonation && targets && targets.length > 0 && (
-                    <label className="billing-toggle">
-                      <input type="checkbox" checked={gift} onChange={(event) => setGift(event.target.checked)} />
-                      <span>
-                        <strong>Gift this month</strong>
-                        <small>You pay now and the owner is notified. Requires membership in the server.</small>
-                      </span>
-                      <i aria-hidden="true" />
-                    </label>
+                  {targets && targets.length > 0 && (
+                    <p className="billing-hint">
+                      Buying for a community you are in but do not manage?{" "}
+                      <a href={`/billing/gift${guildId ? `?guild=${guildId}` : ""}`}>Gift premium instead</a>.
+                    </p>
                   )}
                 </div>
               )}
@@ -331,19 +356,58 @@ export function BillingPage() {
               {isDonation && (
                 <div className="billing-field">
                   <span className="billing-label">Amount (USD)</span>
+                  <div className="billing-presets" role="group" aria-label="Suggested amounts">
+                    {(meta?.presets || [3, 5, 10, 25, 50]).map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        className={`billing-preset${Number.parseFloat(amount) === preset ? " is-selected" : ""}`}
+                        aria-pressed={Number.parseFloat(amount) === preset}
+                        onClick={() => setAmount(preset.toFixed(2))}
+                      >
+                        ${preset}
+                      </button>
+                    ))}
+                  </div>
                   <div className="billing-amount">
                     <span aria-hidden="true">$</span>
                     <input
                       type="number"
-                      min="1"
-                      max="10000"
+                      min={meta?.min_amount ?? 1}
+                      max={meta?.max_amount ?? 10000}
                       step="1"
                       value={amount}
                       onChange={(event) => setAmount(event.target.value)}
                       aria-label="Donation amount in USD"
                     />
                   </div>
-                  <p className="billing-hint">Minimum $1. A receipt and Supporter badge arrive after the network confirms.</p>
+                  <p className="billing-hint">
+                    Minimum ${meta?.min_amount ?? 1}. A receipt and Supporter badge arrive after the network confirms.
+                  </p>
+                  {meta && meta.totals.donation_count > 0 && (
+                    <div className="billing-supporter-totals">
+                      <p>
+                        <strong>{formatUsd(meta.totals.total_cents)}</strong> raised by{" "}
+                        {meta.totals.donor_count.toLocaleString()} supporter{meta.totals.donor_count === 1 ? "" : "s"}{" "}
+                        across {meta.totals.donation_count.toLocaleString()} donation{meta.totals.donation_count === 1 ? "" : "s"}.
+                      </p>
+                      {meta.goal_cents > 0 && (
+                        <div
+                          className="billing-goal"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={meta.goal_cents}
+                          aria-valuenow={Math.min(meta.totals.total_cents, meta.goal_cents)}
+                          aria-label="Donation goal"
+                        >
+                          <i style={{ width: `${Math.min(100, Math.round((meta.progress || 0) * 100))}%` }} />
+                        </div>
+                      )}
+                      {meta.your_total_cents > 0 && (
+                        <p className="billing-hint">You have donated {formatUsd(meta.your_total_cents)} so far. Thank you!</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -402,7 +466,7 @@ export function BillingPage() {
                   <strong>{isDonation ? `$${Number.parseFloat(amount).toFixed(2)} USD` : plan?.price_label}</strong>
                 </div>
                 <div>
-                  <span className="billing-label">{gift ? "Gift for" : isDonation ? "To" : "Server"}</span>
+                  <span className="billing-label">{isDonation ? "To" : "Server"}</span>
                   <strong>{isDonation ? "Niko" : selectedTarget?.name || `Server ${guildId}`}</strong>
                 </div>
               </div>
@@ -487,12 +551,27 @@ export function BillingPage() {
           {!loading && step === "done" && (
             <div className="billing-body billing-done">
               <span className="billing-done-mark" aria-hidden="true"><Icon name="check" /></span>
-              <h2>{isDonation ? "Thank you for supporting Niko" : gift ? "Gift on its way" : "Premium is active"}</h2>
+              <h2>{isDonation ? "Thank you for supporting Niko" : "Premium is active"}</h2>
               <p>
                 {isDonation
                   ? "Your donation is confirmed. The Supporter badge is applied in the support server."
                   : `AI image moderation is unlocked${paidUntil ? ` until ${formatDate(paidUntil)}` : ""}. Turn it on under Moderation in the dashboard.`}
               </p>
+              {isDonation && checkout && (
+                <div className="billing-receipt">
+                  <div>
+                    <span className="billing-label">Amount</span>
+                    <strong>{checkout.amount_label}</strong>
+                  </div>
+                  <div>
+                    <span className="billing-label">Track ID</span>
+                    <code>{checkout.track_id || checkout.order_id}</code>
+                  </div>
+                  <p className="billing-hint">
+                    Keep the track ID for <code>/donationstatus</code>. A receipt is waiting in your DMs.
+                  </p>
+                </div>
+              )}
               <div className="billing-done-actions">
                 <button type="button" className="billing-primary" onClick={() => navigate(isDonation ? "/" : `/dashboard/${guildId}/moderation`)}>
                   {isDonation ? "Back to site" : "Open moderation"}

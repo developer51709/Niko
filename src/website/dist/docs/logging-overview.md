@@ -9,13 +9,13 @@ Niko's logging system provides comprehensive server event logging across ten cat
 | **Moderation** | Kicks, bans, unbans, timeouts applied/removed, nickname changes by staff |
 | **AutoMod** | Niko's own filters (spam, links, bad words, mass mentions, anti-nuke, anti-raid) and rules fired by Discord's native AutoMod |
 | **Messages** | Message edits, message deletions (images inline, other attachments re-uploaded), bulk clears and purges |
-| **Channels** | Channel and thread create/delete/update, permission overwrite changes, webhook changes, pinned and unpinned messages |
-| **Members** | Joins, leaves, boosts, avatar updates, role changes and nickname changes |
+| **Channels** | Channel and thread create/delete/update, permission overwrite changes, webhook changes, pinned and unpinned messages, plus restore/revert buttons |
+| **Members** | Joins, leaves, boosts, global and server profile picture changes (with both pictures archived), role changes and nickname changes |
 | **Captcha** | Captcha passes, failures, and verification kicks |
 | **Invites** | Invite creation and deletion, plus which invite each new member used |
-| **Roles** | Role create, delete, update (name, colour, hoist, mentionable, permissions) |
+| **Roles** | Role create, delete, update (name, colour, hoist, mentionable, permissions), plus a restore button on deleted roles |
 | **Server** | Server name/description/verification/icon/banner changes, emoji and sticker changes, integrations, scheduled events |
-| **Voice** | Voice channel joins, leaves, and moves |
+| **Voice** | Voice channel joins, leaves, and moves, and self/server mute, deafen, camera and stream changes |
 
 ## Configuration
 
@@ -49,9 +49,10 @@ All entries use Discord components v2 containers:
 - **Body** — Structured details: mentions, channel references, IDs, timestamps and reasons
 - **Moderator attribution** — read from the audit log, matched by target and recency
 - **Jump links** — deleted/edited messages, pins and overwrite changes link to the affected message or channel
-- **MediaGallery** — image attachments from deleted messages are embedded directly
+- **MediaGallery** — image attachments from deleted messages are embedded directly; re-uploaded pictures (such as a replaced avatar) carry a "Before"/"After" caption
 - **Section + Thumbnail** — member entries show the member's avatar
 - **Files** — non-image attachments from deleted messages are re-uploaded (capped at 5 files, 2 MB each)
+- **Archived pictures** — a profile picture change downloads both pictures and uploads them with the entry, because Discord expires the CDN URL of a replaced avatar within a day or two
 
 ## Member Logging
 
@@ -59,8 +60,9 @@ All entries use Discord components v2 containers:
 - **Member Left** — Roles at the time of departure and how long they had been in the server
 - **Kick / Ban** — A removed member is logged once as a kick or ban with the moderator and reason, never also as a plain leave
 - **Server Boosted / Boost Removed** — Boost count and server tier
-- **Avatar Updated** — Old and new avatar, with the new avatar as a thumbnail
-- **Role Changes** — Roles added and removed
+- **Avatar Updated** — The global profile picture changed; both pictures are attached to the entry
+- **Server Avatar Updated** — The per-server picture changed; logged as its own entry, so a member who changes both gets two entries
+- **Role Changes** — Roles added and removed, plus the staff member who changed them (read from the audit log)
 - **Nickname Changes** — Old and new nickname, attributed to the staff member who changed it
 
 ## Message Logging
@@ -80,6 +82,21 @@ Niko caches invite usage on startup and after each join:
 - **Vanity Invite Used** — Vanity URL joins
 - **Unknown Join Method** — Joins with no matching invite (OAuth2, Server Discovery, deleted invite)
 - **Invite Created/Deleted** — Invite lifecycle events
+
+## Quick Actions
+
+Log entries carry buttons for the obvious next step, each gated on the permission it needs and answered ephemerally:
+
+| Button | Appears on | What it does |
+|--------|-----------|--------------|
+| **Kick / Ban / Unban** | Moderation, AutoMod, join and captcha entries | Applies the action to the member the entry is about |
+| **Unmute** | Mute and tempmute entries | Removes the member's mute through the moderation system |
+| **Unlock Channel** | Locked-channel entries | Removes the `Send Messages` deny from `@everyone` |
+| **Restore Role** | **Role Deleted** | Recreates the role with its name, colour, permissions, hoist, mentionable and position. Members who held it are not re-added |
+| **Restore Channel** | **Channel Deleted** | Recreates the channel in its category with its topic, slowmode, NSFW flag, bitrate, user limit and permission overwrites |
+| **Revert Changes** | **Channel Updated** | Puts the changed settings and permission overwrites back to their previous values |
+
+The restore and revert buttons keep working after a restart: the state they need is stored in the database and the button carries only a snapshot id. Snapshots are pruned after 30 days, after which the button answers that the restore has expired. A restore is written back into the category's own log channel, so the undo is on the record too.
 
 ## Disabling Categories
 

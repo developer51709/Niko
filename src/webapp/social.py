@@ -139,7 +139,7 @@ def _guild_embed_context(guild_id: str) -> dict | None:
         "title": f"{guild.name} — Level leaderboard",
         "description": description,
         "name": guild.name,
-        "section": "Level Leaderboard",
+        "section": "Level leaderboard",
         "thumbnail": str(icon.url) if icon is not None else "",
         "accent": None,
         "lines": lines,
@@ -228,7 +228,7 @@ def _team_apply_embed_context() -> dict:
             else "No staff roles are open right now — check back soon, or say hi in the support server."
         ),
         "name": "Join the Niko team",
-        "section": "STAFF APPLICATIONS",
+        "section": "Staff applications",
         "thumbnail": "",
         "accent": None,
         "lines": lines,
