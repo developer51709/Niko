@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import database
 from .formatters import *
@@ -6,14 +7,27 @@ from .formatters import *
 
 LOG_WEBHOOK_NAME = "Niko | Server Logs"
 
+#: How long a loaded logging config is reused before it is read again. Every
+#: single log event used to re-read the whole table (and on MongoDB iterate the
+#: whole collection), because the config was reloaded unconditionally at the
+#: top of log_event.
+CONFIG_TTL = 30.0
+
+#: Deleted-message attachments are re-uploaded into the log, so they are capped:
+#: a mass delete of large files would otherwise download them all again.
+MAX_LOG_FILES = 5
+MAX_LOG_FILE_BYTES = 2_000_000
+
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Logging config lives in the database (logging_config); loaded on demand.
+        # Logging config lives in the database (logging_config); loaded on demand
+        # and reused for CONFIG_TTL so one event is not one table read.
         self._config: dict = {}
-        self._config_loaded = False
+        self._config_at: float = 0.0
+        self._config_lock = asyncio.Lock()
         # guild_id → {invite_code: uses_count}
         self._invite_cache: dict[int, dict[str, int]] = {}
         self._webhook_cache: dict[tuple[int, int], discord.Webhook] = {}
@@ -41,9 +55,75 @@ class ServerLogger(commands.Cog):
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
 
+    def invalidate(self) -> None:
+        """Drop the cached config so the next event reads it again."""
+        self._config_at = 0.0
+
+    async def config(self) -> dict:
+        """The loaded logging config, refreshed at most once per CONFIG_TTL.
+
+        A failed read keeps the last good copy: returning `{}` (which is what
+        `_load_log_config` does by default) looked like "no category is
+        configured" and silently dropped every event for a whole outage.
+        """
+        if self._config_at and time.monotonic() - self._config_at < CONFIG_TTL:
+            return self._config
+        async with self._config_lock:
+            if self._config_at and time.monotonic() - self._config_at < CONFIG_TTL:
+                return self._config
+            try:
+                fresh = await _load_log_config(raise_on_error=True)
+            except Exception as error:
+                logging.warning(
+                    "logging_cog",
+                    f"Could not reload the logging config ({error}); keeping the last copy",
+                )
+                self._config_at = time.monotonic()
+                return self._config
+            # An empty result from a bot in thousands of guilds means a failed
+            # read, not that every server cleared its channels.
+            if fresh or not self._config:
+                self._config = fresh
+            self._config_at = time.monotonic()
+        return self._config
+
     async def _reload(self):
-        self._config = await _load_log_config()
-        self._config_loaded = True
+        """Force a fresh read, for the `/logging` panel and its status view."""
+        self.invalidate()
+        return await self.config()
+
+    async def save_config(self, guild: discord.Guild, cfg: dict, *, actor=None,
+                          summary: str = "", before: dict | None = None) -> None:
+        """Persist one guild's logging config, then announce the change.
+
+        The announcement goes to the channels that were configured before the
+        change, so redirecting or clearing a category cannot quietly stop the
+        logs the people watching that channel rely on.
+        """
+        await _save_guild_log_config(guild.id, cfg)
+        self._config[str(guild.id)] = cfg
+        self.invalidate()
+        await self._audit_logging_change(guild, before, actor=actor, summary=summary)
+
+    async def _audit_logging_change(self, guild: discord.Guild, before: dict | None,
+                                    *, actor=None, summary: str = "") -> None:
+        """Record a logging-config change in the channels it affected."""
+        if before is None:
+            return
+        channels = {before.get(key) for key in CATEGORIES if before.get(key)}
+        if not channels:
+            return
+        lines = [f"**Action:** Logging configuration changed"]
+        if actor is not None:
+            lines.append(f"**Changed by:** {getattr(actor, 'mention', actor)}")
+        if summary:
+            lines.append(f"**Change:** {summary}")
+        for channel_id in list(channels)[:3]:
+            channel = guild.get_channel(channel_id)
+            if channel is None:
+                continue
+            await self._send_entry(
+                guild, channel, "server", "Logging Updated", "\n".join(lines))
 
     # ── Core logging method ───────────────────────
 
@@ -67,7 +147,7 @@ class ServerLogger(commands.Cog):
         files renders discord.ui.File components inside the log container (the
         bytes are uploaded alongside the message via send(files=...)).
         """
-        await self._reload()
+        await self.config()
         cfg = self._get_cfg(guild.id)
 
         if category in cfg.get("disabled", []):
@@ -81,6 +161,34 @@ class ServerLogger(commands.Cog):
         if not channel:
             return
 
+        await self._send_entry(
+            guild, channel, category, title, body,
+            target_id=target_id, action_key=action_key, channel_id=channel_id,
+            media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+        )
+
+    async def _send_entry(
+        self,
+        guild: discord.Guild,
+        channel: discord.abc.Messageable,
+        category: str,
+        title: str,
+        body: str,
+        *,
+        target_id: int | None = None,
+        action_key: str | None = None,
+        channel_id: int | None = None,
+        media_urls: list[str] | None = None,
+        thumbnail_url: str | None = None,
+        files: list[discord.File] | None = None,
+    ) -> None:
+        """Post one log entry to a specific channel.
+
+        Webhooks are preferred (their own rate-limit bucket), but a server that
+        has not granted Manage Webhooks, or a channel that cannot own a webhook
+        such as a thread, still gets its log: the entry falls back to the bot
+        account instead of being dropped.
+        """
         view = _build_log_view(
             category=category,
             title=title,
@@ -94,11 +202,11 @@ class ServerLogger(commands.Cog):
             files=files,
         )
         try:
-            # Webhooks use a separate Discord rate-limit bucket from bot messages.
+            await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))
             webhook = await self._get_log_webhook(channel)
             if webhook is None:
+                await self._send_with_bot(channel, view, files)
                 return
-            await log_channel_limiter.acquire((guild.id, channel.id))
             try:
                 await webhook.send(
                     view=view,
@@ -125,6 +233,7 @@ class ServerLogger(commands.Cog):
                         )
                 webhook = await self._get_log_webhook(channel)
                 if webhook is None:
+                    await self._send_with_bot(channel, view, files)
                     return
                 for file in files or []:
                     file.reset(seek=True)
@@ -139,8 +248,27 @@ class ServerLogger(commands.Cog):
         except Exception as e:
             logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")
 
-    async def _get_log_webhook(self, channel: discord.TextChannel) -> discord.Webhook | None:
-        """Return the persisted log webhook for a channel, replacing it if deleted."""
+    async def _send_with_bot(self, channel: discord.abc.Messageable,
+                             view: discord.ui.LayoutView,
+                             files: list[discord.File] | None = None) -> None:
+        """Send a log entry as the bot itself, the fallback without webhooks."""
+        for file in files or []:
+            file.reset(seek=True)
+        await channel.send(
+            view=view,
+            files=files or [],
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    async def _get_log_webhook(self, channel) -> discord.Webhook | None:
+        """Return the persisted log webhook for a channel, replacing it if deleted.
+
+        Only real text channels can own a webhook; threads, announcement
+        channels and categories return None so the caller falls back to sending
+        the entry as the bot.
+        """
+        if not isinstance(channel, discord.TextChannel):
+            return None
         key = (channel.guild.id, channel.id)
         lock = self._webhook_locks.setdefault(key, asyncio.Lock())
         async with lock:
@@ -185,6 +313,14 @@ class ServerLogger(commands.Cog):
                     f"Cannot create log webhook in {channel} for {channel.guild}: missing Manage Webhooks permission",
                 )
                 return None
+            except discord.HTTPException as error:
+                # A thread or an announcement channel cannot own a webhook; the
+                # entry is still delivered through the bot account.
+                logging.warning(
+                    "logging_cog",
+                    f"Cannot create log webhook in {channel} ({error}); falling back to a normal message",
+                )
+                return None
 
             if not webhook.token:
                 logging.error("logging_cog", f"Created log webhook in {channel} without a token; cannot persist it")
@@ -227,6 +363,29 @@ class ServerLogger(commands.Cog):
         await self.log_event(guild, category, title, body, target_id=target_id, action_key=title)
 
     # ── Gateway event listeners ───────────────────
+
+    async def _audit_entry(self, guild: discord.Guild, action, target_id: int,
+                           *, window: float = 15.0):
+        """The audit entry for *this* action on *this* target, or None.
+
+        Every attribution used to take "the first entry in the last few", with
+        no target and no recency check, so two moderators acting within a second
+        swapped names and a stale entry could blame somebody who did nothing.
+        Audit entries arrive newest first, so the first entry older than the
+        window ends the search.
+        """
+        try:
+            async for entry in guild.audit_logs(limit=6, action=action):
+                target = getattr(entry, "target", None)
+                if target is not None and getattr(target, "id", None) != target_id:
+                    continue
+                age = (discord.utils.utcnow() - entry.created_at).total_seconds()
+                if age > window:
+                    break
+                return entry
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+        return None
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -319,35 +478,52 @@ class ServerLogger(commands.Cog):
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
 
-        # ── Check audit log for an external kick ──
-        kick_entry = None
-        try:
-            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
-                if entry.target.id == member.id:
-                    kick_entry = entry
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
-
-        if kick_entry and kick_entry.user != self.bot.user:
-            kick_body = (
+        # ── Was this a kick or a ban rather than a plain leave? ──
+        # Only kicks used to be checked, so a banned member also appeared as
+        # "Member Left" with no reason on top of the Ban entry.
+        kick = await self._audit_entry(
+            guild, discord.AuditLogAction.kick, member.id)
+        if kick is not None and kick.user != self.bot.user:
+            body = (
                 f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
                 f"**Action:** Kick\n"
-                f"**Reason:** {kick_entry.reason or 'No reason provided'}\n"
-                f"**Moderator:** {kick_entry.user.mention if kick_entry.user else 'Unknown'}"
+                f"**Reason:** {kick.reason or 'No reason provided'}\n"
+                f"**Moderator:** {kick.user.mention if kick.user else 'Unknown'}"
             )
             await self.log_event(
-                guild, "moderation", "Kick", kick_body,
+                guild, "moderation", "Kick", body,
                 target_id=member.id, action_key="Kick"
             )
+            return
+
+        # A ban already has its own listener; the member must not also show up
+        # as having left on their own.
+        if await self._audit_entry(guild, discord.AuditLogAction.ban, member.id) is not None:
+            return
 
         roles = [r.mention for r in member.roles if r != guild.default_role]
         roles_text = ", ".join(roles) if roles else "None"
+        joined_at = getattr(member, "joined_at", None)
+        tenure = (
+            f"\n**Joined:** <t:{int(joined_at.timestamp())}:R>" if joined_at else ""
+        )
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Roles:** {roles_text}"
+            f"**Roles:** {roles_text}{tenure}"
         )
-        await self.log_event(guild, "members", "Member Left", body)
+        await self.log_event(
+            guild, "members", "Member Left", body,
+            target_id=member.id,
+            thumbnail_url=self._avatar_url(member),
+        )
+
+    @staticmethod
+    def _avatar_url(user) -> str | None:
+        """A member-scoped entry shows the avatar as a thumbnail."""
+        try:
+            return user.display_avatar.url
+        except Exception:
+            return None
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
@@ -390,16 +566,29 @@ class ServerLogger(commands.Cog):
         if removed:
             changes.append(f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
 
+        # ── Boost / unboost ───────────────────────
+        before_boost = getattr(before, "premium_since", None)
+        after_boost = getattr(after, "premium_since", None)
+        if before_boost != after_boost and (before_boost is None or after_boost is None):
+            if after_boost is not None:
+                boost_title, boost_line = "Server Boosted", "started boosting"
+            else:
+                boost_title, boost_line = "Boost Removed", "stopped boosting"
+            boost_body = (
+                f"**Member:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
+                f"**Action:** {boost_line}\n"
+                f"**Boosts:** `{guild.premium_subscription_count}` (Tier {guild.premium_tier})"
+            )
+            await self.log_event(
+                guild, "members", boost_title, boost_body,
+                target_id=after.id, thumbnail_url=self._avatar_url(after),
+            )
+
         # ── Nick change — attribute to moderator via audit log ──
         if before.nick != after.nick:
-            nick_moderator = None
-            try:
-                async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id:
-                        nick_moderator = entry.user
-                        break
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+            nick_entry = await self._audit_entry(
+                guild, discord.AuditLogAction.member_update, after.id)
+            nick_moderator = nick_entry.user if nick_entry else None
 
             if nick_moderator and nick_moderator != self.bot.user:
                 nick_body = (
@@ -408,6 +597,8 @@ class ServerLogger(commands.Cog):
                     f"**New Nickname:** `{after.nick or after.name}`\n"
                     f"**Changed By:** {nick_moderator.mention}"
                 )
+                if nick_entry.reason:
+                    nick_body += f"\n**Reason:** {nick_entry.reason}"
                 await self.log_event(
                     guild, "moderation", "Nickname Changed", nick_body,
                     target_id=after.id
@@ -419,14 +610,9 @@ class ServerLogger(commands.Cog):
         before_timeout = getattr(before, "timed_out_until", None)
         after_timeout = getattr(after, "timed_out_until", None)
         if before_timeout != after_timeout:
-            timeout_mod = None
-            try:
-                async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id:
-                        timeout_mod = entry.user
-                        break
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+            timeout_entry = await self._audit_entry(
+                guild, discord.AuditLogAction.member_update, after.id)
+            timeout_mod = timeout_entry.user if timeout_entry else None
 
             if timeout_mod and timeout_mod != self.bot.user:
                 if after_timeout:
@@ -436,6 +622,8 @@ class ServerLogger(commands.Cog):
                         f"**Until:** <t:{int(after_timeout.timestamp())}:F> (<t:{int(after_timeout.timestamp())}:R>)\n"
                         f"**Moderator:** {timeout_mod.mention}"
                     )
+                    if timeout_entry.reason:
+                        timeout_body += f"\n**Reason:** {timeout_entry.reason}"
                     await self.log_event(
                         guild, "moderation", "Timeout", timeout_body,
                         target_id=after.id, action_key="Timeout"
@@ -584,14 +772,9 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
-        responsible = None
-        try:
-            async for entry in channel.guild.audit_logs(limit=3, action=discord.AuditLogAction.channel_create):
-                if entry.target.id == channel.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            channel.guild, discord.AuditLogAction.channel_create, channel.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Channel:** {channel.mention} (`{channel.name}`)\n"
@@ -602,14 +785,9 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
-        responsible = None
-        try:
-            async for entry in channel.guild.audit_logs(limit=3, action=discord.AuditLogAction.channel_delete):
-                if entry.target.id == channel.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            channel.guild, discord.AuditLogAction.channel_delete, channel.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Channel:** `#{channel.name}`\n"
@@ -643,17 +821,45 @@ class ServerLogger(commands.Cog):
                 a_lim = getattr(after, "user_limit", 0) or "Unlimited"
                 changes.append(f"**User Limit:** `{b_lim}` → `{a_lim}`")
 
+        # ── Permission overwrites ────────────────
+        # Granting or revoking a member/role overwrite is the most consequential
+        # channel edit and used to be silent unless the category was logged by
+        # the role or member listener.
+        before_overwrites = getattr(before, "overwrites", {})
+        after_overwrites = getattr(after, "overwrites", {})
+        for target, overwrite in after_overwrites.items():
+            old = before_overwrites.get(target)
+            label = getattr(target, "mention", None) or getattr(target, "name", str(target))
+            if old is None:
+                granted = [p for p, v in iter(overwrite) if v]
+                denied = [p for p, v in iter(overwrite) if not v]
+                parts = []
+                if granted:
+                    parts.append("allow " + ", ".join(f"`{p.replace('_', ' ')}`" for p in granted))
+                if denied:
+                    parts.append("deny " + ", ".join(f"`{p.replace('_', ' ')}`" for p in denied))
+                changes.append(f"**Overwrite Added** for {label}: " + ("; ".join(parts) or "none"))
+            elif old != overwrite:
+                granted = [p for p, v in iter(overwrite) if v and not getattr(old, p)]
+                denied = [p for p, v in iter(overwrite) if not v and getattr(old, p)]
+                parts = []
+                if granted:
+                    parts.append("allow " + ", ".join(f"`{p}`" for p in granted))
+                if denied:
+                    parts.append("deny " + ", ".join(f"`{p}`" for p in denied))
+                if parts:
+                    changes.append(f"**Overwrite Changed** for {label}: " + "; ".join(parts))
+        for target in before_overwrites:
+            if target not in after_overwrites:
+                label = getattr(target, "mention", None) or getattr(target, "name", str(target))
+                changes.append(f"**Overwrite Removed** for {label}")
+
         if not changes:
             return
 
-        responsible = None
-        try:
-            async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_update):
-                if entry.target.id == after.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            after.guild, discord.AuditLogAction.channel_update, after.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Channel:** {after.mention} (`{after.name}`)\n"
@@ -664,14 +870,9 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role: discord.Role):
-        responsible = None
-        try:
-            async for entry in role.guild.audit_logs(limit=3, action=discord.AuditLogAction.role_create):
-                if entry.target.id == role.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            role.guild, discord.AuditLogAction.role_create, role.id)
+        responsible = entry.user if entry else None
 
         color_text = str(role.color) if role.color.value else "Default"
         body = (
@@ -684,14 +885,9 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):
-        responsible = None
-        try:
-            async for entry in role.guild.audit_logs(limit=3, action=discord.AuditLogAction.role_delete):
-                if entry.target.id == role.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            role.guild, discord.AuditLogAction.role_delete, role.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Role:** `{role.name}` (ID: `{role.id}`)\n"
@@ -723,14 +919,9 @@ class ServerLogger(commands.Cog):
         if not changes:
             return
 
-        responsible = None
-        try:
-            async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_update):
-                if entry.target.id == after.id:
-                    responsible = entry.user
-                    break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            after.guild, discord.AuditLogAction.role_update, after.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Role:** {after.mention} (`{after.name}`)\n"
@@ -767,13 +958,9 @@ class ServerLogger(commands.Cog):
         if not changes:
             return
 
-        responsible = None
-        try:
-            async for entry in after.audit_logs(limit=5, action=discord.AuditLogAction.guild_update):
-                responsible = entry.user
-                break
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        entry = await self._audit_entry(
+            after, discord.AuditLogAction.guild_update, after.id)
+        responsible = entry.user if entry else None
 
         body = (
             f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
@@ -801,11 +988,13 @@ class ServerLogger(commands.Cog):
         responsible = None
         try:
             action = discord.AuditLogAction.emoji_create if added else discord.AuditLogAction.emoji_delete
-            async for entry in guild.audit_logs(limit=3, action=action):
-                responsible = entry.user
-                break
+            for emoji in (added or removed):
+                entry = await self._audit_entry(guild, action, emoji.id)
+                if entry is not None:
+                    responsible = entry.user
+                    break
         except (discord.Forbidden, discord.HTTPException):
-            pass
+            responsible = None
 
         body = (
             f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
@@ -864,12 +1053,13 @@ class ServerLogger(commands.Cog):
             await self.log_event(guild, "voice", "Voice Move", body, target_id=member.id)
 
     @commands.Cog.listener()
-    # update: discord.py does not support the moderator parameter so we must use the audit log to get the moderator.
+    # discord.py does not pass the moderator, so the audit log is the only source.
     async def on_member_ban(self, guild: discord.Guild, user: discord.User, reason: str | None = None):
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
-            moderator = entry.user
+        entry = await self._audit_entry(guild, discord.AuditLogAction.ban, user.id)
+        moderator = entry.user if entry else None
         if moderator == self.bot.user:
             return
+        reason = reason or (entry.reason if entry else None)
         body = (
             f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
             f"**Action:** Ban\n"
@@ -883,10 +1073,11 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User, reason: str | None = None):
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.unban):
-            moderator = entry.user
+        entry = await self._audit_entry(guild, discord.AuditLogAction.unban, user.id)
+        moderator = entry.user if entry else None
         if moderator == self.bot.user:
             return
+        reason = reason or (entry.reason if entry else None)
         body = (
             f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
             f"**Action:** Unban\n"
@@ -897,6 +1088,227 @@ class ServerLogger(commands.Cog):
             guild, "moderation", "Unban", body,
             target_id=user.id, action_key="Unban"
         )
+
+    # ── Events that used to be unlogged ──────────
+
+    async def _audit_latest(self, guild: discord.Guild, action, *, window: float = 15.0):
+        """The newest audit entry for *action*, if it is recent enough."""
+        try:
+            async for entry in guild.audit_logs(limit=1, action=action):
+                if (discord.utils.utcnow() - entry.created_at).total_seconds() > window:
+                    return None
+                return entry
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+        return None
+
+    @commands.Cog.listener()
+    async def on_bulk_message_delete(self, messages: list[discord.Message]):
+        """A purge: Discord does not fire on_message_delete for each message."""
+        if not messages or messages[0].guild is None:
+            return
+        guild = messages[0].guild
+        channel = messages[0].channel
+        counts: dict[str, int] = {}
+        for message in messages:
+            label = f"{message.author.mention}"
+            counts[label] = counts.get(label, 0) + 1
+        top = sorted(counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        entry = await self._audit_latest(guild, discord.AuditLogAction.message_bulk_delete)
+        body = (
+            f"**Channel:** {channel.mention}\n"
+            f"**Messages Deleted:** `{len(messages)}`\n"
+            f"**Top Authors:**\n" + "\n".join(f"{who} — `{count}`" for who, count in top)
+        )
+        if entry is not None:
+            body += f"\n**Deleted By:** {entry.user.mention if entry.user else 'Unknown'}"
+        await self.log_event(
+            guild, "messages", "Messages Bulk Deleted", body,
+            channel_id=channel.id,
+        )
+
+    @commands.Cog.listener()
+    async def on_thread_create(self, thread: discord.Thread):
+        guild = thread.guild
+        entry = await self._audit_entry(
+            guild, discord.AuditLogAction.thread_create, thread.id)
+        body = (
+            f"**Thread:** {thread.mention} (`{thread.name}`)\n"
+            f"**Parent:** {thread.parent.mention if thread.parent else 'Unknown'}\n"
+            f"**Created By:** {thread.owner.mention if thread.owner else 'Unknown'}"
+        )
+        if entry is not None and entry.user:
+            body += f"\n-# Created via {entry.user.mention}"
+        await self.log_event(guild, "channels", "Thread Created", body,
+                             channel_id=thread.parent_id)
+
+    @commands.Cog.listener()
+    async def on_thread_delete(self, thread: discord.Thread):
+        guild = thread.guild
+        entry = await self._audit_entry(
+            guild, discord.AuditLogAction.thread_delete, thread.id)
+        body = (
+            f"**Thread:** `{thread.name}` (ID: `{thread.id}`)\n"
+            f"**Parent:** {thread.parent.mention if thread.parent else 'Unknown'}\n"
+            f"**Deleted By:** {entry.user.mention if entry and entry.user else 'Unknown'}"
+        )
+        await self.log_event(guild, "channels", "Thread Deleted", body)
+
+    @commands.Cog.listener()
+    async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
+        changes = []
+        if before.name != after.name:
+            changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+        if before.archived != after.archived:
+            changes.append(f"**Archived:** `{before.archived}` → `{after.archived}`")
+        if before.locked != after.locked:
+            changes.append(f"**Locked:** `{before.locked}` → `{after.locked}`")
+        if getattr(before, "slowmode_delay", 0) != getattr(after, "slowmode_delay", 0):
+            changes.append(
+                f"**Slowmode:** `{before.slowmode_delay}s` → `{after.slowmode_delay}s`")
+        if not changes:
+            return
+        body = (
+            f"**Thread:** {after.mention} (`{after.name}`)\n"
+            f"**Parent:** {after.parent.mention if after.parent else 'Unknown'}\n"
+            + "\n".join(changes)
+        )
+        await self.log_event(after.guild, "channels", "Thread Updated", body)
+
+    @commands.Cog.listener()
+    async def on_webhooks_update(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+        for action, title in (
+            (discord.AuditLogAction.webhook_create, "Webhook Created"),
+            (discord.AuditLogAction.webhook_delete, "Webhook Deleted"),
+            (discord.AuditLogAction.webhook_update, "Webhook Updated"),
+        ):
+            entry = await self._audit_latest(guild, action)
+            if entry is None:
+                continue
+            target = getattr(entry, "target", None)
+            if getattr(target, "channel", None) is not None and target.channel.id != channel.id:
+                continue
+            name = getattr(target, "name", None) or "unknown"
+            body = (
+                f"**Channel:** {channel.mention}\n"
+                f"**Webhook:** `{name}`\n"
+                f"**By:** {entry.user.mention if entry.user else 'Unknown'}"
+            )
+            await self.log_event(guild, "channels", title, body, channel_id=channel.id)
+            return
+
+    @commands.Cog.listener()
+    async def on_guild_integrations_update(self, guild: discord.Guild):
+        entry = await self._audit_latest(guild, discord.AuditLogAction.integration_create) \
+            or await self._audit_latest(guild, discord.AuditLogAction.integration_delete) \
+            or await self._audit_latest(guild, discord.AuditLogAction.integration_update)
+        if entry is None:
+            return
+        body = (
+            f"**Integration:** `{getattr(entry.target, 'name', 'unknown')}`\n"
+            f"**By:** {entry.user.mention if entry.user else 'Unknown'}"
+        )
+        await self.log_event(guild, "server", "Integrations Updated", body)
+
+    @commands.Cog.listener()
+    async def on_automod_action(self, execution: discord.AutoModAction):
+        """A rule managed in Discord's own AutoMod settings fired."""
+        guild = execution.guild
+        if guild is None:
+            return
+        member = execution.member
+
+        # The action payload only carries the rule id, so the name needs a
+        # fetch — and a missing Manage Server permission must not lose the entry.
+        rule_name = f"rule {execution.rule_id}"
+        try:
+            rule = await execution.fetch_rule()
+            rule_name = f"{rule.name} ({execution.rule_id})"
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            pass
+
+        action_type = getattr(execution.action, "type", None)
+        action_text = str(getattr(action_type, "name", action_type) or "blocked").replace("_", " ")
+        body = (
+            f"**Rule:** `{rule_name}` ({str(execution.rule_trigger_type).replace('_', ' ')})\n"
+            f"**Action:** {action_text.title()}"
+        )
+        if member is not None:
+            body = f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n" + body
+        if execution.channel_id:
+            body += f"\n**Channel:** <#{execution.channel_id}>"
+        matched = execution.matched_keyword or execution.matched_content or execution.content
+        if matched:
+            body += f"\n**Matched:** `{matched[:200]}`"
+        await self.log_event(
+            guild, "automod", "AutoMod Rule Triggered", body,
+            target_id=member.id if member else None,
+        )
+
+    @commands.Cog.listener()
+    async def on_guild_channel_pins_update(self, channel, last_pin):
+        """A pin or unpin: the audit log knows which and by whom."""
+        guild = getattr(channel, "guild", None)
+        if guild is None:
+            return
+        for action, title in (
+            (discord.AuditLogAction.message_pin, "Message Pinned"),
+            (discord.AuditLogAction.message_unpin, "Message Unpinned"),
+        ):
+            entry = await self._audit_latest(guild, action)
+            if entry is None:
+                continue
+            target = getattr(entry, "target", None)
+            target_channel = getattr(target, "channel", None)
+            if target_channel is not None and target_channel.id != channel.id:
+                continue
+            body = (
+                f"**Channel:** {channel.mention}\n"
+                f"**By:** {entry.user.mention if entry.user else 'Unknown'}"
+            )
+            jump = getattr(target, "jump_url", None)
+            if jump:
+                body += f"\n-# [Jump to message]({jump})"
+            await self.log_event(guild, "channels", title, body, channel_id=channel.id)
+            return
+
+    @commands.Cog.listener()
+    async def on_scheduled_event_create(self, event: discord.ScheduledEvent):
+        body = (
+            f"**Event:** {event.name}\n"
+            f"**Starts:** <t:{int(event.start_time.timestamp())}:F>\n"
+            f"**Location:** {event.location or 'Unknown'}\n"
+            f"**Created By:** {event.creator.mention if event.creator else 'Unknown'}"
+        )
+        await self.log_event(event.guild, "server", "Event Created", body)
+
+    @commands.Cog.listener()
+    async def on_scheduled_event_delete(self, event: discord.ScheduledEvent):
+        entry = await self._audit_entry(
+            event.guild, discord.AuditLogAction.scheduled_event_delete, event.id)
+        body = (
+            f"**Event:** {event.name}\n"
+            f"**Deleted By:** {entry.user.mention if entry and entry.user else 'Unknown'}"
+        )
+        await self.log_event(event.guild, "server", "Event Deleted", body)
+
+    @commands.Cog.listener()
+    async def on_scheduled_event_update(self, before: discord.ScheduledEvent, after: discord.ScheduledEvent):
+        changes = []
+        if before.name != after.name:
+            changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+        if before.status != after.status:
+            changes.append(f"**Status:** `{before.status}` → `{after.status}`")
+        if before.start_time != after.start_time:
+            changes.append(
+                f"**Start:** <t:{int(before.start_time.timestamp())}:f> → "
+                f"<t:{int(after.start_time.timestamp())}:f>"
+            )
+        if not changes:
+            return
+        body = f"**Event:** {after.name}\n" + "\n".join(changes)
+        await self.log_event(after.guild, "server", "Event Updated", body)
 
     # ── Commands ──────────────────────────────────
 

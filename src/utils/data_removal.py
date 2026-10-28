@@ -32,6 +32,9 @@ USER_DELETIONS: tuple[tuple[str, str], ...] = (
     ("roleplay_blocks", "blocker_id"),
     ("roleplay_blocks", "blocked_id"),
     ("poll_votes", "user_id"),
+    # Niko's per-server conversation memory is personal data (the deleted
+    # ``memory.json`` equivalent), so an account request clears it everywhere.
+    ("ai_memory", "user_id"),
     ("participants", "user_id"),
     ("uwulock_config", "user_id"),
     ("voicemaster_channels", "owner_id"),
@@ -49,6 +52,7 @@ USER_ANONYMIZATIONS: tuple[tuple[str, str, str], ...] = (
 # ── Server deletion ─────────────────────────────────────────────────────────
 GUILD_DELETIONS: tuple[str, ...] = (
     "ai_config",
+    "ai_memory",
     "notifier_config",
     "notification_channels",
     "follows",

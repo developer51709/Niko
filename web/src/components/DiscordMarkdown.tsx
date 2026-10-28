@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { DiscordBadgeList } from "./DiscordBadgeList";
 import { DiscordServerTagPill, type DiscordServerTagInfo } from "./DiscordServerTag";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
-import { BOT_EMOJIS } from "../data/botEmojis";
+import { isApplicationEmoji, useBotEmojis } from "../data/botEmojis";
 import { profileBadges } from "../data/profileBadges";
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { resolveDiscordText } from "../api";
@@ -132,11 +132,6 @@ export function DiscordEmojiProvider({ guildName, guildIconUrl, children }: {
   return <DiscordEmojiContext.Provider value={{ guildName, guildIconUrl }}>{children}</DiscordEmojiContext.Provider>;
 }
 
-// Application emojis live on the bot itself; every other custom emoji is a
-// server emoji. The generated list is shared with the rendering lab, so the
-// popup never has to guess from the emoji name.
-const APPLICATION_EMOJI_IDS = new Set(BOT_EMOJIS.map((emoji) => emoji.id));
-
 // Discord's own Nitro mark, used by the Get Nitro button in the client.
 function NitroMark() {
   return <svg className="discord-emoji-popup-nitro-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -213,7 +208,10 @@ export function DiscordEmoji({ name, id, animated = false, className, interactiv
   const triggerRef = useRef<HTMLImageElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const emojiContext = useContext(DiscordEmojiContext);
-  const isApplication = source ? source === "app" : APPLICATION_EMOJI_IDS.has(id);
+  // Application emojis live on the bot itself; every other custom emoji is a
+  // server emoji. The bot's live catalog answers that, so the popup never has
+  // to guess from the name and never reads a frozen copy of the list.
+  const isApplication = source ? source === "app" : isApplicationEmoji(id);
 
   const positionPopup = useCallback(() => {
     const trigger = triggerRef.current;
@@ -748,6 +746,10 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
   inline?: boolean;
 }) {
   const [resolvedNames, setResolvedNames] = useState<{ key: string; names: DiscordMentionNames }>({ key: "", names: {} });
+  // Subscribing here is what re-renders the block once the bot's emoji catalog
+  // arrives, so its emojis classify themselves as app or server emojis in the
+  // markup too, not only in the popup opened later.
+  useBotEmojis();
   const resolutionKey = `${guildId || ""}:${text}`;
   const mentionNamesKey = JSON.stringify(mentionNames || {});
   useEffect(() => {

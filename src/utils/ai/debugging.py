@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import asyncio
+import difflib
 import traceback
 import datetime
 from pathlib import Path
@@ -36,9 +37,12 @@ DEBUG_CHANNEL_ID: int | None = (
     else None
 )
 
-COGS_DIR  = Path("src/cogs")
-UTILS_DIR = Path("src/utils")
-BACKUP_DIR = Path("data/ai_debug_backups")
+# Absolute paths: the old relative paths only resolved when the process was
+# started from the repository root.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+COGS_DIR = REPO_ROOT / "src" / "cogs"
+UTILS_DIR = REPO_ROOT / "src" / "utils"
+BACKUP_DIR = REPO_ROOT / "data" / "ai_debug_backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 _MAX_FILE_CHARS = 8000
@@ -74,13 +78,30 @@ def _call_ai(system: str, user: str, *, max_tokens: int = 1200) -> str:
 # ──────────────────────────────────────────────
 # File helpers
 # ──────────────────────────────────────────────
-def _find_source_file(name: str) -> Path | None:
-    """Search cogs/ then utils/ for a matching .py file."""
-    for directory in (COGS_DIR, UTILS_DIR):
-        candidate = directory / f"{name}.py"
-        if candidate.exists():
+def _find_source_file(name: str | None) -> Path | None:
+    """Resolve ``cogs/ai/chat``, ``ai/chat`` or ``chat`` to a source file."""
+    if not name:
+        return None
+    relative = str(name).replace("\\", "/").strip("/")
+    for directory, prefix in ((COGS_DIR, "cogs"), (UTILS_DIR, "utils")):
+        candidate_name = relative
+        if candidate_name.startswith(prefix + "/"):
+            candidate_name = candidate_name[len(prefix) + 1:]
+        if not candidate_name or candidate_name.startswith("../"):
+            continue
+        candidate = (directory / f"{candidate_name}.py").resolve()
+        if candidate.is_file() and directory in candidate.parents:
             return candidate
     return None
+
+
+def _module_name(file_path: Path) -> str | None:
+    """The extension name for a cog file, or None for a non-cog file."""
+    try:
+        relative = file_path.resolve().relative_to(COGS_DIR)
+    except ValueError:
+        return None
+    return "cogs." + ".".join(relative.with_suffix("").parts)
 
 
 def _read_file(path: Path) -> str:
@@ -112,9 +133,30 @@ def _extract_code_block(text: str) -> str | None:
 
 
 def _infer_file_from_tb(traceback_str: str) -> str | None:
-    """Try to detect which cog/util file is named in the traceback."""
-    matches = re.findall(r"src/(?:cogs|utils)/(\w+)\.py", traceback_str)
-    return matches[-1] if matches else None
+    """Detect which cog/util file is named in the traceback.
+
+    Handles nested modules such as ``src/utils/ai/openai_client.py``, which the
+    old single-segment pattern reported as "unknown file".
+    """
+    matches = re.findall(r"src[\\/](cogs|utils)[\\/]([\w/]+)\.py", traceback_str)
+    if not matches:
+        return None
+    kind, rest = matches[-1]
+    return f"{kind}/{rest}"
+
+
+async def _is_bot_owner(bot, interaction: discord.Interaction) -> bool:
+    """The debugging tools rewrite source files, so they are owner-only."""
+    try:
+        if await bot.is_owner(interaction.user):
+            return True
+    except Exception:  # noqa: BLE001 - fall through to refusal
+        pass
+    await interaction.response.send_message(
+        f"{get_emoji('cross')} Only the bot owner can use the AI debugging tools.",
+        ephemeral=True,
+    )
+    return False
 
 
 # ──────────────────────────────────────────────
@@ -183,6 +225,8 @@ class _AiDebugBtn(discord.ui.Button):
         self.file_name  = file_name
 
     async def callback(self, interaction: discord.Interaction):
+        if not await _is_bot_owner(self.bot, interaction):
+            return
         await interaction.response.defer(thinking=True)
 
         code = ""
@@ -220,6 +264,18 @@ class _AiDebugBtn(discord.ui.Button):
         log.info("AIDebugging", f"Analysis sent for {self.error_type} in {self.file_name or 'unknown'}")
 
 
+def _unified_diff(old_code: str, new_code: str, *, limit: int = 1500) -> str:
+    diff = "\n".join(difflib.unified_diff(
+        old_code.splitlines(), new_code.splitlines(),
+        fromfile="current", tofile="proposed", lineterm="", n=2,
+    ))
+    if not diff:
+        return "(no textual changes)"
+    if len(diff) > limit:
+        diff = diff[:limit] + "\n… diff truncated"
+    return diff
+
+
 class _FixWithAiBtn(discord.ui.Button):
     def __init__(
         self,
@@ -237,6 +293,8 @@ class _FixWithAiBtn(discord.ui.Button):
         self.file_path  = file_path
 
     async def callback(self, interaction: discord.Interaction):
+        if not await _is_bot_owner(self.bot, interaction):
+            return
         await interaction.response.defer(thinking=True)
 
         code = _read_file(self.file_path)
@@ -260,22 +318,48 @@ class _FixWithAiBtn(discord.ui.Button):
             )
             return
 
-        backup_path = _backup(self.file_path)
+        # Preview first: the model no longer writes to disk by itself.
+        view = _make_view(
+            discord.ui.TextDisplay(content=f"### {get_emoji('utility')} Proposed fix — `{self.file_name}.py`"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=f"```diff\n{_unified_diff(code, fixed_code)}\n```"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content="-# Nothing has been written yet. Applying creates a backup first."),
+            discord.ui.ActionRow(_ApplyFixBtn(self.bot, self.file_name, self.file_path, fixed_code)),
+        )
+        await interaction.followup.send(view=view)
+        log.info("AIDebugging", f"Fix previewed for {self.file_name}.py")
+
+
+class _ApplyFixBtn(discord.ui.Button):
+    def __init__(self, bot: commands.Bot, file_name: str, file_path: Path, fixed_code: str):
+        super().__init__(label="Apply fix", style=discord.ButtonStyle.danger, emoji=get_emoji('tick'))
+        self.bot        = bot
+        self.file_name  = file_name
+        self.file_path  = file_path
+        self.fixed_code = fixed_code
+
+    async def callback(self, interaction: discord.Interaction):
+        if not await _is_bot_owner(self.bot, interaction):
+            return
+        await interaction.response.defer(thinking=True)
 
         try:
-            self.file_path.write_text(fixed_code, encoding="utf-8")
+            backup_path = _backup(self.file_path)
+            self.file_path.write_text(self.fixed_code, encoding="utf-8")
         except Exception as exc:
             await interaction.followup.send(f"{get_emoji('cross')} Failed to write fix: `{exc}`", ephemeral=True)
             return
+        self.disabled = True
 
-        # Hot-reload if it's a cog
         reload_status = ""
-        if self.file_path.parent == COGS_DIR:
+        module = _module_name(self.file_path)
+        if module:
             try:
-                await self.bot.reload_extension(f"cogs.{self.file_name}")
-                reload_status = f"\n{get_emoji('tick')} Cog `{self.file_name}` hot-reloaded successfully."
+                await self.bot.reload_extension(module)
+                reload_status = f"\n{get_emoji('tick')} `{module}` hot-reloaded."
             except Exception as exc:
-                reload_status = f"\n{get_emoji('danger')} Fix written but cog reload failed: `{exc}`"
+                reload_status = f"\n{get_emoji('danger')} Fix written but reload failed: `{exc}`"
 
         view = _make_view(
             discord.ui.TextDisplay(content=f"### {get_emoji('utility')} Fix Applied — `{self.file_name}.py`"),
@@ -306,19 +390,26 @@ class _RevertBtn(discord.ui.Button):
         self.backup_path = backup_path
 
     async def callback(self, interaction: discord.Interaction):
+        if not await _is_bot_owner(self.bot, interaction):
+            return
         await interaction.response.defer(thinking=True)
 
         if not self.backup_path.exists():
             await interaction.followup.send(f"{get_emoji('danger')} Backup file not found.", ephemeral=True)
             return
 
-        shutil.copy2(self.backup_path, self.file_path)
+        try:
+            shutil.copy2(self.backup_path, self.file_path)
+        except OSError as exc:
+            await interaction.followup.send(f"{get_emoji('cross')} Failed to restore: `{exc}`", ephemeral=True)
+            return
 
         reload_status = ""
-        if self.file_path.parent == COGS_DIR:
+        module = _module_name(self.file_path)
+        if module:
             try:
-                await self.bot.reload_extension(f"cogs.{self.file_name}")
-                reload_status = f"{get_emoji('tick')} `{self.file_name}` reverted and reloaded."
+                await self.bot.reload_extension(module)
+                reload_status = f"{get_emoji('tick')} `{module}` reverted and reloaded."
             except Exception as exc:
                 reload_status = f"{get_emoji('danger')} Reverted but reload failed: `{exc}`"
 

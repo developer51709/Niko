@@ -151,6 +151,8 @@ PRIMARY_KEYS: dict = {
     "support_server_config": "guild_id",
     "support_server_panels": ("guild_id", "panel_key"),
     "onboarding": "guild_id",
+    "ai_config": "guild_id",
+    "ai_memory": ("guild_id", "user_id"),
     "logging_config": "guild_id",
     "logging_webhooks": ("guild_id", "channel_id"),
     "moderation_config": "guild_id",

@@ -1,256 +1,82 @@
-// The bot's custom emojis, generated from src/config/emojis.py by
-// scripts/build-bot-emojis.mjs — do not edit by hand.
+// The bot's custom emojis, read from the bot itself at runtime.
 //
-// The rendering lab draws these exact emojis, so emoji rendering is checked
-// with the names and ids Discord actually receives. An emoji whose id does not
-// resolve (a `placeholder` the startup sync has not uploaded yet, a deleted
-// emoji, one from another server) falls back to the `:name:` text Discord
-// shows instead of a broken image.
+// This module used to be generated from src/config/emojis.py by
+// scripts/build-bot-emojis.mjs, so the list only changed when somebody ran that
+// script: an emoji that was added, renamed or re-uploaded stayed dead here
+// until then, and a re-upload always changes the id — Discord cannot replace an
+// emoji's art, so new art means a new emoji.
+//
+// `/api/emojis` parses the bot's config on every request together with the ids
+// its emoji sync has re-uploaded, so the rendering lab, the emoji popups and
+// the bot always draw the same names and ids with no build step to forget.
 
-export type BotEmoji = {
-  /** The emoji name Discord stores, without the surrounding colons. */
-  name: string;
-  /** The emoji id, or a stub id until the startup sync uploads the art. */
-  id: string;
-  animated: boolean;
-  /** True while the id is a config stub rather than an uploaded emoji. */
-  placeholder: boolean;
-};
+import { useEffect, useState } from "react";
+import { getBotEmojis } from "../api";
+import type { BotEmoji } from "../types";
 
-export const BOT_EMOJIS: BotEmoji[] = [
-  { name: "active_developer_badge", id: "1555268393274318960", animated: false, placeholder: false },
-  { name: "boosting_1_months", id: "1562090580761387084", animated: false, placeholder: false },
-  { name: "boosting_2_months", id: "1562090584146190378", animated: false, placeholder: false },
-  { name: "boosting_3_months", id: "1562090587585384558", animated: false, placeholder: false },
-  { name: "boosting_6_months", id: "1562090590672257095", animated: false, placeholder: false },
-  { name: "boosting_9_months", id: "1562090593910259772", animated: false, placeholder: false },
-  { name: "boosting_12_months", id: "1562090597207113780", animated: false, placeholder: false },
-  { name: "boosting_15_months", id: "1562090600499515402", animated: false, placeholder: false },
-  { name: "boosting_18_months", id: "1562090604211470416", animated: false, placeholder: false },
-  { name: "boosting_24_months", id: "1562090607621447811", animated: false, placeholder: false },
-  { name: "bug_hunter_badge", id: "1562090611291463722", animated: false, placeholder: false },
-  { name: "bug_hunter_gold_badge", id: "1562090614969864255", animated: false, placeholder: false },
-  { name: "certified_moderator_badge", id: "1562090618019381430", animated: false, placeholder: false },
-  { name: "early_supporter_badge", id: "1562090621034954933", animated: false, placeholder: false },
-  { name: "hypesquad_events", id: "1562090624130224210", animated: false, placeholder: false },
-  { name: "partner_badge", id: "1562090627368484915", animated: false, placeholder: false },
-  { name: "staff_badge", id: "1562090630472011806", animated: false, placeholder: false },
-  { name: "supports_commands_badge", id: "1562090633295044609", animated: false, placeholder: false },
-  { name: "arrow_left", id: "1555259171404775484", animated: false, placeholder: false },
-  { name: "arrow_right", id: "1555259174139461774", animated: false, placeholder: false },
-  { name: "Automod", id: "1555268396470509678", animated: false, placeholder: false },
-  { name: "badge_event_coordinator", id: "1562090636348498032", animated: false, placeholder: false },
-  { name: "badge_graphic_designer", id: "1562090639586361377", animated: false, placeholder: false },
-  { name: "badge_head_admin", id: "1562090643403309068", animated: false, placeholder: false },
-  { name: "badge_head_support", id: "1562090647102685305", animated: false, placeholder: false },
-  { name: "badge_moderator", id: "1562090651200266340", animated: false, placeholder: false },
-  { name: "badge_owner", id: "1562090654425681970", animated: false, placeholder: false },
-  { name: "badge_partnership_manager", id: "1562090657546502297", animated: false, placeholder: false },
-  { name: "badge_partnership_lead", id: "1562090660838899723", animated: false, placeholder: false },
-  { name: "badge_staff", id: "1562090663971913830", animated: false, placeholder: false },
-  { name: "badge_support", id: "1562090667382153256", animated: false, placeholder: false },
-  { name: "badge_supporter_role", id: "1562090670678745118", animated: false, placeholder: false },
-  { name: "badge_bug_hunter_role", id: "1562090673757229086", animated: false, placeholder: false },
-  { name: "badge_partner_role", id: "1562090677079244957", animated: false, placeholder: false },
-  { name: "bluesky", id: "1555268412375179444", animated: false, placeholder: false },
-  { name: "broom", id: "1555268418679345233", animated: false, placeholder: false },
-  { name: "C4Empty", id: "1551966113968029766", animated: false, placeholder: false },
-  { name: "C4Red", id: "1551966117176676393", animated: true, placeholder: false },
-  { name: "C4Top1", id: "1551966121417121854", animated: false, placeholder: false },
-  { name: "C4Top2", id: "1551966124214718535", animated: false, placeholder: false },
-  { name: "C4Top3", id: "1551966126936825856", animated: false, placeholder: false },
-  { name: "C4Top4", id: "1551966129629691994", animated: false, placeholder: false },
-  { name: "C4Top5", id: "1551966132615778418", animated: false, placeholder: false },
-  { name: "C4Top6", id: "1551966135581278379", animated: false, placeholder: false },
-  { name: "C4Top7", id: "1551966140081770649", animated: false, placeholder: false },
-  { name: "C4Yellow", id: "1551966142959067166", animated: true, placeholder: false },
-  { name: "cpu", id: "1555264174227984464", animated: false, placeholder: false },
-  { name: "credit_card", id: "1555268421170765867", animated: true, placeholder: false },
-  { name: "crypto_bitcoin", id: "1551966153402753237", animated: false, placeholder: false },
-  { name: "crypto_bnb", id: "1551966157400178822", animated: false, placeholder: false },
-  { name: "crypto_dogecoin", id: "1551966161476780124", animated: false, placeholder: false },
-  { name: "crypto_ethereum", id: "1551966164496945192", animated: false, placeholder: false },
-  { name: "crypto_ltc", id: "1551966167537815632", animated: false, placeholder: false },
-  { name: "crypto_monero", id: "1551966170775552132", animated: false, placeholder: false },
-  { name: "crypto_tether_usdt", id: "1551966174160625785", animated: false, placeholder: false },
-  { name: "crypto_tron", id: "1551966177125732392", animated: false, placeholder: false },
-  { name: "dbl", id: "1551966179856359565", animated: false, placeholder: false },
-  { name: "disconnect", id: "1555268424882458735", animated: false, placeholder: false },
-  { name: "discord", id: "1555268428271587338", animated: true, placeholder: false },
-  { name: "gift", id: "1555241290713530429", animated: false, placeholder: false },
-  { name: "github", id: "1555268431132237985", animated: false, placeholder: false },
-  { name: "hypesquad_balance", id: "1555268433900212314", animated: false, placeholder: false },
-  { name: "hypesquad_bravery", id: "1555268436756664381", animated: false, placeholder: false },
-  { name: "hypesquad_briliance", id: "1555268439436689478", animated: false, placeholder: false },
-  { name: "ai", id: "1555251393831501977", animated: false, placeholder: false },
-  { name: "ban", id: "1555268442137960538", animated: false, placeholder: false },
-  { name: "boost", id: "1555268444860059678", animated: false, placeholder: false },
-  { name: "bot", id: "1555251402245275842", animated: false, placeholder: false },
-  { name: "bug", id: "1555251405181296772", animated: false, placeholder: false },
-  { name: "categories", id: "1555251408486269069", animated: false, placeholder: false },
-  { name: "cross", id: "1555268447561187398", animated: false, placeholder: false },
-  { name: "danger", id: "1555265416102936597", animated: false, placeholder: false },
-  { name: "disk", id: "1555251411363696642", animated: false, placeholder: false },
-  { name: "docs", id: "1555251414299713586", animated: false, placeholder: false },
-  { name: "economy", id: "1555251416958767254", animated: false, placeholder: false },
-  { name: "edit", id: "1555256267411427391", animated: false, placeholder: false },
-  { name: "games", id: "1555251419634868346", animated: false, placeholder: false },
-  { name: "gambling", id: "1555268450257993769", animated: false, placeholder: false },
-  { name: "general", id: "1555251425213284525", animated: false, placeholder: false },
-  { name: "giveaway", id: "1555268453055594576", animated: false, placeholder: false },
-  { name: "heart", id: "1555251431777370154", animated: false, placeholder: false },
-  { name: "home", id: "1555251434604339284", animated: false, placeholder: false },
-  { name: "host", id: "1555263525121691748", animated: false, placeholder: false },
-  { name: "image", id: "1555251440182755370", animated: false, placeholder: false },
-  { name: "important", id: "1555251443395461241", animated: false, placeholder: false },
-  { name: "invite", id: "1555251446557970452", animated: false, placeholder: false },
-  { name: "join", id: "1555251457966743585", animated: false, placeholder: false },
-  { name: "leave", id: "1555251460961210451", animated: false, placeholder: false },
-  { name: "leveling", id: "1555251464463712329", animated: false, placeholder: false },
-  { name: "lightbulb", id: "1555251467453988955", animated: false, placeholder: false },
-  { name: "link", id: "1555251470369292318", animated: false, placeholder: false },
-  { name: "loading", id: "1555251473485664328", animated: true, placeholder: false },
-  { name: "loop", id: "1555251475989536929", animated: false, placeholder: false },
-  { name: "megaphone", id: "1555251479051505674", animated: false, placeholder: false },
-  { name: "message", id: "1555260128092098690", animated: false, placeholder: false },
-  { name: "minus", id: "1555265425095262259", animated: false, placeholder: false },
-  { name: "moderation", id: "1555251482473926656", animated: false, placeholder: false },
-  { name: "nsfw", id: "1555265429386035280", animated: false, placeholder: false },
-  { name: "paint", id: "1555256276525785088", animated: false, placeholder: false },
-  { name: "pause", id: "1555251495161696297", animated: false, placeholder: false },
-  { name: "play", id: "1555251497955233873", animated: false, placeholder: false },
-  { name: "plus", id: "1555265436344385697", animated: false, placeholder: false },
-  { name: "premium", id: "1555251501084188765", animated: false, placeholder: false },
-  { name: "question", id: "1555251504431104201", animated: false, placeholder: false },
-  { name: "refresh", id: "1555274298523123834", animated: false, placeholder: false },
-  { name: "reminder", id: "1555251509812535386", animated: false, placeholder: false },
-  { name: "roleplay", id: "1555251512538566686", animated: false, placeholder: false },
-  { name: "rewind", id: "1555251515374047352", animated: false, placeholder: false },
-  { name: "settings", id: "1555264209552547840", animated: false, placeholder: false },
-  { name: "shuffle", id: "1555251518444277861", animated: false, placeholder: false },
-  { name: "skip", id: "1555251521413709956", animated: false, placeholder: false },
-  { name: "stats", id: "1555256281747423343", animated: false, placeholder: false },
-  { name: "stop", id: "1555251526560129137", animated: false, placeholder: false },
-  { name: "support", id: "1555251529580290078", animated: false, placeholder: false },
-  { name: "tick", id: "1555259176874414151", animated: false, placeholder: false },
-  { name: "ticket", id: "1555265439104376922", animated: false, placeholder: false },
-  { name: "trash", id: "1555240682640375859", animated: false, placeholder: false },
-  { name: "utility", id: "1555265441876680805", animated: false, placeholder: false },
-  { name: "user", id: "1555252635672510484", animated: false, placeholder: false },
-  { name: "verified", id: "1555274301601484931", animated: false, placeholder: false },
-  { name: "welcome", id: "1555265447455363223", animated: false, placeholder: false },
-  { name: "wumpus", id: "1555251540602785804", animated: false, placeholder: false },
-  { name: "instagram", id: "1555268456058986666", animated: false, placeholder: false },
-  { name: "lastfm", id: "1555268460676780144", animated: false, placeholder: false },
-  { name: "music", id: "1555264224530538561", animated: false, placeholder: false },
-  { name: "notepad", id: "1555274304302747678", animated: false, placeholder: false },
-  { name: "number_eight", id: "1551966390464806984", animated: false, placeholder: false },
-  { name: "number_five", id: "1551966433678729216", animated: false, placeholder: false },
-  { name: "number_four", id: "1551966436539506748", animated: false, placeholder: false },
-  { name: "number_nine", id: "1551966439118737479", animated: false, placeholder: false },
-  { name: "number_one", id: "1551966442239566024", animated: false, placeholder: false },
-  { name: "number_seven", id: "1551966445460521063", animated: false, placeholder: false },
-  { name: "number_six", id: "1551966448346337350", animated: false, placeholder: false },
-  { name: "number_three", id: "1551966451047338005", animated: false, placeholder: false },
-  { name: "number_two", id: "1551966453895270431", animated: false, placeholder: false },
-  { name: "number_zero", id: "1551966456604921896", animated: false, placeholder: false },
-  { name: "owner_icon", id: "1555268465798025289", animated: false, placeholder: false },
-  { name: "oxapay", id: "1555268468805345430", animated: false, placeholder: false },
-  { name: "pingpong", id: "1555268471326244985", animated: false, placeholder: false },
-  { name: "python", id: "1555268474433962166", animated: false, placeholder: false },
-  { name: "ram", id: "1555268477307060366", animated: false, placeholder: false },
-  { name: "reddit", id: "1555268479987482634", animated: false, placeholder: false },
-  { name: "scroll", id: "1555274306957738165", animated: false, placeholder: false },
-  { name: "soundcloud", id: "1555268485918097490", animated: false, placeholder: false },
-  { name: "spotify", id: "1555268489437257779", animated: false, placeholder: false },
-  { name: "star", id: "1555260181162631329", animated: false, placeholder: false },
-  { name: "status_dnd", id: "1555268492855615673", animated: false, placeholder: false },
-  { name: "status_idle", id: "1555268497662148710", animated: false, placeholder: false },
-  { name: "status_offline", id: "1555268500904349767", animated: false, placeholder: false },
-  { name: "status_online", id: "1555268503643099246", animated: false, placeholder: false },
-  { name: "status_streaming", id: "1555268506608468049", animated: false, placeholder: false },
-  { name: "thumbs_down", id: "1555268509108408432", animated: false, placeholder: false },
-  { name: "thumbs_up", id: "1555268512388358255", animated: false, placeholder: false },
-  { name: "tiktok", id: "1555268514871246901", animated: false, placeholder: false },
-  { name: "topgg", id: "1562090682884161588", animated: false, placeholder: false },
-  { name: "twitch", id: "1555268517870444565", animated: false, placeholder: false },
-  { name: "twitterx", id: "1555268521540325377", animated: false, placeholder: false },
-  { name: "voicemaster", id: "1555251543568285838", animated: false, placeholder: false },
-  { name: "verified_developer_badge", id: "1555268524744777848", animated: false, placeholder: false },
-  { name: "hide", id: "1555251546684522578", animated: false, placeholder: false },
-  { name: "lock", id: "1555256287296753787", animated: false, placeholder: false },
-  { name: "unhide", id: "1555251552879648808", animated: false, placeholder: false },
-  { name: "unlock", id: "1555268527982907634", animated: false, placeholder: false },
-  { name: "warning", id: "1555259179579478016", animated: false, placeholder: false },
-  { name: "wavelink", id: "1555268531124174899", animated: false, placeholder: false },
-  { name: "website", id: "1555268534190473327", animated: false, placeholder: false },
-  { name: "White1", id: "1551966551144538142", animated: false, placeholder: false },
-  { name: "White2", id: "1551966553937805354", animated: false, placeholder: false },
-  { name: "White3", id: "1551966556832006196", animated: false, placeholder: false },
-  { name: "White4", id: "1551966560120471594", animated: false, placeholder: false },
-  { name: "White5", id: "1551966562766950430", animated: false, placeholder: false },
-  { name: "White6", id: "1551966565316960378", animated: false, placeholder: false },
-  { name: "White7", id: "1551966568328462437", animated: false, placeholder: false },
-  { name: "youtube", id: "1555268539806519447", animated: false, placeholder: false },
-  { name: "youtube_shorts", id: "1555268543027744829", animated: false, placeholder: false },
-  { name: "log_kick", id: "9000001", animated: false, placeholder: true },
-  { name: "log_ban", id: "9000002", animated: false, placeholder: true },
-  { name: "log_unban", id: "9000003", animated: false, placeholder: true },
-  { name: "log_warn", id: "9000004", animated: false, placeholder: true },
-  { name: "log_clear_warnings", id: "9000005", animated: false, placeholder: true },
-  { name: "log_mute", id: "9000006", animated: false, placeholder: true },
-  { name: "log_tempmute", id: "9000007", animated: false, placeholder: true },
-  { name: "log_unmute", id: "9000008", animated: false, placeholder: true },
-  { name: "log_nickname", id: "9000009", animated: false, placeholder: true },
-  { name: "log_timeout", id: "9000010", animated: false, placeholder: true },
-  { name: "log_timeout_removed", id: "9000011", animated: false, placeholder: true },
-  { name: "log_clear", id: "9000012", animated: false, placeholder: true },
-  { name: "log_purge", id: "9000013", animated: false, placeholder: true },
-  { name: "log_lock", id: "9000014", animated: false, placeholder: true },
-  { name: "log_unlock", id: "9000015", animated: false, placeholder: true },
-  { name: "log_anti_spam", id: "9000016", animated: false, placeholder: true },
-  { name: "log_anti_link", id: "9000017", animated: false, placeholder: true },
-  { name: "log_bad_words", id: "9000018", animated: false, placeholder: true },
-  { name: "log_mass_mention", id: "9000019", animated: false, placeholder: true },
-  { name: "log_nsfw_filter", id: "9000020", animated: false, placeholder: true },
-  { name: "log_app_detected", id: "9000021", animated: false, placeholder: true },
-  { name: "log_app_action", id: "9000022", animated: false, placeholder: true },
-  { name: "log_interaction_flood", id: "9000023", animated: false, placeholder: true },
-  { name: "log_anti_nuke", id: "9000024", animated: false, placeholder: true },
-  { name: "log_anti_raid", id: "9000025", animated: false, placeholder: true },
-  { name: "log_message_deleted", id: "9000026", animated: false, placeholder: true },
-  { name: "log_message_edited", id: "9000027", animated: false, placeholder: true },
-  { name: "log_channel_created", id: "9000028", animated: false, placeholder: true },
-  { name: "log_channel_deleted", id: "9000029", animated: false, placeholder: true },
-  { name: "log_channel_updated", id: "9000030", animated: false, placeholder: true },
-  { name: "log_member_join", id: "9000031", animated: false, placeholder: true },
-  { name: "log_member_leave", id: "9000032", animated: false, placeholder: true },
-  { name: "log_member_updated", id: "9000033", animated: false, placeholder: true },
-  { name: "log_avatar", id: "9000034", animated: false, placeholder: true },
-  { name: "log_captcha_passed", id: "9000035", animated: false, placeholder: true },
-  { name: "log_captcha_failed", id: "9000036", animated: false, placeholder: true },
-  { name: "log_captcha_kicked", id: "9000037", animated: false, placeholder: true },
-  { name: "log_invite_created", id: "9000038", animated: false, placeholder: true },
-  { name: "log_invite_deleted", id: "9000039", animated: false, placeholder: true },
-  { name: "log_invite_used", id: "9000040", animated: false, placeholder: true },
-  { name: "log_vanity_invite", id: "9000041", animated: false, placeholder: true },
-  { name: "log_unknown_join", id: "9000042", animated: false, placeholder: true },
-  { name: "log_role_created", id: "9000043", animated: false, placeholder: true },
-  { name: "log_role_deleted", id: "9000044", animated: false, placeholder: true },
-  { name: "log_role_updated", id: "9000045", animated: false, placeholder: true },
-  { name: "log_server_updated", id: "9000046", animated: false, placeholder: true },
-  { name: "log_emoji_updated", id: "9000047", animated: false, placeholder: true },
-  { name: "log_sticker_updated", id: "9000048", animated: false, placeholder: true },
-  { name: "log_voice_join", id: "9000049", animated: false, placeholder: true },
-  { name: "log_voice_leave", id: "9000050", animated: false, placeholder: true },
-  { name: "log_voice_move", id: "9000051", animated: false, placeholder: true },
-  { name: "disable_no", id: "1555268546173608038", animated: false, placeholder: false },
-  { name: "enable_yes", id: "1555268549155495996", animated: false, placeholder: false },
-  { name: "disable_yes", id: "1555268552108412948", animated: false, placeholder: false },
-  { name: "enable_no", id: "1555268554910076928", animated: false, placeholder: false },
-];
+let catalog: BotEmoji[] = [];
+let applicationIds: ReadonlySet<string> = new Set();
+let failed = false;
+let pending: Promise<BotEmoji[]> | null = null;
+const listeners = new Set<() => void>();
 
 /** The `<:name:id>` token Discord and the bot use for this emoji. */
 export function botEmojiToken(emoji: BotEmoji): string {
   return `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>`;
+}
+
+/** The catalog as it stands right now; empty until the one fetch resolves. */
+export function botEmojis(): BotEmoji[] {
+  return catalog;
+}
+
+/** Whether an id belongs to the Niko application rather than to a server. */
+export function isApplicationEmoji(id: string): boolean {
+  return applicationIds.has(id);
+}
+
+/**
+ * Whether the catalog could not be read, so a surface can say so instead of
+ * drawing an empty list as if the bot had no emojis.
+ */
+export function botEmojisFailed(): boolean {
+  return failed;
+}
+
+/** Fetch the catalog once per page and share it with every subscriber. */
+function ensureBotEmojis(): Promise<BotEmoji[]> {
+  if (!pending) {
+    pending = getBotEmojis()
+      .then((response) => {
+        catalog = response.emojis;
+        applicationIds = new Set(catalog.map((emoji) => emoji.id));
+        failed = false;
+        listeners.forEach((listener) => listener());
+        return catalog;
+      })
+      .catch(() => {
+        // The lab and the popups keep their fallback behaviour, and a later
+        // subscriber may retry the failed load.
+        failed = true;
+        pending = null;
+        listeners.forEach((listener) => listener());
+        return catalog;
+      });
+  }
+  return pending;
+}
+
+/** The bot's emojis for a component, re-rendering once they arrive. */
+export function useBotEmojis(): BotEmoji[] {
+  const [emojis, setEmojis] = useState<BotEmoji[]>(() => botEmojis());
+
+  useEffect(() => {
+    const listener = () => setEmojis(botEmojis());
+    listeners.add(listener);
+    void ensureBotEmojis();
+    setEmojis(botEmojis());
+    return () => { listeners.delete(listener); };
+  }, []);
+
+  return emojis;
 }

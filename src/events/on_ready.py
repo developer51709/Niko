@@ -21,6 +21,7 @@ from events.startup import (
     write_bot_stats,
     write_commands,
     preload_economy_cache,
+    preload_ai_config,
 )
 
 from events.startup.status import (
@@ -48,6 +49,7 @@ async def handle_ready(bot):
         ("init_database", "Initializing the database", init_database),
         ("load_cogs", "Loading cogs", load_cogs),
         ("preload_economy_cache", "Warming economy cache", preload_economy_cache),
+        ("preload_ai_config", "Warming AI settings cache", preload_ai_config),
         ("print_banner", "Printing startup banner", print_banner),
         ("write_commands", "Writing command data", write_commands),
         ("write_bot_stats", "Writing bot stats", write_bot_stats),

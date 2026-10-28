@@ -19,15 +19,16 @@ ownership record exists.
 
 Personal account data: economy balances and transactions, leveling XP, birthday
 and reminder data, AFK state, music likes and playlists, giveaway entries, poll
-votes, roleplay actions and blocks, voicemaster channels owned by the member,
-and staff application submissions. The member's name is removed from
+votes, roleplay actions and blocks, AI conversation memory, voicemaster channels
+owned by the member, and staff application submissions. The member's name is removed from
 suggestions and giveaway host fields where it was attached to server content.
 Gift attribution on premium subscriptions is cleared.
 
 **3. What server deletion removes**
 
 Niko's configuration and content for the server: AutoMod and logging settings,
-leveling configuration and XP, tickets configuration, giveaways and entries,
+AI settings and conversation memory, leveling configuration and XP, tickets
+configuration, giveaways and entries,
 polls and votes, starboard entries, social notifier follows, voicemaster
 settings, prefix, profile, privacy, triggers, onboarding, suggestions, and the
 server activity totals. Premium subscriptions and payment records are separate

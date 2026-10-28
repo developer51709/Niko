@@ -22,9 +22,9 @@ from typing import Hashable
 
 
 class RateLimiter:
-    __slots__ = ("rate", "per", "_timestamps", "_locks")
+    __slots__ = ("rate", "per", "_timestamps", "_locks", "_max_keys")
 
-    def __init__(self, rate: int, per: float):
+    def __init__(self, rate: int, per: float, max_keys: int = 4096):
         if rate < 1:
             raise ValueError("rate must be >= 1")
         if per <= 0:
@@ -33,6 +33,33 @@ class RateLimiter:
         self.per: float = per
         self._timestamps: dict[Hashable, deque[float]] = {}
         self._locks: dict[Hashable, asyncio.Lock] = {}
+        # Both maps are keyed by channel/member/guild id and used to grow for
+        # the lifetime of the process: a bot in thousands of channels leaked one
+        # deque and one lock per key it had ever seen. The bound keeps the
+        # working set small without ever forgetting an actively used key.
+        self._max_keys: int = max_keys
+
+    def _evict(self, now: float) -> None:
+        """Drop idle buckets, then the least recently used ones."""
+        if len(self._timestamps) < self._max_keys:
+            return
+        idle = [
+            key for key, ts in self._timestamps.items()
+            if not ts or ts[-1] < now - self.per
+        ]
+        for key in idle:
+            self._timestamps.pop(key, None)
+            self._locks.pop(key, None)
+        excess = len(self._timestamps) - (self._max_keys * 3 // 4)
+        if excess <= 0:
+            return
+        oldest = sorted(
+            self._timestamps.items(),
+            key=lambda item: item[1][-1] if item[1] else 0.0,
+        )[:excess]
+        for key, _ in oldest:
+            self._timestamps.pop(key, None)
+            self._locks.pop(key, None)
 
     def _lock_for(self, key: Hashable) -> asyncio.Lock:
         lock = self._locks.get(key)
@@ -46,6 +73,7 @@ class RateLimiter:
         async with lock:
             ts = self._timestamps.get(key)
             if ts is None:
+                self._evict(time.monotonic())
                 ts = deque()
                 self._timestamps[key] = ts
 
@@ -64,10 +92,6 @@ class RateLimiter:
                         ts.popleft()
 
             ts.append(time.monotonic())
-
-            if not ts:
-                self._timestamps.pop(key, None)
-                self._locks.pop(key, None)
 
 
 # ─────────────────────────────────────────────────────────────

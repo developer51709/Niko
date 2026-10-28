@@ -6,9 +6,15 @@ import asyncio
 from utils import logging as log
 from config.emojis import get_emoji
 
-INVITE_REGEX = re.compile(r"(discord\.gg/|discord\.com/invite/)", re.IGNORECASE)
+# Every invite host Discord hands out: discord.gg short links plus the two
+# long forms. discordapp.com was missing, so those invites walked past
+# anti-link.
+INVITE_REGEX = re.compile(
+    r"(discord\.gg/|discord\.com/invite/|discordapp\.com/invite/)",
+    re.IGNORECASE,
+)
 
-# this will be used to prevent the bot from pinging every whitelisted user on the server every single time the automod command is used 🫩
+# Used so the panel never pings every whitelisted member in the list.
 ALLOWED_MENTIONS = discord.AllowedMentions.none()
 
 # AppInstallationType integer keys used in _integration_owners
@@ -42,12 +48,40 @@ MESSAGES = {
     "en": {
         # ── Overview panel ──
         "overview_title":    "### {emoji} AutoMod Dashboard",
-        "overview_desc":     "Here's a full snapshot of your server's protection ☕",
+        "no_permission":     "{cross} You need the **Manage Server** permission to change this server's AutoMod settings.",
+        "overview_desc":     "Here's a full snapshot of your server's protection.",
         "section_msgfilter": "**Message Filter**",
-        "section_antinuke":  "**💣 Anti-Nuke**",
-        "section_antiraid":  "**🌊 Anti-Raid** *(join flood)*",
+        "section_antinuke":  "**{danger} Anti-Nuke**",
+        "section_antiraid":  "**{warning} Anti-Raid** *(join flood)*",
         "section_extraid":   "**Ext. App Raid**",
         "section_whitelist": "**Whitelist**",
+        # Section menu entries
+        "sec_overview":      "Overview",
+        "sec_overview_desc": "Full snapshot of all protections",
+        "sec_nav":           "Navigate sections…",
+        "btn_add_user":      "Add User",
+        "btn_add_role":      "Add Role",
+        "btn_remove_user":   "Remove User",
+        "btn_remove_role":   "Remove Role",
+        "wl_add_user_ph":    "Choose member(s) to whitelist…",
+        "wl_add_role_ph":    "Choose role(s) to whitelist…",
+        "wl_remove_user_ph": "Choose member(s) to remove…",
+        "wl_remove_role_ph": "Choose role(s) to remove…",
+        "wl_more":           "-# Only the first 25 are listed — use `.whitelist remove user <id>` for the rest.",
+        "wl_and_more":       "-# …and `{count}` more.",
+        "nsfw_premium":      "{cross} **NSFW image filtering is a Niko Premium perk** — upgrade this server to switch it on.",
+        "sec_filter":        "Message Filter",
+        "sec_filter_desc":   "Anti-spam, anti-link, bad words and mass mention",
+        "sec_images":        "Image Filtering",
+        "sec_images_desc":   "NSFW and scam image scanning",
+        "sec_nuke":          "Anti-Nuke",
+        "sec_nuke_desc":     "Stop mass bans, kicks and channel deletions",
+        "sec_raid":          "Anti-Raid",
+        "sec_raid_desc":     "Stop mass member join attacks",
+        "sec_ext":           "Ext. App Raid",
+        "sec_ext_desc":      "User-installed app abuse & interaction floods",
+        "sec_whitelist":     "Whitelist",
+        "sec_whitelist_desc":"Users and roles exempt from automod",
         "wl_summary":        "`{wu}` whitelisted user(s)  •  `{wr}` whitelisted role(s)",
         "nav_hint":          "-# Use the dropdown below to navigate and configure each section.",
         # ── Filter panel ──
@@ -66,17 +100,17 @@ MESSAGES = {
         "massmention_desc":  "**Mass Mention** — mutes members who mass-mention",
         "massmention_max":   "  Max mentions: `{max}`",
         "scamimg_desc":      "**Scam Image Filter** — deletes known MrBeast scam images",
-        "scamimg_note":      "-# ⚠️ Experimental — still in early testing and may have some reliability issues.",
+        "scamimg_note":      "-# {warning} Experimental — still in early testing and may have some reliability issues.",
         "images_title":      "Image Filtering Settings",
         "images_desc":       "Automatic moderation for images posted in your server.",
         "nsfwimg_desc":      "**NSFW Filter** — deletes images classified as NSFW via AI (external API)",
         "nsfwimg_note":      "-# Premium perk — fal.ai's NSFW model scores every image while the server's subscription is active.",
-        "section_images":    "**🖼️ Image Filtering**",
+        "section_images":    "**{image} Image Filtering**",
         # ── Anti-Nuke panel ──
-        "nuke_title":        "### 💣 Anti-Nuke Settings",
+        "nuke_title":        "### {danger} Anti-Nuke Settings",
         "nuke_desc":         "Protects your server against rogue moderators performing mass destructive actions.",
-        "nuke_status_on":    "active 🟢",
-        "nuke_status_off":   "inactive 🔴",
+        "nuke_status_on":    "{tick} Active",
+        "nuke_status_off":   "{cross} Inactive",
         "nuke_thresholds":   "**Tracked Actions & Thresholds** *(within interval)*",
         "nuke_bans":         "Bans: ≥ `{t}`",
         "nuke_kicks":        "Kicks: ≥ `{t}`",
@@ -88,10 +122,10 @@ MESSAGES = {
         "nuke_action":       "**Action on trigger:** `{action}`",
         "nuke_actions_hint": "-# Actions: `strip` (remove dangerous roles), `kick`, `ban`",
         # ── Anti-Raid panel ──
-        "raid_title":        "### 🌊 Anti-Raid Settings *(Join Flood)*",
+        "raid_title":        "### {warning} Anti-Raid Settings *(Join Flood)*",
         "raid_desc":         "Detects and responds to mass member join events.",
-        "raid_status_on":    "active 🟢",
-        "raid_status_off":   "inactive 🔴",
+        "raid_status_on":    "{tick} Active",
+        "raid_status_off":   "{cross} Inactive",
         "raid_threshold":    "**Join Threshold:** `{t}` members",
         "raid_window":       "**Time Window:** `{t}` seconds",
         "raid_action":       "**Action on trigger:** `{action}`",
@@ -130,12 +164,12 @@ MESSAGES = {
         "invalid_ext_action":      "Invalid action. Choose: `kick`, `ban`, `warn`, or `log`.",
         "invalid_numbers":         "Please enter valid whole numbers.",
         # ── DM alerts to server owner ──
-        "raid_dm":    ("🚨 **Anti-Raid** in **{guild}**!\n"
+        "raid_dm":    ("{danger} **Anti-Raid** in **{guild}**!\n"
                        "`{count}` joins in `{interval}s`. Action: `{action}`."),
-        "nuke_dm":    ("🚨 **Anti-Nuke** in **{guild}**!\n"
+        "nuke_dm":    ("{danger} **Anti-Nuke** in **{guild}**!\n"
                        "`{offender}` performed `{threshold}` `{action_key}` within `{interval}s`.\n"
                        "Action: `{action}`."),
-        "extraid_dm": ("🚨 **Interaction Flood Raid** detected in **{guild}**!\n"
+        "extraid_dm": ("{danger} **Interaction Flood Raid** detected in **{guild}**!\n"
                        "`{count}` newly-joined members fired bot interactions simultaneously.\n"
                        "Suspected operator: {operator}\n"
                        "Raider action: `{ra}`  •  Operator action: `{oa}`"),
@@ -154,12 +188,39 @@ MESSAGES = {
     "de": {
         # ── Overview panel ──
         "overview_title":    "### {emoji} AutoMod-Dashboard",
-        "overview_desc":     "Hier ist eine vollständige Übersicht des Serverschutzes ☕",
+        "no_permission":     "{cross} Du brauchst die Berechtigung **Server verwalten**, um die AutoMod-Einstellungen zu ändern.",
+        "overview_desc":     "Hier ist eine vollständige Übersicht des Serverschutzes.",
         "section_msgfilter": "**Nachrichtenfilter**",
-        "section_antinuke":  "**💣 Anti-Nuke**",
-        "section_antiraid":  "**🌊 Anti-Raid** *(Beitrittsflut)*",
+        "section_antinuke":  "**{danger} Anti-Nuke**",
+        "section_antiraid":  "**{warning} Anti-Raid** *(Beitrittsflut)*",
         "section_extraid":   "**Ext. App-Raid**",
         "section_whitelist": "**Whitelist**",
+        "sec_overview":      "Übersicht",
+        "sec_overview_desc": "Vollständige Übersicht aller Schutzfunktionen",
+        "sec_nav":           "Bereiche wechseln…",
+        "btn_add_user":      "Benutzer hinzufügen",
+        "btn_add_role":      "Rolle hinzufügen",
+        "btn_remove_user":   "Benutzer entfernen",
+        "btn_remove_role":   "Rolle entfernen",
+        "wl_add_user_ph":    "Mitglied(er) zur Whitelist hinzufügen…",
+        "wl_add_role_ph":    "Rolle(n) zur Whitelist hinzufügen…",
+        "wl_remove_user_ph": "Mitglied(er) entfernen…",
+        "wl_remove_role_ph": "Rolle(n) entfernen…",
+        "wl_more":           "-# Es werden nur die ersten 25 angezeigt — nutze `.whitelist remove user <id>` für die übrigen.",
+        "wl_and_more":       "-# …und `{count}` weitere.",
+        "nsfw_premium":      "{cross} **NSFW-Bildfilter ist eine Niko-Premium-Funktion** — upgrade diesen Server, um sie zu aktivieren.",
+        "sec_filter":        "Nachrichtenfilter",
+        "sec_filter_desc":   "Anti-Spam, Anti-Link, verbotene Wörter, Massen-Erwähnung",
+        "sec_images":        "Bildfilter",
+        "sec_images_desc":   "NSFW- und Betrugsbild-Prüfung",
+        "sec_nuke":          "Anti-Nuke",
+        "sec_nuke_desc":     "Stoppt Massenbans, Kicks und Kanal-Löschungen",
+        "sec_raid":          "Anti-Raid",
+        "sec_raid_desc":     "Stoppt Massen-Beitritte",
+        "sec_ext":           "Ext. App-Raid",
+        "sec_ext_desc":      "Missbrauch durch Nutzer-Apps und Interaktionsfluten",
+        "sec_whitelist":     "Whitelist",
+        "sec_whitelist_desc":"Benutzer und Rollen, die AutoMod ausgenommen sind",
         "wl_summary":        "`{wu}` befreite(r) Nutzer  •  `{wr}` befreite(r) Rolle(n)",
         "nav_hint":          "-# Nutze das Dropdown unten zur Navigation und Konfiguration.",
         # ── Filter panel ──
@@ -178,17 +239,17 @@ MESSAGES = {
         "massmention_desc":  "**Massen-Erwähnung** — stummt Mitglieder bei Massen-Mentions",
         "massmention_max":   "  Max. Erwähnungen: `{max}`",
         "scamimg_desc":      "**Scam-Bildfilter** — löscht bekannte MrBeast-Betrugsbilder",
-        "scamimg_note":      "-# ⚠️ Experimentell — befindet sich noch in frühen Tests und kann Zuverlässigkeitsprobleme haben.",
+        "scamimg_note":      "-# {warning} Experimentell — befindet sich noch in frühen Tests und kann Zuverlässigkeitsprobleme haben.",
         "images_title":      "Bildfilter-Einstellungen",
         "images_desc":       "Automatische Moderation für in deinem Server gepostete Bilder.",
         "nsfwimg_desc":      "**NSFW-Filter** — löscht per KI als NSFW eingestufte Bilder (externe API)",
         "nsfwimg_note":      "-# Premium-Vorteil — fal.ais NSFW-Modell bewertet jedes Bild, solange das Server-Abo aktiv ist.",
-        "section_images":    "**🖼️ Bildfilter**",
+        "section_images":    "**{image} Bildfilter**",
         # ── Anti-Nuke panel ──
-        "nuke_title":        "### 💣 Anti-Nuke-Einstellungen",
+        "nuke_title":        "### {danger} Anti-Nuke-Einstellungen",
         "nuke_desc":         "Schützt deinen Server vor böswilligen Moderatoren, die Massenaktionen durchführen.",
-        "nuke_status_on":    "aktiv 🟢",
-        "nuke_status_off":   "inaktiv 🔴",
+        "nuke_status_on":    "{tick} Aktiv",
+        "nuke_status_off":   "{cross} Inaktiv",
         "nuke_thresholds":   "**Überwachte Aktionen & Schwellenwerte** *(innerhalb des Intervalls)*",
         "nuke_bans":         "Bans: ≥ `{t}`",
         "nuke_kicks":        "Kicks: ≥ `{t}`",
@@ -200,10 +261,10 @@ MESSAGES = {
         "nuke_action":       "**Aktion bei Auslösung:** `{action}`",
         "nuke_actions_hint": "-# Aktionen: `strip` (gefährliche Rollen entfernen), `kick`, `ban`",
         # ── Anti-Raid panel ──
-        "raid_title":        "### 🌊 Anti-Raid-Einstellungen *(Beitrittsflut)*",
+        "raid_title":        "### {warning} Anti-Raid-Einstellungen *(Beitrittsflut)*",
         "raid_desc":         "Erkennt Massen-Beitritte und reagiert darauf.",
-        "raid_status_on":    "aktiv 🟢",
-        "raid_status_off":   "inaktiv 🔴",
+        "raid_status_on":    "{tick} Aktiv",
+        "raid_status_off":   "{cross} Inaktiv",
         "raid_threshold":    "**Beitritts-Schwellenwert:** `{t}` Mitglieder",
         "raid_window":       "**Zeitfenster:** `{t}` Sekunden",
         "raid_action":       "**Aktion bei Auslösung:** `{action}`",
@@ -241,12 +302,12 @@ MESSAGES = {
         "invalid_ext_action":      "Ungültige Aktion. Wähle: `kick`, `ban`, `warn` oder `log`.",
         "invalid_numbers":         "Bitte gib gültige ganze Zahlen ein.",
         # ── DM alerts to server owner ──
-        "raid_dm":    ("🚨 **Anti-Raid** in **{guild}**!\n"
+        "raid_dm":    ("{danger} **Anti-Raid** in **{guild}**!\n"
                        "`{count}` Beitritte in `{interval}s`. Aktion: `{action}`."),
-        "nuke_dm":    ("🚨 **Anti-Nuke** in **{guild}**!\n"
+        "nuke_dm":    ("{danger} **Anti-Nuke** in **{guild}**!\n"
                        "`{offender}` hat `{threshold}` `{action_key}` in `{interval}s` ausgeführt.\n"
                        "Aktion: `{action}`."),
-        "extraid_dm": ("🚨 **Interaktionsflut-Raid** in **{guild}**!\n"
+        "extraid_dm": ("{danger} **Interaktionsflut-Raid** in **{guild}**!\n"
                        "`{count}` kürzlich beigetretene Mitglieder lösten gleichzeitig Bot-Interaktionen aus.\n"
                        "Vermuteter Operator: {operator}\n"
                        "Raider-Aktion: `{ra}`  •  Operator-Aktion: `{oa}`"),
@@ -265,12 +326,39 @@ MESSAGES = {
     "es": {
         # ── Overview panel ──
         "overview_title":    "### {emoji} Panel de AutoMod",
-        "overview_desc":     "Aquí tienes una vista completa de la protección de tu servidor ☕",
+        "no_permission":     "{cross} Necesitas el permiso **Gestionar servidor** para cambiar los ajustes de AutoMod.",
+        "overview_desc":     "Aquí tienes una vista completa de la protección de tu servidor.",
         "section_msgfilter": "**Filtro de Mensajes**",
-        "section_antinuke":  "**💣 Anti-Nuke**",
-        "section_antiraid":  "**🌊 Anti-Raid** *(avalancha de ingresos)*",
+        "section_antinuke":  "**{danger} Anti-Nuke**",
+        "section_antiraid":  "**{warning} Anti-Raid** *(avalancha de ingresos)*",
         "section_extraid":   "**Raid de Apps Externas**",
         "section_whitelist": "**Lista Blanca**",
+        "sec_overview":      "Resumen",
+        "sec_overview_desc": "Vista completa de todas las protecciones",
+        "sec_nav":           "Ir a una sección…",
+        "btn_add_user":      "Añadir usuario",
+        "btn_add_role":      "Añadir rol",
+        "btn_remove_user":   "Quitar usuario",
+        "btn_remove_role":   "Quitar rol",
+        "wl_add_user_ph":    "Elige miembro(s) para la lista blanca…",
+        "wl_add_role_ph":    "Elige rol(es) para la lista blanca…",
+        "wl_remove_user_ph": "Elige miembro(s) para quitar…",
+        "wl_remove_role_ph": "Elige rol(es) para quitar…",
+        "wl_more":           "-# Solo se muestran los primeros 25 — usa `.whitelist remove user <id>` para el resto.",
+        "wl_and_more":       "-# …y `{count}` más.",
+        "nsfw_premium":      "{cross} **El filtro NSFW es una ventaja de Niko Premium** — mejora este servidor para activarlo.",
+        "sec_filter":        "Filtro de mensajes",
+        "sec_filter_desc":   "Anti-spam, anti-enlaces, palabras prohibidas y menciones masivas",
+        "sec_images":        "Filtrado de imágenes",
+        "sec_images_desc":   "Análisis NSFW y de imágenes de estafa",
+        "sec_nuke":          "Anti-Nuke",
+        "sec_nuke_desc":     "Detiene baneos, expulsiones y borrados masivos",
+        "sec_raid":          "Anti-Raid",
+        "sec_raid_desc":     "Detiene avalanchas de ingresos",
+        "sec_ext":           "Raid de apps externas",
+        "sec_ext_desc":      "Abuso de apps instaladas por usuarios y flujos de interacciones",
+        "sec_whitelist":     "Lista blanca",
+        "sec_whitelist_desc":"Usuarios y roles exentos del automod",
         "wl_summary":        "`{wu}` usuario(s) en lista blanca  •  `{wr}` rol(es) en lista blanca",
         "nav_hint":          "-# Usa el desplegable de abajo para navegar y configurar cada sección.",
         # ── Filter panel ──
@@ -289,17 +377,17 @@ MESSAGES = {
         "massmention_desc":  "**Menciones Masivas** — silencia a quien hace menciones masivas",
         "massmention_max":   "  Máx menciones: `{max}`",
         "scamimg_desc":      "**Filtro de Imágenes de Estafa** — borra imágenes de estafa de MrBeast conocidas",
-        "scamimg_note":      "-# ⚠️ Experimental — todavía en pruebas tempranas y puede tener problemas de fiabilidad.",
+        "scamimg_note":      "-# {warning} Experimental — todavía en pruebas tempranas y puede tener problemas de fiabilidad.",
         "images_title":      "Configuración del Filtrado de Imágenes",
         "images_desc":       "Moderación automática para imágenes publicadas en tu servidor.",
         "nsfwimg_desc":      "**Filtro NSFW** — borra imágenes clasificadas como NSFW por IA (API externa)",
         "nsfwimg_note":      "-# Ventaja premium — el modelo NSFW de fal.ai analiza cada imagen mientras la suscripción del servidor esté activa.",
-        "section_images":    "**🖼️ Filtrado de Imágenes**",
+        "section_images":    "**{image} Filtrado de Imágenes**",
         # ── Anti-Nuke panel ──
-        "nuke_title":        "### 💣 Configuración Anti-Nuke",
+        "nuke_title":        "### {danger} Configuración Anti-Nuke",
         "nuke_desc":         "Protege tu servidor contra moderadores corruptos que realizan acciones destructivas masivas.",
-        "nuke_status_on":    "activo 🟢",
-        "nuke_status_off":   "inactivo 🔴",
+        "nuke_status_on":    "{tick} Activo",
+        "nuke_status_off":   "{cross} Inactivo",
         "nuke_thresholds":   "**Acciones Monitorizadas y Umbrales** *(dentro del intervalo)*",
         "nuke_bans":         "Baneos: ≥ `{t}`",
         "nuke_kicks":        "Expulsiones: ≥ `{t}`",
@@ -311,10 +399,10 @@ MESSAGES = {
         "nuke_action":       "**Acción al activarse:** `{action}`",
         "nuke_actions_hint": "-# Acciones: `strip` (quitar roles peligrosos), `kick`, `ban`",
         # ── Anti-Raid panel ──
-        "raid_title":        "### 🌊 Configuración Anti-Raid *(Avalancha de Ingresos)*",
+        "raid_title":        "### {warning} Configuración Anti-Raid *(Avalancha de Ingresos)*",
         "raid_desc":         "Detecta y responde ante ingresos masivos de miembros.",
-        "raid_status_on":    "activo 🟢",
-        "raid_status_off":   "inactivo 🔴",
+        "raid_status_on":    "{tick} Activo",
+        "raid_status_off":   "{cross} Inactivo",
         "raid_threshold":    "**Umbral de Ingresos:** `{t}` miembros",
         "raid_window":       "**Ventana de Tiempo:** `{t}` segundos",
         "raid_action":       "**Acción al activarse:** `{action}`",
@@ -353,12 +441,12 @@ MESSAGES = {
         "invalid_ext_action":      "Acción inválida. Elige: `kick`, `ban`, `warn` o `log`.",
         "invalid_numbers":         "Por favor introduce números enteros válidos.",
         # ── DM alerts to server owner ──
-        "raid_dm":    ("🚨 ¡**Anti-Raid** en **{guild}**!\n"
+        "raid_dm":    ("{danger} ¡**Anti-Raid** en **{guild}**!\n"
                        "`{count}` ingresos en `{interval}s`. Acción: `{action}`."),
-        "nuke_dm":    ("🚨 ¡**Anti-Nuke** en **{guild}**!\n"
+        "nuke_dm":    ("{danger} ¡**Anti-Nuke** en **{guild}**!\n"
                        "`{offender}` realizó `{threshold}` `{action_key}` en `{interval}s`.\n"
                        "Acción: `{action}`."),
-        "extraid_dm": ("🚨 ¡**Raid de Avalancha de Interacciones** detectado en **{guild}**!\n"
+        "extraid_dm": ("{danger} ¡**Raid de Avalancha de Interacciones** detectado en **{guild}**!\n"
                        "`{count}` miembros recién ingresados dispararon interacciones del bot simultáneamente.\n"
                        "Operador sospechoso: {operator}\n"
                        "Acción raider: `{ra}`  •  Acción operador: `{oa}`"),
@@ -392,33 +480,60 @@ def get_lang(ctx_or_guild=None) -> str:
     return "en"
 
 
-# Mapping of plain-emoji placeholders used in MESSAGES strings to Niko's
-# custom server emojis, applied uniformly by _t() across every language.
-_CUSTOM_EMOJI_MAP = {
-    "💣": get_emoji("danger"),
-    "🌊": get_emoji("warning"),
-    "🖼️": get_emoji("image"),
-    "🖼": get_emoji("image"),
-    "⚠️": get_emoji("warning"),
-    "⚠": get_emoji("warning"),
-    "🚨": get_emoji("danger"),
-    "☕": get_emoji("heart"),
+# Niko's own emojis, filled into the panel strings by _t(). Declared once here
+# instead of being pasted into every translation: MESSAGES carries `{tick}`-style
+# placeholders, and the emoji sync rewrites this dictionary in place after a
+# re-upload, so these replies never point at a retired id.
+EMOJI = {
+    "danger":  get_emoji("danger"),
+    "warning": get_emoji("warning"),
+    "image":   get_emoji("image"),
+    "tick":    get_emoji("tick"),
+    "cross":   get_emoji("cross"),
 }
 
 
-def _custom_emojis(text: str) -> str:
-    """Replace stock emojis in a panel string with Niko's custom emojis."""
-    for stock, custom in _CUSTOM_EMOJI_MAP.items():
-        if stock in text:
-            text = text.replace(stock, custom)
-    return text
-
-
 def _t(lang: str, key: str, **kwargs) -> str:
-    """Look up a localised string, apply format kwargs and custom emojis."""
+    """Look up a localised string, filling in Niko's emojis and any kwargs."""
     text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
-    text = text.format(**kwargs) if kwargs else text
-    return _custom_emojis(text)
+    return text.format(**EMOJI, **kwargs)
+
+
+# ──────────────────────────────────────────────────
+#  PERMISSIONS
+# ──────────────────────────────────────────────────
+
+def _may_manage(interaction: discord.Interaction) -> bool:
+    """Whether the member may edit this server's AutoMod settings.
+
+    Manage Server, like the `/automod` command itself, the `/badwords` panel and
+    the dashboard's automod API all use. Every control in this panel used to demand
+    Administrator instead, so a Manage Server holder could open it and then be
+    refused on every button.
+    """
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    return bool(permissions is not None and getattr(permissions, "manage_guild", False))
+
+
+async def _deny(interaction: discord.Interaction):
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=_t(get_lang(interaction.guild), "no_permission")),
+    ))
+    return await interaction.response.send_message(view=view, ephemeral=True)
+
+
+async def _log(cog, interaction: discord.Interaction, title: str, body: str) -> None:
+    """Record an AutoMod settings change in the server's log.
+
+    Discord surfaces used to change these settings silently; only the dashboard
+    kept any record at all.
+    """
+    try:
+        await cog.utils().log_action(
+            interaction.guild, title, body, moderator=interaction.user)
+    except Exception:  # logging must never break a settings change
+        pass
 
 
 # ──────────────────────────────────────────────────
@@ -563,26 +678,36 @@ def _build_ext_raid_text(cfg: dict, lang: str = "en") -> str:
     )
 
 
+#: The whitelist itself is uncapped; the panel renders a page of it so the
+#: container can never exceed Discord's per-component text limit.
+_WL_RENDER_LIMIT = 40
+
+
+def _wl_lines(entries: list, resolve, lang: str) -> str:
+    """One mention per line, with a count for the entries that did not fit."""
+    shown = entries[:_WL_RENDER_LIMIT]
+    lines = [f"・ {resolve(entry)}" for entry in shown]
+    if len(entries) > len(shown):
+        lines.append(_t(lang, "wl_and_more", count=len(entries) - len(shown)))
+    return chr(10).join(lines) or "*None*"
+
+
 def _build_whitelist_text(cfg: dict, guild: discord.Guild, lang: str = "en") -> str:
     user_ids = cfg.get("whitelist_users", [])
     role_ids = cfg.get("whitelist_roles", [])
 
-    user_lines = [
-        f"・ {(guild.get_member(uid) or discord.Object(uid))}"
-        for uid in user_ids
-    ]
-    role_lines = [
-        f"・ {(guild.get_role(rid) or discord.Object(rid))}"
-        for rid in role_ids
-    ]
+    user_lines = _wl_lines(
+        user_ids, lambda uid: guild.get_member(uid) or discord.Object(uid), lang)
+    role_lines = _wl_lines(
+        role_ids, lambda rid: guild.get_role(rid) or discord.Object(rid), lang)
 
     return (
         f"### {get_emoji('unlock')} {_t(lang, 'wl_title')}\n"
         f"{_t(lang, 'wl_desc')}\n\n"
         f"{_t(lang, 'wl_users_hdr')}\n"
-        f"{chr(10).join(user_lines) or '*None*'}\n\n"
+        f"{user_lines}\n\n"
         f"{_t(lang, 'wl_roles_hdr')}\n"
-        f"{chr(10).join(role_lines) or '*None*'}\n\n"
+        f"{role_lines}\n\n"
         f"{_t(lang, 'wl_hint')}"
     )
 
@@ -707,73 +832,65 @@ def _build_nuke_dm_view(
 # ──────────────────────────────────────────────────
 
 class SectionSelect(discord.ui.Select):
-    def __init__(self, automod_cog, guild_id: int, current_section: str):
+    def __init__(self, automod_cog, guild_id: int, current_section: str, lang: str):
         self._cog = automod_cog
         self._guild_id = guild_id
         options = [
             discord.SelectOption(
-                label="Overview", 
-                value="overview", 
+                label=_t(lang, "sec_overview"),
+                value="overview",
                 emoji=get_emoji("automod"),
-                description="Full snapshot of all protections",
+                description=_t(lang, "sec_overview_desc"),
                 default=(current_section == "overview")
             ),
             discord.SelectOption(
-                label="Message Filter", 
-                value="filter", 
+                label=_t(lang, "sec_filter"),
+                value="filter",
                 emoji=get_emoji("message"),
-                description="Spam, links, bad words, mass mention",
+                description=_t(lang, "sec_filter_desc"),
                 default=(current_section == "filter")
             ),
             discord.SelectOption(
-                label="Image Filtering", 
-                value="image_filter", 
+                label=_t(lang, "sec_images"),
+                value="image_filter",
                 emoji=get_emoji("image"),
-                description="NSFW detection & MrBeast scam images",
+                description=_t(lang, "sec_images_desc"),
                 default=(current_section == "image_filter")
             ),
             discord.SelectOption(
-                label="Anti-Nuke", 
-                value="antinuke", 
+                label=_t(lang, "sec_nuke"),
+                value="antinuke",
                 emoji=get_emoji("danger"),
-                description="Stop rogue mods from mass-deleting",
+                description=_t(lang, "sec_nuke_desc"),
                 default=(current_section == "antinuke")
             ),
             discord.SelectOption(
-                label="Anti-Raid", 
-                value="antiraid", 
+                label=_t(lang, "sec_raid"),
+                value="antiraid",
                 emoji=get_emoji("warning"),
-                description="Stop mass member join attacks",
+                description=_t(lang, "sec_raid_desc"),
                 default=(current_section == "antiraid")
             ),
             discord.SelectOption(
-                label="Ext. App Raid", 
-                value="ext_raid", 
+                label=_t(lang, "sec_ext"),
+                value="ext_raid",
                 emoji=get_emoji("bot"),
-                description="User-installed app abuse & interaction floods",
+                description=_t(lang, "sec_ext_desc"),
                 default=(current_section == "ext_raid")
             ),
             discord.SelectOption(
-                label="Whitelist", 
-                value="whitelist", 
+                label=_t(lang, "sec_whitelist"),
+                value="whitelist",
                 emoji=get_emoji("unlock"),
-                description="Users and roles exempt from automod",
+                description=_t(lang, "sec_whitelist_desc"),
                 default=(current_section == "whitelist")
             ),
         ]
-        super().__init__(placeholder="Navigate sections...", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder=_t(lang, "sec_nav"), options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         new_panel = _build_panel(self._cog, self._guild_id, self.values[0], interaction.guild)
         await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
@@ -786,6 +903,7 @@ class ToggleButton(discord.ui.Button):
         self._guild_id = guild_id
         self._key = key
         self._section = section
+        self._label = label
         cfg = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg["automod"].get(key, False)
         super().__init__(
@@ -795,20 +913,27 @@ class ToggleButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
-        cfg["automod"][self._key] = not cfg["automod"].get(self._key, False)
+        turning_on = not cfg["automod"].get(self._key, False)
+        # The dashboard already refuses to switch NSFW image filtering on
+        # without premium, because the fal.ai scan is billed per image. The
+        # panel used to let anyone enable it here and the config then sat
+        # inert, so the two surfaces disagreed about what was configured.
+        if turning_on and self._key == "nsfw_image_filter":
+            if not await self._cog._premium_active(self._guild_id):
+                lang = get_lang(interaction.guild)
+                view = discord.ui.LayoutView()
+                view.add_item(discord.ui.Container(
+                    discord.ui.TextDisplay(content=_t(lang, "nsfw_premium")),
+                ))
+                return await interaction.response.send_message(view=view, ephemeral=True)
+        cfg["automod"][self._key] = turning_on
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Settings",
+                   f"{self._label} turned **{'on' if turning_on else 'off'}**.")
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
         await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
@@ -821,6 +946,7 @@ class SubToggleButton(discord.ui.Button):
         self._sub_cfg = sub_cfg_key
         self._field = field
         self._section = section
+        self._label = label
         cfg = automod_cog.utils().get_guild_config(guild_id)
         enabled = cfg.get(sub_cfg_key, {}).get(field, True)
         super().__init__(
@@ -830,20 +956,15 @@ class SubToggleButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
-        cfg[self._sub_cfg][self._field] = not cfg[self._sub_cfg].get(self._field, True)
+        enabled = not cfg[self._sub_cfg].get(self._field, True)
+        cfg[self._sub_cfg][self._field] = enabled
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Settings",
+                   f"{self._label} turned **{'on' if enabled else 'off'}**.")
         new_panel = _build_panel(self._cog, self._guild_id, self._section, interaction.guild)
         await interaction.response.edit_message(view=new_panel, allowed_mentions=ALLOWED_MENTIONS)
 
@@ -856,16 +977,8 @@ class EditThresholdsButton(discord.ui.Button):
         super().__init__(label=label, style=discord.ButtonStyle.blurple, emoji=get_emoji("settings"))
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         modal = _build_threshold_modal(cfg, self._cog, self._guild_id, self._section)
@@ -884,16 +997,8 @@ class EditExtAppButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(ExtAppThresholdModal(self._cog, self._guild_id, cfg))
@@ -917,16 +1022,8 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
         self.max_ment.default = str(cfg.get("max_mentions", 5))
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -935,6 +1032,9 @@ class FilterThresholdModal(discord.ui.Modal, title="Message Filter Thresholds"):
             cfg["spam_interval"] = max(1, int(self.spam_secs.value))
             cfg["max_mentions"] = max(1, int(self.max_ment.value))
             utils.save_config()
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"Message filter thresholds: **{cfg['spam_threshold']}** msgs / "
+                       f"**{cfg['spam_interval']}s**, max **{cfg['max_mentions']}** mentions.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "filter", interaction.guild))
         except ValueError:
@@ -960,16 +1060,8 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
         self.interval.default = str(an.get("interval", 10))
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -980,6 +1072,11 @@ class AntiNukeThresholdModal(discord.ui.Modal, title="Anti-Nuke Thresholds"):
             cfg["antinuke"]["role_delete_threshold"] = max(1, int(self.role_t.value))
             cfg["antinuke"]["interval"] = max(1, int(self.interval.value))
             utils.save_config()
+            an = cfg["antinuke"]
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"Anti-Nuke thresholds: **{an['ban_threshold']}** bans, "
+                       f"**{an['kick_threshold']}** kicks, **{an['channel_delete_threshold']}** channel "
+                       f"deletes, **{an['role_delete_threshold']}** role deletes in **{an['interval']}s**.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
         except ValueError:
@@ -996,16 +1093,8 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
         self.action.default = cfg.get("antinuke", {}).get("action", "strip")
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("strip", "kick", "ban"):
@@ -1015,6 +1104,7 @@ class AntiNukeActionModal(discord.ui.Modal, title="Anti-Nuke Response Action"):
         cfg = utils.get_guild_config(self._guild_id)
         cfg["antinuke"]["action"] = val
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Settings", f"Anti-Nuke action set to `{val}`.")
         await interaction.response.edit_message(
             view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
 
@@ -1045,16 +1135,8 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
         self.slow_secs.default = str(ar.get("lockdown_slowmode", 30))
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("kick", "ban", "softban", "slowmode", "lockdown"):
@@ -1069,6 +1151,11 @@ class AntiRaidThresholdModal(discord.ui.Modal, title="Anti-Raid Settings"):
             cfg["antiraid"]["new_account_days"] = max(0, int(self.new_days.value or 0))
             cfg["antiraid"]["lockdown_slowmode"]= max(1, int(self.slow_secs.value or 30))
             utils.save_config()
+            ar = cfg["antiraid"]
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"Anti-Raid settings: **{ar['join_threshold']}** joins in "
+                       f"**{ar['join_interval']}s**, action `{ar['action']}`, "
+                       f"new-account filter **{ar['new_account_days']}d**.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antiraid", interaction.guild))
         except ValueError:
@@ -1094,16 +1181,8 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
         self.operator_act.default = are.get("operator_action", "notify")
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         raider_val = self.raider_act.value.lower().strip()
         operator_val = self.operator_act.value.lower().strip()
         lang = get_lang(interaction.guild)
@@ -1122,6 +1201,11 @@ class ExtRaidThresholdModal(discord.ui.Modal, title="Ext. Raid — Interaction F
             cfg["antiraid_ext"]["raider_action"] = raider_val
             cfg["antiraid_ext"]["operator_action"] = operator_val
             utils.save_config()
+            are = cfg["antiraid_ext"]
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"Interaction-flood settings: **{are['interaction_threshold']}** users in "
+                       f"**{are['interaction_window']}s**, raider action `{are['raider_action']}`, "
+                       f"operator action `{are['operator_action']}`.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
         except ValueError:
@@ -1143,16 +1227,8 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
         self.action.default = are.get("ext_app_action", "kick")
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         val = self.action.value.lower().strip()
         lang = get_lang(interaction.guild)
         if val not in ("kick", "ban", "warn", "log"):
@@ -1165,6 +1241,10 @@ class ExtAppThresholdModal(discord.ui.Modal, title="Ext. Raid — User-Installed
             cfg["antiraid_ext"]["ext_app_window"] = max(5, int(self.window.value))
             cfg["antiraid_ext"]["ext_app_action"] = val
             utils.save_config()
+            are = cfg["antiraid_ext"]
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"User-installed app detection: **{are['ext_app_threshold']}** commands in "
+                       f"**{are['ext_app_window']}s**, action `{are['ext_app_action']}`.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "ext_raid", interaction.guild))
         except ValueError:
@@ -1194,16 +1274,8 @@ class AntiNukeExtThresholdModal(discord.ui.Modal, title="Anti-Nuke — Extended 
         self.webhook_del.default = str(an.get("webhook_delete_threshold", 3))
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -1211,6 +1283,10 @@ class AntiNukeExtThresholdModal(discord.ui.Modal, title="Anti-Nuke — Extended 
             cfg["antinuke"]["channel_create_threshold"] = max(1, int(self.chan_create.value))
             cfg["antinuke"]["webhook_delete_threshold"] = max(1, int(self.webhook_del.value))
             utils.save_config()
+            an = cfg["antinuke"]
+            await _log(self._cog, interaction, "AutoMod Settings",
+                       f"Anti-Nuke extended thresholds: **{an['channel_create_threshold']}** channel "
+                       f"creates, **{an['webhook_delete_threshold']}** webhook deletes.")
             await interaction.response.edit_message(
                 view=_build_panel(self._cog, self._guild_id, "antinuke", interaction.guild))
         except ValueError:
@@ -1226,16 +1302,8 @@ class _NukeExtThresholdButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         await interaction.response.send_modal(AntiNukeExtThresholdModal(self._cog, self._guild_id, cfg))
@@ -1244,11 +1312,18 @@ class _NukeExtThresholdButton(discord.ui.Button):
 # ──────────────────────────────────────────────────
 #  WHITELIST EPHEMERAL SELECTS & VIEWS
 # ──────────────────────────────────────────────────
+
+#: Discord allows 25 options (and 25 values) in one select. The whitelist is
+#: uncapped, so a long list has to be shown in part rather than crashing the
+#: picker with a ValueError.
+_WL_MAX_OPTIONS = 25
+
+
 class _WLUserSelect(discord.ui.UserSelect):
     """Ephemeral select — add members to whitelist."""
-    def __init__(self, automod_cog, guild_id: int, message):
+    def __init__(self, automod_cog, guild_id: int, message, lang: str = "en"):
         super().__init__(
-            placeholder="Choose member(s) to whitelist…",
+            placeholder=_t(lang, "wl_add_user_ph"),
             min_values=1, max_values=10,
         )
         self._cog = automod_cog
@@ -1256,22 +1331,16 @@ class _WLUserSelect(discord.ui.UserSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for user in self.values:
             utils.add_whitelist_user(self._guild_id, user.id)
         utils.save_config()
         names = " ".join(u.mention for u in self.values)
+        await _log(self._cog, interaction, "AutoMod Whitelist",
+                   f"Added {names} to the automod whitelist.")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -1289,9 +1358,9 @@ class _WLUserSelect(discord.ui.UserSelect):
 
 class _WLRoleSelect(discord.ui.RoleSelect):
     """Ephemeral select — add roles to whitelist."""
-    def __init__(self, automod_cog, guild_id: int, message):
+    def __init__(self, automod_cog, guild_id: int, message, lang: str = "en"):
         super().__init__(
-            placeholder="Choose role(s) to whitelist…",
+            placeholder=_t(lang, "wl_add_role_ph"),
             min_values=1, max_values=10,
         )
         self._cog = automod_cog
@@ -1299,22 +1368,16 @@ class _WLRoleSelect(discord.ui.RoleSelect):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for role in self.values:
             utils.add_whitelist_role(self._guild_id, role.id)
         utils.save_config()
         names = " ".join(r.mention for r in self.values)
+        await _log(self._cog, interaction, "AutoMod Whitelist",
+                   f"Added {names} to the automod whitelist.")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -1332,32 +1395,26 @@ class _WLRoleSelect(discord.ui.RoleSelect):
 
 class _WLUserRemoveSelect(discord.ui.Select):
     """Ephemeral select — remove users from whitelist."""
-    def __init__(self, automod_cog, guild_id: int, options: list, message):
+    def __init__(self, automod_cog, guild_id: int, options: list, message, lang: str = "en"):
         super().__init__(
-            placeholder="Choose member(s) to remove…",
-            min_values=1, max_values=len(options),
-            options=options,
+            placeholder=_t(lang, "wl_remove_user_ph"),
+            min_values=1, max_values=min(len(options), _WL_MAX_OPTIONS),
+            options=options[:_WL_MAX_OPTIONS],
         )
         self._cog = automod_cog
         self._guild_id = guild_id
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for uid_str in self.values:
             utils.remove_whitelist_user(self._guild_id, int(uid_str))
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Whitelist",
+                   f"Removed `{len(self.values)}` member(s) from the automod whitelist.")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -1373,32 +1430,26 @@ class _WLUserRemoveSelect(discord.ui.Select):
 
 class _WLRoleRemoveSelect(discord.ui.Select):
     """Ephemeral select — remove roles from whitelist."""
-    def __init__(self, automod_cog, guild_id: int, options: list, message):
+    def __init__(self, automod_cog, guild_id: int, options: list, message, lang: str = "en"):
         super().__init__(
-            placeholder="Choose role(s) to remove…",
-            min_values=1, max_values=len(options),
-            options=options,
+            placeholder=_t(lang, "wl_remove_role_ph"),
+            min_values=1, max_values=min(len(options), _WL_MAX_OPTIONS),
+            options=options[:_WL_MAX_OPTIONS],
         )
         self._cog = automod_cog
         self._guild_id = guild_id
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         for rid_str in self.values:
             utils.remove_whitelist_role(self._guild_id, int(rid_str))
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Whitelist",
+                   f"Removed `{len(self.values)}` role(s) from the automod whitelist.")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -1413,26 +1464,18 @@ class _WLRoleRemoveSelect(discord.ui.Select):
 
 
 class _WLAddUserBtn(discord.ui.Button):
-    def __init__(self, automod_cog, guild_id: int):
+    def __init__(self, automod_cog, guild_id: int, lang: str = "en"):
         super().__init__(
-            label="Add User", 
-            style=discord.ButtonStyle.green,
+            label=_t(lang, "btn_add_user"),
+            style=discord.ButtonStyle.secondary,
             emoji=get_emoji("plus")
         )
         self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
@@ -1442,7 +1485,7 @@ class _WLAddUserBtn(discord.ui.Button):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _WLUserSelect(self._cog, self._guild_id, message)
+                _WLUserSelect(self._cog, self._guild_id, message, lang)
             )
         )
         view.add_item(container)
@@ -1452,26 +1495,18 @@ class _WLAddUserBtn(discord.ui.Button):
 
 
 class _WLAddRoleBtn(discord.ui.Button):
-    def __init__(self, automod_cog, guild_id: int):
+    def __init__(self, automod_cog, guild_id: int, lang: str = "en"):
         super().__init__(
-            label="Add Role", 
-            style=discord.ButtonStyle.green,
+            label=_t(lang, "btn_add_role"),
+            style=discord.ButtonStyle.secondary,
             emoji=get_emoji("plus")
         )
         self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
@@ -1481,7 +1516,7 @@ class _WLAddRoleBtn(discord.ui.Button):
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _WLRoleSelect(self._cog, self._guild_id, message)
+                _WLRoleSelect(self._cog, self._guild_id, message, lang)
             )
         )
         view.add_item(container)
@@ -1491,26 +1526,19 @@ class _WLAddRoleBtn(discord.ui.Button):
 
 
 class _WLRemoveUserBtn(discord.ui.Button):
-    def __init__(self, automod_cog, guild_id: int, has_users: bool):
+    def __init__(self, automod_cog, guild_id: int, has_users: bool, lang: str = "en"):
         super().__init__(
-            label="➖ Remove User",
-            style=discord.ButtonStyle.red,
+            label=_t(lang, "btn_remove_user"),
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("trash"),
             disabled=not has_users,
         )
         self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -1527,15 +1555,16 @@ class _WLRemoveUserBtn(discord.ui.Button):
             return await interaction.response.send_message(
                 _t(lang, "wl_no_users"), ephemeral=True,
             )
+        prompt = _t(lang, "wl_remove_user_prompt")
+        if len(options) > _WL_MAX_OPTIONS:
+            prompt += f"\n{_t(lang, 'wl_more')}"
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=_t(lang, "wl_remove_user_prompt")
-            ),
+            discord.ui.TextDisplay(content=prompt),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _WLUserRemoveSelect(self._cog, self._guild_id, options, message)
+                _WLUserRemoveSelect(self._cog, self._guild_id, options, message, lang)
             )
         )
         view.add_item(container)
@@ -1545,26 +1574,19 @@ class _WLRemoveUserBtn(discord.ui.Button):
 
 
 class _WLRemoveRoleBtn(discord.ui.Button):
-    def __init__(self, automod_cog, guild_id: int, has_roles: bool):
+    def __init__(self, automod_cog, guild_id: int, has_roles: bool, lang: str = "en"):
         super().__init__(
-            label="➖ Remove Role",
-            style=discord.ButtonStyle.red,
+            label=_t(lang, "btn_remove_role"),
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("trash"),
             disabled=not has_roles,
         )
         self._cog = automod_cog
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
@@ -1581,15 +1603,16 @@ class _WLRemoveRoleBtn(discord.ui.Button):
             return await interaction.response.send_message(
                 _t(lang, "wl_no_roles"), ephemeral=True,
             )
+        prompt = _t(lang, "wl_remove_role_prompt")
+        if len(options) > _WL_MAX_OPTIONS:
+            prompt += f"\n{_t(lang, 'wl_more')}"
         message = interaction.message
         view = discord.ui.LayoutView(timeout=60)
         container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=_t(lang, "wl_remove_role_prompt")
-            ),
+            discord.ui.TextDisplay(content=prompt),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _WLRoleRemoveSelect(self._cog, self._guild_id, options, message)
+                _WLRoleRemoveSelect(self._cog, self._guild_id, options, message, lang)
             )
         )
         view.add_item(container)
@@ -1613,7 +1636,7 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         discord.ui.TextDisplay(content=text),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
     )
-    container.add_item(discord.ui.ActionRow(SectionSelect(self, guild_id, section)))
+    container.add_item(discord.ui.ActionRow(SectionSelect(self, guild_id, section, lang)))
 
     if section == "filter":
         container.add_item(discord.ui.ActionRow(
@@ -1668,12 +1691,12 @@ def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.
         has_u = bool(wl_cfg.get("whitelist_users", []))
         has_r = bool(wl_cfg.get("whitelist_roles", []))
         container.add_item(discord.ui.ActionRow(
-            _WLAddUserBtn(self, guild_id),
-            _WLAddRoleBtn(self, guild_id),
+            _WLAddUserBtn(self, guild_id, lang),
+            _WLAddRoleBtn(self, guild_id, lang),
         ))
         container.add_item(discord.ui.ActionRow(
-            _WLRemoveUserBtn(self, guild_id, has_u),
-            _WLRemoveRoleBtn(self, guild_id, has_r),
+            _WLRemoveUserBtn(self, guild_id, has_u, lang),
+            _WLRemoveRoleBtn(self, guild_id, has_r, lang),
         ))
 
     view.add_item(container)
@@ -1707,16 +1730,8 @@ class AntiNukeActionSelect(discord.ui.Select):
 
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         
         val = self.values[0]
         lang = get_lang(interaction.guild)
@@ -1727,6 +1742,7 @@ class AntiNukeActionSelect(discord.ui.Select):
         cfg = utils.get_guild_config(self._guild_id)
         cfg["antinuke"]["action"] = val
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Settings", f"Anti-Nuke action set to `{val}`.")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -1758,15 +1774,8 @@ class BadWordsActionSelect(discord.ui.Select):
         super().__init__(placeholder="Choose response…", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red(),
-            ))
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
 
         val = self.values[0]
         lang = get_lang(interaction.guild)
@@ -1777,6 +1786,8 @@ class BadWordsActionSelect(discord.ui.Select):
         cfg = utils.get_guild_config(self._guild_id)
         cfg["badwords_action"] = val
         utils.save_config()
+        await _log(self._cog, interaction, "AutoMod Settings",
+                   f"Blocked-word response set to `{val}`.")
         mode = _t(lang, "badwords_action_censor" if val == "censor" else "badwords_action_delete")
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -1797,15 +1808,8 @@ class BadWordsActionButton(discord.ui.Button):
         self._section = section
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red(),
-            ))
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         lang = get_lang(interaction.guild)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -1826,16 +1830,8 @@ class _NukeActionButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Administrator** permissions to do that."
-                ),
-                accent_colour=discord.Color.red()
-            )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
+        if not _may_manage(interaction):
+            return await _deny(interaction)
         utils = self._cog.utils()
         cfg = utils.get_guild_config(self._guild_id)
         message = interaction.message

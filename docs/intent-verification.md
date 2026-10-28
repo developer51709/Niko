@@ -43,9 +43,9 @@ without access to the raw text of messages:
 **Is message content stored permanently?**
 
 No, with two narrow exceptions:
-- **AI conversation history**: the last 3 message exchanges per user are kept in
-  `memory.json` to give the LLM short-term context. Users can erase this with
-  `/clearhistory`.
+- **AI conversation history**: the last 3 message exchanges per user, scoped to
+  the server they happened in, are kept in the `ai_memory` database table to give
+  the LLM short-term context. Users can erase this with `/clearhistory`.
 - **Snipe cache**: one deleted/edited message per channel is held in memory and
   cleared every time the bot restarts.
 
@@ -96,7 +96,7 @@ This table covers every file or database where user/server data is persisted.
 
 | File / DB | What is stored | Who can delete it |
 |---|---|---|
-| `memory.json` | AI conversation history (last 3 turns), long-term memory notes, favorability scores — keyed by User ID | User via `/clearhistory`; bot owner manually |
+| `ai_memory` table | AI conversation history (last 3 turns) and long-term memory notes — keyed by server + User ID | User via `/clearhistory`; bot owner via database |
 | `data/economy_data/{user_id}.json` | Coin balance, bank balance, inventory, job, XP, level, transaction log | Bot owner manually |
 | `data/levels.json` | Per-guild, per-user XP and level | Server admin via `!levelconfig resetuser`; bot owner manually |
 | `data/warnings.json` | Per-guild warning records (User ID + reason + timestamp) | Server admin via `!clearwarnings`; bot owner manually |

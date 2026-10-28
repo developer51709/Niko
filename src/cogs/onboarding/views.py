@@ -14,6 +14,8 @@ from utils.onboarding.config import (
     load_all_configs,
     migrate_json_files,
     new_menu_id,
+    build_role_menu,
+    build_role_menu_option,
     MENU_TYPE_LABELS,
     DEFAULT_MENU_TYPE,
     BUTTON_STYLE_NAMES,
@@ -296,13 +298,13 @@ class RoleMenuOptionModal(Modal):
                 view=feedback_view("That role is already in this menu.", ok=False), ephemeral=True
             )
 
-        entry = {
-            "role_id": self.role_id,
-            "label": self.label_input.value.strip() or "Role",
-            "description": self.desc_input.value.strip() or None,
-            "emoji": self.emoji_input.value.strip() or None,
-            "style": style,
-        }
+        entry = build_role_menu_option(
+            role_id=self.role_id,
+            label=self.label_input.value.strip(),
+            description=self.desc_input.value.strip() or None,
+            emoji=self.emoji_input.value.strip() or None,
+            style=style,
+        )
 
         if self.edit_index is not None and 0 <= self.edit_index < len(options):
             options[self.edit_index] = entry
@@ -353,7 +355,7 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
                 view=feedback_view("You've reached the maximum of 25 role menus.", ok=False), ephemeral=True
             )
 
-        color = 0x57F287
+        color = None
         if self.color_input.value.strip():
             try:
                 color = int(self.color_input.value.strip().replace("#", ""), 16)
@@ -365,17 +367,13 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
         name = _generate_menu_name(title, existing_names)
 
         menu_id = new_menu_id()
-        cfg.role_menus[menu_id] = {
-            "name": name,
-            "title": title,
-            "description": self.desc_input.value.strip() or "Choose your roles below.",
-            "color": color,
-            "menu_type": DEFAULT_MENU_TYPE,
-            "max_values": None,
-            "channel_id": None,
-            "message_id": None,
-            "options": [],
-        }
+        cfg.role_menus[menu_id] = build_role_menu(
+            name=name,
+            title=title,
+            description=self.desc_input.value.strip() or None,
+            color=color,
+            menu_type=DEFAULT_MENU_TYPE,
+        )
         await update_config(self.guild_id, cfg)
 
         await interaction.response.send_message(

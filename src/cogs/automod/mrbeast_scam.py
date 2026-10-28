@@ -3,7 +3,7 @@ mrbeast_scam.py — Experimental MrBeast image scam detection.
 
 Flow
 ────
-1. Anyone right-clicks a message → "🚩 Report MrBeast Scam".
+1. Anyone right-clicks a message → "Report MrBeast Scam".
 2. The message's image assets (plus context) are forwarded to the scam
    review channel in the private staff-only server.
 3. Niko staff press **Confirm Scam** (adds the image's perceptual hash to
@@ -33,6 +33,7 @@ from discord import MediaGalleryItem
 from discord import app_commands
 from discord.ext import commands
 
+from config.emojis import get_emoji
 from config.ids import OWNER_IDS, SCAM_REVIEW_CHANNEL, SCAM_REVIEW_GUILD
 from utils import logging
 
@@ -217,7 +218,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._ctx_report = app_commands.ContextMenu(
-            name="🚩 Report MrBeast Scam",
+            name="Report MrBeast Scam",
             callback=self._report_context_menu,
         )
         self.bot.tree.add_command(self._ctx_report)
@@ -323,7 +324,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         images = [a for a in message.attachments if _is_image_attachment(a)]
         if not images:
             await interaction.followup.send(
-                view=_cv("🚩 That message has no image attachments to review.", colour=_ACCENT_WARN),
+                view=_cv(f"{get_emoji('image')} That message has no image attachments to review.", colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -332,7 +333,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if review_channel is None:
             await interaction.followup.send(
                 view=_cv(
-                    "🚩 Scam review is not configured yet — an admin needs to set `SCAM_REVIEW_CHANNEL`.",
+                    f"{get_emoji('warning')} Scam review is not configured yet — an admin needs to set `SCAM_REVIEW_CHANNEL`.",
                     colour=_ACCENT_WARN,
                 ),
                 ephemeral=True,
@@ -374,7 +375,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             for i, (name, data) in enumerate(blobs)
         ]
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### 🚩 MrBeast Scam Report"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('megaphone')} MrBeast Scam Report"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=body),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -397,7 +398,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         except discord.HTTPException as exc:
             logging.error("MrBeastScam", f"Could not deliver report to review channel: {exc}")
             await interaction.followup.send(
-                view=_cv("🚩 Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
+                view=_cv(f"{get_emoji('danger')} Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -417,7 +418,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             logging.error("MrBeastScam", f"Could not persist scam report: {exc}")
 
         await interaction.followup.send(
-            view=_cv("🚩 Thanks! The image was sent to the scam review team.", colour=_ACCENT_OK),
+            view=_cv(f"{get_emoji('tick')} Thanks! The image was sent to the scam review team.", colour=_ACCENT_OK),
             ephemeral=True,
         )
 
@@ -426,7 +427,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
     async def _handle_review(self, interaction: discord.Interaction, decision: str) -> None:
         if not self._is_staff_reviewer(interaction.user):
             await interaction.response.send_message(
-                view=_cv("🔒 Only Niko staff can review scam reports.", colour=_ACCENT_ERROR),
+                view=_cv(f"{get_emoji('lock')} Only Niko staff can review scam reports.", colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -446,7 +447,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         )
         if row is None:
             await interaction.message.edit(
-                view=_cv("🚩 Scam Review — already resolved", colour=_ACCENT_MUTED)
+                view=_cv(f"{get_emoji('tick')} Scam Review — already resolved", colour=_ACCENT_MUTED)
             )
             return
 
@@ -520,7 +521,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
 
         if not hash_bits_list:
             await interaction.followup.send(
-                view=_cv("⚠️ Could not recover the reported image — reject this report and re-report it.", colour=_ACCENT_WARN),
+                view=_cv(f"{get_emoji('warning')} Could not recover the reported image — reject this report and re-report it.", colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -544,7 +545,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
 
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### ✅ Scam Confirmed"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Scam Confirmed"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
                 content=(
@@ -568,7 +569,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### 🚫 Scam Report Rejected"),
+            discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Scam Report Rejected"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"Rejected by {interaction.user.mention} — nothing was added to the filter."),
             accent_colour=discord.Colour(_ACCENT_MUTED),
@@ -697,7 +698,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
                     built.append(discord.File(io.BytesIO(data), filename=_safe_upload_name(name, i)))
 
             kids: list[discord.ui.Item] = [
-                discord.ui.TextDisplay(content="### 🚩 MrBeast Scam Removed"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('broom')} MrBeast Scam Removed"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=body),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -752,7 +753,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         review_channel = self._review_channel()
         if review_channel is None:
             await interaction.followup.send(
-                view=_cv("🚩 Scam review is not configured — cannot submit this false positive.", colour=_ACCENT_WARN),
+                view=_cv(f"{get_emoji('warning')} Scam review is not configured — cannot submit this false positive.", colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -816,7 +817,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         def build_fp_view(with_image: bool) -> tuple[discord.ui.LayoutView, list[discord.File]]:
             files: list[discord.File] = []
             kids: list[discord.ui.Item] = [
-                discord.ui.TextDisplay(content="### 🧪 False Positive Report"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('bug')} False Positive Report"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=body),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -859,7 +860,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if not ok:
             logging.error("MrBeastScam", f"Could not forward false positive: {retry_exc}")
             await interaction.followup.send(
-                view=_cv("🚩 Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
+                view=_cv(f"{get_emoji('danger')} Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -873,14 +874,14 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             pass
 
         await interaction.followup.send(
-            view=_cv("🧪 Thanks! The false positive was sent to the scam review team.", colour=_ACCENT_OK),
+            view=_cv(f"{get_emoji('tick')} Thanks! The false positive was sent to the scam review team.", colour=_ACCENT_OK),
             ephemeral=True,
         )
 
     async def _remove_scam_hash(self, interaction: discord.Interaction, image_hash: str) -> None:
         if not self._is_staff_reviewer(interaction.user):
             await interaction.response.send_message(
-                view=_cv("🔒 Only Niko staff can remove hashes.", colour=_ACCENT_ERROR),
+                view=_cv(f"{get_emoji('lock')} Only Niko staff can remove hashes.", colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -889,12 +890,12 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             await self.bot.cxn.execute("DELETE FROM mrbeast_scams WHERE image_hash = $1", image_hash)
         except Exception as exc:
             logging.error("MrBeastScam", f"Could not remove hash {image_hash}: {exc}")
-            await interaction.followup.send(view=_cv("⚠️ Could not remove that hash.", colour=_ACCENT_ERROR))
+            await interaction.followup.send(view=_cv(f"{get_emoji('danger')} Could not remove that hash.", colour=_ACCENT_ERROR))
             return
         if interaction.message is not None:
             try:
                 await interaction.message.edit(
-                    view=_cv(f"🧹 Hash `{image_hash[:12]}…` removed from the filter", colour=_ACCENT_MUTED)
+                    view=_cv(f"{get_emoji('broom')} Hash `{image_hash[:12]}…` removed from the filter", colour=_ACCENT_MUTED)
                 )
             except discord.HTTPException:
                 pass

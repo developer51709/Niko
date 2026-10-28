@@ -1,6 +1,7 @@
 import type {
   AchievementsResponse,
   AuthStatus,
+  BotEmojisResponse,
   BotStats,
   Command,
   EconomyStanding,
@@ -73,6 +74,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 export const getAuth = () => api<AuthStatus>("/auth/status");
 export const getDashboardAccess = () => api<{ blacklisted: boolean; scope?: "user"; reason?: string }>("/api/dashboard/access");
 export const getPublicConfig = () => api<PublicConfig>("/api/config");
+export const getBotEmojis = () => api<BotEmojisResponse>("/api/emojis");
 export const getStats = () => api<BotStats>("/api/botstats");
 export const resolveDiscordText = (text: string, guildId?: string) => api<{
   text: string;

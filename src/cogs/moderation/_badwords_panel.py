@@ -92,6 +92,11 @@ MESSAGES = {
         "section_words":     "Word list",
         "section_presets":   "Preset filters",
         "section_response":  "Response",
+        "btn_add_word":      "Add Word",
+        "btn_remove_word":   "Remove Word",
+        "btn_clear_words":   "Clear All",
+        "btn_set_mask":      "Set Mask",
+        "add_word_title":    "Blocked word",
         "section_placeholder": "Navigate sections…",
         "preset_placeholder": "Toggle preset filters…",
         "response_placeholder": "Choose the response…",
@@ -145,6 +150,11 @@ MESSAGES = {
         "section_words":     "Wortliste",
         "section_presets":   "Preset-Filter",
         "section_response":  "Reaktion",
+        "btn_add_word":      "Wort hinzufügen",
+        "btn_remove_word":   "Wort entfernen",
+        "btn_clear_words":   "Alle löschen",
+        "btn_set_mask":      "Maske setzen",
+        "add_word_title":    "Gesperrtes Wort",
         "section_placeholder": "Bereiche…",
         "preset_placeholder": "Preset-Filter umschalten…",
         "response_placeholder": "Reaktion wählen…",
@@ -198,6 +208,11 @@ MESSAGES = {
         "section_words":     "Lista de palabras",
         "section_presets":   "Filtros predefinidos",
         "section_response":  "Respuesta",
+        "btn_add_word":      "Añadir palabra",
+        "btn_remove_word":   "Quitar palabra",
+        "btn_clear_words":   "Borrar todo",
+        "btn_set_mask":      "Definir máscara",
+        "add_word_title":    "Palabra bloqueada",
         "section_placeholder": "Ir a una sección…",
         "preset_placeholder": "Activar filtros predefinidos…",
         "response_placeholder": "Elige la respuesta…",
@@ -247,6 +262,16 @@ async def _notice(interaction: discord.Interaction, text: str):
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text)))
     return await interaction.response.send_message(view=view, ephemeral=True)
+
+
+async def _log(utils, interaction: discord.Interaction, body: str) -> None:
+    """Record a filter change in the server's AutoMod log.
+
+    Whitelisting a user exempts them from anti-nuke, so who changed what has to
+    leave a trace — none of these edits used to be logged at all.
+    """
+    await utils.log_action(
+        interaction.guild, "Blocked Words", body, moderator=interaction.user)
 
 
 # ──────────────────────────────────────────────────
@@ -346,15 +371,15 @@ def build_panel(utils, guild_id: int, section: str = "overview", guild=None) -> 
 
     if section == "words":
         container.add_item(discord.ui.ActionRow(
-            AddWordButton(utils, guild_id),
-            RemoveWordButton(utils, guild_id),
-            ClearWordsButton(utils, guild_id),
+            AddWordButton(utils, guild_id, lang),
+            RemoveWordButton(utils, guild_id, lang),
+            ClearWordsButton(utils, guild_id, lang),
         ))
     elif section == "presets":
         container.add_item(discord.ui.ActionRow(PresetSelect(utils, guild_id, lang)))
     elif section == "response":
         container.add_item(discord.ui.ActionRow(ResponseSelect(utils, guild_id, lang)))
-        container.add_item(discord.ui.ActionRow(SetMaskButton(utils, guild_id)))
+        container.add_item(discord.ui.ActionRow(SetMaskButton(utils, guild_id, lang)))
 
     view.add_item(container)
     return view
@@ -404,26 +429,28 @@ class SectionSelect(discord.ui.Select):
 # ── Word list ────────────────────────────────────────────────────────────────
 
 class AddWordButton(discord.ui.Button):
-    def __init__(self, utils, guild_id: int):
-        super().__init__(label="Add Word", style=discord.ButtonStyle.green, emoji=EMOJI["plus"])
+    def __init__(self, utils, guild_id: int, lang: str):
+        super().__init__(label=_t(lang, "btn_add_word"), style=discord.ButtonStyle.green, emoji=EMOJI["plus"])
         self._utils = utils
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         if not _may_manage(interaction):
             return await _deny(interaction)
-        await interaction.response.send_modal(AddWordModal(self._utils, self._guild_id))
+        await interaction.response.send_modal(
+            AddWordModal(self._utils, self._guild_id, _lang(interaction.guild)))
 
 
-class AddWordModal(discord.ui.Modal, title="Blocked word"):
+class AddWordModal(discord.ui.Modal):
+    # Modal field labels stay English across the bot; the title follows the panel.
     word = discord.ui.TextInput(
         label="Word or phrase",
         placeholder="e.g. badword, bad*, *bad*",
         max_length=MAX_BLOCKED_WORD_LENGTH,
     )
 
-    def __init__(self, utils, guild_id: int):
-        super().__init__()
+    def __init__(self, utils, guild_id: int, lang: str = "en"):
+        super().__init__(title=_t(lang, "add_word_title"))
         self._utils = utils
         self._guild_id = guild_id
 
@@ -440,12 +467,13 @@ class AddWordModal(discord.ui.Modal, title="Blocked word"):
         if len(current) >= MAX_BLOCKED_WORDS:
             return await _notice(interaction, _t(lang, "words_full", max=MAX_BLOCKED_WORDS))
         self._utils.add_blocked_word(self._guild_id, word)
+        await _log(self._utils, interaction, f"**Action:** Word added\n**Word:** `{word}`")
         await _rerender(interaction, self._utils, self._guild_id, "words")
 
 
 class RemoveWordButton(discord.ui.Button):
-    def __init__(self, utils, guild_id: int):
-        super().__init__(label="Remove Word", style=discord.ButtonStyle.gray, emoji=EMOJI["trash"])
+    def __init__(self, utils, guild_id: int, lang: str):
+        super().__init__(label=_t(lang, "btn_remove_word"), style=discord.ButtonStyle.gray, emoji=EMOJI["trash"])
         self._utils = utils
         self._guild_id = guild_id
 
@@ -492,6 +520,7 @@ class RemoveWordSelect(discord.ui.Select):
             return await _deny(interaction)
         word = self.values[0]
         self._utils.remove_blocked_word(self._guild_id, word)
+        await _log(self._utils, interaction, f"**Action:** Word removed\n**Word:** `{word}`")
         await _notice(interaction, _t(lang, "word_removed", word=word))
         if self.message is not None:
             await self.message.edit(
@@ -501,8 +530,8 @@ class RemoveWordSelect(discord.ui.Select):
 
 
 class ClearWordsButton(discord.ui.Button):
-    def __init__(self, utils, guild_id: int):
-        super().__init__(label="Clear All", style=discord.ButtonStyle.red, emoji=EMOJI["trash"])
+    def __init__(self, utils, guild_id: int, lang: str):
+        super().__init__(label=_t(lang, "btn_clear_words"), style=discord.ButtonStyle.red, emoji=EMOJI["trash"])
         self._utils = utils
         self._guild_id = guild_id
 
@@ -518,7 +547,7 @@ class ClearWordsButton(discord.ui.Button):
             discord.ui.TextDisplay(content=_t(lang, "clear_prompt", count=len(words))),
             discord.ui.ActionRow(
                 ConfirmClearButton(self._utils, self._guild_id, len(words), interaction.message),
-                CancelClearButton(),
+                CancelClearButton(lang),
             ),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -538,6 +567,7 @@ class ConfirmClearButton(discord.ui.Button):
         if not _may_manage(interaction):
             return await _deny(interaction)
         self._utils.clear_blocked_words(self._guild_id)
+        await _log(self._utils, interaction, f"**Action:** Every blocked word cleared ({self._count})")
         await _notice(interaction, _t(lang, "clear_done", count=self._count))
         if self.message is not None:
             await self.message.edit(
@@ -547,8 +577,8 @@ class ConfirmClearButton(discord.ui.Button):
 
 
 class CancelClearButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Cancel", style=discord.ButtonStyle.secondary)
+    def __init__(self, lang: str):
+        super().__init__(label=_t(lang, "cancel"), style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction):
         lang = _lang(interaction.guild)
@@ -587,7 +617,10 @@ class PresetSelect(discord.ui.Select):
         lang = _lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
-        self._utils.set_badwords_presets(self._guild_id, self.values)
+        enabled = self._utils.set_badwords_presets(self._guild_id, self.values)
+        await _log(self._utils, interaction,
+                   "**Action:** Preset filters updated\n**Enabled:** "
+                   f"{', '.join(f'`{key}`' for key in enabled) or 'none'}")
         await interaction.response.edit_message(
             view=build_panel(self._utils, self._guild_id, "presets", interaction.guild),
             allowed_mentions=ALLOWED_MENTIONS,
@@ -632,7 +665,8 @@ class ResponseSelect(discord.ui.Select):
         if value not in ("delete", "censor"):
             return await _notice(interaction, _t(lang, "response_placeholder"))
         self._utils.get_guild_config(self._guild_id)["badwords_action"] = value
-        self._utils.save_config()
+        self._utils.save_config(self._guild_id)
+        await _log(self._utils, interaction, f"**Action:** Blocked-word response set to `{value}`")
         await interaction.response.edit_message(
             view=build_panel(self._utils, self._guild_id, "response", interaction.guild),
             allowed_mentions=ALLOWED_MENTIONS,
@@ -642,8 +676,8 @@ class ResponseSelect(discord.ui.Select):
 
 
 class SetMaskButton(discord.ui.Button):
-    def __init__(self, utils, guild_id: int):
-        super().__init__(label="Set Mask", style=discord.ButtonStyle.gray, emoji=EMOJI["gear"])
+    def __init__(self, utils, guild_id: int, lang: str):
+        super().__init__(label=_t(lang, "btn_set_mask"), style=discord.ButtonStyle.gray, emoji=EMOJI["gear"])
         self._utils = utils
         self._guild_id = guild_id
 
@@ -680,7 +714,9 @@ class MaskModal(discord.ui.Modal):
             return await _deny(interaction)
         mask = normalize_badwords_mask(self.mask.value)
         self._utils.get_guild_config(self._guild_id)["badwords_mask"] = mask
-        self._utils.save_config()
+        self._utils.save_config(self._guild_id)
+        await _log(self._utils, interaction,
+                   f"**Action:** Censor mask set to `{mask}`" if mask else "**Action:** Censor mask cleared")
         await _rerender(interaction, self._utils, self._guild_id, "response")
         await interaction.followup.send(
             _t(lang, "mask_saved", mask=mask) if mask else _t(lang, "mask_saved_none"),

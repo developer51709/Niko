@@ -240,6 +240,16 @@ def _save_runtime_guild_profile(guild_id: int, profile: dict) -> None:
         conn.close()
 
 
+def _serialize_logging_categories() -> list[dict]:
+    """The log categories the bot knows about, for the dashboard's pickers."""
+    from cogs.logging.formatters import CATEGORIES
+
+    return [
+        {"key": key, "label": info["label"], "description": info.get("description", "")}
+        for key, info in CATEGORIES.items()
+    ]
+
+
 def _get_runtime_server_config(guild_id: str) -> dict:
     """Read all server-management settings from their existing owners."""
     from utils.prefix_manager import DEFAULT_PREFIX, PREFIX_OVERRIDE, get_prefixes
@@ -264,6 +274,9 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "prefix_override": PREFIX_OVERRIDE,
         "onboarding": _serialize_onboarding_config(onboarding),
         "logging": logging_config,
+        # The bot's own category list, so the dashboard can never drift from the
+        # events the bot actually logs.
+        "logging_categories": _serialize_logging_categories(),
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
         "profile": _get_runtime_guild_profile(guild_id),
         # Whether the server tag popups in transcripts hide this server.

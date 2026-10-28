@@ -133,6 +133,17 @@ async def _create_tables(bot):
             pass
 
     await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_memory (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            memory TEXT NOT NULL DEFAULT '',
+            history TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (guild_id, user_id)
+        )
+    """)
+
+    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS staff_applications (
             id                TEXT PRIMARY KEY,
             guild_id          INTEGER NOT NULL,

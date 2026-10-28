@@ -1,6 +1,7 @@
 """Flask routes for dashboard."""
 
 import binascii
+import copy
 from utils.economy_jobs import get_job
 from utils.premium import get_subscription, subscription_view
 from utils.verification.modes import MODES as VERIFICATION_MODES
@@ -12,6 +13,28 @@ globals().update({
     for name, value in vars(_server).items()
     if not name.startswith("__")
 })
+
+
+async def _notify_logging_change(guild_id: int, before: dict) -> None:
+    """Refresh the live cog and announce a dashboard logging edit.
+
+    The dashboard writes the config straight to the database, so without this
+    the cog kept serving its cached copy for up to CONFIG_TTL and the channels
+    being watched never heard that their configuration had changed.
+    """
+    if _discord_bot is None:
+        return
+    cog = _discord_bot.get_cog("ServerLogger")
+    if cog is None:
+        return
+    cog.invalidate()
+    guild = _discord_bot.get_guild(guild_id)
+    if guild is None:
+        return
+    try:
+        await cog._audit_logging_change(guild, before, summary="Updated from the dashboard")
+    except Exception:
+        pass
 
 @app.route("/api/dashboard/access")
 @require_dashboard_auth
@@ -312,7 +335,7 @@ def api_guild_config(guild_id):
     # never be persisted alongside it.
     modcfg  = {**get_runtime_moderation_config(guild_id), "preset_filters": _preset_filter_catalog()}
     premium_cfg = _guild_premium_view(guild_id)
-    aicfg   = get_ai_config(int(guild_id))
+    aicfg   = cached_ai_config(int(guild_id))
     level_cfg = get_runtime_level_config(guild_id)
 
     try:
@@ -552,17 +575,36 @@ def api_save_automod(guild_id):
                 return jsonify({"error": f"{key} must be between {minimum} and {maximum}."}), 400
             guild_config[key] = value
 
+    # Every threshold the Discord panel can edit is accepted here too, and the
+    # action vocabularies match the ones the bot actually implements per
+    # section. The lists used to be shorter and shared, so the dashboard
+    # silently dropped anti-nuke's channel-create/webhook-delete thresholds and
+    # anti-raid's new-account filter, and validated anti-raid's action against
+    # anti-nuke's choices (accepting `strip`, which a raid never runs).
     nested_fields = {
         "antinuke": {
             "ban_threshold": (1, 100), "kick_threshold": (1, 100),
             "channel_delete_threshold": (1, 100), "role_delete_threshold": (1, 100),
+            "channel_create_threshold": (1, 100), "webhook_delete_threshold": (1, 100),
             "interval": (1, 3600),
         },
-        "antiraid": {"join_threshold": (1, 1000), "join_interval": (1, 3600)},
+        "antiraid": {
+            "join_threshold": (1, 1000), "join_interval": (1, 3600),
+            "new_account_days": (0, 365), "lockdown_slowmode": (1, 21600),
+        },
         "antiraid_ext": {
             "interaction_threshold": (1, 1000), "interaction_window": (1, 3600),
             "join_age_limit": (1, 86400), "ext_app_threshold": (1, 1000),
             "ext_app_window": (1, 3600),
+        },
+    }
+    nested_choices = {
+        "antinuke": {"action": {"strip", "kick", "ban"}},
+        "antiraid": {"action": {"kick", "ban", "softban", "slowmode", "lockdown"}},
+        "antiraid_ext": {
+            "raider_action": {"kick", "ban"},
+            "operator_action": {"notify", "kick", "ban"},
+            "ext_app_action": {"kick", "ban", "warn", "log"},
         },
     }
     for section, fields in nested_fields.items():
@@ -579,12 +621,7 @@ def api_save_automod(guild_id):
                 if not minimum <= value <= maximum:
                     return jsonify({"error": f"{section}.{key} must be between {minimum} and {maximum}."}), 400
                 target[key] = value
-        for key, choices in {
-            "action": {"strip", "kick", "ban"},
-            "raider_action": {"kick", "ban", "softban", "slowmode", "lockdown"},
-            "operator_action": {"notify", "kick", "ban"},
-            "ext_app_action": {"kick", "ban", "warn"},
-        }.items():
+        for key, choices in nested_choices.get(section, {}).items():
             if key in incoming and incoming[key] in choices:
                 target[key] = incoming[key]
         if section == "antiraid_ext" and "ext_app_detection" in incoming:
@@ -825,6 +862,7 @@ def api_save_server(guild_id):
             return jsonify({"error": "Logging settings must be an object."}), 400
         current = run_on_bot_loop(_load_log_config())
         logging_cfg = _guild_config(current, numeric_guild_id)
+        before_logging_cfg = copy.deepcopy(logging_cfg)
         for category, value in logging_data.items():
             if category == "disabled":
                 if not isinstance(value, list) or any(item not in CATEGORIES for item in value):
@@ -847,6 +885,7 @@ def api_save_server(guild_id):
             else:
                 return jsonify({"error": f"Unsupported logging category: {category}"}), 400
         run_on_bot_loop(_save_guild_log_config(numeric_guild_id, logging_cfg))
+        run_on_bot_loop(_notify_logging_change(numeric_guild_id, before_logging_cfg))
 
     tickets_data = body.get("tickets")
     if tickets_data is not None:
@@ -1091,6 +1130,8 @@ def api_save_profile(guild_id):
 @require_csrf
 def api_save_ai(guild_id):
     """Persist all AI settings through the database-backed config helper."""
+    from utils.ai.config import MIN_AI_NAME_LENGTH
+
     body = request.get_json(silent=True) or {}
     allowed = {
         "personality", "enabled", "ai_name",
@@ -1102,14 +1143,26 @@ def api_save_ai(guild_id):
         return jsonify({"error": f"Unsupported AI fields: {', '.join(sorted(unknown))}"}), 400
     if "personality" in body and body["personality"] not in {"cafe", "normal"}:
         return jsonify({"error": "Personality must be cafe or normal."}), 400
-    if "ai_name" in body and len(str(body["ai_name"]).strip()) > 32:
-        return jsonify({"error": "AI name must be 32 characters or fewer."}), 400
+    if "ai_name" in body:
+        name = str(body["ai_name"]).strip()
+        if len(name) > 32:
+            return jsonify({"error": "AI name must be 32 characters or fewer."}), 400
+        # A one- or two-letter name would make Niko answer almost every message.
+        if len(name) < MIN_AI_NAME_LENGTH:
+            return jsonify({
+                "error": f"AI name must be at least {MIN_AI_NAME_LENGTH} characters."
+            }), 400
 
     guild_int = int(guild_id)
-    for key in allowed:
-        if key in body:
-            set_ai_config(guild_int, key, body[key])
-    return jsonify({"ok": True, "config": get_ai_config(guild_int)})
+    try:
+        for key in allowed:
+            if key in body:
+                run_on_bot_loop(save_ai_config(guild_int, key, body[key]))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except Exception as error:
+        return jsonify({"error": f"The AI setting could not be saved: {error}"}), 503
+    return jsonify({"ok": True, "config": cached_ai_config(guild_int)})
 
 @app.route("/api/guild/<guild_id>/config/leveling", methods=["POST"])
 @require_auth

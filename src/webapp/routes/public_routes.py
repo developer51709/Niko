@@ -252,6 +252,35 @@ def api_commands():
 def api_health():
     return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
 
+@app.route("/api/emojis")
+def api_bot_emojis():
+    """Every emoji the bot sends, for the website's own emoji rendering.
+
+    Read from the bot's config on each request, with the ids the emoji sync has
+    re-uploaded, so the rendering lab and the emoji popups can never drift from
+    the bot. They used to read a list generated into the web app, which went
+    stale as soon as an emoji was added, renamed, or re-uploaded — and a
+    re-upload always changes the id, because Discord cannot replace an emoji's
+    art. A short id is a stub the sync has not uploaded yet, which the website
+    marks instead of requesting it from the CDN.
+    """
+    # Imported here so the sync's aiohttp client stays out of the web app's
+    # startup path; the catalog itself is one file read.
+    from utils.emoji_sync import live_emoji_catalog
+
+    return jsonify({
+        "emojis": [
+            {
+                "name": emoji.discord_name,
+                "id": str(emoji.emoji_id),
+                "animated": emoji.animated,
+                "placeholder": emoji.is_placeholder,
+            }
+            for emoji in live_emoji_catalog()
+        ],
+    })
+
+
 @app.route("/api/config")
 def api_public_config():
     bot_avatar_url = None

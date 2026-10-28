@@ -9,13 +9,15 @@ def test_multimodal_experiment_is_opt_in_and_visible_in_config():
     config = (ROOT / "src/utils/ai/config.py").read_text(encoding="utf-8")
     panel = (ROOT / "src/cogs/ai/config.py").read_text(encoding="utf-8")
     assert '"multimodal_experiment": "False"' in config
-    assert 'ExperimentToggle(self.bot, "multimodal", self.guild_id)' in panel
+    assert 'ExperimentToggle(self.bot, "multimodal", self.guild_id' in panel
     assert "MultimodalExperimentAbout" in panel
 
 
 def test_message_handler_only_collects_media_when_enabled():
     source = (ROOT / "src/events/on_message.py").read_text(encoding="utf-8")
-    assert 'get_ai_config(guild.id, "multimodal_experiment") == "True"' in source
+    # The handler reads the guild config once and reuses it for the whole message.
+    assert 'config = await load_config(guild.id)' in source
+    assert 'config.get("multimodal_experiment") == "True"' in source
     assert 'content_type.startswith("image/")' in source
     assert 'content_type.startswith("audio/")' in source
     assert "transcribe_audio" in source

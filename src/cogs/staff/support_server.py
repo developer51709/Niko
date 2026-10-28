@@ -9,6 +9,7 @@ from discord.http import Route
 
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from utils import logging
+from utils.onboarding.config import build_role_menu, build_role_menu_option
 
 ROLE_SPECS = {
     "owner": ("Niko Owner", 0xC8A882, True),
@@ -909,106 +910,75 @@ class SupportGuidePanel(discord.ui.LayoutView):
         self.add_item(container)
 
 
-class SupportPingPanel(discord.ui.LayoutView):
-    """Persistent member-managed notification roles panel."""
-    def __init__(self):
-        super().__init__(timeout=None)
-        row = discord.ui.ActionRow()
-        for key, label, emoji in (("announcements_ping", "Announcements", "📣"), ("events_ping", "Events", "🎉"), ("community_ping", "Community", "💬"), ("polls_ping", "Polls", "📊"), ("partnerships_ping", "Partnerships", "🤝")):
-            button = discord.ui.Button(label=label, emoji=emoji, style=discord.ButtonStyle.secondary, custom_id=f"niko:support:role:{key}")
-            button.callback = self._toggle_role
-            row.add_item(button)
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay(content="## Choose your notifications\nGet only the updates you care about. Tap again to remove a role."), discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small), row, accent_colour=0xC8A882))
-
-    async def _toggle_role(self, interaction: discord.Interaction):
-        if not interaction.guild or interaction.guild.id != SUPPORT_GUILD or not isinstance(interaction.user, discord.Member):
-            return await interaction.response.send_message("This panel only works in the official support server.", ephemeral=True)
-        key = interaction.data.get("custom_id", "").rsplit(":", 1)[-1]
-        role = await support_role(interaction.client, key)
-        if role is None:
-            return await interaction.response.send_message("This role is not configured yet. Please contact staff.", ephemeral=True)
-        if role in interaction.user.roles:
-            await interaction.user.remove_roles(role, reason="Support notification role preference")
-            message = f"Removed **{role.name}**."
-        else:
-            await interaction.user.add_roles(role, reason="Support notification role preference")
-            message = f"Added **{role.name}**."
-        await interaction.response.send_message(message, ephemeral=True)
-
+# The member role panels are ordinary onboarding role menus, provisioned in the
+# exact shape `.onboarding role-menu` stores (see
+# utils.onboarding.config.build_role_menu). They are not support-server-specific
+# views: that way they keep the feature's persistence, its re-registration on
+# restart, and its management UI instead of needing code of their own.
+SUPPORT_ACCENT = 0xC8A882
 
 PRONOUN_ROLE_KEYS = ("pronouns_he_him", "pronouns_she_her", "pronouns_they_them", "pronouns_xe_xem", "pronouns_any")
 AGE_GROUP_ROLE_KEYS = ("age_13_15", "age_16_17", "age_18_20", "age_21_24", "age_25_plus")
 
-
-async def _toggle_cosmetic_role(interaction: discord.Interaction, group_keys: tuple[str, ...]) -> None:
-    """Toggle one opt-in role, keeping the group to a single choice."""
-    if not interaction.guild or interaction.guild.id != SUPPORT_GUILD or not isinstance(interaction.user, discord.Member):
-        return await interaction.response.send_message("This panel only works in the official support server.", ephemeral=True)
-    key = str(interaction.data.get("custom_id", "")).rsplit(":", 1)[-1]
-    if key not in group_keys:
-        return await interaction.response.send_message("That role option is no longer available.", ephemeral=True)
-    guild = interaction.guild
-    ids = (await get_support_ids(interaction.client))["roles"]
-    group_roles = [guild.get_role(int(ids[key_])) if ids.get(key_) else None for key_ in group_keys]
-    role = group_roles[group_keys.index(key)]
-    if role is None:
-        return await interaction.response.send_message("This role is not configured yet. Please contact staff.", ephemeral=True)
-    member = interaction.user
-    if role in member.roles:
-        await member.remove_roles(role, reason="Support server role preference")
-        message = f"Removed **{role.name}**."
-    else:
-        stale = [other for other in group_roles if other and other != role and other in member.roles]
-        if stale:
-            await member.remove_roles(*stale, reason="Support server role preference")
-        await member.add_roles(role, reason="Support server role preference")
-        message = f"Added **{role.name}**."
-    await interaction.response.send_message(message, ephemeral=True)
-
-
-class _RoleChoicePanel(discord.ui.LayoutView):
-    """Persistent single-choice role picker shared by the identity panels."""
-
-    title = ""
-    description = ""
-    role_keys: tuple[str, ...] = ()
-
-    def __init__(self):
-        super().__init__(timeout=None)
-        row = discord.ui.ActionRow()
-        for key in self.role_keys:
-            button = discord.ui.Button(
-                label=ROLE_SPECS[key][0],
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"niko:support:role:{key}",
-            )
-            button.callback = self._toggle
-            row.add_item(button)
-        self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"## {self.title}\n{self.description}"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            row,
-            accent_colour=0xC8A882,
-        ))
-
-    async def _toggle(self, interaction: discord.Interaction) -> None:
-        await _toggle_cosmetic_role(interaction, self.role_keys)
+# menu_id -> panel spec. The dict order is the order the panels are posted in
+# #roles, and ``roles`` is the order of the buttons inside a panel.
+SUPPORT_ROLE_MENUS = {
+    "support_notifications": {
+        "name": "support-notifications",
+        "title": "Choose your notifications",
+        "description": "Get only the updates you care about. Tap a role again to remove it.",
+        "menu_type": "button_multi",
+        "roles": (
+            ("announcements_ping", "📣"),
+            ("events_ping", "🎉"),
+            ("community_ping", "💬"),
+            ("polls_ping", "📊"),
+            ("partnerships_ping", "🤝"),
+        ),
+    },
+    "support_pronouns": {
+        "name": "support-pronouns",
+        "title": "Pronouns",
+        "description": "Pick the pronoun role that fits you. Choose one - tap it again to remove it.",
+        "menu_type": "button_single",
+        "roles": tuple((key, None) for key in PRONOUN_ROLE_KEYS),
+    },
+    "support_age_groups": {
+        "name": "support-age-groups",
+        "title": "Age group",
+        "description": "Share your age range if you like. These roles are cosmetic and are never pinged. Choose one - tap it again to remove it.",
+        "menu_type": "button_single",
+        "roles": tuple((key, None) for key in AGE_GROUP_ROLE_KEYS),
+    },
+}
 
 
-class SupportPronounPanel(_RoleChoicePanel):
-    """Opt-in pronoun roles for members."""
+def support_role_menus(roles: dict) -> dict[str, dict]:
+    """Build the support server's member role panels as onboarding role menus.
 
-    title = "Pronouns"
-    description = "Pick the pronoun role that fits you. Choose one - tap it again to remove it."
-    role_keys = PRONOUN_ROLE_KEYS
-
-
-class SupportAgePanel(_RoleChoicePanel):
-    """Opt-in age-range roles. Cosmetic only, never pinged."""
-
-    title = "Age group"
-    description = "Share your age range if you like. These roles are cosmetic and are never pinged. Choose one - tap it again to remove it."
-    role_keys = AGE_GROUP_ROLE_KEYS
+    Roles the reconcile could not create are skipped rather than stored as
+    options that resolve to nothing, and a panel whose roles are all missing is
+    left out entirely. The ids are stable so re-running the setup updates the
+    same menus instead of creating duplicates.
+    """
+    menus: dict[str, dict] = {}
+    for menu_id, spec in SUPPORT_ROLE_MENUS.items():
+        options = [
+            build_role_menu_option(role_id=int(roles[key]), label=ROLE_SPECS[key][0], emoji=emoji)
+            for key, emoji in spec["roles"]
+            if roles.get(key)
+        ]
+        if not options:
+            continue
+        menus[menu_id] = build_role_menu(
+            name=spec["name"],
+            title=spec["title"],
+            description=spec["description"],
+            color=SUPPORT_ACCENT,
+            menu_type=spec["menu_type"],
+            options=options,
+        )
+    return menus
 
 
 def support_rules_text() -> str:
