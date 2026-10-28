@@ -166,8 +166,36 @@
 .dashboard-layout .settings-category-editor .settings-option-row input { min-height: 42px; }
 .dashboard-layout .settings-category-editor .settings-category-actions { display: flex; align-self: start; justify-content: flex-start; margin-top: 2px; }
 .dashboard-layout .settings-category-editor .settings-category-actions .button { width: auto; flex: 0 0 auto; margin-top: 0; }
-.dashboard-layout .level-role-row input[type="number"] { flex: 0 0 104px; }
-.dashboard-layout .level-role-row .role-select { flex: 1 1 auto; min-width: 0; }
+/* Level role rewards: one card per level → role mapping. The level input and
+   the role select used to sit in a single flex row without any dashboard
+   styling of their own, so they rendered as raw browser controls squeezed
+   side by side — narrow enough on phones to cut role names off entirely. */
+.dashboard-layout .level-reward-editor { display: grid; gap: 13px; }
+.dashboard-layout .level-reward-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; }
+.dashboard-layout .level-reward-summary { display: inline-flex; align-items: center; gap: 7px; color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.dashboard-layout .level-reward-summary .status-dot { width: 6px; height: 6px; }
+.dashboard-layout .level-reward-summary .status-dot.is-idle { background: var(--dim); }
+.dashboard-layout .level-reward-toolbar .button { width: auto; flex: 0 0 auto; margin-top: 0; }
+.dashboard-layout .level-reward-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.dashboard-layout .level-reward-card { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 14px; background: rgba(255, 255, 255, .025); border: 1px solid var(--line-soft); border-radius: 12px; transition: background .18s ease, border-color .18s ease; }
+.dashboard-layout .level-reward-card:hover,
+.dashboard-layout .level-reward-card:focus-within { background: rgba(255, 255, 255, .04); border-color: var(--line); }
+.dashboard-layout .level-reward-field { display: grid; gap: 6px; min-width: 0; }
+.dashboard-layout .level-reward-field > span { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.dashboard-layout .level-reward-field input,
+.dashboard-layout .level-reward-field select { width: 100%; min-height: 42px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; outline: none; }
+/* Keep the role picker's chevron clear of long role names. */
+.dashboard-layout .level-reward-field select { padding-right: 38px; }
+.dashboard-layout .level-reward-field input[type="number"] { font: 600 13px "Space Mono", monospace; }
+.dashboard-layout .level-reward-field input::placeholder { color: var(--dim); font-weight: 500; }
+.dashboard-layout .level-reward-field input:focus-visible,
+.dashboard-layout .level-reward-field select:focus-visible { border-color: rgba(139, 213, 177, .5); box-shadow: 0 0 0 3px rgba(139, 213, 177, .14); }
+.dashboard-layout .level-reward-remove { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 0 13px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 9px; font-size: 10px; font-weight: 700; transition: background .18s ease, border-color .18s ease, color .18s ease; }
+.dashboard-layout .level-reward-remove:hover { color: var(--ink); background: var(--callout); border-color: rgba(213, 220, 229, .24); }
+.dashboard-layout .level-reward-remove:focus-visible { outline: 2px solid rgba(139, 213, 177, .55); outline-offset: 2px; }
+.dashboard-layout .level-reward-empty { display: grid; justify-items: center; gap: 5px; padding: 26px 20px; color: var(--dim); text-align: center; font-size: 11px; line-height: 1.6; background: rgba(255, 255, 255, .02); border: 1px dashed var(--line); border-radius: 12px; }
+.dashboard-layout .level-reward-empty strong { color: var(--ink); font-size: 12px; letter-spacing: -.02em; }
+.dashboard-layout .level-reward-note { color: var(--dim); font-size: 10px; line-height: 1.6; }
 .dashboard-layout .blocked-word-row { justify-content: space-between; }
 .dashboard-layout .blocked-word-row .blocked-word-value { min-width: 0; overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-layout .settings-category-editor .blocked-word-actions { gap: 8px; align-items: center; }
@@ -417,6 +445,13 @@
   .dashboard-layout .guild-feature-settings > .settings-panel { padding: 18px; }
   .dashboard-layout .settings-category-editor .settings-option-row { align-items: stretch; }
   .dashboard-layout .settings-category-editor .settings-option-remove { flex: 0 0 auto; }
+  /* Rewards stack: full-width role picker, level and remove share the first row. */
+  .dashboard-layout .level-reward-card { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 12px; }
+  .dashboard-layout .level-reward-field-level { grid-row: 1; grid-column: 1; }
+  .dashboard-layout .level-reward-remove { grid-row: 1; grid-column: 2; width: 42px; padding: 0; }
+  .dashboard-layout .level-reward-remove span { display: none; }
+  .dashboard-layout .level-reward-field-role { grid-row: 2; grid-column: 1 / -1; }
+  .dashboard-layout .level-reward-toolbar .button { flex: 1 1 auto; }
 }
 
 /* Dashboard overview contrast and navigation refinements. */
