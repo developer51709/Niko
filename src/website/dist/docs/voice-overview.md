@@ -1,58 +1,73 @@
 # Voice Features Overview
 
-Niko includes voice features for music playback and voice channel management.
+Niko plays music through a pool of Lavalink nodes and manages voice channels in your server. Music starts with the `/play` slash command (or `.play`), and everything else is a prefix command that is also available as a button on the now-playing panel.
 
 ## Music Features
 
 ### Playing Music
-Use the `/play` slash command or `.play` with a prefix:
+Use `/play` or `.play`:
 
 ```
+/play <song name or URL>
 .play <song name or URL>
 ```
 
-Supports:
-- YouTube videos
-- Spotify links
-- Direct URLs
-- Search queries
+`/play` autocompletes search results while you type. Supported input:
+
+- YouTube videos and playlists
+- SoundCloud links, or `sc:<query>` for a SoundCloud search
+- Spotify tracks, albums and playlists (only when the deployment has Spotify credentials)
+- Direct URLs and plain search queries
+
+Queues are capped at 50 tracks per command and playlist resolution stops after about 45 seconds, so a huge playlist can never freeze the command.
 
 ### Music Controls
-- `/pause` - Pause playback
-- `/resume` - Resume playback
-- `/stop` - Stop playback
-- `/skip` - Skip to next song
-- `/queue` - View play queue
-- `/nowplaying` - See current song
-- `/loop` - Cycle loop modes (off / track / queue)
-- `/volume` - Set playback volume
-- `/autoplay` - Toggle Last.fm autoplay
+These are prefix commands (use your server prefix, `.` by default). Each one is mirrored by a button on the now-playing panel, so you rarely have to type them.
+
+- `.pause` / `.resume` — Pause or resume playback
+- `.skip` — Skip to the next song
+- `.stop` — Stop playback and clear the queue
+- `.queue` — View the play queue
+- `.nowplaying` — See the current song
+- `.loop` — Repeat the current track on or off
+- `.volume <0-100>` — Set playback volume
+- `.autoplay` — Toggle Last.fm suggestions for when the queue runs dry
+- `.musicstatus` — Show the Lavalink nodes Niko is connected to
+
+The panel has Prev, Pause/Resume, Skip, Stop and Like on the first row, then Loop, Autoplay, Queue, Vol − and Vol +.
 
 ### Liked Songs
-- `/like` - Like the currently playing song
-- `/liked` - Browse your liked songs
-- `/unlike` - Remove a song from your likes
+- `.like` — Like (or unlike) the song that is playing
+- `.liked` — Browse your liked songs
+- `.unlike <number>` — Remove one, or `.unlike all` to clear the library
 
-### Other Music Features
-- Ghost queue for Last.fm autoplay (keeps playing when the queue runs dry)
-- Music persistence across restarts
-- Now-playing panel with interactive controls
+Liked songs are stored in a dedicated music database and follow you across every server Niko is in.
+
+### Autoplay
+`.autoplay` uses the Last.fm "similar tracks" API to keep music going once the queue empties. It needs a Last.fm API key on the deployment; without one the button and command report that autoplay is unavailable. Suggestions are resolved in the background into a ghost queue, so they never disturb the tracks you queued yourself.
+
+### Reliability
+- Niko keeps up to three healthy Lavalink nodes and tops the pool back up when one drops. Audio keeps playing on the surviving nodes.
+- A track that fails to load is retried once on a different node before it is skipped.
+- A track the node accepts but never actually streams is detected, failed over, and reported instead of showing a panel for silent playback.
+- A player that has nothing queued, or whose channel empties out, leaves the voice channel after five minutes instead of holding the connection.
+- Active playback does not survive a bot restart — the panel buttons stop working once the bot is restarted, and a fresh `/play` starts a new session. Liked songs and autoplay settings are unaffected.
 
 ## Voice Channel Management
 
 ### Join Voice
-Niko joins automatically when you use `/play` — no separate join command needed.
+Niko joins automatically when you use `/play` — no separate join command is needed.
 
 ### Leave Voice
 ```
-/disconnect
+.disconnect
 ```
 
-Or use `.disconnect` with a prefix. You can also use the disconnect button on the now-playing panel.
+`.dc` and `.leave` also work.
 
 ### Voice Settings
-- `/volume` - Adjust playback volume (0-100)
-- `/musicstatus` - Show or hide the listening status
+- `.volume <0-100>` — Adjust playback volume
+- `.musicstatus` — Show which Lavalink nodes are connected and which optional integrations are enabled
 
 ## Permissions
 
@@ -64,6 +79,6 @@ Niko needs these permissions for voice:
 ## Tips
 
 1. **Set up voice channels**: Dedicated music channels work best
-2. **Configure volume**: Use `/volume` to set a comfortable level
-3. **Enable autoplay**: Turn on `/autoplay` with a Last.fm username for endless music
-4. **Save favorites**: Use `/like` on songs you enjoy and find them later with `/liked`
+2. **Configure volume**: Use `.volume` to set a comfortable level
+3. **Enable autoplay**: Turn on `.autoplay` to keep similar tracks coming once the queue ends
+4. **Save favorites**: Use `.like` on songs you enjoy and find them later with `.liked`

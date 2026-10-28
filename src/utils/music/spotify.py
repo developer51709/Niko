@@ -94,11 +94,15 @@ class SpotifyClient:
                     ) as r:
                         if r.status == 200:
                             return await r.json(content_type=None)
-                        if r.status in (401, 403):
+                        if r.status == 401:
                             # Credentials may have been invalidated — refresh once.
                             self._token = None
                             self._exp   = 0.0
                             continue
+                        if r.status == 403:
+                            # Forbidden is a scope/plan limit, not a bad token:
+                            # refreshing would only burn another request.
+                            return None
                         if r.status in (429, 500, 502, 503):
                             await asyncio.sleep(1)
                             continue
@@ -127,15 +131,26 @@ class SpotifyClient:
         return queries
 
     async def resolve_playlist(self, playlist_id: str) -> list[str]:
-        """Returns list of 'Artist - Title' search strings (first 50 tracks)."""
-        data = await self._get(f"playlists/{playlist_id}/tracks?limit=50")
+        """Returns list of 'Artist - Title' search strings (first 50 tracks).
+
+        Spotify removed ``/playlists/{id}/tracks`` for Development Mode apps in
+        February 2026; ``/items`` is its replacement and returns each track
+        under ``item`` instead of ``track``. Older payloads are still read so a
+        deployment with grandfathered access keeps working.
+        """
+        data = await self._get(f"playlists/{playlist_id}/items?limit=50")
         if not data:
             return []
         queries = []
-        for item in data.get("items", []):
-            track = item.get("track")
-            if not track:
+        for entry in data.get("items", []):
+            # ``item`` is the current field, ``track`` the pre-2026 one.
+            track = entry.get("item") or entry.get("track")
+            if not isinstance(track, dict):
+                continue  # removed track, deleted episode, …
+            name = track.get("name")
+            if not name:
                 continue
-            artist = track["artists"][0]["name"] if track.get("artists") else "Unknown"
-            queries.append(f"{artist} - {track['name']}")
+            artists = track.get("artists") or []
+            artist = artists[0].get("name") if artists and isinstance(artists[0], dict) else "Unknown"
+            queries.append(f"{artist} - {name}")
         return queries

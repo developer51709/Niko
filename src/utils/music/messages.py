@@ -139,12 +139,18 @@ MESSAGES["normal"]["es"].update({
 # Playback was accepted by the node but never actually started streaming.
 MESSAGES["normal"]["en"].update({
     "music_start_failed": "I couldn't start playback on the music server — please try `.play` again.",
+    "music_db_error":      "Couldn't reach the music database right now — try again in a moment.",
+    "music_playlist_capped": "Only the first {count} tracks were added — playlists are capped to keep the queue manageable.",
 })
 MESSAGES["normal"]["de"].update({
     "music_start_failed": "Die Wiedergabe konnte nicht gestartet werden — bitte versuche es mit `.play` noch einmal.",
+    "music_db_error":      "Die Musik-Datenbank ist gerade nicht erreichbar — versuche es gleich noch einmal.",
+    "music_playlist_capped": "Nur die ersten {count} Titel wurden hinzugefügt — Playlists sind begrenzt, damit die Warteschlange übersichtlich bleibt.",
 })
 MESSAGES["normal"]["es"].update({
     "music_start_failed": "No se pudo iniciar la reproducción en el servidor de música — inténtalo de nuevo con `.play`.",
+    "music_db_error":      "No se pudo acceder a la base de datos de música — inténtalo de nuevo en un momento.",
+    "music_playlist_capped": "Solo se añadieron las primeras {count} canciones — las listas tienen un límite para mantener la cola manejable.",
 })
 
 msg = make_msg(MESSAGES)

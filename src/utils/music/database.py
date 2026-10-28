@@ -14,6 +14,7 @@ Every call site speaks the same pool API as the main database, so the
 SQL ↔ MongoDB translation layer is reused as-is.
 """
 
+import asyncio
 import os
 
 import aiosqlite
@@ -74,49 +75,61 @@ class MusicDatabase:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.pool = None
+            cls._instance._ready = False
+            # Guards double init: a command that runs while startup is still
+            # creating the pool used to open a second SQLite connection that
+            # nobody closed.
+            cls._instance._init_lock = asyncio.Lock()
         return cls._instance
 
     # ────────────────────────────────────────────── setup ──
     @property
     def is_ready(self) -> bool:
-        return self.pool is not None
+        return self._ready
 
     async def init(self, bot=None) -> None:
         """Create the music pool (called from startup, after the main DB)."""
-        if self.pool is not None:
-            return
+        async with self._init_lock:
+            if self._ready:
+                return
 
-        main = getattr(bot, "cxn", None) if bot is not None else None
-        if main is not None and main.db_type == "mongodb":
-            # Same cluster, separate database within it — reuses the main
-            # pool's motor client so we don't open a second connection pool.
-            try:
-                client   = main.client
-                base     = os.getenv("MONGODB_DATABASE", "discord_bot")
-                self.pool = MongoPool(client, f"{base}_music")
-            except Exception as e:
-                logging.warning("MusicDB", f"Mongo music database failed ({e}); using SQLite.")
-                self.pool = None
+            pool = None
+            main = getattr(bot, "cxn", None) if bot is not None else None
+            if main is not None and main.db_type == "mongodb":
+                # Same cluster, separate database within it — reuses the main
+                # pool's motor client so we don't open a second connection pool.
+                try:
+                    client = main.client
+                    base   = os.getenv("MONGODB_DATABASE", "discord_bot")
+                    pool   = MongoPool(client, f"{base}_music")
+                except Exception as e:
+                    logging.warning("MusicDB", f"Mongo music database failed ({e}); using SQLite.")
+                    pool = None
 
-        if self.pool is None:
-            conn = await aiosqlite.connect(MUSIC_DB_PATH)
-            await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute("PRAGMA foreign_keys=ON")
-            self.pool = SQLitePool(conn)
+            if pool is None:
+                conn = await aiosqlite.connect(MUSIC_DB_PATH)
+                await conn.execute("PRAGMA journal_mode=WAL")
+                await conn.execute("PRAGMA foreign_keys=ON")
+                pool = SQLitePool(conn)
 
-        for sql in _TABLE_SQL:
-            await self.pool.execute(sql)
+            for sql in _TABLE_SQL:
+                await pool.execute(sql)
 
-        logging.success(
-            "MusicDB",
-            f"Music database ready ({self.pool.db_type}, {len(_TABLE_SQL)} tables).",
-        )
+            # Only published once the tables exist, so a concurrent reader can
+            # never see a pool that is not usable yet.
+            self.pool = pool
+            self._ready = True
+
+            logging.success(
+                "MusicDB",
+                f"Music database ready ({pool.db_type}, {len(_TABLE_SQL)} tables).",
+            )
 
     async def ensure(self, bot=None) -> bool:
         """Lazy init for commands that run before/without the startup hook."""
-        if self.pool is None:
+        if not self._ready:
             await self.init(bot)
-        return self.pool is not None
+        return self._ready
 
     # ────────────────────────────────────────────── liked songs ──
     async def add_liked(self, user_id: int, track) -> bool:

@@ -19,6 +19,7 @@ import aiosqlite
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from cogs.giveaway.cog import Giveaway  # noqa: E402
+from cogs.logging.formatters import LOG_EMOJI_KEYS  # noqa: E402
 from cogs.giveaway.views import _GiveawayJoinBtn, _MgmtSelectBtn  # noqa: E402
 from database import PRIMARY_KEYS, SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
@@ -68,6 +69,10 @@ class FakeUser:
         self.bot = bot
         self.display_name = f"user{user_id}"
 
+    @property
+    def mention(self):
+        return f"<@{self.id}>"
+
 
 class FakeInteraction:
     def __init__(self, *, guild_id, user, message_id):
@@ -76,6 +81,24 @@ class FakeInteraction:
         self.user = user
         self.message = SimpleNamespace(id=message_id)
         self.response = FakeResponse()
+
+
+class FakeServerLogger:
+    """The part of the ServerLogger cog the giveaway cog calls."""
+
+    def __init__(self):
+        self.entries: list[dict] = []
+
+    async def log_event(self, guild, category, title, body, *, target_id=None,
+                        action_key=None, **kwargs):
+        self.entries.append({
+            "guild": guild,
+            "category": category,
+            "title": title,
+            "body": body,
+            "target_id": target_id,
+            "action_key": action_key,
+        })
 
 
 class FakeCtx:
@@ -115,8 +138,10 @@ class GiveawayBanTests(unittest.TestCase):
         self.connection = asyncio.run(_memory_connection())
         self.pool = SQLitePool(self.connection)
         self.channel = FakeChannel()
+        self.logger = FakeServerLogger()
         self.bot = SimpleNamespace(
             cxn=self.pool,
+            get_cog=lambda name: self.logger if name == "ServerLogger" else None,
             get_channel=lambda channel_id: self.channel,
             get_guild=lambda guild_id: SimpleNamespace(id=guild_id, preferred_locale="en-US"),
             add_view=lambda *args, **kwargs: None,
@@ -261,6 +286,63 @@ class GiveawayBanTests(unittest.TestCase):
         ctx = self._unban()
 
         self.assertIn("is not banned", ctx.sent[-1])
+
+    # ── moderation logs ──────────────────────────────────────
+
+    def test_a_ban_is_logged_to_the_moderation_channel(self):
+        self._add_giveaway(1000)
+        self._add_participant(1000, BANNED)
+
+        self._ban()
+
+        entry = self.logger.entries[-1]
+        self.assertEqual(entry["category"], "moderation")
+        self.assertEqual(entry["title"], "Giveaway Ban")
+        self.assertEqual(entry["target_id"], BANNED)
+        self.assertIn(f"<@{ADMIN}>", entry["body"])
+        # The entry says what the ban did, not just that it happened.
+        self.assertIn("**Entries removed:** 1", entry["body"])
+
+    def test_an_unban_is_logged_to_the_moderation_channel(self):
+        self._ban()
+
+        self._unban()
+
+        entry = self.logger.entries[-1]
+        self.assertEqual(entry["category"], "moderation")
+        self.assertEqual(entry["title"], "Giveaway Unban")
+        self.assertEqual(entry["target_id"], BANNED)
+        self.assertNotIn("Entries removed", entry["body"])
+
+    def test_a_refused_ban_is_not_logged(self):
+        self._ban()
+        self._ban()
+
+        self.assertEqual(
+            [entry["title"] for entry in self.logger.entries],
+            ["Giveaway Ban"],
+        )
+
+    def test_giveaway_bans_and_unbans_have_their_own_log_emojis(self):
+        self.assertEqual(LOG_EMOJI_KEYS["Giveaway Ban"], "log_giveaway_ban")
+        self.assertEqual(LOG_EMOJI_KEYS["Giveaway Unban"], "log_giveaway_unban")
+        # Distinct from a Discord ban: the member keeps their access.
+        self.assertNotIn("log_giveaway_ban", (LOG_EMOJI_KEYS["Ban"], LOG_EMOJI_KEYS["Unban"]))
+
+    def test_a_missing_or_broken_logging_cog_does_not_break_the_command(self):
+        self.bot.get_cog = lambda name: None
+        ctx = self._ban()
+        self.assertEqual(len(self._ban_rows()), 1)
+        self.assertIn("can no longer join giveaways", ctx.sent[-1])
+
+        class Broken:
+            async def log_event(self, *args, **kwargs):
+                raise RuntimeError("log channel is gone")
+
+        self.bot.get_cog = lambda name: Broken()
+        ctx = self._unban()
+        self.assertEqual(self._ban_rows(), [])
+        self.assertIn("can join giveaways in this server again", ctx.sent[-1])
 
     # ── Join button ──────────────────────────────────────────
 
