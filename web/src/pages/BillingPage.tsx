@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, getAuth } from "../api";
+import { CryptoIcon } from "../components/CryptoIcon";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { navigate } from "../router";
@@ -440,7 +441,11 @@ export function BillingPage() {
                   onClick={() => setStep("asset")}
                   disabled={!canPay}
                 >
-                  <span className="billing-method-icon"><Icon name="spark" /></span>
+                  <span className="billing-method-icon is-coins" aria-hidden="true">
+                    <CryptoIcon code="USDT" />
+                    <CryptoIcon code="BTC" />
+                    <CryptoIcon code="ETH" />
+                  </span>
                   <span><strong>Crypto</strong><small>USDT, Bitcoin, Ethereum and more</small></span>
                   <Icon name="arrow" />
                 </button>
@@ -483,7 +488,9 @@ export function BillingPage() {
                       className={`billing-asset${currency === code ? " is-selected" : ""}`}
                       onClick={() => setCurrency(code)}
                     >
-                      <span className="billing-asset-mark" aria-hidden="true">{meta.mark}</span>
+                      <span className="billing-asset-mark" aria-hidden="true">
+                        <CryptoIcon code={code} fallback={meta.mark} />
+                      </span>
                       <strong>{code}</strong>
                       <small>{meta.name}</small>
                     </button>
@@ -516,6 +523,7 @@ export function BillingPage() {
                 <div className="billing-quote-amount">
                   <span className="billing-label">Send exactly</span>
                   <strong>
+                    <CryptoIcon code={checkout.pay_currency || currency} />
                     {checkout.pay_amount ?? "—"} {checkout.pay_currency || currency}
                   </strong>
                   <small>{checkout.amount_label}</small>
