@@ -173,6 +173,43 @@ class Giveaway(commands.Cog):
 
     # ─── GIVEAWAY BANS ────────────────────────────────────────
 
+    def logger(self):
+        """The server-logging cog, or None when it is not loaded."""
+        get_cog = getattr(self.bot, "get_cog", None)
+        return get_cog("ServerLogger") if get_cog else None
+
+    async def _log_ban_change(self, ctx, member, *, banned: bool, cleared: int = 0) -> None:
+        """Record a giveaway ban or unban in the server's moderation logs.
+
+        Discord's own audit log knows nothing about a giveaway ban — the member
+        keeps talking, they only stop being eligible for prizes — so this entry
+        is the only place a moderator can see who was kept out of the draw and
+        by whom. A missing logging cog or channel is not an error: the ban has
+        already been written and the command answered either way.
+        """
+        logger = self.logger()
+        if logger is None or ctx.guild is None:
+            return
+
+        title = "Giveaway Ban" if banned else "Giveaway Unban"
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** {title}\n"
+        )
+        if banned:
+            body += f"**Entries removed:** {cleared}\n"
+        body += f"**Moderator:** {ctx.author.mention}"
+
+        try:
+            await logger.log_event(
+                ctx.guild, "moderation", title, body,
+                target_id=member.id, action_key=title,
+            )
+        except Exception as exc:
+            logging.error(
+                "Giveaway", f"Could not log the {title.lower()} for {member.id}: {exc}"
+            )
+
     async def _banned_user_ids(self, guild_id) -> set[int]:
         """Every member banned from this server's giveaways.
 
@@ -239,6 +276,7 @@ class Giveaway(commands.Cog):
         await ctx.send(
             f"{get_emoji('check')} {msg(ctx, 'ban_success', user=member.display_name, count=cleared)}"
         )
+        await self._log_ban_change(ctx, member, banned=True, cleared=cleared)
 
     @giveaway.command(name="unban")
     @commands.has_permissions(manage_guild=True)
@@ -261,6 +299,7 @@ class Giveaway(commands.Cog):
         await ctx.send(
             f"{get_emoji('check')} {msg(ctx, 'unban_success', user=member.display_name)}"
         )
+        await self._log_ban_change(ctx, member, banned=False)
 
     # ─── BACKGROUND TASK ─────────────────────────────────────
 

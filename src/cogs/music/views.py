@@ -21,6 +21,7 @@ import wavelink
 from discord import MediaGalleryItem, UnfurledMediaItem
 
 from config.emojis import get_emoji
+from utils import logging as log
 from utils.music import (
     SOURCE_COLOURS,
     _fmt_dur,
@@ -31,6 +32,21 @@ from utils.music import (
 from utils.music.database import MusicDatabase
 
 __all__ = ["_build_np_view"]
+
+
+async def _report_failure(interaction: discord.Interaction, exc: BaseException) -> None:
+    """Tell the presser that the node rejected the action.
+
+    Panel buttons used to call straight into the player, so a Lavalink 500
+    escaped as an unhandled interaction error and the button looked dead.
+    """
+    log.warning("Music", f"Panel action failed: {exc}")
+    try:
+        await interaction.followup.send(
+            "The music server didn't respond — try again in a moment.", ephemeral=True
+        )
+    except Exception:
+        pass
 
 
 # ──────────────────────────────────────────────────
@@ -51,7 +67,10 @@ class _PauseResumeBtn(discord.ui.Button):
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player:
-            await player.pause(not player.paused)
+            try:
+                await player.pause(not player.paused)
+            except Exception as exc:
+                await _report_failure(interaction, exc)
         await self.cog._update_np_message(interaction.guild)
 
 
@@ -65,7 +84,10 @@ class _SkipBtn(discord.ui.Button):
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player and player.playing:
-            await player.skip(force=True)
+            try:
+                await player.skip(force=True)
+            except Exception as exc:
+                await _report_failure(interaction, exc)
         await self.cog._update_np_message(interaction.guild)
 
 
@@ -84,7 +106,10 @@ class _StopBtn(discord.ui.Button):
             state["current_track"] = None
             self.cog._clear_ghost(self.guild_id)
             player.queue.clear()
-            await player.stop()
+            try:
+                await player.stop()
+            except Exception as exc:
+                await _report_failure(interaction, exc)
         await self.cog._update_np_message(interaction.guild)
 
 
@@ -110,7 +135,13 @@ class _PrevBtn(discord.ui.Button):
         # put current back at front of queue
         if player.current:
             player.queue.put_at(0, player.current)
-        await player.play(prev_track)
+        try:
+            await player.play(prev_track)
+        except Exception as exc:
+            # Give the entry back so a failed replay does not eat history.
+            history.append(prev_track)
+            await _report_failure(interaction, exc)
+            return
         state["current_track"] = prev_track
         self.cog._schedule_ghost_refill(self.guild_id)
         await self.cog._update_np_message(interaction.guild)
@@ -139,14 +170,14 @@ class _AutoplayBtn(discord.ui.Button):
             super().__init__(
                 label="Autoplay",
                 style=discord.ButtonStyle.secondary,
-                emoji="📻",
+                emoji=get_emoji("autoplay"),
                 disabled=True,
             )
         else:
             super().__init__(
                 label="Autoplay On" if autoplay else "Autoplay",
                 style=discord.ButtonStyle.success if autoplay else discord.ButtonStyle.secondary,
-                emoji="📻",
+                emoji=get_emoji("autoplay"),
             )
         self.cog       = cog
         self.guild_id  = guild_id
@@ -172,7 +203,7 @@ class _LikeBtn(discord.ui.Button):
         super().__init__(
             label="Like",
             style=discord.ButtonStyle.secondary,
-            emoji="♥",
+            emoji=get_emoji("heart"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -181,21 +212,20 @@ class _LikeBtn(discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         player = self.cog._player_for_guild(interaction.guild)
         if not player or not player.current:
-            await interaction.followup.send("Nothing is playing to like.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "like_nothing"), ephemeral=True)
             return
         track = player.current
         db    = MusicDatabase()
         try:
             await db.ensure(self.cog.bot)
             now_liked = await db.toggle_liked(interaction.user.id, track)
-        except Exception:
-            await interaction.followup.send("Couldn't reach the music database right now.", ephemeral=True)
+        except Exception as exc:
+            log.warning("Music", f"Panel like failed for {interaction.user.id}: {exc}")
+            await interaction.followup.send(msg(interaction, "music_db_error"), ephemeral=True)
             return
         title = (track.title or "Unknown")
-        if now_liked:
-            await interaction.followup.send(f"♥ Liked **{title}**", ephemeral=True)
-        else:
-            await interaction.followup.send(f"Removed **{title}** from your likes.", ephemeral=True)
+        key = "like_on" if now_liked else "like_off"
+        await interaction.followup.send(msg(interaction, key, title=title), ephemeral=True)
 
 
 class _QueueBtn(discord.ui.Button):
@@ -205,7 +235,7 @@ class _QueueBtn(discord.ui.Button):
         super().__init__(
             label="Queue",
             style=discord.ButtonStyle.secondary,
-            emoji="📜",
+            emoji=get_emoji("queue"),
         )
         self.cog      = cog
         self.guild_id = guild_id
@@ -216,9 +246,11 @@ class _QueueBtn(discord.ui.Button):
         state = self.cog._state(self.guild_id)
         ghost = list(state["ghost_queue"])
         if not player or (player.queue.is_empty and not ghost):
-            await interaction.followup.send("The queue is currently empty.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "queue_empty"), ephemeral=True)
             return
-        lines = self.cog._format_queue_lines(player, self.guild_id)
+        lines = self.cog._format_queue_lines(
+            player, self.guild_id, msg(interaction, "queue_header")
+        )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content="\n".join(lines)),
@@ -229,7 +261,11 @@ class _QueueBtn(discord.ui.Button):
 
 class _VolDownBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Vol -", style=discord.ButtonStyle.secondary, emoji="🔉")
+        super().__init__(
+            label="Vol -",
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("volume_down"),
+        )
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -238,13 +274,20 @@ class _VolDownBtn(discord.ui.Button):
         player = self.cog._player_for_guild(interaction.guild)
         if player:
             new_vol = max(0, player.volume - 10)
-            await player.set_volume(new_vol)
+            try:
+                await player.set_volume(new_vol)
+            except Exception as exc:
+                await _report_failure(interaction, exc)
         await self.cog._update_np_message(interaction.guild)
 
 
 class _VolUpBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Vol +", style=discord.ButtonStyle.secondary, emoji="🔊")
+        super().__init__(
+            label="Vol +",
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("volume_up"),
+        )
         self.cog      = cog
         self.guild_id = guild_id
 
@@ -253,7 +296,10 @@ class _VolUpBtn(discord.ui.Button):
         player = self.cog._player_for_guild(interaction.guild)
         if player:
             new_vol = min(100, player.volume + 10)
-            await player.set_volume(new_vol)
+            try:
+                await player.set_volume(new_vol)
+            except Exception as exc:
+                await _report_failure(interaction, exc)
         await self.cog._update_np_message(interaction.guild)
 
 
@@ -321,7 +367,11 @@ def _build_np_view(
     source       = (track.source or "").lower()
     accent_color = _source_colour(track)
     author_name  = track.author or "Unknown Artist"
-    duration     = _progress_bar(player.position or 0, track.length or 0)
+    # Streams report length 0; a progress bar would render as permanently full.
+    if not track.length:
+        duration = f"🔴 Live · {_fmt_dur(player.position or 0)} elapsed"
+    else:
+        duration = _progress_bar(player.position or 0, track.length)
     uri          = track.uri or ""
 
     # Source badge
@@ -342,7 +392,8 @@ def _build_np_view(
         f"by {author_name}\n\n"
         f"{duration}\n\n"
         f"-# {src_badge} · Vol {vol}% · "
-        f"{get_emoji('loop') + ' Loop ' if loop else ''}{'📻 Autoplay ' if autoplay else ''}"
+        f"{get_emoji('loop') + ' Loop ' if loop else ''}"
+        f"{get_emoji('autoplay') + ' Autoplay ' if autoplay else ''}"
     ).rstrip(" · \n")
 
     # Build container items

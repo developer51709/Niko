@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import re
 import time as _time
 from collections import deque
@@ -51,6 +52,18 @@ _LAVELINK_500_DELAY   = 1.0  # seconds between retries
 _TRACK_START_TIMEOUT = 6.0  # wait for TrackStart before failing over
 _TRACK_START_RETRY   = 8.0  # wait after switching to another node
 
+# Node pool maintenance.
+_NODE_RESCAN_INTERVAL = 3600.0  # full pool: hourly top-up
+_NODE_PARTIAL_INTERVAL = 600.0  # some capacity, but below the target
+_NODE_RETRY_MIN       = 30.0    # empty pool: retry fast, then back off
+_NODE_RETRY_MAX       = 300.0
+
+# /play resolution bounds. A playlist URL can expand to hundreds of tracks and
+# every one of them costs a Lavalink search, so both the count and the total
+# time spent resolving are capped.
+_MAX_TRACKS_PER_PLAY  = 50
+_PLAY_RESOLVE_BUDGET  = 45.0
+
 
 def _is_lavalink_500(exc: BaseException) -> bool:
     """Return True if the exception is a transient Lavalink 500 error."""
@@ -60,6 +73,21 @@ def _is_lavalink_500(exc: BaseException) -> bool:
     # wavelink wraps the HTTP status in the exception args / message
     msg = str(exc).lower()
     return "status=500" in msg or "internal server error" in msg
+
+
+def _next_rescan_delay(connected: int, previous: float) -> float:
+    """Seconds to wait before the next node rescan.
+
+    * full pool — hourly top-up only;
+    * partial pool — retry every ten minutes to fill the missing capacity;
+    * empty pool — fast exponential backoff, so a boot where every public
+      node is down does not leave music dead until the next hourly tick.
+    """
+    if connected <= 0:
+        return min(max(previous * 2, _NODE_RETRY_MIN), _NODE_RETRY_MAX)
+    if connected < int(_MAX_CONNECT_NODES):
+        return _NODE_PARTIAL_INTERVAL
+    return _NODE_RESCAN_INTERVAL
 
 
 async def _player_op(
@@ -214,8 +242,10 @@ class MusicSystem(commands.Cog):
 
     async def _node_rescan_loop(self):
         await self.bot.wait_until_ready()
-        first_run = True
+        delay = 0.0
         while not self.bot.is_closed():
+            if delay:
+                await asyncio.sleep(delay)
             try:
                 await self.startup_connect()
             except asyncio.CancelledError:
@@ -224,8 +254,7 @@ class MusicSystem(commands.Cog):
                 log.warning("Lavalink", f"Node rescan failed: {exc}")
             # Rescans are deliberately long-running and bounded: they top up
             # missing capacity without needlessly reconnecting healthy nodes.
-            await asyncio.sleep(0 if first_run else 3600)
-            first_run = False
+            delay = _next_rescan_delay(len(self._node_labels), delay)
 
     def _state(self, guild_id: int) -> dict:
         if guild_id not in self._guild_states:
@@ -240,6 +269,8 @@ class MusicSystem(commands.Cog):
                 "current_track": None,
                 # Track/node pair already retried after a Lavalink load failure.
                 "failed_track_retry": None,
+                # Track already skipped once after Lavalink reported it stuck.
+                "stuck_track": None,
                 # Autoplay "ghost queue": pre-resolved Last.fm suggestions
                 # that play only when the manual queue runs dry. It never
                 # feeds tracks into player.queue, so manual queue changes
@@ -372,8 +403,13 @@ class MusicSystem(commands.Cog):
             if (similar_artist.lower(), similar_title.lower()) in played:
                 continue
             try:
-                results = await wavelink.Playable.search(
-                    f"ytsearch:{similar_artist} - {similar_title}"
+                # Bound the search: a hung request would keep this background
+                # refill alive forever and block every later refill.
+                results = await asyncio.wait_for(
+                    wavelink.Playable.search(
+                        f"ytsearch:{similar_artist} - {similar_title}"
+                    ),
+                    timeout=10,
                 )
             except Exception:
                 continue
@@ -401,15 +437,15 @@ class MusicSystem(commands.Cog):
         ]
         if not candidates:
             return None
-        import random
         return random.choice(candidates)
 
     async def _failover_player(self, player, track=None):
-        """Switch a player to a different Lavalink node.
+        """Move a player onto a different Lavalink node, resuming playback.
 
-        Disconnects from the current node, reconnects through an alternative
-        node, and resumes playback if a track was provided.  Returns True on
-        success, False if no alternative node was available.
+        ``Player.node`` is read-only in wavelink 3, so the live switch has to go
+        through :meth:`wavelink.Player.switch_node`, which tears down the old
+        session, re-dispatches the voice state and replays the current track.
+        Returns True when the player is streaming on the new node again.
         """
         old_node = getattr(player, "node", None)
         new_node = self._get_alt_node(exclude=old_node)
@@ -417,9 +453,8 @@ class MusicSystem(commands.Cog):
             log.warning("Music", "No alternative Lavalink node available for failover.")
             return False
 
-        channel = getattr(player, "channel", None)
-        guild = getattr(player, "guild", None)
-        if not channel or not guild:
+        if not getattr(player, "connected", False):
+            # Nothing to carry over — the next /play opens a fresh session.
             return False
 
         log.info(
@@ -429,17 +464,21 @@ class MusicSystem(commands.Cog):
         )
 
         try:
-            # Reassign the player to the new node and re-establish the voice
-            # session.  wavelink's Player.connect is keyword-only and takes
-            # no channel argument, so move_to is the correct API here.
-            player.node = new_node
-            await player.move_to(channel, timeout=15)
+            await player.switch_node(new_node)
         except Exception as exc:
-            log.warning("Music", f"Failover reconnection failed: {exc}")
+            log.warning("Music", f"Failover to {new_node.identifier} failed: {exc}")
+            # A failed live switch leaves the player half-migrated (wavelink
+            # warns about stale state), so drop it rather than keep a player
+            # that no node can drive.
+            try:
+                await player.disconnect()
+            except Exception:
+                pass
             return False
 
-        # Resume playback if a track was provided
-        if track:
+        # switch_node already replays the current track; only push the track
+        # explicitly when the node never had it loaded.
+        if track is not None and track != player.current:
             try:
                 await player.play(track)
             except Exception as exc:
@@ -462,6 +501,21 @@ class MusicSystem(commands.Cog):
         except asyncio.TimeoutError:
             return False
 
+    async def cog_before_invoke(self, ctx: commands.Context) -> None:
+        """Acknowledge slash invocations up front.
+
+        Voice connects and node switching routinely take longer than Discord's
+        three-second window, and an unacknowledged interaction cannot be
+        answered at all. Deferring here covers every music command at once.
+        """
+        interaction = getattr(ctx, "interaction", None)
+        if interaction is None or interaction.response.is_done():
+            return
+        try:
+            await interaction.response.defer()
+        except Exception as exc:
+            log.debug("Music", f"Could not defer the interaction: {exc}")
+
     # ─── NP MESSAGE UPDATE ────────────────────────
 
     async def _update_np_message(self, guild: discord.Guild):
@@ -483,8 +537,10 @@ class MusicSystem(commands.Cog):
             await message.edit(view=view)
         except discord.NotFound:
             state["np_message"] = None
-        except Exception:
-            pass
+        except Exception as exc:
+            # Rate limits and transient 5xx are expected on a button-heavy
+            # panel; only a genuinely broken view is worth a warning.
+            log.debug("Music", f"Now-playing panel update failed: {exc}")
 
     async def _send_np(self, ctx: commands.Context, player: wavelink.Player):
         """Send (or update) the now-playing control panel."""
@@ -524,6 +580,16 @@ class MusicSystem(commands.Cog):
             ]
             existing_ids = {node.identifier for node in connected}
             capacity = max(0, int(_MAX_CONNECT_NODES) - len(connected))
+            if capacity <= 0:
+                # Probing ~30 public nodes to fill capacity that does not exist
+                # wasted a round of requests on every rescan; the pool is full.
+                self._node_labels = sorted(node.identifier for node in connected)
+                self.connected = True
+                log.debug(
+                    "Lavalink",
+                    f"Node pool healthy ({len(connected)} connected); skipping discovery.",
+                )
+                return
 
             discovered = await _fetch_node_list()
             candidates = _dedupe_nodes(list(LAVALINK_NODES) + list(discovered or []))
@@ -550,7 +616,7 @@ class MusicSystem(commands.Cog):
                         wavelink.Pool.connect(nodes=targets, client=self.bot),
                         timeout=_CONNECT_TIMEOUT + 10,
                     )
-                    connected += await self._wait_for_connected_nodes(
+                    await self._wait_for_connected_nodes(
                         {node.identifier for node in targets}
                     )
                 except Exception as exc:
@@ -574,10 +640,14 @@ class MusicSystem(commands.Cog):
             self._connecting = False
 
     async def _eject_stale_nodes(self):
-        """Remove disconnected nodes from the wavelink pool so their
-        identifiers can be re-registered on the next connect attempt."""
+        """Remove dead nodes from the pool so they can be re-registered.
+
+        Only DISCONNECTED nodes are ejected: a node that is still CONNECTING
+        belongs to a handshake that is already in flight and closing it here
+        would kill a connection that was about to succeed.
+        """
         for node in list(wavelink.Pool.nodes.values()):
-            if node.status is not wavelink.NodeStatus.CONNECTED:
+            if node.status is wavelink.NodeStatus.DISCONNECTED:
                 try:
                     await node.close(eject=True)
                 except Exception:
@@ -641,6 +711,11 @@ class MusicSystem(commands.Cog):
                 f"Node '{node.identifier}' closed — {len(remaining)} node(s) still "
                 "connected, continuing playback.",
             )
+            # Top the pool back up instead of waiting for the hourly rescan;
+            # every player still lives on the surviving nodes, so this only
+            # replaces lost capacity.
+            if len(remaining) < int(_MAX_CONNECT_NODES) and not self._connecting:
+                self.bot.loop.create_task(self.startup_connect(retry_delay=5))
             return
 
         self._node_labels = []
@@ -654,6 +729,84 @@ class MusicSystem(commands.Cog):
         self.bot.loop.create_task(self.startup_connect(retry_delay=10))
 
     @commands.Cog.listener()
+    async def on_wavelink_inactive_player(self, player: wavelink.Player) -> None:
+        """Leave the channel once wavelink declares the player inactive.
+
+        wavelink fires this after ``inactive_player_timeout`` with nothing
+        playing, and after ``inactive_channel_tokens`` consecutive tracks with
+        no listeners. The event only *announces* the state — nothing in
+        wavelink disconnects the player — so without this handler the bot sat
+        in an empty voice channel indefinitely, holding a session on a public
+        Lavalink node for no one.
+        """
+        guild = getattr(player, "guild", None)
+        if guild is None:
+            return
+        state = self._guild_states.get(guild.id)
+        if state is not None:
+            state["current_track"] = None
+            state["np_message"]    = None
+            state["last_track"]    = None
+        self._clear_ghost(guild.id)
+        log.info(
+            "Music",
+            f"Player in guild {guild.id} went inactive — leaving the voice channel.",
+        )
+        try:
+            await player.disconnect()
+        except Exception as exc:
+            log.warning("Music", f"Idle disconnect failed for guild {guild.id}: {exc}")
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(
+        self,
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ) -> None:
+        """Forget player state when the bot is disconnected from outside.
+
+        A moderator kicking the bot, a deleted channel or a Lavalink cleanup
+        closes the voice connection without going through ``/disconnect``, so
+        the panel and ghost queue would otherwise point at a dead session.
+        """
+        if self.bot.user is None or member.id != self.bot.user.id:
+            return
+        if before.channel is None or after.channel is not None:
+            return
+        state = self._guild_states.get(member.guild.id)
+        if state is None:
+            return
+        state["current_track"] = None
+        state["np_message"]    = None
+        self._clear_ghost(member.guild.id)
+        log.info(
+            "Music",
+            f"Voice connection in guild {member.guild.id} was closed externally "
+            "— cleared player state.",
+        )
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_exception(
+        self, payload: wavelink.TrackExceptionEventPayload
+    ) -> None:
+        """Log the Lavalink error behind a failed track.
+
+        The failing track is recovered by the ``loadFailed`` branch of
+        :meth:`on_wavelink_track_end`; this listener keeps the reason visible
+        instead of letting the play simply stop.
+        """
+        player = payload.player
+        guild  = getattr(player, "guild", None)
+        track  = getattr(payload, "track", None)
+        detail = getattr(getattr(payload, "exception", None), "message", "") or "unknown error"
+        log.warning(
+            "Music",
+            f"Track exception in guild {getattr(guild, 'id', '?')} "
+            f"({getattr(track, 'title', 'unknown')!r}): {detail}",
+        )
+
+    @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload) -> None:
         """Auto-set voice channel status to the current track title when a song starts."""
         player = payload.player
@@ -664,7 +817,10 @@ class MusicSystem(commands.Cog):
         # repopulates ``player.current`` during a node transition.
         guild = getattr(player, "guild", None)
         if guild is not None and payload.track:
-            self._state(guild.id)["current_track"] = payload.track
+            state = self._state(guild.id)
+            state["current_track"] = payload.track
+            # A fresh start clears the stuck marker for the previous track.
+            state["stuck_track"] = None
 
         # Wake any /play start-verification waiter — the node is streaming.
         started = self._track_start_events.get(guild.id) if guild else None
@@ -680,6 +836,40 @@ class MusicSystem(commands.Cog):
         artist = (track.author or "")[:40]
         status = f"🎵 {title}" + (f" · {artist}" if artist else "")
         asyncio.create_task(set_voice_status(self.bot, player.channel.id, status))
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_stuck(
+        self, payload: wavelink.TrackStuckEventPayload
+    ) -> None:
+        """Recover from a track that stalls mid-stream.
+
+        Lavalink reports ``TrackStuck`` and then never sends ``TrackEnd`` for
+        that track, so without this the queue sat on a silent track forever.
+        Skipping produces the usual ``TrackEnd``/advance path. The same track
+        stalling twice is skipped without a second attempt.
+        """
+        player = payload.player
+        guild  = getattr(player, "guild", None)
+        if player is None or guild is None:
+            return
+
+        track = payload.track
+        state = self._state(guild.id)
+        key = getattr(track, "encoded", None) or (
+            getattr(track, "author", ""),
+            getattr(track, "title", ""),
+        )
+        repeated = state.get("stuck_track") == key
+        state["stuck_track"] = key
+        log.warning(
+            "Music",
+            f"Track {getattr(track, 'title', 'unknown')!r} stalled in guild "
+            f"{guild.id}{' again' if repeated else ''} — skipping.",
+        )
+        try:
+            await player.skip(force=True)
+        except Exception as exc:
+            log.error("Music", f"Skipping a stuck track failed: {exc}")
 
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
@@ -742,21 +932,34 @@ class MusicSystem(commands.Cog):
         natural = reason in ("finished", "replaced")
 
         # Queue has more tracks — manual queue always wins over autoplay.
+        # A node that refuses one track usually still plays the next, so a
+        # failed start advances down the queue instead of stalling playback
+        # (and instead of raising out of this listener).
         if not player.queue.is_empty:
-            next_track = player.queue.get()
-            await _player_op(
-                lambda t=next_track: player.play(t),
-                failover=self._make_failover(player, next_track),
-            )
-            await self._update_np_message(player.guild)
-            # Near the end of a manual queue, keep the autoplay suggestions
-            # following the new queue tail (coalesced background refill).
-            try:
-                if len(player.queue) <= GHOST_QUEUE_LEN:
-                    self._schedule_ghost_refill(guild_id)
-            except Exception:
-                pass
-            return
+            for _ in range(3):
+                if player.queue.is_empty:
+                    break
+                next_track = player.queue.get()
+                try:
+                    await _player_op(
+                        lambda t=next_track: player.play(t),
+                        failover=self._make_failover(player, next_track),
+                    )
+                except Exception as exc:
+                    log.error(
+                        "Music",
+                        f"Could not start queued track {next_track.title!r}: {exc}",
+                    )
+                    continue
+                await self._update_np_message(player.guild)
+                # Near the end of a manual queue, keep the autoplay
+                # suggestions following the new queue tail (coalesced).
+                try:
+                    if len(player.queue) <= GHOST_QUEUE_LEN:
+                        self._schedule_ghost_refill(guild_id)
+                except Exception:
+                    pass
+                return
 
         # Queue exhausted — continue via the autoplay ghost queue (Last.fm
         # suggestions pre-resolved in the background, never mixed into the
@@ -799,8 +1002,18 @@ class MusicSystem(commands.Cog):
                 for similar_artist, similar_title in similars:
                     if (similar_artist.lower(), similar_title.lower()) in played:
                         continue
-                    query   = f"ytsearch:{similar_artist} - {similar_title}"
-                    results = await wavelink.Playable.search(query)
+                    query = f"ytsearch:{similar_artist} - {similar_title}"
+                    try:
+                        # Search on the player's node so the encoded result is
+                        # guaranteed to be playable there, and bound the wait so
+                        # a stuck node cannot stall the queue forever.
+                        results = await asyncio.wait_for(
+                            wavelink.Playable.search(query, node=player.node),
+                            timeout=10,
+                        )
+                    except Exception as exc:
+                        log.warning("Music", f"Autoplay search failed: {exc}")
+                        continue
                     if not results:
                         continue
                     nxt = results[0] if isinstance(results, list) else results
@@ -824,7 +1037,7 @@ class MusicSystem(commands.Cog):
 
         # Nothing more to play — idle grace period then disconnect
         await asyncio.sleep(IDLE_TIMEOUT)
-        if player and not player.playing:
+        if not player.playing and getattr(player, "connected", False):
             if getattr(player, "channel", None):
                 await set_voice_status(self.bot, player.channel.id, None)
             try:
@@ -893,10 +1106,10 @@ class MusicSystem(commands.Cog):
         channel = ctx.author.voice.channel
         player = _wavelink_player(ctx.voice_client)
         if ctx.voice_client is not None:
-            healthy = (
-                player is not None
-                and getattr(player, "is_connected", lambda: True)()
-            )
+            # ``is_connected`` was renamed to the ``connected`` property in
+            # wavelink 3; the old getattr default made every stale player look
+            # healthy, so a dead player was reused instead of replaced.
+            healthy = player is not None and bool(player.connected)
             if not healthy:
                 # Either a stale client left behind by a node outage or a
                 # manually-created VoiceClient (e.g. an eval command) that
@@ -986,6 +1199,15 @@ class MusicSystem(commands.Cog):
             choices.append(app_commands.Choice(name=label, value=value))
 
         self._autocomplete_cache[cache_key] = (now, choices)
+        # Keystrokes are unbounded, so drop stale entries instead of keeping one
+        # per query the bot has ever autocompleted.
+        if len(self._autocomplete_cache) > 256:
+            cutoff = now - 300
+            self._autocomplete_cache = {
+                key: value
+                for key, value in self._autocomplete_cache.items()
+                if value[0] >= cutoff
+            }
         return choices
 
     @commands.hybrid_command(
@@ -995,12 +1217,8 @@ class MusicSystem(commands.Cog):
     )
     @app_commands.describe(search="Song name, YouTube/SoundCloud/Spotify URL, or sc:<query>")
     async def play(self, ctx: commands.Context, *, search: str):
-        # Slash invocations need to defer because resolution can take >3s
-        if ctx.interaction and not ctx.interaction.response.is_done():
-            try:
-                await ctx.defer()
-            except Exception:
-                pass
+        # Slash invocations are acknowledged by cog_before_invoke; resolution
+        # can take much longer than Discord's three-second window.
         player = await self.get_player(ctx)
         if not player:
             return
@@ -1033,10 +1251,21 @@ class MusicSystem(commands.Cog):
             return await ctx.send(msg(ctx, "play_not_found" if not is_spotify else "spotify_fail"))
 
         queued_count = 0
+        added        = 0          # first track + everything queued
         first_track  = None
+        cap_reached  = False
         start_event: asyncio.Event | None = None
+        deadline = _time.monotonic() + _PLAY_RESOLVE_BUDGET
 
-        for i, query in enumerate(searches):
+        for query in searches:
+            # A playlist can resolve to hundreds of searches; stop before the
+            # command sits there for minutes.
+            if _time.monotonic() >= deadline:
+                log.warning(
+                    "Music",
+                    "Playlist resolution hit its time budget — stopping early.",
+                )
+                break
             try:
                 # Search on the player's own node: the encoded track is then
                 # guaranteed to be decodable by the node that must stream it.
@@ -1052,25 +1281,48 @@ class MusicSystem(commands.Cog):
             if not results:
                 continue
 
-            track = results[0] if isinstance(results, list) else results
-            if not player.playing and first_track is None:
-                # Arm the start waiter *before* play so a fast TrackStart can
-                # never race past it.
-                start_event = asyncio.Event()
-                self._track_start_events[ctx.guild.id] = start_event
-                await _player_op(
-                    lambda t=track: player.play(t),
-                    failover=self._make_failover(player, track),
-                )
-                first_track = track
-                self._state(ctx.guild.id)["current_track"] = track
+            # A playlist URL expands into every track it holds; a plain search
+            # only ever contributes its best match.
+            if isinstance(results, wavelink.Playlist):
+                candidates = list(results)
             else:
-                player.queue.put(track)
-                queued_count += 1
+                candidates = [results[0]]
 
-        if first_track is None and queued_count == 0:
+            for track in candidates:
+                if added >= _MAX_TRACKS_PER_PLAY:
+                    cap_reached = True
+                    break
+                if not player.playing and first_track is None:
+                    # Arm the start waiter *before* play so a fast TrackStart
+                    # can never race past it.
+                    start_event = asyncio.Event()
+                    self._track_start_events[ctx.guild.id] = start_event
+                    try:
+                        await _player_op(
+                            lambda t=track: player.play(t),
+                            failover=self._make_failover(player, track),
+                        )
+                    except Exception as exc:
+                        log.warning("Music", f"Lavalink refused a track: {exc}")
+                        self._track_start_events.pop(ctx.guild.id, None)
+                        start_event = None
+                        continue
+                    first_track = track
+                    added += 1
+                    self._state(ctx.guild.id)["current_track"] = track
+                else:
+                    player.queue.put(track)
+                    queued_count += 1
+                    added += 1
+            if cap_reached:
+                break
+
+        if added == 0:
             self._track_start_events.pop(ctx.guild.id, None)
             return await ctx.send(msg(ctx, "play_not_found"))
+
+        if cap_reached:
+            await ctx.send(msg(ctx, "music_playlist_capped", count=_MAX_TRACKS_PER_PLAY))
 
         # The node accepting the track does not mean audio is streaming.
         # Wait for the TrackStart event; if it never comes, fail over to a
@@ -1104,20 +1356,20 @@ class MusicSystem(commands.Cog):
         self._schedule_ghost_refill(ctx.guild.id)
 
         if queued_count:
-            if not first_track:
-                first_track = player.current
-            # Multiple tracks added (album / playlist)
-            multi = discord.ui.LayoutView()
-            multi.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=(
-                        f"### Added {queued_count + 1} track{'s' if queued_count else ''} to the queue\n"
-                        f"Now playing **{first_track.title}** + {queued_count} more queued."
-                    )
-                ),
-                accent_colour=_source_colour(first_track),
-            ))
-            await ctx.send(view=multi)
+            now_playing = first_track or player.current
+            if now_playing is not None:
+                # Multiple tracks added (album / playlist)
+                multi = discord.ui.LayoutView()
+                multi.add_item(discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=(
+                            f"### Added {queued_count} track{'s' if queued_count != 1 else ''} to the queue\n"
+                            f"Now playing **{now_playing.title}** + {queued_count} more queued."
+                        )
+                    ),
+                    accent_colour=_source_colour(now_playing),
+                ))
+                await ctx.send(view=multi)
 
         # Send / replace now-playing control panel
         if first_track and not queued_count:
@@ -1131,10 +1383,9 @@ class MusicSystem(commands.Cog):
         player = _wavelink_player(ctx.voice_client)
         if not player or not player.playing:
             return await ctx.send(msg(ctx, "pause_nothing"))
-        await _player_op(
-            lambda: player.pause(True),
-            failover=self._make_failover(player),
-        )
+        # Control operations retry on the same node: switching nodes would
+        # interrupt playback just to change a volume or a pause state.
+        await _player_op(lambda: player.pause(True))
         await ctx.send(msg(ctx, "pause_ok"))
         await self._update_np_message(ctx.guild)
 
@@ -1144,12 +1395,9 @@ class MusicSystem(commands.Cog):
     )
     async def resume(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
-        if not player:
+        if not player or not player.paused:
             return await ctx.send(msg(ctx, "resume_nothing"))
-        await _player_op(
-            lambda: player.pause(False),
-            failover=self._make_failover(player),
-        )
+        await _player_op(lambda: player.pause(False))
         await ctx.send(msg(ctx, "resume_ok"))
         await self._update_np_message(ctx.guild)
 
@@ -1161,10 +1409,7 @@ class MusicSystem(commands.Cog):
         player = _wavelink_player(ctx.voice_client)
         if not player or not player.playing:
             return await ctx.send(msg(ctx, "skip_nothing"))
-        await _player_op(
-            lambda: player.skip(force=True),
-            failover=self._make_failover(player),
-        )
+        await _player_op(lambda: player.skip(force=True))
         await ctx.send(msg(ctx, "skip_ok"))
 
     @commands.command(
@@ -1180,10 +1425,7 @@ class MusicSystem(commands.Cog):
         state["current_track"] = None
         self._clear_ghost(ctx.guild.id)
         player.queue.clear()
-        await _player_op(
-            lambda: player.stop(),
-            failover=self._make_failover(player),
-        )
+        await _player_op(lambda: player.stop())
         await ctx.send(msg(ctx, "stop_ok"))
         await self._update_np_message(ctx.guild)
 
@@ -1283,7 +1525,7 @@ class MusicSystem(commands.Cog):
             now_liked = await db.toggle_liked(ctx.author.id, track)
         except Exception as exc:
             log.error("Music", f"Like failed for {ctx.author.id}: {exc}")
-            return await ctx.send(msg(ctx, "play_not_found"))
+            return await ctx.send(msg(ctx, "music_db_error"))
         key = "like_on" if now_liked else "like_off"
         await ctx.send(msg(ctx, key, title=track.title or "Unknown"))
 
@@ -1301,7 +1543,7 @@ class MusicSystem(commands.Cog):
             total = await db.count_liked(ctx.author.id)
         except Exception as exc:
             log.error("Music", f"Liked list failed for {ctx.author.id}: {exc}")
-            return await ctx.send(msg(ctx, "play_not_found"))
+            return await ctx.send(msg(ctx, "music_db_error"))
 
         if not rows:
             return await ctx.send(msg(ctx, "liked_empty"))
@@ -1352,7 +1594,7 @@ class MusicSystem(commands.Cog):
             await ctx.send(msg(ctx, "unlike_ok", title=target["title"]))
         except Exception as exc:
             log.error("Music", f"Unlike failed for {ctx.author.id}: {exc}")
-            await ctx.send(msg(ctx, "play_not_found"))
+            await ctx.send(msg(ctx, "music_db_error"))
 
     @commands.command(
         name="nowplaying", aliases=["np"],
@@ -1373,10 +1615,7 @@ class MusicSystem(commands.Cog):
         if not player:
             return await ctx.send(msg(ctx, "volume_nothing"))
         vol = max(0, min(vol, 100))
-        await _player_op(
-            lambda v=vol: player.set_volume(v),
-            failover=self._make_failover(player),
-        )
+        await _player_op(lambda v=vol: player.set_volume(v))
         await ctx.send(msg(ctx, "volume_set", vol=vol))
         await self._update_np_message(ctx.guild)
 

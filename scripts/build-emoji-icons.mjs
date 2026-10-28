@@ -143,6 +143,14 @@ const MAIN_EMOJIS = [
   ["rewind", "rewind", NEUTRAL],
   ["shuffle", "shuffle", NEUTRAL],
   ["loop", "repeat", NEUTRAL],
+  ["queue", "list-music", NEUTRAL],
+  // The two halves of the volume control. One wave and two waves read as
+  // quieter/louder at 20px without needing a plus or a minus beside them.
+  ["volume_down", "volume-1", NEUTRAL],
+  ["volume_up", "volume-2", NEUTRAL],
+  // Autoplay keeps the radio it was as a unicode glyph: a signal with waves
+  // reads as "keep finding more" and stays legible beside the other controls.
+  ["autoplay", "radio", NEUTRAL],
   ["refresh", "refresh-cw", NEUTRAL],
   ["music", "music", NEUTRAL],
   ["voicemaster", "mic-vocal", NEUTRAL],
@@ -165,6 +173,14 @@ const MAIN_EMOJIS = [
   ["roleplay", "theater", NEUTRAL],
   ["paint", "palette", NEUTRAL],
   ["reminder", "alarm-clock", NEUTRAL],
+  // The giveaway setup panel's own controls, and the member list its manage
+  // panel opens.
+  ["duration", "timer", NEUTRAL],
+  ["trophy", "trophy", NEUTRAL],
+  ["participants", "users", NEUTRAL],
+  // A giveaway that ended with no entries. The only face in the set, because
+  // it is the only line that would otherwise drop a unicode emoji mid-sentence.
+  ["sad", "frown", NEUTRAL],
 
   // Machine stats for the status commands.
   ["cpu", "cpu", NEUTRAL],
@@ -250,6 +266,11 @@ const LOG_EMOJIS = [
   ["log_server_updated", "server-cog", NEUTRAL],
   ["log_emoji_updated", "smile", NEUTRAL],
   ["log_sticker_updated", "sticker", NEUTRAL],
+
+  // Giveaways. A ban is a removal and an unban a reprieve, so they follow the
+  // same colour rule as the moderation entries above.
+  ["log_giveaway_ban", "ticket-slash", RED],
+  ["log_giveaway_unban", "circle-check", GREEN],
 
   // Voice.
   ["log_voice_join", "headphones", NEUTRAL],

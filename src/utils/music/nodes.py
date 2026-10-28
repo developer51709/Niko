@@ -94,13 +94,29 @@ def _dedupe_nodes(nodes: list[dict]) -> list[dict]:
     return unique
 
 
+# The discovered pool only changes slowly, so cache it. Without this, retries
+# after a failed connect (which back off from 30s) refetched both upstream
+# markdown files every attempt.
+_NODE_LIST_TTL = 1800.0
+_cached_nodes: list[dict] | None = None
+_cached_at: float = 0.0
+
+
 async def fetch_node_list() -> list[dict]:
     """Return the hardcoded node list, optionally merged with upstream nodes.
 
     The hardcoded list is always the baseline.  When the public list is
     reachable, any nodes not already in the baseline are appended so the
     pool is as large as possible.  Nodelink entries are filtered out.
+
+    Results are cached for ``_NODE_LIST_TTL`` seconds so reconnect retries
+    do not refetch both upstream files on every attempt.
     """
+    global _cached_nodes, _cached_at
+
+    if _cached_nodes is not None and _time.monotonic() - _cached_at < _NODE_LIST_TTL:
+        return list(_cached_nodes)
+
     baseline: list[dict] = list(_FALLBACK_NODES)
 
     try:
@@ -125,11 +141,13 @@ async def fetch_node_list() -> list[dict]:
                 )
             else:
                 log.info("Lavalink", f"Hardcoded list covers all upstream nodes ({len(merged)} total).")
+            _cached_nodes, _cached_at = merged, _time.monotonic()
             return merged
     except Exception as e:
         log.warning("Lavalink", f"Upstream fetch failed (using hardcoded list): {e}")
 
     log.info("Lavalink", f"Using hardcoded Lavalink node list ({len(baseline)} nodes).")
+    _cached_nodes, _cached_at = baseline, _time.monotonic()
     return baseline
 
 
@@ -145,7 +163,9 @@ async def _probe_node(
     async with sem:
         try:
             t0 = _time.monotonic()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT), ssl=False) as r:
+            # Verify TLS like wavelink will: probing with ssl=False accepted
+            # nodes whose certificate wavelink then refused, wasting a slot.
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT)) as r:
                 if r.status == 200:
                     return (node, (_time.monotonic() - t0) * 1000)
         except Exception:

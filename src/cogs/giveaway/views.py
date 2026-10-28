@@ -165,12 +165,12 @@ MESSAGES = {
             "label_hosted_by":        "Hosted by",
             "label_winner":           "Winner(s)",
             "label_no_participants":  "Nobody participated",
-            "no_participants_msg":    "The giveaway for **{prize}** has ended, but nobody participated! 😢",
-            "winner_announce":        "🎉 Congratulations {mentions}! You won **{prize}**!\n{url}",
+            "no_participants_msg":    "The giveaway for **{prize}** has ended, but nobody participated! {sad}",
+            "winner_announce":        "{giveaway} Congratulations {mentions}! You won **{prize}**!\n{url}",
             "reroll_hint":            "-# Reroll with `{command}` — copy and paste it here.",
-            "reroll_announce":        "🎉 **Giveaway Reroll!** The new winner for **{prize}** is: {mentions}! Congratulations!",
-            "join_success":           "🎉 You have successfully joined the giveaway! Good luck!",
-            "join_already":           "✅ You have already joined this giveaway!",
+            "reroll_announce":        "{giveaway} **Giveaway Reroll!** The new winner for **{prize}** is: {mentions}! Congratulations!",
+            "join_success":           "{giveaway} You have successfully joined the giveaway! Good luck!",
+            "join_already":           "{tick} You have already joined this giveaway!",
             "join_ended":             "This giveaway has already ended!",
             "join_host":              "You cannot join your own giveaway!",
             "join_bot":               "Bots cannot participate in giveaways!",
@@ -180,21 +180,21 @@ MESSAGES = {
             "unban_success":          "**{user}** can join giveaways in this server again.",
             "unban_not_banned":       "**{user}** is not banned from giveaways in this server.",
             "no_exist":               "This giveaway doesn't exist anymore.",
-            "no_perm_manage":         "❌ Only the giveaway host or a server admin can manage this giveaway.",
-            "end_confirmed":          "✅ The giveaway has been ended. Winners have been announced in the channel.",
+            "no_perm_manage":         "{cross} Only the giveaway host or a server admin can manage this giveaway.",
+            "end_confirmed":          "{tick} The giveaway has been ended. Winners have been announced in the channel.",
             "no_participants_yet":    "Nobody has joined the giveaway yet.",
-            "reroll_no_participants": "❌ Nobody participated in this giveaway, so no one can be rerolled!",
-            "reroll_not_ended":       "❌ This giveaway hasn't ended yet! You can only reroll ended giveaways.",
-            "reroll_not_found":       "❌ Could not find a giveaway with that message ID.",
-            "invalid_duration":       "❌ Invalid duration! Use numbers followed by `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`).",
-            "invalid_winners":        "❌ Invalid winners count! Must be a number (e.g. `2`).",
-            "min_one_winner":         "❌ You must have at least 1 winner!",
+            "reroll_no_participants": "{cross} Nobody participated in this giveaway, so no one can be rerolled!",
+            "reroll_not_ended":       "{cross} This giveaway hasn't ended yet! You can only reroll ended giveaways.",
+            "reroll_not_found":       "{cross} Could not find a giveaway with that message ID.",
+            "invalid_duration":       "{cross} Invalid duration! Use numbers followed by `s`, `m`, `h`, or `d` (e.g. `30s`, `10m`, `2h`, `1d`).",
+            "invalid_winners":        "{cross} Invalid winners count! Must be a number (e.g. `2`).",
+            "min_one_winner":         "{cross} You must have at least 1 winner!",
             "footer_active":          "{count} Winner{s} | Ends at",
-            "manage_title":           "⚙️ Giveaway Management",
+            "manage_title":           "{settings} Giveaway Management",
             "manage_info":            "Use the buttons below to manage this giveaway.",
-            "select_result":          "🎲 Randomly selected: {mention}",
+            "select_result":          "{gambling} Randomly selected: {mention}",
             "select_no_entries":      "Nobody has entered the giveaway yet, so no one can be selected.",
-            "participants_title":     "👥 Participants",
+            "participants_title":     "{participants} Participants",
             "participants_empty":     "Nobody has joined the giveaway yet.",
         },
         "de": {
@@ -205,12 +205,12 @@ MESSAGES = {
             "label_hosted_by":        "Veranstaltet von",
             "label_winner":           "Gewinner",
             "label_no_participants":  "Niemand hat teilgenommen",
-            "no_participants_msg":    "Das Gewinnspiel für **{prize}** ist beendet, aber niemand hat teilgenommen! 😢",
-            "winner_announce":        "🎉 Glückwunsch {mentions}! Ihr habt **{prize}** gewonnen!\n{url}",
+            "no_participants_msg":    "Das Gewinnspiel für **{prize}** ist beendet, aber niemand hat teilgenommen! {sad}",
+            "winner_announce":        "{giveaway} Glückwunsch {mentions}! Ihr habt **{prize}** gewonnen!\n{url}",
             "reroll_hint":            "-# Neu ziehen mit `{command}` — einfach kopieren und hier einfügen.",
-            "reroll_announce":        "🎉 **Reroll!** Der neue Gewinner für **{prize}** ist: {mentions}! Glückwunsch!",
-            "join_success":           "🎉 Du hast erfolgreich am Gewinnspiel teilgenommen! Viel Glück!",
-            "join_already":           "✅ Du hast bereits an diesem Gewinnspiel teilgenommen!",
+            "reroll_announce":        "{giveaway} **Reroll!** Der neue Gewinner für **{prize}** ist: {mentions}! Glückwunsch!",
+            "join_success":           "{giveaway} Du hast erfolgreich am Gewinnspiel teilgenommen! Viel Glück!",
+            "join_already":           "{tick} Du hast bereits an diesem Gewinnspiel teilgenommen!",
             "join_ended":             "Dieses Gewinnspiel ist bereits beendet!",
             "join_host":              "Du kannst nicht an deinem eigenen Gewinnspiel teilnehmen!",
             "join_bot":               "Bots können nicht an Gewinnspielen teilnehmen!",
@@ -220,21 +220,21 @@ MESSAGES = {
             "unban_success":          "**{user}** kann wieder an Gewinnspielen in diesem Server teilnehmen.",
             "unban_not_banned":       "**{user}** ist nicht von Gewinnspielen in diesem Server ausgeschlossen.",
             "no_exist":               "Dieses Gewinnspiel existiert nicht mehr.",
-            "no_perm_manage":         "❌ Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
-            "end_confirmed":          "✅ Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
+            "no_perm_manage":         "{cross} Nur der Veranstalter oder ein Server-Admin kann dieses Gewinnspiel verwalten.",
+            "end_confirmed":          "{tick} Das Gewinnspiel wurde beendet. Gewinner wurden im Channel bekannt gegeben.",
             "no_participants_yet":    "Noch niemand hat am Gewinnspiel teilgenommen.",
-            "reroll_no_participants": "❌ Niemand hat teilgenommen, daher kann niemand erneut gezogen werden!",
-            "reroll_not_ended":       "❌ Dieses Gewinnspiel ist noch nicht beendet!",
-            "reroll_not_found":       "❌ Kein Gewinnspiel mit dieser Nachrichten-ID gefunden.",
-            "invalid_duration":       "❌ Ungültige Dauer! Benutze Zahlen mit `s`, `m`, `h` oder `d` (z.B. `30s`, `10m`, `2h`, `1d`).",
-            "invalid_winners":        "❌ Ungültige Gewinneranzahl! Muss eine Zahl sein (z.B. `2`).",
-            "min_one_winner":         "❌ Es muss mindestens 1 Gewinner geben!",
+            "reroll_no_participants": "{cross} Niemand hat teilgenommen, daher kann niemand erneut gezogen werden!",
+            "reroll_not_ended":       "{cross} Dieses Gewinnspiel ist noch nicht beendet!",
+            "reroll_not_found":       "{cross} Kein Gewinnspiel mit dieser Nachrichten-ID gefunden.",
+            "invalid_duration":       "{cross} Ungültige Dauer! Benutze Zahlen mit `s`, `m`, `h` oder `d` (z.B. `30s`, `10m`, `2h`, `1d`).",
+            "invalid_winners":        "{cross} Ungültige Gewinneranzahl! Muss eine Zahl sein (z.B. `2`).",
+            "min_one_winner":         "{cross} Es muss mindestens 1 Gewinner geben!",
             "footer_active":          "{count} Gewinner | Endet um",
-            "manage_title":           "⚙️ Gewinnspiel-Verwaltung",
+            "manage_title":           "{settings} Gewinnspiel-Verwaltung",
             "manage_info":            "Nutze die Schaltflächen unten, um das Gewinnspiel zu verwalten.",
-            "select_result":          "🎲 Zufällig ausgewählt: {mention}",
+            "select_result":          "{gambling} Zufällig ausgewählt: {mention}",
             "select_no_entries":      "Noch niemand ist dabei, daher kann niemand ausgewählt werden.",
-            "participants_title":     "👥 Teilnehmer",
+            "participants_title":     "{participants} Teilnehmer",
             "participants_empty":     "Noch niemand hat am Gewinnspiel teilgenommen.",
         },
         "es": {
@@ -245,12 +245,12 @@ MESSAGES = {
             "label_hosted_by":        "Organizado por",
             "label_winner":           "Ganador(es)",
             "label_no_participants":  "Nadie participó",
-            "no_participants_msg":    "El sorteo de **{prize}** ha terminado, ¡pero nadie participó! 😢",
-            "winner_announce":        "🎉 ¡Felicidades {mentions}! ¡Has ganado **{prize}**!\n{url}",
+            "no_participants_msg":    "El sorteo de **{prize}** ha terminado, ¡pero nadie participó! {sad}",
+            "winner_announce":        "{giveaway} ¡Felicidades {mentions}! ¡Has ganado **{prize}**!\n{url}",
             "reroll_hint":            "-# Vuelve a sortear con `{command}`: cópialo y pégalo aquí.",
-            "reroll_announce":        "🎉 **¡Re-sorteo!** El nuevo ganador de **{prize}** es: {mentions}! ¡Felicidades!",
-            "join_success":           "🎉 ¡Te has unido al sorteo correctamente! ¡Mucha suerte!",
-            "join_already":           "✅ ¡Ya te uniste a este sorteo!",
+            "reroll_announce":        "{giveaway} **¡Re-sorteo!** El nuevo ganador de **{prize}** es: {mentions}! ¡Felicidades!",
+            "join_success":           "{giveaway} ¡Te has unido al sorteo correctamente! ¡Mucha suerte!",
+            "join_already":           "{tick} ¡Ya te uniste a este sorteo!",
             "join_ended":             "¡Este sorteo ya ha terminado!",
             "join_host":              "¡No puedes unirte a tu propio sorteo!",
             "join_bot":               "¡Los bots no pueden participar en sorteos!",
@@ -260,21 +260,21 @@ MESSAGES = {
             "unban_success":          "**{user}** puede volver a unirse a los sorteos de este servidor.",
             "unban_not_banned":       "**{user}** no está vetado de los sorteos de este servidor.",
             "no_exist":               "Este sorteo ya no existe.",
-            "no_perm_manage":         "❌ Solo el organizador del sorteo o un admin del servidor puede gestionarlo.",
-            "end_confirmed":          "✅ El sorteo ha sido finalizado. Los ganadores han sido anunciados en el canal.",
+            "no_perm_manage":         "{cross} Solo el organizador del sorteo o un admin del servidor puede gestionarlo.",
+            "end_confirmed":          "{tick} El sorteo ha sido finalizado. Los ganadores han sido anunciados en el canal.",
             "no_participants_yet":    "Nadie se ha unido al sorteo todavía.",
-            "reroll_no_participants": "❌ ¡Nadie participó en este sorteo, así que no hay nadie a quien volver a elegir!",
-            "reroll_not_ended":       "❌ ¡Este sorteo aún no ha terminado! Solo puedes volver a sortear sorteos finalizados.",
-            "reroll_not_found":       "❌ No se encontró un sorteo con ese ID de mensaje.",
-            "invalid_duration":       "❌ ¡Duración inválida! Usa números seguidos de `s`, `m`, `h` o `d` (p. ej. `30s`, `10m`, `2h`, `1d`).",
-            "invalid_winners":        "❌ ¡Cantidad de ganadores inválida! Debe ser un número (p. ej. `2`).",
-            "min_one_winner":         "❌ ¡Debe haber al menos 1 ganador!",
+            "reroll_no_participants": "{cross} ¡Nadie participó en este sorteo, así que no hay nadie a quien volver a elegir!",
+            "reroll_not_ended":       "{cross} ¡Este sorteo aún no ha terminado! Solo puedes volver a sortear sorteos finalizados.",
+            "reroll_not_found":       "{cross} No se encontró un sorteo con ese ID de mensaje.",
+            "invalid_duration":       "{cross} ¡Duración inválida! Usa números seguidos de `s`, `m`, `h` o `d` (p. ej. `30s`, `10m`, `2h`, `1d`).",
+            "invalid_winners":        "{cross} ¡Cantidad de ganadores inválida! Debe ser un número (p. ej. `2`).",
+            "min_one_winner":         "{cross} ¡Debe haber al menos 1 ganador!",
             "footer_active":          "{count} Ganador{s} | Finaliza el",
-            "manage_title":           "⚙️ Gestión del Sorteo",
+            "manage_title":           "{settings} Gestión del Sorteo",
             "manage_info":            "Usa los botones de abajo para gestionar este sorteo.",
-            "select_result":          "🎲 Elegido al azar: {mention}",
+            "select_result":          "{gambling} Elegido al azar: {mention}",
             "select_no_entries":      "Nadie se ha unido al sorteo todavía, así que no hay a quién elegir.",
-            "participants_title":     "👥 Participantes",
+            "participants_title":     "{participants} Participantes",
             "participants_empty":     "Nadie se ha unido al sorteo todavía.",
         },
     },
@@ -291,12 +291,24 @@ def _get_lang(obj) -> str:
     return "en"
 
 
+#: Emoji tokens a message may carry as ``{name}``.
+#:
+#: The table is translated per language, so an emoji that only lives inside a
+#: translated sentence cannot be swapped at the call site. Each language keeps
+#: the token and this resolves it, which keeps one icon set across all three.
+_EMOJI_FIELDS = ("giveaway", "tick", "cross", "settings", "gambling", "participants", "sad")
+
+
 def msg(obj, key: str, **kwargs) -> str:
     """Resolve a giveaway message: guild language, then English, then the key."""
     lang = _get_lang(obj)
     text = MESSAGES["normal"].get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["normal"]["en"].get(key, key)
+    for name in _EMOJI_FIELDS:
+        token = "{" + name + "}"
+        if token in text:
+            text = text.replace(token, get_emoji(name))
     return text.format(**kwargs) if kwargs else text
 
 
@@ -424,7 +436,11 @@ def _make_persistent_view(bot, message_id: int) -> discord.ui.View:
 
 class _MgmtEndBtn(discord.ui.Button):
     def __init__(self, bot, message_id, prize, winners_count, channel_id, guild_id, host_id):
-        super().__init__(label="End Giveaway", style=discord.ButtonStyle.danger, emoji="🛑")
+        super().__init__(
+            label="End Giveaway",
+            style=discord.ButtonStyle.danger,
+            emoji=get_emoji("stop"),
+        )
         self._bot           = bot
         self._message_id    = message_id
         self._prize         = prize
@@ -489,7 +505,11 @@ class _MgmtSelectBtn(discord.ui.Button):
 
 class _MgmtParticipantsBtn(discord.ui.Button):
     def __init__(self, bot, message_id):
-        super().__init__(label="Participants", style=discord.ButtonStyle.blurple, emoji="👥")
+        super().__init__(
+            label="Participants",
+            style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("participants"),
+        )
         self._bot        = bot
         self._message_id = message_id
 
@@ -822,7 +842,9 @@ class _SetupBtn(discord.ui.Button):
         if action == "cancel":
             cancelled = discord.ui.LayoutView()
             cancelled.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="🗑 Giveaway setup cancelled."),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('trash')} Giveaway setup cancelled."
+                ),
                 accent_colour=discord.Color.red(),
             ))
             return await interaction.response.edit_message(view=cancelled)
@@ -842,7 +864,7 @@ class _SetupChannelSelect(discord.ui.ChannelSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                "{get_emoji('cross')} Only the host can configure this giveaway.", ephemeral=True
+                f"{get_emoji('cross')} Only the host can configure this giveaway.", ephemeral=True
             )
         self._setup_view.state.channel_id = self.values[0].id
         await self._setup_view.refresh(interaction)
@@ -859,7 +881,7 @@ class _SetupRoleSelect(discord.ui.RoleSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                "{get_emoji('cross')} Only the host can configure this giveaway.", ephemeral=True
+                f"{get_emoji('cross')} Only the host can configure this giveaway.", ephemeral=True
             )
         self._setup_view.state.requirements["role_ids"] = [r.id for r in self.values]
         await self._setup_view.refresh(interaction)
@@ -918,8 +940,8 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 _SetupBtn("Prize",    discord.ButtonStyle.primary,   f"{get_emoji('gift')}", self, "prize"),
-                _SetupBtn("Duration", discord.ButtonStyle.primary,   "⏳", self, "duration"),
-                _SetupBtn("Winners",  discord.ButtonStyle.primary,   "🏆", self, "winners"),
+                _SetupBtn("Duration", discord.ButtonStyle.primary,   f"{get_emoji('duration')}", self, "duration"),
+                _SetupBtn("Winners",  discord.ButtonStyle.primary,   f"{get_emoji('trophy')}", self, "winners"),
             ),
             discord.ui.ActionRow(_SetupChannelSelect(self)),
             discord.ui.ActionRow(_SetupRoleSelect(self)),
@@ -947,7 +969,9 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         try:
             timeout_view = discord.ui.LayoutView()
             timeout_view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content="⌛ Giveaway setup timed out."),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('duration')} Giveaway setup timed out."
+                ),
                 accent_colour=discord.Color.greyple(),
             ))
             await self.message.edit(view=timeout_view)

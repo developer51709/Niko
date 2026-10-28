@@ -193,6 +193,10 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     "Timeout Removed": "log_timeout_removed",
     "Clear": "log_clear",
     "Purge": "log_purge",
+    # A giveaway ban does not touch the member's access to the server, so it is a
+    # moderation entry of its own rather than a reuse of Ban/Unban.
+    "Giveaway Ban": "log_giveaway_ban",
+    "Giveaway Unban": "log_giveaway_unban",
     # AutoMod
     "Anti-Spam": "log_anti_spam",
     "Anti-Link": "log_anti_link",
