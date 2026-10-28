@@ -296,6 +296,14 @@
   border-radius: 9px;
 }
 .billing-method-icon svg { width: 14px; height: 14px; }
+.billing-method-icon.is-coins { display: flex; align-items: center; justify-content: center; }
+.billing-method-icon.is-coins .crypto-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--crypto-brand, #e4d6c3);
+  filter: drop-shadow(0 0 1.5px rgba(12, 9, 6, .9));
+}
+.billing-method-icon.is-coins .crypto-icon + .crypto-icon { margin-left: -4px; }
 
 .billing-error {
   margin: 0;
@@ -353,7 +361,30 @@
 }
 .billing-asset:hover { transform: translateY(-1px); background: rgba(255, 255, 255, .06); }
 .billing-asset.is-selected { border-color: rgba(200, 168, 130, .55); background: rgba(200, 168, 130, .1); }
-.billing-asset-mark { color: #e9dcc9; font-size: 14px; line-height: 1; }
+/* CryptoFonts brand glyphs (cryptofonts.com): single-colour SVGs painted
+   through a mask, so a logo takes the colour of its tile. */
+.crypto-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  background-color: currentColor;
+  -webkit-mask: var(--crypto-glyph) center / contain no-repeat;
+  mask: var(--crypto-glyph) center / contain no-repeat;
+  transition: color .16s ease, background-color .16s ease;
+}
+
+.billing-asset-mark {
+  display: grid;
+  place-items: center;
+  height: 20px;
+  color: #e9dcc9;
+  font-size: 13px;
+  line-height: 1;
+}
+.billing-asset-mark .crypto-icon { color: #e9dcc9; }
+.billing-asset:hover .billing-asset-mark .crypto-icon,
+.billing-asset.is-selected .billing-asset-mark .crypto-icon { color: var(--crypto-brand, #e9dcc9); }
 .billing-asset strong { font: 10px/1.2 "Space Mono", monospace; letter-spacing: .04em; }
 .billing-asset small { color: var(--dim); font-size: 8.5px; }
 
@@ -411,7 +442,14 @@
   border-radius: 14px;
 }
 .billing-quote-amount { display: grid; gap: 3px; min-width: 0; }
-.billing-quote-amount strong { font-size: 20px; letter-spacing: -.035em; }
+.billing-quote-amount strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  letter-spacing: -.035em;
+}
+.billing-quote-amount strong .crypto-icon { width: 18px; height: 18px; color: var(--crypto-brand, #e9dcc9); }
 .billing-quote-amount small { color: var(--dim); font-size: 9.5px; }
 
 .billing-qr {
@@ -564,6 +602,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .billing-skeleton, .billing-live .billing-dot { animation: none; }
-  .billing-target, .billing-asset, .billing-primary, .billing-toggle i, .billing-toggle i::after { transition: none; }
+  .billing-target, .billing-asset, .billing-primary, .billing-toggle i, .billing-toggle i::after, .crypto-icon { transition: none; }
   .billing-primary:hover, .billing-asset:hover { transform: none; }
 }
