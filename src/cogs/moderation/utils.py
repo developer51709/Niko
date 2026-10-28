@@ -113,6 +113,10 @@ DEFAULT_GUILD_CONFIG = {
     "badwords_mask": "*",
     "whitelist_users": [],
     "whitelist_roles": [],
+    # The role this guild's mutes use, pinned the first time one is handed out.
+    # Storing the id keeps a role that merely happens to be called "Muted" from
+    # being adopted — and having its channel permissions rewritten — later on.
+    "mute_role_id": None,
     "antinuke": {
         "ban_threshold": 3,
         "kick_threshold": 3,
@@ -168,7 +172,7 @@ def _migrate_guild_config(cfg: dict) -> dict:
 
     for key in ("spam_threshold", "spam_interval", "max_mentions", "blocked_words",
                 "badwords_presets", "badwords_action", "badwords_mask",
-                "whitelist_users", "whitelist_roles"):
+                "whitelist_users", "whitelist_roles", "mute_role_id"):
         cfg.setdefault(key, DEFAULT_GUILD_CONFIG[key])
 
     cfg.setdefault("antinuke", dict(DEFAULT_GUILD_CONFIG["antinuke"]))
@@ -371,8 +375,11 @@ class ModerationUtils(commands.Cog):
     def save_config(self, guild_id: int | None = None):
         """Write the config cache through to the database (fire-and-forget).
 
-        Pass guild_id to persist one guild, or omit to persist every cached
-        guild. Safe to call from the bot loop or from Flask worker threads.
+        Pass guild_id to persist the guild that was just edited. Omitting it
+        persists *every* cached guild, which is a deliberate bulk write for
+        migrations and the dashboard — never for a single settings change, since
+        one toggle would then rewrite the config of every guild the bot is in.
+        Safe to call from the bot loop or from Flask worker threads.
         """
         targets = [guild_id] if guild_id is not None else [
             int(gid) for gid in self.config
@@ -502,10 +509,31 @@ class ModerationUtils(commands.Cog):
 
     # ---------- MUTE SYSTEM (DATABASE) ----------
 
+    def find_mute_role(self, guild: discord.Guild) -> discord.Role | None:
+        """The guild's mute role, or None — this never creates one.
+
+        The pinned id wins; the name lookup is only the one-time adoption path
+        for servers whose role predates the stored id.
+        """
+        stored = self.get_guild_config(guild.id).get("mute_role_id")
+        if stored:
+            role = guild.get_role(int(stored))
+            if role is not None:
+                return role
+        return discord.utils.get(guild.roles, name="Muted")
+
+    def _remember_mute_role(self, guild: discord.Guild, role: discord.Role) -> None:
+        """Pin the role used for mutes, so later lookups never guess by name."""
+        cfg = self.get_guild_config(guild.id)
+        if cfg.get("mute_role_id") != role.id:
+            cfg["mute_role_id"] = role.id
+            self.save_config(guild.id)
+
     async def ensure_mute_role(self, guild: discord.Guild, *, verify_perms: bool = False) -> discord.Role:
-        role = discord.utils.get(guild.roles, name="Muted")
+        """The guild's mute role, created (and pinned) only when it has none."""
+        role = self.find_mute_role(guild)
         created = False
-        if not role:
+        if role is None:
             perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
             role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
             created = True
@@ -523,6 +551,7 @@ class ModerationUtils(commands.Cog):
                     )
                 except Exception:
                     continue
+        self._remember_mute_role(guild, role)
         return role
 
     async def mute_member(self, guild: discord.Guild, member: discord.Member, duration=None, reason=None):
@@ -562,8 +591,18 @@ class ModerationUtils(commands.Cog):
                 logging.error("Moderation", f"Failed to save mute for {member.id}: {e}")
 
     async def unmute_member(self, member: discord.Member, reason=None):
-        role = await self.ensure_mute_role(member.guild)
-        await member.remove_roles(role, reason=reason or "Unmuted")
+        """Take the mute role off a member.
+
+        Deliberately never provisions a role: unmuting someone in a server that
+        has never muted anybody used to create a "Muted" role and rewrite every
+        channel's permissions for it.
+        """
+        role = self.find_mute_role(member.guild)
+        if role is not None and role in member.roles:
+            try:
+                await member.remove_roles(role, reason=reason or "Unmuted")
+            except discord.HTTPException:
+                pass
 
         pool = _pool()
         if pool is not None:
@@ -678,7 +717,7 @@ class ModerationUtils(commands.Cog):
         if word in current or len(current) >= MAX_BLOCKED_WORDS:
             return
         cfg["blocked_words"] = current + [word]
-        self.save_config()
+        self.save_config(guild_id)
 
     def remove_blocked_word(self, guild_id: int, word: str):
         cfg = self.get_guild_config(guild_id)
@@ -686,11 +725,11 @@ class ModerationUtils(commands.Cog):
         if word is None:
             return
         cfg["blocked_words"] = [entry for entry in self.get_blocked_words(guild_id) if entry != word]
-        self.save_config()
+        self.save_config(guild_id)
 
     def clear_blocked_words(self, guild_id: int):
         self.get_guild_config(guild_id)["blocked_words"] = []
-        self.save_config()
+        self.save_config(guild_id)
 
     # ---------- BLOCKED WORD PRESET FILTERS ----------
 
@@ -713,14 +752,14 @@ class ModerationUtils(commands.Cog):
                 return False
             updated = [preset for preset in current if preset != key]
         self.get_guild_config(guild_id)["badwords_presets"] = updated
-        self.save_config()
+        self.save_config(guild_id)
         return True
 
     def set_badwords_presets(self, guild_id: int, keys) -> list:
         """Replace the whole enabled set at once (one save, one config write)."""
         presets = normalize_presets(keys)
         self.get_guild_config(guild_id)["badwords_presets"] = presets
-        self.save_config()
+        self.save_config(guild_id)
         return presets
 
     def toggle_badwords_preset(self, guild_id: int, key: str) -> bool | None:
@@ -807,28 +846,28 @@ class ModerationUtils(commands.Cog):
         wl = cfg.setdefault("whitelist_users", [])
         if user_id not in wl:
             wl.append(user_id)
-        self.save_config()
+        self.save_config(guild_id)
 
     def remove_whitelist_user(self, guild_id: int, user_id: int):
         cfg = self.get_guild_config(guild_id)
         wl = cfg.get("whitelist_users", [])
         if user_id in wl:
             wl.remove(user_id)
-        self.save_config()
+        self.save_config(guild_id)
 
     def add_whitelist_role(self, guild_id: int, role_id: int):
         cfg = self.get_guild_config(guild_id)
         wl = cfg.setdefault("whitelist_roles", [])
         if role_id not in wl:
             wl.append(role_id)
-        self.save_config()
+        self.save_config(guild_id)
 
     def remove_whitelist_role(self, guild_id: int, role_id: int):
         cfg = self.get_guild_config(guild_id)
         wl = cfg.get("whitelist_roles", [])
         if role_id in wl:
             wl.remove(role_id)
-        self.save_config()
+        self.save_config(guild_id)
 
     def get_whitelist(self, guild_id: int) -> dict:
         cfg = self.get_guild_config(guild_id)

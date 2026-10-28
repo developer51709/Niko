@@ -2,10 +2,11 @@
 
 Discord never draws a broken custom emoji: an emoji it cannot resolve is
 written out as ``:name:`` instead. The popups, the export and the rendering lab
-all follow that, and the rendering lab draws the bot's real emojis (the names
-and ids from src/config/emojis.py) rather than made-up samples. The markdown
-markers are covered here too, because a marker that is not a capture group
-renders as the wrong formatting without any error.
+all follow that, and the rendering lab draws the bot's real emojis — the names
+and ids ``/api/emojis`` parses out of src/config/emojis.py, including the ids
+the bot's emoji sync re-uploaded — rather than a copy that goes stale. The
+markdown markers are covered here too, because a marker that is not a capture
+group renders as the wrong formatting without any error.
 """
 
 import re
@@ -18,19 +19,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from config.emojis import get_emoji  # noqa: E402
 from utils.tickets.transcripts import _md_to_html, export_html  # noqa: E402
+from webapp import app  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
 #: ``<:name:id>`` / ``<a:name:id>``, exactly what the bot sends and the config
 #: and the generated web data file both hold.
 TOKEN = re.compile(r"<(a?):([A-Za-z0-9_~]+):(\d+)>")
-
-#: One entry of web/src/data/botEmojis.ts, written by
-#: scripts/build-bot-emojis.mjs.
-WEB_EMOJI_ENTRY = re.compile(
-    r'\{ name: "([A-Za-z0-9_~]+)", id: "(\d+)", animated: (true|false), placeholder: (true|false) \}'
-)
-
 
 def _config_emojis():
     """The bot's emojis as (name, id, animated), in config order."""
@@ -45,17 +40,77 @@ def _config_emojis():
     return emojis
 
 
-def test_the_web_emoji_list_matches_the_bot_config():
-    """A new bot emoji means one run of scripts/build-bot-emojis.mjs."""
+def _emoji_api_payload():
+    response = app.test_client().get("/api/emojis")
+    assert response.status_code == 200
+    return response.get_json()["emojis"]
+
+
+def _catalog_names():
+    from utils.emoji_sync import live_emoji_catalog
+
+    return [emoji.discord_name for emoji in live_emoji_catalog()]
+
+
+def test_the_website_reads_the_bots_emojis_from_the_api():
+    """One source of truth: the site asks the bot instead of carrying a copy.
+
+    The web app used to hold a table generated from src/config/emojis.py, so a
+    new or re-uploaded emoji stayed dead there until somebody ran the generator
+    — and a re-upload always changes the id.
+    """
+    from utils.emoji_sync import parse_config
+
+    assert _emoji_api_payload() == [
+        {
+            "name": parsed.discord_name,
+            "id": str(parsed.emoji_id),
+            "animated": parsed.animated,
+            "placeholder": parsed.is_placeholder,
+        }
+        for parsed in parse_config()
+    ]
+
     source = (ROOT / "web" / "src" / "data" / "botEmojis.ts").read_text(encoding="utf-8")
-
-    assert "scripts/build-bot-emojis.mjs" in source
+    # The web app holds no emoji names or ids of its own any more.
+    assert not TOKEN.search(source), "the web emoji list is hardcoded again"
+    assert "BOT_EMOJIS" not in source
+    assert "getBotEmojis()" in source
     assert "export function botEmojiToken" in source
-    web = [(name, emoji_id, animated == "true") for name, emoji_id, animated, _ in WEB_EMOJI_ENTRY.findall(source)]
 
-    config = _config_emojis()
-    assert len(config) > 100
-    assert web == config
+    api = (ROOT / "web" / "src" / "api.ts").read_text(encoding="utf-8")
+    assert 'export const getBotEmojis = () => api<BotEmojisResponse>("/api/emojis");' in api
+
+
+def test_the_emoji_api_reports_the_ids_the_running_sync_adopted(monkeypatch):
+    """A re-uploaded emoji reaches the website without a build or a restart."""
+    from utils import emoji_sync
+
+    parsed = emoji_sync.parse_config()[0]
+    monkeypatch.setattr(
+        emoji_sync,
+        "live_emoji_ids",
+        lambda: {parsed.emoji_id: f"<:{parsed.discord_name}:1560000000000000001>"},
+    )
+
+    assert _emoji_api_payload()[0] == {
+        "name": parsed.discord_name,
+        "id": "1560000000000000001",
+        "animated": parsed.animated,
+        "placeholder": False,
+    }
+
+
+def test_a_stub_emoji_id_is_marked_instead_of_drawn():
+    """A config stub is not a snowflake, so the CDN has nothing to serve."""
+    from utils.emoji_sync import ParsedEmoji
+
+    assert ParsedEmoji("log_kick", 9000001, False).is_placeholder
+    assert not ParsedEmoji("log_kick", 1564762780425265172, False).is_placeholder
+    # The stub ids in the config are exactly the ones the site marks.
+    payload = {emoji["name"]: emoji for emoji in _emoji_api_payload()}
+    for emoji in payload.values():
+        assert emoji["placeholder"] is (len(emoji["id"]) < 15), emoji
 
 
 def test_retired_owner_and_developer_emojis_are_removed():
@@ -68,14 +123,20 @@ def test_retired_owner_and_developer_emojis_are_removed():
     assert "badge_developer" not in config
     assert "bot_owner" not in config
     assert "badge_developer" not in web
-    assert 'name: "bot_owner"' not in web
+    assert "bot_owner" not in web
     assert not (ROOT / "src" / "assets" / "emojis" / "badge_developer.png").exists()
     assert not (ROOT / "src" / "assets" / "emojis" / "bot_owner.png").exists()
+
+    # The lab draws the catalog the API reports, so a retired emoji has to be
+    # gone from the config itself rather than from a copy.
+    names = _catalog_names()
+    assert "badge_developer" not in names
+    assert "bot_owner" not in names
 
     # Owner-only command panels use the owner role badge instead.
     assert "get_emoji('bot_owner')" not in owner
     assert owner.count("get_emoji('badge_owner')") >= 2
-    assert 'name: "badge_owner"' in web
+    assert "badge_owner" in names
 
 
 def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
@@ -88,14 +149,16 @@ def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
     # The old partner emoji art did not match the rest of the set, so neither
     # the bot config nor the rendering lab carries it anymore.
     assert 'emoji_name == "partner"' not in config
-    assert 'name: "partner"' not in web
+    assert "partner" not in web
     assert not (assets / "partner.png").exists()
     assert not (assets / "icon_partner.png").exists()
 
     # Its replacement is generated from the same profile badge asset the
     # website popups draw, so the bot card and the site match.
     assert 'emoji_name == "partner_badge"' in config
-    assert 'name: "partner_badge"' in web
+    names = _catalog_names()
+    assert "partner" not in names
+    assert "partner_badge" in names
     assert (assets / "partner_badge.png").exists()
     assert 'partner_badge: "badges/partner.svg"' in build
     assert '(("partner",),                                    "partner_badge")' in cog
@@ -121,9 +184,11 @@ def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
     page = (ROOT / "web" / "src" / "pages" / "TranscriptPage.tsx").read_text(encoding="utf-8")
     route = (ROOT / "src" / "webapp" / "routes" / "transcript_routes.py").read_text(encoding="utf-8")
 
-    # The generated bot emoji list decides the popup layout, so an app emoji
-    # never has to be guessed from its name.
-    assert "const APPLICATION_EMOJI_IDS = new Set(BOT_EMOJIS.map((emoji) => emoji.id));" in markdown
+    # The bot's live emoji catalog decides the popup layout, so an app emoji
+    # never has to be guessed from its name and never comes from a frozen list.
+    assert "const isApplication = source ? source === \"app\" : isApplicationEmoji(id);" in markdown
+    assert "useBotEmojis();" in markdown
+    assert "BOT_EMOJIS" not in markdown
     assert 'data-emoji-app={isApplication ? "1" : "0"}' in markdown
     assert "This emoji is from the Niko app" in markdown
     assert "This emoji is from this server. Get Nitro to use it everywhere." in markdown
@@ -142,12 +207,16 @@ def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
 
 
 def test_custom_emoji_popup_knows_application_and_server_emojis():
-    application = _md_to_html("<:hypesquad_bravery:1555268436756664381>")
+    # The application emoji is read from the config, so this never pins an id
+    # that a re-upload has already retired.
+    token = get_emoji("hypesquad_bravery")
+    emoji_id = TOKEN.search(token).group(3)
+    application = _md_to_html(token)
     server = _md_to_html("<:drinking~1:123456789012345678>")
 
     # The popup needs the id for its own artwork and whether the emoji belongs
     # to the Niko application or to the ticket's server.
-    assert 'data-emoji-id="1555268436756664381"' in application
+    assert f'data-emoji-id="{emoji_id}"' in application
     assert 'data-emoji-app="1"' in application
     assert 'data-emoji-id="123456789012345678"' in server
     assert 'data-emoji-app="0"' in server
@@ -289,7 +358,10 @@ def test_every_log_message_type_has_its_own_emoji():
         assert not PROTECTED_EMOJI.search(name), title
         assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), title
         # A typo here is a heading that renders the literal text `:log_kick:`.
-        assert f":{name}:" in (get_emoji(name) or ""), title
+        # The Discord-side name may differ in case only (`automod` is uploaded
+        # as `Automod`), which renders identically, so compare case-insensitively.
+        emoji = get_emoji(name) or ""
+        assert f":{name}:" in emoji.lower(), title
 
 
 def test_the_log_emoji_ids_are_unique_until_the_sync_uploads_the_art():
@@ -329,8 +401,15 @@ def test_a_log_entry_is_headed_by_its_message_types_emoji():
 def test_the_render_lab_tests_emoji_rendering_with_the_bots_own_emojis():
     source = (ROOT / "web" / "src" / "pages" / "RenderLabPage.tsx").read_text(encoding="utf-8")
 
-    assert "BOT_EMOJIS.map(botEmojiToken).join" in source
-    assert "{BOT_EMOJIS.map((emoji) =>" in source
+    # The lab draws the catalog the API reports, live, and never a copy of it.
+    assert "const emojis = useBotEmojis();" in source
+    assert "emojis.map(botEmojiToken).join" in source
+    assert "{emojis.map((emoji) =>" in source
+    assert "BOT_EMOJIS" not in source
+    # The popup samples take their id from the catalog too, so a re-uploaded
+    # emoji cannot leave a dead id behind in this page.
+    assert 'emojis.find((emoji) => emoji.name === "hypesquad_bravery")' in source
+    assert "id=\"1520827369508700252\"" not in source
     assert ">Custom emoji<" in source
     # The lab has to show the invalid case too, wrapped in real formatting.
     assert "<:not_a_real_emoji:" in source

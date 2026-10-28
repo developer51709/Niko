@@ -14,7 +14,7 @@ sys.path.insert(0, "src")
 from cogs.staff import staff as staff_module
 from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp.routes import team_recruitment_routes
-from cogs.staff.support_server import CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SupportAgePanel, SupportGuidePanel, SupportPronounPanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available
+from cogs.staff.support_server import AGE_GROUP_ROLE_KEYS, CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, PRONOUN_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SUPPORT_ROLE_MENUS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available, support_role_menus
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -141,20 +141,56 @@ class SupportServerStructureTests(unittest.TestCase):
                 self.assertFalse(permissions.administrator)
                 self.assertFalse(permissions.manage_guild)
 
-    def test_identity_panels_offer_single_choice_pronoun_and_age_roles(self):
-        panels = (
-            (SupportPronounPanel(), ["He/Him", "She/Her", "They/Them", "Xe/Xem", "Any Pronouns"]),
-            (SupportAgePanel(), ["13–15", "16–17", "18–20", "21–24", "25+"]),
+    def test_member_role_panels_are_onboarding_role_menus(self):
+        roles = {key: index for index, key in enumerate(ROLE_SPECS, 500)}
+        menus = support_role_menus(roles)
+
+        self.assertEqual(
+            list(menus),
+            ["support_notifications", "support_pronouns", "support_age_groups"],
         )
-        for panel, expected in panels:
-            with self.subTest(panel=type(panel).__name__):
-                self.assertIsNone(panel.timeout)
-                buttons = [item for item in panel.walk_children() if isinstance(item, discord.ui.Button)]
-                self.assertEqual([button.label for button in buttons], expected)
-                for button in buttons:
-                    key = button.custom_id.rsplit(":", 1)[-1]
+        # A provisioned panel is stored in exactly the shape the admin wizard
+        # writes, so `.onboarding role-menu` can manage it like any other menu.
+        for menu in menus.values():
+            self.assertEqual(
+                set(menu),
+                {"name", "title", "description", "color", "menu_type", "max_values", "channel_id", "message_id", "options"},
+            )
+            self.assertIsNone(menu["channel_id"])
+            self.assertIsNone(menu["message_id"])
+
+        notifications = menus["support_notifications"]
+        self.assertEqual(notifications["menu_type"], "button_multi")
+        self.assertEqual(
+            [option["role_id"] for option in notifications["options"]],
+            [
+                roles[key]
+                for key in ("announcements_ping", "events_ping", "community_ping", "polls_ping", "partnerships_ping")
+            ],
+        )
+        for menu_id, keys in (("support_pronouns", PRONOUN_ROLE_KEYS), ("support_age_groups", AGE_GROUP_ROLE_KEYS)):
+            with self.subTest(panel=menu_id):
+                menu = menus[menu_id]
+                # Cosmetic identity roles stay single-choice and unmentionable.
+                self.assertEqual(menu["menu_type"], "button_single")
+                self.assertEqual([option["label"] for option in menu["options"]], [ROLE_SPECS[key][0] for key in keys])
+                self.assertEqual([option["role_id"] for option in menu["options"]], [roles[key] for key in keys])
+                for key in keys:
                     self.assertEqual(ROLE_SPECS[key][1:], (0, False))
                     self.assertFalse(key.endswith("_ping"))
+
+        # Stable ids mean re-running the setup refreshes the same panels.
+        self.assertEqual(support_role_menus(roles), menus)
+        # Roles the reconcile could not create never become dead options, and a
+        # panel whose roles are all missing is left out rather than stored empty.
+        self.assertEqual(support_role_menus({"staff": 1}), {})
+        self.assertEqual(
+            [
+                option["role_id"]
+                for option in support_role_menus({"announcements_ping": 5})["support_notifications"]["options"]
+            ],
+            [5],
+        )
 
     def test_staff_rules_channel_is_moved_to_top_of_category(self):
         async def check():
@@ -329,6 +365,45 @@ class SupportServerStructureTests(unittest.TestCase):
             text_channels[1].position = 4
             await _reorder_support_category_channels(category, text_channels)
             bulk_update.assert_not_awaited()
+        asyncio.run(check())
+
+    def test_configure_support_systems_provisions_the_member_role_menus(self):
+        async def check():
+            import utils.onboarding.config as onboarding_config
+            import utils.onboarding.utils as onboarding_utils
+            import utils.tickets.utils as ticket_utils
+            import cogs.logging.formatters as log_formatters
+            from utils.onboarding.config import OnboardingConfig
+
+            # A panel that was already posted keeps its message across a rebuild.
+            config = OnboardingConfig(role_menus={
+                "support_pronouns": {"channel_id": 77, "message_id": 88, "options": []},
+            })
+            pool = SimpleNamespace(db_type="sqlite", fetchrow=AsyncMock(return_value={"guild_id": 1}))
+            ticket_config = SimpleNamespace(panel_title="", panel_description="", panel_categories=[], support_roles=[], panel_channel_id=None, panel_message_id=None)
+            channels = {"logs": 11, "automod_logs": 12, "member_logs": 13, "message_logs": 14, "channel_logs": 15, "scam_review": 16, "voice_join": 17, "tickets": 18, "welcome": 19}
+            roles = {key: index for index, key in enumerate(ROLE_SPECS, 21)}
+            guild = SimpleNamespace(id=1, get_channel=lambda channel_id: SimpleNamespace(id=channel_id, category_id=20))
+            bot = SimpleNamespace(cxn=object(), get_cog=lambda _name: None)
+            with patch.object(onboarding_utils, "get_config", new=AsyncMock(return_value=config)), \
+                 patch.object(onboarding_utils, "update_config", new=AsyncMock()), \
+                 patch.object(onboarding_config, "_pool", return_value=pool), \
+                 patch.object(ticket_utils, "get_ticket_config", return_value=ticket_config), \
+                 patch.object(ticket_utils, "async_update_ticket_config", new=AsyncMock(return_value=True)), \
+                 patch.object(log_formatters, "_load_log_config", new=AsyncMock(return_value={})), \
+                 patch.object(log_formatters, "_save_guild_log_config", new=AsyncMock()), \
+                 patch("cogs.automod.mrbeast_scam.set_review_channel", new=AsyncMock()), \
+                 patch.object(staff_module, "_save_voice_master_settings", new=AsyncMock()):
+                await staff_module._configure_support_systems(bot, guild, roles, channels)
+
+            self.assertEqual(set(config.role_menus), set(SUPPORT_ROLE_MENUS))
+            self.assertEqual(
+                (config.role_menus["support_pronouns"]["channel_id"], config.role_menus["support_pronouns"]["message_id"]),
+                (77, 88),
+            )
+            self.assertEqual(config.role_menus["support_notifications"]["menu_type"], "button_multi")
+            self.assertIsNone(config.role_menus["support_notifications"]["message_id"])
+
         asyncio.run(check())
 
     def test_configure_support_systems_saves_distinct_log_channel_ids(self):
@@ -569,6 +644,7 @@ class SupportServerStructureTests(unittest.TestCase):
         async def check():
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value={"role_ids": '{"staff":12}', "channel_ids": '{"polls":44}'}), execute=AsyncMock())
             channel = SimpleNamespace(id=11, create_invite=AsyncMock(return_value=SimpleNamespace(url="https://discord.gg/current")))
+
             guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD, get_channel=lambda _: channel)
             url = await create_support_invite(SimpleNamespace(cxn=pool), guild, {"welcome": 11, "general": 22})
             self.assertEqual(url, "https://discord.gg/current")
@@ -669,6 +745,17 @@ class SupportServerStructureTests(unittest.TestCase):
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value=None), execute=AsyncMock())
             panel_calls = []
             sent_views = {}
+            onboarding_cfg = SimpleNamespace(
+                role_menus=support_role_menus({key: index for index, key in enumerate(ROLE_SPECS, 500)})
+            )
+            class FakeRoleMenuView:
+                def __init__(self, guild_id, menu_id, cfg=None):
+                    self.guild_id = guild_id
+                    self.menu_id = menu_id
+            async def get_onboarding(_guild_id):
+                return onboarding_cfg
+            async def update_onboarding(_guild_id, _cfg):
+                return None
             class FlexibleGuild:
                 id = 44
                 def get_channel(self, channel_id):
@@ -701,7 +788,9 @@ class SupportServerStructureTests(unittest.TestCase):
                  patch("cogs.staff.owner._build_status_panel", return_value=object()), \
                  patch("cogs.staff.owner._build_rules_panel", return_value=object()), \
                  patch("cogs.staff.staff._staff_rules_panel", return_value=object()), \
-                 patch.object(staff_module, "SupportPingPanel", return_value=object()), \
+                 patch("utils.onboarding.utils.get_config", new=get_onboarding), \
+                 patch("utils.onboarding.utils.update_config", new=update_onboarding), \
+                 patch("cogs.onboarding.views.RoleMenuView", new=FakeRoleMenuView), \
                  patch("cogs.staff.staff._support_api_pause", new=AsyncMock()):
                 await _send_support_panels(
                     bot,
@@ -712,6 +801,25 @@ class SupportServerStructureTests(unittest.TestCase):
             self.assertEqual(ticket_cfg.panel_channel_id, message.channel.id)
             self.assertEqual(ticket_cfg.panel_message_id, message.id)
             self.assertEqual(panel_calls, [(44, message.channel.id, message.id)])
+            # #roles is filled by onboarding role menus, posted through the same
+            # path an admin's menu uses and recorded in the onboarding config.
+            self.assertEqual(
+                [
+                    call.args[0].menu_id
+                    for call in bot.add_view.call_args_list
+                    if isinstance(call.args[0], FakeRoleMenuView)
+                ],
+                list(SUPPORT_ROLE_MENUS),
+            )
+            self.assertEqual(
+                [onboarding_cfg.role_menus[menu_id]["message_id"] for menu_id in SUPPORT_ROLE_MENUS],
+                [message.id] * len(SUPPORT_ROLE_MENUS),
+            )
+            registered_panel_keys = {
+                call.args[2] for call in pool.execute.await_args_list
+                if call.args and "INSERT INTO support_server_panels" in call.args[0]
+            }
+            self.assertFalse(registered_panel_keys & {"notification_roles", "pronoun_roles", "age_roles"})
             partnership_ad_text = "\\n".join(
                 component.content
                 for component in sent_views[channels["partnership_ad"]].walk_children()

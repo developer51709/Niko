@@ -10,6 +10,7 @@ from .banner import print_banner
 from .sync import run_slash_sync, run_emoji_sync
 from .writers import write_bot_stats, write_commands
 from .economy import preload_economy_cache
+from .ai import preload_ai_config
 
 __all__ = [
     "init_database",
@@ -21,4 +22,5 @@ __all__ = [
     "write_bot_stats",
     "write_commands",
     "preload_economy_cache",
+    "preload_ai_config",
 ]

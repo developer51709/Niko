@@ -46,6 +46,61 @@ def new_menu_id() -> str:
     return secrets.token_hex(4)
 
 
+# Wizard default for a menu without a chosen colour. Provisioned menus pass
+# their own brand colour instead.
+DEFAULT_MENU_COLOR = 0x57F287
+
+
+def build_role_menu_option(
+    *,
+    role_id: int,
+    label: str,
+    description: str | None = None,
+    emoji: str | None = None,
+    style: str | None = None,
+) -> dict:
+    """The stored shape of one role menu option, exactly as the wizard writes it."""
+    return {
+        "role_id": int(role_id),
+        "label": label or "Role",
+        "description": description,
+        "emoji": emoji,
+        "style": style if style in BUTTON_STYLE_NAMES else None,
+    }
+
+
+def build_role_menu(
+    *,
+    name: str,
+    title: str | None = None,
+    description: str | None = None,
+    color: int | None = None,
+    menu_type: str | None = None,
+    options: list[dict] | None = None,
+    max_values: int | None = None,
+    channel_id: int | None = None,
+    message_id: int | None = None,
+) -> dict:
+    """The single stored shape of a role menu.
+
+    Both the admin wizard and the panels provisioned by the support-server
+    setup build their menus here, so a menu created automatically is
+    indistinguishable from one an admin created with ``.onboarding role-menu``:
+    same keys, same defaults, same persistence and restart behaviour.
+    """
+    return {
+        "name": name,
+        "title": (title or "Role Selection")[:100],
+        "description": (description or "Choose your roles below.")[:300],
+        "color": color if color is not None else DEFAULT_MENU_COLOR,
+        "menu_type": menu_type if menu_type in MENU_TYPE_LABELS else DEFAULT_MENU_TYPE,
+        "max_values": max_values,
+        "channel_id": channel_id,
+        "message_id": message_id,
+        "options": list(options or []),
+    }
+
+
 @dataclass
 class OnboardingConfig:
     # Welcome

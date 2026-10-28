@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { DiscordBadgeList } from "../components/DiscordBadgeList";
 import { DiscordEmoji, DiscordEmojiProvider, DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
-import { BOT_EMOJIS, botEmojiToken } from "../data/botEmojis";
+import { botEmojiToken, botEmojisFailed, useBotEmojis } from "../data/botEmojis";
 import { BADGE_GROUPS, profileBadges } from "../data/profileBadges";
 import { navigate, RENDER_LAB_PATH } from "../router";
 
@@ -99,11 +99,6 @@ const SAMPLE_GROUPS: { group: string; samples: Sample[] }[] = [
 // shows them. Built once so each group is resolved a single time.
 const BADGE_SECTIONS = BADGE_GROUPS.map((group) => ({ ...group, badges: profileBadges(group.keys) }));
 
-// The bot's own emojis (src/config/emojis.py), rendered from their real names
-// and ids: the parade below is every one of them, and the list draws each emoji
-// next to the exact token the bot sends.
-const EMOJI_PARADE = BOT_EMOJIS.map(botEmojiToken).join(" ");
-
 // An emoji the CDN cannot resolve — a stale id, a deleted emoji, one from
 // another server — has to read as `:name:` text and leave the formatting around
 // it alone.
@@ -175,6 +170,15 @@ export function RenderLabPage() {
   const [ids, setIds] = useState<string[]>(initialIds);
   const [draft, setDraft] = useState("");
   const [guildId, setGuildId] = useState("");
+  // The bot's own emojis (src/config/emojis.py), read from the bot at runtime:
+  // the parade below is every one of them, and the list draws each emoji next
+  // to the exact token the bot sends. Nothing here is a copy of the config, so
+  // an added or re-uploaded emoji shows up on the next page load.
+  const emojis = useBotEmojis();
+  const emojiParade = useMemo(() => emojis.map(botEmojiToken).join(" "), [emojis]);
+  // The popup samples draw whichever id the bot currently has for that emoji,
+  // so a re-uploaded emoji never leaves a dead id in the lab.
+  const popupSample = emojis.find((emoji) => emoji.name === "hypesquad_bravery") || emojis[0];
 
   const addIds = () => {
     const next = draft
@@ -268,24 +272,37 @@ export function RenderLabPage() {
         <section className="render-lab-section" aria-labelledby="render-lab-emoji">
           <h2 id="render-lab-emoji">Custom emoji</h2>
           <p>
-            The bot's own emojis, rendered from the real names and ids in <code>src/config/emojis.py</code>. An emoji the CDN
-            cannot resolve falls back to the <code>:name:</code> text Discord shows, so a dead emoji can neither leave a
-            broken image nor break the formatting around it.
+            The bot's own emojis, read live from <code>/api/emojis</code> — the names and ids parsed out of{" "}
+            <code>src/config/emojis.py</code> with the ids the bot's emoji sync re-uploaded, so this page draws whatever the
+            bot is sending right now. An emoji the CDN cannot resolve falls back to the <code>:name:</code> text Discord
+            shows, so a dead emoji can neither leave a broken image nor break the formatting around it.
           </p>
-          <div className="render-lab-render" style={{ marginTop: 12 }}>
-            <DiscordMarkdown text={EMOJI_PARADE} />
-          </div>
+          {emojis.length ? (
+            <div className="render-lab-render" style={{ marginTop: 12 }}>
+              <DiscordMarkdown text={emojiParade} />
+            </div>
+          ) : (
+            <p className="render-lab-empty">
+              {botEmojisFailed()
+                ? <>The bot's emojis could not be read from <code>/api/emojis</code>. Reload the page to try again.</>
+                : <>Loading the bot's emojis from <code>/api/emojis</code>…</>}
+            </p>
+          )}
           <h3 style={{ marginTop: 18 }}>Emoji popup layouts</h3>
           <p>
             Click either emoji: the first opens the application-emoji popup, the second previews the server-emoji popup
             with its Nitro prompt and server row.
           </p>
-          <div className="render-lab-render" style={{ marginTop: 10 }}>
-            <span className="discord-markdown"><DiscordEmoji name="hypesquad_bravery" id="1520827369508700252" className="discord-md-emoji" /></span>
-            <span> application emoji · </span>
-            <span className="discord-markdown"><DiscordEmoji name="hypesquad_bravery" id="1520827369508700252" className="discord-md-emoji" source="server" /></span>
-            <span> server emoji</span>
-          </div>
+          {popupSample ? (
+            <div className="render-lab-render" style={{ marginTop: 10 }}>
+              <span className="discord-markdown"><DiscordEmoji name={popupSample.name} id={popupSample.id} animated={popupSample.animated} className="discord-md-emoji" /></span>
+              <span> application emoji · </span>
+              <span className="discord-markdown"><DiscordEmoji name={popupSample.name} id={popupSample.id} animated={popupSample.animated} className="discord-md-emoji" source="server" /></span>
+              <span> server emoji</span>
+            </div>
+          ) : (
+            <p className="render-lab-empty">The popup samples need the emoji list above.</p>
+          )}
           <h3 style={{ marginTop: 18 }}>Emoji the CDN cannot resolve</h3>
           <p>Bold, italic, underline, strike and spoiler around emojis with an unknown id, a stale id and no id at all.</p>
           <div className="render-lab-render" style={{ marginTop: 10 }}>
@@ -296,13 +313,13 @@ export function RenderLabPage() {
             Each emoji next to the exact <code>&lt;:name:id&gt;</code> token the bot sends, so a missing one is visible as
             text in the list as well.
           </p>
-          <ul className="render-lab-emoji-list">
-            {BOT_EMOJIS.map((emoji) => <li key={`${emoji.name}-${emoji.id}`}>
+          {emojis.length > 0 && <ul className="render-lab-emoji-list">
+            {emojis.map((emoji) => <li key={`${emoji.name}-${emoji.id}`}>
               <DiscordMarkdown text={botEmojiToken(emoji)} inline />
               <code title={botEmojiToken(emoji)}>{botEmojiToken(emoji)}</code>
               {emoji.placeholder && <span className="render-lab-emoji-note">stub id</span>}
             </li>)}
-          </ul>
+          </ul>}
         </section>
 
         <section className="render-lab-section" aria-labelledby="render-lab-inline">

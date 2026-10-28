@@ -3,7 +3,7 @@ Moderation — message-management commands (clear, purge).
 """
 import discord
 from discord.ext import commands
-from ._messages import msg, _chunked_purge
+from ._messages import msg, _cv2, _chunked_purge
 from config.emojis import get_emoji
 
 
@@ -21,7 +21,12 @@ class MessagesMixin:
                 pass
 
         check = (lambda message: message.author.id == member.id) if member else None
-        deleted = await _chunked_purge(ctx.channel, amount, check=check)
+        try:
+            deleted = await _chunked_purge(ctx.channel, amount, check=check)
+        except discord.Forbidden:
+            return await ctx.send(view=_cv2(msg(ctx, "cannot_purge")), ephemeral=True)
+        except discord.HTTPException as e:
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), ephemeral=True)
         if member:
             message = msg(ctx, "purged", count=len(deleted), member=member)
             category, action = "messages", "Purge"
@@ -42,11 +47,14 @@ class MessagesMixin:
             )
             target_id = None
 
-        await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5)
+        # ephemeral matters: the purge itself was deferred privately, so the
+        # confirmation must not land in the channel for everyone to read.
+        await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5, ephemeral=True)
         await self.logger().log_event(ctx.guild, category, action, body, target_id=target_id, action_key=action)
 
     @commands.hybrid_command(name="clear", aliases=["purge"], description="Clear messages, optionally from one member",
                              help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
+    @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def clear(
         self,

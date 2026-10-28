@@ -18,10 +18,9 @@ from discord.ext import commands
 from config.ids import OWNER_IDS, SUPPORT_GUILD
 from config.links import WEBSITE
 from cogs.staff.support_server import (
-    CHANNEL_SPECS, ROLE_SPECS, SupportAgePanel, SupportGuidePanel, SupportPingPanel,
-    SupportPronounPanel, apply_role_icons,
+    CHANNEL_SPECS, ROLE_SPECS, SUPPORT_ROLE_MENUS, SupportGuidePanel, apply_role_icons,
     assign_support_roles, create_support_invite, get_support_ids, persist_support_ids,
-    reconcile_structure, role_icons_available, support_rules_text,
+    reconcile_structure, role_icons_available, support_role_menus, support_rules_text,
 )
 from cogs.staff.owner import OwnerCog, _StatusPanelCog
 from cogs.staff.development import Development
@@ -768,6 +767,21 @@ async def _configure_support_systems(bot, guild, roles, channels):
     onboarding.captcha_remove_role_ids = []
     onboarding.captcha_kick_on_fail = False
 
+    # The member role panels (#roles) are stored as regular onboarding role
+    # menus, so `.onboarding role-menu` manages them like any other menu and
+    # the startup hook re-registers them after a restart.
+    menus = support_role_menus(roles)
+    if menus:
+        configured = getattr(onboarding, "role_menus", None) or {}
+        for menu_id, menu in menus.items():
+            # Keep where the panel was last posted so a rebuild refreshes the
+            # same message instead of leaving a duplicate behind.
+            posted = configured.get(menu_id) or {}
+            menu["channel_id"] = posted.get("channel_id")
+            menu["message_id"] = posted.get("message_id")
+            configured[menu_id] = menu
+        onboarding.role_menus = configured
+
     await update_config(guild.id, onboarding)
     from utils.onboarding.config import _pool
     onboarding_pool = _pool()
@@ -839,8 +853,10 @@ def _support_log_channels(channels: dict) -> dict[str, int]:
 
 
 async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str | None = None):
+    from cogs.onboarding.views import RoleMenuView
     from cogs.staff.owner import _build_status_panel, _collect_status
     from cogs.tickets.views import TicketPanelView
+    from utils.onboarding.utils import get_config, update_config
     from utils.tickets.utils import get_ticket_config, async_update_ticket_config
     from cogs.voicemaster.cog import VoiceMasterInterface
 
@@ -889,6 +905,31 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
                 f"INSERT INTO {unique_table} (channel_id, guild_id, message_id, created_at) VALUES ($1, $2, $3, datetime('now'))",
                 channel.id, guild.id, message.id,
             )
+        return message
+
+    async def post_role_menu(menu_id, menu, cfg):
+        """Post or refresh one member role panel as its onboarding role menu.
+
+        The menu config owns the message location, exactly as it does for a menu
+        an admin posted with `.onboarding role-menu`, so a refresh edits the
+        existing message and a deleted panel is simply reposted.
+        """
+        channel = guild.get_channel(int(channels["roles"]))
+        if channel is None:
+            raise RuntimeError("Configured channel `roles` disappeared before panel post.")
+        view = RoleMenuView(guild.id, menu_id, cfg=cfg)
+        message = None
+        if menu.get("channel_id") and menu.get("message_id"):
+            posted_channel = guild.get_channel(int(menu["channel_id"])) or channel
+            try:
+                message = await posted_channel.get_partial_message(int(menu["message_id"])).edit(view=view)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                message = None
+        if message is None:
+            message = await channel.send(view=view)
+        menu["channel_id"] = message.channel.id
+        menu["message_id"] = message.id
+        bot.add_view(RoleMenuView(guild.id, menu_id, cfg=cfg), message_id=message.id)
         return message
 
     # These channels are self-explanatory; remove legacy setup panels as well
@@ -940,9 +981,16 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     ))
     await post("partnership_info", partnership_info, channel_key="partnership_info")
     await post("support_guide", SupportGuidePanel(channels), channel_key="support_guide")
-    roles_message = await post("notification_roles", SupportPingPanel(), channel_key="roles")
-    pronoun_message = await post("pronoun_roles", SupportPronounPanel(), channel_key="roles")
-    age_message = await post("age_roles", SupportAgePanel(), channel_key="roles")
+    # #roles holds onboarding role menus now, so clear the messages left behind
+    # by the former support-only panels and then refresh each menu in place.
+    for legacy_key in ("notification_roles", "pronoun_roles", "age_roles"):
+        await remove_panel(legacy_key)
+    onboarding_cfg = await get_config(guild.id)
+    for menu_id in SUPPORT_ROLE_MENUS:
+        menu = (onboarding_cfg.role_menus or {}).get(menu_id)
+        if menu is not None:
+            await post_role_menu(menu_id, menu, onboarding_cfg)
+    await update_config(guild.id, onboarding_cfg)
     ticket_message = await post("tickets", TicketPanelView(guild.id, get_ticket_config(guild.id)))
     ticket_cfg = get_ticket_config(guild.id)
     ticket_cfg.panel_channel_id = ticket_message.channel.id
@@ -996,9 +1044,6 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     bot.add_view(SupportGuidePanel(channels))
     bot.add_view(VoiceMasterInterface(), message_id=voice_message.id)
     bot.add_view(TicketPanelView(guild.id, get_ticket_config(guild.id)), message_id=ticket_message.id)
-    bot.add_view(SupportPingPanel(), message_id=roles_message.id)
-    bot.add_view(SupportPronounPanel(), message_id=pronoun_message.id)
-    bot.add_view(SupportAgePanel(), message_id=age_message.id)
 
 
 async def _support_api_pause():

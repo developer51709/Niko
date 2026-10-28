@@ -1,10 +1,36 @@
 """
 Moderation — server-settings commands (badwords, whitelist, setmodlog).
 """
+import re
+
 import discord
 from discord.ext import commands
 from config.emojis import get_emoji
 from ._messages import msg, _cv2
+
+#: A user/role mention, or a bare snowflake.
+_MENTION = re.compile(r"^<@[!&]?(\d+)>$")
+_SNOWFLAKE = re.compile(r"^\d{15,20}$")
+
+
+def _target_id(value) -> int | None:
+    """Read a user or role id out of a mention or a bare id.
+
+    Slash invocations hand us a plain string, and the synthetic context message
+    carries no mentions, so the value itself has to be parsed — the old code
+    peeked at ``ctx.message.mentions`` and therefore silently failed on slash
+    commands while accepting mentions on prefix ones.
+    """
+    text = str(value or "").strip().strip("`")
+    match = _MENTION.match(text)
+    if match:
+        return int(match.group(1))
+    return int(text) if _SNOWFLAKE.match(text.lstrip("&")) else None
+
+
+def _mention_text(kind: str, target_id: int) -> str:
+    """How to refer to a whitelist entry, resolved or not."""
+    return f"<@{target_id}>" if kind == "user" else f"<@&{target_id}>"
 
 
 class SettingsMixin:
@@ -26,6 +52,7 @@ class SettingsMixin:
         )
 
     @badwords.command(name="add", description="Add a blocked word")
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def badwords_add(self, ctx, *, word: str = commands.parameter(default=None, description="The word or phrase to block.")):
         utils = self.utils()
@@ -33,6 +60,9 @@ class SettingsMixin:
             return await ctx.send(msg(ctx, "no_word"))
         utils.add_blocked_word(ctx.guild.id, word)
         await ctx.send(msg(ctx, "badwords_added", word=word))
+        await utils.log_action(
+            ctx.guild, "Blocked Words",
+            f"**Action:** Word added\n**Word:** `{word}`", moderator=ctx.author)
 
     @commands.has_permissions(manage_guild=True)
     @badwords.command(name="remove", description="Remove a blocked word")
@@ -42,6 +72,9 @@ class SettingsMixin:
             return await ctx.send(msg(ctx, "no_word"))
         utils.remove_blocked_word(ctx.guild.id, word)
         await ctx.send(msg(ctx, "badwords_removed", word=word))
+        await utils.log_action(
+            ctx.guild, "Blocked Words",
+            f"**Action:** Word removed\n**Word:** `{word}`", moderator=ctx.author)
 
     @commands.has_permissions(manage_guild=True)
     @badwords.command(name="clear", description="Clear all blocked words")
@@ -49,11 +82,15 @@ class SettingsMixin:
         utils = self.utils()
         utils.clear_blocked_words(ctx.guild.id)
         await ctx.send(msg(ctx, "badwords_cleared"))
+        await utils.log_action(
+            ctx.guild, "Blocked Words",
+            "**Action:** Every blocked word cleared", moderator=ctx.author)
 
     # ── WHITELIST ─────────────────────────────────────────────────────────────
     @commands.hybrid_group(name="whitelist", aliases=["wl"], invoke_without_command=True,
                            description="Manage the automod whitelist",
                            help="{ 'en': 'Manage the automod whitelist.', 'de': 'Verwalte die Automod-Whitelist.', 'es': 'Gestiona la lista blanca de automod.' }")
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist(self, ctx):
         utils = self.utils()
@@ -80,76 +117,88 @@ class SettingsMixin:
         )
         await ctx.send(view=_cv2(text), allowed_mentions=discord.AllowedMentions.none())
 
-    @whitelist.command(name="add", description="Add a user or role to the automod whitelist")
+    @whitelist.command(name="add", description="Exempt a user or role from automod")
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist_add(
         self,
         ctx,
         target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
-        target: str = commands.parameter(default=None, description="The user or role mention, or its ID."),
+        target: str = commands.parameter(default=None, description="The user or role mention, or its numeric ID."),
     ):
         utils = self.utils()
-        if not target_type or target_type.lower() not in ("user", "role"):
+        kind = str(target_type or "").strip().lower()
+        if kind not in ("user", "role"):
             return await ctx.send(msg(ctx, "wl_invalid_type"))
+        target_id = _target_id(target)
+        if target_id is None:
+            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind))
 
-        if target_type.lower() == "user":
-            member = None
-            if ctx.message.mentions:
-                member = ctx.message.mentions[0]
-            elif target and target.isdigit():
-                member = ctx.guild.get_member(int(target))
-            if not member:
-                return await ctx.send(msg(ctx, "no_member", action="whitelist"))
-            utils.add_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_added", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
+        if kind == "user":
+            mention = _mention_text(kind, target_id)
+            user = ctx.guild.get_member(target_id)
+            if user is None:
+                # Someone who left the server can still be on the list; only an
+                # id that resolves to nothing at all is refused.
+                try:
+                    user = await self.bot.fetch_user(target_id)
+                except (discord.NotFound, discord.HTTPException):
+                    return await ctx.send(msg(ctx, "no_user_found"))
+            mention = user.mention
+            utils.add_whitelist_user(ctx.guild.id, target_id)
         else:
-            role = None
-            if ctx.message.role_mentions:
-                role = ctx.message.role_mentions[0]
-            elif target and target.isdigit():
-                role = ctx.guild.get_role(int(target))
-            if not role:
-                return await ctx.send("Could not find that role.")
-            utils.add_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_added", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
+            role = ctx.guild.get_role(target_id)
+            if role is None:
+                return await ctx.send(msg(ctx, "wl_role_missing"))
+            mention = role.mention
+            utils.add_whitelist_role(ctx.guild.id, target_id)
 
-    @whitelist.command(name="remove", aliases=["rm"], description="Remove a user or role from the automod whitelist")
+        key = "wl_user_added" if kind == "user" else "wl_role_added"
+        await ctx.send(msg(ctx, key, target=mention), allowed_mentions=discord.AllowedMentions.none())
+        await utils.log_action(
+            ctx.guild, "AutoMod Whitelist",
+            f"**Action:** Added {kind}\n**Target:** {mention}", moderator=ctx.author)
+
+    @whitelist.command(name="remove", aliases=["rm"], description="Stop exempting a user or role from automod")
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist_remove(
         self,
         ctx,
         target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
-        target: str = commands.parameter(default=None, description="The user or role mention, or its ID."),
+        target: str = commands.parameter(default=None, description="The user or role mention, or its numeric ID."),
     ):
         utils = self.utils()
-        if not target_type or target_type.lower() not in ("user", "role"):
+        kind = str(target_type or "").strip().lower()
+        if kind not in ("user", "role"):
             return await ctx.send(msg(ctx, "wl_invalid_type"))
+        target_id = _target_id(target)
+        if target_id is None:
+            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind))
 
-        if target_type.lower() == "user":
-            member = None
-            if ctx.message.mentions:
-                member = ctx.message.mentions[0]
-            elif target and target.isdigit():
-                member = ctx.guild.get_member(int(target))
-            if not member:
-                return await ctx.send(msg(ctx, "no_member", action="remove from whitelist"))
-            utils.remove_whitelist_user(ctx.guild.id, member.id)
-            await ctx.send(msg(ctx, "wl_user_removed", target=member.mention), allowed_mentions=discord.AllowedMentions.none())
+        if kind == "user":
+            member = ctx.guild.get_member(target_id)
+            mention = member.mention if member else _mention_text(kind, target_id)
+            utils.remove_whitelist_user(ctx.guild.id, target_id)
         else:
-            role = None
-            if ctx.message.role_mentions:
-                role = ctx.message.role_mentions[0]
-            elif target and target.isdigit():
-                role = ctx.guild.get_role(int(target))
-            if not role:
-                return await ctx.send("Could not find that role.")
-            utils.remove_whitelist_role(ctx.guild.id, role.id)
-            await ctx.send(msg(ctx, "wl_role_removed", target=role.mention), allowed_mentions=discord.AllowedMentions.none())
+            role = ctx.guild.get_role(target_id)
+            if role is None:
+                return await ctx.send(msg(ctx, "wl_role_missing"))
+            mention = role.mention
+            utils.remove_whitelist_role(ctx.guild.id, target_id)
+
+        key = "wl_user_removed" if kind == "user" else "wl_role_removed"
+        await ctx.send(msg(ctx, key, target=mention), allowed_mentions=discord.AllowedMentions.none())
+        await utils.log_action(
+            ctx.guild, "AutoMod Whitelist",
+            f"**Action:** Removed {kind}\n**Target:** {mention}", moderator=ctx.author)
 
     # ── SETMODLOG (deprecated redirect) ──────────────────────────────────────
-    @commands.hybrid_command(name="setmodlog",
+    @commands.hybrid_command(name="setmodlog", hidden=True,
                              description="Set the moderation log channel (deprecated)",
                              help="{ 'en': 'Set the moderation log channel.', 'de': 'Moderationslog-Kanal setzen.', 'es': 'Establece el canal de registro de moderación.' }")
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
     async def setmodlog(self, ctx):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(

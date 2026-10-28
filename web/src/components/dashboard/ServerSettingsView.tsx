@@ -48,11 +48,19 @@ function SaveFooter({ state }: { state: SaveState }) {
   </div>;
 }
 
-const loggingCategories = [
+// Fallback only: the bot serves its own category list in server.logging_categories,
+// so a new category shows up here without a second hardcoded copy to update.
+const fallbackLoggingCategories: [string, string][] = [
   ["moderation", "Moderation"], ["automod", "AutoMod"], ["messages", "Messages"],
   ["channels", "Channels"], ["members", "Members"], ["captcha", "Captcha"],
   ["invites", "Invites"], ["roles", "Roles"], ["server", "Server"], ["voice", "Voice"],
-] as const;
+];
+
+function loggingCategoryOptions(server?: ServerConfig): [string, string, string][] {
+  const categories = server?.logging_categories;
+  if (!categories?.length) return fallbackLoggingCategories.map(([key, label]) => [key, label, ""]);
+  return categories.map((category) => [category.key, category.label, category.description || ""]);
+}
 
 function channelLabel(resources: GuildResources | null, id: string | number | null | undefined) {
   if (!id) return "Not set";
@@ -78,6 +86,7 @@ function initialValues(server?: ServerConfig) {
 }
 
 export function ServerSettingsView({ guildId, config, resources, csrfToken }: { guildId: string; config: GuildConfig | null; resources: GuildResources | null; csrfToken?: string }) {
+  const loggingCategories = loggingCategoryOptions(config?.server);
   const [values, setValues] = useState(() => initialValues(config?.server));
   const [state, setState] = useState(initialSave);
 
@@ -129,7 +138,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       </section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
-        {loggingCategories.map(([key, label]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
+        {loggingCategories.map(([key, label, description]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key} title={description || undefined}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
       </div></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><SettingCards><SettingCard title="Private server" hint="Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible." action={<Switch checked={values.private_server} onCheckedChange={(value) => setValue("private_server", value)} aria-label="Private server" />} /></SettingCards></section>

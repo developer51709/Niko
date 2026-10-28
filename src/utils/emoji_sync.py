@@ -32,7 +32,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 import aiohttp
 import discord
 
-from config.emojis import apply_live_emoji_ids, swap_emoji_ids
+from config.emojis import apply_live_emoji_ids, live_emoji_ids, swap_emoji_ids
 from utils import logging
 import socket
 
@@ -62,6 +62,11 @@ CDN_BASE      = "https://cdn.discordapp.com/emojis/{id}.{ext}"
 
 EMOJI_RE = re.compile(r"<(?P<animated>a?):(?P<name>[A-Za-z0-9_]+):(?P<id>\d+)>")
 
+#: Discord snowflakes are 17-19 digits. A shorter id is one of the stub ids the
+#: config uses until the sync uploads the art, so a consumer can mark those
+#: instead of asking the CDN for an emoji that does not exist yet.
+SNOWFLAKE_MIN_DIGITS = 15
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Data model
 # ──────────────────────────────────────────────────────────────────────────────
@@ -88,6 +93,11 @@ class ParsedEmoji:
         a = "a" if self.animated else ""
         return f"<{a}:{self.discord_name}:{self.emoji_id}>"
 
+    @property
+    def is_placeholder(self) -> bool:
+        """True while this is a config stub rather than an uploaded emoji."""
+        return self.emoji_id < 10 ** (SNOWFLAKE_MIN_DIGITS - 1)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Parse config
@@ -105,6 +115,33 @@ def parse_config() -> List[ParsedEmoji]:
                 animated=bool(m.group("animated")),
             )
     return list(seen.values())
+
+
+def live_emoji_catalog() -> List[ParsedEmoji]:
+    """Every emoji the bot sends, with the ids the running sync uploaded.
+
+    ``parse_config`` reads the file, which holds whichever ids were last written
+    to it; the live map covers an emoji the sync re-uploaded in this process but
+    has not written back yet. Consumers that draw or classify emojis outside the
+    bot — the website's rendering lab and emoji popups — read this instead of a
+    copy of the config, so they cannot drift from what the bot actually sends.
+    """
+    live = live_emoji_ids()
+    catalog: List[ParsedEmoji] = []
+    for parsed in parse_config():
+        replacement = live.get(parsed.emoji_id)
+        match = EMOJI_RE.match(replacement) if replacement else None
+        if match:
+            catalog.append(
+                ParsedEmoji(
+                    discord_name=match.group("name"),
+                    emoji_id=int(match.group("id")),
+                    animated=bool(match.group("animated")),
+                )
+            )
+        else:
+            catalog.append(parsed)
+    return catalog
 
 
 # ──────────────────────────────────────────────────────────────────────────────

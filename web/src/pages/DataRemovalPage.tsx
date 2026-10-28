@@ -163,7 +163,8 @@ export function DataRemovalPage() {
               <p>
                 Deletes the personal data attached to your Discord account: economy balances,
                 leveling XP, birthdays, reminders, AFK state, music library, giveaway entries,
-                poll votes, roleplay preferences, staff application submissions, and any public
+                poll votes, roleplay preferences, AI conversation memory, staff application
+                submissions, and any public
                 staff profile (bio, banner, and links). Your name is also removed from suggestions
                 and giveaway hosts where it was attached to server content.
               </p>
@@ -173,7 +174,8 @@ export function DataRemovalPage() {
               <h3>Server data</h3>
               <p>
                 Deletes a server's Niko configuration and content: AutoMod and logging settings,
-                leveling data, tickets configuration, giveaways, polls, starboard entries,
+                AI settings and conversation memory, leveling data, tickets configuration,
+                giveaways, polls, starboard entries,
                 social notifier follows, voicemaster settings, profiles, and related settings.
                 The server's deletion stays available after Niko is removed, as long as you were
                 the owner when it left.

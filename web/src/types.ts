@@ -15,6 +15,21 @@ export type PublicConfig = {
   oauth_available: boolean;
 };
 
+/** One of the bot's custom emojis, as `/api/emojis` reports it. */
+export type BotEmoji = {
+  /** The emoji name Discord stores, without the surrounding colons. */
+  name: string;
+  /** The emoji id, or a stub id until the bot's emoji sync uploads the art. */
+  id: string;
+  animated: boolean;
+  /** True while the id is a config stub rather than an uploaded emoji. */
+  placeholder: boolean;
+};
+
+export type BotEmojisResponse = {
+  emojis: BotEmoji[];
+};
+
 export type CommandType = "slash" | "prefix" | "hybrid" | "context";
 
 export type CommandParameter = {
@@ -518,6 +533,8 @@ export type ServerConfig = {
   prefix_override?: string;
   onboarding: OnboardingConfig;
   logging: LoggingConfig;
+  /** The bot's own log categories, so the dashboard cannot drift from it. */
+  logging_categories?: { key: string; label: string; description?: string }[];
   tickets: TicketConfig;
   profile: GuildProfile;
   privacy?: { private: boolean };

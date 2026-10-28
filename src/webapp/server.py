@@ -49,7 +49,8 @@ import sqlite3
 import uuid
 from cogs.donations.oxapay import OxaPayClient
 from cogs.staff.staff import STAFF_ROLES
-from utils.ai.config import get_ai_config, set_ai_config
+from utils.ai.config import cached_config as cached_ai_config
+from utils.ai.config import save_config as save_ai_config
 from utils.donations import get_invoice, save_invoice, update_invoice_status, verify_donation_token
 from .config import ADMINISTRATOR_PERM, BOT_STATS, DISCORD_API, DISCORD_BOT_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, ECONOMY_DIR, MANAGE_GUILD_PERM, OXAPAY_KEY, WEB_DIST_DIR
 from flask import redirect, session

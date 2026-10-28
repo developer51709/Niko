@@ -16,14 +16,12 @@ All features degrade gracefully (ephemeral error) when permissions are missing.
 
 from __future__ import annotations
 
-import asyncio
-import os
-
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from config.emojis import get_emoji
+from utils import logging as log
 from utils.discord_extras import forward_message, set_voice_status, stage_become_speaker
 
 
@@ -34,40 +32,6 @@ def _cv(text: str, *, colour: discord.Colour | None = None) -> discord.ui.Layout
         kw["accent_colour"] = colour
     view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=text), **kw))
     return view
-
-
-# ── AI helper (optional) ──────────────────────────────────────────────────────
-
-def _try_ai_reply(bot: commands.Bot, user_id: int, guild, content: str, username: str) -> str | None:
-    """Attempt a synchronous AI reply. Returns None if AI is not configured."""
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if openai_key:
-        try:
-            from utils.ai.openai_client import generate_reply_openai
-            from utils.ai.config import get_personality
-            personality = "cafe"
-            SYSTEM = (
-                "You are Niko, a cozy café AI companion. You are warm, friendly, and a little playful. "
-                "Keep responses short and conversational — this is a Discord context menu reply."
-            )
-            reply = generate_reply_openai(bot, user_id, guild, content, username, SYSTEM)
-            return reply
-        except Exception:
-            pass
-
-    niko_key = os.environ.get("NIKO_API_KEY") or os.environ.get("NIKOAPI_KEY")
-    if niko_key:
-        try:
-            from utils.ai.nikoapi import generate_reply_nikoapi
-            SYSTEM = (
-                "You are Niko, a cozy café AI companion. Keep replies short and warm."
-            )
-            reply = generate_reply_nikoapi(bot, user_id, guild, content, username, SYSTEM)
-            return reply
-        except Exception:
-            pass
-
-    return None
 
 
 # ── COG ───────────────────────────────────────────────────────────────────────
@@ -110,26 +74,38 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
         prompt = f'Someone shared this message with you:\n\n"{content}"\n\nWhat do you think?'
 
-        loop = asyncio.get_event_loop()
-        reply = await loop.run_in_executor(
-            None,
-            lambda: _try_ai_reply(
-                self.bot,
-                interaction.user.id,
-                interaction.guild,
-                prompt,
-                interaction.user.display_name,
-            ),
+        # Share the same config, memory and sentinel handling as the normal AI
+        # path. The old helper gated on OPENAI_API_KEY (which this bot never
+        # reads), so the menu answered "not set up" even when AI worked.
+        from utils.ai.config import load_config
+        from utils.ai.error_views import build_ai_error_view, parse_ai_error
+        from utils.ai.reply import generate_reply
+
+        config = await load_config(interaction.guild.id) if interaction.guild else None
+        reply = await generate_reply(
+            self.bot,
+            interaction.user.id,
+            interaction.guild,
+            prompt,
+            interaction.user.display_name,
+            config=config,
         )
 
         if isinstance(reply, str) and reply.startswith("ai_error:"):
-            from utils.ai.error_views import build_ai_error_view, parse_ai_error
             kind, cooldown = parse_ai_error(reply)
             await interaction.followup.send(
                 view=build_ai_error_view(kind, cooldown),
                 ephemeral=True,
             )
-        elif reply:
+        elif reply == "ai_disabled_global":
+            await interaction.followup.send(
+                "Niko's AI is currently disabled by the bot owner.", ephemeral=True
+            )
+        elif reply == "ai_disabled_guild":
+            await interaction.followup.send(
+                "AI is disabled in this server.", ephemeral=True
+            )
+        elif isinstance(reply, str) and reply:
             await interaction.followup.send(
                 view=_cv(f"### ☕ Niko says…\n{reply}", colour=discord.Colour(0xc8a882)),
                 ephemeral=True,
@@ -137,12 +113,12 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         else:
             await interaction.followup.send(
                 view=_cv(
-                    "☕ My AI isn't set up yet — ask an admin to add the `OPENAI_API_KEY` secret!\n"
-                    f"-# Message by {message.author.mention}: *{content[:120]}*",
+                    "☕ I couldn't come up with a reply just now — try again in a moment.",
                     colour=discord.Colour(0xfee75c),
                 ),
                 ephemeral=True,
             )
+        log.info("Nitro", f"Ask Niko reply requested by {interaction.user.id}")
 
     # ── Context menu: User Profile ────────────────────────────────────────
 

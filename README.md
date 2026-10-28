@@ -66,7 +66,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 - Weekly lottery and unlockable achievements with server-side image cards
 
 ### AI companion
-- OpenAI-compatible chat with per-user memory and favorability
+- OpenAI-compatible chat with per-server, per-user memory
 - Configurable identity and tone per server
 - Image generation, translation, definitions, and AI-assisted error reports
 

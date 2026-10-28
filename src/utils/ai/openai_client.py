@@ -1,17 +1,30 @@
-# utils/ai/openai_client.py
+"""Groq chat completions: prompt assembly, actions, retries and budgets.
+
+Every call here is async (`AsyncOpenAI`), so a slow provider response no longer
+holds a thread from the shared default executor and no memory/config read blocks
+the event loop.
+"""
+from __future__ import annotations
+
+import asyncio
 import datetime
-import time
-from openai import OpenAI, NotFoundError, APIConnectionError, APIStatusError, RateLimitError
+import io
 import os
-from utils.ai.memory import (
-    get_user_memory,
-    get_conversation_history,
-    get_favorability,
-    update_user_memory,
-    adjust_favorability
+import re
+import time
+
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    AsyncOpenAI,
+    NotFoundError,
+    RateLimitError,
 )
 
-client = None
+from utils import logging
+from utils.ai import memory as ai_memory
+
+client: AsyncOpenAI | None = None
 
 _FALLBACK_REPLIES = [
     "sorry, my mind went blank for a sec ☕ try again in a moment~",
@@ -32,21 +45,75 @@ def _model_setting(name: str, default: str) -> str:
     return os.environ.get(name, default).strip() or default
 
 
+class AINotConfigured(RuntimeError):
+    """The provider key is missing; callers get a clear card, not an apology."""
+
+
+# ── Request limits ─────────────────────────────────────────────────────────────
+#: Provider calls time out instead of holding a coroutine (and the typing
+#: indicator) for the SDK's default of several minutes.
+_REQUEST_TIMEOUT_SECS = 25.0
+
+#: Groq rejects audio uploads above 25 MB; stay well below that and refuse
+#: oversized attachments before reading/uploading them.
+_MAX_AUDIO_BYTES = 10 * 1024 * 1024
+
 # ── Rate-limit guard ───────────────────────────────────────────────────────────
-# Maps user_id → unix timestamp when the cooldown expires.
+# Maps user_id → monotonic timestamp when the cooldown expires.
 # When the API returns 429, we stop accepting that user's requests for a while
 # to avoid hammering the endpoint and making the rate limit worse.
 _rl_cooldown: dict[int, float] = {}
 _RL_COOLDOWN_SECS = 30  # seconds to pause per user after a 429
+_RL_COOLDOWN_MAX_KEYS = 4096
+
+# ── Per-guild budget ───────────────────────────────────────────────────────────
+# One server must not be able to drain the shared key for every other server.
+# A rolling hourly window is enough to bound spend without a persistence layer.
+_guild_usage: dict[int, tuple[float, int]] = {}
+_GUILD_WINDOW_SECS = 3600.0
+_GUILD_HOURLY_DEFAULT = 200
 
 
-def transcribe_audio(audio_bytes: bytes, filename: str = "voice_message.ogg") -> str:
+def _guild_hourly_limit() -> int:
+    return _int_setting("AI_GUILD_HOURLY_REQUESTS", _GUILD_HOURLY_DEFAULT, 1, 100_000)
+
+
+def _consume_guild_budget(guild_id: int) -> bool:
+    """Count one request against the guild's hourly allowance."""
+    now = time.monotonic()
+    start, used = _guild_usage.get(guild_id, (now, 0))
+    if now - start >= _GUILD_WINDOW_SECS:
+        start, used = now, 0
+    if used >= _guild_hourly_limit():
+        _guild_usage[guild_id] = (start, used)
+        return False
+    _guild_usage[guild_id] = (start, used + 1)
+    if len(_guild_usage) > 4096:
+        for key, (window_start, _count) in list(_guild_usage.items()):
+            if now - window_start >= _GUILD_WINDOW_SECS:
+                _guild_usage.pop(key, None)
+    return True
+
+
+def _prune_cooldowns(now: float) -> None:
+    if len(_rl_cooldown) <= _RL_COOLDOWN_MAX_KEYS:
+        return
+    for key, until in list(_rl_cooldown.items()):
+        if until <= now:
+            _rl_cooldown.pop(key, None)
+
+
+async def transcribe_audio(audio_bytes: bytes, filename: str = "voice_message.ogg") -> str:
     """Transcribe a Discord voice attachment using the configured AI client."""
-    import io
-
+    if not audio_bytes:
+        return ""
+    if len(audio_bytes) > _MAX_AUDIO_BYTES:
+        raise ValueError(
+            f"Voice message is larger than {_MAX_AUDIO_BYTES // (1024 * 1024)} MB."
+        )
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename or "voice_message.ogg"
-    result = _get_client().audio.transcriptions.create(
+    result = await _get_client().audio.transcriptions.create(
         model=_model_setting("GROQ_TRANSCRIPTION_MODEL", GROQ_TRANSCRIPTION_MODEL),
         file=audio_file,
     )
@@ -93,17 +160,20 @@ def _reasoning_effort() -> str:
     return value if value in {"low", "medium", "high"} else _REASONING_EFFORT
 
 
-def _get_client():
+def _get_client() -> AsyncOpenAI:
     global client
     if client is None:
-        groq_key = os.environ.get("GROQ_API_KEY")
+        groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+        if not groq_key:
+            raise AINotConfigured("GROQ_API_KEY is not set.")
 
         # max_retries=0 — we handle retries ourselves so the SDK never
         # silently resends a request that already hit a rate limit.
-        client = OpenAI(
+        client = AsyncOpenAI(
             api_key=groq_key,
             base_url=os.environ.get("GROQ_BASE_URL", GROQ_BASE_URL),
             max_retries=0,
+            timeout=_REQUEST_TIMEOUT_SECS,
         )
     return client
 
@@ -395,7 +465,8 @@ _AI_ACTIONS_TOOLS = [
                     "user": _USER_ARG,
                     "nickname": {"type": "string", "description": "New nickname (max 32 chars). Empty string resets."},
                 },
-                "required": ["user"],
+                # Required, not optional: an omitted value used to reset the nick.
+                "required": ["user", "nickname"],
             },
         },
     },
@@ -432,24 +503,28 @@ _ACTION_KEYWORDS = {
 }
 
 
+# Word-boundary matcher: plain substring matching attached all 18 tool schemas
+# to innocent messages such as "banana" or "urban" ("ban" is a substring).
+_ACTION_RE = re.compile(
+    r"\b("
+    + "|".join(
+        re.escape(phrase)
+        for phrase in sorted(_ACTION_PHRASES | _ACTION_KEYWORDS, key=len, reverse=True)
+    )
+    + r")\b",
+    re.IGNORECASE,
+)
+
+
 def _message_requests_action(message: str) -> bool:
     """Return True only if the message looks like an explicit action request.
 
     Keeps token usage low by skipping tool definitions for casual chat.
     """
-    lower = message.lower()
-    # Quick single-keyword check
-    words = set(lower.split())
-    if words & _ACTION_KEYWORDS:
-        return True
-    # Multi-word phrase check
-    for phrase in _ACTION_PHRASES:
-        if phrase in lower:
-            return True
-    return False
+    return bool(_ACTION_RE.search(message or ""))
 
 
-def _create_completion(*, model: str, messages: list, with_tools: bool = False):
+async def _create_completion(*, model: str, messages: list, with_tools: bool = False):
     """Send one chat completion, retrying transient connection/5xx failures.
 
     Rate limits are re-raised so the caller can apply the per-user cooldown
@@ -476,7 +551,7 @@ def _create_completion(*, model: str, messages: list, with_tools: bool = False):
             kwargs["tools"]       = _AI_ACTIONS_TOOLS
             kwargs["tool_choice"] = "auto"
         try:
-            return _get_client().chat.completions.create(**kwargs)
+            return await _get_client().chat.completions.create(**kwargs)
         except RateLimitError:
             raise
         except (APIConnectionError, APIStatusError) as error:
@@ -486,7 +561,7 @@ def _create_completion(*, model: str, messages: list, with_tools: bool = False):
             # The connection may be stale after a network hiccup; rebuild it.
             _reset_client()
             if attempt < _REQUEST_ATTEMPTS - 1:
-                time.sleep(min(_RETRY_BACKOFF_SECS * (2 ** attempt), 2.0))
+                await asyncio.sleep(min(_RETRY_BACKOFF_SECS * (2 ** attempt), 2.0))
     raise last_error
 
 
@@ -504,9 +579,27 @@ def _action_payload(tool_call) -> dict:
     return payload
 
 
-def generate_reply_openai(
+def _is_safety_error(error: Exception) -> bool:
+    """Whether a provider 4xx is a content-policy rejection."""
+    try:
+        body = getattr(error, "body", None) or {}
+        err_code = (body.get("error", {}) or {}).get("code", "") if isinstance(body, dict) else ""
+        if err_code in {"content_filter", "content_policy_violation", "moderated"}:
+            return True
+        text = str(error).lower()
+        return any(
+            key in text
+            for key in ("content_filter", "safety", "content_policy", "moderated")
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def generate_reply_openai(
     bot, user_id: int, server, message: str, username: str, SYSTEM_PROMPT: str,
     *,
+    guild_id: int = 0,
+    ai_name: str = "Niko",
     context_messages: str = None,
     replied_content: str = None,
     ai_actions_enabled: bool = False,
@@ -516,23 +609,10 @@ def generate_reply_openai(
     server_name  = server.name if server else "DM"
     member_count = len(server.members) if server else 0
 
-    # ── Pull memory — apply size caps to save tokens ──────────────────
-    user_mem     = get_user_memory(user_id)
-    if user_mem:
-        user_mem = user_mem[-_USER_MEMORY_MAX:]
-    conv_history = get_conversation_history(user_id, limit=_CONV_HISTORY_TURNS)
-    favor        = get_favorability(user_id)
-
-    if favor > 15:
-        fav_label = f"{username} is one of your absolute favorites."
-    elif favor > 8:
-        fav_label = f"You like {username} a lot."
-    elif favor > 3:
-        fav_label = f"You have a good impression of {username}."
-    elif favor > 0:
-        fav_label = f"You are warming up to {username}."
-    else:
-        fav_label = f"You don't know {username} well yet."
+    # ── Pull memory for THIS guild — apply size caps to save tokens ────
+    memory = await ai_memory.get_context(guild_id, user_id, limit=_CONV_HISTORY_TURNS)
+    user_mem = memory.memory[-_USER_MEMORY_MAX:] if memory.memory else ""
+    conv_history = memory.history
 
     # ── Trim context helpers if they arrived oversized ─────────────────
     if replied_content and len(replied_content) > _REPLIED_CONTENT_MAX:
@@ -544,9 +624,10 @@ def generate_reply_openai(
         context_messages = "\n".join(lines)
 
     # ── Build a compact user message (system prompt NOT repeated here) ─
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%a %d %b %Y %H:%M")
     user_parts = [
-        f"[{datetime.datetime.utcnow().strftime('%a %d %b %Y %H:%M')} UTC | {server_name} | {member_count} members]",
-        f"User: {username} | {fav_label}",
+        f"[{timestamp} UTC | {server_name} | {member_count} members]",
+        f"User: {username}",
     ]
 
     if user_mem:
@@ -577,10 +658,14 @@ def generate_reply_openai(
 
     # ── Short-circuit if this user is still in a rate-limit cooldown ──
     now = time.monotonic()
+    _prune_cooldowns(now)
     cooldown_until = _rl_cooldown.get(user_id, 0)
     if now < cooldown_until:
-        remaining = int(cooldown_until - now)
-        return f"ai_error:rate_limit:{remaining}"
+        return f"ai_error:rate_limit:{int(cooldown_until - now) + 1}"
+
+    if not _consume_guild_budget(guild_id):
+        logging.warning("AI", f"Guild {guild_id} reached its hourly AI request limit")
+        return "ai_error:budget"
 
     model = (
         _model_setting("GROQ_VISION_MODEL", GROQ_VISION_MODEL)
@@ -596,79 +681,89 @@ def generate_reply_openai(
         {"role": "user",   "content": user_content},
     ]
     answers: list[str] = []
+    started = time.monotonic()
+    finish_reason = None
 
     try:
         # An answer that runs into the token budget comes back with
         # finish_reason="length".  Ask for the rest of it instead of serving a
         # reply that stops mid-sentence.
         for request_index in range(_MAX_REPLY_REQUESTS):
-            response = _create_completion(
+            response = await _create_completion(
                 model=model,
                 messages=conversation,
                 with_tools=wants_action and request_index == 0,
             )
             choice = response.choices[0]
+            finish_reason = choice.finish_reason
 
             # ── Safety filter: model declined via finish_reason ────────────
-            if choice.finish_reason == "content_filter":
-                print(f"[AI] Content filter finish_reason for user {user_id}")
+            if finish_reason == "content_filter":
+                logging.warning("AI", f"Content filter blocked a reply for user {user_id}")
                 return "ai_error:safety"
 
             # ── Handle AI Actions tool call ────────────────────────────────
-            if wants_action and choice.finish_reason == "tool_calls" and choice.message.tool_calls:
-                return _action_payload(choice.message.tool_calls[0])
+            tool_calls = getattr(choice.message, "tool_calls", None)
+            if wants_action and finish_reason == "tool_calls" and tool_calls:
+                if len(tool_calls) > 1:
+                    logging.warning(
+                        "AI",
+                        f"Model requested {len(tool_calls)} actions; running only the first",
+                    )
+                payload = _action_payload(tool_calls[0])
+                logging.info(
+                    "AI",
+                    f"guild={guild_id} user={user_id} action={payload.get('action')} "
+                    f"ms={int((time.monotonic() - started) * 1000)}",
+                )
+                return payload
 
             text = (choice.message.content or "").strip()
             if text:
                 answers.append(text)
 
-            if choice.finish_reason != "length":
+            if finish_reason != "length":
                 break
             if text:
                 conversation.append({"role": "assistant", "content": text})
                 conversation.append({"role": "user", "content": _CONTINUE_PROMPT})
 
-    except RateLimitError as e:
+    except AINotConfigured:
+        logging.error("AI", "GROQ_API_KEY is not configured — AI replies are disabled")
+        return "ai_error:not_configured"
+
+    except RateLimitError as error:
         # 429 — do NOT reset the client (it's fine), do NOT retry.
         # Apply a per-user cooldown so the next call returns immediately
         # instead of hitting the API again and worsening the rate limit.
         retry_after = _RL_COOLDOWN_SECS
         # Honour the Retry-After header if the API returned one
         try:
-            header_val = getattr(e.response, "headers", {}).get("retry-after")
+            header_val = getattr(error.response, "headers", {}).get("retry-after")
             if header_val:
                 retry_after = max(int(float(header_val)), retry_after)
-        except Exception:
+        except Exception:  # noqa: BLE001 - header parsing is best effort
             pass
         _rl_cooldown[user_id] = time.monotonic() + retry_after
-        print(f"[AI] Rate limited — user {user_id} cooling down for {retry_after}s")
+        logging.warning(
+            "AI", f"Rate limited — user {user_id} cooling down for {retry_after}s"
+        )
         return f"ai_error:rate_limit:{retry_after}"
 
-    except (NotFoundError, APIConnectionError, APIStatusError) as e:
-        # Check whether this is a content / safety filter rejection before
-        # treating it as a generic connection problem.
-        is_safety = False
-        try:
-            body     = getattr(e, "body", None) or {}
-            err_code = (body.get("error", {}) or {}).get("code", "") if isinstance(body, dict) else ""
-            err_str  = str(e).lower()
-            if err_code in ("content_filter", "content_policy_violation", "moderated") or \
-               any(k in err_str for k in ("content_filter", "safety", "content_policy", "moderated")):
-                is_safety = True
-        except Exception:
-            pass
-
-        if is_safety:
-            print(f"[AI] Safety filter triggered for user {user_id}")
+    except (NotFoundError, APIConnectionError, APIStatusError) as error:
+        if _is_safety_error(error):
+            logging.warning("AI", f"Safety filter triggered for user {user_id}")
             return "ai_error:safety"
-
         _reset_client()
-        print(f"[AI] API error: {e}")
+        logging.error("AI", f"Provider error for guild {guild_id}: {error}")
         return "ai_error:generic"
 
-    except Exception as e:
+    except asyncio.CancelledError:
+        raise
+
+    except Exception as error:  # noqa: BLE001 - one bad reply must not kill the handler
         _reset_client()
-        print(f"[AI] Unexpected error: {e}")
+        logging.error("AI", f"Unexpected AI error for guild {guild_id}: {error!r}")
         return "ai_error:generic"
 
     clean = " ".join(answers).strip()
@@ -678,12 +773,21 @@ def generate_reply_openai(
         # canned line instead of leaving the user with nothing.
         reply = _FALLBACK_REPLIES[_fallback_idx % len(_FALLBACK_REPLIES)]
         _fallback_idx += 1
-        print(f"[AI] Empty completion for user {user_id} — sending fallback reply")
+        logging.warning("AI", f"Empty completion for user {user_id} — fallback reply")
         return reply
 
-    update_user_memory(user_id, message, role=username)
-    update_user_memory(user_id, clean,   role="Niko")
-    adjust_favorability(user_id, delta=1)
-
+    await ai_memory.record_turn(
+        guild_id,
+        user_id,
+        message,
+        clean,
+        user_label=username,
+        assistant_label=ai_name,
+    )
+    logging.info(
+        "AI",
+        f"guild={guild_id} user={user_id} model={model} finish={finish_reason} "
+        f"chars={len(clean)} ms={int((time.monotonic() - started) * 1000)}",
+    )
     return clean
 

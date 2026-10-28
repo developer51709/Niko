@@ -1,5 +1,6 @@
 from utils.nsfw_api import check_message_images
 from utils.premium import is_premium
+from discord.ext import tasks
 
 from .views import *
 
@@ -39,12 +40,96 @@ class AutoMod(commands.Cog):
         # apart from everyone else's messages. Kept for the process lifetime:
         # one int per channel ever censored, and an empty set costs nothing.
         self._censor_webhook_ids: set[int] = set()
+        self._prune_caches.start()
 
     def utils(self):
         return self.bot.get_cog("ModerationUtils")
 
     def get_cfg(self, guild_id: int):
         return self.utils().get_guild_config(guild_id)
+
+    # ─── CACHE PRUNING ─────────────────────────────
+
+    # The detection caches only ever look back one configured interval, and no
+    # interval can exceed an hour, so anything older than that is unreachable.
+    _CACHE_RETENTION = 3600
+
+    def cog_unload(self):
+        self._prune_caches.cancel()
+
+    @tasks.loop(minutes=15)
+    async def _prune_caches(self):
+        self.prune_caches()
+
+    def prune_caches(self) -> None:
+        """Forget aged-out and left-behind entries in the detection caches.
+
+        Each bucket drops its own aged-out timestamps as it is used, but the
+        bucket itself — one per member ever seen, in one dict per server ever
+        seen — stayed in memory for the life of the process.
+        """
+        now = time.time()
+        cutoff = now - self._CACHE_RETENTION
+        self._prune_bucket_map(self._msg_history, cutoff)
+        self._prune_bucket_map(self._ext_app_history, cutoff)
+        for guild_id in list(self._join_history):
+            remaining = [t for t in self._join_history[guild_id] if t >= cutoff]
+            if remaining:
+                self._join_history[guild_id] = remaining
+            else:
+                self._join_history.pop(guild_id, None)
+        for guild_id in list(self._interaction_history):
+            remaining = [
+                entry for entry in self._interaction_history[guild_id]
+                if entry[1] >= cutoff
+            ]
+            if remaining:
+                self._interaction_history[guild_id] = remaining
+            else:
+                self._interaction_history.pop(guild_id, None)
+        for guild_id in list(self._nuke_history):
+            per_user = self._nuke_history[guild_id]
+            for user_id in list(per_user):
+                per_action = per_user[user_id]
+                for action_key in list(per_action):
+                    remaining = [t for t in per_action[action_key] if t >= cutoff]
+                    if remaining:
+                        per_action[action_key] = remaining
+                    else:
+                        per_action.pop(action_key, None)
+                if not per_action:
+                    per_user.pop(user_id, None)
+            if not per_user:
+                self._nuke_history.pop(guild_id, None)
+        # Both dedup guards hold nothing but an expiry, so expired ones simply go.
+        for guild_id in list(self._raid_actioned):
+            if self._raid_actioned[guild_id] < now:
+                self._raid_actioned.pop(guild_id, None)
+        for guild_id in list(self._nuke_actioned):
+            actioned = self._nuke_actioned[guild_id]
+            for user_id in list(actioned):
+                if actioned[user_id] < now:
+                    actioned.pop(user_id, None)
+            if not actioned:
+                self._nuke_actioned.pop(guild_id, None)
+
+    @staticmethod
+    def _prune_bucket_map(cache: dict, cutoff: float) -> None:
+        """Prune a ``{guild_id: {user_id: [timestamp]}}`` cache in place."""
+        for guild_id in list(cache):
+            per_user = cache[guild_id]
+            for user_id in list(per_user):
+                remaining = [t for t in per_user[user_id] if t >= cutoff]
+                if remaining:
+                    per_user[user_id] = remaining
+                else:
+                    per_user.pop(user_id, None)
+            if not per_user:
+                cache.pop(guild_id, None)
+
+    @_prune_caches.before_loop
+    async def _before_prune(self):
+        await self.bot.wait_until_ready()
 
     # ─── INVITE CACHE ─────────────────────────────
 
@@ -862,12 +947,15 @@ class AutoMod(commands.Cog):
 
     # ─── SETTINGS COMMAND ─────────────────────────
 
-    @commands.command(
+    @commands.hybrid_command(
         name="automod",
-        help="{ 'en': 'Open the AutoMod settings panel ☕🛡️', 'de': 'AutoMod-Einstellungen' }"
+        description="Open the AutoMod settings panel",
+        help="{ 'en': 'Open the AutoMod settings panel.', 'de': 'Öffne das AutoMod-Einstellungsmenü.', 'es': 'Abre el panel de ajustes de AutoMod.' }",
     )
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def automod_settings(self, ctx):
+        """Hybrid like every other settings command, so `/automod` works too."""
         panel = _build_panel(self, ctx.guild.id, "overview", ctx.guild)
         await ctx.send(view=panel, allowed_mentions=ALLOWED_MENTIONS)
 

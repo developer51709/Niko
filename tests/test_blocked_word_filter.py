@@ -71,7 +71,9 @@ def make_utils(blocked_words=None, action=None, mask=None, presets=None) -> Mode
     if mask is not None:
         stored["badwords_mask"] = mask
     cog = ModerationUtils.__new__(ModerationUtils)
-    cog.bot = SimpleNamespace(loop=_ClosedLoop())
+    # `get_cog` is how the panel's settings-change logging reaches the
+    # ServerLogger cog; returning None keeps that a no-op in these tests.
+    cog.bot = SimpleNamespace(loop=_ClosedLoop(), get_cog=lambda name: None)
     cog.config = {str(GUILD_ID): stored}
     cog._stale_entries = set()
     cog._blocked_patterns = {}
@@ -897,7 +899,7 @@ def test_the_config_payload_carries_the_preset_catalog():
             patch.object(dashboard_routes, "get_runtime_moderation_config", lambda guild_id: _Cog().get_guild_config(guild_id)), \
             patch.object(dashboard_routes, "_get_runtime_server_config", lambda guild_id: {}), \
             patch.object(dashboard_routes, "_guild_premium_view", lambda guild_id: {"active": False}), \
-            patch.object(dashboard_routes, "get_ai_config", lambda guild_id: {}), \
+            patch.object(dashboard_routes, "cached_ai_config", lambda guild_id: {}), \
             patch.object(dashboard_routes, "get_runtime_level_config", lambda guild_id: {}):
         with app.test_request_context():
             payload = dashboard_routes.api_guild_config.__wrapped__.__wrapped__(str(GUILD_ID)).get_json()
@@ -1098,7 +1100,7 @@ async def test_removing_a_word_refreshes_the_panel():
     utils = make_utils(["ass", "kicked"])
     message = _FakeMessage()
     interaction = _FakeInteraction(message=message)
-    await RemoveWordButton(utils, GUILD_ID).callback(interaction)
+    await RemoveWordButton(utils, GUILD_ID, "en").callback(interaction)
     assert interaction.response.sent
 
     select = _choose(RemoveWordSelect(utils, GUILD_ID, utils.get_blocked_words(GUILD_ID), message), ["ass"])
@@ -1114,7 +1116,7 @@ async def test_clearing_the_word_list_asks_for_confirmation_first():
     utils = make_utils(["ass", "kicked"])
     message = _FakeMessage()
     prompt = _FakeInteraction(message=message)
-    await ClearWordsButton(utils, GUILD_ID).callback(prompt)
+    await ClearWordsButton(utils, GUILD_ID, "en").callback(prompt)
     assert prompt.response.sent
     assert utils.get_blocked_words(GUILD_ID) == ["ass", "kicked"], "nothing is dropped before the confirm"
 
@@ -1132,8 +1134,8 @@ async def test_the_panel_refuses_a_member_without_manage_server():
         SectionSelect(utils, GUILD_ID, "overview", "en"),
         _choose(PresetSelect(utils, GUILD_ID, "en"), ["sexual"]),
         _choose(ResponseSelect(utils, GUILD_ID, "en"), ["censor"]),
-        AddWordButton(utils, GUILD_ID),
-        ClearWordsButton(utils, GUILD_ID),
+        AddWordButton(utils, GUILD_ID, "en"),
+        ClearWordsButton(utils, GUILD_ID, "en"),
     ):
         interaction = _FakeInteraction(manage_guild=False)
         await component.callback(interaction)
