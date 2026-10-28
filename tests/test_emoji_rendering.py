@@ -139,10 +139,18 @@ def test_retired_owner_and_developer_emojis_are_removed():
     assert "badge_owner" in names
 
 
+def _info_cards_source() -> str:
+    """Every module of the info cog: its cards are split by subject."""
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src" / "cogs" / "info").glob("*.py"))
+    )
+
+
 def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
     config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
     web = (ROOT / "web" / "src" / "data" / "botEmojis.ts").read_text(encoding="utf-8")
-    cog = (ROOT / "src" / "cogs" / "info" / "cog.py").read_text(encoding="utf-8")
+    cog = _info_cards_source()
     build = (ROOT / "scripts" / "build-badge-art.mjs").read_text(encoding="utf-8")
     assets = ROOT / "src" / "assets" / "emojis"
 
@@ -161,7 +169,7 @@ def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
     assert "partner_badge" in names
     assert (assets / "partner_badge.png").exists()
     assert 'partner_badge: "badges/partner.svg"' in build
-    assert '(("partner",),                                    "partner_badge")' in cog
+    assert re.search(r'\(\("partner",\),\s*"partner_badge"\)', cog)
 
 
 def test_the_react_markdown_writes_the_emoji_name_out_when_it_cannot_load():

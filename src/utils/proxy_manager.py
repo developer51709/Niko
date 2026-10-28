@@ -25,8 +25,6 @@ While the proxy is active a background task performs exactly one tiny
 moment that probe confirms the direct IP is no longer rate limited (any
 non-429 response), the proxy is disabled again so the Webshare 1 GB/month
 bandwidth allowance is only consumed while it is genuinely needed.
-
-Webshare proxy failover is independent of standby backend failover.
 """
 
 from __future__ import annotations
@@ -41,6 +39,7 @@ import aiohttp
 import requests
 
 from utils import logging
+from utils.cloudflare import interstitial_signature
 
 # ── Config ───────────────────────────────────────────────────────────────────
 WEBSHARE_API_KEY_ENV = "WEBSHARE_API_KEY"
@@ -149,16 +148,13 @@ async def cloudflare_throttle(response) -> str | None:
     Discord serves every response through Cloudflare, so ``Server: cloudflare``
     and ``CF-Ray`` prove nothing on their own.  Only Cloudflare's block/challenge
     page — or its ``cf-mitigated`` header, or a numeric ``error code: 10xx`` — is a
-    throttle, and that is the event a different egress IP clears.  A 429 is a
-    throttle rather than a denied egress, which is why the standby manager leaves
-    its recovery to this proxy failover.
+    throttle, and that is the event a different egress IP clears.
     """
     if getattr(response, "status", None) != 429:
         return None
-    from utils.standby_manager import StandbyFailoverManager
 
     body = await _read_response_text(response)
-    return StandbyFailoverManager.cloudflare_interstitial(response, body)
+    return interstitial_signature(response, body)
 
 
 class WebshareProxyManager:
@@ -190,8 +186,6 @@ class WebshareProxyManager:
         """Bind to the bot's HTTP client and install the global-429 hook.
 
         Synchronous on purpose so it can run at import time in ``bot.py``.
-        The standby manager exclusively wraps ``static_login`` and installs
-        this manager's request hook after the aiohttp session is created.
         Returns True when proxy failover is armed.
         """
         if not self.api_key:
@@ -212,10 +206,8 @@ class WebshareProxyManager:
         session = self._current_session()
         if session is not None:
             self._install_hook(session)
-        # StandbyFailoverManager exclusively owns static_login so it can
-        # prioritize standby handoff before falling back to this proxy manager.
-        # It attaches its aiohttp hook during static_login; attach again after
-        # login to install this manager's hook for subsequent requests.
+        # The session only exists once login starts, so ``attach`` is called again
+        # after login to hook the live session for subsequent requests.
         self._attached_bot_http = bot.http
         logging.info("ProxyManager", "Global rate-limit failover armed.")
         return True

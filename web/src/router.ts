@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -35,6 +35,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/data-removal") return "data-removal";
   if (path === "/community") return "community";
   if (path === "/donate" || path.startsWith("/donate")) return "donate";
+  if (path === "/billing/gift") return "gift";
   if (path === "/billing" || path.startsWith("/billing/")) return "billing";
   if (path === "/transcript" || path.startsWith("/transcript/")) return "transcript";
   if (path === "/changelog") return "changelog";

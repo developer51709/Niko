@@ -9,6 +9,7 @@ import { GuildLeaderboardPage } from "./pages/GuildLeaderboardPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
 import { BillingPage } from "./pages/BillingPage";
+import { GiftPremiumPage } from "./pages/GiftPremiumPage";
 import { LegalPage } from "./pages/LegalPage";
 import { DataRemovalPage } from "./pages/DataRemovalPage";
 import { TranscriptPage } from "./pages/TranscriptPage";
@@ -58,6 +59,7 @@ export function App() {
   else if (page === "community") pageContent = <LegalPage type="community" />;
   else if (page === "donate") pageContent = <DonatePage />;
   else if (page === "billing") pageContent = <BillingPage />;
+  else if (page === "gift") pageContent = <GiftPremiumPage />;
   else if (page === "transcript") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     pageContent = <TranscriptPage transcriptId={pathParts[1] || ""} />;

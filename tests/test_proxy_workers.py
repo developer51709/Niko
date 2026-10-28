@@ -137,11 +137,6 @@ class FakeProxyWorkers:
         return self.response
 
 
-class FakeFailover:
-    def cloudflare_interstitial(self, response):
-        return None
-
-
 class ProxyWorkerRegistryTests(unittest.TestCase):
     def test_registry_refuses_ephemeral_sqlite_storage(self):
         bot = SimpleNamespace(cxn=SimpleNamespace(db_type="sqlite"))
@@ -374,7 +369,7 @@ class DiscordProxyDashboardIntegrationTests(unittest.TestCase):
     def test_dashboard_discord_request_prefers_a_worker(self):
         proxied = FakeResponse(content=b'{"id":"1"}', headers={"Content-Type": "application/json"})
         proxy = FakeProxyWorkers(response=proxied)
-        bot = SimpleNamespace(http=None, standby_failover=FakeFailover(), discord_proxy=proxy)
+        bot = SimpleNamespace(http=None, discord_proxy=proxy)
 
         with patch.object(runtime, "_discord_bot", bot), patch.object(discord_api.req, "get") as direct:
             response = discord_api.discord_request("GET", "https://discord.com/api/v10/users/@me")
@@ -386,7 +381,7 @@ class DiscordProxyDashboardIntegrationTests(unittest.TestCase):
     def test_dashboard_discord_request_falls_back_when_no_worker_can_relay(self):
         direct_response = FakeResponse(content=b'{"id":"2"}')
         proxy = FakeProxyWorkers(error=RuntimeError("workers unavailable"))
-        bot = SimpleNamespace(http=None, standby_failover=FakeFailover(), discord_proxy=proxy)
+        bot = SimpleNamespace(http=None, discord_proxy=proxy)
 
         with patch.object(runtime, "_discord_bot", bot), patch.object(
             discord_api.req, "get", return_value=direct_response

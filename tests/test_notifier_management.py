@@ -1233,7 +1233,6 @@ class BotHandoffTests(unittest.TestCase):
                 proxy="http://webshare:secret@127.0.0.1:8080",
                 user_agent="DiscordBot (https://discord.com, 2.7.1)",
             ),
-            standby_failover=SimpleNamespace(active_origin=None),
         )
         client = app.test_client()
         with client.session_transaction() as session:

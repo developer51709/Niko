@@ -3,8 +3,11 @@ from .. import server as _server
 
 globals().update({name: value for name, value in vars(_server).items() if not name.startswith("__")})
 
+import ipaddress
 import secrets
+import socket
 import time
+from urllib.parse import urlsplit
 
 import requests
 
@@ -17,28 +20,68 @@ from utils.proxy_worker_registry import (
     remove_proxy_worker,
     set_proxy_routing_enabled,
 )
-from utils.standby_failover import standby_origin
-
-# Management belongs to the primary exactly like standby management. A standby
-# forwards these requests instead of storing a registry it cannot control.
-from .standby_routes import (
-    _forward_control_to_primary,
-    _is_own_origin,
-    _validate_public_https_origin,
-)
 
 
 def _owner_only():
-    """Proxy-worker controls are owner-only, like standby controls."""
+    """Proxy-worker controls are owner-only, like every deployment control."""
     if _current_staff_role() != "owner":
         return jsonify({"error": "Proxy worker management is restricted to the bot owner."}), 403
     return None
 
 
-def _origin_error(error):
-    """The standby validator owns URL safety; label its message for this page."""
-    message = str(error)
-    return message.replace("Standby", "Proxy worker").replace("standby", "proxy worker")
+def _origin_key(value):
+    """Normalize a host or origin to ``host:port`` so defaults cannot differ."""
+    parts = urlsplit(value)
+    if not parts.hostname:
+        parts = urlsplit(f"https://{value}")
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return f"{(parts.hostname or '').lower()}:{port or (443 if parts.scheme != 'http' else 80)}"
+
+
+def _validate_public_https_origin(raw_url):
+    """Validate a worker URL: HTTPS, public host, no credentials or path."""
+    if not isinstance(raw_url, str) or len(raw_url) > 300:
+        raise ValueError("Enter a valid HTTPS worker origin.")
+    parts = urlsplit(raw_url.strip().rstrip("/"))
+    try:
+        parsed_port = parts.port
+    except ValueError as exc:
+        raise ValueError("Worker URL has an invalid port.") from exc
+    if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+        raise ValueError("Worker URL must be HTTPS and must not contain embedded credentials.")
+    if parts.path or parts.query or parts.fragment:
+        raise ValueError("Enter only the HTTPS origin, without a path or query string.")
+    hostname = parts.hostname.rstrip(".").lower()
+    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith((".localhost", ".local", ".internal")):
+        raise ValueError("Worker URL must use a public hostname.")
+    try:
+        addresses = [ipaddress.ip_address(hostname)]
+    except ValueError:
+        try:
+            addresses = [
+                ipaddress.ip_address(item[4][0])
+                for item in socket.getaddrinfo(hostname, parsed_port or 443, type=socket.SOCK_STREAM)
+            ]
+        except (OSError, ValueError) as exc:
+            raise ValueError("Worker hostname could not be resolved.") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("Worker URL must resolve only to public IP addresses.")
+    if parsed_port is not None and not 1 <= parsed_port <= 65535:
+        raise ValueError("Worker URL has an invalid port.")
+    return f"https://{parts.netloc}"
+
+
+def _is_own_origin(url):
+    """Reject registering this server's own origin, which would proxy to itself."""
+    try:
+        own_origins = {_origin_key(public_base_url())}
+    except (TypeError, ValueError):
+        own_origins = set()
+    own_origins.add(_origin_key(request.host))
+    return _origin_key(url) in own_origins
 
 
 def _manager(bot, rows=None, enabled=None):
@@ -145,9 +188,6 @@ def _merge_telemetry(rows, probes):
 @app.route("/api/staff/proxy-workers", methods=["GET"])
 @require_auth
 def api_staff_proxy_workers():
-    forwarded = _forward_control_to_primary()
-    if forwarded is not None:
-        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -199,9 +239,6 @@ def api_staff_proxy_workers():
 @require_auth
 @require_csrf
 def api_add_staff_proxy_worker():
-    forwarded = _forward_control_to_primary()
-    if forwarded is not None:
-        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -213,9 +250,9 @@ def api_add_staff_proxy_worker():
     if not name or len(name) > 60:
         return jsonify({"error": "Proxy worker name must be between 1 and 60 characters."}), 400
     try:
-        url = standby_origin(_validate_public_https_origin(body.get("url")))
+        url = _validate_public_https_origin(body.get("url"))
     except ValueError as exc:
-        return jsonify({"error": _origin_error(exc)}), 400
+        return jsonify({"error": str(exc)}), 400
     if _is_own_origin(url):
         return jsonify({"error": "A proxy worker cannot use this server's own origin."}), 400
 
@@ -263,9 +300,6 @@ def api_add_staff_proxy_worker():
 @require_auth
 @require_csrf
 def api_remove_staff_proxy_worker(worker_id):
-    forwarded = _forward_control_to_primary()
-    if forwarded is not None:
-        return forwarded
     error = _owner_only()
     if error:
         return error
@@ -286,9 +320,6 @@ def api_remove_staff_proxy_worker(worker_id):
 @require_auth
 @require_csrf
 def api_control_staff_proxy_routing():
-    forwarded = _forward_control_to_primary()
-    if forwarded is not None:
-        return forwarded
     error = _owner_only()
     if error:
         return error

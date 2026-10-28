@@ -17,7 +17,6 @@ from utils.gateway import patch_identify
 from utils.interaction_endpoint import install_interaction_endpoint
 from utils.interaction_priority import install_interaction_priority
 from utils.proxy_manager import WebshareProxyManager
-from utils.standby_manager import StandbyFailoverManager
 from utils.discord_proxy import DiscordProxyManager
 from utils import logging
 from events.on_ready import handle_ready
@@ -51,12 +50,10 @@ bot.remove_command("help")
 bot.cxn: database.SQLitePool | database.MongoPool | None = None
 
 # ── REST egress failover ─────────────────────────────────────────────────────
-# Standby owns startup login interception and falls back to Webshare only if
-# no healthy standby can be selected.
+# Webshare is the only egress fallback: it arms itself the moment Discord
+# globally rate limits this IP and disables itself once the direct IP recovers.
 WEBSHARE_API_KEY = os.getenv("WEBSHARE_API_KEY")
 bot.proxy_manager: WebshareProxyManager | None = WebshareProxyManager(WEBSHARE_API_KEY)
-bot.standby_failover = StandbyFailoverManager()
-bot.standby_failover.attach(bot)
 # Optional Discord REST egress through registered Cloudflare workers. The hook
 # is installed now so registry changes at startup take effect before login, and
 # the manager stays disabled until the owner enables routing.
@@ -87,37 +84,15 @@ bot.tree.interaction_check = _slash_blacklist_check
 
 
 # ── Events ───────────────────────────────────────────────────────────────────
-async def _refresh_handoff_caches(bot):
-    """Refresh database-backed caches before the bot resumes serving events."""
-    from events.startup.economy import preload_economy_cache
-    from utils.blacklist_manager import BlacklistManager
-
-    manager = BlacklistManager()
-    manager._loaded = False
-    await manager.reload()
-    await preload_economy_cache(bot)
-
-
-async def _on_gateway_ready(bot):
-    handoff = getattr(bot, "gateway_handoff", None)
-    if handoff is not None and handoff.refresh_caches_on_ready:
-        await _refresh_handoff_caches(bot)
-        handoff.refresh_caches_on_ready = False
-    await handle_ready(bot)
-
-
 @bot.event
 async def on_ready():
     try:
-        await _on_gateway_ready(bot)
         # A reconnect can replace discord.py's aiohttp session; re-attaching is
         # idempotent and keeps worker routing available on the new session.
         proxy = getattr(bot, "discord_proxy", None)
         if proxy is not None:
             proxy.attach(bot)
-        handoff = getattr(bot, "gateway_handoff", None)
-        if handoff is not None:
-            handoff.mark_connected()
+        await handle_ready(bot)
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
 
@@ -157,29 +132,15 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
-        from utils.gateway_failover import GatewayHandoff
-        from utils.standby_failover import standby_mode as _standby_mode
-
-        standby_mode = _standby_mode()
-        handoff = GatewayHandoff(bot, active=not standby_mode)
-        bot.gateway_handoff = handoff
-
-        # Load standby endpoints on the primary and optional proxy workers on
-        # both roles before Discord login, so the wrapped static_login can
-        # switch egress if the host is challenged. Neither registry is required
-        # for the bot to start.
+        # Load the shared registry before Discord login so owner-managed proxy
+        # workers are available for the first REST call. It is optional: without
+        # MongoDB the bot keeps its normal egress.
         if os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
             except Exception as e:
                 logging.warning("Database", f"Could not connect the shared database before login: {e}")
             else:
-                if not standby_mode:
-                    try:
-                        from webapp.routes.standby_routes import initialize_standby_registry
-                        await initialize_standby_registry(bot)
-                    except Exception as e:
-                        logging.warning("StandbyFailover", f"Could not preload standby instances: {e}")
                 try:
                     from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
                     await initialize_proxy_worker_registry(bot)
@@ -187,12 +148,11 @@ if __name__ == "__main__":
                     logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
         if bot.discord_proxy is not None:
             bot.discord_proxy.attach(bot)
-        if not standby_mode and bot.proxy_manager is not None:
+        if bot.proxy_manager is not None:
             bot.proxy_manager.attach(bot)
 
-        if not standby_mode:
-            start_api_server(bot)
-            logging.info("Startup", "Dashboard API started alongside the bot.")
+        start_api_server(bot)
+        logging.info("Startup", "Dashboard API started alongside the bot.")
 
         device_choice = STATUS_DEVICE
         patch_identify(device_choice)
@@ -207,8 +167,6 @@ if __name__ == "__main__":
                 pass
 
         try:
-            # Login, initialize the shared database, and load all cogs before
-            # gateway ownership is enabled, so the standby is warm on demand.
             await bot.login(str(TOKEN))
             # Slash commands, buttons, selects and modals answer through the
             # interaction callback, which Discord never counts against the global
@@ -227,11 +185,12 @@ if __name__ == "__main__":
             await init_database(bot)
             await load_cogs(bot)
             await preload_economy_cache(bot)
+            # on_ready skips these three steps; they already ran before the
+            # gateway connected.
             bot._pre_gateway_initialized = True
             if bot.discord_proxy is not None:
-                # A standby that takes the gateway must also use the owner's
-                # worker egress, so both roles reload the shared registry once
-                # the database pool is live.
+                # The registry is database-backed, so reload it once the pool is
+                # live and hook the session discord.py created during login.
                 if getattr(getattr(bot, "cxn", None), "db_type", None) == "mongodb":
                     try:
                         from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
@@ -240,50 +199,12 @@ if __name__ == "__main__":
                         logging.warning("DiscordProxy", f"Could not load proxy workers after login: {e}")
                 bot.discord_proxy.attach(bot)
             if bot.proxy_manager is not None:
-                if not standby_mode:
-                    bot.proxy_manager.attach(bot)
+                bot.proxy_manager.attach(bot)
                 await bot.proxy_manager.prefetch()
-            if standby_mode:
-                from utils.standby_failover import serve_standby
-                standby_manager = bot.standby_failover
-                standby_manager.attach(bot)
-                # A standby never initiates failover. It accepts signed handoff
-                # commands only, so a blocked request there can neither promote
-                # it nor hand its gateway to another registered instance.
-                standby_manager.select_failover("off")
-                from webapp import app as web_app, configure_bot
-                configure_bot(bot)
-                server = await serve_standby(
-                    os.getenv("STANDBY_HOST", "0.0.0.0"),
-                    int(os.getenv("PORT", os.getenv("STANDBY_PORT", "10000"))),
-                    os.getenv("STANDBY_TLS_CERT") or None,
-                    os.getenv("STANDBY_TLS_KEY") or None,
-                    os.getenv("DISCORD_BOT_TOKEN", ""),
-                    os.getenv("SESSION_SECRET", ""),
-                    handoff,
-                    web_app=web_app,
-                )
-                logging.info("StandbyFailover", "Standby backend is warm; gateway remains inactive until signed handoff.")
-                async with server:
-                    await handoff.run()
-            else:
-                if bot.standby_failover is not None:
-                    await bot.standby_failover.check_direct_egress()
-                    if bot.standby_failover.active_origin is None and bot.standby_failover.direct_egress_verified:
-                        # This instance is about to connect directly, so a
-                        # standby still holding an earlier failover must release
-                        # the gateway before two live sessions exist. This is
-                        # skipped while this instance cannot reach Discord: the
-                        # standby then owns the only working gateway.
-                        await bot.standby_failover.stand_down_standbys()
-                await handoff.run()
+            await bot.connect()
         except Exception as e:
             logging.error("Startup", f"Error connecting to Discord: {e}")
         finally:
-            try:
-                await handoff.shutdown()
-            except Exception:
-                pass
             try:
                 await bot.close()
             except Exception:

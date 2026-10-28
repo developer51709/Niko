@@ -73,9 +73,9 @@ The result is a companion that feels native to Discord — fast slash commands, 
 ### Dashboard and operations
 - Discord OAuth dashboard for server settings, activity, and moderation insights
 - Live command directory, documentation, changelog, and public profile cards
-- Staff workspace for team applications, server notes, standby management, and owner-only billing
+- Staff workspace for team applications, server notes, and owner-only billing
 - Optional Discord REST proxy workers with live latency, errors, and request telemetry
-- Interaction endpoint support, standby failover, and Discord-aware proxy recovery
+- Interaction endpoint support and Discord-aware proxy recovery
 
 ---
 
@@ -140,7 +140,7 @@ pip install -r requirements.txt
 
 ### 2. Configure the environment
 
-Set these variables in your hosting dashboard, shell, or a local `src/.env` file. `DISCORD_BOT_TOKEN` is required; the dashboard needs OAuth credentials.
+Copy `env.example` from the repository root to `src/.env` (the bot loads that path) or set the same variables in your hosting dashboard. Every variable has a comment there. `DISCORD_BOT_TOKEN` is required; the dashboard needs OAuth credentials.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -204,7 +204,7 @@ The dashboard's live command directory is the source of truth for the current bu
 | [Setup](docs/setup.md) | Environment variables, first run, and interactions endpoint |
 | [API](docs/api.md) | Public and authenticated routes, plus endpoint conventions |
 | [Dashboard](docs/dashboard.md) | Dashboard structure and server configuration |
-| [Maintenance](docs/maintenance.md) | Updates, backups, proxy behavior, and standby failover |
+| [Maintenance](docs/maintenance.md) | Updates, backups, and proxy behavior |
 | [AI providers](docs/ai-providers.md) | OpenAI-compatible provider configuration |
 | [FAQ](docs/faq.md) | Common questions and troubleshooting |
 | [Privacy policy](docs/privacy-policy.md) | What Niko stores and how it is used |

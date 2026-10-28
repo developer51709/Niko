@@ -30,8 +30,6 @@ import type {
   BlacklistAppealStatus,
   DataRemovalOverview,
   StaffDataRemovalRequest,
-  StandbyFailoverStatus,
-  StandbyInstance,
   ProxyWorkersResponse,
   ProxyWorkerRouting,
   NotifierConfig,
@@ -97,10 +95,6 @@ export const getTeamProfileCard = (type: string, url: string, signal?: AbortSign
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
 export const getStaffMembers = () => api<StaffManagementResponse>("/api/staff/members");
 export const manageStaffMember = (userId: string, body: { action: "assign" | "demote" | "suspend" | "lift"; role?: string; reason?: string }, csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/members/${encodeURIComponent(userId)}/manage`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
-export const getStaffStandbys = () => api<{ standbys: StandbyInstance[]; failover: StandbyFailoverStatus }>("/api/staff/standbys");
-export const controlStaffStandbyFailover = (body: { action: "mode"; mode: "auto" | "off" } | { action: "activate"; standby_id: string } | { action: "rotate" }, csrfToken?: string) => api<{ ok: boolean; failover: StandbyFailoverStatus }>("/api/staff/standbys/failover", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
-export const addStaffStandby = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean; standby: StandbyInstance }>("/api/staff/standbys", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
-export const removeStaffStandby = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/standbys/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const getStaffProxyWorkers = () => api<ProxyWorkersResponse>("/api/staff/proxy-workers");
 export const addStaffProxyWorker = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/proxy-workers", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
 export const removeStaffProxyWorker = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/proxy-workers/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });

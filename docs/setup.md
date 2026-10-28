@@ -18,7 +18,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment Variables
-Create a `.env` file or set the following environment variables:
+Copy `env.example` from the repository root to `src/.env` (loaded by `src/bot.py`) or set the variables in whatever secret store your host provides. The template lists every variable, grouped and commented; the ones worth knowing about first are below.
 - `DISCORD_BOT_TOKEN`: Your bot's secret token.
 - `DISCORD_PUBLIC_KEY` *(optional)*: Your application's **Public Key** from the Developer Portal. Required by the Interactions Endpoint URL (see below); the bot also reads it from the application object when it is unset, and caches what it read.
 - `DEVELOPMENT` *(optional)*: Set to `true`, `1`, `yes` or `on` for the public beta deployment. It selects the dedicated development status rotation in `src/config/status.py` and forces the command prefix to `!`, overriding server settings; leave unset or false for production behavior. Development instances also stop awarding XP and stop recording message activity (`src/config/environment.py`), so running one against production's MongoDB cannot overwrite live levels or double-count the dashboard.

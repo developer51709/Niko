@@ -26,6 +26,10 @@ CRYPTO_CURRENCIES = ("USDT", "ETH", "BTC", "BNB", "LTC", "DOGE", "TRX", "XMR")
 PAYMENT_LIFETIME_MINUTES = 60
 MAX_STAFF_GRANT_MONTHS = 12
 
+#: Gift terms a page may ask for. The amount is always derived from these, never
+#: from the request, so a browser cannot buy a year for the price of a month.
+GIFT_MONTH_OPTIONS = (1, 3, 6, 12)
+
 
 def merchant_key() -> str:
     return (os.getenv("OXAPAY_API_KEY") or "").strip()
@@ -53,6 +57,15 @@ def _billing_bot():
 
 def _crypto_valid(value: str) -> bool:
     return str(value or "").upper() in CRYPTO_CURRENCIES
+
+
+def _gift_months(value) -> int | None:
+    """One of the offered gift terms, or None for anything else."""
+    try:
+        months = int(value)
+    except (TypeError, ValueError):
+        return None
+    return months if months in GIFT_MONTH_OPTIONS else None
 
 
 def _is_member(guild_id: int, user_id: int) -> bool:
@@ -114,6 +127,11 @@ def api_premium_plans():
         "perks": billing.PERKS,
         "renewal_notice_days": billing.PREMIUM_REMINDER_DAYS,
         "currencies": list(CRYPTO_CURRENCIES),
+        "gift": {
+            "enabled": payment_configured(),
+            "months": list(GIFT_MONTH_OPTIONS),
+            "price_cents_per_month": billing.PREMIUM_PRICE_CENTS,
+        },
         "methods": {
             "crypto": {"enabled": payment_configured()},
             "card": {"enabled": False, "message": "Card payments are coming soon."},
@@ -158,18 +176,119 @@ def api_premium_gift_targets():
         return jsonify({"error": "Your servers could not be loaded right now."}), 503
 
 
+@app.route("/api/premium/guilds")
+@require_auth
+def api_premium_guilds():
+    """Servers the member can upgrade, with their current premium state.
+
+    Buying needs Manage Server, so this reads the same OAuth manage list the
+    purchase route checks against; the gift page uses ``/gift-targets`` instead.
+    """
+    if _user_id() is None:
+        return jsonify({"error": "Not authenticated"}), 401
+    if _discord_bot is None:
+        return jsonify({"error": "The Discord bot is not available."}), 503
+    managed = managed_guild_ids()
+
+    async def collect():
+        bot = _billing_bot()
+        rows = []
+        for guild_id in managed:
+            guild = _discord_bot.get_guild(int(guild_id))
+            if guild is None:
+                continue
+            sub = await billing.get_subscription(bot.cxn, guild.id)
+            rows.append({
+                "id": str(guild.id),
+                "name": guild.name,
+                "icon_url": str(guild.icon.url) if getattr(guild, "icon", None) else None,
+                "member_count": int(getattr(guild, "member_count", 0) or 0),
+                "premium": billing.subscription_view(sub),
+            })
+        rows.sort(key=lambda item: (not (item["premium"] or {}).get("active"), item["name"].casefold()))
+        return rows
+
+    try:
+        return jsonify({"guilds": run_on_bot_loop(collect())})
+    except Exception:
+        return jsonify({"error": "Your servers could not be loaded right now."}), 503
+
+
 # ── Checkout ────────────────────────────────────────────────────────────────
+
+async def _create_checkout(
+    *, kind: str, guild_id: int, payer_id: int, pay_currency: str, months: int
+) -> dict:
+    """Quote one OxaPay payment and record it before the payer sees an address.
+
+    The amount is always the plan price times a whitelisted term, never a value
+    from the request body, so the browser cannot choose what it pays.
+    """
+    amount_cents = billing.PREMIUM_PRICE_CENTS * int(months)
+    order_id = f"premium_{kind}_{guild_id}_{uuid.uuid4().hex}"
+    guild = _discord_bot.get_guild(guild_id) if _discord_bot is not None else None
+    label = "gift" if kind == billing.KIND_GIFT else "subscription"
+    description = (
+        f"Niko Premium {label} - {guild.name if guild else guild_id} - "
+        f"{billing.price_label(amount_cents)}"
+    )
+    if int(months) > 1:
+        description += f" ({months} months)"
+
+    client = OxaPayClient(merchant_key())
+    result = await client.create_white_label(
+        amount=amount_cents / 100,
+        currency=billing.PREMIUM_CURRENCY,
+        pay_currency=pay_currency,
+        lifetime=PAYMENT_LIFETIME_MINUTES,
+        description=description,
+        callback_url=f"{public_base_url()}/api/premium/webhook",
+        order_id=order_id,
+    )
+    if not result.get("success"):
+        raise RuntimeError(result.get("message", "OxaPay could not start the payment."))
+
+    data = result.get("data") or {}
+    bot = _billing_bot()
+    await billing.record_payment(
+        bot.cxn,
+        order_id=order_id,
+        track_id=result["trackId"],
+        guild_id=guild_id,
+        payer_id=payer_id,
+        kind=kind,
+        months=int(months),
+        amount_cents=amount_cents,
+        currency=billing.PREMIUM_CURRENCY,
+        pay_currency=pay_currency,
+        address=data.get("address"),
+        pay_amount=data.get("pay_amount"),
+        qr_code=data.get("qr_code"),
+        expires_at=data.get("expired_at"),
+    )
+    payload = _checkout_payload(
+        result, order_id=order_id, amount_cents=amount_cents, months=int(months)
+    )
+    payload["guild_id"] = str(guild_id)
+    return payload
+
 
 @app.route("/api/premium/checkout", methods=["POST"])
 @require_auth
 @require_csrf
 def api_premium_checkout():
-    """Start a white-label crypto payment for one month of premium."""
+    """Start the one-month upgrade for a server the member manages.
+
+    Gifts do not come through here; ``/api/premium/gift/checkout`` owns that
+    flow so the membership rule and term options cannot drift apart.
+    """
     if not payment_configured():
         return jsonify({"error": "Payments are not configured yet."}), 503
     body = request.get_json(silent=True) or {}
     kind = str(body.get("kind") or billing.KIND_PURCHASE).strip().lower()
-    if kind not in {billing.KIND_PURCHASE, billing.KIND_GIFT}:
+    if kind == billing.KIND_GIFT:
+        return jsonify({"error": "Gifts are checked out from /billing/gift."}), 400
+    if kind != billing.KIND_PURCHASE:
         return jsonify({"error": "Choose a valid premium purchase type."}), 400
     pay_currency = str(body.get("pay_currency") or "").upper()
     if not _crypto_valid(pay_currency):
@@ -184,63 +303,101 @@ def api_premium_checkout():
     user_id = _user_id()
     if user_id is None:
         return jsonify({"error": "Not authenticated"}), 401
-
-    if kind == billing.KIND_PURCHASE:
-        if raw_guild not in managed_guild_ids():
-            return jsonify({"error": "You need Manage Server access to upgrade that server."}), 403
-    elif not _is_member(guild_id, user_id):
-        return jsonify({"error": "You have to be a member of that server to gift it premium."}), 403
-
-    amount_cents = billing.PREMIUM_PRICE_CENTS
-    order_id = f"premium_{kind}_{guild_id}_{uuid.uuid4().hex}"
-    guild = _discord_bot.get_guild(guild_id)
-    description = (
-        f"Niko Premium - {guild.name if guild else guild_id} - {billing.price_label(amount_cents)}"
-    )
-    if kind == billing.KIND_GIFT:
-        description += " (gift)"
+    if raw_guild not in managed_guild_ids():
+        return jsonify({"error": "You need Manage Server access to upgrade that server."}), 403
 
     try:
-        client = OxaPayClient(merchant_key())
-        result = run_on_bot_loop(client.create_white_label(
-            amount=amount_cents / 100,
-            currency=billing.PREMIUM_CURRENCY,
+        payload = run_on_bot_loop(_create_checkout(
+            kind=billing.KIND_PURCHASE,
+            guild_id=guild_id,
+            payer_id=user_id,
             pay_currency=pay_currency,
-            lifetime=PAYMENT_LIFETIME_MINUTES,
-            description=description,
-            callback_url=f"{public_base_url()}/api/premium/webhook",
-            order_id=order_id,
+            months=1,
         ))
     except Exception as error:
         return jsonify({"error": f"Could not start the payment: {error}"}), 503
-    if not result.get("success"):
-        return jsonify({"error": result.get("message", "OxaPay could not start the payment.")}), 502
+    return jsonify(payload)
 
-    data = result.get("data") or {}
-    async def store():
-        bot = _billing_bot()
-        await billing.record_payment(
-            bot.cxn,
-            order_id=order_id,
-            track_id=result["trackId"],
-            guild_id=guild_id,
-            payer_id=user_id,
-            kind=kind,
-            months=1,
-            amount_cents=amount_cents,
-            currency=billing.PREMIUM_CURRENCY,
-            pay_currency=pay_currency,
-            address=data.get("address"),
-            pay_amount=data.get("pay_amount"),
-            qr_code=data.get("qr_code"),
-            expires_at=data.get("expired_at"),
-        )
+
+@app.route("/api/premium/gift/checkout", methods=["POST"])
+@require_auth
+@require_csrf
+def api_premium_gift_checkout():
+    """Buy premium for a server the payer belongs to.
+
+    Gifting needs membership rather than Manage Server, and the term is one of
+    ``GIFT_MONTH_OPTIONS`` — both rules live here and nowhere else.
+    """
+    if not payment_configured():
+        return jsonify({"error": "Payments are not configured yet."}), 503
+    body = request.get_json(silent=True) or {}
+    months = _gift_months(body.get("months", 1))
+    if months is None:
+        offered = ", ".join(str(month) for month in GIFT_MONTH_OPTIONS)
+        return jsonify({"error": f"Choose one of these gift lengths: {offered} months."}), 400
+    pay_currency = str(body.get("pay_currency") or "").upper()
+    if not _crypto_valid(pay_currency):
+        return jsonify({"error": "That cryptocurrency is not available."}), 400
+    raw_guild = str(body.get("guild_id") or "").strip()
+    if not raw_guild.isdigit():
+        return jsonify({"error": "Choose a server first."}), 400
+    guild_id = int(raw_guild)
+    if _discord_bot is None or _discord_bot.get_guild(guild_id) is None:
+        return jsonify({"error": "Niko is not in that server."}), 404
+
+    user_id = _user_id()
+    if user_id is None:
+        return jsonify({"error": "Not authenticated"}), 401
+    if not _is_member(guild_id, user_id):
+        return jsonify({"error": "You have to be a member of that server to gift it premium."}), 403
 
     try:
-        run_on_bot_loop(store())
+        payload = run_on_bot_loop(_create_checkout(
+            kind=billing.KIND_GIFT,
+            guild_id=guild_id,
+            payer_id=user_id,
+            pay_currency=pay_currency,
+            months=months,
+        ))
     except Exception as error:
-        return jsonify({"error": f"Payment created but could not be recorded: {error}"}), 503
-    return jsonify(_checkout_payload(result, order_id=order_id, amount_cents=amount_cents, months=1))
+        return jsonify({"error": f"Could not start the payment: {error}"}), 503
+    payload["status_url"] = f"/api/premium/gift/orders/{payload['order_id']}"
+    return jsonify(payload)
+
+
+@app.route("/api/premium/gift/orders/<order_id>")
+@require_auth
+def api_premium_gift_order(order_id):
+    """Poll a gift: its payment state and the recipient's resulting term."""
+    try:
+        bot = _billing_bot()
+        payment = run_on_bot_loop(billing.get_payment(bot.cxn, order_id=order_id))
+        if payment is None or payment.get("kind") != billing.KIND_GIFT:
+            return jsonify({"error": "Gift not found."}), 404
+        if int(payment["payer_id"]) != (_user_id() or 0):
+            return jsonify({"error": "Gift not found."}), 404
+        subscription = run_on_bot_loop(
+            billing.get_subscription(bot.cxn, int(payment["guild_id"]))
+        )
+    except Exception:
+        return jsonify({"error": "Gift status is temporarily unavailable."}), 503
+
+    return jsonify({
+        "order_id": payment["order_id"],
+        "track_id": payment.get("track_id"),
+        "status": payment.get("status"),
+        "paid": str(payment.get("status", "")).lower() in billing.PAID_STATUSES,
+        "months": int(payment.get("months") or 1),
+        "guild_id": str(payment.get("guild_id")),
+        "amount_cents": payment.get("amount_cents"),
+        "amount_label": billing.price_label(int(payment.get("amount_cents") or 0)),
+        "address": payment.get("address"),
+        "pay_amount": payment.get("pay_amount"),
+        "pay_currency": payment.get("pay_currency"),
+        "qr_code": payment.get("qr_code"),
+        "expires_at": payment.get("expires_at"),
+        "subscription": billing.subscription_view(subscription),
+    })
 
 
 @app.route("/api/premium/orders/<order_id>")

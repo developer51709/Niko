@@ -21,9 +21,11 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import discord  # noqa: E402
+
 from config.links import WEBSITE  # noqa: E402
 from cogs.info import cog as info_cog  # noqa: E402
-from cogs.info.cog import (  # noqa: E402
+from cogs.info._spotify import (  # noqa: E402
     SPOTIFY_LOADING_CARD_TYPES,
     _spotify_loading_card_view,
 )
@@ -152,8 +154,8 @@ class SpotifyCommandFlowTests(unittest.TestCase):
         interaction = _Interaction() if slash else None
         ctx = _Context(interaction)
         cog = info_cog.InfoCog(bot=types.SimpleNamespace(start_time=0))
-        with mock.patch.object(info_cog.discord, "Member", _Member), \
-                mock.patch.object(info_cog.discord, "Spotify", _Spotify):
+        with mock.patch.object(discord, "Member", _Member), \
+                mock.patch.object(discord, "Spotify", _Spotify):
             asyncio.run(info_cog.InfoCog.spotify.callback(cog, ctx, _Member()))
         return interaction, ctx
 

@@ -3,6 +3,7 @@
 import discord
 from discord.ext import commands
 from config.emojis import get_emoji
+from utils import logging
 from utils.ai.config import (
     MIN_AI_NAME_LENGTH,
     load_config,
@@ -396,7 +397,12 @@ class AIConfig(commands.Cog):
     async def cog_load(self):
         # Warm the config cache for every guild, so the sync personality lookup
         # used by roleplay flavour text and the panel buttons is accurate.
-        await preload_all()
+        # A cache warm-up must never be able to fail the whole cog: that took
+        # every AI command offline over a single unreadable guild row.
+        try:
+            await preload_all()
+        except Exception as error:  # noqa: BLE001
+            logging.warning("ai_config", f"Could not warm the AI config cache: {error}")
 
     @commands.hybrid_command(
         name="ai-config",

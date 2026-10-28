@@ -95,25 +95,6 @@ export type LockdownStepResult = {
   status: LockdownStepStatus;
   detail: string;
 };
-export type StandbyInstance = {
-  id: string;
-  name: string;
-  url: string;
-  created_at: number;
-  health?: "online" | "offline";
-  active?: boolean;
-  stats?: { uptime_seconds: number; total_api_requests: number; failed_api_requests: number } | null;
-};
-export type StandbyFailoverStatus = {
-  mode: "auto" | "off" | "standby";
-  enabled: boolean;
-  active_standby_id: string | null;
-  standby_count: number;
-  last_error?: string | null;
-  last_changed_at: number;
-  failover_count: number;
-  egress_blocked: boolean;
-};
 export type ProxyWorkerLatencyPoint = {
   t: number;
   avg: number;

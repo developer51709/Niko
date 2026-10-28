@@ -152,8 +152,8 @@ def test_a_per_route_rate_limit_leaves_the_direct_ip_alone():
 
 def test_a_cloudflare_throttle_arms_the_proxy():
     async def scenario():
-        # "Error 1015" is the edge throttling this IP, and the standby manager
-        # deliberately leaves that recovery to the proxy.
+        # "Error 1015" is the edge throttling this IP, so the proxy manager
+        # arms or rotates the proxy to clear it.
         session = FakeSession(FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE))
         manager, http, _ = _attach(session)
 

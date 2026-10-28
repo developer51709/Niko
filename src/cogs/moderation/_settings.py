@@ -1,11 +1,10 @@
 """
-Moderation — server-settings commands (badwords, whitelist, setmodlog).
+Moderation — server-settings commands (badwords, whitelist).
 """
 import re
 
 import discord
 from discord.ext import commands
-from config.emojis import get_emoji
 from ._messages import msg, _cv2
 
 #: A user/role mention, or a bare snowflake.
@@ -34,7 +33,7 @@ def _mention_text(kind: str, target_id: int) -> str:
 
 
 class SettingsMixin:
-    """badwords, whitelist, and setmodlog commands."""
+    """badwords and whitelist commands."""
 
     # ── BADWORDS ─────────────────────────────────────────────────────────────
     @commands.hybrid_group(name="badwords", invoke_without_command=True,
@@ -192,21 +191,3 @@ class SettingsMixin:
         await utils.log_action(
             ctx.guild, "AutoMod Whitelist",
             f"**Action:** Removed {kind}\n**Target:** {mention}", moderator=ctx.author)
-
-    # ── SETMODLOG (deprecated redirect) ──────────────────────────────────────
-    @commands.hybrid_command(name="setmodlog", hidden=True,
-                             description="Set the moderation log channel (deprecated)",
-                             help="{ 'en': 'Set the moderation log channel.', 'de': 'Moderationslog-Kanal setzen.', 'es': 'Establece el canal de registro de moderación.' }")
-    @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
-    async def setmodlog(self, ctx):
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### Important Notice"),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="This command has been moved to the new logging system and is scheduled for removal. "
-                        "Please use `.logging` instead."
-            ),
-        ))
-        await ctx.reply(view=view)

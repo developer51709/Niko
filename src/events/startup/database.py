@@ -816,6 +816,18 @@ async def _create_tables(bot):
             PRIMARY KEY (guild_id, channel_id)
         )
     """)
+    # A log entry's restore/revert buttons carry only a snapshot id; the state
+    # they need (a role's permissions, a channel's overwrites) lives here, so a
+    # button keeps working after a restart.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS logging_snapshots (
+            snapshot_id TEXT PRIMARY KEY,
+            guild_id    INTEGER NOT NULL,
+            kind        TEXT NOT NULL,
+            payload     TEXT NOT NULL,
+            created_at  TEXT NOT NULL
+        )
+    """)
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS moderation_config (
             guild_id INTEGER PRIMARY KEY,
@@ -2113,8 +2125,6 @@ async def init_database(bot):
             )
         logging.success("DB", "Database connection established")
         await _create_tables(bot)
-        from webapp.routes.standby_routes import initialize_standby_registry
-        await initialize_standby_registry(bot)
         # Eagerly load the blacklist cache from the database so hot-path
         # sync reads (message/interaction checks) work immediately.
         try:

@@ -58,8 +58,8 @@ async def handle_ready(bot):
         ("run_slash_sync", "Scheduling slash command sync", run_slash_sync),
     ]
 
-    # The process entrypoint initializes a standby before waiting for gateway
-    # ownership; do not initialize its database/cogs a second time on READY.
+    # The process entrypoint initializes the database, cogs and economy cache
+    # before the gateway connects; do not initialize them a second time on READY.
     if getattr(bot, "_pre_gateway_initialized", False):
         startup_steps = [
             item for item in startup_steps

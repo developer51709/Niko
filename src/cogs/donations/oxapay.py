@@ -3,6 +3,8 @@ OxaPay merchant API client.
 Docs: https://oxapay.com/api
 """
 
+from urllib.parse import quote
+
 import aiohttp
 
 OXAPAY_BASE = "https://api.oxapay.com"
@@ -134,6 +136,41 @@ class OxaPayClient:
                 message = str(error["message"])
             message = message or str(data.get("message") or "")
         return {"success": False, "message": message or "OxaPay could not start this payment."}
+
+    async def check_white_label(self, track_id: str) -> dict:
+        """Status of a payment created through :meth:`create_white_label`.
+
+        White-label payments live under the v1 API, so the legacy merchant
+        inquiry cannot see them; it is still used as a fallback for invoices
+        created before the white-label checkout existed. Statuses are
+        normalised to the legacy capitalised form (``Paid``, ``Waiting``,
+        ``Expired``, ``Failed``) so callers only handle one shape.
+        """
+        if not track_id:
+            return {"success": False, "status": "Unknown", "message": "Missing track ID."}
+        data = None
+        try:
+            async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                async with session.get(
+                    f"{OXAPAY_V1_BASE}/payment/{quote(str(track_id), safe='')}",
+                    headers={
+                        "merchant_api_key": self.merchant_key,
+                        "Accept": "application/json",
+                    },
+                ) as resp:
+                    if resp.status < 500:
+                        data = await resp.json(content_type=None)
+        except Exception:
+            data = None
+
+        details = data.get("data") if isinstance(data, dict) else None
+        if isinstance(details, dict) and details.get("status"):
+            return {
+                "success": True,
+                "status": str(details["status"]).strip().title(),
+                "data": details,
+            }
+        return await self.check_payment(track_id)
 
     async def check_payment(self, track_id: str) -> dict:
         """

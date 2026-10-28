@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
-import { addStaffStandby, controlStaffStandbyFailover, createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBilling, getStaffDataRemovalRequests, getStaffMembers, getStaffStandbys, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, manageStaffMember, removeStaffStandby, resetStaffGuildProfile, resolveStaffBillingPayment, reviewStaffDataRemoval, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist, updateStaffSubscription } from "../api";
+import type { KeyboardEvent } from "react";
+import { createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBilling, getStaffDataRemovalRequests, getStaffMembers, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, manageStaffMember, resetStaffGuildProfile, resolveStaffBillingPayment, reviewStaffDataRemoval, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist, updateStaffSubscription } from "../api";
 import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
 import { Icon } from "../components/Icon";
@@ -15,7 +15,7 @@ import { ColorPicker } from "../components/dashboard/ColorPicker";
 import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
-import type { AuthStatus, StandbyFailoverStatus, StandbyInstance, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
+import type { AuthStatus, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
 
 type ReviewedTeamSubmission = TeamRecruitmentSubmission & {
   opening_id: string;
@@ -40,7 +40,7 @@ const PUBLIC_LINK_TYPES = [
   ["other", "Other"],
 ] as const;
 
-type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "standbys" | "proxy-workers" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -52,7 +52,6 @@ const TAB_ROLES: Record<StaffTab, string[]> = {
   guilds: ["owner", "head_admin"],
   blacklist: ["owner", "head_admin"],
   appeals: ["owner", "head_admin"],
-  standbys: OWNER_ROLES,
   "proxy-workers": OWNER_ROLES,
   "team-recruitment": OWNER_ROLES,
   "staff-management": OWNER_ROLES,
@@ -123,13 +122,6 @@ export function StaffDashboardPage() {
   const [staffRosterRoleDrafts, setStaffRosterRoleDrafts] = useState<Record<string, string>>({});
   const [newStaffId, setNewStaffId] = useState("");
   const [newStaffRole, setNewStaffRole] = useState("");
-  const [standbys, setStandbys] = useState<StandbyInstance[]>([]);
-  const [standbyFailover, setStandbyFailover] = useState<StandbyFailoverStatus | null>(null);
-  const [expandedStandbyId, setExpandedStandbyId] = useState<string | null>(null);
-  const [standbyRefreshedAt, setStandbyRefreshedAt] = useState<number | null>(null);
-  const [standbyName, setStandbyName] = useState("");
-  const [standbyUrl, setStandbyUrl] = useState("");
-  const [standbyBusy, setStandbyBusy] = useState(false);
   // Only the silent 5s poll writes this: it is live status, not an answer to an
   // action, so it stays on the panel instead of becoming a repeating toast.
   const [appeals, setAppeals] = useState<BlacklistAppeal[]>([]);
@@ -194,7 +186,6 @@ export function StaffDashboardPage() {
       });
       setLinks(staffStatus.profile.public_links || []);
       if (staffStatus.role === "owner") {
-        void refreshStandbys();
         void refreshNikoApplications();
         void refreshBilling();
         void refreshStaffRoster();
@@ -216,11 +207,6 @@ export function StaffDashboardPage() {
     });
     return () => { active = false; };
   }, []);
-  useEffect(() => {
-    if (!staff || staff.role !== "owner" || activeTab !== "standbys") return;
-    const timer = window.setInterval(() => void refreshStandbys(), 5000);
-    return () => window.clearInterval(timer);
-  }, [staff?.role, activeTab]);
   useEffect(() => {
     const syncFromHash = () => {
       const linked = tabFromHash(window.location.hash, null);
@@ -294,7 +280,7 @@ export function StaffDashboardPage() {
   const canManageGlobal = tabAllowedForRole(staff.role, "global");
   const canManageGuilds = tabAllowedForRole(staff.role, "guilds");
   const canReviewAppeals = tabAllowedForRole(staff.role, "appeals");
-  const canManageStandbys = tabAllowedForRole(staff.role, "standbys");
+  const canManageProxyWorkers = tabAllowedForRole(staff.role, "proxy-workers");
   const canManageNikoApplications = tabAllowedForRole(staff.role, "team-recruitment");
   const canManageStaffRoster = tabAllowedForRole(staff.role, "staff-management");
   const canManageBilling = tabAllowedForRole(staff.role, "billing");
@@ -423,44 +409,6 @@ export function StaffDashboardPage() {
     } finally {
       setBusyGuildAction(false);
     }
-  };
-  async function refreshStandbys() {
-    try {
-      const result = await getStaffStandbys();
-      setStandbys(result.standbys);
-      setStandbyFailover(result.failover);
-      setStandbyRefreshedAt(Date.now());
-      clearToasts("staff-standbys-status");
-    } catch (reason) { notifyError(reason instanceof Error ? reason.message : "Standby status unavailable.", "staff-standbys-status"); }
-  }
-  const standbyControl = async (action: { action: "mode"; mode: "auto" | "off" } | { action: "activate"; standby_id: string } | { action: "rotate" }, success: string) => {
-    if (standbyBusy) return;
-    setStandbyBusy(true); notifyLoading("Applying that change…", "staff-standbys");
-    try {
-      await controlStaffStandbyFailover(action, auth.csrf_token);
-      await refreshStandbys();
-      notifySuccess(success, "staff-standbys");
-    } catch (reason) { notifyError(reason instanceof Error ? reason.message : "Failover control failed.", "staff-standbys"); }
-    finally { setStandbyBusy(false); }
-  };
-  const saveStandby = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (standbyBusy) return;
-    setStandbyBusy(true); notifyLoading("Verifying that standby…", "staff-standbys");
-    try {
-      await addStaffStandby(standbyName, standbyUrl, auth.csrf_token);
-      await refreshStandbys();
-      setStandbyName(""); setStandbyUrl("");
-      notifySuccess("Standby verified and registered. It is available for authenticated Discord traffic failover.", "staff-standbys");
-    } catch (reason) { notifyError(reason instanceof Error ? reason.message : "Standby could not be verified.", "staff-standbys"); }
-    finally { setStandbyBusy(false); }
-  };
-  const deleteStandby = async (standby: StandbyInstance) => {
-    if (standbyBusy || !window.confirm(`Remove ${standby.name} from standby failover?`)) return;
-    setStandbyBusy(true); notifyLoading("Removing that standby…", "staff-standbys");
-    try { await removeStaffStandby(standby.id, auth.csrf_token); await refreshStandbys(); notifySuccess(`${standby.name} was removed.`, "staff-standbys"); }
-    catch (reason) { notifyError(reason instanceof Error ? reason.message : "Standby could not be removed.", "staff-standbys"); }
-    finally { setStandbyBusy(false); }
   };
   async function refreshBilling() {
     try { setBilling(await getStaffBilling()); }
@@ -671,8 +619,7 @@ export function StaffDashboardPage() {
       {canManageGuilds && <button type="button" role="tab" id="staff-guilds-tab" aria-selected={activeTab === "guilds"} aria-controls="staff-guilds-panel" className={activeTab === "guilds" ? "active" : ""} onClick={() => setActiveTab("guilds")}><Icon name="shield" /> Guild operations <span>{staffGuilds.length}</span></button>}
       {canManageGuilds && <button type="button" role="tab" id="staff-blacklist-tab" aria-selected={activeTab === "blacklist"} aria-controls="staff-blacklist-panel" className={activeTab === "blacklist" ? "active" : ""} onClick={() => setActiveTab("blacklist")}><Icon name="lock" /> Blacklist <span>{blacklistEntries.users.length + blacklistEntries.guilds.length}</span></button>}
       {canReviewAppeals && <button type="button" role="tab" id="staff-appeals-tab" aria-selected={activeTab === "appeals"} aria-controls="staff-appeals-panel" className={activeTab === "appeals" ? "active" : ""} onClick={() => setActiveTab("appeals")}><Icon name="message" /> Appeals <span>{appeals.filter((appeal) => appeal.status === "pending").length}</span></button>}
-      {canManageStandbys && <button type="button" role="tab" id="staff-standbys-tab" aria-selected={activeTab === "standbys"} aria-controls="staff-standbys-panel" className={activeTab === "standbys" ? "active" : ""} onClick={() => setActiveTab("standbys")}><Icon name="shield" /> Standby instances <span>{standbys.length}</span></button>}
-      {canManageStandbys && <button type="button" role="tab" id="staff-proxy-workers-tab" aria-selected={activeTab === "proxy-workers"} aria-controls="staff-proxy-workers-panel" className={activeTab === "proxy-workers" ? "active" : ""} onClick={() => setActiveTab("proxy-workers")}><Icon name="chart" /> Discord proxy</button>}
+      {canManageProxyWorkers && <button type="button" role="tab" id="staff-proxy-workers-tab" aria-selected={activeTab === "proxy-workers"} aria-controls="staff-proxy-workers-panel" className={activeTab === "proxy-workers" ? "active" : ""} onClick={() => setActiveTab("proxy-workers")}><Icon name="chart" /> Discord proxy</button>}
       {canManageNikoApplications && <button type="button" role="tab" id="staff-team-recruitment-tab" aria-selected={activeTab === "team-recruitment"} aria-controls="staff-team-recruitment-panel" className={activeTab === "team-recruitment" ? "active" : ""} onClick={() => setActiveTab("team-recruitment")}><Icon name="users" /> Team Applications <span>{nikoApplications.reduce((count, application) => count + application.submission_count, 0)}</span></button>}
       {canManageStaffRoster && <button type="button" role="tab" id="staff-staff-management-tab" aria-selected={activeTab === "staff-management"} aria-controls="staff-staff-management-panel" className={activeTab === "staff-management" ? "active" : ""} onClick={() => setActiveTab("staff-management")}><Icon name="users" /> Staff management <span>{staffRoster.filter((member) => member.staff_status !== "former").length}</span></button>}
       {canManageStaffRoster && <button type="button" role="tab" id="staff-broadcasts-tab" aria-selected={activeTab === "broadcasts"} aria-controls="staff-broadcasts-panel" className={activeTab === "broadcasts" ? "active" : ""} onClick={() => setActiveTab("broadcasts")}><Icon name="message" /> Broadcasts</button>}
@@ -801,8 +748,7 @@ export function StaffDashboardPage() {
       </div>}
     </section>}
     {activeTab === "appeals" && canReviewAppeals && <section id="staff-appeals-panel" role="tabpanel" aria-labelledby="staff-appeals-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Trust &amp; safety</span><h2>Blacklist appeals</h2><p>Review requests privately. Approval removes the active restriction while preserving its appealed history; denied appeals cannot be resubmitted.</p></div><div className="staff-guild-count"><strong>{appeals.filter((appeal) => appeal.status === "pending").length}</strong><span>pending review</span></div></header><div className="staff-guild-toolbar"><span className="staff-appeal-privacy">Visible to the bot owner and Head Admins</span><button type="button" className="button button-muted" onClick={() => void loadAppeals()} disabled={appealsLoading}><Icon name="spark" />{appealsLoading ? "Refreshing…" : "Refresh appeals"}</button></div>{appealsLoading && appeals.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading appeals…</p></div> : appeals.length === 0 ? <div className="staff-guild-empty">No blacklist appeals have been submitted.</div> : <div className="staff-guild-list">{appeals.map((appeal) => <article className={`staff-guild-card staff-appeal-card staff-appeal-${appeal.status}`} key={appeal.appeal_id}><div className="staff-appeal-header"><div className="staff-appeal-identity"><span className="panel-kicker">{appeal.guild_id ? "Guild appeal" : "User appeal"}</span><strong>{appeal.guild_id ? `Guild ${appeal.guild_id}` : appeal.username || "Discord user"}</strong><small>{appeal.guild_id ? `Submitted by user ${appeal.user_id}` : `Discord ID · ${appeal.user_id}`} <span aria-hidden="true">·</span> {new Date(appeal.created_at * 1000).toLocaleString()}</small></div><span className={`staff-guild-status${appeal.status === "denied" ? " is-blocked" : appeal.status === "pending" ? " is-pending" : " is-approved"}`}><i />{appeal.status}</span></div><div className="staff-appeal-reason staff-appeal-context"><span className="panel-kicker">Blacklist reason</span><p>{appeal.blacklist_reason || "No reason recorded."}</p></div><div className="staff-appeal-reason staff-appeal-message"><span className="panel-kicker">Appeal statement</span><p>{appeal.appeal_text}</p></div>{appeal.status === "pending" ? <><label className="form-field"><span className="form-label">Staff note {"(optional)"}</span><textarea rows={3} maxLength={2000} value={appealNotes[appeal.appeal_id] || ""} onChange={(event) => setAppealNotes((current) => ({ ...current, [appeal.appeal_id]: event.target.value }))} placeholder="Add context for the decision; the user can see this note…" /><small>{(appealNotes[appeal.appeal_id] || "").length}/2000 · shown to the user with the decision</small></label><div className="staff-appeal-actions"><button type="button" className="button button-muted" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "denied")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Deny appeal"}</button><button type="button" className="button button-primary" disabled={reviewingAppealId !== null} onClick={() => void reviewAppeal(appeal, "approved")}>{reviewingAppealId === appeal.appeal_id ? "Saving…" : "Approve appeal"}</button></div></> : <><div className="staff-appeal-reason staff-appeal-note"><span className="panel-kicker">Staff decision note</span><p>{appeal.staff_note || "No note added."}</p></div><small className="staff-appeal-reviewed">{appeal.status === "approved" ? "Approved" : "Denied"}{appeal.reviewed_at ? ` ${new Date(appeal.reviewed_at * 1000).toLocaleString()}` : ""} <span aria-hidden="true">·</span> Staff ID {appeal.reviewed_by || "unknown"}</small></>}</article>)}</div>}</section>}
-    {activeTab === "proxy-workers" && canManageStandbys && <section id="staff-proxy-workers-panel" role="tabpanel" aria-labelledby="staff-proxy-workers-tab" className="staff-guild-operations"><ProxyWorkersView csrfToken={auth.csrf_token} /></section>}
-    {activeTab === "standbys" && canManageStandbys && <section id="staff-standbys-panel" role="tabpanel" aria-labelledby="staff-standbys-tab" className="staff-guild-operations"><header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · authenticated failover</span><h2>Standby backend instances</h2><p>Each standby runs a warm, full copy of the production backend and dashboard. It takes Discord gateway ownership only after an authenticated failover handoff; Webshare proxies remain a separate egress feature.</p></div><div className="staff-guild-count"><strong>{standbys.length}</strong><span>verified instances</span></div></header><form className="staff-blacklist-form" onSubmit={(event) => void saveStandby(event)}><input value={standbyName} onChange={(event) => setStandbyName(event.target.value)} maxLength={60} placeholder="Region / instance name" aria-label="Standby name" required /><input value={standbyUrl} onChange={(event) => setStandbyUrl(event.target.value)} type="url" placeholder="https://standby.example.com" aria-label="Standby HTTPS origin" required /><button type="submit" className="button button-primary" disabled={standbyBusy}>{standbyBusy ? "Verifying…" : "Verify & add standby"}</button></form><div className="staff-guild-toolbar standby-toolbar"><span className="standby-live-label"><i />Live status · {standbyRefreshedAt ? `updated ${new Date(standbyRefreshedAt).toLocaleTimeString()}` : "connecting…"}</span><div className="standby-mode-actions"><button type="button" className={`button button-small ${standbyFailover?.mode === "auto" || standbyFailover?.mode === "standby" ? "button-primary" : "button-muted"}`} disabled={standbyBusy} onClick={() => void standbyControl({ action: "mode", mode: "auto" }, "Automatic standby-first failover enabled.")}>Auto · standby first</button><button type="button" className={`button button-small ${standbyFailover?.mode === "off" ? "button-danger" : "button-muted"}`} disabled={standbyBusy} onClick={() => void standbyControl({ action: "mode", mode: "off" }, "Automatic routing disabled.")}>Direct / off</button><button type="button" className="button button-small button-muted" disabled={standbyBusy} onClick={() => void refreshStandbys()}><Icon name="spark" />Refresh now</button></div></div>{standbyFailover && <div className="standby-overview"><div><span className="panel-kicker">Route</span><strong>{standbyFailover.enabled ? standbys.find((item) => item.id === standbyFailover.active_standby_id)?.name || "Standby active" : standbyFailover.mode === "off" ? "Direct · failover off" : "Direct · auto armed"}</strong></div><div><span className="panel-kicker">Failovers</span><strong>{standbyFailover.failover_count}</strong></div><div><span className="panel-kicker">Egress</span><strong>{standbyFailover.egress_blocked ? "Blocked · rerouted" : "Clear"}</strong></div></div>}{standbyFailover?.last_error && <div className="notice warning" role="status">Last route warning: {standbyFailover.last_error}</div>}<div className="staff-guild-list">{standbys.map((standby) => { const expanded = expandedStandbyId === standby.id; const stats = standby.stats; return <article className={`staff-guild-card standby-card${expanded ? " expanded" : ""}`} key={standby.id}><button type="button" className="staff-guild-row standby-card-toggle" aria-expanded={expanded} onClick={() => setExpandedStandbyId(expanded ? null : standby.id)}><span className="staff-guild-icon"><Icon name="shield" /></span><span className="staff-guild-title"><strong>{standby.name}</strong><small>{standby.url} · verified {new Date(standby.created_at * 1000).toLocaleString()}</small></span><span className={`staff-guild-status${standby.health === "online" ? " is-approved" : " is-blocked"}`}><i />{standby.health === "online" ? "Online" : "Offline"}</span>{standby.active && <span className="standby-active-tag">Active</span>}<Icon name={expanded ? "close" : "arrow"} className="staff-guild-chevron" /></button>{expanded && <div className="standby-card-details"><div className="standby-stats-grid"><div><span className="panel-kicker">Health</span><strong>{standby.health === "online" ? "Reachable" : "Unavailable"}</strong></div><div><span className="panel-kicker">Discord API requests</span><strong>{stats?.total_api_requests ?? "—"}</strong></div><div><span className="panel-kicker">Failed requests</span><strong>{stats?.failed_api_requests ?? "—"}</strong></div><div><span className="panel-kicker">Uptime</span><strong>{stats ? `${Math.floor(stats.uptime_seconds / 3600)}h ${Math.floor(stats.uptime_seconds % 3600 / 60)}m` : "—"}</strong></div></div><div className="standby-manual-actions"><button type="button" className="button button-primary button-small" disabled={standbyBusy || standby.health !== "online"} onClick={() => void standbyControl({ action: "activate", standby_id: standby.id }, `${standby.name} is now the active Discord route.`)}><Icon name="spark" />Route through standby</button><button type="button" className="button button-muted button-small" disabled={standbyBusy} onClick={() => void standbyControl({ action: "rotate" }, "Failover route rotated.")}><Icon name="refresh" />Rotate route</button><button type="button" className="button button-danger button-small" disabled={standbyBusy} onClick={() => void deleteStandby(standby)}>Remove standby</button></div></div>}</article>; })}{standbys.length === 0 && <div className="staff-guild-empty">No verified standby instances yet.</div>}</div></section>}
+    {activeTab === "proxy-workers" && canManageProxyWorkers && <section id="staff-proxy-workers-panel" role="tabpanel" aria-labelledby="staff-proxy-workers-tab" className="staff-guild-operations"><ProxyWorkersView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "staff-management" && canManageStaffRoster && <section id="staff-staff-management-panel" role="tabpanel" aria-labelledby="staff-staff-management-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · access control</span><h2>Staff management</h2><p>View the full staff roster, assign or change roles, and suspend access during investigations. Suspension preserves the stored role and the member's public profile but removes every official Discord staff role and blocks staff commands and website pages until you lift it.</p></div><div className="staff-guild-count"><strong>{staffRoster.filter((member) => member.staff_status !== "former").length}</strong><span>{staffRoster.filter((member) => member.staff_status === "suspended").length} suspended · {staffRoster.filter((member) => member.staff_status === "former").length} former</span></div></header>
       <div className="staff-guild-toolbar"><label className="staff-guild-search"><Icon name="search" /><input type="search" value={staffRosterSearch} onChange={(event) => setStaffRosterSearch(event.target.value)} placeholder="Search staff by name, role, or ID" aria-label="Search staff roster" /></label><button type="button" className="button button-muted" onClick={() => void refreshStaffRoster()} disabled={staffRosterLoading}><Icon name="spark" />{staffRosterLoading ? "Refreshing…" : "Refresh roster"}</button></div>

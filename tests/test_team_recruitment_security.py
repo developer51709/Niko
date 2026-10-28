@@ -19,7 +19,7 @@ from webapp.routes import team_recruitment_routes as routes
 
 
 class StaffIdentityFallbackTests(unittest.TestCase):
-    def test_staff_identity_fetches_user_when_standby_cache_is_empty(self):
+    def test_staff_identity_fetches_user_when_user_cache_is_empty(self):
         fetched_ids = []
 
         class FakeBot:

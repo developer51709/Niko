@@ -295,7 +295,7 @@ class Blackjack(commands.Cog):
         user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
 
-        blackjack_cooldown = int(os.getenv("BLACKJACK_COOLDOWN") or 60)
+        blackjack_cooldown = int(os.getenv("BLACKJACK_COOLDOWN") or 30)
         if user_data["last_blackjack"] + blackjack_cooldown > time.time():
             return await ctx.send(view=cooldown_view(
                 "play blackjack",

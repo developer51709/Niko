@@ -88,7 +88,7 @@ All moderation actions are logged to your configured log channel. Logs include:
 | `slowmode` | Set channel slowmode (seconds) |
 | `lock` / `unlock` | Lock or unlock a channel |
 | `nick` | Change a member's nickname |
-| `setmodlog` | Open the mod-log settings panel |
+| `logging` | Open the server's logging settings |
 
 ## Moderation Best Practices
 

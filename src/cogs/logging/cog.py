@@ -1,8 +1,17 @@
 import asyncio
+import io
 import time
 
 import database
 from .formatters import *
+from .revert import (
+    channel_snapshot,
+    overwrite_entry,
+    register_persistent_views,
+    removed_overwrite_entry,
+    role_snapshot,
+    save_snapshot,
+)
 
 
 LOG_WEBHOOK_NAME = "Niko | Server Logs"
@@ -17,6 +26,44 @@ CONFIG_TTL = 30.0
 #: a mass delete of large files would otherwise download them all again.
 MAX_LOG_FILES = 5
 MAX_LOG_FILE_BYTES = 2_000_000
+
+#: Discord expires the CDN URL of a replaced avatar a day or two after the
+#: change, so both pictures are downloaded and uploaded with the log entry
+#: instead of linked. The cap keeps a large animated asset from turning one
+#: profile edit into a big upload.
+MAX_ARCHIVED_AVATAR_BYTES = 4_000_000
+
+_IMAGE_EXTENSIONS = ("png", "jpg", "jpeg", "webp", "gif")
+
+
+def _asset_url(asset) -> str | None:
+    """The URL of an asset, or None for a missing one."""
+    try:
+        return asset.url if asset else None
+    except Exception:  # noqa: BLE001 - a broken asset is simply "no picture"
+        return None
+
+
+def _asset_extension(asset) -> str:
+    """The image format from the asset URL, for the archived file's name."""
+    tail = (_asset_url(asset) or "").split("?", 1)[0].rsplit(".", 1)[-1].lower()
+    return tail if tail in _IMAGE_EXTENSIONS else "png"
+
+
+def _channel_kind(channel) -> str:
+    """A channel's type as its plain name (text, voice, forum …)."""
+    return str(getattr(getattr(channel, "type", "text"), "name", "text")).lower()
+
+
+def _permission_list(permissions, *, limit: int = 8) -> str:
+    """The granted names of a Permissions object, for a detail line."""
+    names = [name.replace("_", " ") for name, value in iter(permissions) if value]
+    if not names:
+        return "none"
+    shown = names[:limit]
+    if len(names) > limit:
+        shown.append(f"+{len(names) - limit} more")
+    return ", ".join(shown)
 
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
@@ -51,6 +98,10 @@ class ServerLogger(commands.Cog):
                         self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
                 except (discord.Forbidden, discord.HTTPException, discord.NotFound):
                     pass
+
+    async def cog_load(self):
+        """Register the restore/revert buttons for entries posted before this run."""
+        register_persistent_views(self.bot)
 
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
@@ -136,16 +187,23 @@ class ServerLogger(commands.Cog):
         target_id: int | None = None,
         action_key: str | None = None,
         channel_id: int | None = None,
-        media_urls: list[str] | None = None,
+        media_urls: list | None = None,
         thumbnail_url: str | None = None,
         files: list[discord.File] | None = None,
+        file_components: bool = True,
+        revert: tuple[str, str] | None = None,
     ):
         """Send a structured log entry to the configured channel for the given category.
 
-        media_urls renders image URLs in a MediaGallery inside the log container;
-        thumbnail_url renders the body in a Section with a Thumbnail accessory;
-        files renders discord.ui.File components inside the log container (the
-        bytes are uploaded alongside the message via send(files=...)).
+        media_urls renders images in a MediaGallery inside the log container (a
+        ``(uri, caption)`` pair labels its item); thumbnail_url renders the body
+        in a Section with a Thumbnail accessory; files uploads the bytes
+        alongside the message and renders them as discord.ui.File components
+        unless ``file_components`` is False, which is what an asset-archiving
+        entry wants: its bytes belong in the gallery, not in a file chip.
+
+        ``revert`` is a ``(kind, snapshot_id)`` pair; it adds the restore/revert
+        button that undoes the logged change.
         """
         await self.config()
         cfg = self._get_cfg(guild.id)
@@ -165,6 +223,7 @@ class ServerLogger(commands.Cog):
             guild, channel, category, title, body,
             target_id=target_id, action_key=action_key, channel_id=channel_id,
             media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+            file_components=file_components, revert=revert,
         )
 
     async def _send_entry(
@@ -178,9 +237,11 @@ class ServerLogger(commands.Cog):
         target_id: int | None = None,
         action_key: str | None = None,
         channel_id: int | None = None,
-        media_urls: list[str] | None = None,
+        media_urls: list | None = None,
         thumbnail_url: str | None = None,
         files: list[discord.File] | None = None,
+        file_components: bool = True,
+        revert: tuple[str, str] | None = None,
     ) -> None:
         """Post one log entry to a specific channel.
 
@@ -200,6 +261,8 @@ class ServerLogger(commands.Cog):
             media_urls=media_urls,
             thumbnail_url=thumbnail_url,
             files=files,
+            file_components=file_components,
+            revert=revert,
         )
         try:
             await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))
@@ -464,10 +527,12 @@ class ServerLogger(commands.Cog):
                 target_id=member.id
             )
 
+        member_count = getattr(guild, "member_count", None)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Account Created:** {created} ({account_age} days ago){age_warn}\n"
             f"**Join Method:** {join_method}"
+            + (f"\n**Member Count:** `{member_count:,}`" if member_count else "")
         )
         await self.log_event(
             guild, "members", "Member Joined", body,
@@ -507,9 +572,18 @@ class ServerLogger(commands.Cog):
         tenure = (
             f"\n**Joined:** <t:{int(joined_at.timestamp())}:R>" if joined_at else ""
         )
+        created_at = getattr(member, "created_at", None)
+        account = (
+            f"\n**Account Created:** <t:{int(created_at.timestamp())}:R>"
+            if created_at else ""
+        )
+        member_count = getattr(guild, "member_count", None)
+        remaining = (
+            f"\n**Member Count:** `{member_count:,}`" if member_count else ""
+        )
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Roles:** {roles_text}{tenure}"
+            f"**Roles ({len(roles)}):** {roles_text}{tenure}{account}{remaining}"
         )
         await self.log_event(
             guild, "members", "Member Left", body,
@@ -525,34 +599,106 @@ class ServerLogger(commands.Cog):
         except Exception:
             return None
 
+    async def _archive_asset(self, asset, filename: str) -> discord.File | None:
+        """Download an asset so the log keeps it after its CDN URL expires.
+
+        Discord invalidates the URL of a replaced avatar a day or two after the
+        change, so linking the old picture produced an entry that went dead. The
+        bytes are uploaded with the entry instead.
+        """
+        if asset is None:
+            return None
+        try:
+            data = await asset.read()
+        except (discord.HTTPException, discord.NotFound, OSError, AttributeError):
+            return None
+        if not data or len(data) > MAX_ARCHIVED_AVATAR_BYTES:
+            return None
+        return discord.File(io.BytesIO(data), filename=filename)
+
+    async def _log_avatar_change(self, before, after, *, attribute: str, title: str,
+                                 label: str, slug: str) -> bool:
+        """Log one picture change with both pictures archived as attachments.
+
+        The global profile picture and the per-server picture are separate
+        fields, so a member who changes both gets an entry for each rather than
+        one entry that hides half of what happened.
+        """
+        old_asset = getattr(before, attribute, None)
+        new_asset = getattr(after, attribute, None)
+        old_url = _asset_url(old_asset)
+        new_url = _asset_url(new_asset)
+        if old_url == new_url:
+            return False
+
+        lines = [
+            f"**Member:** {after.mention} (`{after}` — ID: `{after.id}`)",
+            f"**Changed:** {label}",
+        ]
+        media: list = []
+        files: list[discord.File] = []
+        linked: list[str] = []
+        pictures = ((old_asset, "before", old_url), (new_asset, "after", new_url))
+        present = sum(1 for _asset, _side, url in pictures if url)
+        for asset, side, url in pictures:
+            filename = f"{slug}-{side}.{_asset_extension(asset)}"
+            archived = await self._archive_asset(asset, filename)
+            if archived is not None:
+                files.append(archived)
+                media.append((f"attachment://{filename}", f"{side.title()} — {label}"))
+            elif url:
+                # The download failed or the file is too large to re-upload, so
+                # the entry keeps the link it has — with the caveat that the old
+                # one stops working once Discord expires it.
+                media.append(url)
+                linked.append(f"**{side.title()}:** {url}")
+
+        if len(files) == present and present:
+            lines.append(
+                "-# The pictures are attached to this entry, so it still shows "
+                "them after Discord expires their old links."
+            )
+        elif files and linked:
+            lines.append(
+                "-# One picture could not be archived and is linked instead; "
+                "Discord expires such a link once the picture changes again."
+            )
+        lines.extend(linked)
+        if not files and not linked:
+            lines.append("**Before:** *none*\n**After:** *none*")
+
+        await self.log_event(
+            guild=after.guild,
+            category="members",
+            title=title,
+            body="\n".join(lines),
+            target_id=after.id,
+            action_key=title,
+            media_urls=media or None,
+            files=files or None,
+            file_components=False,
+        )
+        return True
+
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         guild = after.guild
 
-        # ── Avatar change (global or server avatar) ──
-        def _asset_url(asset) -> str | None:
-            return asset.url if asset else None
-
-        avatar_changed = (
-            _asset_url(before.avatar) != _asset_url(after.avatar)
-            or _asset_url(before.guild_avatar) != _asset_url(after.guild_avatar)
+        # ── Pictures: the global profile picture and the server one ──
+        await self._log_avatar_change(
+            before, after,
+            attribute="avatar",
+            title="Avatar Updated",
+            label="Global profile picture",
+            slug="profile-picture",
         )
-        if avatar_changed:
-            old_avatar = (
-                _asset_url(before.guild_avatar)
-                or _asset_url(before.avatar)
-                or before.display_avatar.url
-            )
-            new_avatar = after.display_avatar.url
-            avatar_body = (
-                f"**Member:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
-                f"**Avatar Updated**\n"
-                f"[Old avatar]({old_avatar}) → [New avatar]({new_avatar})"
-            )
-            await self.log_event(
-                guild, "members", "Avatar Updated", avatar_body,
-                target_id=after.id, thumbnail_url=new_avatar,
-            )
+        await self._log_avatar_change(
+            before, after,
+            attribute="guild_avatar",
+            title="Server Avatar Updated",
+            label="Server profile picture",
+            slug="server-profile-picture",
+        )
 
         before_roles = set(before.roles)
         after_roles = set(after.roles)
@@ -565,6 +711,16 @@ class ServerLogger(commands.Cog):
             changes.append(f"**Roles Added:** {', '.join(r.mention for r in added)}")
         if removed:
             changes.append(f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
+        if added or removed:
+            # A role change is usually somebody else's doing; the gateway event
+            # only says the roles changed, so the audit log names the actor.
+            role_entry = await self._audit_entry(
+                guild, discord.AuditLogAction.member_role_update, after.id)
+            role_actor = role_entry.user if role_entry else None
+            if role_actor is not None and role_actor != self.bot.user:
+                changes.append(f"**Roles Changed By:** {role_actor.mention}")
+                if role_entry.reason:
+                    changes.append(f"**Reason:** {role_entry.reason}")
 
         # ── Boost / unboost ───────────────────────
         before_boost = getattr(before, "premium_since", None)
@@ -777,11 +933,42 @@ class ServerLogger(commands.Cog):
         responsible = entry.user if entry else None
 
         body = (
-            f"**Channel:** {channel.mention} (`{channel.name}`)\n"
-            f"**Type:** {str(channel.type).replace('_', ' ').title()}\n"
-            f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
+            f"**Channel:** {channel.mention} (`{channel.name}` — ID: `{channel.id}`)\n"
+            f"**Type:** {_channel_kind(channel).title()}\n"
+            f"**Category:** {self._category_text(channel)}\n"
+            f"**Position:** `{getattr(channel, 'position', 0)}`\n"
+            + self._channel_detail_lines(channel)
+            + f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
         )
-        await self.log_event(channel.guild, "channels", "Channel Created", body)
+        await self.log_event(channel.guild, "channels", "Channel Created", body,
+                             channel_id=channel.id)
+
+    @staticmethod
+    def _category_text(channel) -> str:
+        category = getattr(channel, "category", None)
+        return category.mention if category else "None"
+
+    @staticmethod
+    def _channel_detail_lines(channel) -> str:
+        """The settings worth naming for whichever channel type this is."""
+        lines = ""
+        if _channel_kind(channel) in ("text", "news", "forum", "media", "stage"):
+            topic = getattr(channel, "topic", None)
+            if topic:
+                lines += f"**Topic:** {topic[:200]}\n"
+            slowmode = getattr(channel, "slowmode_delay", 0) or 0
+            if slowmode:
+                lines += f"**Slowmode:** `{slowmode}s`\n"
+            if getattr(channel, "nsfw", False):
+                lines += "**NSFW:** `True`\n"
+        if _channel_kind(channel) in ("voice", "stage"):
+            bitrate = getattr(channel, "bitrate", 0) or 0
+            limit = getattr(channel, "user_limit", 0) or 0
+            lines += f"**Bitrate:** `{bitrate // 1000}kbps` · **User Limit:** `{limit or 'Unlimited'}`\n"
+        overwrites = getattr(channel, "overwrites", {}) or {}
+        if overwrites:
+            lines += f"**Permission Overwrites:** `{len(overwrites)}`\n"
+        return lines
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
@@ -789,37 +976,67 @@ class ServerLogger(commands.Cog):
             channel.guild, discord.AuditLogAction.channel_delete, channel.id)
         responsible = entry.user if entry else None
 
+        # The channel is gone, so its settings are snapshotted now: the restore
+        # button can only put back what it knows about.
+        snapshot = await save_snapshot(channel.guild.id, "channel", channel_snapshot(channel))
+
         body = (
-            f"**Channel:** `#{channel.name}`\n"
-            f"**Type:** {str(channel.type).replace('_', ' ').title()}\n"
-            f"**Deleted By:** {responsible.mention if responsible else 'Unknown'}"
+            f"**Channel:** `#{channel.name}` (ID: `{channel.id}`)\n"
+            f"**Type:** {_channel_kind(channel).title()}\n"
+            f"**Category:** {self._category_text(channel)}\n"
+            f"**Position:** `{getattr(channel, 'position', 0)}`\n"
+            + self._channel_detail_lines(channel)
+            + f"**Deleted By:** {responsible.mention if responsible else 'Unknown'}"
         )
-        await self.log_event(channel.guild, "channels", "Channel Deleted", body)
+        if snapshot:
+            body += "\n-# Press **Restore Channel** to recreate it with the same settings."
+        await self.log_event(
+            channel.guild, "channels", "Channel Deleted", body,
+            target_id=channel.id,
+            revert=("channel", snapshot) if snapshot else None,
+        )
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
         changes = []
+        # What the Revert button puts back, keyed by the edit option it maps to.
+        # Only fields that actually changed are stored, so a revert never
+        # overwrites a setting nobody touched.
+        revert_before: dict = {}
 
         if before.name != after.name:
             changes.append(f"**Name:** `{before.name}` → `{after.name}`")
+            revert_before["name"] = before.name
+
+        if self._category_text(before) != self._category_text(after):
+            changes.append(
+                f"**Category:** {self._category_text(before)} → {self._category_text(after)}")
+            revert_before["category_id"] = getattr(
+                getattr(before, "category", None), "id", None)
 
         if isinstance(after, discord.TextChannel) or isinstance(after, discord.ForumChannel):
             if getattr(before, "topic", None) != getattr(after, "topic", None):
                 b_topic = getattr(before, "topic", None) or "*None*"
                 a_topic = getattr(after, "topic", None) or "*None*"
                 changes.append(f"**Topic:** {b_topic} → {a_topic}")
+                revert_before["topic"] = getattr(before, "topic", None)
             if getattr(before, "slowmode_delay", 0) != getattr(after, "slowmode_delay", 0):
                 changes.append(f"**Slowmode:** `{getattr(before, 'slowmode_delay', 0)}s` → `{getattr(after, 'slowmode_delay', 0)}s`")
+                revert_before["slowmode_delay"] = int(
+                    getattr(before, "slowmode_delay", 0) or 0)
             if getattr(before, "nsfw", False) != getattr(after, "nsfw", False):
                 changes.append(f"**NSFW:** `{getattr(before, 'nsfw', False)}` → `{getattr(after, 'nsfw', False)}`")
+                revert_before["nsfw"] = bool(getattr(before, "nsfw", False))
 
-        if isinstance(after, discord.VoiceChannel):
+        if isinstance(after, (discord.VoiceChannel, discord.StageChannel)):
             if getattr(before, "bitrate", None) != getattr(after, "bitrate", None):
                 changes.append(f"**Bitrate:** `{getattr(before, 'bitrate', 0) // 1000}kbps` → `{getattr(after, 'bitrate', 0) // 1000}kbps`")
+                revert_before["bitrate"] = int(getattr(before, "bitrate", 0) or 0)
             if getattr(before, "user_limit", 0) != getattr(after, "user_limit", 0):
                 b_lim = getattr(before, "user_limit", 0) or "Unlimited"
                 a_lim = getattr(after, "user_limit", 0) or "Unlimited"
                 changes.append(f"**User Limit:** `{b_lim}` → `{a_lim}`")
+                revert_before["user_limit"] = int(getattr(before, "user_limit", 0) or 0)
 
         # ── Permission overwrites ────────────────
         # Granting or revoking a member/role overwrite is the most consequential
@@ -827,6 +1044,7 @@ class ServerLogger(commands.Cog):
         # the role or member listener.
         before_overwrites = getattr(before, "overwrites", {})
         after_overwrites = getattr(after, "overwrites", {})
+        overwrite_restore: list[dict] = []
         for target, overwrite in after_overwrites.items():
             old = before_overwrites.get(target)
             label = getattr(target, "mention", None) or getattr(target, "name", str(target))
@@ -839,6 +1057,8 @@ class ServerLogger(commands.Cog):
                 if denied:
                     parts.append("deny " + ", ".join(f"`{p.replace('_', ' ')}`" for p in denied))
                 changes.append(f"**Overwrite Added** for {label}: " + ("; ".join(parts) or "none"))
+                # The overwrite did not exist before, so a revert removes it.
+                overwrite_restore.append(removed_overwrite_entry(target))
             elif old != overwrite:
                 granted = [p for p, v in iter(overwrite) if v and not getattr(old, p)]
                 denied = [p for p, v in iter(overwrite) if not v and getattr(old, p)]
@@ -849,10 +1069,12 @@ class ServerLogger(commands.Cog):
                     parts.append("deny " + ", ".join(f"`{p}`" for p in denied))
                 if parts:
                     changes.append(f"**Overwrite Changed** for {label}: " + "; ".join(parts))
+                    overwrite_restore.append(overwrite_entry(target, old))
         for target in before_overwrites:
             if target not in after_overwrites:
                 label = getattr(target, "mention", None) or getattr(target, "name", str(target))
                 changes.append(f"**Overwrite Removed** for {label}")
+                overwrite_restore.append(overwrite_entry(target, before_overwrites[target]))
 
         if not changes:
             return
@@ -861,12 +1083,26 @@ class ServerLogger(commands.Cog):
             after.guild, discord.AuditLogAction.channel_update, after.id)
         responsible = entry.user if entry else None
 
+        snapshot = None
+        if revert_before or overwrite_restore:
+            snapshot = await save_snapshot(
+                after.guild.id, "channel-update",
+                {"channel_id": after.id, "before": revert_before,
+                 "overwrites": overwrite_restore},
+            )
+
         body = (
-            f"**Channel:** {after.mention} (`{after.name}`)\n"
+            f"**Channel:** {after.mention} (`{after.name}` — ID: `{after.id}`)\n"
             f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
             + "\n".join(changes)
         )
-        await self.log_event(after.guild, "channels", "Channel Updated", body)
+        if snapshot:
+            body += "\n-# Press **Revert Changes** to put these settings back."
+        await self.log_event(
+            after.guild, "channels", "Channel Updated", body,
+            channel_id=after.id,
+            revert=("channel-update", snapshot) if snapshot else None,
+        )
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role: discord.Role):
@@ -876,12 +1112,13 @@ class ServerLogger(commands.Cog):
 
         color_text = str(role.color) if role.color.value else "Default"
         body = (
-            f"**Role:** {role.mention} (`{role.name}`)\n"
-            f"**Color:** `{color_text}`\n"
-            f"**Hoisted:** `{role.hoist}` | **Mentionable:** `{role.mentionable}`\n"
+            f"**Role:** {role.mention} (`{role.name}` — ID: `{role.id}`)\n"
+            f"**Color:** `{color_text}` · **Hoisted:** `{role.hoist}` · **Mentionable:** `{role.mentionable}`\n"
+            f"**Position:** `{role.position}` · **Members:** `{len(role.members)}`\n"
+            f"**Permissions:** {_permission_list(role.permissions)}\n"
             f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
         )
-        await self.log_event(role.guild, "roles", "Role Created", body)
+        await self.log_event(role.guild, "roles", "Role Created", body, target_id=role.id)
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):
@@ -889,11 +1126,24 @@ class ServerLogger(commands.Cog):
             role.guild, discord.AuditLogAction.role_delete, role.id)
         responsible = entry.user if entry else None
 
+        # The role is gone, so its settings are snapshotted now: the restore
+        # button can only recreate what it knows about.
+        snapshot = await save_snapshot(role.guild.id, "role", role_snapshot(role))
+
         body = (
             f"**Role:** `{role.name}` (ID: `{role.id}`)\n"
+            f"**Color:** `{role.colour}` · **Hoisted:** `{role.hoist}` · **Mentionable:** `{role.mentionable}`\n"
+            f"**Position:** `{role.position}`\n"
+            f"**Permissions:** {_permission_list(role.permissions)}\n"
             f"**Deleted By:** {responsible.mention if responsible else 'Unknown'}"
         )
-        await self.log_event(role.guild, "roles", "Role Deleted", body)
+        if snapshot:
+            body += "\n-# Press **Restore Role** to recreate it with the same settings."
+        await self.log_event(
+            role.guild, "roles", "Role Deleted", body,
+            target_id=role.id,
+            revert=("role", snapshot) if snapshot else None,
+        )
 
     @commands.Cog.listener()
     async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
@@ -924,11 +1174,12 @@ class ServerLogger(commands.Cog):
         responsible = entry.user if entry else None
 
         body = (
-            f"**Role:** {after.mention} (`{after.name}`)\n"
+            f"**Role:** {after.mention} (`{after.name}` — ID: `{after.id}`)\n"
+            f"**Members:** `{len(after.members)}` · **Position:** `{after.position}`\n"
             f"**Updated By:** {responsible.mention if responsible else 'Unknown'}\n"
             + "\n".join(changes)
         )
-        await self.log_event(after.guild, "roles", "Role Updated", body)
+        await self.log_event(after.guild, "roles", "Role Updated", body, target_id=after.id)
 
     @commands.Cog.listener()
     async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
@@ -1051,6 +1302,35 @@ class ServerLogger(commands.Cog):
                 f"**To:** {after.channel.mention}"
             )
             await self.log_event(guild, "voice", "Voice Move", body, target_id=member.id)
+
+        else:
+            # Same channel: the category promises mute/deafen changes too, and
+            # they used to be silent. self_stream and self_video are only sent
+            # for some guilds, so a missing attribute changes nothing.
+            states = []
+            for attribute, label, on_text, off_text in (
+                ("self_mute", "Self Mute", "muted", "unmuted"),
+                ("self_deaf", "Self Deafen", "deafened", "undeafened"),
+                ("self_stream", "Stream", "started streaming", "stopped streaming"),
+                ("self_video", "Camera", "camera on", "camera off"),
+                ("mute", "Server Mute", "server-muted", "server-unmuted"),
+                ("deaf", "Server Deafen", "server-deafened", "server-undeafened"),
+            ):
+                was = getattr(before, attribute, None)
+                now = getattr(after, attribute, None)
+                if was is None or now is None or was == now:
+                    continue
+                states.append(f"**{label}:** `{on_text if now else off_text}`")
+            if not states:
+                return
+            channel = after.channel or before.channel
+            body = (
+                f"**Member:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Channel:** {channel.mention if channel else 'Unknown'}\n"
+                + "\n".join(states)
+            )
+            await self.log_event(
+                guild, "voice", "Voice State Updated", body, target_id=member.id)
 
     @commands.Cog.listener()
     # discord.py does not pass the moderator, so the audit log is the only source.

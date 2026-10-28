@@ -3,9 +3,8 @@
 The reported bug: every guild the signed-in member administers was listed under
 "Add Niko to a server" instead of "Manage a server", because install state was
 read only from the live gateway cache. That cache is legitimately empty in a
-standby process (`STANDBY_MODE` never connects a gateway) and in a dashboard
-served before the first READY, so the bot's recorded guild list has to be the
-fallback.
+dashboard served before the first READY, so the bot's recorded guild list has
+to be the fallback.
 """
 
 import json
@@ -59,7 +58,7 @@ class BotGuildIdTests(unittest.TestCase):
         self.assertEqual(runtime.bot_guild_ids(), {"333"})
 
     def test_an_empty_gateway_cache_falls_back_to_the_recorded_guilds(self):
-        # A standby bot keeps the object but owns no shards.
+        # Before the first READY the bot object exists but holds no guilds.
         runtime._discord_bot = SimpleNamespace(guilds=[])
         self.assertEqual(runtime.bot_guild_ids(), {"111", "222"})
 

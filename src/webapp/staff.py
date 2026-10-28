@@ -92,9 +92,9 @@ def _staff_identity(user_id: str) -> dict:
             cached_identity = cached_identity_entry[1]
         elif runtime._discord_bot is not None:
             try:
-                # A warm standby may have no gateway-populated user cache.
-                # Resolve identity through Discord REST without taking gateway
-                # ownership, then cache it to avoid polling Discord every 5s.
+                # The gateway user cache can be empty right after a restart.
+                # Resolve identity through Discord REST instead, then cache it
+                # to avoid polling Discord every 5s.
                 user = runtime.run_on_bot_loop(runtime._discord_bot.fetch_user(int(user_id)))
                 avatar = getattr(user, "display_avatar", None)
                 cached_identity = {

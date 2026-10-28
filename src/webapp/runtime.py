@@ -71,7 +71,7 @@ def schedule_on_bot_loop(awaitable):
 
 def public_base_url() -> str:
     """Return the externally reachable origin used by provider callbacks."""
-    explicit = os.environ.get("PUBLIC_URL") or os.environ.get("DONATION_SITE_URL")
+    explicit = os.environ.get("PUBLIC_URL")
     if explicit:
         return explicit.rstrip("/")
     domain = os.environ.get("REPLIT_DEV_DOMAIN")
@@ -113,11 +113,10 @@ def bot_guild_ids() -> set:
     """Return the set of guild IDs the bot is currently in.
 
     The live gateway cache is authoritative whenever it has entries. It is
-    empty in two real cases though: a dashboard served before the gateway has
-    finished its first READY, and a standby process, which never connects a
-    gateway at all. Trusting only the cache there reported every guild as
-    "Niko is not installed", so fall back to the guild list the bot records in
-    ``data/bot_stats.json`` at startup.
+    empty in one real case though: a dashboard served before the gateway has
+    finished its first READY. Trusting only the cache there reported every
+    guild as "Niko is not installed", so fall back to the guild list the bot
+    records in ``data/bot_stats.json`` at startup.
     """
     if _discord_bot is not None:
         cached = {str(guild.id) for guild in getattr(_discord_bot, "guilds", [])}

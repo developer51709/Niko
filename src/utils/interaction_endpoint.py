@@ -43,10 +43,9 @@ from utils import logging
 #: is also when it gives up on the HTTP response.
 DISCORD_DEADLINE_SECONDS = 3.0
 #: How long the route waits for the handler's callback.  The rest of the window
-#: is the round trip to Discord, plus the standby relay on the way (that relay
-#: reads upstream with a three second timeout of its own), so the default leaves
-#: a full second of margin.  ``DISCORD_INTERACTION_BUDGET_SECONDS`` overrides it
-#: for a deployment that can afford to wait longer.
+#: is the round trip to Discord, so the default leaves a full second of margin.
+#: ``DISCORD_INTERACTION_BUDGET_SECONDS`` overrides it for a deployment that can
+#: afford to wait longer.
 DEFAULT_RESPONSE_BUDGET_SECONDS = 2.0
 #: How long past the budget the route waits before it stops waiting for the
 #: dispatch itself, so the budget is always what ends the wait.

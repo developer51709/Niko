@@ -12,7 +12,7 @@ from config import links as site_links
 
 
 def public_origin() -> str:
-    explicit = os.environ.get("PUBLIC_URL") or os.environ.get("DONATION_SITE_URL")
+    explicit = os.environ.get("PUBLIC_URL")
     if explicit:
         return explicit.rstrip("/")
     return site_links.WEBSITE
