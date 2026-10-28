@@ -423,19 +423,22 @@ def get_runtime_level_config(guild_id: str) -> dict:
     return _serialize_level_config(level_cfg or runtime.load_json(config.LEVELCFG_JSON, {}).get(guild_id, {}))
 
 
-def get_open_team_openings(limit: int = 6) -> list[dict] | None:
-    """The staff roles accepting applications right now.
+def get_team_openings(limit: int = 10, opening_id: str | None = None) -> list[dict] | None:
+    """Official staff role openings, each with whether it is hiring.
 
-    Used by the applications page's link preview, which has to name the open
-    roles without the viewer opening the page. Only the columns the preview
-    shows are read, and the same ``status = 'open'`` filter the page's own API
-    uses applies, so a closed role never appears in a preview.
+    Used by the applications page's link preview: the page lists the roles that
+    are open, while a role's own application page has to say whether that role
+    is accepting applications right now — so a closed row is read too instead
+    of being filtered out. ``opening_id`` narrows the read to one role. Only the
+    columns the preview shows are read, and open roles come first so the ones a
+    reader can act on lead the list.
 
     Returns ``None`` when the table cannot be read, which the caller treats as
     "no openings to list" rather than an error.
     """
-    limit = max(1, min(int(limit), 10))
-    columns = "id, title, description"
+    limit = max(1, min(int(limit), 20))
+    columns = "id, title, description, status"
+    order = "(status = 'open') DESC, title ASC"
 
     def normalize(rows) -> list[dict]:
         openings = []
@@ -447,16 +450,20 @@ def get_open_team_openings(limit: int = 6) -> list[dict] | None:
                 "id": str(row.get("id") or ""),
                 "title": title,
                 "description": " ".join(str(row.get("description") or "").split()),
+                "open": str(row.get("status") or "").strip().lower() == "open",
             })
         return openings[:limit]
 
     pool = getattr(runtime._discord_bot, "cxn", None) if runtime._discord_bot is not None else None
     if pool is not None:
+        where = "WHERE id = $1 " if opening_id else ""
+        args = (opening_id, limit) if opening_id else (limit,)
+
         async def read_openings():
             return await pool.fetch(
                 f"SELECT {columns} FROM staff_team_openings "
-                "WHERE status = 'open' ORDER BY created_at DESC LIMIT $1",
-                limit,
+                f"{where}ORDER BY {order} LIMIT ${len(args)}",
+                *args,
             )
 
         try:
@@ -466,14 +473,18 @@ def get_open_team_openings(limit: int = 6) -> list[dict] | None:
 
     conn = sqlite_connect()
     if conn is not None:
+        where = "WHERE id = ? " if opening_id else ""
         try:
             rows = conn.execute(
                 f"SELECT {columns} FROM staff_team_openings "
-                "WHERE status = 'open' ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                f"{where}ORDER BY {order} LIMIT ?",
+                (opening_id, limit) if opening_id else (limit,),
             ).fetchall()
             conn.close()
-            return normalize([{"id": row[0], "title": row[1], "description": row[2]} for row in rows])
+            return normalize([
+                {"id": row[0], "title": row[1], "description": row[2], "status": row[3]}
+                for row in rows
+            ])
         except Exception:
             conn.close()
 
