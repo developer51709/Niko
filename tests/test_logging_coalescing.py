@@ -35,11 +35,13 @@ class _Message:
     def __init__(self, view):
         self.view = view
         self.edits = []
+        self.mentions = []
         self.deleted = False
         self.id = 1
 
-    async def edit(self, *, view):
+    async def edit(self, *, view, allowed_mentions=None):
         self.edits.append(view)
+        self.mentions.append(allowed_mentions)
         self.view = view
 
     async def delete(self):
@@ -114,6 +116,21 @@ class TestRetentionWindow(_CogTestCase):
         self.assertIn("<@&2>", body)
         self.assertEqual(body.count("**Member:**"), 1)
         self.assertIn(logging_cog.COALESCED_NOTE, body)
+
+    def test_every_merged_edit_suppresses_mentions(self):
+        # The merged body mentions roles and members. An edit that omitted
+        # allowed_mentions would ping every role named in the entry.
+        self.send(_member_update("**Roles Added:** <@&1>"))
+        self.send(_member_update("**Roles Added:** <@&2>"))
+        self.send(_member_update("**Roles Added:** <@&3>"))
+
+        mentions = self.channel.sent[0].mentions
+        self.assertEqual(len(mentions), 2)
+        for allowed in mentions:
+            self.assertIs(allowed.roles, False)
+            self.assertIs(allowed.users, False)
+            self.assertIs(allowed.everyone, False)
+            self.assertIs(allowed.replied_user, False)
 
     def test_added_and_removed_roles_are_kept_apart(self):
         self.send(_member_update("**Roles Added:** <@&1>"))
@@ -194,7 +211,7 @@ class TestRetentionWindow(_CogTestCase):
         self.send(_member_update("**Roles Added:** <@&1>"))
         message = self.channel.sent[0]
 
-        async def _gone(*, view):
+        async def _gone(*, view, allowed_mentions=None):
             raise discord.NotFound(
                 SimpleNamespace(status=404, reason="Not Found"), "Unknown Message")
 

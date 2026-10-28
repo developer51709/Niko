@@ -75,7 +75,7 @@ performed server-side; the frontend must not be treated as the security boundary
 | GET | `/api/premium/guilds` | Servers the signed-in member can upgrade, with premium state |
 | POST | `/api/premium/checkout` | Start a one-month white-label purchase; returns the crypto address, amount, and QR code |
 | GET | `/api/premium/orders/<order_id>` | Poll a checkout and the guild's resulting term |
-| GET | `/api/premium/gift-targets` | Servers the signed-in member belongs to, with premium state |
+| GET | `/api/premium/gift-targets` | Mutual servers the signed-in member belongs to, with premium state |
 | POST | `/api/premium/gift/checkout` | Start a gift for 1, 3, 6, or 12 months on a server the payer belongs to |
 | GET | `/api/premium/gift/orders/<order_id>` | Poll a gift and the recipient's resulting term |
 | GET | `/api/donations/meta` | Presets, currencies, totals, and goal for the donation page |
