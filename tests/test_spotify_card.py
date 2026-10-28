@@ -73,6 +73,20 @@ class SpotifyCardRenderTests(unittest.TestCase):
         self.assertEqual(image.size, (CARD_W, CARD_H))
         image.close()
 
+    def test_card_keeps_its_rounded_corners_transparent(self):
+        buffer = _render_spotify_sync(None, "Track", "Artist", "Album", 180.0, 30.0, "")
+        image = Image.open(buffer)
+        self.assertEqual(image.mode, "RGBA")
+        with self.subTest(corner="top-left"):
+            self.assertEqual(image.getpixel((0, 0))[3], 0)
+        with self.subTest(corner="top-right"):
+            self.assertEqual(image.getpixel((CARD_W - 1, 0))[3], 0)
+        with self.subTest(corner="bottom-left"):
+            self.assertEqual(image.getpixel((0, CARD_H - 1))[3], 0)
+        with self.subTest(corner="mid-top stays opaque"):
+            self.assertEqual(image.getpixel((CARD_W // 2, 2))[3], 255)
+        image.close()
+
     def test_public_renderer_returns_a_png_buffer(self):
         buffer = asyncio.run(
             render_spotify_card(

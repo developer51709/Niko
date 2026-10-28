@@ -285,7 +285,9 @@ class ShopMixin:
         if not items:
             view = _info_view("🛒 Empty shelves", "Nothing in stock for that category.")
         else:
-            message = await self._show_loading_card(ctx, "shop")
+            message = await self._show_loading_card(
+                ctx, "shop", rows=len(items), shop_controls=True,
+            )
             card = await render_shop_card(items=items, balance=int(data.get("balance", 0)), category=cat_filter)
             view = _ShopActionView(self, image_name="shop.png")
             return await message.edit(view=view, attachments=[discord.File(card, "shop.png")])

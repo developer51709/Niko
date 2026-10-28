@@ -239,6 +239,21 @@ def get_item(item_id: str) -> dict | None:
     return SHOP_ITEMS.get((item_id or "").lower())
 
 
+def shop_loading_row_counts() -> list[int]:
+    """Row counts a shop card can show, sorted ascending.
+
+    ``shop`` renders the whole catalogue and ``shop <category>`` renders one
+    category, so those are the only row counts that occur in practice. Both the
+    loading-card generator and the bot's loading view read this list, which
+    keeps the pre-rendered GIF size in step with the finished card when items
+    are added or removed.
+    """
+    counts = {1, len(SHOP_ITEMS)}
+    for category in {item.get("category") for item in SHOP_ITEMS.values()}:
+        counts.add(sum(1 for item in SHOP_ITEMS.values() if item.get("category") == category))
+    return sorted(count for count in counts if count > 0)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Bank tiers
 #

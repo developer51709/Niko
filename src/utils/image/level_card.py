@@ -22,7 +22,7 @@ import asyncio
 import requests
 from io import BytesIO
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 from utils.image._font_resolver import (
     get_bold,
     get_reg,
@@ -106,6 +106,11 @@ def _render_level_sync(
     overlay.putalpha(ImageOps.invert(vignette))
     canvas = Image.alpha_composite(grad, overlay)
 
+    # The vignette overlay covers the whole rectangle, so compositing it fills
+    # the space outside the rounded corners back in. Clip the alpha to the
+    # rounded shape so the corner cut-outs stay transparent in the saved image.
+    canvas.putalpha(ImageChops.multiply(canvas.getchannel("A"), _rounded_mask((RANK_W, RANK_H), 28)))
+
     # border
     bd = ImageDraw.Draw(canvas)
     bd.rounded_rectangle([0, 0, RANK_W - 1, RANK_H - 1], radius=28, outline=ac, width=2)
@@ -172,7 +177,9 @@ def _render_level_sync(
     d.text((RANK_W - 36 - pw2, bar_y + 2), pct_text, fill=DIM, font=_reg(13))
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    # Save with the alpha channel so the rounded corner cut-outs stay
+    # transparent instead of becoming opaque black.
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 

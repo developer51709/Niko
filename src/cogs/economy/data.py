@@ -34,7 +34,7 @@ from config.links import WEBSITE
 from .seasons import season_open, season_open_key
 from utils.economy_jobs import (
     JOBS, DEFAULT_JOB, get_job,
-    SHOP_ITEMS, get_item,
+    SHOP_ITEMS, get_item, shop_loading_row_counts,
     BANK_TIERS, bank_info, bank_cap, bank_name, bank_rate, max_bank_tier,
     xp_to_next, total_xp_for_level, level_from_total_xp, add_xp,
     LOTTERY_TICKET_PRICE, LOTTERY_DRAW_INTERVAL, LOTTERY_HOUSE_RAKE, LOTTERY_BASE_POT,
@@ -970,24 +970,68 @@ def _loading_cards_base() -> str:
     return f"{origin or WEBSITE}/assets/loading-cards/economy"
 
 
-def _loading_card_view(card_type: str) -> discord.ui.LayoutView:
+def _shop_loading_file(rows: int | None) -> str:
+    """The shop loading GIF that matches a card with *rows* item rows.
+
+    ``scripts/generate_economy_loading_cards.py`` writes ``shop.gif`` for the
+    whole catalogue and ``shop-<rows>.gif`` for each category, so the
+    placeholder is exactly as tall as the finished card and the edit that
+    swaps them in does not resize the message. An unknown row count falls back
+    to the next generated size that can hold it.
+    """
+    available = shop_loading_row_counts()
+    largest = max(available)
+    if rows is None:
+        return "shop.gif"
+    try:
+        wanted = max(1, int(rows))
+    except (TypeError, ValueError):
+        return "shop.gif"
+    if wanted >= largest:
+        return "shop.gif"
+    matched = next((count for count in available if count >= wanted), largest)
+    return "shop.gif" if matched == largest else f"shop-{matched}.gif"
+
+
+def _loading_card_view(
+    card_type: str,
+    *,
+    rows: int | None = None,
+    shop_controls: bool = False,
+) -> discord.ui.LayoutView:
     """A remote animated loading card for *card_type*.
 
     The GIF is hosted by the public website rather than uploaded with the
     message, so the loading state costs no attachment and appears instantly.
     The finished card then replaces it in the same message (see
     ``EconomyCog._show_loading_card``).
+
+    ``rows`` picks the shop GIF that is exactly as tall as the card about to
+    be rendered, and ``shop_controls`` adds the Buy/Sell buttons in a disabled
+    state, so the shop message keeps the same shape while it loads.
     """
     card_type = str(card_type).lower()
     if card_type not in LOADING_CARD_TYPES:
         raise ValueError(f"Unknown economy loading card type: {card_type!r}")
+    file_name = f"{card_type}.gif"
+    if card_type == "shop":
+        file_name = _shop_loading_file(rows)
     view = discord.ui.LayoutView()
-    view.add_item(discord.ui.Container(
+    container = discord.ui.Container(
         discord.ui.MediaGallery(discord.MediaGalleryItem(
-            media=f"{_loading_cards_base()}/{card_type}.gif",
+            media=f"{_loading_cards_base()}/{file_name}",
         )),
         accent_colour=ACCENT_BROWN,
-    ))
+    )
+    if shop_controls:
+        # Same hint and buttons as `_ShopActionView`, only disabled until the
+        # card is ready — the layout does not jump when the card arrives.
+        container.add_item(discord.ui.TextDisplay(content="-# Choose an action below to open a private checkout panel."))
+        container.add_item(discord.ui.ActionRow(
+            discord.ui.Button(label="Buy", style=discord.ButtonStyle.success, disabled=True),
+            discord.ui.Button(label="Sell", style=discord.ButtonStyle.secondary, disabled=True),
+        ))
+    view.add_item(container)
     return view
 
 
