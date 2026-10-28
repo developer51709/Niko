@@ -32,6 +32,9 @@ what ``context`` carries in:
 * ``kind="applications"`` — the staff applications page. Lists the roles that
   are open, each linked to its own form, so a reader can pick one from the
   preview without opening the page first.
+* ``kind="application"`` — one role's application form. Describes that role and
+  says whether it is accepting applications right now, so a closed role does
+  not read as if it were still hiring.
 
 A context is only ever built from data the page itself already publishes.
 

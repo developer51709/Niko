@@ -72,9 +72,17 @@ _STAFF_PAGE = re.compile(r"^/team/([^/]+)$")
 # above would otherwise claim it and borrow the roster's copy.
 _TEAM_APPLY_PAGE = "/team/apply"
 
+# One role's own application form, /team/apply/<opening id>.
+_TEAM_APPLICATION_PAGE = re.compile(r"^/team/apply/([^/]+)$")
+
 # Discord caps the payload at 3,000 bytes and an unreadably long list helps
 # nobody, so the preview names a handful of roles and leaves the rest to the page.
 _APPLICATION_LIST_LIMIT = 6
+
+# How many rows the list preview reads before keeping the open ones: closed
+# roles are read too (a role's own page reports its status), and they must not
+# crowd the roles a reader can actually apply to out of the capped list.
+_APPLICATION_READ_LIMIT = 20
 
 
 def _staff_card_accent(member: dict) -> int | None:
@@ -86,6 +94,22 @@ def _staff_card_accent(member: dict) -> int | None:
         return int(raw, 16)
     except ValueError:
         return None
+
+
+def _bot_avatar_url() -> str:
+    """The bot's own avatar, used as the thumbnail of its own pages.
+
+    An empty string is fine: the preview module falls back to the site icon, so
+    a server without a live gateway still previews.
+    """
+    bot = runtime._discord_bot
+    user = getattr(bot, "user", None) if bot is not None else None
+    if user is None:
+        return ""
+    try:
+        return str(user.display_avatar.url)
+    except Exception:
+        return ""
 
 
 def _guild_embed_context(guild_id: str) -> dict | None:
@@ -195,10 +219,15 @@ def _team_apply_embed_context() -> dict:
     public information; every entry links straight to that role's form so a
     reader can pick one from the preview instead of opening the page first.
     """
-    # Capped here as well as in the reader: the reader's LIMIT keeps the query
-    # small, and this keeps an over-long list from exceeding the payload budget
-    # (an over-limit embed is discarded entirely, which would lose the links).
-    openings = (database.get_open_team_openings(_APPLICATION_LIST_LIMIT) or [])[:_APPLICATION_LIST_LIMIT]
+    # The page only lists roles it can take applications for, so the preview
+    # does the same: the reader returns closed roles as well (their own pages
+    # report their status), and they are dropped here. The list stays capped
+    # because an over-long payload is discarded entirely, which would lose the
+    # links (an over-limit embed is dropped in full).
+    openings = [
+        opening for opening in (database.get_team_openings(_APPLICATION_READ_LIMIT) or [])
+        if opening.get("open")
+    ][:_APPLICATION_LIST_LIMIT]
     entries = []
     for opening in openings:
         title = str(opening.get("title") or "").strip()
@@ -229,10 +258,54 @@ def _team_apply_embed_context() -> dict:
         ),
         "name": "Join the Niko team",
         "section": "Staff applications",
-        "thumbnail": "",
+        # Niko's own face, like every other page it fronts: a list of its staff
+        # roles should look like Niko, not like the site's generic icon.
+        "thumbnail": _bot_avatar_url(),
         "accent": None,
         "lines": lines,
         "list": entries,
+    }
+
+
+def _team_application_embed_context(opening_id: str) -> dict | None:
+    """One staff role's application page: what it is, and whether it is hiring.
+
+    A role that has stopped taking applications still has a page — old links
+    are shared around — so it is described with its status instead of falling
+    back to the section's generic copy. Everything here is already public: the
+    applications page lists each role's title and description.
+    """
+    if not opening_id:
+        return None
+    openings = database.get_team_openings(_APPLICATION_READ_LIMIT, opening_id=opening_id)
+    opening = next(
+        (item for item in (openings or []) if str(item.get("id")) == opening_id),
+        None,
+    )
+    if not opening:
+        return None
+    title = str(opening.get("title") or "Niko team")
+    accepting = bool(opening.get("open"))
+    description = str(opening.get("description") or "").strip()
+    if len(description) > 200:
+        description = description[:197].rstrip() + "…"
+    if not description:
+        description = f"Applications for {title} on the Niko team."
+    status = (
+        "-# Open now · accepting new applications"
+        if accepting
+        else "-# Closed right now · not accepting new applications"
+    )
+    return {
+        "kind": "application",
+        "template": _TEAM_APPLY_PAGE,
+        "title": f"{title} — Niko staff application",
+        "description": description,
+        "name": title,
+        "section": "Niko staff application" if accepting else "Niko staff application · closed",
+        "thumbnail": _bot_avatar_url(),
+        "accent": None,
+        "lines": [status],
     }
 
 
@@ -251,6 +324,10 @@ def _social_context(route: str) -> dict | None:
     context = None
     if key == _TEAM_APPLY_PAGE:
         context = _team_apply_embed_context()
+    elif (match := _TEAM_APPLICATION_PAGE.match(key)):
+        # An unknown role borrows the applications page's copy rather than
+        # describing a role that does not exist.
+        context = _team_application_embed_context(match.group(1)) or {"template": _TEAM_APPLY_PAGE}
     elif (match := _GUILD_PAGE.match(key)):
         # No server data (the bot is not in it, or it is not reachable) still
         # borrows the leaderboard section's copy.
