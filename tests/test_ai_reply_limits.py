@@ -217,6 +217,70 @@ def test_tools_are_attached_for_an_explicit_request(monkeypatch):
     assert "tools" in requests[0]
 
 
+@pytest.mark.parametrize("text", [
+    "create a channel called memes",
+    "create a channel",
+    "can you make a new channel for art?",
+    "set up a channel for gaming",
+    "add a channel please",
+    "new channel please",
+    "please create a text channel named announcements",
+    "delete the channel #spam",
+    "rename this channel",
+    "create a role for staff",
+    "give a role to bob",
+    "make him a moderator role",
+])
+def test_natural_phrasings_attach_the_action_tools(monkeypatch, text):
+    _, requests = ask(monkeypatch, [completion("sure")], text=text, ai_actions_enabled=True)
+    assert "tools" in requests[0], text
+
+
+@pytest.mark.parametrize("text", [
+    "what role do you play in this",
+    "i like this channel",
+    "my channel is lagging",
+    "new here, what channel should i post in",
+])
+def test_talking_about_channels_does_not_attach_the_tools(monkeypatch, text):
+    _, requests = ask(monkeypatch, [completion("hey")], text=text, ai_actions_enabled=True)
+    assert "tools" not in requests[0], text
+
+
+def test_a_create_channel_tool_call_returns_the_action(monkeypatch):
+    payload = '{"name": "memes", "type": "text", "topic": "fresh memes"}'
+    reply, requests = ask(
+        monkeypatch,
+        [completion(None, "tool_calls", [tool_call("create_channel", payload)])],
+        text="create a channel called memes",
+        ai_actions_enabled=True,
+    )
+    assert reply == {"action": "create_channel", "name": "memes", "type": "text", "topic": "fresh memes"}
+    assert "tools" in requests[0]
+
+
+def test_a_tool_call_is_used_even_when_the_finish_reason_is_stop(monkeypatch):
+    payload = '{"name": "memes"}'
+    reply, _ = ask(
+        monkeypatch,
+        [completion(None, "stop", [tool_call("create_channel", payload)])],
+        text="create a channel called memes",
+        ai_actions_enabled=True,
+    )
+    assert reply == {"action": "create_channel", "name": "memes"}
+
+
+def test_action_mode_is_explained_only_when_the_tools_are_attached(monkeypatch):
+    _, action_requests = ask(
+        monkeypatch, [completion("sure")], text="create a channel called memes", ai_actions_enabled=True
+    )
+    system = action_requests[0]["messages"][0]["content"]
+    assert "Action mode" in system
+
+    _, chat_requests = ask(monkeypatch, [completion("hey")], text="how are you", ai_actions_enabled=True)
+    assert "Action mode" not in chat_requests[0]["messages"][0]["content"]
+
+
 # ── Transient failures and sentinels ──────────────────────────────────────────
 
 def test_a_transient_error_is_retried(monkeypatch):

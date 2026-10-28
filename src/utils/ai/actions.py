@@ -694,7 +694,13 @@ async def _do_create_channel(bot, msg: discord.Message, args: dict) -> None:
     if err:
         await msg.channel.send(view=err)
         return
-    name = (args.get("name") or "").strip().lower().replace(" ", "-")[:90]
+    # The model often echoes how the user wrote it — "#memes", "<#123>",
+    # "announcements and news" — and Discord rejects those raw. Normalise
+    # before validating so a good request does not fail on formatting.
+    name = (args.get("name") or "").strip()
+    name = _CHANNEL_MENTION_RE.sub("", name).strip().lstrip("#").strip()
+    name = re.sub(r"[^\w\- ]+", "", name, flags=re.UNICODE)
+    name = re.sub(r"[\s_]+", "-", name.lower()).strip("-")[:90]
     if not name:
         await msg.channel.send(view=_error_view("Channel name is required."))
         return
