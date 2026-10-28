@@ -159,6 +159,7 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Member Updated": "members",
     "Avatar Updated": "members",
     "Server Avatar Updated": "members",
+    "Profile Banner Updated": "members",
     "Username Updated": "members",
     "Member Boosted": "members",
     "Boost Removed": "members",
@@ -235,6 +236,9 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     "Member Updated": "log_member_updated",
     "Avatar Updated": "log_avatar",
     "Server Avatar Updated": "image",
+    # A banner is neither a picture attachment nor a name, so it keeps the
+    # members category emoji rather than borrowing an icon that means something
+    # else in the same list.
     "Username Updated": "user",
     "Member Boosted": "boost",
     "Boost Removed": "star",

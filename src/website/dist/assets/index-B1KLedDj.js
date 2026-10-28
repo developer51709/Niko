@@ -2098,14 +2098,27 @@ All entries use Discord components v2 containers:
 - **Files** — non-image attachments from deleted messages are re-uploaded (capped at 5 files, 2 MB each)
 - **Archived pictures** — a profile picture change downloads both pictures and uploads them with the entry, because Discord expires the CDN URL of a replaced avatar within a day or two
 
+## 30-Second Retention Window
+
+An entry about a member (**Member Updated**, **Nickname Changed**) stays open for 30 seconds. A change that arrives inside that window is merged into the entry already posted and the message is edited, so a role menu clicked several times — or a moderator making a run of role changes — leaves one entry instead of one per click:
+
+- Role grants and removals accumulate in the same entry
+- A role granted and taken back inside the window cancels out, and an entry left with nothing to say is removed
+- Single-valued lines (a nickname, the staff member who made the change) show the latest value
+- Picture changes are never merged: each is a finished change whose before/after files belong to its own entry
+
+Edits respect the same per-channel rate limit as new entries, and a merged entry says so in its footer.
+
 ## Member Logging
 
 - **Member Joined** — Account age, join method (invite code, vanity URL, or unknown) and invite usage
 - **Member Left** — Roles at the time of departure and how long they had been in the server
 - **Kick / Ban** — A removed member is logged once as a kick or ban with the moderator and reason, never also as a plain leave
 - **Server Boosted / Boost Removed** — Boost count and server tier
-- **Avatar Updated** — The global profile picture changed; both pictures are attached to the entry
+- **Avatar Updated** — The global profile picture changed; both pictures are attached to the entry. Logged in every server the member shares with Niko, because a member without a per-server picture shows the global one everywhere
 - **Server Avatar Updated** — The per-server picture changed; logged as its own entry, so a member who changes both gets two entries
+- **Username Updated** — A global username or display name change, which is what the member is shown as in this server until they set a nickname
+- **Profile Banner Updated** — The global profile banner changed; both banners are archived on the entry
 - **Role Changes** — Roles added and removed, plus the staff member who changed them (read from the audit log)
 - **Nickname Changes** — Old and new nickname, attributed to the staff member who changed it
 

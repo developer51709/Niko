@@ -140,14 +140,17 @@ class _Asset:
         return self._data
 
 
-def _user(*, avatar=None, guild_avatar=None, member_id=42):
+def _user(*, avatar=None, guild_avatar=None, member_id=42, name="tester",
+          global_name=None, banner=None):
     return SimpleNamespace(
         id=member_id,
-        name="tester",
+        name=name,
+        global_name=global_name,
         mention=f"<@{member_id}>",
         __str__=lambda _self: "tester#0001",
         guild=_Guild(),
         avatar=avatar,
+        banner=banner,
         guild_avatar=guild_avatar,
         display_avatar=SimpleNamespace(url="https://cdn.example/current.png"),
         roles=[],
@@ -188,11 +191,14 @@ class TestProfilePictures:
         before = _user(avatar=_Asset("https://cdn.example/old.png"))
         after = _user(avatar=_Asset("https://cdn.example/new.png"))
 
-        asyncio.run(cog.on_member_update(before, after))
+        # A global change reaches the bot as a user update: the member in a
+        # member update shares its user object, so it never shows the diff.
+        asyncio.run(cog.on_user_update(before, after))
 
         cog.log_event.assert_awaited_once()
         call = _call(cog)
         assert call.title == "Avatar Updated"
+        assert call.guild.id == GUILD_ID
         assert "Global profile picture" in call.body
         assert [file.filename for file in call.files] == [
             "profile-picture-before.png", "profile-picture-after.png"]
@@ -231,6 +237,7 @@ class TestProfilePictures:
             guild_avatar=_Asset("https://cdn.example/new-server.png"),
         )
 
+        asyncio.run(cog.on_user_update(before, after))
         asyncio.run(cog.on_member_update(before, after))
 
         titles = [call.kwargs["title"] for call in cog.log_event.await_args_list]
@@ -242,7 +249,7 @@ class TestProfilePictures:
         before = _user(avatar=_Asset("https://cdn.example/same.png"))
         after = _user(avatar=_Asset("https://cdn.example/same.png"))
 
-        asyncio.run(cog.on_member_update(before, after))
+        asyncio.run(cog.on_user_update(before, after))
 
         cog.log_event.assert_not_awaited()
 
@@ -251,7 +258,7 @@ class TestProfilePictures:
         before = _user(avatar=_Asset("https://cdn.example/old.png", error=OSError("gone")))
         after = _user(avatar=_Asset("https://cdn.example/new.png"))
 
-        asyncio.run(cog.on_member_update(before, after))
+        asyncio.run(cog.on_user_update(before, after))
 
         call = _call(cog)
         # Only the picture that could not be downloaded is linked; the other is
@@ -269,11 +276,57 @@ class TestProfilePictures:
         after = _user(avatar=_Asset("https://cdn.example/new.png", data=b"ok"))
 
         with mock.patch.object(logging_cog, "MAX_ARCHIVED_AVATAR_BYTES", 4):
-            asyncio.run(cog.on_member_update(before, after))
+            asyncio.run(cog.on_user_update(before, after))
 
         call = _call(cog)
         assert [file.filename for file in call.files] == ["profile-picture-after.png"]
         assert call.media_urls[0] == "https://cdn.example/huge.gif"
+
+    def test_the_same_change_dispatched_twice_is_logged_once(self):
+        cog = _cog()
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        # Discord dispatches one profile edit once per shared server.
+        asyncio.run(cog.on_user_update(before, after))
+        asyncio.run(cog.on_user_update(_user(avatar=_Asset("https://cdn.example/old.png")), after))
+
+        cog.log_event.assert_awaited_once()
+
+    def test_a_global_name_change_is_logged(self):
+        cog = _cog()
+        before = _user(name="tester", global_name="Old Name")
+        after = _user(name="tester", global_name="New Name")
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        cog.log_event.assert_awaited_once()
+        call = _call(cog)
+        assert call.title == "Username Updated"
+        assert "**Display Name:** `Old Name` → `New Name`" in call.body
+        assert "Username:" not in call.body
+
+    def test_a_username_change_is_logged(self):
+        cog = _cog()
+        before = _user(name="tester")
+        after = _user(name="renamed")
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert "**Username:** `tester` → `renamed`" in call.body
+
+    def test_a_banner_change_has_its_own_entry(self):
+        cog = _cog()
+        before = _user(banner=_Asset("https://cdn.example/old-banner.png"))
+        after = _user(banner=_Asset("https://cdn.example/new-banner.png"))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert call.title == "Profile Banner Updated"
+        assert [file.filename for file in call.files] == [
+            "profile-banner-before.png", "profile-banner-after.png"]
 
 
 # ── Snapshot store ────────────────────────────────
