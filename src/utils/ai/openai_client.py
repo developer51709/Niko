@@ -473,46 +473,73 @@ _AI_ACTIONS_TOOLS = [
 ]
 
 
-# ── Action-intent keyword sets ─────────────────────────────────────────────────
+# ── Action-intent matching ────────────────────────────────────────────────────
 # Tools are only attached to the API request when the incoming message clearly
 # signals a moderation or server-management intent.  This avoids sending ~2,000
 # extra tool-definition tokens on every casual chat message.
+#
+# Matching is verb + (filler) + noun instead of a fixed phrase list.  The old
+# list only held "create channel"/"make a channel", so the requests people
+# actually type — "create a channel called memes", "make a new channel",
+# "set up a channel", even "delete the channel" — never attached the tools and
+# the model could only answer in text.  The filler run covers the articles and
+# adjectives that sit between the verb and the noun.
 
-_ACTION_PHRASES = {
-    # moderation verbs
-    "ban", "unban", "kick", "mute", "unmute", "timeout", "untimeout",
-    "warn", "warning", "strike",
-    # message management
-    "purge", "clear messages", "delete messages", "bulk delete",
-    # channel management
-    "create channel", "delete channel", "rename channel",
-    "make a channel", "set topic", "channel topic",
-    # role management
-    "create role", "delete role", "make a role", "assign role",
-    "give role", "remove role", "take role", "add role",
-    # nickname
-    "nickname", "change nick", "set nick", "rename",
-    # polls
-    "create poll", "make a poll", "start a poll",
-}
+#: Short run of words allowed between the verb and its noun — "create *a new
+#: private* channel", "add *the mod* role", "give *him a moderator* role". A
+#: fixed word list kept missing these, so it is a bounded gap instead.
+_ACTION_GAP = r"[^.\n]{0,40}?"
 
-# Single words that on their own strongly suggest an action request
+_CREATE_VERBS = r"(?:create|make|add|open|start|build|spawn|setup|set\s+up)"
+_EDIT_VERBS = r"(?:delete|remove|rename|edit|change|update|modify|nuke|wipe|archive)"
+_GRANT_VERBS = r"(?:assign|give|grant|add|remove|take|revoke|strip)"
+
+# Moderation verbs strong enough to attach the tools on their own.
 _ACTION_KEYWORDS = {
-    "ban", "unban", "kick", "mute", "unmute", "timeout",
-    "untimeout", "warn", "purge", "poll",
+    "ban", "unban", "kick", "mute", "unmute", "timeout", "untimeout",
+    "warn", "purge", "poll",
 }
-
 
 # Word-boundary matcher: plain substring matching attached all 18 tool schemas
 # to innocent messages such as "banana" or "urban" ("ban" is a substring).
 _ACTION_RE = re.compile(
-    r"\b("
-    + "|".join(
-        re.escape(phrase)
-        for phrase in sorted(_ACTION_PHRASES | _ACTION_KEYWORDS, key=len, reverse=True)
-    )
-    + r")\b",
+    r"\b(?:"
+    + "|".join(re.escape(word) for word in sorted(_ACTION_KEYWORDS, key=len, reverse=True))
+    + r")\b"
+    # channels: create/set up a channel, delete/rename the channel, channel topic
+    + rf"|\b{_CREATE_VERBS}\b{_ACTION_GAP}\bchannels?\b"
+    # "new channel" is a common shorthand, but a bare "new" + gap matched
+    # "new here, what channel should i post in" — keep it adjacent only.
+    + r"|\bnew\s+(?:text|voice)?\s*channels?\b"
+    + rf"|\b{_EDIT_VERBS}\b{_ACTION_GAP}\bchannels?\b"
+    + rf"|\btopics?\b{_ACTION_GAP}\bchannels?\b|\bchannels?\b{_ACTION_GAP}\btopics?\b"
+    # channel by mention/name only: "delete #spam", "rename <#123>"
+    + rf"|\b{_EDIT_VERBS}\b{_ACTION_GAP}(?:<#\d+>|#[\w-]+|" + r"'(?:[\w-]+)')"
+    # roles: create/delete a role, give @user the role, remove their role
+    + rf"|\b{_CREATE_VERBS}\b{_ACTION_GAP}\broles?\b"
+    + rf"|\b{_GRANT_VERBS}\b{_ACTION_GAP}\broles?\b"
+    + rf"|\b{_EDIT_VERBS}\b{_ACTION_GAP}\broles?\b"
+    # nicknames: change/set/reset a nickname
+    + rf"|\b(?:change|set|update|reset|assign)\b{_ACTION_GAP}\bnick(?:name)?\b"
+    # polls: create/start a poll
+    + rf"|\b{_CREATE_VERBS}\b{_ACTION_GAP}\bpolls?\b"
+    # messages: clear/delete/bulk-delete messages
+    + rf"|\b(?:clear|delete|remove|bulk\s+delete|clean\s+up|wipe)\b{_ACTION_GAP}\bmessages\b",
     re.IGNORECASE,
+)
+
+
+# Told to the model only when the tools are actually attached, so a text-only
+# answer to "create a channel called memes" stops being possible.
+_ACTION_SYSTEM_HINT = (
+    "\n\nAction mode\n"
+    "- The user is asking you to do something in this server (a channel, role, "
+    "nickname, poll, messages, or a member). Call exactly one tool with the "
+    "arguments it needs — do not describe the change in text instead.\n"
+    "- Never claim an action is done: the tool asks the request author to "
+    "confirm and then reports the real result.\n"
+    "- If the message is casual chat that merely mentions one of those words, "
+    "ignore the tools and reply normally."
 )
 
 
@@ -677,7 +704,10 @@ async def generate_reply_openai(
     # burns ~2,000 input tokens per request with no benefit.
     wants_action = ai_actions_enabled and _message_requests_action(message)
     conversation = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT + (_ACTION_SYSTEM_HINT if wants_action else ""),
+        },
         {"role": "user",   "content": user_content},
     ]
     answers: list[str] = []
@@ -703,8 +733,11 @@ async def generate_reply_openai(
                 return "ai_error:safety"
 
             # ── Handle AI Actions tool call ────────────────────────────────
+            # Act on any tool call the model produced, not only when the
+            # provider labels the finish reason "tool_calls": some responses
+            # carry the call with finish_reason "stop" and used to be dropped.
             tool_calls = getattr(choice.message, "tool_calls", None)
-            if wants_action and finish_reason == "tool_calls" and tool_calls:
+            if wants_action and tool_calls:
                 if len(tool_calls) > 1:
                     logging.warning(
                         "AI",
