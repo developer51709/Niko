@@ -1,4 +1,6 @@
 import asyncio
+import json
+import string
 import sys
 import unittest
 from types import SimpleNamespace
@@ -6,13 +8,43 @@ from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import discord
+from discord.ext import commands
 
 sys.path.insert(0, "src")
 
 import cogs.voicemaster.cog as voicemaster_module
 from config.ids import SUPPORT_GUILD
+from cogs.voicemaster import messages as vm_messages
 from cogs.voicemaster.cog import VoiceMaster, VoiceMasterChannelSelect, VoiceMasterInterface, VoiceMasterSetupView
 from database import SQLitePool
+
+
+def _view_text(view) -> str:
+    """Every text display and button label rendered by a components v2 view."""
+    parts = []
+    for child in view.walk_children():
+        text = getattr(child, "content", None) or getattr(child, "label", None)
+        if text:
+            parts.append(str(text))
+    return "\n".join(parts)
+
+
+def _localized_ctx(locale: str, *, user_id: int = 5):
+    """A command context whose guild prefers ``locale``."""
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=55, preferred_locale=locale),
+        author=SimpleNamespace(
+            id=user_id,
+            voice=SimpleNamespace(channel=SimpleNamespace(id=22)),
+        ),
+        replies=[],
+    )
+
+    async def reply(*, view=None, **_kwargs):
+        ctx.replies.append(view)
+
+    ctx.reply = reply
+    return ctx
 
 
 class FakeResponse:
@@ -242,6 +274,226 @@ class VoiceMasterSetupTests(unittest.TestCase):
             await connection.close()
 
         asyncio.run(check())
+
+
+class VoiceMasterLocalizationTests(unittest.TestCase):
+    def test_german_and_spanish_translations_are_resolved(self):
+        self.assertEqual(vm_messages.text("de", "locked"), "Sprachkanal gesperrt.")
+        self.assertEqual(vm_messages.text("es", "locked"), "Canal de voz bloqueado.")
+
+    def test_an_unsupported_language_falls_back_to_english(self):
+        self.assertEqual(vm_messages.text("fr", "locked"), "Voice channel locked.")
+
+    def test_an_unknown_key_falls_back_to_the_key_itself(self):
+        self.assertEqual(vm_messages.text("de", "not_a_real_key"), "not_a_real_key")
+
+    def test_every_language_translates_every_key(self):
+        english = set(vm_messages.MESSAGES["en"])
+        for lang in ("de", "es"):
+            self.assertEqual(
+                english - set(vm_messages.MESSAGES[lang]), set(),
+                f"{lang} is missing translations",
+            )
+
+    def test_translations_keep_the_english_placeholders(self):
+        def fields(template):
+            return {
+                name for _, name, _, _ in string.Formatter().parse(template) if name
+            }
+
+        for key, template in vm_messages.MESSAGES["en"].items():
+            for lang in ("de", "es"):
+                self.assertEqual(
+                    fields(vm_messages.MESSAGES[lang][key]),
+                    fields(template),
+                    f"{lang}:{key} changes the placeholders",
+                )
+
+    def test_the_control_panel_renders_in_the_requested_language(self):
+        german = _view_text(VoiceMasterInterface("de"))
+        spanish = _view_text(VoiceMasterInterface("es"))
+
+        self.assertIn("den Sprachkanal", german)
+        self.assertIn("el canal de voz", spanish)
+        # The command names stay literal so the legend still matches the buttons.
+        self.assertIn("`Lock`", german)
+        self.assertIn("`Lock`", spanish)
+
+    def test_panel_actions_reply_in_the_interaction_language(self):
+        async def check():
+            interaction, cog = _interaction(987654321)
+            interaction.guild = SimpleNamespace(
+                id=987654321, preferred_locale="de-DE"
+            )
+
+            await VoiceMasterInterface()._dispatch(interaction, "lock")
+
+            cog.lock_channel.assert_awaited_once()
+            self.assertIn("Sprachkanal gesperrt", interaction.response.texts)
+
+        asyncio.run(check())
+
+    def test_commands_reply_in_the_guild_language(self):
+        async def check():
+            cog = VoiceMaster.__new__(VoiceMaster)
+            cog.bot = SimpleNamespace()
+            cog.is_channel_owner = AsyncMock(return_value=True)
+            cog.lock_channel = AsyncMock()
+            ctx = _localized_ctx("es-ES")
+
+            await VoiceMaster.lock.callback(cog, ctx)
+
+            self.assertIn("Canal de voz bloqueado", _view_text(ctx.replies[-1]))
+
+        asyncio.run(check())
+
+    def test_command_errors_are_localized_too(self):
+        async def check():
+            cog = VoiceMaster.__new__(VoiceMaster)
+            cog.bot = SimpleNamespace()
+            cog.is_channel_owner = AsyncMock(return_value=False)
+            ctx = _localized_ctx("de-DE")
+
+            await VoiceMaster.lock.callback(cog, ctx)
+
+            self.assertIn("Du besitzt diesen Sprachkanal nicht", _view_text(ctx.replies[-1]))
+
+        asyncio.run(check())
+
+    def test_the_setup_prompt_follows_the_guild_language(self):
+        ctx = _localized_ctx("de-DE")
+
+        view = VoiceMasterSetupView(
+            object(), ctx, SimpleNamespace(mention="<#1>")
+        )
+        text = _view_text(view)
+
+        self.assertIn("VoiceMaster Einrichtung", text)
+        self.assertIn("Neuen Kanal erstellen", text)
+        self.assertIn("Vorhandenen Kanal verwenden", text)
+        self.assertIn("VoiceMaster verwendet derzeit", text)
+
+    def test_the_channel_picker_labels_follow_the_guild_language(self):
+        ctx = _localized_ctx("es-ES")
+        channel = _fake_voice_channel(
+            402, "Hangout", SimpleNamespace(id=401, name="Lounge")
+        )
+
+        select = VoiceMasterChannelSelect(object(), ctx, [channel])
+
+        self.assertEqual(select.placeholder, "Selecciona el canal de voz a usar...")
+        self.assertEqual(select.options[0].description, "Categoría: Lounge")
+
+    def test_the_setup_confirmation_follows_the_guild_language(self):
+        view = voicemaster_module._setup_success_view(
+            SimpleNamespace(mention="<#302>"),
+            SimpleNamespace(name="Lounge"),
+            ".",
+            SimpleNamespace(guild=SimpleNamespace(id=1, preferred_locale="es")),
+        )
+
+        text = _view_text(view)
+
+        self.assertIn("Configuración de VoiceMaster completada", text)
+        self.assertIn("Canal de entrada", text)
+        self.assertIn("Categoría", text)
+
+    def test_the_channel_card_labels_follow_the_guild_language(self):
+        async def check():
+            cog = VoiceMaster.__new__(VoiceMaster)
+            cog.bot = SimpleNamespace(
+                cxn=SimpleNamespace(fetchval=AsyncMock(return_value=None))
+            )
+            channel = SimpleNamespace(
+                id=22,
+                name="Lounge",
+                members=[],
+                user_limit=0,
+                bitrate=64000,
+                rtc_region=None,
+                guild=SimpleNamespace(
+                    get_member=lambda _id: None, default_role=object()
+                ),
+                overwrites_for=lambda _role: SimpleNamespace(
+                    connect=True, view_channel=True
+                ),
+            )
+            ctx = SimpleNamespace(
+                guild=SimpleNamespace(id=1, preferred_locale="de")
+            )
+
+            text = _view_text(await cog.get_channel_info(channel, ctx))
+
+            self.assertIn("Mitglieder", text)
+            self.assertIn("Kein Limit", text)
+            self.assertIn("Automatisch", text)
+            self.assertIn("Offen", text)
+
+        asyncio.run(check())
+
+
+class VoiceMasterCommandMetadataTests(unittest.TestCase):
+    """The help entry the help menu and the dashboard commands page read."""
+
+    def _commands(self):
+        found = []
+
+        def walk(command):
+            found.append(command)
+            for sub in getattr(command, "commands", []):
+                walk(sub)
+
+        for attribute in dir(VoiceMaster):
+            command = getattr(VoiceMaster, attribute)
+            if isinstance(command, commands.Command) and command.parent is None:
+                walk(command)
+        return found
+
+    def _help_key(self, command):
+        if command.qualified_name == "voicemaster":
+            return "group"
+        return command.qualified_name.replace("voicemaster ", "").replace(" ", "_")
+
+    def _parameters(self, command):
+        params = getattr(command, "parameters", None)
+        if params is None:
+            params = getattr(command, "clean_params", {}).values()
+        return [parameter for parameter in params if getattr(parameter, "name", None)]
+
+    def test_every_command_help_has_all_three_languages(self):
+        commands_seen = self._commands()
+        self.assertTrue(commands_seen)
+
+        for command in commands_seen:
+            parsed = json.loads(str(command.help))
+            self.assertEqual(set(parsed), {"en", "de", "es"}, command.qualified_name)
+            self.assertTrue(all(parsed.values()), command.qualified_name)
+
+    def test_every_command_help_matches_the_message_catalog(self):
+        for command in self._commands():
+            key = self._help_key(command)
+            self.assertIn(key, vm_messages.COMMAND_HELP["en"], command.qualified_name)
+            parsed = json.loads(str(command.help))
+            for lang in ("en", "de", "es"):
+                self.assertEqual(
+                    parsed[lang], vm_messages.COMMAND_HELP[lang][key],
+                    f"{lang}:{key} drifted from the catalog",
+                )
+
+    def test_every_argument_has_a_description_for_the_commands_page(self):
+        for command in self._commands():
+            for parameter in self._parameters(command):
+                self.assertTrue(
+                    str(getattr(parameter, "description", "") or "").strip(),
+                    f"{command.qualified_name} {parameter.name} has no description",
+                )
+
+    def test_the_help_menu_reads_the_localized_help(self):
+        parsed = json.loads(str(VoiceMaster.lock.help))
+
+        self.assertEqual(parsed["en"], "Lock your voice channel so nobody else can join")
+        self.assertEqual(parsed["de"], "Sperrt deinen Sprachkanal für andere")
+        self.assertIn("Bloquea", parsed["es"])
 
 
 if __name__ == "__main__":

@@ -859,6 +859,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     from utils.onboarding.utils import get_config, update_config
     from utils.tickets.utils import get_ticket_config, async_update_ticket_config
     from cogs.voicemaster.cog import VoiceMasterInterface
+    from cogs.voicemaster.messages import language_of
 
     pool = bot.cxn
 
@@ -997,7 +998,7 @@ async def _send_support_panels(bot, guild, roles, channels, *, invite_url: str |
     ticket_cfg.panel_message_id = ticket_message.id
     if not await async_update_ticket_config(guild.id, ticket_cfg):
         raise RuntimeError("Ticket panel message settings could not be saved to the database.")
-    voice_message = await post("voice_panel", VoiceMasterInterface())
+    voice_message = await post("voice_panel", VoiceMasterInterface(language_of(guild)))
     forum = guild.get_channel(int(channels["help"]))
     if not isinstance(forum, discord.ForumChannel):
         raise RuntimeError("The configured public help channel is not a forum.")

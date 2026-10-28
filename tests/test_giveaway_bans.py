@@ -15,9 +15,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 import aiosqlite
+import discord
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from config.emojis import get_emoji  # noqa: E402
 from cogs.giveaway.cog import Giveaway  # noqa: E402
 from cogs.logging.formatters import LOG_EMOJI_KEYS  # noqa: E402
 from cogs.giveaway.views import _GiveawayJoinBtn, _MgmtSelectBtn  # noqa: E402
@@ -232,7 +234,7 @@ class GiveawayBanTests(unittest.TestCase):
         self.assertEqual(int(rows[0]["user_id"]), BANNED)
         self.assertEqual(int(rows[0]["banned_by"]), ADMIN)
         self.assertTrue(rows[0]["created_at"])
-        self.assertIn("can no longer join giveaways", ctx.sent[-1])
+        self.assertIn("can no longer join giveaways", view_text(ctx.views[-1]))
 
     def test_ban_clears_the_entries_the_member_already_holds(self):
         self._add_giveaway(1000)
@@ -246,7 +248,7 @@ class GiveawayBanTests(unittest.TestCase):
         self.assertEqual(self._participants(1000), [MEMBER])
         self.assertEqual(self._participants(1001), [])
         # The reply has to say what the ban actually did.
-        self.assertIn("**2**", ctx.sent[-1])
+        self.assertIn("**2**", view_text(ctx.views[-1]))
 
     def test_ban_leaves_ended_giveaways_and_other_servers_alone(self):
         self._add_giveaway(1002, ended=1)
@@ -259,33 +261,75 @@ class GiveawayBanTests(unittest.TestCase):
         self.assertEqual(self._participants(1002), [BANNED])
         self.assertEqual(self._participants(2000), [BANNED])
         self.assertEqual(self._ban_rows(OTHER_GUILD), [])
-        self.assertIn("**0**", ctx.sent[-1])
+        self.assertIn("**0**", view_text(ctx.views[-1]))
 
     def test_banning_twice_does_not_duplicate_the_row(self):
         self._ban()
         ctx = self._ban()
 
         self.assertEqual(len(self._ban_rows()), 1)
-        self.assertIn("already banned", ctx.sent[-1])
+        self.assertIn("already banned", view_text(ctx.views[-1]))
 
     def test_a_bot_cannot_be_banned_from_giveaways(self):
         ctx = FakeCtx()
         asyncio.run(Giveaway.ban.callback(self.cog, ctx, FakeUser(MEMBER, bot=True)))
 
         self.assertEqual(self._ban_rows(), [])
-        self.assertIn("Bots cannot participate", ctx.sent[-1])
+        self.assertIn("Bots cannot participate", view_text(ctx.views[-1]))
 
     def test_unban_lifts_the_ban(self):
         self._ban()
         ctx = self._unban()
 
         self.assertEqual(self._ban_rows(), [])
-        self.assertIn("can join giveaways in this server again", ctx.sent[-1])
+        self.assertIn("can join giveaways in this server again", view_text(ctx.views[-1]))
 
     def test_unbanning_a_member_who_is_not_banned_says_so(self):
         ctx = self._unban()
 
-        self.assertIn("is not banned", ctx.sent[-1])
+        self.assertIn("is not banned", view_text(ctx.views[-1]))
+
+    def test_both_replies_are_components_v2_cards_without_message_content(self):
+        for ctx in (self._ban(), self._unban()):
+            self.assertIsInstance(ctx.views[-1], discord.ui.LayoutView)
+            self.assertIsNone(ctx.sent[-1])
+
+    def test_a_successful_ban_card_uses_the_tick_emoji(self):
+        # The reply used to ask for get_emoji('check'), a key that does not
+        # exist, so a successful ban started with a literal "None".
+        ctx = self._ban()
+
+        text = view_text(ctx.views[-1])
+
+        self.assertTrue(text.startswith(f"### {get_emoji('tick')} Giveaway ban"), text)
+        self.assertNotIn("None", text)
+        self.assertEqual(
+            ctx.views[-1].children[0].accent_colour, discord.Color.green()
+        )
+
+    def test_a_successful_unban_card_uses_the_tick_emoji(self):
+        self._ban()
+        ctx = self._unban()
+
+        text = view_text(ctx.views[-1])
+
+        self.assertTrue(text.startswith(f"### {get_emoji('tick')} Giveaway unban"), text)
+        self.assertEqual(
+            ctx.views[-1].children[0].accent_colour, discord.Color.green()
+        )
+
+    def test_a_refused_ban_card_uses_the_cross_emoji(self):
+        self._ban()
+        ctx = self._ban()
+
+        text = view_text(ctx.views[-1])
+
+        self.assertIn(get_emoji("cross"), text)
+        self.assertNotIn(get_emoji("tick"), text)
+        self.assertNotIn("None", text)
+        self.assertEqual(
+            ctx.views[-1].children[0].accent_colour, discord.Color.red()
+        )
 
     # ── moderation logs ──────────────────────────────────────
 
@@ -333,7 +377,7 @@ class GiveawayBanTests(unittest.TestCase):
         self.bot.get_cog = lambda name: None
         ctx = self._ban()
         self.assertEqual(len(self._ban_rows()), 1)
-        self.assertIn("can no longer join giveaways", ctx.sent[-1])
+        self.assertIn("can no longer join giveaways", view_text(ctx.views[-1]))
 
         class Broken:
             async def log_event(self, *args, **kwargs):
@@ -342,7 +386,7 @@ class GiveawayBanTests(unittest.TestCase):
         self.bot.get_cog = lambda name: Broken()
         ctx = self._unban()
         self.assertEqual(self._ban_rows(), [])
-        self.assertIn("can join giveaways in this server again", ctx.sent[-1])
+        self.assertIn("can join giveaways in this server again", view_text(ctx.views[-1]))
 
     # ── Join button ──────────────────────────────────────────
 

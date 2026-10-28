@@ -82,6 +82,28 @@ def _fill_level_up_template(template: str, member, level: int, guild) -> str:
         return template
 
 
+def _json_mapping(value) -> dict:
+    """Decode a stored JSON object that may already be a mapping.
+
+    The same column arrives as text from SQLite and already parsed from the
+    MongoDB pool, which decodes ``JSON_COLUMNS`` on read. The leveling config
+    read used to call ``json.loads`` unconditionally, so on MongoDB it raised
+    on the parsed dict and the fallback below replaced every stored level role
+    with ``{}``: a reward saved from the dashboard or ``/leveling panel`` was
+    written, echoed back once, then vanished on the next read and never granted
+    the role.
+    """
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _channel_id_list(value) -> list:
     """Normalise a stored channel list into a list of integer IDs."""
     if isinstance(value, str):
@@ -135,10 +157,7 @@ class Leveling(commands.Cog):
             cfg["xp_cooldown"]      = row["xp_cooldown"]
             cfg["level_up_channel"] = row["level_up_channel"]
             cfg["level_up_message"] = row["level_up_message"]
-            try:
-                cfg["level_roles"] = json.loads(row["level_roles"] or "{}")
-            except Exception:
-                cfg["level_roles"] = {}
+            cfg["level_roles"] = _json_mapping(row["level_roles"])
             cfg["xp_excluded_channels"] = _channel_id_list(row.get("xp_excluded_channels"))
             cfg["xp_vc_enabled"]        = bool(row.get("xp_vc_enabled", 0))
             # Card customization
