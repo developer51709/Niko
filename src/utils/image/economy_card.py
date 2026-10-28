@@ -846,13 +846,24 @@ async def render_leaderboard_card(
 # ──────────────────────────────────────────────────────────────────────────
 
 SHOP_W = 900
+SHOP_HEADER_H = 126
+SHOP_ROW_H = 78
+
+
+def shop_card_height(rows: int) -> int:
+    """Height of a shop card showing *rows* item rows.
+
+    Shared with ``scripts/generate_economy_loading_cards.py`` so the shop
+    loading placeholder is exactly as tall as the finished card.
+    """
+    return SHOP_HEADER_H + max(1, int(rows)) * SHOP_ROW_H + 42
 
 
 def _render_shop_sync(items: list[dict], balance: int, category: str | None = None) -> BytesIO:
     """Render the catalog shown by the interactive shop command."""
-    row_h = 78
-    header_h = 126
-    height = header_h + max(1, len(items)) * row_h + 42
+    row_h = SHOP_ROW_H
+    header_h = SHOP_HEADER_H
+    height = shop_card_height(len(items))
     canvas = _make_canvas(SHOP_W, height, radius=28)
     d = ImageDraw.Draw(canvas)
     d.text((38, 28), "NIKO ECONOMY", fill=ACCENT, font=_bold(17))

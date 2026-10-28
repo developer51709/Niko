@@ -180,15 +180,18 @@ class EconomyCog(
                 return i
         return None
 
-    async def _show_loading_card(self, ctx, card_type: str):
+    async def _show_loading_card(self, ctx, card_type: str, **kwargs):
         """Show the matching animated loading card while a render is in flight.
 
         The public GIF is sent first and then edited into the finished PNG card,
         so a slow avatar fetch never leaves the member with a bare "thinking"
         state. Prefix commands get a new message; slash commands reuse the
         deferred response, so neither path leaves a duplicate card behind.
+
+        ``**kwargs`` reach :func:`_loading_card_view` — the shop passes its row
+        count and disabled controls so the placeholder matches the final card.
         """
-        view = _loading_card_view(card_type)
+        view = _loading_card_view(card_type, **kwargs)
         if ctx.interaction:
             return await ctx.interaction.edit_original_response(view=view)
         return await ctx.send(view=view)

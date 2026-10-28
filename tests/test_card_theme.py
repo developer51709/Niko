@@ -23,7 +23,13 @@ from utils.image import blackjack  # noqa: E402
 from utils.image import economy_card as ec  # noqa: E402
 from utils.image import level_card  # noqa: E402
 from config.links import WEBSITE  # noqa: E402
-from cogs.economy.data import ACCENT_BROWN, LOADING_CARD_TYPES, _loading_card_view  # noqa: E402
+from cogs.economy.data import (  # noqa: E402
+    ACCENT_BROWN,
+    LOADING_CARD_TYPES,
+    _loading_card_view,
+    _shop_loading_file,
+)
+from utils.economy_jobs import shop_loading_row_counts  # noqa: E402
 from cogs.leveling.cog import (  # noqa: E402
     LEVELING_LOADING_CARD_TYPES,
     _loading_card_view as _leveling_loading_card_view,
@@ -211,6 +217,60 @@ class EconomyLoadingCardTests(unittest.TestCase):
                         str(gallery.items[0].media.url),
                         f"https://beta.example.com/assets/loading-cards/economy/{card_type}.gif",
                     )
+
+
+class CardTransparencyTests(unittest.TestCase):
+    """The corner cut-outs of a rounded card must stay transparent."""
+
+    def test_level_card_keeps_its_rounded_corners_transparent(self):
+        buffer = level_card._render_level_sync(None, "Alice", 5, 100, 250, 2)
+        image = Image.open(buffer)
+        self.assertEqual(image.mode, "RGBA")
+        for xy in (
+            (0, 0),
+            (level_card.RANK_W - 1, 0),
+            (0, level_card.RANK_H - 1),
+            (level_card.RANK_W - 1, level_card.RANK_H - 1),
+        ):
+            with self.subTest(corner=xy):
+                self.assertEqual(image.getpixel(xy)[3], 0)
+        with self.subTest(corner="mid-top stays opaque"):
+            self.assertEqual(image.getpixel((level_card.RANK_W // 2, 2))[3], 255)
+        image.close()
+
+
+class ShopLoadingCardSizeTests(unittest.TestCase):
+    """The shop placeholder must be exactly as tall as the card it becomes."""
+
+    def test_every_row_count_has_a_gif_the_size_of_the_card(self):
+        folder = ROOT / "web" / "public" / "assets" / "loading-cards" / "economy"
+        for rows in shop_loading_row_counts():
+            with self.subTest(rows=rows):
+                path = folder / _shop_loading_file(rows)
+                self.assertTrue(
+                    path.is_file(),
+                    f"{path} is missing — run scripts/generate_economy_loading_cards.py",
+                )
+                image = Image.open(path)
+                self.assertEqual(image.size, (ec.SHOP_W, ec.shop_card_height(rows)))
+                image.close()
+
+    def test_loading_view_uses_the_matching_size_and_disabled_controls(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PUBLIC_URL", None)
+            view = _loading_card_view("shop", rows=3, shop_controls=True)
+        container = view.children[0]
+        gallery = container.children[0]
+        self.assertEqual(
+            str(gallery.items[0].media.url),
+            f"{WEBSITE}/assets/loading-cards/economy/{_shop_loading_file(3)}",
+        )
+        self.assertEqual([type(item).__name__ for item in container.children], [
+            "MediaGallery", "TextDisplay", "ActionRow",
+        ])
+        buttons = container.children[2].children
+        self.assertEqual([button.label for button in buttons], ["Buy", "Sell"])
+        self.assertTrue(all(button.disabled for button in buttons))
 
 
 class LevelingLoadingCardTests(unittest.TestCase):

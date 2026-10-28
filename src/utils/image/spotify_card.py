@@ -257,7 +257,10 @@ def _render_spotify_sync(
     draw.text((CARD_W - 36 - label_w, FOOTER_TEXT_Y + 2), label, fill=ACCENT, font=_bold(11))
 
     out = BytesIO()
-    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    # Keep the alpha channel: `_make_canvas` clips the canvas to the rounded
+    # card shape, so saving as RGB would paste the corner cut-outs back in as
+    # opaque black when Discord renders the PNG.
+    canvas.save(out, format="PNG", optimize=True)
     out.seek(0)
     return out
 
