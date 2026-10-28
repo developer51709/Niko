@@ -1,5 +1,6 @@
 import asyncio
 import io
+import re
 import time
 
 import database
@@ -33,6 +34,41 @@ MAX_LOG_FILE_BYTES = 2_000_000
 #: profile edit into a big upload.
 MAX_ARCHIVED_AVATAR_BYTES = 4_000_000
 
+#: Global profile changes arrive once per shared server, so the last logged
+#: profile of each user is remembered to drop the repeats. The cap keeps a big
+#: bot from holding an entry for every user it has ever seen change a picture.
+MAX_TRACKED_PROFILES = 20_000
+
+#: How long one entry stays open for further changes. A member update is
+#: posted once and then edited for this long, so a role menu that toggles six
+#: roles produces one entry rather than six.
+ENTRY_RETENTION_SECONDS = 30.0
+
+#: Titles whose entries describe an ongoing change to one member, and so are
+#: merged inside the retention window. Picture changes are left out: an edit
+#: cannot attach the before/after files, and each picture change is a finished
+#: event rather than one step of a sequence.
+COALESCED_TITLES = frozenset({"Member Updated", "Nickname Changed"})
+
+#: Details that accumulate across the window instead of replacing each other —
+#: the second role a member gains is added to the list, not swapped in for the
+#: first.
+_ACCUMULATED_DETAILS = frozenset({"Roles Added", "Roles Removed"})
+
+#: The line that cancels a given accumulated line out.
+_OPPOSITE_DETAILS = {"Roles Added": "Roles Removed", "Roles Removed": "Roles Added"}
+
+#: A ``**Label:** value`` detail line of a log body.
+_DETAIL_LINE = re.compile(r"^\*\*(?P<label>[^*]+):\*\*\s*(?P<value>.*)$")
+
+COALESCED_NOTE = (
+    "-# Changes made within 30 seconds of each other are merged into this entry."
+)
+
+#: Open entries and their locks are dropped lazily, but a very busy bot should
+#: not hold one per member it has ever logged.
+MAX_PENDING_ENTRIES = 512
+
 _IMAGE_EXTENSIONS = ("png", "jpg", "jpeg", "webp", "gif")
 
 
@@ -65,6 +101,109 @@ def _permission_list(permissions, *, limit: int = 8) -> str:
         shown.append(f"+{len(names) - limit} more")
     return ", ".join(shown)
 
+def _split_entry_body(body: str) -> tuple[str, list[tuple[str, str]]]:
+    """Split a log body into its heading line(s) and labelled detail lines.
+
+    ``**Member:** @someone`` (the first line) stays the heading; the change
+    lines below it — ``**Roles Added:** @mod`` — become mergeable details, so
+    two member updates can be folded together without their headers piling up.
+    """
+    heading: list[str] = []
+    details: list[tuple[str, str]] = []
+    for line in body.splitlines():
+        match = _DETAIL_LINE.match(line)
+        if not match or not heading:
+            heading.append(line)
+            continue
+        details.append((match.group("label").strip(), match.group("value").strip()))
+    return "\n".join(heading), details
+
+
+def _detail_values(details: list[tuple[str, str]], label: str) -> list[str]:
+    """The comma-separated values of one detail line."""
+    for name, value in details:
+        if name == label:
+            return [item.strip() for item in value.split(",") if item.strip()]
+    return []
+
+
+def _set_detail(details: list[tuple[str, str]], label: str,
+                values: list[str]) -> None:
+    """Write a detail line's values, removing the line when none are left."""
+    for index, (name, _) in enumerate(details):
+        if name == label:
+            if values:
+                details[index] = (label, ", ".join(values))
+            else:
+                details.pop(index)
+            return
+    if values:
+        details.append((label, ", ".join(values)))
+
+
+def _merge_entry_details(current: list[tuple[str, str]],
+                        incoming: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Fold a new change into the details already collected.
+
+    Role lists grow and cancel out — a role granted and taken back inside the
+    window leaves no line, which is what a self-assign menu toggled twice
+    means — while a single-valued line (a nickname, the moderator who made the
+    change) takes the newest value. The entry describes the member's current
+    state rather than replaying every intermediate click.
+    """
+    merged = list(current)
+    for label, value in incoming:
+        if label in _ACCUMULATED_DETAILS:
+            opposite = _OPPOSITE_DETAILS[label]
+            additions: list[str] = []
+            for item in (part.strip() for part in value.split(",")):
+                if not item:
+                    continue
+                if item in _detail_values(merged, opposite):
+                    # Toggled back inside the window: the role ends where it
+                    # started, so neither line should mention it.
+                    _set_detail(merged, opposite, [
+                        other for other in _detail_values(merged, opposite)
+                        if other != item
+                    ])
+                elif item not in _detail_values(merged, label) and item not in additions:
+                    additions.append(item)
+            if additions:
+                _set_detail(merged, label, _detail_values(merged, label) + additions)
+            continue
+        for index, (name, _) in enumerate(merged):
+            if name == label:
+                merged[index] = (label, value)
+                break
+        else:
+            merged.append((label, value))
+    return merged
+
+
+def _render_entry_body(heading: str, details: list[tuple[str, str]],
+                       *, note: bool = False) -> str:
+    """Rebuild a body from its heading and details, for the edited entry."""
+    lines = [heading] if heading else []
+    lines.extend(f"**{label}:** {value}" for label, value in details)
+    if note:
+        lines.append(COALESCED_NOTE)
+    return "\n".join(lines)
+
+
+class _PendingEntry:
+    """The entry a target's changes are collected into while it is open."""
+
+    __slots__ = ("message", "channel_id", "heading", "details", "expires_at")
+
+    def __init__(self, message, channel_id: int, heading: str,
+                 details: list[tuple[str, str]], expires_at: float):
+        self.message = message
+        self.channel_id = channel_id
+        self.heading = heading
+        self.details = details
+        self.expires_at = expires_at
+
+
 class ServerLogger(commands.Cog):
     """Multi-channel server event logging."""
 
@@ -80,6 +219,13 @@ class ServerLogger(commands.Cog):
         self._webhook_cache: dict[tuple[int, int], discord.Webhook] = {}
         self._webhook_locks: dict[tuple[int, int], asyncio.Lock] = {}
         self._deleted_webhooks: set[int] = set()
+        # user id → the global profile fields last logged, so one profile edit
+        # (dispatched once per shared server) is logged once, not once per guild.
+        self._global_profile_seen: dict[int, tuple] = {}
+        # (guild, category, title, target) → the entry still inside its
+        # retention window, so rapid changes to one member edit that entry.
+        self._pending_entries: dict[tuple, _PendingEntry] = {}
+        self._pending_locks: dict[tuple, asyncio.Lock] = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -249,7 +395,169 @@ class ServerLogger(commands.Cog):
         has not granted Manage Webhooks, or a channel that cannot own a webhook
         such as a thread, still gets its log: the entry falls back to the bot
         account instead of being dropped.
+
+        An entry about a member is kept open for ``ENTRY_RETENTION_SECONDS``:
+        a change that lands inside that window is merged into the entry already
+        posted and the message is edited, so a role menu that toggles several
+        roles — or a moderator making a run of changes — leaves one entry
+        behind instead of one per click.
         """
+        retention_key = self._retention_key(
+            guild, category, title, target_id, files, media_urls, revert)
+        if retention_key is None:
+            await self._post_entry(
+                guild, channel, category, title, body,
+                target_id=target_id, action_key=action_key, channel_id=channel_id,
+                media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+                file_components=file_components, revert=revert,
+            )
+            return
+
+        lock = self._pending_locks.setdefault(retention_key, asyncio.Lock())
+        async with lock:
+            self._prune_pending()
+            pending = self._open_entry(retention_key, channel)
+            if pending is not None and await self._extend_entry(
+                retention_key, guild, channel, category, title, body, pending,
+                target_id=target_id, action_key=action_key,
+                channel_id=channel_id, thumbnail_url=thumbnail_url,
+            ):
+                return
+            self._pending_entries.pop(retention_key, None)
+            message = await self._post_entry(
+                guild, channel, category, title, body,
+                target_id=target_id, action_key=action_key, channel_id=channel_id,
+                media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+                file_components=file_components, revert=revert,
+            )
+            if message is None:
+                return
+            heading, details = _split_entry_body(body)
+            self._pending_entries[retention_key] = _PendingEntry(
+                message,
+                getattr(channel, "id", 0),
+                heading,
+                details,
+                time.monotonic() + ENTRY_RETENTION_SECONDS,
+            )
+
+        # A lock is only worth keeping while its entry is open; dropping it
+        # stops the map from holding one per member the bot has ever logged.
+        if retention_key not in self._pending_entries and not lock.locked():
+            self._pending_locks.pop(retention_key, None)
+
+    def _retention_key(self, guild, category: str, title: str,
+                       target_id: int | None, files, media_urls,
+                       revert) -> tuple | None:
+        """The key whose entry this change belongs to, or None to send fresh.
+
+        Only a finished, text-only entry about one member can be extended: an
+        edit cannot attach the files a picture change carries.
+        """
+        if title not in COALESCED_TITLES or target_id is None:
+            return None
+        if files or media_urls or revert:
+            return None
+        return (guild.id, category, title, target_id)
+
+    def _open_entry(self, key: tuple, channel) -> _PendingEntry | None:
+        """The entry still inside its window, forgetting it once it has closed."""
+        pending = self._pending_entries.get(key)
+        if pending is None:
+            return None
+        if (pending.channel_id != getattr(channel, "id", 0)
+                or time.monotonic() >= pending.expires_at):
+            self._pending_entries.pop(key, None)
+            return None
+        return pending
+
+    async def _extend_entry(self, key: tuple, guild, channel, category: str,
+                            title: str, body: str, pending: _PendingEntry, *,
+                            target_id=None, action_key: str | None = None,
+                            channel_id: int | None = None,
+                            thumbnail_url: str | None = None) -> bool:
+        """Fold a change into the open entry and edit its message.
+
+        Returns False when the entry could not be edited (the message was
+        deleted, or the edit failed), so the caller posts a fresh entry.
+        """
+        _, details = _split_entry_body(body)
+        merged = _merge_entry_details(pending.details, details)
+        if not merged:
+            # Every change cancelled out inside the window — a role menu toggled
+            # on and then off — so the entry has nothing left to say and goes.
+            self._pending_entries.pop(key, None)
+            try:
+                await pending.message.delete()
+            except Exception as e:
+                logging.warning(
+                    "logging_cog",
+                    f"Could not remove the emptied log entry in {channel}: {e}",
+                )
+            return True
+        view = _build_log_view(
+            category=category,
+            title=title,
+            body=_render_entry_body(pending.heading, merged, note=True),
+            guild_id=guild.id,
+            target_id=target_id,
+            action_key=action_key or title,
+            channel_id=channel_id,
+            thumbnail_url=thumbnail_url,
+        )
+        try:
+            await log_channel_limiter.acquire((guild.id, pending.channel_id))
+            await pending.message.edit(view=view)
+        except Exception as e:
+            logging.warning(
+                "logging_cog",
+                f"Could not extend the log entry in {channel}: {e}",
+            )
+            return False
+        pending.details = merged
+        return True
+
+    def _prune_pending(self) -> None:
+        """Forget entries whose window has closed, and their locks with them.
+
+        Called on every coalescable entry instead of from a timer: nothing has
+        to keep running for the window to expire, and a key that is never seen
+        again is dropped the next time any other member entry is logged.
+        """
+        now = time.monotonic()
+        for key, pending in list(self._pending_entries.items()):
+            if pending.expires_at <= now:
+                self._pending_entries.pop(key, None)
+                # The current event's own lock is held while this runs.
+                lock = self._pending_locks.get(key)
+                if lock is None or not lock.locked():
+                    self._pending_locks.pop(key, None)
+        if len(self._pending_locks) <= MAX_PENDING_ENTRIES:
+            return
+        # A lock is only needed while its entry is open. A held lock is left
+        # alone: another event is using it right now.
+        for key, lock in list(self._pending_locks.items()):
+            if key not in self._pending_entries and not lock.locked():
+                self._pending_locks.pop(key, None)
+
+    async def _post_entry(
+        self,
+        guild: discord.Guild,
+        channel: discord.abc.Messageable,
+        category: str,
+        title: str,
+        body: str,
+        *,
+        target_id: int | None = None,
+        action_key: str | None = None,
+        channel_id: int | None = None,
+        media_urls: list | None = None,
+        thumbnail_url: str | None = None,
+        files: list[discord.File] | None = None,
+        file_components: bool = True,
+        revert: tuple[str, str] | None = None,
+    ):
+        """Send one entry and return the message, so it can be extended later."""
         view = _build_log_view(
             category=category,
             title=title,
@@ -268,10 +576,9 @@ class ServerLogger(commands.Cog):
             await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))
             webhook = await self._get_log_webhook(channel)
             if webhook is None:
-                await self._send_with_bot(channel, view, files)
-                return
+                return await self._send_with_bot(channel, view, files)
             try:
-                await webhook.send(
+                return await webhook.send(
                     view=view,
                     files=files or [],
                     username=LOG_WEBHOOK_NAME,
@@ -296,11 +603,10 @@ class ServerLogger(commands.Cog):
                         )
                 webhook = await self._get_log_webhook(channel)
                 if webhook is None:
-                    await self._send_with_bot(channel, view, files)
-                    return
+                    return await self._send_with_bot(channel, view, files)
                 for file in files or []:
                     file.reset(seek=True)
-                await webhook.send(
+                return await webhook.send(
                     view=view,
                     files=files or [],
                     username=LOG_WEBHOOK_NAME,
@@ -310,14 +616,15 @@ class ServerLogger(commands.Cog):
                 )
         except Exception as e:
             logging.error("logging_cog", f"Failed to send log message to {channel} in {guild}: {e}")
+            return None
 
     async def _send_with_bot(self, channel: discord.abc.Messageable,
                              view: discord.ui.LayoutView,
-                             files: list[discord.File] | None = None) -> None:
+                             files: list[discord.File] | None = None):
         """Send a log entry as the bot itself, the fallback without webhooks."""
         for file in files or []:
             file.reset(seek=True)
-        await channel.send(
+        return await channel.send(
             view=view,
             files=files or [],
             allowed_mentions=discord.AllowedMentions.none(),
@@ -616,13 +923,15 @@ class ServerLogger(commands.Cog):
             return None
         return discord.File(io.BytesIO(data), filename=filename)
 
-    async def _log_avatar_change(self, before, after, *, attribute: str, title: str,
-                                 label: str, slug: str) -> bool:
+    async def _log_picture_change(self, before, after, *, attribute: str, title: str,
+                                  label: str, slug: str, guild) -> bool:
         """Log one picture change with both pictures archived as attachments.
 
-        The global profile picture and the per-server picture are separate
-        fields, so a member who changes both gets an entry for each rather than
-        one entry that hides half of what happened.
+        The global profile picture, the global banner and the per-server
+        picture are separate fields, so a member who changes several of them
+        gets an entry for each rather than one entry that hides half of what
+        happened. ``guild`` is explicit because a global change arrives as a
+        :class:`discord.User`, which has no guild of its own.
         """
         old_asset = getattr(before, attribute, None)
         new_asset = getattr(after, attribute, None)
@@ -668,7 +977,7 @@ class ServerLogger(commands.Cog):
             lines.append("**Before:** *none*\n**After:** *none*")
 
         await self.log_event(
-            guild=after.guild,
+            guild=guild,
             category="members",
             title=title,
             body="\n".join(lines),
@@ -680,20 +989,96 @@ class ServerLogger(commands.Cog):
         )
         return True
 
+    def _shared_guilds(self, user) -> list:
+        """The guilds where this user and the bot are both members."""
+        guilds = getattr(user, "mutual_guilds", None)
+        if guilds is None:
+            single = getattr(user, "guild", None)
+            return [single] if single is not None else []
+        return list(guilds)
+
+    @commands.Cog.listener()
+    async def on_user_update(self, before: discord.User, after: discord.User):
+        """Log a change to a member's *global* Discord profile.
+
+        The global picture, display name, username and banner are visible in
+        every server the user is in (a member without a per-server picture
+        shows the global one), so they belong in each server's member logs.
+
+        These arrive as ``on_user_update``: Discord sends the changed user
+        once per shared server, and the member in ``on_member_update`` shares
+        its user object with the updated one, so comparing two members can
+        never show a global change.
+        """
+        if getattr(after, "bot", False):
+            return
+
+        signature = (
+            getattr(after, "name", None),
+            getattr(after, "global_name", None),
+            _asset_url(getattr(after, "avatar", None)),
+            _asset_url(getattr(after, "banner", None)),
+        )
+        if self._global_profile_seen.get(after.id) == signature:
+            # The same edit is dispatched once per shared server (and again from
+            # the member update), so the first dispatch logs it to all of them
+            # and the repeats are dropped.
+            return
+        self._global_profile_seen[after.id] = signature
+        if len(self._global_profile_seen) > MAX_TRACKED_PROFILES:
+            # Oldest first: a dict keeps insertion order.
+            self._global_profile_seen.pop(next(iter(self._global_profile_seen)))
+
+        names: list[str] = []
+        if before.name != after.name:
+            names.append(f"**Username:** `{before.name}` → `{after.name}`")
+        if before.global_name != after.global_name:
+            names.append(
+                f"**Display Name:** `{before.global_name or 'none'}` → "
+                f"`{after.global_name or 'none'}`"
+            )
+
+        for guild in self._shared_guilds(after):
+            member = guild.get_member(after.id) or after
+            await self._log_picture_change(
+                before, after,
+                guild=guild,
+                attribute="avatar",
+                title="Avatar Updated",
+                label="Global profile picture",
+                slug="profile-picture",
+            )
+            await self._log_picture_change(
+                before, after,
+                guild=guild,
+                attribute="banner",
+                title="Profile Banner Updated",
+                label="Profile banner",
+                slug="profile-banner",
+            )
+            if names:
+                body = (
+                    f"**Member:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                    f"**Changed:** Global profile\n"
+                    + "\n".join(names)
+                )
+                await self.log_event(
+                    guild, "members", "Username Updated", body,
+                    target_id=after.id,
+                    thumbnail_url=self._avatar_url(member),
+                )
+
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         guild = after.guild
 
-        # ── Pictures: the global profile picture and the server one ──
-        await self._log_avatar_change(
+        # ── Picture: only the per-server one reaches this event ──
+        # A global picture change is logged by on_user_update instead: Discord
+        # updates the shared user object in place before this listener runs, so
+        # `before` and `after` always agree on the global picture.
+        await self._log_picture_change(
             before, after,
-            attribute="avatar",
-            title="Avatar Updated",
-            label="Global profile picture",
-            slug="profile-picture",
-        )
-        await self._log_avatar_change(
-            before, after,
+            guild=guild,
             attribute="guild_avatar",
             title="Server Avatar Updated",
             label="Server profile picture",
