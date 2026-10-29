@@ -61,10 +61,7 @@ class AboutMixin:
         avatar_url = bot_user.avatar.url if bot_user.avatar else None
 
         creator = await resolve_creator(self.bot)
-        creator_line = (
-            f"{creator.display_name} ({creator.mention})" if creator
-            else f"<@{CREATOR_ID}>"
-        )
+        creator_line = creator.display_name if creator else msg(ctx, 'about_dev_unknown')
 
         servers = len(self.bot.guilds)
         members = sum(guild.member_count or 0 for guild in self.bot.guilds)
@@ -129,7 +126,7 @@ class AboutMixin:
             )
         )
         view.add_item(container)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # CREATOR

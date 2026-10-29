@@ -54,7 +54,6 @@ def _creator():
     return SimpleNamespace(
         id=_about.CREATOR_ID,
         display_name="soren",
-        mention=f"<@{_about.CREATOR_ID}>",
         avatar=None,
     )
 
@@ -85,9 +84,42 @@ def test_the_creator_id_comes_from_the_owner_set():
 
 
 def test_about_names_the_same_account_the_creator_command_opens():
-    view = _about_body(_creator())
+    text = _text(_about_body(_creator()))
 
-    assert f"soren (<@{_about.CREATOR_ID}>)" in _text(view)
+    assert "soren" in text
+
+
+def test_the_about_card_names_the_developer_without_pinging_them():
+    # A mention would ping the developer on every /about and show as
+    # "unknown-user" in servers the account does not share with the bot.
+    text = _text(_about_body(_creator()))
+
+    assert f"<@{_about.CREATOR_ID}>" not in text
+    assert "**Developer:** soren" in text
+
+
+def test_a_failed_creator_lookup_does_not_fall_back_to_a_mention():
+    async def fetch(_id):
+        raise discord.NotFound(
+            SimpleNamespace(status=404, reason="Not Found", headers={}),
+            "Unknown User",
+        )
+
+    cog = _about.AboutMixin()
+    cog.bot = SimpleNamespace(
+        user=SimpleNamespace(id=1520558530472448170, avatar=None),
+        guilds=[],
+        commands={},
+        get_user=lambda _id: None,
+        fetch_user=fetch,
+        start_time=time.time(),
+    )
+    ctx = _Ctx()
+    asyncio.run(cog.about.callback(cog, ctx))
+
+    text = _text(ctx.sent[-1]["view"])
+    assert f"<@{_about.CREATOR_ID}>" not in text
+    assert "**Developer:** Unavailable" in text
 
 
 def test_both_cards_accept_the_same_creator_lookup():
