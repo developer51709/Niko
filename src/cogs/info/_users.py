@@ -6,22 +6,7 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from ._avatars import AvatarButtons, UserInfoButtons
 from ._badges import _get_badges, _get_discord_badges
-from ._messages import _divider, cv2_image, msg
-
-# The permissions worth naming on the userinfo card, in the order they read
-# best. A member without any of them gets no permissions line at all, so an
-# ordinary profile does not carry a row of "none".
-_KEY_PERMISSIONS = (
-    "administrator",
-    "manage_guild",
-    "manage_roles",
-    "manage_channels",
-    "kick_members",
-    "ban_members",
-    "moderate_members",
-    "manage_messages",
-    "mention_everyone",
-)
+from ._messages import _divider, cv2_image, key_permission_names, msg
 
 
 class UserMixin:
@@ -96,16 +81,9 @@ class UserMixin:
 
         nickname = f"`{target.nick}`" if target.nick else "*none*"
 
-        # The permissions worth naming: Administrator implies all the others, so
-        # it is the only one shown when it is set.
-        if target.guild_permissions.administrator:
-            key_perms = ["Administrator"]
-        else:
-            key_perms = [
-                name.replace("_", " ").title()
-                for name in _KEY_PERMISSIONS
-                if getattr(target.guild_permissions, name, False)
-            ]
+        # The permissions worth naming; Administrator implies all the others,
+        # so it is the only one shown when it is set.
+        key_perms = key_permission_names(target.guild_permissions)
 
         bot_tag = f" {get_emoji('bot')}" if target.bot else ""
         created = int(target.created_at.timestamp())
