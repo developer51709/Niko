@@ -61,6 +61,7 @@ MESSAGES = {
                 "your server \u2014 with a full web dashboard for everything behind it."
             ),
             "about_dev": "Developer",
+            "about_dev_unknown": "Unavailable",
             "about_lib": "Library",
             "about_servers": "Servers",
             "about_members": "Members",
@@ -192,6 +193,7 @@ MESSAGES = {
                 "für alles dahinter."
             ),
             "about_dev": "Entwickler",
+            "about_dev_unknown": "Nicht verfügbar",
             "about_lib": "Bibliothek",
             "about_servers": "Server",
             "about_members": "Mitglieder",
@@ -321,6 +323,7 @@ MESSAGES = {
                 "recuerda tu servidor \u2014 con un panel web completo para todo lo demás."
             ),
             "about_dev": "Desarrollador",
+            "about_dev_unknown": "No disponible",
             "about_lib": "Librería",
             "about_servers": "Servidores",
             "about_members": "Miembros",
