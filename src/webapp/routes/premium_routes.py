@@ -12,11 +12,10 @@ import hmac
 import hashlib
 import json
 import os
-import uuid
 
 from flask import jsonify, request, Response, session
 
-from cogs.donations.oxapay import OxaPayClient
+from cogs.donations.oxapay import OxaPayClient, build_order_id
 from utils import logging
 import utils.premium as billing
 
@@ -244,7 +243,9 @@ async def _create_checkout(
     from the request body, so the browser cannot choose what it pays.
     """
     amount_cents = billing.PREMIUM_PRICE_CENTS * int(months)
-    order_id = f"premium_{kind}_{guild_id}_{uuid.uuid4().hex}"
+    # OxaPay rejects order ids over 50 characters, so the id is built to fit
+    # rather than assembled by hand (the old form was 69 for a purchase).
+    order_id = build_order_id("premium", kind, guild_id)
     guild = _discord_bot.get_guild(guild_id) if _discord_bot is not None else None
     label = "gift" if kind == billing.KIND_GIFT else "subscription"
     description = (

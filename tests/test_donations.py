@@ -531,3 +531,40 @@ def test_a_purchase_order_cannot_be_read_as_a_gift(monkeypatch, pool):
         session["user"] = {"id": "7"}
         status, _ = _response(premium_routes.api_premium_gift_order.__wrapped__, "premium_purchase_1")
     assert status == 404
+
+
+# ── Order ids must fit OxaPay's limit ───────────────────────────────────────
+
+def test_order_ids_fit_the_providers_50_character_limit():
+    """OxaPay rejects longer ids, which failed every purchase and every gift.
+
+    The old form was ``premium_purchase_<19-digit guild>_<32 hex>`` — 69
+    characters — so checkout could not start at all.
+    """
+    from cogs.donations.oxapay import MAX_ORDER_ID_LENGTH, build_order_id
+
+    order_id = build_order_id("premium", "purchase", "123456789012345678")
+    assert len(order_id) <= MAX_ORDER_ID_LENGTH
+    assert order_id.startswith("premium_purchase_123456789012345678_")
+
+    donation_id = build_order_id("donation", "123456789012345678")
+    assert len(donation_id) <= MAX_ORDER_ID_LENGTH
+    assert donation_id.startswith("donation_123456789012345678_")
+
+    # A longer stem keeps a random tail instead of overflowing the limit.
+    long_id = build_order_id("x" * 80)
+    assert len(long_id) == MAX_ORDER_ID_LENGTH
+    assert long_id.rsplit("_", 1)[1]
+
+    # Ids are the primary key of the payment row, so they must stay unique.
+    assert build_order_id("donation", "7") != build_order_id("donation", "7")
+
+
+def test_gift_checkout_sends_the_provider_a_short_order_id(monkeypatch, pool):
+    status, payload, captured = _gift_route(
+        monkeypatch, pool, guild_id="123456789012345678", user_id="123456789012345678"
+    )
+
+    assert status == 200
+    assert captured["order_id"] == payload["order_id"]
+    assert len(captured["order_id"]) <= 50

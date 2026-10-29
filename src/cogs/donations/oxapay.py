@@ -3,6 +3,7 @@ OxaPay merchant API client.
 Docs: https://oxapay.com/api
 """
 
+import uuid
 from urllib.parse import quote
 
 import aiohttp
@@ -10,6 +11,27 @@ import aiohttp
 OXAPAY_BASE = "https://api.oxapay.com"
 OXAPAY_V1_BASE = "https://api.oxapay.com/v1"
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+#: OxaPay refuses a longer order id ("The order id field must not be greater
+#: than 50 characters"), which fails the whole checkout. Ids are built to fit.
+MAX_ORDER_ID_LENGTH = 50
+
+#: Random tail an order id carries when the readable part leaves room for it.
+_ORDER_ID_RANDOM_CHARS = 12
+
+
+def build_order_id(*parts: object) -> str:
+    """A unique order id that OxaPay will accept.
+
+    ``build_order_id("premium", "purchase", guild_id)`` reads like the id it
+    produces, followed by a random hex tail for uniqueness. The tail shrinks
+    with the readable part so a longer prefix or snowflake can never push the
+    id past :data:`MAX_ORDER_ID_LENGTH`.
+    """
+    stem = "_".join(str(part) for part in parts if str(part))
+    tail = max(6, min(_ORDER_ID_RANDOM_CHARS, MAX_ORDER_ID_LENGTH - len(stem) - 1))
+    stem = stem[: MAX_ORDER_ID_LENGTH - tail - 1]
+    return f"{stem}_{uuid.uuid4().hex[:tail]}"
 
 
 class OxaPayClient:
@@ -91,6 +113,14 @@ class OxaPayClient:
             {"success": True, "trackId": str, "data": dict}
             {"success": False, "message": str}
         """
+        if len(str(order_id)) > MAX_ORDER_ID_LENGTH:
+            return {
+                "success": False,
+                "message": (
+                    f"Order id {order_id!r} is longer than the "
+                    f"{MAX_ORDER_ID_LENGTH}-character limit."
+                ),
+            }
         payload: dict = {
             "amount": float(amount),
             "currency": currency,

@@ -8,6 +8,8 @@ globals().update({
     if not name.startswith("__")
 })
 
+from cogs.donations.oxapay import build_order_id
+
 from utils.donations import (
     CRYPTO_CURRENCIES,
     DONATION_MAX_AMOUNT,
@@ -77,7 +79,7 @@ def api_create_donation_invoice():
     if not OXAPAY_KEY:
         return jsonify({"error": "Donations are not configured yet."}), 503
 
-    order_id = f"donation_{claims['user_id']}_{uuid.uuid4().hex}"
+    order_id = build_order_id("donation", claims["user_id"])
     callback_url = f"{public_base_url()}/api/donations/webhook"
     # White-label: the payer receives an address, amount, and QR code from our
     # own page instead of a hosted OxaPay checkout.
