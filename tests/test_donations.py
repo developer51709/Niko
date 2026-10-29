@@ -340,7 +340,7 @@ def _response(view, *args):
 
 
 def _gift_route(monkeypatch, pool, *, member=True, managed=(), months=1, guild_id="42",
-                user_id="7", pay_currency="USDT"):
+                user_id="7", pay_currency="USDT", network=None):
     from flask import session
 
     from webapp.routes import premium_routes
@@ -390,13 +390,10 @@ def _gift_route(monkeypatch, pool, *, member=True, managed=(), months=1, guild_i
         premium_routes, "run_on_bot_loop", lambda awaitable, timeout=8: asyncio.run(awaitable)
     )
 
-    with premium_routes.app.test_request_context(
-        json={
-            "guild_id": guild_id,
-            "months": months,
-            "pay_currency": pay_currency,
-        }
-    ):
+    body = {"guild_id": guild_id, "months": months, "pay_currency": pay_currency}
+    if network is not None:
+        body["network"] = network
+    with premium_routes.app.test_request_context(json=body):
         session["user"] = {"id": user_id}
         payload = premium_routes.api_premium_gift_checkout.__wrapped__.__wrapped__()
     # Flask accepts ``(body, status)`` from a view, so normalise the pair.
@@ -568,3 +565,51 @@ def test_gift_checkout_sends_the_provider_a_short_order_id(monkeypatch, pool):
     assert status == 200
     assert captured["order_id"] == payload["order_id"]
     assert len(captured["order_id"]) <= 50
+    assert captured["network"] == "Tron"
+
+
+def test_every_offered_currency_has_a_network():
+    """OxaPay rejects a white-label payment that does not name a network."""
+    from cogs.donations.oxapay import networks_for, resolve_network
+    from webapp.routes import premium_routes
+
+    for code in premium_routes.CRYPTO_CURRENCIES:
+        assert networks_for(code), code
+    for code in donations.CRYPTO_CURRENCIES:
+        assert networks_for(code), code
+
+    # The first option is the fallback for a caller that does not choose.
+    assert resolve_network("usdt", None) == "Tron"
+    assert resolve_network("USDT", "Ethereum") == "Ethereum"
+    # Base carries ETH, not USDT, so it must be refused rather than guessed.
+    assert resolve_network("USDT", "Base") is None
+    assert resolve_network("NOPE", None) is None
+
+
+def test_the_chosen_network_reaches_the_provider(monkeypatch, pool):
+    status, _, captured = _gift_route(monkeypatch, pool, network="Ethereum")
+    assert status == 200
+    assert captured["network"] == "Ethereum"
+
+
+def test_a_network_the_coin_cannot_use_is_refused(monkeypatch, pool):
+    status, _, captured = _gift_route(monkeypatch, pool, network="Base")
+    assert status == 400
+    assert captured == {}
+
+
+def test_no_payment_is_requested_without_a_network():
+    from cogs.donations.oxapay import OxaPayClient
+
+    async def run():
+        return await OxaPayClient("merchant-key").create_white_label(
+            amount=15,
+            pay_currency="USDT",
+            network="",
+            description="Niko Premium subscription",
+            order_id="premium_purchase_1",
+        )
+
+    result = asyncio.run(run())
+    assert result["success"] is False
+    assert "network" in result["message"].lower()

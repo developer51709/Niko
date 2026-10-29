@@ -388,6 +388,50 @@
 .billing-asset strong { font: 10px/1.2 "Space Mono", monospace; letter-spacing: .04em; }
 .billing-asset small { color: var(--dim); font-size: 8.5px; }
 
+/* Network picker: the payer must name the chain, because the same stablecoin
+   on a different chain is a different asset and is not recoverable. */
+.billing-networks-block { display: grid; gap: 7px; }
+.billing-networks { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.billing-network {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  color: #d8cbb8;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 999px;
+  font-size: 9.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: border-color .16s ease, background .16s ease, color .16s ease;
+}
+.billing-network:hover { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .14); }
+.billing-network.is-selected {
+  color: var(--ink);
+  background: rgba(200, 168, 130, .12);
+  border-color: rgba(200, 168, 130, .55);
+}
+.billing-network .network-icon { width: 14px; height: 14px; color: #b8a992; }
+.billing-network.is-selected .network-icon { color: var(--crypto-brand, #e9dcc9); }
+
+.billing-network-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  color: #f0d6a6;
+  background: rgba(226, 168, 74, .09);
+  border: 1px solid rgba(226, 168, 74, .3);
+  border-radius: 10px;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.billing-network-warning .icon { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; color: #e6b866; }
+.billing-network-warning strong { color: #ffe9c4; font-weight: 600; }
+
 .billing-primary {
   display: inline-flex;
   align-items: center;

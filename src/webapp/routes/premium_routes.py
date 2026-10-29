@@ -15,7 +15,12 @@ import os
 
 from flask import jsonify, request, Response, session
 
-from cogs.donations.oxapay import OxaPayClient, build_order_id
+from cogs.donations.oxapay import (
+    OxaPayClient,
+    build_order_id,
+    network_options,
+    resolve_network,
+)
 from utils import logging
 import utils.premium as billing
 
@@ -126,6 +131,9 @@ def api_premium_plans():
         "perks": billing.PERKS,
         "renewal_notice_days": billing.PREMIUM_REMINDER_DAYS,
         "currencies": list(CRYPTO_CURRENCIES),
+        # The chains each currency can be paid on, so the page can let the
+        # payer choose one instead of guessing on their behalf.
+        "networks": network_options(),
         "gift": {
             "enabled": payment_configured(),
             "months": list(GIFT_MONTH_OPTIONS),
@@ -235,7 +243,13 @@ def api_premium_guilds():
 # ── Checkout ────────────────────────────────────────────────────────────────
 
 async def _create_checkout(
-    *, kind: str, guild_id: int, payer_id: int, pay_currency: str, months: int
+    *,
+    kind: str,
+    guild_id: int,
+    payer_id: int,
+    pay_currency: str,
+    network: str,
+    months: int,
 ) -> dict:
     """Quote one OxaPay payment and record it before the payer sees an address.
 
@@ -260,6 +274,7 @@ async def _create_checkout(
         amount=amount_cents / 100,
         currency=billing.PREMIUM_CURRENCY,
         pay_currency=pay_currency,
+        network=network,
         lifetime=PAYMENT_LIFETIME_MINUTES,
         description=description,
         callback_url=f"{public_base_url()}/api/premium/webhook",
@@ -326,12 +341,19 @@ def api_premium_checkout():
     if raw_guild not in managed_guild_ids():
         return jsonify({"error": "You need Manage Server access to upgrade that server."}), 403
 
+    # Every white-label payment needs a chain, and the payer picks it: the same
+    # coin on the wrong chain is unrecoverable.
+    network = resolve_network(pay_currency, body.get("network"))
+    if network is None:
+        return jsonify({"error": "That payment network is not available for this coin."}), 400
+
     try:
         payload = run_on_bot_loop(_create_checkout(
             kind=billing.KIND_PURCHASE,
             guild_id=guild_id,
             payer_id=user_id,
             pay_currency=pay_currency,
+            network=network,
             months=1,
         ))
     except Exception as error:
@@ -371,12 +393,17 @@ def api_premium_gift_checkout():
     if not _is_member(guild_id, user_id):
         return jsonify({"error": "You have to be a member of that server to gift it premium."}), 403
 
+    network = resolve_network(pay_currency, body.get("network"))
+    if network is None:
+        return jsonify({"error": "That payment network is not available for this coin."}), 400
+
     try:
         payload = run_on_bot_loop(_create_checkout(
             kind=billing.KIND_GIFT,
             guild_id=guild_id,
             payer_id=user_id,
             pay_currency=pay_currency,
+            network=network,
             months=months,
         ))
     except Exception as error:
