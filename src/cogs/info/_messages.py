@@ -10,12 +10,30 @@ MESSAGES = {
             "serverinfo_title": "Server Info",
             "serverinfo_name": "Server Name",
             "serverinfo_id": "Server ID",
-            "serverinfo_members": "Member Count",
+            "serverinfo_members": "Members",
+            "serverinfo_members_word": "members",
             "serverinfo_users": "User Count",
-            "serverinfo_bots": "Bot Count",
-            "serverinfo_roles": "Role Count",
-            "serverinfo_created": "Server Created",
-            "serverinfo_owner": "Server Owner",
+            "serverinfo_humans": "humans",
+            "serverinfo_bots": "bots",
+            "serverinfo_roles": "Roles",
+            "serverinfo_created": "Created",
+            "serverinfo_owner": "Owner",
+            "serverinfo_online": "Online Now",
+            "serverinfo_online_word": "online",
+            "serverinfo_channels": "Channels",
+            "serverinfo_text_channels": "text",
+            "serverinfo_voice_channels": "voice",
+            "serverinfo_categories": "categories",
+            "serverinfo_emojis": "Emojis",
+            "serverinfo_stickers": "Stickers",
+            "serverinfo_verification": "Verification",
+            "serverinfo_description": "Description",
+            "serverinfo_features": "Features",
+            "verification_none": "None",
+            "verification_low": "Low",
+            "verification_medium": "Medium",
+            "verification_high": "High",
+            "verification_highest": "Highest",
 
             "userinfo_title": "User Info",
             "userinfo_username": "Username",
@@ -57,8 +75,17 @@ MESSAGES = {
             "roleinfo_name": "Role Name",
             "roleinfo_id": "Role ID",
             "roleinfo_color": "Role Color",
-            "roleinfo_position": "Role Position",
-            "roleinfo_members": "Role Members",
+            "roleinfo_color_default": "Default",
+            "roleinfo_position": "Position",
+            "roleinfo_members_word": "members",
+            "roleinfo_created": "Created",
+            "roleinfo_mentionable": "Mentionable",
+            "roleinfo_hoisted": "Hoisted",
+            "roleinfo_managed": "Managed",
+            "roleinfo_permissions": "Key Permissions",
+            "roleinfo_permissions_none": "none",
+            "roleinfo_yes": "Yes",
+            "roleinfo_no": "No",
             "roleinfo_need_role": "Please specify a role! Example: `!roleinfo @Role`",
 
             "servericon_title": "Server Icon",
@@ -110,11 +137,29 @@ MESSAGES = {
             "serverinfo_name": "Servername",
             "serverinfo_id": "Server-ID",
             "serverinfo_members": "Mitglieder",
+            "serverinfo_members_word": "Mitglieder",
             "serverinfo_users": "Benutzer",
+            "serverinfo_humans": "Menschen",
             "serverinfo_bots": "Bots",
             "serverinfo_roles": "Rollen",
             "serverinfo_created": "Erstellt am",
-            "serverinfo_owner": "Server-Besitzer",
+            "serverinfo_owner": "Besitzer",
+            "serverinfo_online": "Gerade online",
+            "serverinfo_online_word": "online",
+            "serverinfo_channels": "Kanäle",
+            "serverinfo_text_channels": "Text",
+            "serverinfo_voice_channels": "Sprache",
+            "serverinfo_categories": "Kategorien",
+            "serverinfo_emojis": "Emojis",
+            "serverinfo_stickers": "Sticker",
+            "serverinfo_verification": "Verifizierung",
+            "serverinfo_description": "Beschreibung",
+            "serverinfo_features": "Funktionen",
+            "verification_none": "Keine",
+            "verification_low": "Niedrig",
+            "verification_medium": "Mittel",
+            "verification_high": "Hoch",
+            "verification_highest": "Höchste",
 
             "userinfo_title": "Benutzer-Informationen",
             "userinfo_username": "Benutzername",
@@ -155,8 +200,17 @@ MESSAGES = {
             "roleinfo_name": "Rollenname",
             "roleinfo_id": "Rollen-ID",
             "roleinfo_color": "Farbe",
+            "roleinfo_color_default": "Standard",
             "roleinfo_position": "Position",
-            "roleinfo_members": "Mitglieder",
+            "roleinfo_members_word": "Mitglieder",
+            "roleinfo_created": "Erstellt am",
+            "roleinfo_mentionable": "Erwähnbar",
+            "roleinfo_hoisted": "Separat angezeigt",
+            "roleinfo_managed": "Verwaltet",
+            "roleinfo_permissions": "Wichtige Berechtigungen",
+            "roleinfo_permissions_none": "keine",
+            "roleinfo_yes": "Ja",
+            "roleinfo_no": "Nein",
             "roleinfo_need_role": "Bitte gib eine Rolle an! Beispiel: `!roleinfo @Rolle`",
 
             "servericon_title": "Server-Icon",
@@ -206,12 +260,30 @@ MESSAGES = {
             "serverinfo_title": "Información del Servidor",
             "serverinfo_name": "Nombre del Servidor",
             "serverinfo_id": "ID del Servidor",
-            "serverinfo_members": "Cantidad de Miembros",
+            "serverinfo_members": "Miembros",
+            "serverinfo_members_word": "miembros",
             "serverinfo_users": "Cantidad de Usuarios",
-            "serverinfo_bots": "Cantidad de Bots",
-            "serverinfo_roles": "Cantidad de Roles",
-            "serverinfo_created": "Servidor Creado",
-            "serverinfo_owner": "Dueño del Servidor",
+            "serverinfo_humans": "humanos",
+            "serverinfo_bots": "bots",
+            "serverinfo_roles": "Roles",
+            "serverinfo_created": "Creado",
+            "serverinfo_owner": "Dueño",
+            "serverinfo_online": "En Línea Ahora",
+            "serverinfo_online_word": "en línea",
+            "serverinfo_channels": "Canales",
+            "serverinfo_text_channels": "texto",
+            "serverinfo_voice_channels": "voz",
+            "serverinfo_categories": "categorías",
+            "serverinfo_emojis": "Emojis",
+            "serverinfo_stickers": "Stickers",
+            "serverinfo_verification": "Verificación",
+            "serverinfo_description": "Descripción",
+            "serverinfo_features": "Funciones",
+            "verification_none": "Ninguna",
+            "verification_low": "Baja",
+            "verification_medium": "Media",
+            "verification_high": "Alta",
+            "verification_highest": "Máxima",
 
             "userinfo_title": "Información del Usuario",
             "userinfo_username": "Nombre de Usuario",
@@ -252,9 +324,18 @@ MESSAGES = {
             "roleinfo_title": "Información del Rol",
             "roleinfo_name": "Nombre del Rol",
             "roleinfo_id": "ID del Rol",
-            "roleinfo_color": "Color del Rol",
-            "roleinfo_position": "Posición del Rol",
-            "roleinfo_members": "Miembros con el Rol",
+            "roleinfo_color": "Color",
+            "roleinfo_color_default": "Predeterminado",
+            "roleinfo_position": "Posición",
+            "roleinfo_members_word": "miembros",
+            "roleinfo_created": "Creado",
+            "roleinfo_mentionable": "Mencionable",
+            "roleinfo_hoisted": "Mostrado Aparte",
+            "roleinfo_managed": "Gestionado",
+            "roleinfo_permissions": "Permisos Clave",
+            "roleinfo_permissions_none": "ninguno",
+            "roleinfo_yes": "Sí",
+            "roleinfo_no": "No",
             "roleinfo_need_role": "¡Por favor especifica un rol! Ejemplo: `!roleinfo @Rol`",
 
             "servericon_title": "Icono del Servidor",
@@ -305,6 +386,41 @@ MESSAGES = {
 }
 
 msg = make_msg(MESSAGES)
+
+
+# ===================================================
+#  SHARED CARD HELPERS
+# ===================================================
+
+# The permissions worth naming on the user and role cards, in the order they
+# read best. Anyone without them gets no permissions line at all, so an
+# ordinary member or role does not carry a row of "none".
+_KEY_PERMISSIONS = (
+    "administrator",
+    "manage_guild",
+    "manage_roles",
+    "manage_channels",
+    "kick_members",
+    "ban_members",
+    "moderate_members",
+    "manage_messages",
+    "mention_everyone",
+)
+
+
+def key_permission_names(permissions) -> list[str]:
+    """The notable permission names held by a member's or a role's permissions.
+
+    Administrator implies every other permission, so it is the only name
+    returned when it is set; otherwise the names come in display order.
+    """
+    if getattr(permissions, "administrator", False):
+        return ["Administrator"]
+    return [
+        name.replace("_", " ").title()
+        for name in _KEY_PERMISSIONS
+        if getattr(permissions, name, False)
+    ]
 
 
 def cv2_text(text, thumbnail_url=None):
