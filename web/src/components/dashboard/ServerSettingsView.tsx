@@ -4,6 +4,7 @@ import { saveConfig } from "../../api";
 import { Icon } from "../Icon";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
+import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading } from "./DashboardViews";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
@@ -138,7 +139,7 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       </section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
-        {loggingCategories.map(([key, label, description]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key} title={description || undefined}><label className="form-field"><span className="form-label">{label} logs</span><select value={String(values.logging[key] || "")} onChange={(event) => setLoggingChannel(key, event.target.value)}><option value="">Not set</option>{channels.map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}</select></label><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
+        {loggingCategories.map(([key, label, description]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key} title={description || undefined}><div className="form-field"><span className="form-label">{label} logs</span><ChannelSelect channels={channels} value={String(values.logging[key] || "")} placeholder="Not set" ariaLabel={`${label} logs`} onChange={(value) => setLoggingChannel(key, value)} /></div><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
       </div></section>
 
       <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><SettingCards><SettingCard title="Private server" hint="Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible." action={<Switch checked={values.private_server} onCheckedChange={(value) => setValue("private_server", value)} aria-label="Private server" />} /></SettingCards></section>

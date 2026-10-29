@@ -71,15 +71,15 @@ An entry about a member (**Member Updated**, **Nickname Changed**) stays open fo
 - Single-valued lines (a nickname, the staff member who made the change) show the latest value
 - Picture changes are never merged: each is a finished change whose before/after files belong to its own entry
 
-Edits respect the same per-channel rate limit as new entries, and a merged entry says so in its footer.
+Edits respect the same per-channel rate limit as new entries.
 
 ## Member Logging
 
-- **Member Joined** — Account age, join method (invite code, vanity URL, or unknown) and invite usage
+- **Member Joined** — Account creation time as a live Discord timestamp (still correct and relative whenever the entry is read), join method (invite code, vanity URL, or unknown) and invite usage
 - **Member Left** — Roles at the time of departure and how long they had been in the server
 - **Kick / Ban** — A removed member is logged once as a kick or ban with the moderator and reason, never also as a plain leave
 - **Server Boosted / Boost Removed** — Boost count and server tier
-- **Avatar Updated** — The global profile picture changed; both pictures are attached to the entry. Logged in every server the member shares with Niko, because a member without a per-server picture shows the global one everywhere
+- **Avatar Updated** — The global profile picture changed; both pictures are attached to the entry, with Discord's default picture standing in for whichever side has none. Logged in every server the member shares with Niko, because a member without a per-server picture shows the global one everywhere
 - **Server Avatar Updated** — The per-server picture changed; logged as its own entry, so a member who changes both gets two entries
 - **Username Updated** — A global username or display name change, which is what the member is shown as in this server until they set a nickname
 - **Profile Banner Updated** — The global profile banner changed; both banners are archived on the entry
@@ -114,6 +114,8 @@ Log entries carry buttons for the obvious next step, each gated on the permissio
 | **Kick / Ban / Unban** | Moderation, AutoMod, join and captcha entries | Applies the action to the member the entry is about |
 | **Unmute** | Mute and tempmute entries | Removes the member's mute through the moderation system |
 | **Unlock Channel** | Locked-channel entries | Removes the `Send Messages` deny from `@everyone` |
+| **Disconnect** | Voice join, move and state entries | Moves the member out of the voice channel the entry named |
+| **Server Mute / Server Unmute** | Voice entries | Server-mutes the member; on a **Server Mute** state entry the same button unmutes them instead, so it always names the action it will take |
 | **Restore Role** | **Role Deleted** | Recreates the role with its name, colour, permissions, hoist, mentionable and position. Members who held it are not re-added |
 | **Restore Channel** | **Channel Deleted** | Recreates the channel in its category with its topic, slowmode, NSFW flag, bitrate, user limit and permission overwrites |
 | **Revert Changes** | **Channel Updated** | Puts the changed settings and permission overwrites back to their previous values |

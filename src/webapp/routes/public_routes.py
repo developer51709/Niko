@@ -1,8 +1,12 @@
 """Flask routes for public."""
 
+import datetime
+
 from config import links as bot_links
 from .. import leaderboard_cache
 from .. import server as _server
+from ..bot_card import render_bot_card
+from ..staff_card import avatar_data_url
 
 globals().update({
     name: value
@@ -330,6 +334,105 @@ def api_botstats():
         "version":       stats.get("version", "1.0"),
         "economy_users": econ_count,
     })
+
+
+def _bot_card_profile() -> dict:
+    """The figures Niko's own README card draws, read from the running bot.
+
+    Counts come from the same live snapshot ``/api/botstats`` uses, so the card
+    and the website can never disagree. Latency and uptime are read straight
+    from the bot object, which is safe from the Flask thread because neither
+    awaits anything. When the gateway is down the startup snapshot still fills
+    the tiles and the card shows the offline presence instead of breaking.
+    """
+    bot = _discord_bot
+    snapshot = load_json(BOT_STATS, {})
+
+    stats = None
+    coro = _live_bot_stats()
+    try:
+        live = run_on_bot_loop(coro, timeout=3)
+        stats = dict(live) if live else None
+    except Exception:
+        # Nothing was scheduled (no bot loop, or the future raised), so close
+        # the coroutine instead of leaving it un-awaited.
+        coro.close()
+        stats = None
+
+    stats = stats or {
+        "guild_count": snapshot.get("guild_count", 0),
+        "user_count": snapshot.get("user_count", 0),
+        "command_count": snapshot.get("command_count", 0),
+        "version": snapshot.get("version", "1.0"),
+    }
+
+    user = getattr(bot, "user", None) if bot is not None else None
+    online = bool(user is not None and getattr(bot, "is_ready", lambda: False)())
+
+    avatar_url = None
+    if user is not None:
+        try:
+            avatar_url = str(user.display_avatar.url)
+        except Exception:
+            avatar_url = None
+
+    latency_ms = None
+    if online:
+        try:
+            latency_ms = round(float(bot.latency) * 1000)
+        except Exception:
+            latency_ms = None
+
+    uptime_seconds = None
+    start_time = getattr(bot, "start_time", None) if bot is not None else None
+    if isinstance(start_time, (int, float)) and start_time > 0:
+        uptime_seconds = max(0, time.time() - start_time)
+    else:
+        since = snapshot.get("uptime_since")
+        if since:
+            try:
+                uptime_seconds = max(0, time.time() - datetime.datetime.fromisoformat(since).timestamp())
+            except (TypeError, ValueError):
+                uptime_seconds = None
+
+    return {
+        "name": getattr(user, "display_name", None) or getattr(user, "name", None) or "Niko",
+        "handle": getattr(user, "name", None) or "niko",
+        "avatar_url": avatar_url,
+        "online": online,
+        "guild_count": stats.get("guild_count", 0),
+        "user_count": stats.get("user_count", 0),
+        "command_count": stats.get("command_count", 0),
+        "latency_ms": latency_ms,
+        "uptime_seconds": uptime_seconds,
+        "version": str(stats.get("version") or "1.0"),
+    }
+
+
+@app.route("/bot/card.svg")
+def api_bot_card():
+    """Niko's live profile card, for the README and any other README.
+
+    GitHub fetches this through its image proxy inside an ``<img>``, so the
+    document must stand on its own: the avatar is inlined as a data URI and the
+    markup uses presentation attributes instead of an external stylesheet.
+    """
+    profile = _bot_card_profile()
+    svg = render_bot_card(
+        profile,
+        theme=request.args.get("theme"),
+        accent=request.args.get("accent"),
+        avatar_data_url=avatar_data_url(profile.get("avatar_url")),
+    )
+    response = Response(svg, mimetype="image/svg+xml")
+    # The figures are live, so no layer may reuse a rendered card. GitHub's
+    # image proxy and the browser both honour this and revalidate instead of
+    # serving the counts the bot had when the image was first requested.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 async def _live_bot_stats():

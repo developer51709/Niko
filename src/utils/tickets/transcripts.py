@@ -1138,8 +1138,9 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-menu-dots {{ display: flex; gap: 3px; }}
   .discord-profile-menu-dots i {{ width: 4px; height: 4px; border-radius: 50%; background: #fff; }}
   .discord-profile-menu-list {{ position: absolute; top: calc(100% + 6px); right: 0; min-width: 148px; padding: 4px; background: #232428; border: 1px solid rgb(255 255 255 / .08); border-radius: 6px; box-shadow: 0 10px 26px rgb(0 0 0 / .5); }}
-  .discord-profile-menu-item {{ display: block; width: 100%; padding: 7px 9px; color: #dbdee1; background: transparent; border: 0; border-radius: 4px; font: inherit; text-align: left; cursor: pointer; }}
+  .discord-profile-menu-item {{ display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; color: #dbdee1; background: transparent; border: 0; border-radius: 4px; font: inherit; text-align: left; cursor: pointer; }}
   .discord-profile-menu-item:hover {{ background: #35373c; }}
+  .discord-profile-menu-icon {{ flex: 0 0 auto; width: 15px; height: 15px; color: #b5bac1; }}
   .discord-profile-body {{ position: relative; padding: 0 16px 16px; }}
   .discord-profile-head {{ display: flex; align-items: center; gap: 8px; margin-top: -38px; }}
   .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; }}
@@ -1632,7 +1633,9 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       return '<button type="button" class="discord-profile-badge-button" data-badge-key="' + escapeHtml(key) + '" aria-haspopup="dialog" aria-expanded="false"' + label + '><img class="discord-profile-badge" src="' + badge.src + '"></button>';
     }}).join('');
     const spotify = profileSpotify(profile);
-    const menu = '<div class="discord-profile-menu"><button type="button" class="discord-profile-menu-button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" data-profile-menu-button><span class="discord-profile-menu-dots" aria-hidden="true"><i></i><i></i><i></i></span></button><div class="discord-profile-menu-list" role="menu" hidden><button type="button" class="discord-profile-menu-item" role="menuitem" data-copy-user-id>Copy User ID</button></div></div>';
+    // Discord's own ID icon, inlined because a transcript is a standalone file.
+    const idIcon = '<svg class="discord-profile-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M15.3 14.48c-.46.45-1.08.67-1.86.67h-1.39V9.2h1.39c.78 0 1.4.22 1.86.67.46.45.68 1.22.68 2.31 0 1.1-.22 1.86-.68 2.31Z"></path><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm1 15h2.04V7.34H6V17Zm4-9.66V17h3.44c1.46 0 2.6-.42 3.38-1.25.8-.83 1.2-2.02 1.2-3.58s-.4-2.75-1.2-3.58c-.79-.83-1.92-1.25-3.38-1.25H10Z"></path></svg>';
+    const menu = '<div class="discord-profile-menu"><button type="button" class="discord-profile-menu-button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" data-profile-menu-button><span class="discord-profile-menu-dots" aria-hidden="true"><i></i><i></i><i></i></span></button><div class="discord-profile-menu-list" role="menu" hidden><button type="button" class="discord-profile-menu-item" role="menuitem" data-copy-user-id>' + idIcon + '<span data-copy-label>Copy User ID</span></button></div></div>';
     card.innerHTML = banner + menu + '<div class="discord-profile-body">'
       + '<div class="discord-profile-head">' + avatar + statusBubble + '</div>'
       + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>'
@@ -1747,7 +1750,10 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
         const write = navigator.clipboard && navigator.clipboard.writeText
           ? navigator.clipboard.writeText(String(profile.id))
           : Promise.reject(new Error("clipboard unavailable"));
-        write.then(() => {{ copyButton.textContent = "Copied!"; }}, () => {{}});
+        write.then(() => {{
+          const label = copyButton.querySelector("[data-copy-label]");
+          if (label) label.textContent = "Copied!";
+        }}, () => {{}});
       }});
     }}
     bindSpotify(card, spotify.timing);

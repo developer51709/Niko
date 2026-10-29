@@ -115,7 +115,9 @@ class TestRetentionWindow(_CogTestCase):
         self.assertIn("<@&1>", body)
         self.assertIn("<@&2>", body)
         self.assertEqual(body.count("**Member:**"), 1)
-        self.assertIn(logging_cog.COALESCED_NOTE, body)
+        # The entry does not explain the merge window to the reader.
+        self.assertNotIn("merged into this entry", body)
+        self.assertNotIn("30 seconds", body)
 
     def test_every_merged_edit_suppresses_mentions(self):
         # The merged body mentions roles and members. An edit that omitted

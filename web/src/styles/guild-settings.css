@@ -148,8 +148,8 @@
 .panel-heading { margin-bottom: 23px; }
 .panel-heading h3 { font-size: 16px; }
 .panel-icon { color: var(--accent); background: var(--surface-muted); border-radius: 8px; }
-.server-controls-body { display: grid; align-content: start; gap: 14px; min-height: 92px; }
-.server-controls-body p { max-width: 34ch; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+/* A lone overview panel fills the row instead of leaving a dead half. */
+.overview-columns > .dash-panel:only-child { grid-column: 1 / -1; }
 .rank-row, .table-row { border-color: var(--line-soft); }
 .rank-row { padding: 12px 0; }
 .rank-row > strong { display: grid; gap: 2px; text-align: right; }
@@ -196,10 +196,41 @@
 .dashboard-layout .level-reward-empty { display: grid; justify-items: center; gap: 5px; padding: 26px 20px; color: var(--dim); text-align: center; font-size: 11px; line-height: 1.6; background: rgba(255, 255, 255, .02); border: 1px dashed var(--line); border-radius: 12px; }
 .dashboard-layout .level-reward-empty strong { color: var(--ink); font-size: 12px; letter-spacing: -.02em; }
 .dashboard-layout .level-reward-note { color: var(--dim); font-size: 10px; line-height: 1.6; }
-.dashboard-layout .blocked-word-row { justify-content: space-between; }
-.dashboard-layout .blocked-word-row .blocked-word-value { min-width: 0; overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-layout .settings-category-editor .blocked-word-actions { gap: 8px; align-items: center; }
-.dashboard-layout .settings-category-editor .blocked-word-actions input { flex: 1 1 auto; min-width: 0; min-height: 42px; }
+/* Blocked words: a count header, removable glass chips, an inline add field and
+   a separate response block keep even a long list scannable. */
+.dashboard-layout .blocked-words-editor { gap: 12px; }
+.dashboard-layout .blocked-words-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; }
+.dashboard-layout .blocked-words-count { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: 11px; font-weight: 650; }
+.dashboard-layout .blocked-words-count .status-dot { width: 6px; height: 6px; }
+.dashboard-layout .blocked-words-count .status-dot.is-idle { background: var(--dim); }
+.dashboard-layout .blocked-words-rule { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.dashboard-layout .blocked-word-chips { display: flex; flex-wrap: wrap; gap: 7px; max-height: 266px; overflow-y: auto; margin: 0; padding: 2px; list-style: none; }
+.dashboard-layout .blocked-word-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 4px 4px 11px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-radius: 999px; transition: background .16s ease, border-color .16s ease; }
+.dashboard-layout .blocked-word-chip:hover { background: rgba(255, 255, 255, .075); border-color: rgba(213, 220, 229, .28); }
+.dashboard-layout .blocked-word-chip .blocked-word-value { min-width: 0; overflow: hidden; color: var(--ink); font: 11px "Space Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-layout .blocked-word-remove { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; padding: 0; color: var(--dim); background: transparent; border: 0; border-radius: 50%; transition: background .16s ease, color .16s ease; }
+.dashboard-layout .blocked-word-remove:hover { color: #e8a2a2; background: rgba(232, 162, 162, .14); }
+.dashboard-layout .blocked-word-remove:focus-visible { outline: 2px solid rgba(213, 220, 229, .45); outline-offset: 1px; }
+.dashboard-layout .blocked-words-empty { display: grid; justify-items: center; gap: 5px; padding: 24px 20px; text-align: center; background: rgba(255, 255, 255, .02); border: 1px dashed var(--line); border-radius: 12px; font-size: 10px; line-height: 1.6; }
+.dashboard-layout .blocked-words-empty-icon { display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 3px; color: var(--accent-dark); background: var(--surface-muted); border: 1px solid var(--line); border-radius: 8px; }
+.dashboard-layout .blocked-words-empty-icon .icon { width: 15px; height: 15px; }
+.dashboard-layout .blocked-words-empty strong { color: var(--ink); font-size: 12px; letter-spacing: -.02em; }
+.dashboard-layout .blocked-words-empty span:not(.blocked-words-empty-icon) { color: var(--dim); }
+.dashboard-layout .blocked-words-empty code { color: var(--accent-dark); }
+/* The input keeps a visible field: fill, border and focus ring. A borderless
+   input inside a styled bar read as a label, so people could not tell where to
+   type. */
+.dashboard-layout .blocked-word-add { display: flex; align-items: center; gap: 8px; }
+.dashboard-layout .blocked-word-add input { flex: 1 1 auto; min-width: 0; min-height: 42px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: 0; font-size: 12px; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.dashboard-layout .blocked-word-add input::placeholder { color: var(--dim); }
+.dashboard-layout .blocked-word-add input:hover { border-color: rgba(213, 220, 229, .28); }
+.dashboard-layout .blocked-word-add input:focus { background: rgba(255, 255, 255, .06); border-color: rgba(213, 220, 229, .45); box-shadow: 0 0 0 4px rgba(213, 220, 229, .1); }
+.dashboard-layout .blocked-word-add .button { width: auto; flex: 0 0 auto; min-height: 42px; margin-top: 0; }
+.dashboard-layout .blocked-word-add .button:disabled { cursor: not-allowed; opacity: .55; }
+.dashboard-layout .blocked-words-response { display: grid; gap: 10px; padding: 14px; background: rgba(255, 255, 255, .02); border: 1px solid var(--line-soft); border-radius: 12px; }
+.dashboard-layout .blocked-words-response-label { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.dashboard-layout .blocked-words-response .setting-note { margin-top: 0; }
+.dashboard-layout .blocked-words-note { color: var(--dim); font-size: 10px; line-height: 1.65; }
 .dashboard-layout .color-picker { min-width: 0; }
 .ticket-admin-list { display: grid; gap: 8px; }
 .ticket-admin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 13px 14px; background: rgba(255,255,255,.025); border: 1px solid var(--line-soft); border-radius: 10px; }
@@ -445,6 +476,9 @@
   .dashboard-layout .guild-feature-settings > .settings-panel { padding: 18px; }
   .dashboard-layout .settings-category-editor .settings-option-row { align-items: stretch; }
   .dashboard-layout .settings-category-editor .settings-option-remove { flex: 0 0 auto; }
+  .dashboard-layout .blocked-word-add { flex-wrap: wrap; }
+  .dashboard-layout .blocked-word-add input { flex-basis: 100%; }
+  .dashboard-layout .blocked-word-add .button { width: 100%; }
   /* Rewards stack: full-width role picker, level and remove share the first row. */
   .dashboard-layout .level-reward-card { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 12px; }
   .dashboard-layout .level-reward-field-level { grid-row: 1; grid-column: 1; }

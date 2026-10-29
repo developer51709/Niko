@@ -69,7 +69,9 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-profile-menu-dots i { width: 4px; height: 4px; border-radius: 50%; background: #fff; }
 .discord-profile-menu-list { position: absolute; top: calc(100% + 6px); right: 0; min-width: 148px; padding: 4px; background: #232428; border: 1px solid rgba(255, 255, 255, .08); border-radius: 6px; box-shadow: 0 10px 26px rgba(0, 0, 0, .5); }
 .discord-profile-menu-item { display: block; width: 100%; padding: 7px 9px; color: #dbdee1; background: transparent; border: 0; border-radius: 4px; font: inherit; text-align: left; }
+.discord-profile-menu-item { display: flex; align-items: center; gap: 8px; }
 .discord-profile-menu-item:hover { background: #35373c; }
+.discord-profile-menu-icon { width: 15px; height: 15px; color: #b5bac1; }
 .discord-profile-body { position: relative; padding: 0 16px 16px; }
 /* The avatar and the custom status share one row, like Discord's own popout:
    the bubble sits to the right of the avatar and points back at it. */
@@ -221,6 +223,31 @@ a.discord-server-tag-invite.is-join:hover { background: #4752c4; }
 .role-select-chip button { display: grid; place-items: center; padding: 2px; color: var(--muted); background: transparent; border: 0; border-radius: 50%; }
 .role-select-chip button:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .role-select-preview { margin-top: 8px; padding: 10px 12px; color: var(--muted); background: color-mix(in srgb, var(--surface-raised) 82%, transparent); border: 1px solid var(--line-soft); border-radius: 8px; font-size: 11px; line-height: 1.6; }
+/* Icons from the copied Discord SVG set are painted through a mask so they
+   inherit the surrounding text colour instead of rendering as black images. */
+.mask-icon { display: inline-block; flex: 0 0 auto; width: 16px; height: 16px; background-color: currentColor; -webkit-mask: var(--mask-icon) center / contain no-repeat; mask: var(--mask-icon) center / contain no-repeat; }
+/* Channel picker: a custom listbox because native option elements cannot hold
+   channel icons. The trigger keeps the form-field look of every other input. */
+.channel-select { position: relative; width: 100%; }
+/* Glass controls: the trigger and the popup carry the same translucent fill
+   and blur as the dashboard cards. */
+.channel-select-trigger { display: flex; width: 100%; min-height: 42px; align-items: center; gap: 9px; padding: 9px 12px; color: var(--ink); background: rgba(255, 255, 255, .035); border: 1px solid var(--line); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 8px 22px rgba(0, 0, 0, .12); font: inherit; font-size: 12px; text-align: left; backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); transition: background .18s, border-color .18s, box-shadow .18s; }
+.channel-select-trigger:hover { background: rgba(255, 255, 255, .07); border-color: rgba(213, 220, 229, .28); }
+.channel-select-trigger:focus-visible, .channel-select.is-open .channel-select-trigger { background: rgba(255, 255, 255, .075); border-color: rgba(213, 220, 229, .45); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 0 4px rgba(213, 220, 229, .1); outline: 0; }
+.channel-select-trigger:disabled { cursor: not-allowed; opacity: .6; }
+.channel-select-glyph { color: var(--muted); }
+.channel-select-glyph.is-empty { color: var(--dim); opacity: .7; }
+.channel-select-value { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.channel-select-value.is-placeholder { color: var(--dim); }
+.channel-select-chevron { flex: 0 0 auto; color: var(--dim); transition: transform .18s; }
+.channel-select.is-open .channel-select-chevron { transform: rotate(180deg); }
+.channel-select-list { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; width: 100%; max-height: 256px; overflow-y: auto; padding: 5px; background: rgba(12, 13, 15, .68); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06); backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%); }
+.channel-select-option { display: flex; width: 100%; align-items: center; gap: 9px; padding: 8px 9px; color: var(--muted); background: transparent; border: 0; border-radius: 7px; font: inherit; font-size: 12px; text-align: left; }
+.channel-select-option.is-highlighted { color: var(--ink); background: rgba(255, 255, 255, .07); }
+.channel-select-option.is-selected { color: var(--ink); font-weight: 650; }
+.channel-select-option .channel-select-glyph { color: var(--dim); }
+.channel-select-option.is-highlighted .channel-select-glyph, .channel-select-option.is-selected .channel-select-glyph { color: var(--accent-dark); }
+.channel-select-check { flex: 0 0 auto; color: var(--accent-dark); font-size: 11px; }
 .discord-markdown .discord-md-task { display: inline; }
 .discord-markdown .discord-md-table-wrap { max-width: 100%; margin: 8px 0; overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 7px; }
 .discord-markdown .discord-md-table { width: 100%; border-collapse: collapse; font-size: .9em; }

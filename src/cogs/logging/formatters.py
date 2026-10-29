@@ -298,6 +298,13 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
     "member_join": ["kick", "ban"],
     "Captcha Failed": ["kick", "ban"],
     "Captcha Kicked": ["ban"],
+    # Voice entries keep the member within reach: mute them (in this session or
+    # the next one) and, unless they have already left, pull them out of the
+    # channel the entry named.
+    "Voice Join": ["voice_mute", "voice_disconnect"],
+    "Voice Leave": ["voice_mute"],
+    "Voice Move": ["voice_mute", "voice_disconnect"],
+    "Voice State Updated": ["voice_mute", "voice_disconnect"],
 }
 _AUTOMOD_DEFAULT_BUTTONS = ["kick", "ban"]
 
@@ -508,6 +515,80 @@ class UnmuteButton(discord.ui.Button):
             await interaction.response.send_message(f"Failed to unmute: {e}", ephemeral=True)
 
 
+class VoiceDisconnectButton(discord.ui.Button):
+    """Pull a member out of the voice channel the entry is about."""
+
+    def __init__(self, guild_id: int, target_id: int):
+        super().__init__(label="Disconnect", style=discord.ButtonStyle.secondary,
+                         emoji=get_emoji("disconnect"), row=0)
+        self.guild_id = guild_id
+        self.target_id = target_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.move_members:
+            return await interaction.response.send_message(
+                "You don't have permission to move members.", ephemeral=True)
+        guild = interaction.client.get_guild(self.guild_id)
+        if not guild:
+            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+        member = guild.get_member(self.target_id)
+        if member is None:
+            return await interaction.response.send_message(
+                "Member not found (they may have left the server).", ephemeral=True)
+        voice = getattr(member, "voice", None)
+        if voice is None or voice.channel is None:
+            return await interaction.response.send_message(
+                f"**{member}** is not in a voice channel.", ephemeral=True)
+        try:
+            await member.move_to(None, reason=f"Quick action by {interaction.user}")
+            await interaction.response.send_message(
+                f"{get_emoji('tick')} Disconnected **{member}** from {voice.channel.mention}.",
+                ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I don't have permission to disconnect that member.", ephemeral=True)
+
+
+class VoiceMuteButton(discord.ui.Button):
+    """Server-mute or server-unmute a member, mirroring their current state.
+
+    Voice entries already say whether the member is server-muted, so one button
+    carries both directions and is labelled with the action it will take.
+    """
+
+    def __init__(self, guild_id: int, target_id: int, *, unmute: bool = False):
+        super().__init__(
+            label="Server Unmute" if unmute else "Server Mute",
+            style=discord.ButtonStyle.success if unmute else discord.ButtonStyle.secondary,
+            emoji=get_emoji("log_unmute" if unmute else "log_mute"),
+            row=0,
+        )
+        self.guild_id = guild_id
+        self.target_id = target_id
+        self.unmute = unmute
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.mute_members:
+            return await interaction.response.send_message(
+                "You don't have permission to mute members in voice.", ephemeral=True)
+        guild = interaction.client.get_guild(self.guild_id)
+        if not guild:
+            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+        member = guild.get_member(self.target_id)
+        if member is None:
+            return await interaction.response.send_message(
+                "Member not found (they may have left the server).", ephemeral=True)
+        try:
+            await member.edit(mute=not self.unmute,
+                              reason=f"Quick action by {interaction.user}")
+            action = "Unmuted" if self.unmute else "Server-muted"
+            await interaction.response.send_message(
+                f"{get_emoji('tick')} {action} **{member}** in voice.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I don't have permission to mute that member.", ephemeral=True)
+
+
 class UnlockButton(discord.ui.Button):
     def __init__(self, guild_id: int, channel_id: int):
         super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji=get_emoji('unlock'), row=0)
@@ -540,8 +621,12 @@ _REVERT_BUTTONS = {
 
 
 def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None, channel_id: int | None = None,
-                          revert: tuple[str, str] | None = None) -> list[discord.ui.Button]:
+                          revert: tuple[str, str] | None = None,
+                          body: str = "") -> list[discord.ui.Button]:
     btns: list[discord.ui.Button] = []
+    # A voice entry states the member's mute state, so the one mute button can
+    # offer the action that is actually still available.
+    server_muted = "**Server Mute:** `server-muted`" in body
     # The revert button reads first: undoing the event beats acting on the person
     # or channel afterwards, and it is the reason the entry is actionable.
     if revert:
@@ -562,6 +647,10 @@ def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None,
             btns.append(UnmuteButton(guild_id, target_id))
         elif b == "unlock" and channel_id:
             btns.append(UnlockButton(guild_id, channel_id))
+        elif b == "voice_mute" and target_id:
+            btns.append(VoiceMuteButton(guild_id, target_id, unmute=server_muted))
+        elif b == "voice_disconnect" and target_id:
+            btns.append(VoiceDisconnectButton(guild_id, target_id))
     return btns
 
 
@@ -601,7 +690,7 @@ def _build_log_view(
         emoji = get_emoji(cat_info["emoji_key"])
 
     buttons = _build_action_buttons(
-        action_key or title, guild_id, target_id, channel_id, revert)
+        action_key or title, guild_id, target_id, channel_id, revert, body=body)
 
     children: list[discord.ui.Item] = [
         discord.ui.TextDisplay(content=f"### {emoji} {title}"),

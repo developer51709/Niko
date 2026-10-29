@@ -1,6 +1,6 @@
 <div align="center">
 
-![Niko](docs/assets/niko_banner_2.png)
+<img src="docs/assets/niko_banner.svg" alt="Niko — the warm, capable Discord companion for communities that care" width="100%" />
 
 # Niko
 
@@ -19,6 +19,10 @@ Moderation, music, progression, tickets, social feeds, and AI — in one polishe
 ![Flask](https://img.shields.io/badge/Flask-API-000000?style=flat-square&logo=flask&logoColor=white)
 ![React 18](https://img.shields.io/badge/React-18-149ECA?style=flat-square&logo=react&logoColor=white)
 ![Vite 6](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)
+
+<img src="https://niko.sryze.cc/bot/card.svg" alt="Niko's live Discord profile: servers, members, commands, latency, and uptime" width="620" />
+
+<sub>Live profile — every figure is read from the running bot when the card loads, not from a stored snapshot.</sub>
 
 </div>
 

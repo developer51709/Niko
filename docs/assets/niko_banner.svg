@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Niko — the warm, capable Discord companion for communities that care">
+  <defs>
+    <linearGradient id="niko-banner-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14181F"/>
+      <stop offset="52%" stop-color="#0C0E13"/>
+      <stop offset="100%" stop-color="#08090C"/>
+    </linearGradient>
+    <radialGradient id="niko-banner-warm" cx="16%" cy="8%" r="82%">
+      <stop offset="0%" stop-color="#C8A882" stop-opacity="0.30"/>
+      <stop offset="60%" stop-color="#C8A882" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#C8A882" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="niko-banner-cool" cx="86%" cy="92%" r="74%">
+      <stop offset="0%" stop-color="#5865F2" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#5865F2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="niko-banner-orb" cx="50%" cy="46%" r="52%">
+      <stop offset="0%" stop-color="#C8A882" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#C8A882" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="niko-banner-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="niko-banner-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity="0.035" stroke-width="1"/>
+    </pattern>
+    <!-- The whole artwork is clipped to the rounded frame, so the four corners
+         are genuinely transparent instead of dark squares inside a rounded line. -->
+    <clipPath id="niko-banner-frame">
+      <rect x="0" y="0" width="1200" height="400" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#niko-banner-frame)">
+    <rect width="1200" height="400" fill="url(#niko-banner-bg)"/>
+    <rect width="1200" height="400" fill="url(#niko-banner-grid)"/>
+    <rect width="1200" height="400" fill="url(#niko-banner-warm)"/>
+    <rect width="1200" height="400" fill="url(#niko-banner-cool)"/>
+    <path d="M0 0H1200L860 400H0Z" fill="url(#niko-banner-sheen)"/>
+
+    <!-- Niko's orbit: the accent ring, a soft core, and two satellites. -->
+    <circle cx="930" cy="190" r="132" fill="url(#niko-banner-orb)"/>
+    <circle cx="930" cy="190" r="108" fill="none" stroke="#C8A882" stroke-opacity="0.20" stroke-width="1.5"/>
+    <circle cx="930" cy="190" r="74" fill="none" stroke="#C8A882" stroke-opacity="0.14" stroke-width="1.5"/>
+    <circle cx="930" cy="190" r="52" fill="#C8A882" opacity="0.09"/>
+    <path d="M930 142L941 179L978 190L941 201L930 238L919 201L882 190L919 179Z" fill="#C8A882" opacity="0.92"/>
+    <circle cx="1024" cy="122" r="6" fill="#C8A882" opacity="0.75"/>
+    <circle cx="838" cy="256" r="4" fill="#F5F3EF" opacity="0.45"/>
+    <circle cx="1030" cy="268" r="3" fill="#F5F3EF" opacity="0.30"/>
+
+    <!-- Wordmark and positioning. -->
+    <rect x="88" y="58" width="56" height="4" rx="2" fill="#C8A882"/>
+    <text x="88" y="102" fill="#C8A882" font-family="Space Mono, ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="3.4">DISCORD BOT · SELF-HOSTED · OPEN SOURCE</text>
+    <text x="84" y="230" fill="#F5F3EF" font-family="Plus Jakarta Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="118" font-weight="800" letter-spacing="-5">niko</text>
+    <text x="88" y="280" fill="#B4BAC3" font-family="Plus Jakarta Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="500">The warm, capable Discord companion for communities that care.</text>
+
+    <!-- Capability chips, the same mono labels the cards use. -->
+    <g font-family="Space Mono, ui-monospace, monospace" font-size="10.5" font-weight="700" letter-spacing="1.6">
+      <rect x="88" y="312" width="122" height="36" rx="18" fill="#C8A882" opacity="0.14"/>
+      <text x="104" y="335" fill="#DDC9AE">MODERATION</text>
+      <rect x="220" y="312" width="80" height="36" rx="18" fill="#FFFFFF" opacity="0.06"/>
+      <text x="236" y="335" fill="#B4BAC3">MUSIC</text>
+      <rect x="310" y="312" width="105" height="36" rx="18" fill="#FFFFFF" opacity="0.06"/>
+      <text x="326" y="335" fill="#B4BAC3">LEVELING</text>
+      <rect x="425" y="312" width="96" height="36" rx="18" fill="#FFFFFF" opacity="0.06"/>
+      <text x="441" y="335" fill="#B4BAC3">ECONOMY</text>
+      <rect x="531" y="312" width="56" height="36" rx="18" fill="#FFFFFF" opacity="0.06"/>
+      <text x="547" y="335" fill="#B4BAC3">AI</text>
+    </g>
+
+    <text x="1112" y="352" fill="#858C96" text-anchor="end" font-family="Space Mono, ui-monospace, monospace" font-size="12" letter-spacing="1.2">niko.sryze.cc</text>
+  </g>
+
+  <!-- The hairline stays inside the clip, so it follows the cut corners. -->
+  <rect x="1.25" y="1.25" width="1197.5" height="397.5" rx="26.75" fill="none" stroke="#C8A882" stroke-opacity="0.22" stroke-width="1.5"/>
+</svg>

@@ -1,11 +1,48 @@
 """Info — the commands about Niko itself: /about, /creator, /invite."""
 
+import time
+
 import discord
 from discord.ext import commands
 
 from config import links
 from config.emojis import get_emoji
+from config.ids import OWNER_IDS
 from ._messages import msg
+
+#: The account both cards describe. The id is read from the owner set, so the
+#: name on /about is always the same person /creator opens, and changing the
+#: owner does not leave one of the two cards pointing at somebody else.
+CREATOR_ID = sorted(OWNER_IDS)[0] if OWNER_IDS else 1052690741874401360
+
+
+def _human_uptime(seconds: float) -> str:
+    """``3d 4h 12m``-style uptime for the about card."""
+    seconds = int(max(0, seconds))
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+    if days:
+        return f"{days}d {hours}h {minutes}m"
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+async def resolve_creator(bot):
+    """The creator account, from the same id both cards read.
+
+    The cached user is used first so a command costs nothing; Discord is only
+    asked when the account is not cached, and a failed lookup still lets the
+    card answer instead of raising.
+    """
+    user = bot.get_user(CREATOR_ID)
+    if user is not None:
+        return user
+    try:
+        return await bot.fetch_user(CREATOR_ID)
+    except (discord.NotFound, discord.HTTPException):
+        return None
 
 
 class AboutMixin:
@@ -23,12 +60,30 @@ class AboutMixin:
         bot_user = self.bot.user
         avatar_url = bot_user.avatar.url if bot_user.avatar else None
 
+        creator = await resolve_creator(self.bot)
+        creator_line = (
+            f"{creator.display_name} ({creator.mention})" if creator
+            else f"<@{CREATOR_ID}>"
+        )
+
+        servers = len(self.bot.guilds)
+        members = sum(guild.member_count or 0 for guild in self.bot.guilds)
+        commands = (
+            getattr(self.bot, "_status_command_count", None)
+            or len(self.bot.commands)
+        )
+        started = getattr(self.bot, "start_time", None)
+        uptime = _human_uptime(time.time() - started) if started else "\u2014"
+
         text = (
-            f"### {msg(ctx, 'about_title')}\n"
+            f"### {get_emoji('bot')} {msg(ctx, 'about_title')}\n"
             f"{msg(ctx, 'about_desc')}\n\n"
-            f"**{msg(ctx, 'about_dev')}:** Nyxen\n"
-            f"**{msg(ctx, 'about_lib')}:** discord.py\n"
-            f"**{msg(ctx, 'about_servers')}:** {len(self.bot.guilds)}\n\n"
+            f"**{msg(ctx, 'about_dev')}:** {creator_line}\n"
+            f"**{msg(ctx, 'about_lib')}:** discord.py 2.7\n"
+            f"**{msg(ctx, 'about_servers')}:** {servers:,}  \u00b7  "
+            f"**{msg(ctx, 'about_members')}:** {members:,}\n"
+            f"**{msg(ctx, 'about_commands')}:** {commands:,}  \u00b7  "
+            f"**{msg(ctx, 'about_uptime')}:** {uptime}\n\n"
             f"-# {msg(ctx, 'about_footer')}"
         )
 
@@ -85,7 +140,9 @@ class AboutMixin:
         help="{ 'en': 'meet Nikos creator', 'de': 'entwickler-infos', 'es': 'conoce al creador de Niko' }"
     )
     async def creator(self, ctx):
-        creator = await self.bot.fetch_user(1052690741874401360)
+        creator = await resolve_creator(self.bot)
+        if creator is None:
+            return await ctx.send(msg(ctx, "creator_unavailable"))
         avatar_url = creator.avatar.url if creator.avatar else None
 
         text = (

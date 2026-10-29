@@ -156,9 +156,9 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "badge_partner_role":
         return "<:badge_partner_role:1564762297937698957>"
     if emoji_name == "bluesky":
-        return "<:bluesky:1564762301033353358>"
+        return "<:bluesky:1565386562446032926>"
     if emoji_name == "broom":
-        return "<:broom:1564762304183013477>"
+        return "<:broom:1565386565730041866>"
     if emoji_name == "C4Empty":
         return "<:C4Empty:1564762307295191080>"
     if emoji_name == "C4Red":
@@ -184,31 +184,31 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "credit_card":
         return "<a:credit_card:1564762347082489889>"
     if emoji_name == "crypto_bitcoin":
-        return "<:crypto_bitcoin:1564762350484201651>"
+        return "<:crypto_bitcoin:1565386569316045181>"
     if emoji_name == "crypto_bnb":
-        return "<:crypto_bnb:1564762358679609394>"
+        return "<:crypto_bnb:1565386572294127887>"
     if emoji_name == "crypto_dogecoin":
-        return "<:crypto_dogecoin:1564762363457044582>"
+        return "<:crypto_dogecoin:1565386575393853541>"
     if emoji_name == "crypto_ethereum":
-        return "<:crypto_ethereum:1564762366405771296>"
+        return "<:crypto_ethereum:1565386578883510405>"
     if emoji_name == "crypto_ltc":
-        return "<:crypto_ltc:1564762369815609445>"
+        return "<:crypto_ltc:1565386582729687150>"
     if emoji_name == "crypto_monero":
-        return "<:crypto_monero:1564762372868935781>"
+        return "<:crypto_monero:1565386586072285346>"
     if emoji_name == "crypto_tether_usdt":
-        return "<:crypto_tether_usdt:1564762375893028974>"
+        return "<:crypto_tether_usdt:1565386589834584095>"
     if emoji_name == "crypto_tron":
-        return "<:crypto_tron:1564762379022115046>"
+        return "<:crypto_tron:1565386595513933944>"
     if emoji_name == "dbl":
         return "<:dbl:1564762382050267216>"
     if emoji_name == "disconnect":
         return "<:disconnect:1564762385171087501>"
     if emoji_name == "discord":
-        return "<a:discord:1564762388857626774>"
+        return "<:discord:1565388699204587681>"
     if emoji_name == "gift":
         return "<:gift:1564762392112402523>"
     if emoji_name == "github":
-        return "<:github:1564762397191700652>"
+        return "<:github:1565386601809449094>"
     if emoji_name == "hypesquad_balance":
         return "<:hypesquad_balance:1564762399821537403>"
     if emoji_name == "hypesquad_bravery":
@@ -346,9 +346,9 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "wumpus":
         return "<:wumpus:1564762603824357396>"
     if emoji_name == "instagram":
-        return "<:instagram:1564762607397773363>"
+        return "<:instagram:1565386605148119060>"
     if emoji_name == "lastfm":
-        return "<:lastfm:1564762610627383306>"
+        return "<:lastfm:1565386608168009848>"
     if emoji_name == "music":
         return "<:music:1564762613790019675>"
     if emoji_name == "notepad":
@@ -380,19 +380,19 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "pingpong":
         return "<:pingpong:1564762657813168149>"
     if emoji_name == "python":
-        return "<:python:1564762661076467792>"
+        return "<:python:1565386611250696382>"
     if emoji_name == "ram":
         return "<:ram:1564762664503091241>"
     if emoji_name == "reddit":
-        return "<:reddit:1564762667548156004>"
+        return "<:reddit:1565386614598013059>"
     if emoji_name == "sad":
         return "<:sad:1565046593122472006>"
     if emoji_name == "scroll":
         return "<:scroll:1564762670698336306>"
     if emoji_name == "soundcloud":
-        return "<:soundcloud:1564762673722429563>"
+        return "<:soundcloud:1565386617764708463>"
     if emoji_name == "spotify":
-        return "<:spotify:1564762676985598022>"
+        return "<:spotify:1565386620935471347>"
     if emoji_name == "star":
         return "<:star:1564762680038793296>"
     if emoji_name == "status_dnd":
@@ -410,13 +410,13 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "thumbs_up":
         return "<:thumbs_up:1564762702444896417>"
     if emoji_name == "tiktok":
-        return "<:tiktok:1564762705938882660>"
+        return "<:tiktok:1565386624081072138>"
     if emoji_name == "topgg":
-        return "<:topgg:1564762708614586411>"
+        return "<:topgg:1565386627021275256>"
     if emoji_name == "twitch":
-        return "<:twitch:1564762712301637722>"
+        return "<:twitch:1565386629940781390>"
     if emoji_name == "twitterx":
-        return "<:twitterx:1564762715065684069>"
+        return "<:twitterx:1565386633426247700>"
     if emoji_name == "voicemaster":
         return "<:voicemaster:1564762718290837575>"
     if emoji_name == "verified_developer_badge":
@@ -436,7 +436,7 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "wavelink":
         return "<:wavelink:1564762742030860320>"
     if emoji_name == "website":
-        return "<:website:1564762745381982288>"
+        return "<:website:1565386636332896388>"
     if emoji_name == "White1":
         return "<:White1:1564762748477247639>"
     if emoji_name == "White2":
@@ -452,9 +452,9 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "White7":
         return "<:White7:1564762769797025792>"
     if emoji_name == "youtube":
-        return "<:youtube:1564762772871315536>"
+        return "<:youtube:1565386639738535953>"
     if emoji_name == "youtube_shorts":
-        return "<:youtube_shorts:1564762776247861308>"
+        return "<:youtube_shorts:1565386642779406526>"
     # Server-log emojis, one per log message type so no two log entries ever
     # share an icon. The artwork is generated from Lucide icons into
     # src/assets/emojis/ by scripts/build-emoji-icons.mjs, and the ids below are
