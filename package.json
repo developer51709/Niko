@@ -27,7 +27,9 @@
   },
   "devDependencies": {
     "@mdx-js/rollup": "^3.1.1",
+    "@web3icons/core": "^4.0.58",
     "remark-frontmatter": "^5.0.0",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "simple-icons": "^16.36.0"
   }
 }

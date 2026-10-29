@@ -638,10 +638,32 @@
 .staff-billing-payment-foot code { color: var(--dim); font: 10px "Space Mono", monospace; }
 .staff-billing-note { flex: 1 1 220px; min-width: 180px; }
 
+/* The billing decision and the payment itself are different things, so each
+   card is edged and labelled by which one is true: awaiting payment, paid,
+   flagged for attention, or resolved. */
+.staff-billing-payment.is-pending { border-left: 3px solid rgba(226, 168, 74, .55); }
+.staff-billing-payment.is-approved { border-left: 3px solid rgba(126, 198, 150, .55); }
+.staff-billing-payment.is-blocked { border-left: 3px solid rgba(226, 120, 110, .62); }
+.staff-billing-payment.is-resolved { border-left: 3px solid rgba(150, 170, 210, .55); }
+.staff-billing-payment .staff-guild-status.is-resolved {
+  color: #aebbd4;
+  background: rgba(150, 170, 210, .1);
+  border-color: rgba(150, 170, 210, .28);
+}
+
+.staff-billing-payment-paid { color: var(--dim); font: 9.5px "Space Mono", monospace; letter-spacing: .03em; }
+.staff-billing-payment-paid.is-paid { color: var(--sage, #9dc4a8); }
+
+.staff-billing-payment-note { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 9px; }
+.staff-billing-payment-note .staff-billing-note { flex: 1 1 240px; }
+.staff-billing-payment-note .button { flex: 0 0 auto; }
+.staff-billing-payment-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 @media (max-width: 720px) {
   .staff-billing-grant { grid-template-columns: 1fr 1fr; }
   .staff-billing-grant .button { width: 100%; }
   .staff-billing-payment-head { align-items: flex-start; flex-direction: column; }
+  .staff-billing-payment-note .button, .staff-billing-payment-actions .button { flex: 1 1 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

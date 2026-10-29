@@ -466,14 +466,17 @@ def api_guild_resources(guild_id):
                 ]
             except Exception:
                 pass
-        channels = [
-            {"id": str(channel.id), "name": str(channel.name)}
-            for channel in channels
-        ]
-        voice_channels = [
-            {"id": str(channel.id), "name": str(channel.name)}
-            for channel in voice_channels
-        ]
+        def channel_payload(channel):
+            # The dashboard draws Discord's own channel icon, so it needs the
+            # channel kind as well as the name.
+            return {
+                "id": str(channel.id),
+                "name": str(channel.name),
+                "type": str(getattr(getattr(channel, "type", None), "name", "text")),
+            }
+
+        channels = [channel_payload(channel) for channel in channels]
+        voice_channels = [channel_payload(channel) for channel in voice_channels]
         roles = [
             {"id": str(role.id), "name": role.name}
             for role in guild.roles
@@ -498,14 +501,33 @@ def api_guild_resources(guild_id):
             response.raise_for_status()
             channels = response.json()
             if isinstance(channels, list):
+                channel_types = {
+                    0: "text",
+                    2: "voice",
+                    5: "news",
+                    10: "announcement_thread",
+                    11: "public_thread",
+                    12: "private_thread",
+                    13: "stage_voice",
+                    15: "forum",
+                    16: "media",
+                }
                 return jsonify({
                     "channels": [
-                        {"id": str(channel["id"]), "name": str(channel.get("name") or "")}
+                        {
+                            "id": str(channel["id"]),
+                            "name": str(channel.get("name") or ""),
+                            "type": channel_types.get(channel.get("type"), "text"),
+                        }
                         for channel in channels
                         if channel.get("id") and channel.get("type") in {0, 5, 10, 11, 12}
                     ],
                     "voice_channels": [
-                        {"id": str(channel["id"]), "name": str(channel.get("name") or "")}
+                        {
+                            "id": str(channel["id"]),
+                            "name": str(channel.get("name") or ""),
+                            "type": channel_types.get(channel.get("type"), "voice"),
+                        }
                         for channel in channels
                         if channel.get("id") and channel.get("type") in {2, 13}
                     ],

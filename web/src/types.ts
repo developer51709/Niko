@@ -610,8 +610,8 @@ export type GuildConfig = {
 };
 
 export type GuildResources = {
-  channels: { id: string; name: string }[];
-  voice_channels?: { id: string; name: string }[];
+  channels: { id: string; name: string; type?: string }[];
+  voice_channels?: { id: string; name: string; type?: string }[];
   roles: { id: string; name: string }[];
 };
 

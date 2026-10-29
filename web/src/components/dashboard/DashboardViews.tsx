@@ -202,7 +202,6 @@ export function OverviewView({ overview }: { overview: GuildOverview }) {
     <ServerStatsCard stats={overview.server} />
     <div className="dash-columns overview-columns">
       <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Community energy</span><h3>Top XP</h3></div><span className="panel-icon"><Icon name="spark" /></span></div><RankList rows={overview.leveling.top} /></section>
-      <section className="dash-panel"><div className="panel-heading"><div><span className="panel-kicker">Server controls</span><h3>Manage the room</h3></div><span className="panel-icon"><Icon name="settings" /></span></div><div className="server-controls-body"><p>Use Server settings for prefixes, welcome messages, logs, and ticket panels.</p><span className="text-link">Open server settings <Icon name="arrow" /></span></div></section>
     </div>
   </>;
 }

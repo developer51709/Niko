@@ -31,6 +31,7 @@ but admin login intentionally remains unavailable.
 | GET | `/api/premium/plans` | Plan price, perks, currencies, and enabled payment methods |
 | POST | `/api/premium/webhook` | OxaPay white-label callback, verified with the HMAC-SHA512 merchant signature |
 | POST | `/api/donations/webhook` | OxaPay donation callback, verified the same way |
+| GET | `/bot/card.svg` | Live SVG profile card for the README; accepts `?theme=dark\|light` and `?accent=RRGGBB`, and is served `no-store` so every load shows current figures |
 
 The interactions endpoint is public for the same reason it exists: Discord has
 no session. The Ed25519 signature over the raw body is what proves the caller is

@@ -370,16 +370,42 @@ async def recent_payments(pool, limit: int = 50) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+async def save_payment_note(pool, *, order_id: str, note: str) -> None:
+    """Save a billing note on its own, leaving the decision untouched.
+
+    Notes are written as the owner types them, not as a side effect of flagging
+    or resolving, so a note is never lost by not pressing a decision button.
+    """
+    pool = _require_pool(pool)
+    await pool.execute(
+        "UPDATE premium_payments SET issue_note = $1 WHERE order_id = $2",
+        note, str(order_id),
+    )
+
+
 async def resolve_payment(
     pool,
     *,
     order_id: str,
-    status: str,
+    status: str | None,
     note: str = "",
     staff_id: int | None = None,
 ) -> bool:
-    """Record a billing decision (open/resolved) without touching payment state."""
+    """Record, change, or clear the billing decision for one payment.
+
+    ``status`` is ``"open"`` (needs attention) or ``"resolved"``; ``None``
+    clears the decision so a misclick can be undone. ``resolved_by`` and
+    ``resolved_at`` are the stamp of the *current* decision, so clearing them
+    is what makes an undo real. Nothing here touches the payment itself.
+    """
     pool = _require_pool(pool)
+    if status is None:
+        await pool.execute(
+            "UPDATE premium_payments SET issue_status = NULL, issue_note = $1, "
+            "resolved_by = NULL, resolved_at = NULL WHERE order_id = $2",
+            note, str(order_id),
+        )
+        return True
     await pool.execute(
         "UPDATE premium_payments SET issue_status = $1, issue_note = $2, resolved_by = $3, "
         "resolved_at = $4 WHERE order_id = $5",

@@ -56,13 +56,16 @@ MESSAGES = {
 
             "about_title": "About Niko",
             "about_desc": (
-                "Niko is a friendly, playful, and very social AI designed to be an engaging "
-                "companion in your Discord server. He loves chatting, helping out, and making "
-                "your community feel more alive."
+                "Niko is a warm, all-in-one Discord companion: moderation and AutoMod, music, "
+                "leveling and economy, tickets, giveaways, social feeds, and an AI that remembers "
+                "your server \u2014 with a full web dashboard for everything behind it."
             ),
             "about_dev": "Developer",
             "about_lib": "Library",
             "about_servers": "Servers",
+            "about_members": "Members",
+            "about_commands": "Commands",
+            "about_uptime": "Uptime",
             "about_footer": "Thanks for using Niko!",
 
             "creator_title": "Creator",
@@ -70,6 +73,7 @@ MESSAGES = {
             "creator_tag": "Creator Tag",
             "creator_id": "User ID",
             "creator_project": "Project",
+            "creator_unavailable": "Could not load the creator profile right now. Please try again in a moment.",
 
             "roleinfo_title": "Role Info",
             "roleinfo_name": "Role Name",
@@ -182,12 +186,17 @@ MESSAGES = {
 
             "about_title": "Über Niko",
             "about_desc": (
-                "Niko ist ein freundlicher, verspielter und sehr sozialer KI-Begleiter, "
-                "der deinen Discord-Server lebendiger macht."
+                "Niko ist ein warmer All-in-One-Begleiter für Discord: Moderation und AutoMod, "
+                "Musik, Leveling und Wirtschaft, Tickets, Giveaways, Social-Feeds und eine KI, "
+                "die sich an deinen Server erinnert \u2014 mit einem vollständigen Web-Dashboard "
+                "für alles dahinter."
             ),
             "about_dev": "Entwickler",
             "about_lib": "Bibliothek",
             "about_servers": "Server",
+            "about_members": "Mitglieder",
+            "about_commands": "Befehle",
+            "about_uptime": "Laufzeit",
             "about_footer": "Danke, dass du Niko benutzt!",
 
             "creator_title": "Ersteller",
@@ -195,6 +204,7 @@ MESSAGES = {
             "creator_tag": "Ersteller-Tag",
             "creator_id": "Benutzer-ID",
             "creator_project": "Projekt",
+            "creator_unavailable": "Das Ersteller-Profil konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.",
 
             "roleinfo_title": "Rollen-Informationen",
             "roleinfo_name": "Rollenname",
@@ -306,13 +316,16 @@ MESSAGES = {
 
             "about_title": "Acerca de Niko",
             "about_desc": (
-                "Niko es una IA amigable, juguetona y muy social diseñada para ser un compañero "
-                "entretenido en tu servidor de Discord. Le encanta charlar, ayudar y hacer que "
-                "tu comunidad se sienta más viva."
+                "Niko es un compañero cálido y todo-en-uno para Discord: moderación y AutoMod, "
+                "música, nivelación y economía, tickets, sorteos, redes sociales y una IA que "
+                "recuerda tu servidor \u2014 con un panel web completo para todo lo demás."
             ),
             "about_dev": "Desarrollador",
             "about_lib": "Librería",
             "about_servers": "Servidores",
+            "about_members": "Miembros",
+            "about_commands": "Comandos",
+            "about_uptime": "Tiempo activo",
             "about_footer": "¡Gracias por usar a Niko!",
 
             "creator_title": "Creador",
@@ -320,6 +333,7 @@ MESSAGES = {
             "creator_tag": "Tag del Creador",
             "creator_id": "ID de Usuario",
             "creator_project": "Proyecto",
+            "creator_unavailable": "No se pudo cargar el perfil del creador ahora mismo. Inténtalo de nuevo en un momento.",
 
             "roleinfo_title": "Información del Rol",
             "roleinfo_name": "Nombre del Rol",

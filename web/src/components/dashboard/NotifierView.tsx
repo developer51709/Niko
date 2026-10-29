@@ -9,6 +9,7 @@ import {
 } from "../../api";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
+import { ChannelSelect } from "./ChannelSelect";
 import { RoleSelect } from "./RoleSelect";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
@@ -325,10 +326,13 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
         <SectionTitle label="Per server" title="Announcement defaults" detail="Choose where new accounts post and who gets pinged when you do not set that per account." icon="settings" />
         <div className="form-grid">
           <Field label="Default channel" hint="Used when an account has no channel of its own.">
-            <select value={configDraft.default_channel_id} onChange={(event) => setConfigDraft({ ...configDraft, default_channel_id: event.target.value })}>
-              <option value="">No default channel</option>
-              {channelsWithSelected(resources, configDraft.default_channel_id).map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}
-            </select>
+            <ChannelSelect
+              channels={channelsWithSelected(resources, configDraft.default_channel_id)}
+              value={configDraft.default_channel_id}
+              placeholder="No default channel"
+              ariaLabel="Default channel"
+              onChange={(value) => setConfigDraft({ ...configDraft, default_channel_id: value })}
+            />
           </Field>
           <Field label="Default ping role" hint="Leave empty for a quiet announcement.">
             <RoleSelect roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder="No ping" onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: String(value) })} />
@@ -375,12 +379,13 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
             ? "This server has no default channel yet, so pick where announcements should go."
             : `Optional — leave it on the default channel (#${defaultChannelLabel}) or pick another.`}
         >
-          <select value={form.channel_id} aria-required={addChannelRequired} onChange={(event) => setForm({ ...form, channel_id: event.target.value })}>
-            <option value="">
-              {defaultChannelId ? `Use default — #${defaultChannelLabel}` : "Choose a channel"}
-            </option>
-            {channelsWithSelected(resources, form.channel_id).map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}
-          </select>
+          <ChannelSelect
+            channels={channelsWithSelected(resources, form.channel_id)}
+            value={form.channel_id}
+            placeholder={defaultChannelId ? `Use default — #${defaultChannelLabel}` : "Choose a channel"}
+            ariaLabel={addChannelRequired ? "Announcement channel · required" : "Announcement channel"}
+            onChange={(value) => setForm({ ...form, channel_id: value })}
+          />
         </Field>
         <Field label="Ping role" hint="Optional — mentioned with every announcement.">
           <RoleSelect roles={resources?.roles || []} value={form.ping_role_id} placeholder="No ping" onChange={(value) => setForm({ ...form, ping_role_id: String(value) })} />
@@ -421,10 +426,13 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
               </div>
               <div className="form-grid">
                 <Field label="Channel">
-                  <select value={draft.channel_id} onChange={(event) => updateDraft(follow, { channel_id: event.target.value })}>
-                    <option value="">Choose a channel</option>
-                    {channelsWithSelected(resources, draft.channel_id).map((channel) => <option value={channel.id} key={channel.id}>#{channel.name}</option>)}
-                  </select>
+                  <ChannelSelect
+                    channels={channelsWithSelected(resources, draft.channel_id)}
+                    value={draft.channel_id}
+                    placeholder="Choose a channel"
+                    ariaLabel={`Channel for ${follow.display}`}
+                    onChange={(value) => updateDraft(follow, { channel_id: value })}
+                  />
                 </Field>
                 <Field label="Ping role" hint="Leave empty for a quiet announcement.">
                   <RoleSelect roles={resources?.roles || []} value={draft.ping_role_id} placeholder="No ping" onChange={(value) => updateDraft(follow, { ping_role_id: String(value) })} />

@@ -141,7 +141,7 @@ class _Asset:
 
 
 def _user(*, avatar=None, guild_avatar=None, member_id=42, name="tester",
-          global_name=None, banner=None):
+          global_name=None, banner=None, default_avatar=None):
     return SimpleNamespace(
         id=member_id,
         name=name,
@@ -152,6 +152,7 @@ def _user(*, avatar=None, guild_avatar=None, member_id=42, name="tester",
         avatar=avatar,
         banner=banner,
         guild_avatar=guild_avatar,
+        default_avatar=default_avatar,
         display_avatar=SimpleNamespace(url="https://cdn.example/current.png"),
         roles=[],
         nick=None,
@@ -269,6 +270,72 @@ class TestProfilePictures:
             "https://cdn.example/old.png",
             ("attachment://profile-picture-after.png", "After — Global profile picture"),
         ]
+
+    def test_the_entry_does_not_explain_the_attachments(self):
+        cog = _cog()
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert "attached to this entry" not in call.body
+        assert "expires their old links" not in call.body
+
+    def test_a_removed_picture_shows_the_default_avatar(self):
+        cog = _cog()
+        # Discord draws a default avatar for an account without one, so the
+        # entry must not leave the "after" side blank.
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=None, default_avatar=_Asset("https://cdn.example/default.png"))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.png", "profile-picture-after.png"]
+        assert call.media_urls[-1][1] == "After — Global profile picture"
+        assert "**After:**" not in call.body
+
+    def test_a_first_picture_uses_the_default_as_the_before_image(self):
+        cog = _cog()
+        before = _user(avatar=None, default_avatar=_Asset("https://cdn.example/default.png"))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert len(call.files) == 2
+        assert call.media_urls[0][1] == "Before — Global profile picture"
+        assert "**Before:**" not in call.body
+
+    def test_an_unarchived_default_avatar_is_shown_without_a_dead_link_line(self):
+        cog = _cog()
+        # The default picture has a permanent CDN URL, so a failed download
+        # still shows it — and the entry does not print a link the reader can
+        # already see.
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=None, default_avatar=_Asset("https://cdn.example/default.png",
+                                                        error=OSError("offline")))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        call = _call(cog)
+        assert "https://cdn.example/default.png" in call.media_urls
+        assert "https://cdn.example/default.png" not in call.body
+        assert "**After:**" not in call.body
+
+    def test_a_removed_server_picture_shows_the_global_picture(self):
+        cog = _cog()
+        before = _user(guild_avatar=_Asset("https://cdn.example/old-server.png"))
+        # A member without a per-server picture shows the global one there.
+        after = _user()
+
+        asyncio.run(cog.on_member_update(before, after))
+
+        call = _call(cog)
+        assert call.title == "Server Avatar Updated"
+        assert "https://cdn.example/current.png" in call.media_urls
 
     def test_an_oversized_picture_is_not_uploaded(self):
         cog = _cog()
@@ -655,3 +722,134 @@ def test_a_voice_update_without_a_state_change_logs_nothing():
     asyncio.run(cog.on_voice_state_update(member, state, state))
 
     cog.log_event.assert_not_awaited()
+
+
+# ── Voice quick actions ───────────────────────────
+
+class _VoiceResponse:
+    def __init__(self):
+        self.messages = []
+
+    async def send_message(self, content=None, **kwargs):
+        self.messages.append((content, kwargs))
+
+
+class _VoiceMember:
+    def __init__(self, *, in_channel=True, muted=False):
+        self.id = 42
+        self.voice = SimpleNamespace(
+            channel=SimpleNamespace(id=3, mention="<#3>") if in_channel else None)
+        self.moved_to = "unchanged"
+        self.muted = muted
+        self.edits = []
+
+    async def move_to(self, channel, *, reason=None):
+        self.moved_to = channel
+
+    async def edit(self, *, mute, reason=None):
+        self.edits.append({"mute": mute, "reason": reason})
+        self.muted = mute
+
+    def __str__(self):
+        return "tester#0001"
+
+
+def _voice_interaction(member, **permissions):
+    guild = SimpleNamespace(get_member=lambda _id: member)
+    return SimpleNamespace(
+        client=SimpleNamespace(get_guild=lambda _gid: guild),
+        user=SimpleNamespace(id=5, guild_permissions=discord.Permissions(**permissions)),
+        response=_VoiceResponse(),
+    )
+
+
+def _button_labels(view):
+    """Every button label in a rendered view, however the rows are nested."""
+    labels = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("type") == 2 and "label" in node:
+                labels.append(node["label"])
+            for child in node.get("components", []):
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(view.to_components())
+    return labels
+
+
+def test_voice_entries_get_disconnect_and_mute_actions():
+    buttons = formatters._build_action_buttons("Voice Join", GUILD_ID, 42)
+
+    assert [type(button) for button in buttons] == [
+        formatters.VoiceMuteButton, formatters.VoiceDisconnectButton]
+    assert [button.label for button in buttons] == ["Server Mute", "Disconnect"]
+
+
+def test_a_server_muted_entry_offers_the_unmute_action():
+    buttons = formatters._build_action_buttons(
+        "Voice State Updated", GUILD_ID, 42,
+        body="**Member:** <@42>\n**Server Mute:** `server-muted`")
+
+    assert buttons[0].label == "Server Unmute"
+    assert buttons[0].unmute is True
+
+
+def test_a_voice_leave_entry_has_no_disconnect_button():
+    buttons = formatters._build_action_buttons("Voice Leave", GUILD_ID, 42)
+
+    # The member is already out of voice; only the mute that follows them into
+    # the next session makes sense.
+    assert [type(button) for button in buttons] == [formatters.VoiceMuteButton]
+
+
+def test_a_voice_log_view_carries_the_voice_buttons():
+    view = formatters._build_log_view(
+        "voice", "Voice State Updated", "**Server Mute:** `server-muted`", GUILD_ID,
+        target_id=42)
+
+    assert _button_labels(view) == ["Server Unmute", "Disconnect"]
+
+
+def test_disconnect_moves_the_member_out_of_voice():
+    member = _VoiceMember()
+    interaction = _voice_interaction(member, move_members=True)
+
+    asyncio.run(formatters.VoiceDisconnectButton(GUILD_ID, member.id).callback(interaction))
+
+    assert member.moved_to is None
+    assert "Disconnected" in interaction.response.messages[-1][0]
+
+
+def test_disconnect_explains_when_the_member_is_not_in_voice():
+    member = _VoiceMember(in_channel=False)
+    interaction = _voice_interaction(member, move_members=True)
+
+    asyncio.run(formatters.VoiceDisconnectButton(GUILD_ID, member.id).callback(interaction))
+
+    assert member.moved_to == "unchanged"
+    assert "not in a voice channel" in interaction.response.messages[-1][0]
+
+
+def test_disconnect_needs_the_move_permission():
+    member = _VoiceMember()
+    interaction = _voice_interaction(member, move_members=False)
+
+    asyncio.run(formatters.VoiceDisconnectButton(GUILD_ID, member.id).callback(interaction))
+
+    assert member.moved_to == "unchanged"
+    assert "permission" in interaction.response.messages[-1][0]
+
+
+def test_the_mute_button_toggles_the_voice_state_both_ways():
+    member = _VoiceMember()
+    interaction = _voice_interaction(member, mute_members=True)
+
+    asyncio.run(formatters.VoiceMuteButton(GUILD_ID, member.id).callback(interaction))
+    assert member.edits[-1]["mute"] is True
+
+    asyncio.run(formatters.VoiceMuteButton(GUILD_ID, member.id, unmute=True).callback(interaction))
+    assert member.edits[-1]["mute"] is False

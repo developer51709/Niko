@@ -15,7 +15,7 @@ import { ColorPicker } from "../components/dashboard/ColorPicker";
 import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
 import { PublicHeader } from "../components/PublicHeader";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
-import type { AuthStatus, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
+import type { AuthStatus, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingPayment, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
 
 type ReviewedTeamSubmission = TeamRecruitmentSubmission & {
   opening_id: string;
@@ -43,6 +43,22 @@ const PUBLIC_LINK_TYPES = [
 type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
+
+/**
+ * The badge a payment earns: its billing decision comes first, then whether the
+ * provider was actually paid. A waiting payment and a paid one must never wear
+ * the same pill.
+ */
+function billingPaymentState(payment: StaffBillingPayment): { label: string; className: string } {
+  if (payment.issue_status === "open") return { label: "Needs attention", className: "is-blocked" };
+  if (payment.issue_status === "resolved") return { label: "Resolved", className: "is-resolved" };
+  if (payment.paid) return { label: "Paid", className: "is-approved" };
+  const status = (payment.status || "").toLowerCase();
+  if (status === "expired" || status === "failed") {
+    return { label: payment.status || "Expired", className: "is-blocked" };
+  }
+  return { label: "Awaiting payment", className: "is-pending" };
+}
 
 // One source of truth for tab access: the sidebar buttons and the deep-link
 // guard both read it, so a role can never reach a panel it may not open.
@@ -514,13 +530,39 @@ export function StaffDashboardPage() {
     } catch (reason) { notifyError(reason instanceof Error ? reason.message : "The request could not be reviewed.", "staff-data-removal"); }
     finally { setDataRemovalBusy(false); }
   };
-  const resolveBilling = async (orderId: string, status: "open" | "resolved") => {
+  // The note being edited for a payment, falling back to what is on record so
+  // flagging or resolving never wipes a saved note.
+  const billingNoteFor = (payment: StaffBillingPayment) =>
+    billingNotes[payment.order_id] ?? payment.issue_note ?? "";
+  const forgetBillingDraft = (orderId: string) => setBillingNotes((current) => {
+    const next = { ...current };
+    delete next[orderId];
+    return next;
+  });
+  const saveBillingNote = async (payment: StaffBillingPayment) => {
     if (billingBusy) return;
     setBillingBusy(true);
     try {
-      await resolveStaffBillingPayment(orderId, status, billingNotes[orderId] || "", auth.csrf_token);
-      notifySuccess(status === "resolved" ? "Marked resolved." : "Reopened for follow-up.", "staff-billing");
+      await resolveStaffBillingPayment(payment.order_id, null, billingNoteFor(payment), auth.csrf_token);
+      notifySuccess("Billing note saved.", "staff-billing");
       await refreshBilling();
+      forgetBillingDraft(payment.order_id);
+    } catch (reason) { notifyError(reason instanceof Error ? reason.message : "The note could not be saved.", "staff-billing"); }
+    finally { setBillingBusy(false); }
+  };
+  const resolveBilling = async (orderId: string, status: "open" | "resolved" | "clear") => {
+    if (billingBusy) return;
+    setBillingBusy(true);
+    try {
+      const payment = billing?.payments.find((item) => item.order_id === orderId);
+      const note = payment ? billingNoteFor(payment) : billingNotes[orderId] || "";
+      await resolveStaffBillingPayment(orderId, status, note, auth.csrf_token);
+      notifySuccess(
+        status === "resolved" ? "Marked resolved." : status === "open" ? "Flagged for follow-up." : "Decision undone.",
+        "staff-billing",
+      );
+      await refreshBilling();
+      forgetBillingDraft(orderId);
     } catch (reason) { notifyError(reason instanceof Error ? reason.message : "The note could not be saved.", "staff-billing"); }
     finally { setBillingBusy(false); }
   };
@@ -624,7 +666,7 @@ export function StaffDashboardPage() {
       {canManageStaffRoster && <button type="button" role="tab" id="staff-staff-management-tab" aria-selected={activeTab === "staff-management"} aria-controls="staff-staff-management-panel" className={activeTab === "staff-management" ? "active" : ""} onClick={() => setActiveTab("staff-management")}><Icon name="users" /> Staff management <span>{staffRoster.filter((member) => member.staff_status !== "former").length}</span></button>}
       {canManageStaffRoster && <button type="button" role="tab" id="staff-broadcasts-tab" aria-selected={activeTab === "broadcasts"} aria-controls="staff-broadcasts-panel" className={activeTab === "broadcasts" ? "active" : ""} onClick={() => setActiveTab("broadcasts")}><Icon name="message" /> Broadcasts</button>}
       {canManageDataRemoval && <button type="button" role="tab" id="staff-data-removal-tab" aria-selected={activeTab === "data-removal"} aria-controls="staff-data-removal-panel" className={activeTab === "data-removal" ? "active" : ""} onClick={() => setActiveTab("data-removal")}><Icon name="lock" /> Data removal <span>{dataRemoval?.filter((request) => request.status === "pending").length ?? 0}</span></button>}
-      {canManageBilling && <button type="button" role="tab" id="staff-billing-tab" aria-selected={activeTab === "billing"} aria-controls="staff-billing-panel" className={activeTab === "billing" ? "active" : ""} onClick={() => setActiveTab("billing")}><Icon name="guild_economy" /> Billing <span>{billing?.payments.filter((payment) => !payment.issue_status).length ?? 0}</span></button>}
+      {canManageBilling && <button type="button" role="tab" id="staff-billing-tab" aria-selected={activeTab === "billing"} aria-controls="staff-billing-panel" className={activeTab === "billing" ? "active" : ""} onClick={() => setActiveTab("billing")}><Icon name="guild_economy" /> Billing <span>{billing?.payments.filter((payment) => payment.issue_status === "open").length ?? 0}</span></button>}
       <button type="button" role="tab" id="staff-reports-tab" aria-selected={activeTab === "reports"} aria-controls="staff-reports-panel" className={activeTab === "reports" ? "active" : ""} onClick={() => setActiveTab("reports")}><Icon name="alert" /> Error reports <span>{errorReports.length}</span></button>
     </div>
 
@@ -776,8 +818,7 @@ export function StaffDashboardPage() {
     {activeTab === "billing" && canManageBilling && <section id="staff-billing-panel" role="tabpanel" aria-labelledby="staff-billing-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Revenue</span><h2>Billing &amp; subscriptions</h2><p>Recent white-label payments, active premium servers, and the billing notes needed to resolve an issue. Only the bot owner can open this tab.</p></div><div className="staff-guild-count"><strong>{billing?.totals.paid_label || "$0.00 USD"}</strong><span>collected</span></div></header>
       <div className="staff-guild-toolbar"><span className="staff-appeal-privacy">{billing?.gateway.configured ? "OxaPay connected · fal.ai imageutils/nsfw" : "OxaPay merchant key is missing"}</span><button type="button" className="button button-muted" onClick={() => void refreshBilling()}><Icon name="spark" />Refresh billing</button></div>
-      {!billing ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading billing data…</p></div> : <>
-        <div className="staff-guild-summary"><div><span className="panel-kicker">Active servers</span><strong>{billing.totals.active_count}</strong></div><div><span className="panel-kicker">Expiring soon</span><strong>{billing.totals.expiring_soon}</strong></div><div><span className="panel-kicker">Paid payments</span><strong>{billing.totals.paid_count}</strong></div><div><span className="panel-kicker">Needs attention</span><strong>{billing.payments.filter((payment) => payment.issue_status === "open").length}</strong></div><div><span className="panel-kicker">Unresolved notes</span><strong>{billing.payments.filter((payment) => !payment.issue_status && !payment.paid && payment.status.toLowerCase() === "waiting").length}</strong></div></div>
+      {!billing ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading billing data…</p></div> : <>          <div className="staff-guild-summary"><div><span className="panel-kicker">Active servers</span><strong>{billing.totals.active_count}</strong></div><div><span className="panel-kicker">Expiring soon</span><strong>{billing.totals.expiring_soon}</strong></div><div><span className="panel-kicker">Paid payments</span><strong>{billing.totals.paid_count}</strong></div><div><span className="panel-kicker">Needs attention</span><strong>{billing.payments.filter((payment) => payment.issue_status === "open").length}</strong></div><div><span className="panel-kicker">Awaiting payment</span><strong>{billing.payments.filter((payment) => !payment.paid && !payment.issue_status).length}</strong></div></div>
         <div className="staff-billing-grant">
           <label className="form-field"><span className="form-label">Guild ID</span><input value={billingGuild} onChange={(event) => setBillingGuild(event.target.value)} placeholder="123456789012345678" /></label>
           <label className="form-field"><span className="form-label">Months</span><input type="number" min="1" max="12" value={billingMonths} onChange={(event) => setBillingMonths(event.target.value)} /></label>
@@ -785,11 +826,21 @@ export function StaffDashboardPage() {
           <button type="button" className="button button-muted" disabled={billingBusy || !billingGuild.trim()} onClick={() => void changeBillingSubscription(billingGuild, "cancel")}>Cancel</button>
         </div>
         <h3 className="staff-billing-heading">Recent payments</h3>
-        {billing.payments.length === 0 ? <div className="staff-guild-empty">No premium payments have been started yet.</div> : <div className="staff-guild-list">{billing.payments.map((payment) => <article className="staff-guild-card staff-billing-payment" key={payment.order_id}>
-          <div className="staff-billing-payment-head"><div className="staff-guild-title"><strong>{payment.guild_name || `Guild ${payment.guild_id}`} · {payment.amount_label}</strong><small>{payment.kind} · {payment.pay_currency || payment.currency} · {payment.payer_name || `User ${payment.payer_id}`} · {payment.created_at ? new Date(payment.created_at.replace(" ", "T") + "Z").toLocaleString() : "unknown time"}</small></div><span className={`staff-guild-status${payment.paid ? " is-approved" : payment.issue_status === "open" ? " is-blocked" : " is-pending"}`}><i />{payment.issue_status === "open" ? "needs attention" : payment.paid ? "paid" : payment.status}</span></div>
-          <div className="staff-billing-payment-foot"><code>{payment.order_id}</code><label className="form-field staff-billing-note"><span className="sr-only">Billing note for {payment.order_id}</span><input value={billingNotes[payment.order_id] ?? payment.issue_note ?? ""} onChange={(event) => setBillingNotes((current) => ({ ...current, [payment.order_id]: event.target.value }))} placeholder="Billing note or resolution…" /></label><button type="button" className="button button-muted button-small" disabled={billingBusy} onClick={() => void resolveBilling(payment.order_id, "open")}>Flag</button><button type="button" className="button button-primary button-small" disabled={billingBusy} onClick={() => void resolveBilling(payment.order_id, "resolved")}>Resolve</button></div>
-          {payment.resolved_at && <p className="staff-guild-blacklist-note">Resolved {new Date(payment.resolved_at.replace(" ", "T") + "Z").toLocaleString()} by staff {payment.resolved_by || "unknown"}.</p>}
-        </article>)}</div>}
+        {billing.payments.length === 0 ? <div className="staff-guild-empty">No premium payments have been started yet.</div> : <div className="staff-guild-list">{billing.payments.map((payment) => {
+          const state = billingPaymentState(payment);
+          const note = billingNoteFor(payment);
+          const savedNote = payment.issue_note ?? "";
+          return <article className={`staff-guild-card staff-billing-payment ${state.className}`} key={payment.order_id}>
+            <div className="staff-billing-payment-head"><div className="staff-guild-title"><strong>{payment.guild_name || `Guild ${payment.guild_id}`} · {payment.amount_label}</strong><small>{payment.kind} · {payment.pay_currency || payment.currency} · {payment.payer_name || `User ${payment.payer_id}`} · {payment.created_at ? new Date(payment.created_at.replace(" ", "T") + "Z").toLocaleString() : "unknown time"}</small></div><span className={`staff-guild-status ${state.className}`}><i />{state.label}</span></div>
+            <div className="staff-billing-payment-foot"><code>{payment.order_id}</code><span className={`staff-billing-payment-paid${payment.paid ? " is-paid" : ""}`}>{payment.paid ? "Crypto received" : `Provider status · ${payment.status}`}</span></div>
+            <div className="staff-billing-payment-note"><label className="form-field staff-billing-note"><span className="form-label">Billing note</span><input maxLength={1000} value={note} onChange={(event) => setBillingNotes((current) => ({ ...current, [payment.order_id]: event.target.value }))} placeholder="What was checked, agreed, or refunded…" /></label><button type="button" className="button button-muted button-small" disabled={billingBusy || note === savedNote} onClick={() => void saveBillingNote(payment)}>Save note</button></div>
+            <div className="staff-billing-payment-actions">
+              {payment.issue_status ? <button type="button" className="button button-muted button-small" disabled={billingBusy} onClick={() => void resolveBilling(payment.order_id, "clear")}>{payment.issue_status === "resolved" ? "Undo resolve" : "Clear flag"}</button> : <button type="button" className="button button-muted button-small" disabled={billingBusy} onClick={() => void resolveBilling(payment.order_id, "open")}>Flag for follow-up</button>}
+              {payment.issue_status !== "resolved" && <button type="button" className="button button-primary button-small" disabled={billingBusy} onClick={() => void resolveBilling(payment.order_id, "resolved")}>Mark resolved</button>}
+            </div>
+            {payment.issue_status && payment.resolved_at && <p className="staff-guild-blacklist-note">{payment.issue_status === "resolved" ? "Resolved" : "Flagged"} {new Date(payment.resolved_at.replace(" ", "T") + "Z").toLocaleString()} by staff {payment.resolved_by || "unknown"}.</p>}
+          </article>;
+        })}</div>}
         <h3 className="staff-billing-heading">Subscriptions</h3>
         {billing.subscriptions.length === 0 ? <div className="staff-guild-empty">No premium subscriptions yet.</div> : <div className="staff-guild-list">{billing.subscriptions.map((subscription) => <article className="staff-guild-card staff-billing-subscription" key={subscription.guild_id}>
           <div className="staff-billing-payment-head"><div className="staff-guild-title"><strong>{subscription.guild_name || `Guild ${subscription.guild_id}`}</strong><small>{subscription.active ? `Active · ${subscription.days_remaining ?? 0} days left` : subscription.status} · {subscription.source}{subscription.gifted_by_name ? ` by ${subscription.gifted_by_name}` : ""}</small></div><span className={`staff-guild-status${subscription.active ? " is-approved" : " is-blocked"}`}><i />{subscription.active ? "active" : subscription.status}</span></div>

@@ -645,26 +645,38 @@ def api_staff_resolve_payment(order_id):
     if error:
         return error
     body = request.get_json(silent=True) or {}
-    status = str(body.get("status") or "resolved").strip().lower()
-    if status not in {"open", "resolved"}:
-        return jsonify({"error": "Choose open or resolved."}), 400
+    # Three different jobs share this endpoint:
+    #   no status      — save the note and leave the decision alone
+    #   open/resolved  — flag it for follow-up, or close it
+    #   clear          — undo whichever decision is on record
+    raw_status = body.get("status")
+    status = None if raw_status is None else str(raw_status).strip().lower()
+    if status is not None and status not in {"open", "resolved", "clear"}:
+        return jsonify({"error": "Choose open, resolved, or clear."}), 400
     note = str(body.get("note") or "").strip()[:1000]
     try:
         bot = _billing_bot()
         payment = run_on_bot_loop(billing.get_payment(bot.cxn, order_id=order_id))
         if payment is None:
             return jsonify({"error": "Payment not found."}), 404
-        run_on_bot_loop(billing.resolve_payment(
-            bot.cxn,
-            order_id=order_id,
-            status=status,
-            note=note,
-            staff_id=_user_id(),
-        ))
+        if status is None:
+            run_on_bot_loop(billing.save_payment_note(bot.cxn, order_id=order_id, note=note))
+        else:
+            run_on_bot_loop(billing.resolve_payment(
+                bot.cxn,
+                order_id=order_id,
+                status=None if status == "clear" else status,
+                note=note,
+                staff_id=_user_id(),
+            ))
     except Exception:
         return jsonify({"error": "The billing note could not be saved."}), 503
-    logging.info("Billing", f"{order_id} marked {status} by staff {_user_id()}")
-    return jsonify({"ok": True, "issue_status": status})
+    logging.info("Billing", f"{order_id} billing decision set to {status or 'unchanged'} by {_user_id()}")
+    return jsonify({
+        "ok": True,
+        "issue_status": None if status == "clear" else status,
+        "issue_note": note,
+    })
 
 
 @app.route("/api/staff/billing/subscriptions/<guild_id>", methods=["POST"])

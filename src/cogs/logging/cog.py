@@ -61,10 +61,6 @@ _OPPOSITE_DETAILS = {"Roles Added": "Roles Removed", "Roles Removed": "Roles Add
 #: A ``**Label:** value`` detail line of a log body.
 _DETAIL_LINE = re.compile(r"^\*\*(?P<label>[^*]+):\*\*\s*(?P<value>.*)$")
 
-COALESCED_NOTE = (
-    "-# Changes made within 30 seconds of each other are merged into this entry."
-)
-
 #: Open entries and their locks are dropped lazily, but a very busy bot should
 #: not hold one per member it has ever logged.
 MAX_PENDING_ENTRIES = 512
@@ -180,13 +176,10 @@ def _merge_entry_details(current: list[tuple[str, str]],
     return merged
 
 
-def _render_entry_body(heading: str, details: list[tuple[str, str]],
-                       *, note: bool = False) -> str:
+def _render_entry_body(heading: str, details: list[tuple[str, str]]) -> str:
     """Rebuild a body from its heading and details, for the edited entry."""
     lines = [heading] if heading else []
     lines.extend(f"**{label}:** {value}" for label, value in details)
-    if note:
-        lines.append(COALESCED_NOTE)
     return "\n".join(lines)
 
 
@@ -515,7 +508,7 @@ class ServerLogger(commands.Cog):
         view = _build_log_view(
             category=category,
             title=title,
-            body=_render_entry_body(pending.heading, merged, note=True),
+            body=_render_entry_body(pending.heading, merged),
             guild_id=guild.id,
             target_id=target_id,
             action_key=action_key or title,
@@ -782,9 +775,15 @@ class ServerLogger(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
-        created = member.created_at.strftime("%Y-%m-%d")
+        # Discord renders ``<t:…>`` in every reader's own locale and timezone,
+        # so the creation time stays correct and relative no matter when the
+        # entry is read.
+        created_at = int(member.created_at.timestamp())
         account_age = (datetime.now(timezone.utc) - member.created_at).days
-        age_warn = f"\n-# {get_emoji('danger')} New account — only **{account_age}d** old" if account_age < 7 else ""
+        age_warn = (
+            f"\n-# {get_emoji('danger')} New account — created <t:{created_at}:R>"
+            if account_age < 7 else ""
+        )
 
         # ── Detect which invite was used ──────────
         used_invite = None
@@ -859,7 +858,7 @@ class ServerLogger(commands.Cog):
         member_count = getattr(guild, "member_count", None)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Account Created:** {created} ({account_age} days ago){age_warn}\n"
+            f"**Account Created:** <t:{created_at}:f> (<t:{created_at}:R>){age_warn}\n"
             f"**Join Method:** {join_method}"
             + (f"\n**Member Count:** `{member_count:,}`" if member_count else "")
         )
@@ -955,8 +954,25 @@ class ServerLogger(commands.Cog):
         happened. ``guild`` is explicit because a global change arrives as a
         :class:`discord.User`, which has no guild of its own.
         """
-        old_asset = getattr(before, attribute, None)
-        new_asset = getattr(after, attribute, None)
+        def _picture(user) -> tuple:
+            """The changed picture, or the one Discord shows in its place.
+
+            A removed picture and an account that never had one used to leave a
+            blank spot in the entry. Discord draws a default avatar there (or,
+            for a per-server picture, the member's global one), so the log now
+            shows exactly what the reader saw in the client.
+            """
+            asset = getattr(user, attribute, None)
+            if asset is not None:
+                return asset, False
+            if attribute == "avatar":
+                return getattr(user, "default_avatar", None), True
+            if attribute == "guild_avatar":
+                return getattr(user, "display_avatar", None), True
+            return None, False
+
+        old_asset, old_fallback = _picture(before)
+        new_asset, new_fallback = _picture(after)
         old_url = _asset_url(old_asset)
         new_url = _asset_url(new_asset)
         if old_url == new_url:
@@ -969,9 +985,11 @@ class ServerLogger(commands.Cog):
         media: list = []
         files: list[discord.File] = []
         linked: list[str] = []
-        pictures = ((old_asset, "before", old_url), (new_asset, "after", new_url))
-        present = sum(1 for _asset, _side, url in pictures if url)
-        for asset, side, url in pictures:
+        pictures = (
+            (old_asset, "before", old_url, old_fallback),
+            (new_asset, "after", new_url, new_fallback),
+        )
+        for asset, side, url, fallback in pictures:
             filename = f"{slug}-{side}.{_asset_extension(asset)}"
             archived = await self._archive_asset(asset, filename)
             if archived is not None:
@@ -980,22 +998,20 @@ class ServerLogger(commands.Cog):
             elif url:
                 # The download failed or the file is too large to re-upload, so
                 # the entry keeps the link it has — with the caveat that the old
-                # one stops working once Discord expires it.
+                # one stops working once Discord expires it. A fallback picture
+                # is a permanent CDN URL, so it needs no caveat and no line of
+                # its own.
                 media.append(url)
-                linked.append(f"**{side.title()}:** {url}")
+                if not fallback:
+                    linked.append(f"**{side.title()}:** {url}")
 
-        if len(files) == present and present:
-            lines.append(
-                "-# The pictures are attached to this entry, so it still shows "
-                "them after Discord expires their old links."
-            )
-        elif files and linked:
+        if files and linked:
             lines.append(
                 "-# One picture could not be archived and is linked instead; "
                 "Discord expires such a link once the picture changes again."
             )
         lines.extend(linked)
-        if not files and not linked:
+        if not files and not linked and not media:
             lines.append("**Before:** *none*\n**After:** *none*")
 
         await self.log_event(

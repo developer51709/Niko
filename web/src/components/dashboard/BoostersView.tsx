@@ -3,6 +3,7 @@ import { getBoosterSettings, saveBoosterSettings } from "../../api";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import type { BoosterSettings, GuildResources } from "../../types";
+import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
@@ -101,12 +102,12 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
         </SettingCards>
         <div className="form-grid">
           <Field label="Announcement channel">
-            <select value={settings.channel_id} onChange={(event) => update("channel_id", event.target.value)}>
-              <option value="">Choose a text channel</option>
-              {selectedChannels(resources, settings.channel_id).map((channel) => (
-                <option key={channel.id} value={channel.id}>#{channel.name}</option>
-              ))}
-            </select>
+            <ChannelSelect
+              channels={selectedChannels(resources, settings.channel_id)}
+              value={settings.channel_id}
+              placeholder="Choose a text channel"
+              onChange={(value) => update("channel_id", value)}
+            />
           </Field>
           <Field label="Boost message" hint="Placeholders: {user}, {name}, {server}, {boost_count}, {boost_level}">
             <textarea rows={3} maxLength={2000} value={settings.boost_message} onChange={(event) => update("boost_message", event.target.value)} />

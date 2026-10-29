@@ -10,7 +10,7 @@ import asyncio
 import sys
 import time
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -272,6 +272,52 @@ class LogEventTests(unittest.TestCase):
     def test_a_configured_category_is_sent(self):
         _runner(self.cog.log_event(self.guild, "members", "Member Joined", "body"))
         self.cog._send_entry.assert_awaited_once()
+
+
+class MemberJoinMessageTests(unittest.TestCase):
+    """The join entry reports the account's creation time, not a frozen date."""
+
+    def setUp(self):
+        self.cog = logging_cog.ServerLogger(_bot())
+        self.cog.log_event = mock.AsyncMock()
+        self.guild = FakeGuild()
+        self.guild.member_count = 42
+        self.guild.vanity_url_code = None
+
+        async def no_invites():
+            return []
+
+        self.guild.invites = no_invites
+
+    def join_body(self, created_at):
+        member = SimpleNamespace(
+            id=42, name="tester", mention="<@42>", guild=self.guild,
+            created_at=created_at,
+        )
+        _runner(self.cog.on_member_join(member))
+        # The invite entry is posted first; the member entry is the last one.
+        return self.cog.log_event.await_args_list[-1].args[3]
+
+    def test_account_creation_uses_discords_dynamic_timestamp(self):
+        created = datetime(2023, 5, 6, 7, 8, tzinfo=timezone.utc)
+        stamp = int(created.timestamp())
+
+        body = self.join_body(created)
+
+        self.assertIn(f"**Account Created:** <t:{stamp}:f> (<t:{stamp}:R>)", body)
+        # No frozen date or pre-rendered age that goes stale while the entry sits
+        # in the channel.
+        self.assertNotIn("2023-05-06", body)
+        self.assertNotIn("days ago", body)
+
+    def test_the_young_account_warning_is_relative_too(self):
+        created = discord.utils.utcnow() - timedelta(days=2)
+        stamp = int(created.timestamp())
+
+        body = self.join_body(created)
+
+        self.assertIn(f"New account \u2014 created <t:{stamp}:R>", body)
+        self.assertNotIn("only **", body)
 
 
 class DashboardLoggingSyncTests(unittest.TestCase):

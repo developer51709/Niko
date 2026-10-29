@@ -558,6 +558,7 @@ function ProfileMenu({ userId }: { userId: string }) {
     </button>
     {open && <div className="discord-profile-menu-list" role="menu">
       <button type="button" className="discord-profile-menu-item" role="menuitem" onClick={() => void copyUserId()}>
+        <span className="mask-icon discord-profile-menu-icon" style={{ "--mask-icon": "url(/assets/discord-icons/from-discord/id.svg)" } as CSSProperties} aria-hidden="true" />
         {copied ? "Copied!" : "Copy User ID"}
       </button>
     </div>}

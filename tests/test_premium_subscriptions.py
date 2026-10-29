@@ -282,6 +282,116 @@ async def test_staff_notes_are_stored_on_the_payment(pool):
     assert payment["resolved_by"] == 1
 
 
+@async_test
+async def test_a_note_saves_without_deciding_anything(pool):
+    await premium.record_payment(
+        pool, order_id="order-2", track_id="track-2", guild_id=42, payer_id=7
+    )
+    await premium.save_payment_note(pool, order_id="order-2", note="Waiting on the payer")
+    payment = await premium.get_payment(pool, order_id="order-2")
+    assert payment["issue_note"] == "Waiting on the payer"
+    assert payment["issue_status"] is None
+    assert payment["resolved_at"] is None
+
+
+@async_test
+async def test_a_decision_can_be_undone_without_touching_the_payment(pool):
+    await premium.record_payment(
+        pool, order_id="order-3", track_id="track-3", guild_id=42, payer_id=7
+    )
+    await premium.resolve_payment(
+        pool, order_id="order-3", status="resolved", note="Refunded", staff_id=1
+    )
+    # ``status=None`` is the undo: the decision and its stamp go, the note and
+    # the provider's state stay.
+    await premium.resolve_payment(pool, order_id="order-3", status=None, note="Refunded")
+    payment = await premium.get_payment(pool, order_id="order-3")
+    assert payment["issue_status"] is None
+    assert payment["resolved_by"] is None
+    assert payment["resolved_at"] is None
+    assert payment["issue_note"] == "Refunded"
+    assert payment["status"] == "Waiting"
+
+
+def _staff_billing_call(monkeypatch, pool, body):
+    """POST the owner billing decision route with auth and CSRF bypassed."""
+    from flask import session
+
+    from webapp.routes import premium_routes
+
+    bot = SimpleNamespace(
+        cxn=pool,
+        get_guild=lambda guild_id: None,
+        get_user=lambda user_id: None,
+        get_cog=lambda name: None,
+    )
+    monkeypatch.setattr(premium_routes, "_billing_bot", lambda: bot)
+    monkeypatch.setattr(premium_routes, "_require_owner", lambda: None)
+    monkeypatch.setattr(premium_routes, "_user_id", lambda: 1)
+    monkeypatch.setattr(
+        premium_routes, "run_on_bot_loop", lambda awaitable, timeout=8: asyncio.run(awaitable)
+    )
+
+    with premium_routes.app.test_request_context(json=body):
+        session["user"] = {"id": "1"}
+        result = premium_routes.api_staff_resolve_payment.__wrapped__.__wrapped__("order-4")
+    if isinstance(result, tuple):
+        response, status = result
+    else:
+        response, status = result, 200
+    return status, response.get_json()
+
+
+def test_the_route_saves_a_note_without_deciding(monkeypatch, pool):
+    asyncio.run(premium.record_payment(
+        pool, order_id="order-4", track_id="track-4", guild_id=42, payer_id=7
+    ))
+
+    status, payload = _staff_billing_call(monkeypatch, pool, {"note": "Checked the quote"})
+
+    assert status == 200
+    assert payload["issue_status"] is None
+    payment = asyncio.run(premium.get_payment(pool, order_id="order-4"))
+    assert payment["issue_note"] == "Checked the quote"
+    assert payment["issue_status"] is None
+
+
+def test_the_route_resolves_and_undoes(monkeypatch, pool):
+    asyncio.run(premium.record_payment(
+        pool, order_id="order-4", track_id="track-4", guild_id=42, payer_id=7
+    ))
+
+    status, payload = _staff_billing_call(
+        monkeypatch, pool, {"status": "resolved", "note": "Refunded"}
+    )
+    assert status == 200 and payload["issue_status"] == "resolved"
+    resolved = asyncio.run(premium.get_payment(pool, order_id="order-4"))
+    assert resolved["issue_status"] == "resolved"
+    assert resolved["resolved_at"] is not None
+
+    status, payload = _staff_billing_call(
+        monkeypatch, pool, {"status": "clear", "note": "Refunded"}
+    )
+    assert status == 200 and payload["issue_status"] is None
+    undone = asyncio.run(premium.get_payment(pool, order_id="order-4"))
+    assert undone["issue_status"] is None
+    assert undone["resolved_at"] is None
+    assert undone["issue_note"] == "Refunded"
+
+
+def test_the_route_refuses_an_unknown_decision(monkeypatch, pool):
+    asyncio.run(premium.record_payment(
+        pool, order_id="order-4", track_id="track-4", guild_id=42, payer_id=7
+    ))
+
+    status, payload = _staff_billing_call(monkeypatch, pool, {"status": "paid"})
+
+    assert status == 400
+    assert "choose" in payload["error"].lower()
+    payment = asyncio.run(premium.get_payment(pool, order_id="order-4"))
+    assert payment["issue_status"] is None
+
+
 # ── fal.ai NSFW client ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize(

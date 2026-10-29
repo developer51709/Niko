@@ -318,16 +318,16 @@ def test_every_markdown_marker_is_a_capture_group():
 # ── The generated icon emojis ────────────────────────────────────────────────
 
 #: A name from the families scripts/build-emoji-icons.mjs must never write.
-PROTECTED_EMOJI = re.compile(r"(?:badge|c4|white|logo|loading)", re.I)
+PROTECTED_EMOJI = re.compile(r"(?:badge|c4|white|loading)", re.I)
 
 
-def test_the_emoji_icon_script_owns_only_the_main_and_log_emojis():
-    """Badge art, Connect Four, the logo and the loading emojis are off limits.
+def test_the_emoji_icon_script_owns_only_its_own_tables():
+    """Badge art, Connect Four and the loading emojis are off limits.
 
     Each of those comes from a different owner (build-badge-art.mjs, the game
-    sprites, the hand-exported brand marks, the spinner frames), and a script
-    that rewrites them silently replaces artwork nobody asked it to touch. The
-    script refuses those names outright, so the table cannot grow into them.
+    sprites, the spinner frames), and a script that rewrites them silently
+    replaces artwork nobody asked it to touch. The script refuses those names
+    outright, so the table cannot grow into them.
     """
     source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
     emojis = re.findall(r'\["([a-z_0-9]+)", "[a-z0-9-]+", [A-Z]+\]', source)
@@ -337,10 +337,10 @@ def test_the_emoji_icon_script_owns_only_the_main_and_log_emojis():
     # The general-purpose set and the per-message-type log set.
     assert {"tick", "cross", "warning"} <= set(emojis)
     assert sum(1 for name in emojis if name.startswith("log_")) > 40
-    # Every table entry goes through the guard, and the guard names all four
-    # protected families.
+    # Every table entry goes through the guard, and the guard names every
+    # protected family.
     assert "assertWritable(name)" in source
-    for family in ("badge art", "Connect Four", "logo", "loading spinner"):
+    for family in ("badge art", "Connect Four", "loading spinner"):
         assert family in source, family
 
     for name in emojis:
@@ -349,6 +349,105 @@ def test_the_emoji_icon_script_owns_only_the_main_and_log_emojis():
         # Discord; one with no config entry can never be sent at all.
         assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), name
         assert get_emoji(name), name
+
+
+def test_the_platform_logos_are_drawn_from_simple_icons():
+    """One source for every brand mark, at the same tile as the rest of the set.
+
+    The logos used to be hand-exported PNGs — a 36px Last.fm mark beside a 128px
+    Instagram one, an animated gif for Discord and four different background
+    colours — so they read as a different family in the same message. They are
+    now Simple Icons paths, drawn by the same script, on the same 128px tile.
+    """
+    source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
+
+    assert 'const SIMPLE_ICONS = path.join(ROOT, "node_modules", "simple-icons", "icons");' in source
+    # Each emoji names the Simple Icons slug it is drawn from; a few brands
+    # spell the two differently.
+    for name, slug in (
+        ("discord", "discord"),
+        ("github", "github"),
+        ("python", "python"),
+        ("topgg", "topdotgg"),
+        ("lastfm", "lastdotfm"),
+        ("spotify", "spotify"),
+        ("instagram", "instagram"),
+        ("tiktok", "tiktok"),
+        ("twitterx", "x"),
+        ("youtube", "youtube"),
+        ("youtube_shorts", "youtubeshorts"),
+        ("reddit", "reddit"),
+        ("bluesky", "bluesky"),
+        ("soundcloud", "soundcloud"),
+        ("twitch", "twitch"),
+    ):
+        assert f'["{name}", "{slug}", NEUTRAL]' in source, name
+        assert get_emoji(name), name
+
+    for name in ("discord", "github", "python", "lastfm", "instagram", "tiktok"):
+        path = ROOT / "src" / "assets" / "emojis" / f"{name}.png"
+        assert _png_size(path) == (128, 128), name
+
+
+def test_the_crypto_emojis_are_drawn_from_web3icons():
+    """The coin marks come from Web3 Icons' mono variant, on the same tile.
+
+    They used to be hand-exported coin logos — Bitcoin's mark shipped as 13KB of
+    full-colour art, Tether's as 2KB — so a payment row mixed sizes, colours and
+    outline weights. Web3 Icons publishes every token on one grid; its mono
+    variant is the single-ink mark this set is built from.
+    """
+    source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
+
+    assert 'import { svgs as WEB3_ICONS } from "@web3icons/core";' in source
+    assert "WEB3_ICONS.tokens.mono[symbol]" in source
+
+    for name, symbol in (
+        ("crypto_bitcoin", "btc"),
+        ("crypto_ethereum", "eth"),
+        ("crypto_bnb", "bnb"),
+        ("crypto_dogecoin", "doge"),
+        ("crypto_ltc", "ltc"),
+        ("crypto_monero", "xmr"),
+        ("crypto_tether_usdt", "usdt"),
+        ("crypto_tron", "trx"),
+    ):
+        assert f'["{name}", "{symbol}", NEUTRAL]' in source, name
+        assert get_emoji(name), name
+        assert _png_size(ROOT / "src" / "assets" / "emojis" / f"{name}.png") == (128, 128), name
+
+
+def _png_size(path: Path):
+    """A PNG's pixel size, read from the header instead of decoded."""
+    import struct
+
+    header = path.read_bytes()[:24]
+    assert header[:8] == b"\x89PNG\r\n\x1a\n", path
+    return struct.unpack(">II", header[16:24])
+
+
+def test_the_discord_logo_is_a_static_png_not_the_old_animation():
+    """Discord is a PNG like every other logo, so its gif must not linger.
+
+    The sync downloads and uploads by the animated flag in the config, so a
+    leftover discord.gif would be re-uploaded as the animated emoji instead of
+    the Simple Icons mark.
+    """
+    assets = ROOT / "src" / "assets" / "emojis"
+    config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+
+    assert "<:discord:" in config
+    assert "<a:discord:" not in config
+    assert _png_size(assets / "discord.png") == (128, 128)
+    assert not (assets / "discord.gif").exists()
+
+
+def test_the_broom_emoji_is_drawn_from_the_broom_icon():
+    """The broom is a broom, not the paintbrush the utility set already has."""
+    source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
+
+    assert '["broom", "broom", NEUTRAL]' in source
+    assert '["broom", "brush"' not in source
 
 
 def test_every_log_message_type_has_its_own_emoji():

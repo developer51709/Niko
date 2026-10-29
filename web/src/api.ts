@@ -111,7 +111,10 @@ export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
 export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
-export const resolveStaffBillingPayment = (orderId: string, status: "open" | "resolved", note: string, csrfToken?: string) => api<{ ok: boolean; issue_status: string }>(`/api/staff/billing/payments/${encodeURIComponent(orderId)}/resolve`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status, note }) });
+// `status: null` saves the note without changing the decision, `"clear"`
+// undoes it. The note is always written, so text is never lost by not pressing
+// a decision button.
+export const resolveStaffBillingPayment = (orderId: string, status: "open" | "resolved" | "clear" | null, note: string, csrfToken?: string) => api<{ ok: boolean; issue_status: string | null; issue_note: string }>(`/api/staff/billing/payments/${encodeURIComponent(orderId)}/resolve`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(status === null ? { note } : { status, note }) });
 export const updateStaffSubscription = (guildId: string, action: "grant" | "cancel", months: number, csrfToken?: string) => api<{ ok: boolean; premium: StaffBillingResponse["subscriptions"][number] }>(`/api/staff/billing/subscriptions/${encodeURIComponent(guildId)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ action, months }) });
 export const getDataRemovalOverview = () => api<DataRemovalOverview>("/api/privacy/data-removal");
 export const submitDataRemovalRequest = (body: { scope: "account" | "server"; guild_id?: string; reason: string; confirmation: string }, csrfToken?: string) => api<{ ok: boolean; request: DataRemovalOverview["requests"][number] }>("/api/privacy/data-removal", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
