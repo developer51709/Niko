@@ -8,6 +8,8 @@ globals().update({
     if not name.startswith("__")
 })
 
+from cogs.donations.oxapay import build_order_id, network_options, resolve_network
+
 from utils.donations import (
     CRYPTO_CURRENCIES,
     DONATION_MAX_AMOUNT,
@@ -43,6 +45,7 @@ def api_donation_meta(token: str | None = None):
     return jsonify({
         "presets": list(DONATION_PRESET_AMOUNTS),
         "currencies": list(CRYPTO_CURRENCIES),
+        "networks": network_options(),
         "min_amount": DONATION_MIN_AMOUNT,
         "max_amount": DONATION_MAX_AMOUNT,
         "totals": totals,
@@ -77,7 +80,13 @@ def api_create_donation_invoice():
     if not OXAPAY_KEY:
         return jsonify({"error": "Donations are not configured yet."}), 503
 
-    order_id = f"donation_{claims['user_id']}_{uuid.uuid4().hex}"
+    # The payer picks the chain; a transfer on any other one is not credited
+    # and cannot be refunded.
+    network = resolve_network(currency, body.get("network"))
+    if network is None:
+        return jsonify({"error": "That payment network is not available for this coin."}), 400
+
+    order_id = build_order_id("donation", claims["user_id"])
     callback_url = f"{public_base_url()}/api/donations/webhook"
     # White-label: the payer receives an address, amount, and QR code from our
     # own page instead of a hosted OxaPay checkout.
@@ -87,6 +96,7 @@ def api_create_donation_invoice():
             amount=amount,
             currency="USD",
             pay_currency=currency,
+            network=network,
             lifetime=60,
             description=f"Niko Bot Donation - ${amount:.2f} USD",
             callback_url=callback_url,

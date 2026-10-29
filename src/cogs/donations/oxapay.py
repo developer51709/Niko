@@ -3,6 +3,7 @@ OxaPay merchant API client.
 Docs: https://oxapay.com/api
 """
 
+import uuid
 from urllib.parse import quote
 
 import aiohttp
@@ -10,6 +11,91 @@ import aiohttp
 OXAPAY_BASE = "https://api.oxapay.com"
 OXAPAY_V1_BASE = "https://api.oxapay.com/v1"
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+#: OxaPay refuses a longer order id ("The order id field must not be greater
+#: than 50 characters"), which fails the whole checkout. Ids are built to fit.
+MAX_ORDER_ID_LENGTH = 50
+
+#: Random tail an order id carries when the readable part leaves room for it.
+_ORDER_ID_RANDOM_CHARS = 12
+
+#: The networks each offered currency can be paid on, as
+#: ``currency -> ((OxaPay network code, payer-facing label), ...)``. The codes
+#: and their availability come from ``GET /v1/common/currencies``.
+#:
+#: The payer chooses one, because a stablecoin that exists on several chains is
+#: only credited on the chain it was quoted for — USDT sent over ERC20 to a
+#: TRC20 address is gone. The white-label API also rejects a payment with "The
+#: network field is required" even though its docs mark the field optional, so
+#: the first option is what a request without an explicit choice falls back to.
+CURRENCY_NETWORKS: dict[str, tuple[tuple[str, str], ...]] = {
+    "USDT": (
+        ("Tron", "TRON (TRC20)"),
+        ("Ethereum", "Ethereum (ERC20)"),
+        ("BSC", "BNB Smart Chain (BEP20)"),
+        ("Solana", "Solana"),
+        ("Polygon", "Polygon"),
+        ("The Open Network", "TON"),
+    ),
+    "ETH": (
+        ("Ethereum", "Ethereum (ERC20)"),
+        ("BSC", "BNB Smart Chain (BEP20)"),
+        ("Base", "Base"),
+    ),
+    "BTC": (("Bitcoin", "Bitcoin"),),
+    "BNB": (("BSC", "BNB Smart Chain (BEP20)"),),
+    "LTC": (("Litecoin", "Litecoin"),),
+    "DOGE": (("Dogecoin", "Dogecoin"),),
+    "TRX": (("Tron", "TRON (TRC20)"),),
+    "XMR": (("Monero", "Monero"),),
+}
+
+
+def networks_for(pay_currency: str) -> tuple[tuple[str, str], ...]:
+    """The ``(code, label)`` networks ``pay_currency`` can be paid on."""
+    return CURRENCY_NETWORKS.get(str(pay_currency or "").upper(), ())
+
+
+def network_options() -> dict[str, list[dict[str, str]]]:
+    """``{currency: [{"code", "label"}]}`` for the checkout pages."""
+    return {
+        currency: [{"code": code, "label": label} for code, label in options]
+        for currency, options in CURRENCY_NETWORKS.items()
+    }
+
+
+def resolve_network(pay_currency: str, network: str | None) -> str | None:
+    """The OxaPay network code to charge ``pay_currency`` on, or None.
+
+    ``None`` means the currency or the chosen network is not on offer, which a
+    caller must refuse rather than guess: the wrong chain loses the money. An
+    empty choice falls back to the currency's first (preferred) network so a
+    caller that does not ask still gets a valid request.
+    """
+    options = networks_for(pay_currency)
+    if not options:
+        return None
+    if not network:
+        return options[0][0]
+    wanted = str(network).strip().casefold()
+    for code, _label in options:
+        if code.casefold() == wanted:
+            return code
+    return None
+
+
+def build_order_id(*parts: object) -> str:
+    """A unique order id that OxaPay will accept.
+
+    ``build_order_id("premium", "purchase", guild_id)`` reads like the id it
+    produces, followed by a random hex tail for uniqueness. The tail shrinks
+    with the readable part so a longer prefix or snowflake can never push the
+    id past :data:`MAX_ORDER_ID_LENGTH`.
+    """
+    stem = "_".join(str(part) for part in parts if str(part))
+    tail = max(6, min(_ORDER_ID_RANDOM_CHARS, MAX_ORDER_ID_LENGTH - len(stem) - 1))
+    stem = stem[: MAX_ORDER_ID_LENGTH - tail - 1]
+    return f"{stem}_{uuid.uuid4().hex[:tail]}"
 
 
 class OxaPayClient:
@@ -76,7 +162,7 @@ class OxaPayClient:
         order_id: str,
         callback_url: str | None = None,
         currency: str = "USD",
-        network: str | None = None,
+        network: str,
         lifetime: int = 60,
         fee_paid_by_payer: int = 1,
         under_paid_coverage: int = 10,
@@ -91,18 +177,30 @@ class OxaPayClient:
             {"success": True, "trackId": str, "data": dict}
             {"success": False, "message": str}
         """
+        if len(str(order_id)) > MAX_ORDER_ID_LENGTH:
+            return {
+                "success": False,
+                "message": (
+                    f"Order id {order_id!r} is longer than the "
+                    f"{MAX_ORDER_ID_LENGTH}-character limit."
+                ),
+            }
+        if not network:
+            return {
+                "success": False,
+                "message": "Every payment needs a blockchain network.",
+            }
         payload: dict = {
             "amount": float(amount),
             "currency": currency,
             "pay_currency": pay_currency.upper(),
+            "network": network,
             "lifetime": max(15, min(2880, int(lifetime))),
             "fee_paid_by_payer": 1 if fee_paid_by_payer else 0,
             "under_paid_coverage": max(0, min(60, int(under_paid_coverage))),
             "order_id": order_id,
             "description": description,
         }
-        if network:
-            payload["network"] = network
         if callback_url:
             payload["callback_url"] = callback_url
         if email:

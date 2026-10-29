@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, getAuth } from "../api";
 import { CryptoIcon } from "../components/CryptoIcon";
 import { Icon } from "../components/Icon";
+import { NetworkIcon } from "../components/NetworkIcon";
 import { PublicHeader } from "../components/PublicHeader";
 import { navigate } from "../router";
 
@@ -14,10 +15,14 @@ import { navigate } from "../router";
  * /billing means neither flow has to guess the other's rules.
  */
 
+/** One chain a currency can be paid on, as OxaPay names it. */
+type CryptoNetwork = { code: string; label: string };
+
 type Plan = {
   price_cents: number;
   price_label: string;
   currencies: string[];
+  networks?: Record<string, CryptoNetwork[]>;
   gift: { enabled: boolean; months: number[]; price_cents_per_month: number };
   methods: { crypto: { enabled: boolean } };
 };
@@ -37,6 +42,7 @@ type Checkout = {
   amount_cents: number;
   pay_currency?: string | null;
   pay_amount?: number | null;
+  network?: string | null;
   address?: string | null;
   memo?: string | null;
   qr_code?: string | null;
@@ -95,6 +101,9 @@ export function GiftPremiumPage() {
   const [guildId, setGuildId] = useState(guildParam);
   const [months, setMonths] = useState(1);
   const [currency, setCurrency] = useState("USDT");
+  // Empty means "the chosen coin's first network", so switching coin never
+  // keeps a chain the new coin cannot be paid on.
+  const [network, setNetwork] = useState("");
   const [step, setStep] = useState<"setup" | "asset" | "pay" | "done">("setup");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [giftedUntil, setGiftedUntil] = useState<string | null>(null);
@@ -110,6 +119,16 @@ export function GiftPremiumPage() {
     () => targets?.find((target) => target.id === guildId) || null,
     [targets, guildId],
   );
+
+  const networkOptions = useMemo<CryptoNetwork[]>(
+    () => plan?.networks?.[currency] || [],
+    [currency, plan],
+  );
+  const activeNetwork = networkOptions.some((option) => option.code === network)
+    ? network
+    : networkOptions[0]?.code || "";
+  const activeNetworkLabel =
+    networkOptions.find((option) => option.code === activeNetwork)?.label || activeNetwork;
 
   const terms = plan?.gift.months?.length ? plan.gift.months : [1, 3, 6, 12];
   const perMonthCents = plan?.gift.price_cents_per_month || plan?.price_cents || 1500;
@@ -193,7 +212,7 @@ export function GiftPremiumPage() {
       const result = await api<Checkout>("/api/premium/gift/checkout", {
         method: "POST",
         headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
-        body: JSON.stringify({ guild_id: guildId, months, pay_currency: currency }),
+        body: JSON.stringify({ guild_id: guildId, months, pay_currency: currency, network: activeNetwork }),
       });
       setCheckout(result);
       setStep("pay");
@@ -379,7 +398,10 @@ export function GiftPremiumPage() {
                       role="radio"
                       aria-checked={currency === code}
                       className={`billing-asset${currency === code ? " is-selected" : ""}`}
-                      onClick={() => setCurrency(code)}
+                      onClick={() => {
+                        setCurrency(code);
+                        setNetwork("");
+                      }}
                     >
                       <span className="billing-asset-mark" aria-hidden="true">
                         <CryptoIcon code={code} fallback={meta.mark} />
@@ -390,6 +412,34 @@ export function GiftPremiumPage() {
                   );
                 })}
               </div>
+              {networkOptions.length > 0 && (
+                <div className="billing-networks-block">
+                  <span className="billing-label">Choose a network</span>
+                  <div className="billing-networks" role="radiogroup" aria-label="Blockchain network">
+                    {networkOptions.map((option) => (
+                      <button
+                        key={option.code}
+                        type="button"
+                        role="radio"
+                        aria-checked={activeNetwork === option.code}
+                        className={`billing-network${activeNetwork === option.code ? " is-selected" : ""}`}
+                        onClick={() => setNetwork(option.code)}
+                      >
+                        <NetworkIcon network={option.code} fallback="◈" />
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="billing-network-warning">
+                <Icon name="alert" />
+                <span>
+                  Send <strong>{currency}</strong> only on{" "}
+                  <strong>{activeNetworkLabel || "the network quoted after this step"}</strong>. Funds sent on any
+                  other network are never received and cannot be refunded.
+                </span>
+              </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void startCheckout()} disabled={busy}>
                 {busy ? "Quoting…" : `Pay with ${currency}`}
@@ -419,7 +469,10 @@ export function GiftPremiumPage() {
                     <CryptoIcon code={checkout.pay_currency || currency} />
                     {checkout.pay_amount ?? "—"} {checkout.pay_currency || currency}
                   </strong>
-                  <small>{checkout.amount_label}</small>
+                  <small>
+                    {checkout.amount_label}
+                    {checkout.network ? ` · ${checkout.network}` : ""}
+                  </small>
                 </div>
                 {checkout.qr_code && (
                   <img className="billing-qr" src={checkout.qr_code} alt={`${checkout.pay_currency || currency} payment QR code`} />
@@ -437,6 +490,14 @@ export function GiftPremiumPage() {
               {checkout.memo && (
                 <p className="billing-hint"><strong>Memo required:</strong> {checkout.memo}</p>
               )}
+              <p className="billing-network-warning">
+                <Icon name="alert" />
+                <span>
+                  Send <strong>{checkout.pay_currency || currency}</strong> only on{" "}
+                  <strong>{checkout.network || activeNetworkLabel}</strong>. A transfer on any other network is
+                  not received and cannot be refunded.
+                </span>
+              </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void refreshStatus(checkout)}>
                 I've sent it — check now
