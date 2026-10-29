@@ -175,6 +175,37 @@ class AutoMod(commands.Cog):
 
     # ─── MESSAGE TRACKING ─────────────────────────
 
+    def _antispam_tracks(self, message: discord.Message) -> bool:
+        """Whether this message may count towards the spam threshold.
+
+        Every log entry is posted through the logging webhook, so one burst of
+        moderation wrote one burst of messages from that single "user". Anti-
+        spam counted them, actioned the webhook as the spammer, and that
+        enforcement wrote yet another log entry that counted too — the bot
+        spammed its own logs forever. So posted output never counts: a bot or
+        webhook author is not a member, and there is nobody to mute. A channel
+        the server logs to is skipped as well, whichever account posts there,
+        which also covers the webhook-less fallback.
+        """
+        if message.webhook_id or getattr(message.author, "bot", False):
+            return False
+        return not self._is_log_channel(message)
+
+    def _is_log_channel(self, message: discord.Message) -> bool:
+        """Whether the message landed in a channel this server logs to.
+
+        Read from the logger's cached routing, so this costs one dict lookup
+        per message and never a database read.
+        """
+        bot = getattr(self, "bot", None)
+        logger = bot.get_cog("ServerLogger") if bot is not None else None
+        if logger is None:
+            return False
+        try:
+            return message.channel.id in logger.configured_channel_ids(message.guild.id)
+        except Exception:
+            return False
+
     def _track_message(self, message: discord.Message) -> int:
         gid, uid = message.guild.id, message.author.id
         now = time.time()
@@ -216,7 +247,7 @@ class AutoMod(commands.Cog):
 
         content = message.content or ""
 
-        if cfg["automod"].get("antispam", True):
+        if cfg["automod"].get("antispam", True) and self._antispam_tracks(message):
             count = self._track_message(message)
             if count >= cfg.get("spam_threshold", 6):
                 try:

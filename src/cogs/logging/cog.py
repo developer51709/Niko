@@ -252,6 +252,23 @@ class ServerLogger(commands.Cog):
     def _get_cfg(self, guild_id: int) -> dict:
         return _guild_config(self._config, guild_id)
 
+    def configured_channel_ids(self, guild_id: int) -> set[int]:
+        """The channels this server has routed at least one category to.
+
+        Read from the cached config, so a caller that runs on every message —
+        auto-moderation deciding whether a channel is a log channel — costs one
+        dict lookup and never a database read.
+        """
+        ids: set[int] = set()
+        for key, channel_id in self._get_cfg(guild_id).items():
+            if key == "disabled" or not channel_id:
+                continue
+            try:
+                ids.add(int(channel_id))
+            except (TypeError, ValueError):
+                continue
+        return ids
+
     def invalidate(self) -> None:
         """Drop the cached config so the next event reads it again."""
         self._config_at = 0.0
