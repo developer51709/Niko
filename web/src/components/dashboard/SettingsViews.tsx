@@ -326,7 +326,7 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
           </div>
           {values.badwords_action === "censor" && <p className="setting-note">Censoring deletes the flagged message and reposts the text through a webhook in that channel using the member&apos;s name and avatar, so Niko needs <strong>Manage Webhooks</strong> in the channels you want censored. If the webhook cannot be created the message is deleted instead.</p>}
           </div>
-          <small className="blocked-words-note">Matching is whole-word and case-insensitive, like Discord: blocking <code>ass</code> leaves “class” and “grass” alone. End a word with <code>*</code> to also catch longer forms (<code>fuck*</code> blocks “fucking”), and wrap it as <code>*word*</code> to match it anywhere. Separators between letters are ignored, so <code>a.s.s</code> is still caught.</small>
+          <small className="blocked-words-note">Matching is whole-word and case-insensitive, like Discord: blocking <code>cat</code> leaves “category” alone. End a word with <code>*</code> to also catch longer forms (<code>cat*</code> blocks “cats”), and wrap it as <code>*cat*</code> to match it anywhere. Separators between letters are ignored, so <code>c.a.t</code> is still caught.</small>
         </div>
       </section>
       <section className="dash-panel settings-panel">
@@ -341,7 +341,7 @@ export function ModerationView({ guildId, config, csrfToken }: { guildId: string
               action={<Switch checked={enabledPresets.includes(preset.key)} onCheckedChange={() => togglePreset(preset.key)} aria-label={preset.label} />}
             />)}
           </SettingCards>}
-        <p className="setting-note setting-card-note">Presets run with the same response as the word list above: delete the message, or censor and repost it. They tolerate leet substitutions (<code>n1gg3r</code>), separators (<code>n i g g e r</code>), repeated letters, self-censored letters (<code>sh*t</code>), look-alike unicode characters and fullwidth forms — while leaving ordinary words such as “class”, “analysis” and “spices” untouched. Matching is deliberately aggressive: a term is blocked wherever it stands on its own, so “Niger” on its own trips the slur preset.</p>
+        <p className="setting-note setting-card-note">Presets run with the same response as the word list above: delete the message, or censor and repost it. They are regular expressions rather than plain keywords, so they also tolerate leet substitutions, letters separated by spaces or punctuation, repeated letters, self-censored letters, look-alike unicode characters and fullwidth forms — while leaving ordinary words such as “class”, “analysis” and “spices” untouched. Matching is deliberately aggressive: a term is blocked wherever it stands on its own, so a place name that looks like one trips the slur preset.</p>
       </section>
       <section className="dash-panel settings-panel"><SettingsSectionTitle label="Thresholds" title="Choose when protection steps in" detail="These limits apply across the server." /><div className="form-grid">
         <Field label="Spam messages" hint="Messages inside the spam interval"><input type="number" min="1" max="100" value={values.spam_threshold ?? 6} onChange={(e) => setValues({ ...values, spam_threshold: e.target.value })} /></Field>

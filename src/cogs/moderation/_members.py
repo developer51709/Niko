@@ -625,7 +625,8 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Clear Warnings", body, target_id=member.id)
 
     # ── MUTE / TEMPMUTE / UNMUTE ─────────────────────────────────────────────
-    @commands.hybrid_command(description=CMDS.text("mute.description"),
+    @commands.hybrid_command(name="mute", aliases=["timeout"],
+                             description=CMDS.text("mute.description"),
                              help=CMDS.help("mute"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
@@ -685,11 +686,12 @@ class MembersMixin:
         )
         await self.logger().log_event(ctx.guild, "moderation", "Tempmute", body, target_id=member.id, action_key="Tempmute")
 
-    @commands.hybrid_command(description=CMDS.text("unmute.description"),
+    @commands.hybrid_command(name="unmute", aliases=["untimeout"],
+                             description=CMDS.text("unmute.description"),
                              help=CMDS.help("unmute"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
-    async def unmute(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("unmute", "member"))):
+    async def unmute(self, ctx,        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("unmute", "member"))):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))

@@ -90,7 +90,7 @@ class SettingsMixin:
             "**Action:** Every blocked word cleared", moderator=ctx.author)
 
     # ── WHITELIST ─────────────────────────────────────────────────────────────
-    @commands.hybrid_group(name="whitelist", aliases=["wl"], invoke_without_command=True,
+    @commands.hybrid_group(name="whitelist", aliases=["wl", "allowlist"], invoke_without_command=True,
                            description=CMDS.text("whitelist.description"),
                            help=CMDS.help("whitelist"))
     @commands.guild_only()
