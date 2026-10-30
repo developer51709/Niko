@@ -169,20 +169,20 @@
     "internal_error": "Erreur de configuration interne."
   },
   "commands": {
-    "emojimanager.help": "afficher le menu d'aide des emojis 🎨✨",
-    "emojistats.help": "vérifier combien de places d'emojis il te reste 📊",
+    "emojimanager.help": "Afficher le menu d'aide des emojis",
+    "emojistats.help": "Vérifier combien de places d'emojis il te reste",
     "enlarge.args.emoji_string": "Emoji ou emoji personnalisé à agrandir.",
-    "enlarge.help": "voir un emoji en grand 🔍✨",
+    "enlarge.help": "Voir un emoji en grand",
     "prefix.help": "Configurer des préfixes personnalisés pour ce serveur.",
     "remove-emoji.args.emoji": "Emoji à supprimer.",
-    "remove-emoji.help": "retirer un emoji du serveur 🗑️",
+    "remove-emoji.help": "Retirer un emoji du serveur",
     "setname.help": "Définir et personnaliser le nom affiché du bot.",
     "setprofile.help": "Personnaliser la photo de profil, la bannière et la bio du bot.",
     "steal-from-url.args.name": "Nom du nouvel emoji.",
     "steal-from-url.args.url": "URL directe de l'image ou de l'emoji.",
-    "steal-from-url.help": "ajouter un emoji depuis un lien 🔗✨",
+    "steal-from-url.help": "Ajouter un emoji depuis un lien",
     "steal.args.items": "Emoji, liens d'emojis ou un zip d'emojis.",
-    "steal.help": "voler un emoji, un lien ou un pack entier 🎨✨",
+    "steal.help": "Voler un emoji, un lien ou un pack entier",
     "triggers.help": "Ouvrir le panneau de gestion des déclencheurs personnalisés."
   }
 }

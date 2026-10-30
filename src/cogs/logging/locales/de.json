@@ -320,8 +320,8 @@
   },
   "commands": {
     "logging.description": "Öffne das Konfigurationspanel für Server-Logs.",
-    "logging.help": "öffnet das Einrichtungspanel für Logs 📋",
+    "logging.help": "Öffnet das Einrichtungspanel für Logs",
     "logging.status.description": "Zeig die aktuelle Log-Konfiguration.",
-    "logging.status.help": "zeigt die aktuelle Log-Konfiguration"
+    "logging.status.help": "Zeigt die aktuelle Log-Konfiguration"
   }
 }

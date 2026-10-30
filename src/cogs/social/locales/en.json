@@ -168,7 +168,7 @@
     "starboard.disable.help": "Disable the starboard.",
     "starboard.emoji.args.emoji": "Emoji that counts as a star.",
     "starboard.emoji.description": "Set the trigger emoji.",
-    "starboard.emoji.help": "Set the trigger emoji (default ⭐).",
+    "starboard.emoji.help": "Set the trigger emoji (default ).",
     "starboard.help": "Starboard configuration (admin).",
     "starboard.ignore.args.channel": "Channel the starboard should ignore.",
     "starboard.ignore.description": "Ignore a channel.",

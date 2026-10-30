@@ -76,12 +76,12 @@
     "ai-config.description": "Configure the AI settings for this server",
     "ai-config.help": "Configure the AI settings for your server.",
     "clearhistory.description": "Clear your conversation history and memory with Niko in this server",
-    "clearhistory.help": "wipe your conversation history + memory with niko ☕",
+    "clearhistory.help": "Wipe your conversation history + memory with niko",
     "edit.args.prompt": "Kept for reference; image editing is no longer available.",
     "edit.help": "Image editing was retired — this explains why.",
     "generate.args.prompt": "What the image should show.",
     "generate.help": "Generate an image using AI.",
     "memory.args.member": "Member whose notes to show (defaults to you).",
-    "memory.help": "see my café notes on you ☕📝"
+    "memory.help": "See my café notes on you"
   }
 }

@@ -60,6 +60,6 @@
   "commands": {
     "help.args.command_name": "Befehl, für den Details gezeigt werden.",
     "help.description": "Zeig das Hilfemenü",
-    "help.help": "zeige das Hilfemenü"
+    "help.help": "Zeige das Hilfemenü"
   }
 }

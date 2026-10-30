@@ -36,12 +36,12 @@
   "commands": {
     "donate.args.amount": "Amount in USD to donate (e.g. 5.00, minimum $1)",
     "donate.description": "Support Niko with a crypto donation",
-    "donate.help": "support niko with crypto ☕",
+    "donate.help": "Support niko with crypto",
     "donationstatus.args.track_id": "The Track ID shown on your invoice",
     "donationstatus.description": "Check the status of a pending donation by Track ID",
-    "donationstatus.help": "check donation status",
+    "donationstatus.help": "Check donation status",
     "donorinfo.args.member": "Member to check (defaults to you).",
     "donorinfo.description": "Check donor/supporter status for a user",
-    "donorinfo.help": "check supporter status"
+    "donorinfo.help": "Check supporter status"
   }
 }

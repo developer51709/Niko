@@ -320,8 +320,8 @@
   },
   "commands": {
     "logging.description": "Open the server logging configuration panel.",
-    "logging.help": "open the logging setup panel 📋",
+    "logging.help": "Open the logging setup panel",
     "logging.status.description": "Show the current logging configuration.",
-    "logging.status.help": "show the current logging setup"
+    "logging.status.help": "Show the current logging setup"
   }
 }

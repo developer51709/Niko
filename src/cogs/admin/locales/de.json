@@ -169,20 +169,20 @@
     "panel_failed": "{danger} Das Trigger-Panel konnte nicht geöffnet werden: `{error}`"
   },
   "commands": {
-    "emojimanager.help": "zeige das Emoji-Hilfemenü",
-    "emojistats.help": "sieh nach, wie viele Emojis noch passen",
+    "emojimanager.help": "Zeige das Emoji-Hilfemenü",
+    "emojistats.help": "Sieh nach, wie viele Emojis noch passen",
     "enlarge.args.emoji_string": "Emoji oder eigenes Emoji, das vergrößert wird.",
-    "enlarge.help": "sieh ein Emoji in groß an",
+    "enlarge.help": "Sieh ein Emoji in groß an",
     "prefix.help": "Lege eigene Präfixe für diesen Server fest.",
     "remove-emoji.args.emoji": "Emoji, das gelöscht wird.",
-    "remove-emoji.help": "entferne ein Emoji vom Server",
+    "remove-emoji.help": "Entferne ein Emoji vom Server",
     "setname.help": "Lege den Anzeigenamen des Bots fest und passe ihn an.",
     "setprofile.help": "Passe Profilbild, Banner und Bio des Bots an.",
     "steal-from-url.args.name": "Name für das neue Emoji.",
     "steal-from-url.args.url": "Direkte Bild- oder Emoji-URL.",
     "steal-from-url.help": "Emoji von einem Link hinzufügen",
     "steal.args.items": "Emoji, Emoji-Links oder eine ZIP-Datei mit Emojis.",
-    "steal.help": "stiehl ein Emoji, einen Link oder ein ganzes Paket",
+    "steal.help": "Stiehl ein Emoji, einen Link oder ein ganzes Paket",
     "triggers.help": "Öffnet das Panel für eigene Trigger."
   }
 }

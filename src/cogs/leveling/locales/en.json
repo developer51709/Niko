@@ -165,7 +165,7 @@
     "leveling.description": "All leveling commands — rank, leaderboard, config, and panel",
     "leveling.help": "All leveling commands.",
     "leveling.leaderboard.description": "See this server's live leveling leaderboard",
-    "leveling.leaderboard.help": "Open the live leaderboard 🏆",
+    "leveling.leaderboard.help": "Open the live leaderboard",
     "leveling.panel.description": "Open the interactive leveling management panel",
     "leveling.panel.help": "Open the interactive leveling management panel",
     "leveling.rank.args.member": "Member to show (defaults to you).",

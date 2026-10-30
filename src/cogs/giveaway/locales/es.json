@@ -102,17 +102,17 @@
   "commands": {
     "giveaway.ban.args.member": "Miembro al que excluir de los sorteos.",
     "giveaway.ban.description": "Impide que un miembro participe en los sorteos de este servidor.",
-    "giveaway.ban.help": "mantiene a un miembro fuera de todos los sorteos",
+    "giveaway.ban.help": "Mantiene a un miembro fuera de todos los sorteos",
     "giveaway.description": "Gestiona los sorteos.",
-    "giveaway.help": "organiza un sorteo en este servidor 🎉",
+    "giveaway.help": "Organiza un sorteo en este servidor",
     "giveaway.reroll.args.message_id": "ID del mensaje del sorteo terminado.",
     "giveaway.reroll.description": "Vuelve a sortear un sorteo terminado para elegir otro ganador.",
-    "giveaway.reroll.help": "elige un nuevo ganador para un sorteo terminado",
+    "giveaway.reroll.help": "Elige un nuevo ganador para un sorteo terminado",
     "giveaway.start.args._ignored": "Se ignora; el panel pregunta el resto.",
     "giveaway.start.description": "Abre el panel de configuración del sorteo.",
-    "giveaway.start.help": "inicia un nuevo sorteo 🎉",
+    "giveaway.start.help": "Inicia un nuevo sorteo",
     "giveaway.unban.args.member": "Miembro que puede volver a participar.",
     "giveaway.unban.description": "Permite que un miembro excluido vuelva a participar en los sorteos.",
-    "giveaway.unban.help": "permite que un miembro excluido vuelva a participar"
+    "giveaway.unban.help": "Permite que un miembro excluido vuelva a participar"
   }
 }

@@ -134,20 +134,20 @@
   },
   "commands": {
     "blackjack.description": "Jouer à un vrai blackjack de casino",
-    "blackjack.help": "jouer à un vrai blackjack de casino",
+    "blackjack.help": "Jouer à un vrai blackjack de casino",
     "blackjack.play.args.amount": "Pièces à miser.",
     "blackjack.play.description": "Jouer une partie de blackjack",
-    "blackjack.play.help": "jouer à un vrai blackjack de casino",
+    "blackjack.play.help": "Jouer à un vrai blackjack de casino",
     "blackjack.tutorial.description": "Apprendre à jouer au blackjack",
-    "blackjack.tutorial.help": "apprendre à jouer au blackjack",
+    "blackjack.tutorial.help": "Apprendre à jouer au blackjack",
     "roulette.description": "Jouer à la roulette européenne interactive",
-    "roulette.help": "jouer à la roulette européenne interactive 🎡",
+    "roulette.help": "Jouer à la roulette européenne interactive",
     "slots.description": "Jouer à une machine à sous 3x3 de casino",
-    "slots.help": "jouer à une machine à sous 3×3 de casino 🎰",
+    "slots.help": "Jouer à une machine à sous 3×3 de casino",
     "slots.payouts.description": "Voir la table des gains de la machine à sous",
-    "slots.payouts.help": "voir ce que rapporte chaque symbole",
+    "slots.payouts.help": "Voir ce que rapporte chaque symbole",
     "slots.play.args.amount": "Pièces à miser.",
     "slots.play.description": "Jouer à la machine à sous",
-    "slots.play.help": "faire tourner les rouleaux et espérer une ligne 🎰"
+    "slots.play.help": "Faire tourner les rouleaux et espérer une ligne"
   }
 }

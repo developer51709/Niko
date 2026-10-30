@@ -4,6 +4,13 @@ from utils.command_locales import command_texts
 
 CMDS = command_texts(__package__)
 
+
+async def _send(ctx, view: HelpView):
+    """Send a help card and remember it, so its timeout can disable its components."""
+    view.message = await ctx.send(view=view)
+    return view.message
+
+
 class HelpCog(commands.Cog):
     """Custom help system — fully trilingual (EN / DE / ES)."""
 
@@ -28,15 +35,15 @@ class HelpCog(commands.Cog):
                     f"{_ui(lang, 'cmd_not_found_body', name=command_name)}"
                 )
                 view = _make_layout(self.bot, content, lang, include_dropdown=False)
-                return await ctx.send(view=view)
+                return await _send(ctx, view)
 
             content = await _command_detail_text(self.bot, cmd, ctx)
             view    = _make_layout(self.bot, content, lang, include_dropdown=False)
-            return await ctx.send(view=view)
+            return await _send(ctx, view)
 
         content = _general_text(self.bot, lang)
         view    = _make_layout(self.bot, content, lang, include_dropdown=True, general_page=True)
-        await ctx.send(view=view)
+        await _send(ctx, view)
 
 
 async def setup(bot: commands.Bot):
