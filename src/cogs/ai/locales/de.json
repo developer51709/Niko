@@ -82,6 +82,6 @@
     "generate.args.prompt": "Was auf dem Bild zu sehen sein soll.",
     "generate.help": "Erzeuge ein Bild mit KI.",
     "memory.args.member": "Mitglied, dessen Notizen gezeigt werden (standardmäßig du).",
-    "memory.help": "sieh dir meine Café-Notizen an"
+    "memory.help": "Sieh dir meine Café-Notizen an"
   }
 }

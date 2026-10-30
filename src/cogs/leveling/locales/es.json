@@ -165,7 +165,7 @@
     "leveling.description": "Todos los comandos de niveles: rango, clasificación, configuración y panel",
     "leveling.help": "Todos los comandos de niveles.",
     "leveling.leaderboard.description": "Mira la clasificación en vivo de este servidor",
-    "leveling.leaderboard.help": "Abre la clasificación en vivo 🏆",
+    "leveling.leaderboard.help": "Abre la clasificación en vivo",
     "leveling.panel.description": "Abre el panel interactivo de gestión de niveles",
     "leveling.panel.help": "Abre el panel interactivo de gestión de niveles",
     "leveling.rank.args.member": "Miembro que mostrar (por defecto tú).",

@@ -135,20 +135,20 @@
   },
   "commands": {
     "blackjack.description": "Play a full casino-grade blackjack game",
-    "blackjack.help": "play a full casino-grade blackjack game",
+    "blackjack.help": "Play a full casino-grade blackjack game",
     "blackjack.play.args.amount": "Coins to bet.",
     "blackjack.play.description": "Play a game of blackjack",
-    "blackjack.play.help": "play a full casino-grade blackjack game",
+    "blackjack.play.help": "Play a full casino-grade blackjack game",
     "blackjack.tutorial.description": "Learn how to play blackjack",
-    "blackjack.tutorial.help": "learn how to play blackjack",
+    "blackjack.tutorial.help": "Learn how to play blackjack",
     "roulette.description": "Play interactive European roulette",
-    "roulette.help": "play interactive European roulette 🎡",
+    "roulette.help": "Play interactive European roulette",
     "slots.description": "Play a casino-style 3x3 slot machine",
-    "slots.help": "play a casino-style 3×3 slot machine 🎰",
+    "slots.help": "Play a casino-style 3×3 slot machine",
     "slots.payouts.description": "View the slots payout table",
-    "slots.payouts.help": "see what each symbol pays out",
+    "slots.payouts.help": "See what each symbol pays out",
     "slots.play.args.amount": "Coins to bet.",
     "slots.play.description": "Play a game of slots",
-    "slots.play.help": "spin the reels and hope for a line 🎰"
+    "slots.play.help": "Spin the reels and hope for a line"
   }
 }

@@ -36,12 +36,12 @@
   "commands": {
     "donate.args.amount": "Betrag in USD für die Spende (z. B. 5.00, mindestens 1 $)",
     "donate.description": "Unterstütze Niko mit einer Krypto-Spende",
-    "donate.help": "unterstütze niko mit krypto",
+    "donate.help": "Unterstütze niko mit krypto",
     "donationstatus.args.track_id": "Die Track-ID von deiner Rechnung",
     "donationstatus.description": "Prüfe den Status einer offenen Spende anhand der Track-ID",
-    "donationstatus.help": "spendenstatus prüfen",
+    "donationstatus.help": "Spendenstatus prüfen",
     "donorinfo.args.member": "Mitglied, das geprüft wird (standardmäßig du).",
     "donorinfo.description": "Prüfe den Spender-/Supporter-Status einer Person",
-    "donorinfo.help": "spenderstatus"
+    "donorinfo.help": "Spenderstatus"
   }
 }

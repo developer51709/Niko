@@ -135,20 +135,20 @@
   },
   "commands": {
     "blackjack.description": "Spiele eine vollwertige Blackjack-Partie",
-    "blackjack.help": "spiele ein volles Casino-Blackjack-Spiel",
+    "blackjack.help": "Spiele ein volles Casino-Blackjack-Spiel",
     "blackjack.play.args.amount": "Münzen, die gesetzt werden.",
     "blackjack.play.description": "Spiele eine Runde Blackjack",
-    "blackjack.play.help": "spiele ein volles Casino-Blackjack-Spiel",
+    "blackjack.play.help": "Spiele ein volles Casino-Blackjack-Spiel",
     "blackjack.tutorial.description": "Lerne, wie man Blackjack spielt",
-    "blackjack.tutorial.help": "lerne, wie man Blackjack spielt",
+    "blackjack.tutorial.help": "Lerne, wie man Blackjack spielt",
     "roulette.description": "Spiele interaktives europäisches Roulette",
-    "roulette.help": "spiele interaktives europäisches Roulette 🎡",
+    "roulette.help": "Spiele interaktives europäisches Roulette",
     "slots.description": "Spiele einen Casino-Spielautomaten mit 3×3",
-    "slots.help": "spiele ein Casino-Slot-Spiel",
+    "slots.help": "Spiele ein Casino-Slot-Spiel",
     "slots.payouts.description": "Zeige die Gewinntabelle der Spielautomaten",
-    "slots.payouts.help": "zeigt, was jedes Symbol auszahlt",
+    "slots.payouts.help": "Zeigt, was jedes Symbol auszahlt",
     "slots.play.args.amount": "Münzen, die gesetzt werden.",
     "slots.play.description": "Spiele eine Runde an den Spielautomaten",
-    "slots.play.help": "dreh die Walzen und hoffe auf eine Linie 🎰"
+    "slots.play.help": "Dreh die Walzen und hoffe auf eine Linie"
   }
 }

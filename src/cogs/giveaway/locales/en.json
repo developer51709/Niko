@@ -102,17 +102,17 @@
   "commands": {
     "giveaway.ban.args.member": "Member to ban from giveaways.",
     "giveaway.ban.description": "Stop a member from entering giveaways in this server.",
-    "giveaway.ban.help": "keep a member out of every giveaway",
+    "giveaway.ban.help": "Keep a member out of every giveaway",
     "giveaway.description": "Manage giveaways.",
-    "giveaway.help": "run a giveaway in this server 🎉",
+    "giveaway.help": "Run a giveaway in this server",
     "giveaway.reroll.args.message_id": "Message ID of the finished giveaway.",
     "giveaway.reroll.description": "Reroll a finished giveaway to pick a new winner.",
-    "giveaway.reroll.help": "pick a new winner for a finished giveaway",
+    "giveaway.reroll.help": "Pick a new winner for a finished giveaway",
     "giveaway.start.args._ignored": "Ignored; the panel asks for the rest.",
     "giveaway.start.description": "Open the giveaway setup panel.",
-    "giveaway.start.help": "start a new giveaway 🎉",
+    "giveaway.start.help": "Start a new giveaway",
     "giveaway.unban.args.member": "Member to let back into giveaways.",
     "giveaway.unban.description": "Let a banned member enter giveaways again.",
-    "giveaway.unban.help": "let a banned member enter again"
+    "giveaway.unban.help": "Let a banned member enter again"
   }
 }

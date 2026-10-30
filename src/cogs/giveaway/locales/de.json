@@ -102,17 +102,17 @@
   "commands": {
     "giveaway.ban.args.member": "Mitglied, das von Verlosungen ausgeschlossen wird.",
     "giveaway.ban.description": "Verhindere, dass ein Mitglied an Verlosungen dieses Servers teilnimmt.",
-    "giveaway.ban.help": "hält ein Mitglied von allen Verlosungen fern",
+    "giveaway.ban.help": "Hält ein Mitglied von allen Verlosungen fern",
     "giveaway.description": "Verwalte Verlosungen.",
-    "giveaway.help": "starte eine Verlosung auf diesem Server 🎉",
+    "giveaway.help": "Starte eine Verlosung auf diesem Server",
     "giveaway.reroll.args.message_id": "Nachrichten-ID der beendeten Verlosung.",
     "giveaway.reroll.description": "Würfle eine beendete Verlosung neu, um einen neuen Gewinner zu wählen.",
-    "giveaway.reroll.help": "wählt einen neuen Gewinner für eine beendete Verlosung",
+    "giveaway.reroll.help": "Wählt einen neuen Gewinner für eine beendete Verlosung",
     "giveaway.start.args._ignored": "Wird ignoriert; das Panel fragt den Rest ab.",
     "giveaway.start.description": "Öffne das Einrichtungspanel für die Verlosung.",
-    "giveaway.start.help": "starte eine neue Verlosung 🎉",
+    "giveaway.start.help": "Starte eine neue Verlosung",
     "giveaway.unban.args.member": "Mitglied, das wieder teilnehmen darf.",
     "giveaway.unban.description": "Erlaube einem ausgeschlossenen Mitglied wieder die Teilnahme an Verlosungen.",
-    "giveaway.unban.help": "lässt ein ausgeschlossenes Mitglied wieder teilnehmen"
+    "giveaway.unban.help": "Lässt ein ausgeschlossenes Mitglied wieder teilnehmen"
   }
 }

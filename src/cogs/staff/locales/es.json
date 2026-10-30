@@ -26,7 +26,7 @@
     "devexec.help": "Ejecuta código Python en el proceso del bot.",
     "devguild.args.guild_id": "ID del servidor.",
     "devguild.help": "Muestra información de un servidor.",
-    "devhelp.help": "muestra los comandos de desarrollo",
+    "devhelp.help": "Muestra los comandos de desarrollo",
     "devlatency.help": "Muestra la latencia del websocket del bot.",
     "devmem.help": "Muestra el uso de memoria del proceso del bot.",
     "devmembers.help": "Lista los miembros del servidor actual.",

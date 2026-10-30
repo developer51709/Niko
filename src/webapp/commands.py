@@ -1,6 +1,7 @@
 """The bot's command registry the way the website shows it."""
 
-import json
+from utils.command_locales import help_mapping
+
 from . import runtime
 
 
@@ -91,18 +92,11 @@ def _description_value(value):
     visitor's language. Anything else passes through untouched.
     """
     if isinstance(value, dict):
-        cleaned = {str(k): str(v) for k, v in value.items() if k and v}
+        cleaned = help_mapping(value)
         return cleaned if cleaned else ""
     if isinstance(value, str):
-        text = value.strip()
-        if text.startswith("{"):
-            try:
-                parsed = json.loads(text.replace("'", '"'))
-            except Exception:
-                parsed = None
-            if isinstance(parsed, dict):
-                cleaned = {str(k): str(v) for k, v in parsed.items() if k and v}
-                if cleaned:
-                    return cleaned
+        cleaned = help_mapping(value)
+        if cleaned:
+            return cleaned
         return value
     return str(value) if value else ""

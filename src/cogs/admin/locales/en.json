@@ -169,20 +169,20 @@
     "panel_failed": "{danger} Failed to open the triggers panel: `{error}`"
   },
   "commands": {
-    "emojimanager.help": "show emoji helper menu 🎨✨",
-    "emojistats.help": "check how many emoji slots you have 📊",
+    "emojimanager.help": "Show emoji helper menu",
+    "emojistats.help": "Check how many emoji slots you have",
     "enlarge.args.emoji_string": "Emoji or custom emoji to enlarge.",
-    "enlarge.help": "see an emoji in big size 🔍✨",
+    "enlarge.help": "See an emoji in big size",
     "prefix.help": "Configure custom prefixes for this server.",
     "remove-emoji.args.emoji": "Emoji to delete.",
-    "remove-emoji.help": "remove an emoji from the server 🗑️",
+    "remove-emoji.help": "Remove an emoji from the server",
     "setname.help": "Set and customize the bot's display name.",
     "setprofile.help": "Customize the bot's PFP, banner, and bio.",
     "steal-from-url.args.name": "Name for the new emoji.",
     "steal-from-url.args.url": "Direct image or emoji URL.",
-    "steal-from-url.help": "add emoji from a link 🔗✨",
+    "steal-from-url.help": "Add emoji from a link",
     "steal.args.items": "Emoji, emoji links or a zip of emojis.",
-    "steal.help": "steal an emoji, a link or a whole pack 🎨✨",
+    "steal.help": "Steal an emoji, a link or a whole pack",
     "triggers.help": "Open the custom triggers management panel."
   }
 }

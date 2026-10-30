@@ -168,7 +168,7 @@
     "starboard.disable.help": "Desactiva el starboard.",
     "starboard.emoji.args.emoji": "Emoji que cuenta como estrella.",
     "starboard.emoji.description": "Establece el emoji que activa el starboard.",
-    "starboard.emoji.help": "Establece el emoji activador (por defecto ⭐).",
+    "starboard.emoji.help": "Establece el emoji activador (por defecto ).",
     "starboard.help": "Configuración del starboard (admin).",
     "starboard.ignore.args.channel": "Canal que el starboard debe ignorar.",
     "starboard.ignore.description": "Ignora un canal.",

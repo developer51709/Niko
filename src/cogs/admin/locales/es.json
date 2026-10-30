@@ -169,20 +169,20 @@
     "panel_failed": "{danger} No se pudo abrir el panel de triggers: `{error}`"
   },
   "commands": {
-    "emojimanager.help": "muestra el menú de ayuda de emojis 🎨✨",
-    "emojistats.help": "mira cuántos espacios de emoji tienes 📊",
+    "emojimanager.help": "Muestra el menú de ayuda de emojis",
+    "emojistats.help": "Mira cuántos espacios de emoji tienes",
     "enlarge.args.emoji_string": "Emoji o emoji personalizado que ampliar.",
-    "enlarge.help": "ve un emoji en tamaño grande 🔍✨",
+    "enlarge.help": "Ve un emoji en tamaño grande",
     "prefix.help": "Configura prefijos personalizados para este servidor.",
     "remove-emoji.args.emoji": "Emoji que borrar.",
-    "remove-emoji.help": "elimina un emoji del servidor 🗑️",
+    "remove-emoji.help": "Elimina un emoji del servidor",
     "setname.help": "Establece y personaliza el nombre visible del bot.",
     "setprofile.help": "Personaliza la foto, el banner y la biografía del bot.",
     "steal-from-url.args.name": "Nombre del nuevo emoji.",
     "steal-from-url.args.url": "URL directa de la imagen o del emoji.",
-    "steal-from-url.help": "añade un emoji desde un enlace 🔗✨",
+    "steal-from-url.help": "Añade un emoji desde un enlace",
     "steal.args.items": "Emoji, enlaces de emoji o un zip de emojis.",
-    "steal.help": "robar un emoji, un enlace o un paquete completo",
+    "steal.help": "Robar un emoji, un enlace o un paquete completo",
     "triggers.help": "Abre el panel de gestión de triggers personalizados."
   }
 }

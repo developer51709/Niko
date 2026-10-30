@@ -36,12 +36,12 @@
   "commands": {
     "donate.args.amount": "Cantidad en USD para donar (p. ej. 5.00, mínimo 1 $)",
     "donate.description": "Apoya a Niko con una donación en cripto",
-    "donate.help": "apoya a niko con cripto",
+    "donate.help": "Apoya a niko con cripto",
     "donationstatus.args.track_id": "El ID de seguimiento que aparece en tu factura",
     "donationstatus.description": "Consulta el estado de una donación pendiente con su ID de seguimiento",
-    "donationstatus.help": "ver estado de donación",
+    "donationstatus.help": "Ver estado de donación",
     "donorinfo.args.member": "Miembro a consultar (por defecto tú).",
     "donorinfo.description": "Consulta el estado de donante o supporter de un usuario",
-    "donorinfo.help": "estado de donador"
+    "donorinfo.help": "Estado de donador"
   }
 }

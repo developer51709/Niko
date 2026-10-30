@@ -320,8 +320,8 @@
   },
   "commands": {
     "logging.description": "Ouvrir le panneau de configuration des logs du serveur.",
-    "logging.help": "ouvrir le panneau de configuration des logs 📋",
+    "logging.help": "Ouvrir le panneau de configuration des logs",
     "logging.status.description": "Afficher la configuration actuelle des logs.",
-    "logging.status.help": "afficher la configuration actuelle des logs"
+    "logging.status.help": "Afficher la configuration actuelle des logs"
   }
 }

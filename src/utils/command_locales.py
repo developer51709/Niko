@@ -32,6 +32,7 @@ wording, and the dashboard registry uses :func:`description_map` and
 
 from __future__ import annotations
 
+import ast
 import json
 from typing import Any
 
@@ -130,6 +131,34 @@ def command_texts(package: str | None) -> CommandTexts:
     return CommandTexts(resolve_package(package))
 
 
+def help_mapping(value: Any) -> dict[str, str]:
+    """Read ``command.help`` back into a ``{language: text}`` map.
+
+    ``CMDS.help`` writes JSON, while older records hold a Python literal such as
+    ``"{'en': 'Reset XP.'}"``. Both are parsed as written: rewriting one quote
+    style into the other (``json.loads(raw.replace("'", '"'))``) corrupts every
+    translation that contains an apostrophe — French ``d'objets`` became
+    ``d"objets`` — and the command then showed its raw serialised map.
+
+    Anything that is not such a map comes back as ``{}``.
+    """
+    if isinstance(value, dict):
+        parsed = value
+    elif isinstance(value, str) and value.strip().startswith("{"):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return {}
+    else:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): str(text) for key, text in parsed.items() if text}
+
+
 def command_path(command: Any) -> str:
     """``slots play`` for a subcommand, as the catalogue key prefix."""
     names: list[str] = []
@@ -190,5 +219,6 @@ __all__ = [
     "command_texts",
     "description_map",
     "help_map",
+    "help_mapping",
     "resolve_package",
 ]

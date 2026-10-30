@@ -76,12 +76,12 @@
     "ai-config.description": "Configura los ajustes de IA de este servidor",
     "ai-config.help": "Configura los ajustes de IA de tu servidor.",
     "clearhistory.description": "Borra tu historial de conversación y la memoria de Niko en este servidor",
-    "clearhistory.help": "borrar tu historial de conversación con Niko",
+    "clearhistory.help": "Borrar tu historial de conversación con Niko",
     "edit.args.prompt": "Solo como referencia; la edición de imágenes ya no está disponible.",
     "edit.help": "La edición de imágenes se retiró — aquí se explica por qué.",
     "generate.args.prompt": "Qué debe mostrar la imagen.",
     "generate.help": "Genera una imagen con IA.",
     "memory.args.member": "Miembro cuyas notas mostrar (por defecto tú).",
-    "memory.help": "mira mis notas del café sobre ti ☕📝"
+    "memory.help": "Mira mis notas del café sobre ti"
   }
 }

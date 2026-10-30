@@ -320,8 +320,8 @@
   },
   "commands": {
     "logging.description": "Abre el panel de configuración de registros del servidor.",
-    "logging.help": "abre el panel de configuración de registros 📋",
+    "logging.help": "Abre el panel de configuración de registros",
     "logging.status.description": "Muestra la configuración actual de registros.",
-    "logging.status.help": "muestra la configuración actual de registros"
+    "logging.status.help": "Muestra la configuración actual de registros"
   }
 }

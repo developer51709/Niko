@@ -727,7 +727,8 @@ class _SetupBtn(discord.ui.Button):
                 discord.ui.TextDisplay(content=msg(interaction, "setup_cancelled")),
                 accent_colour=discord.Color.red(),
             ))
-            return await interaction.response.edit_message(view=cancelled)
+            await interaction.response.edit_message(view=cancelled)
+            return self._setup_view.retire()
         if action == "start":
             return await self._setup_view.launch(interaction)
 
@@ -846,6 +847,16 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         self._build()
         await interaction.response.edit_message(view=self)
 
+    def retire(self):
+        """A terminal card has replaced the panel, so nothing is left to time out.
+
+        The panel's buttons and selects are gone from the message once setup has
+        launched a giveaway or been cancelled, so letting the 10 minute timer run
+        would only overwrite that card with the timeout notice.
+        """
+        self.message = None
+        self.stop()
+
     async def on_timeout(self):
         if self.message is None:
             return
@@ -934,6 +945,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             accent_colour=discord.Color.green(),
         ))
         await interaction.response.edit_message(view=done_view)
+        self.retire()
 
 
 # ─────────────────────────────────────────────────────────────

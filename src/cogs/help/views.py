@@ -9,14 +9,13 @@ decorators serialise it into ``{ 'en': '…', 'de': '…', 'es': '…' }`` on
 """
 
 from typing import List, Tuple
-import json
 
 import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
 from config import links
-from utils.command_locales import description_map
+from utils.command_locales import description_map, help_mapping
 from utils.i18n import get_lang
 from utils.prefix_manager import resolve_prefix
 from utils.locales import load_locales
@@ -36,19 +35,16 @@ def get_command_help(ctx_or_interaction, cmd: commands.Command) -> str:
     Return the localised help string for a command.
 
     Decorators serialise the locale entry into JSON on ``command.help``:
-    ``{ 'en': '…', 'de': '…' }``. Commands that only declare a short
-    description fall back to the same locale table, so the menu shows the same
-    wording as the dashboard commands page.
+    ``{ "en": "…", "de": "…" }``, which ``help_mapping`` reads back without
+    disturbing apostrophes inside the translations. Commands that only declare
+    a short description fall back to the same locale table, so the menu shows
+    the same wording as the dashboard commands page.
     """
     lang = get_lang(ctx_or_interaction)
-    if cmd.help:
-        try:
-            help_dict = json.loads(cmd.help.replace("'", '"'))
-            text = help_dict.get(lang) or help_dict.get("en")
-            if text:
-                return text
-        except (json.JSONDecodeError, AttributeError):
-            return cmd.help
+    mapping = help_mapping(cmd.help)
+    text = mapping.get(lang) or mapping.get("en")
+    if text:
+        return text
     catalogue = description_map(cmd)
     return catalogue.get(lang) or catalogue.get("en", "")
 
@@ -314,6 +310,20 @@ class HelpDropdown(discord.ui.Select):
             options=options,
         )
 
+    async def _show(self, interaction: discord.Interaction, view) -> None:
+        """Swap in a new card and retire the one this dropdown came from.
+
+        The old card is replaced rather than reused, so its buttons are gone and
+        its timeout must not fire later and re-render stale content over the new
+        page.
+        """
+        if isinstance(view, HelpView):
+            view.message = getattr(interaction, "message", None)
+        previous = self.view
+        await interaction.response.edit_message(view=view)
+        if previous is not None:
+            previous.stop()
+
     async def callback(self, interaction: discord.Interaction):
         lang     = get_lang(interaction)
         value    = self.values[0]
@@ -331,7 +341,7 @@ class HelpDropdown(discord.ui.Select):
                 include_dropdown=True, general_page=True,
                 dropdown_page=next_page,
             )
-            return await interaction.response.edit_message(view=view)
+            return await self._show(interaction, view)
 
         category  = value
         cog_names = CATEGORY_COGS.get(category, [])
@@ -343,7 +353,7 @@ class HelpDropdown(discord.ui.Select):
                 include_dropdown=True, general_page=True,
                 dropdown_page=self.page,
             )
-            return await interaction.response.edit_message(view=view)
+            return await self._show(interaction, view)
 
         page                      = 1
         commands_content, total_pages = await _commands_text(
@@ -364,7 +374,7 @@ class HelpDropdown(discord.ui.Select):
         view.header_display.content   = header
         view.commands_display.content = commands_content
 
-        await interaction.response.edit_message(view=view)
+        await self._show(interaction, view)
 
 
 # ===================================================
@@ -487,6 +497,38 @@ class HelpPagination(discord.ui.LayoutView):
 #  LAYOUT BUILDER (GENERAL + DETAIL PAGES)
 # ===================================================
 
+class HelpView(discord.ui.LayoutView):
+    """Help card that greys out its components once it stops listening.
+
+    A timed-out view still shows its buttons and dropdown, but Discord rejects
+    every click on them, so the card looks usable and silently does nothing.
+    Disabling them when the view expires makes the dead card look dead.
+    """
+
+    TIMEOUT = 180
+
+    def __init__(self):
+        super().__init__(timeout=self.TIMEOUT)
+        self.message: discord.Message | None = None
+
+    def _disable_components(self) -> bool:
+        """Disable every button and dropdown; True when something changed."""
+        changed = False
+        for child in self.walk_children():
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)) and not child.disabled:
+                child.disabled = True
+                changed = True
+        return changed
+
+    async def on_timeout(self):
+        if not self._disable_components() or self.message is None:
+            return
+        try:
+            await self.message.edit(view=self)
+        except discord.HTTPException:
+            pass
+
+
 def _make_layout(
     bot: commands.Bot,
     content_text: str,
@@ -494,8 +536,8 @@ def _make_layout(
     include_dropdown: bool = True,
     general_page: bool = False,
     dropdown_page: int = 0,
-) -> discord.ui.LayoutView:
-    view      = discord.ui.LayoutView()
+) -> HelpView:
+    view      = HelpView()
     container = discord.ui.Container()
 
     if general_page:
