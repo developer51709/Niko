@@ -471,8 +471,15 @@
   .dash-top-actions .user-pill span { overflow: hidden; text-overflow: ellipsis; }
   .settings-intro > div { min-width: 0; flex: 1; }
   .settings-intro strong, .settings-intro p { overflow-wrap: anywhere; }
+  /* Logging rows stack so every channel picker gets the full card width. */
+  .server-logging-list { padding-top: 2px; border-top: 0; }
+  .server-logging-row { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 10px; padding: 13px 0; }
   .server-logging-row .form-field { min-width: 0; }
-  .server-logging-row .server-logging-toggle { width: 100%; }
+  /* The enable switch drops its raised box and becomes a quiet footer row; the channel
+     name it repeated is already visible in the picker above it. */
+  .server-logging-row .server-logging-toggle { min-height: 0; padding: 0; background: transparent; border: 0; border-radius: 0; }
+  .server-logging-toggle small { display: none; }
+  .server-logging-toggle strong { color: var(--dim); font: 9.5px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
   .dashboard-layout .guild-feature-settings > .settings-panel { padding: 18px; }
   .dashboard-layout .settings-category-editor .settings-option-row { align-items: stretch; }
   .dashboard-layout .settings-category-editor .settings-option-remove { flex: 0 0 auto; }
