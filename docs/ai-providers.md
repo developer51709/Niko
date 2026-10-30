@@ -103,8 +103,8 @@ With the current optimised prompt pipeline (Groq chat-model defaults):
 |---|---|---|
 | Basic message, no experiments | ~400 | ~80 |
 | Better Context enabled | ~550 | ~80 |
-| AI Actions enabled | ~900 | ~80 |
-| Both experiments enabled | ~1 050 | ~80 |
+| AI Actions enabled | ~1 200 (includes the server layout) | ~80 |
+| Both experiments enabled | ~1 350 | ~80 |
 
 Provider pricing and quotas vary by Groq model and account tier; consult the
 Groq console for current limits before enabling high-volume multimodal use.
