@@ -210,6 +210,8 @@ PRIMARY_KEYS: dict = {
     "music_playlist_tracks": ("user_id", "name", "track_key"),
     # Dedicated error-report database (same cluster, isolated from the main DB).
     "error_reports": "code",
+    # Bot-wide usage counters, one row per (day or "lifetime", bucket, name).
+    "bot_analytics": ("scope", "bucket", "name"),
 }
 
 
