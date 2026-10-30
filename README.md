@@ -105,6 +105,7 @@ src/
 ├── bot.py                  # Bot entry point and gateway lifecycle
 ├── api_server.py           # Starts the Flask API beside the bot
 ├── cogs/                   # Feature modules (moderation, economy, music, ...)
+│                           #   each cog keeps its strings in locales/{en,de,es}.json
 ├── webapp/                 # Flask routes, auth, cards, and shared web helpers
 ├── utils/                  # AI, music, tickets, image rendering, and integrations
 ├── events/                 # Gateway and startup event handlers
@@ -121,6 +122,8 @@ scripts/                    # Badge and emoji asset generation helpers
 ```
 
 `src/website/dist/` is generated output. Edit `web/` and run the build rather than changing files under `dist/` directly.
+
+Translated copy is data, not code: a cog loads its catalogue with `load_locales(__package__, "<table>")` from `src/utils/locales.py`, and English fills any key a translation has not caught up with. See **Cog layout and translated strings** in [docs/maintenance.md](docs/maintenance.md).
 
 ---
 

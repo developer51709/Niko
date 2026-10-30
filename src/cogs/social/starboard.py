@@ -20,49 +20,18 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.blacklist_manager import BlacklistManager
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 DEFAULT_THRESHOLD = 3
 DEFAULT_EMOJI = "⭐"
 
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "channel_set":   "✅ Starboard channel set to {channel}.",
-            "threshold_set": "✅ Threshold set to **{n}**.",
-            "emoji_set":     "✅ Starboard emoji set to {emoji}.",
-            "ignored":       "✅ Now ignoring {channel}.",
-            "unignored":     "✅ No longer ignoring {channel}.",
-            "disabled":      "✅ Starboard disabled.",
-            "config_title":  "### {icon} Starboard Config",
-            "config_body":   "**Channel:** {channel}\n**Threshold:** `{threshold}`\n**Emoji:** {emoji}\n**Ignored channels:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-        "de": {
-            "channel_set":   "✅ Starboard-Kanal auf {channel} gesetzt.",
-            "threshold_set": "✅ Schwelle auf **{n}** gesetzt.",
-            "emoji_set":     "✅ Starboard-Emoji auf {emoji} gesetzt.",
-            "ignored":       "✅ Ignoriere jetzt {channel}.",
-            "unignored":     "✅ Ignoriere {channel} nicht mehr.",
-            "disabled":      "✅ Starboard deaktiviert.",
-            "config_title":  "### {icon} Starboard-Konfiguration",
-            "config_body":   "**Kanal:** {channel}\n**Schwelle:** `{threshold}`\n**Emoji:** {emoji}\n**Ignorierte Kanäle:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-        "es": {
-            "channel_set":   "✅ Canal del starboard establecido en {channel}.",
-            "threshold_set": "✅ Umbral establecido en **{n}**.",
-            "emoji_set":     "✅ Emoji del starboard establecido en {emoji}.",
-            "ignored":       "✅ Ahora ignorando {channel}.",
-            "unignored":     "✅ Ya no se ignora {channel}.",
-            "disabled":      "✅ Starboard desactivado.",
-            "config_title":  "### {icon} Configuración del Starboard",
-            "config_body":   "**Canal:** {channel}\n**Umbral:** `{threshold}`\n**Emoji:** {emoji}\n**Canales ignorados:** {ignored}",
-            "starred":       "{emoji} **{count}** · {channel}",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.social", "starboard")
 
 
 def _lang(ctx) -> str:
@@ -74,7 +43,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:
@@ -152,8 +121,8 @@ class Starboard(commands.Cog):
 
     @commands.hybrid_group(
         name="starboard",
-        description="Starboard configuration.",
-        help="{ 'en': 'Starboard configuration (admin).', 'de': 'Starboard-Konfiguration (Admin).', 'es': 'Configuración del starboard (admin).' }",
+        description=CMDS.text("starboard.description"),
+        help=CMDS.help("starboard"),
         invoke_without_command=True,
     )
     @commands.has_permissions(manage_guild=True)
@@ -166,8 +135,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="channel",
-        description="Set the starboard channel.",
-        help="{ 'en': 'Set the starboard channel.', 'de': 'Starboard-Kanal setzen.', 'es': 'Establece el canal del starboard.' }",
+        description=CMDS.text("starboard.channel.description"),
+        help=CMDS.help("starboard.channel"),
     )
     async def starboard_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         g = self._g(ctx.guild.id)
@@ -177,8 +146,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="threshold",
-        description="Set the star threshold.",
-        help="{ 'en': 'Set the star threshold (default 3).', 'de': 'Stern-Schwelle setzen (Standard 3).', 'es': 'Establece el umbral de estrellas (por defecto 3).' }",
+        description=CMDS.text("starboard.threshold.description"),
+        help=CMDS.help("starboard.threshold"),
     )
     async def starboard_threshold(self, ctx: commands.Context, count: int):
         count = max(1, min(50, count))
@@ -189,9 +158,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="emoji",
-        description="Set the trigger emoji.",
-        help="{ 'en': 'Set the trigger emoji (default ⭐).', 'de': 'Trigger-Emoji setzen (Standard ⭐).', 'es': 'Establece el emoji activador (por defecto ⭐).' }",
-    )
+        description=CMDS.text("starboard.emoji.description"),
+        help=CMDS.help("starboard.emoji"))
     async def starboard_emoji(self, ctx: commands.Context, emoji: str):
         g = self._g(ctx.guild.id)
         g["emoji"] = emoji
@@ -200,8 +168,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="ignore",
-        description="Ignore a channel.",
-        help="{ 'en': 'Stop the starboard from picking up messages from this channel.', 'de': 'Nachrichten dieses Kanals nicht mehr aufnehmen.', 'es': 'Deja de recoger mensajes de este canal.' }",
+        description=CMDS.text("starboard.ignore.description"),
+        help=CMDS.help("starboard.ignore"),
     )
     async def starboard_ignore(self, ctx: commands.Context, channel: discord.TextChannel):
         g = self._g(ctx.guild.id)
@@ -212,8 +180,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="unignore",
-        description="Stop ignoring a channel.",
-        help="{ 'en': 'Stop ignoring a channel.', 'de': 'Einen Kanal nicht mehr ignorieren.', 'es': 'Deja de ignorar un canal.' }",
+        description=CMDS.text("starboard.unignore.description"),
+        help=CMDS.help("starboard.unignore"),
     )
     async def starboard_unignore(self, ctx: commands.Context, channel: discord.TextChannel):
         g = self._g(ctx.guild.id)
@@ -224,8 +192,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="disable",
-        description="Disable the starboard.",
-        help="{ 'en': 'Disable the starboard.', 'de': 'Starboard deaktivieren.', 'es': 'Desactiva el starboard.' }",
+        description=CMDS.text("starboard.disable.description"),
+        help=CMDS.help("starboard.disable"),
     )
     async def starboard_disable(self, ctx: commands.Context):
         g = self._g(ctx.guild.id)
@@ -235,8 +203,8 @@ class Starboard(commands.Cog):
 
     @starboard.command(
         name="config",
-        description="Show current starboard config.",
-        help="{ 'en': 'Show the current starboard config.', 'de': 'Aktuelle Starboard-Konfiguration anzeigen.', 'es': 'Muestra la configuración actual del starboard.' }",
+        description=CMDS.text("starboard.config.description"),
+        help=CMDS.help("starboard.config"),
     )
     async def starboard_config(self, ctx: commands.Context):
         g = self._g(ctx.guild.id)

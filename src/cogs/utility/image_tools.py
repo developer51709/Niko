@@ -30,8 +30,48 @@ from utils.image.pil_tools import (
     oil_paint,
 )
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 
-def build_cv2_container(title: str, filename: str, width: int, height: int) -> discord.ui.LayoutView:
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "misc")
+tr = make_flat_msg(MESSAGES)
+
+#: Select-menu order. Labels and descriptions are looked up as
+#: ``fx_<value>_label`` / ``fx_<value>_desc`` so a translation never has to
+#: touch the code.
+EFFECT_ORDER = (
+    "grayscale",
+    "invert",
+    "blur",
+    "pixelate",
+    "deepfry",
+    "caption_top",
+    "caption_bottom",
+    "meme",
+    "sepia",
+    "vaporwave",
+    "glitch",
+    "edge_detect",
+    "emboss",
+    "rotate",
+    "mirror",
+    "flip",
+    "sharpen",
+    "posterize",
+    "vignette",
+    "oil_paint",
+)
+
+
+def build_cv2_container(
+    title: str,
+    filename: str,
+    width: int,
+    height: int,
+    locale=None,
+) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
 
     container = discord.ui.Container(
@@ -44,7 +84,7 @@ def build_cv2_container(title: str, filename: str, width: int, height: int) -> d
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
-            content=f"-# {width}×{height}"
+            content=tr(locale, "img_dimensions", width=width, height=height)
         )
     )
 
@@ -53,37 +93,22 @@ def build_cv2_container(title: str, filename: str, width: int, height: int) -> d
 
 
 class EffectSelect(discord.ui.Select):
-    def __init__(self, cog: "ImageTools", message: discord.Message):
+    def __init__(self, cog: "ImageTools", message: discord.Message, locale=None):
         self.cog = cog
         self.message = message
+        self.locale = locale
 
         options = [
-            # ── original ──
-            discord.SelectOption(label="Grayscale",         value="grayscale",      description="Convert to grayscale."),
-            discord.SelectOption(label="Invert",            value="invert",         description="Invert all colours."),
-            discord.SelectOption(label="Blur",              value="blur",           description="Soft Gaussian blur."),
-            discord.SelectOption(label="Pixelate",          value="pixelate",       description="Retro blocky pixelation."),
-            discord.SelectOption(label="Deepfry",           value="deepfry",        description="Over-saturated deepfry effect."),
-            discord.SelectOption(label="Caption (Top)",     value="caption_top",    description="Add a caption at the top."),
-            discord.SelectOption(label="Caption (Bottom)",  value="caption_bottom", description="Add a caption at the bottom."),
-            discord.SelectOption(label="Meme (Top+Bottom)", value="meme",           description="Classic impact-font meme text."),
-            # ── new ──
-            discord.SelectOption(label="Sepia",             value="sepia",          description="Classic warm sepia tone."),
-            discord.SelectOption(label="Vaporwave",         value="vaporwave",      description="Pink/purple retro palette."),
-            discord.SelectOption(label="Glitch",            value="glitch",         description="RGB channel shift + corruption."),
-            discord.SelectOption(label="Edge Detect",       value="edge_detect",    description="Highlight image edges."),
-            discord.SelectOption(label="Emboss",            value="emboss",         description="Raised-relief 3-D effect."),
-            discord.SelectOption(label="Rotate",            value="rotate",         description="Rotate by a custom angle."),
-            discord.SelectOption(label="Mirror",            value="mirror",         description="Flip horizontally (left ↔ right)."),
-            discord.SelectOption(label="Flip",              value="flip",           description="Flip vertically (top ↔ bottom)."),
-            discord.SelectOption(label="Sharpen",           value="sharpen",        description="Aggressive unsharp-mask sharpening."),
-            discord.SelectOption(label="Posterize",         value="posterize",      description="Flat, poster-art colour reduction."),
-            discord.SelectOption(label="Vignette",          value="vignette",       description="Dark feathered edges."),
-            discord.SelectOption(label="Oil Paint",         value="oil_paint",      description="Simulate an oil painting."),
+            discord.SelectOption(
+                label=tr(locale, f"fx_{value}_label"),
+                value=value,
+                description=tr(locale, f"fx_{value}_desc"),
+            )
+            for value in EFFECT_ORDER
         ]
 
         super().__init__(
-            placeholder="Choose an effect…",
+            placeholder=tr(locale, "fx_choose"),
             min_values=1,
             max_values=1,
             options=options,
@@ -95,42 +120,50 @@ class EffectSelect(discord.ui.Select):
         # Text/modal effects
         if effect in ("caption_top", "caption_bottom"):
             position = "top" if effect == "caption_top" else "bottom"
-            return await interaction.response.send_modal(CaptionModal(self.cog, self.message, position))
+            return await interaction.response.send_modal(
+                CaptionModal(self.cog, self.message, position, interaction)
+            )
 
         if effect == "meme":
-            return await interaction.response.send_modal(MemeModal(self.cog, self.message))
+            return await interaction.response.send_modal(
+                MemeModal(self.cog, self.message, interaction)
+            )
 
         if effect == "rotate":
-            return await interaction.response.send_modal(RotateModal(self.cog, self.message))
+            return await interaction.response.send_modal(
+                RotateModal(self.cog, self.message, interaction)
+            )
 
         # Immediate effects
         raw = await extract_image_from_message(self.message)
         if not raw:
-            return await interaction.response.send_message("No image found.", ephemeral=True)
+            return await interaction.response.send_message(
+                tr(interaction, "img_none"), ephemeral=True
+            )
 
         await interaction.response.defer()
 
         processors = {
-            "grayscale":  (grayscale,       "Grayscale",   "grayscale.gif"),
-            "invert":     (invert_colors,   "Invert",      "invert.gif"),
-            "blur":       (blur_image,      "Blur",        "blur.gif"),
-            "pixelate":   (pixelate_image,  "Pixelate",    "pixelate.gif"),
-            "deepfry":    (deepfry_image,   "Deepfry",     "deepfry.gif"),
-            "sepia":      (sepia,           "Sepia",       "sepia.gif"),
-            "vaporwave":  (vaporwave,       "Vaporwave",   "vaporwave.gif"),
-            "glitch":     (glitch_effect,   "Glitch",      "glitch.gif"),
-            "edge_detect":(edge_detect,     "Edge Detect", "edge_detect.gif"),
-            "emboss":     (emboss,          "Emboss",      "emboss.gif"),
-            "mirror":     (mirror_image,    "Mirror",      "mirror.gif"),
-            "flip":       (flip_image,      "Flip",        "flip.gif"),
-            "sharpen":    (sharpen_image,   "Sharpen",     "sharpen.gif"),
-            "posterize":  (posterize_image, "Posterize",   "posterize.gif"),
-            "vignette":   (vignette,        "Vignette",    "vignette.gif"),
-            "oil_paint":  (oil_paint,       "Oil Paint",   "oil_paint.gif"),
+            "grayscale":  (grayscale,       "grayscale.gif"),
+            "invert":     (invert_colors,   "invert.gif"),
+            "blur":       (blur_image,      "blur.gif"),
+            "pixelate":   (pixelate_image,  "pixelate.gif"),
+            "deepfry":    (deepfry_image,   "deepfry.gif"),
+            "sepia":      (sepia,           "sepia.gif"),
+            "vaporwave":  (vaporwave,       "vaporwave.gif"),
+            "glitch":     (glitch_effect,   "glitch.gif"),
+            "edge_detect":(edge_detect,     "edge_detect.gif"),
+            "emboss":     (emboss,          "emboss.gif"),
+            "mirror":     (mirror_image,    "mirror.gif"),
+            "flip":       (flip_image,      "flip.gif"),
+            "sharpen":    (sharpen_image,   "sharpen.gif"),
+            "posterize":  (posterize_image, "posterize.gif"),
+            "vignette":   (vignette,        "vignette.gif"),
+            "oil_paint":  (oil_paint,       "oil_paint.gif"),
         }
 
-        processor, title, filename = processors[effect]
-        
+        processor, filename = processors[effect]
+
         # Run heavy image processing in a thread pool to avoid blocking the event loop
         loop = asyncio.get_event_loop()
         output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
@@ -139,43 +172,49 @@ class EffectSelect(discord.ui.Select):
         width, height = img.size
         output.seek(0)
 
+        title = tr(interaction, f"fx_{effect}_label")
         file = discord.File(output, filename=filename)
-        view = build_cv2_container(title, filename, width, height)
+        view = build_cv2_container(title, filename, width, height, interaction)
         await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
 class EffectSelectView(discord.ui.View):
-    def __init__(self, cog: "ImageTools", message: discord.Message):
+    def __init__(self, cog: "ImageTools", message: discord.Message, locale=None):
         super().__init__(timeout=60)
-        self.add_item(EffectSelect(cog, message))
+        self.add_item(EffectSelect(cog, message, locale))
 
 
 # ──────────────────────── modals ───────────────────
 
 class CaptionModal(discord.ui.Modal):
-    def __init__(self, cog: "ImageTools", message: discord.Message, position: str):
-        super().__init__(title="Add Caption")
+    def __init__(self, cog: "ImageTools", message: discord.Message, position: str, locale=None):
+        super().__init__(title=tr(locale, "img_modal_caption"))
         self.cog = cog
         self.message = message
         self.position = position
+        self.locale = locale
 
-        self.caption = discord.ui.TextInput(label="Caption text", max_length=200)
+        self.caption = discord.ui.TextInput(
+            label=tr(locale, "img_modal_caption_label"), max_length=200
+        )
         self.add_item(self.caption)
 
     async def on_submit(self, interaction: discord.Interaction):
         raw = await extract_image_from_message(self.message)
         if not raw:
-            return await interaction.response.send_message("No image found.", ephemeral=True)
+            return await interaction.response.send_message(
+                tr(interaction, "img_none"), ephemeral=True
+            )
 
         text = str(self.caption)
 
         if self.position == "top":
             processor = lambda r: caption_top(r, text)
-            title = "Caption (Top)"
+            title = tr(self.locale, "img_title_caption", text=text)
             filename = "caption_top.gif"
         else:
             processor = lambda r: caption_bottom(r, text)
-            title = "Caption (Bottom)"
+            title = tr(self.locale, "img_title_caption_bottom", text=text)
             filename = "caption_bottom.gif"
 
         await interaction.response.defer()
@@ -189,18 +228,23 @@ class CaptionModal(discord.ui.Modal):
         output.seek(0)
 
         file = discord.File(output, filename=filename)
-        view = build_cv2_container(title, filename, width, height)
+        view = build_cv2_container(title, filename, width, height, self.locale)
         await interaction.response.send_message(view=view, file=file, ephemeral=True)
 
 
 class MemeModal(discord.ui.Modal):
-    def __init__(self, cog: "ImageTools", message: discord.Message):
-        super().__init__(title="Meme-ify Image")
+    def __init__(self, cog: "ImageTools", message: discord.Message, locale=None):
+        super().__init__(title=tr(locale, "img_modal_meme"))
         self.cog = cog
         self.message = message
+        self.locale = locale
 
-        self.top = discord.ui.TextInput(label="Top text", max_length=120, required=False)
-        self.bottom = discord.ui.TextInput(label="Bottom text", max_length=120, required=False)
+        self.top = discord.ui.TextInput(
+            label=tr(locale, "img_modal_top"), max_length=120, required=False
+        )
+        self.bottom = discord.ui.TextInput(
+            label=tr(locale, "img_modal_bottom"), max_length=120, required=False
+        )
 
         self.add_item(self.top)
         self.add_item(self.bottom)
@@ -208,13 +252,15 @@ class MemeModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         raw = await extract_image_from_message(self.message)
         if not raw:
-            return await interaction.response.send_message("No image found.", ephemeral=True)
+            return await interaction.response.send_message(
+                tr(interaction, "img_none"), ephemeral=True
+            )
 
         top_text = str(self.top) or ""
         bottom_text = str(self.bottom) or ""
 
         processor = lambda r: meme_top_bottom(r, top_text, bottom_text)
-        
+
         await interaction.response.defer()
 
         # Run heavy image processing in a thread pool to avoid blocking the event loop
@@ -227,19 +273,22 @@ class MemeModal(discord.ui.Modal):
 
         filename = "meme.gif"
         file = discord.File(output, filename=filename)
-        view = build_cv2_container("Meme", filename, width, height)
+        view = build_cv2_container(
+            tr(self.locale, "fx_meme_label"), filename, width, height, self.locale
+        )
         await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
 class RotateModal(discord.ui.Modal):
-    def __init__(self, cog: "ImageTools", message: discord.Message):
-        super().__init__(title="Rotate Image")
+    def __init__(self, cog: "ImageTools", message: discord.Message, locale=None):
+        super().__init__(title=tr(locale, "img_modal_rotate"))
         self.cog = cog
         self.message = message
+        self.locale = locale
 
         self.angle = discord.ui.TextInput(
-            label="Angle (degrees, clockwise)",
-            placeholder="e.g. 90, 180, 45, -30",
+            label=tr(locale, "img_modal_angle_label"),
+            placeholder=tr(locale, "img_modal_angle_placeholder"),
             max_length=8,
             default="90",
         )
@@ -249,14 +298,18 @@ class RotateModal(discord.ui.Modal):
         try:
             angle = float(str(self.angle).strip())
         except ValueError:
-            return await interaction.response.send_message("Invalid angle — enter a number like 90 or -45.", ephemeral=True)
+            return await interaction.response.send_message(
+                tr(interaction, "img_bad_angle"), ephemeral=True
+            )
 
         raw = await extract_image_from_message(self.message)
         if not raw:
-            return await interaction.response.send_message("No image found.", ephemeral=True)
+            return await interaction.response.send_message(
+                tr(interaction, "img_none"), ephemeral=True
+            )
 
         processor = lambda r: rotate_image(r, angle)
-        
+
         await interaction.response.defer()
 
         # Run heavy image processing in a thread pool to avoid blocking the event loop
@@ -269,7 +322,10 @@ class RotateModal(discord.ui.Modal):
 
         filename = "rotated.gif"
         file = discord.File(output, filename=filename)
-        view = build_cv2_container(f"Rotate ({angle:g}°)", filename, width, height)
+        view = build_cv2_container(
+            tr(self.locale, "img_title_rotate", angle=f"{angle:g}"),
+            filename, width, height, self.locale,
+        )
         await interaction.followup.send(view=view, file=file, ephemeral=True)
 
 
@@ -293,7 +349,7 @@ class ImageTools(commands.Cog):
             return await ctx.channel.fetch_message(ctx.message.reference.message_id)
         return ctx.message
 
-    async def _process_and_send_prefix(self, ctx, raw, effect_name, filename, processor):
+    async def _process_and_send_prefix(self, ctx, raw, effect, filename, processor):
         async with ctx.typing():
             # Run heavy image processing in a thread pool to avoid blocking the event loop
             loop = asyncio.get_event_loop()
@@ -303,177 +359,222 @@ class ImageTools(commands.Cog):
             output.seek(0)
 
         file = discord.File(output, filename=filename)
-        view = build_cv2_container(effect_name, filename, width, height)
+        view = build_cv2_container(
+            tr(ctx, f"fx_{effect}_label"), filename, width, height, ctx
+        )
         try:
             await ctx.reply(view=view, file=file)
-        except Exception as e:
+        except Exception:
             await ctx.send(view=view, file=file)
 
     # ──────────── original prefix commands ─────────
 
-    @commands.command(name="grayscale", help="Convert an image to grayscale.")
+    @commands.command(name="grayscale", help=CMDS.help("grayscale"))
     async def grayscale_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Grayscale", "grayscale.gif", grayscale)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "grayscale", "grayscale.gif", grayscale)
 
-    @commands.command(name="invert", help="Invert the colours of an image.")
+    @commands.command(name="invert", help=CMDS.help("invert"))
     async def invert_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Invert", "invert.gif", invert_colors)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "invert", "invert.gif", invert_colors)
 
-    @commands.command(name="blur", help="Apply a soft Gaussian blur to an image.")
+    @commands.command(name="blur", help=CMDS.help("blur"))
     async def blur_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Blur", "blur.gif", blur_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "blur", "blur.gif", blur_image)
 
-    @commands.command(name="pixelate", help="Pixelate an image for a retro/blocky look.")
+    @commands.command(name="pixelate", help=CMDS.help("pixelate"))
     async def pixelate_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Pixelate", "pixelate.gif", pixelate_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "pixelate", "pixelate.gif", pixelate_image)
 
-    @commands.command(name="deepfry", help="Deepfry an image with heavy saturation and noise.")
+    @commands.command(name="deepfry", help=CMDS.help("deepfry"))
     async def deepfry_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Deepfry", "deepfry.gif", deepfry_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "deepfry", "deepfry.gif", deepfry_image)
 
-    @commands.command(name="caption", help="Add a caption to the top of an image.")
+    @commands.command(name="caption", help=CMDS.help("caption"))
     async def caption_prefix(self, ctx: commands.Context, *, text: str):
         message = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(message)
         if not raw:
-            return await ctx.reply("No image found in that message.")
+            return await ctx.reply(tr(ctx, "img_none_in_message"))
         processor = lambda r: caption_top(r, text)
-        await self._process_and_send_prefix(ctx, raw, f"Caption (Top): {text}", "caption_top.gif", processor)
+        async with ctx.typing():
+            loop = asyncio.get_event_loop()
+            output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
+            img = Image.open(output)
+            width, height = img.size
+            output.seek(0)
+        file = discord.File(output, filename="caption_top.gif")
+        view = build_cv2_container(
+            tr(ctx, "img_title_caption", text=text), "caption_top.gif", width, height, ctx
+        )
+        try:
+            await ctx.reply(view=view, file=file)
+        except Exception:
+            await ctx.send(view=view, file=file)
 
-    @commands.command(name="captionbottom", help="Add a caption to the bottom of an image.")
+    @commands.command(name="captionbottom", help=CMDS.help("captionbottom"))
     async def caption_bottom_prefix(self, ctx: commands.Context, *, text: str):
         message = await self._get_target_message_from_ctx(ctx)
         raw = await extract_image_from_message(message)
         if not raw:
-            return await ctx.reply("No image found in that message.")
+            return await ctx.reply(tr(ctx, "img_none_in_message"))
         processor = lambda r: caption_bottom(r, text)
-        await self._process_and_send_prefix(ctx, raw, f"Caption (Bottom): {text}", "caption_bottom.gif", processor)
+        async with ctx.typing():
+            loop = asyncio.get_event_loop()
+            output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
+            img = Image.open(output)
+            width, height = img.size
+            output.seek(0)
+        file = discord.File(output, filename="caption_bottom.gif")
+        view = build_cv2_container(
+            tr(ctx, "img_title_caption_bottom", text=text),
+            "caption_bottom.gif", width, height, ctx,
+        )
+        try:
+            await ctx.reply(view=view, file=file)
+        except Exception:
+            await ctx.send(view=view, file=file)
 
     # ──────────── new prefix commands ────────────
 
-    @commands.command(name="sepia", help="Apply a classic warm sepia tone to an image.")
+    @commands.command(name="sepia", help=CMDS.help("sepia"))
     async def sepia_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Sepia", "sepia.gif", sepia)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "sepia", "sepia.gif", sepia)
 
-    @commands.command(name="vaporwave", help="Apply a pink/purple vaporwave palette to an image.")
+    @commands.command(name="vaporwave", help=CMDS.help("vaporwave"))
     async def vaporwave_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Vaporwave", "vaporwave.gif", vaporwave)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "vaporwave", "vaporwave.gif", vaporwave)
 
-    @commands.command(name="glitch", help="Apply an RGB glitch/corruption effect to an image.")
+    @commands.command(name="glitch", help=CMDS.help("glitch"))
     async def glitch_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Glitch", "glitch.gif", glitch_effect)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "glitch", "glitch.gif", glitch_effect)
 
-    @commands.command(name="edge", help="Detect and highlight edges in an image.")
+    @commands.command(name="edge", help=CMDS.help("edge"))
     async def edge_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Edge Detect", "edge_detect.gif", edge_detect)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "edge_detect", "edge_detect.gif", edge_detect)
 
-    @commands.command(name="emboss", help="Apply a 3D raised-relief emboss effect to an image.")
+    @commands.command(name="emboss", help=CMDS.help("emboss"))
     async def emboss_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Emboss", "emboss.gif", emboss)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "emboss", "emboss.gif", emboss)
 
-    @commands.command(name="rotate", help="Rotate an image clockwise by a given angle. Usage: !rotate <angle>")
+    @commands.command(name="rotate", help=CMDS.help("rotate"))
     async def rotate_prefix(self, ctx, angle: float = 90.0):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
+            return await ctx.reply(tr(ctx, "img_none"))
         processor = lambda r: rotate_image(r, angle)
-        await self._process_and_send_prefix(ctx, raw, f"Rotate ({angle:g}°)", "rotated.gif", processor)
+        async with ctx.typing():
+            loop = asyncio.get_event_loop()
+            output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
+            img = Image.open(output)
+            width, height = img.size
+            output.seek(0)
+        file = discord.File(output, filename="rotated.gif")
+        view = build_cv2_container(
+            tr(ctx, "img_title_rotate", angle=f"{angle:g}"),
+            "rotated.gif", width, height, ctx,
+        )
+        try:
+            await ctx.reply(view=view, file=file)
+        except Exception:
+            await ctx.send(view=view, file=file)
 
-    @commands.command(name="mirror", help="Flip an image horizontally (left ↔ right).")
+    @commands.command(name="mirror", help=CMDS.help("mirror"),
+    )
     async def mirror_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Mirror", "mirror.gif", mirror_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "mirror", "mirror.gif", mirror_image)
 
-    @commands.command(name="flip", help="Flip an image vertically (top ↔ bottom).")
+    @commands.command(name="flip", help=CMDS.help("flip"),
+    )
     async def flip_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Flip", "flip.gif", flip_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "flip", "flip.gif", flip_image)
 
-    @commands.command(name="sharpen", help="Apply aggressive unsharp-mask sharpening to an image.")
+    @commands.command(name="sharpen", help=CMDS.help("sharpen"))
     async def sharpen_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Sharpen", "sharpen.gif", sharpen_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "sharpen", "sharpen.gif", sharpen_image)
 
-    @commands.command(name="posterize", help="Reduce colour depth for a flat poster-art look.")
+    @commands.command(name="posterize", help=CMDS.help("posterize"))
     async def posterize_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Posterize", "posterize.gif", posterize_image)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "posterize", "posterize.gif", posterize_image)
 
-    @commands.command(name="vignette", help="Add a dark feathered vignette around the edges of an image.")
+    @commands.command(name="vignette", help=CMDS.help("vignette"))
     async def vignette_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Vignette", "vignette.gif", vignette)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "vignette", "vignette.gif", vignette)
 
-    @commands.command(name="oilpaint", aliases=["oil"], help="Simulate an oil painting effect.")
+    @commands.command(name="oilpaint", aliases=["oil"], help=CMDS.help("oilpaint"))
     async def oilpaint_prefix(self, ctx):
-        msg = await self._get_target_message_from_ctx(ctx)
-        raw = await extract_image_from_message(msg)
+        source = await self._get_target_message_from_ctx(ctx)
+        raw = await extract_image_from_message(source)
         if not raw:
-            return await ctx.reply("No image found.")
-        await self._process_and_send_prefix(ctx, raw, "Oil Paint", "oil_paint.gif", oil_paint)
+            return await ctx.reply(tr(ctx, "img_none"))
+        await self._process_and_send_prefix(ctx, raw, "oil_paint", "oil_paint.gif", oil_paint)
 
     # ──────────── context menu ────────────
 
     async def edit_image_context(self, interaction: discord.Interaction, message: discord.Message):
         await interaction.response.send_message(
-            "Choose an effect:",
-            view=EffectSelectView(self, message),
+            tr(interaction, "fx_choose_prompt"),
+            view=EffectSelectView(self, message, interaction),
             ephemeral=True,
         )
 

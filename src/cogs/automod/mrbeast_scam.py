@@ -36,6 +36,23 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from config.ids import OWNER_IDS, SCAM_REVIEW_CHANNEL, SCAM_REVIEW_GUILD
 from utils import logging
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
+MESSAGES = load_locales("cogs.automod", "scam")
+
+#: Emojis a scam-panel sentence may carry as ``{name}``.
+_SCAM_EMOJI_FIELDS = ("tick", "cross", "danger", "warning", "broom")
+
+
+def _t(lang: str, key: str, **kwargs) -> str:
+    """A scam-filter string in *lang*, with the bot's emojis filled in."""
+    text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
+    for name in _SCAM_EMOJI_FIELDS:
+        token = "{" + name + "}"
+        if token in text:
+            text = text.replace(token, get_emoji(name))
+    return text.format(**kwargs) if kwargs else text
 
 
 async def set_review_channel(bot, channel_id: int) -> None:
@@ -320,11 +337,13 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
     ) -> None:
         """Right-click a message → send its image assets to staff review."""
         await interaction.response.defer(ephemeral=True)
+        # The reporter reads these replies in their own server.
+        lang = get_lang(interaction.guild)
 
         images = [a for a in message.attachments if _is_image_attachment(a)]
         if not images:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('image')} That message has no image attachments to review.", colour=_ACCENT_WARN),
+                view=_cv(_t(lang, "no_images"), colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -332,10 +351,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         review_channel = self._review_channel()
         if review_channel is None:
             await interaction.followup.send(
-                view=_cv(
-                    f"{get_emoji('warning')} Scam review is not configured yet — an admin needs to set `SCAM_REVIEW_CHANNEL`.",
-                    colour=_ACCENT_WARN,
-                ),
+                view=_cv(_t(lang, "review_unconfigured"), colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -398,7 +414,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         except discord.HTTPException as exc:
             logging.error("MrBeastScam", f"Could not deliver report to review channel: {exc}")
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('danger')} Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
+                view=_cv(_t(lang, "review_unreachable"), colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -671,12 +687,17 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if guild is None:
             return
 
-        body = (
-            f"**Author:** {message.author.mention} (`{message.author.id}`)\n"
-            f"**Channel:** {getattr(message.channel, 'mention', message.channel.id)}\n"
-            f"**Reason:** MrBeast scam image detected "
-            f"(hash `{matched_hash[:12]}…`, distance {distance})\n"
-            f"**Action:** {'Message deleted' if deleted else 'Delete failed — missing permissions'}"
+        # The entry is read in the server that lost the message, so it speaks
+        # that server's language, not the reporter's.
+        lang = get_lang(guild)
+        body = _t(
+            lang, "log_body",
+            author=message.author.mention,
+            author_id=message.author.id,
+            channel=getattr(message.channel, "mention", message.channel.id),
+            hash=matched_hash[:12],
+            distance=distance,
+            action=_t(lang, "action_deleted" if deleted else "action_failed"),
         )
 
         log_channel = await _get_automod_log_channel(self.bot, guild)
@@ -698,7 +719,8 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
                     built.append(discord.File(io.BytesIO(data), filename=_safe_upload_name(name, i)))
 
             kids: list[discord.ui.Item] = [
-                discord.ui.TextDisplay(content=f"### {get_emoji('broom')} MrBeast Scam Removed"),
+                discord.ui.TextDisplay(
+                    content=f"### {get_emoji('broom')} {_t(lang, 'log_title')}"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=body),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -716,7 +738,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
                 ]))
                 kids.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             row = discord.ui.ActionRow()
-            row.add_item(_FalsePositiveButton(matched_hash))
+            row.add_item(_FalsePositiveButton(matched_hash, lang))
             kids.append(row)
             built_view = discord.ui.LayoutView()
             built_view.add_item(discord.ui.Container(*kids, accent_colour=discord.Colour(_ACCENT_WARN)))
@@ -749,11 +771,12 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if not interaction.guild:
             return
         await interaction.response.defer(ephemeral=True)
+        lang = get_lang(interaction.guild)
 
         review_channel = self._review_channel()
         if review_channel is None:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('warning')} Scam review is not configured — cannot submit this false positive.", colour=_ACCENT_WARN),
+                view=_cv(_t(lang, "review_missing"), colour=_ACCENT_WARN),
                 ephemeral=True,
             )
             return
@@ -860,7 +883,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
         if not ok:
             logging.error("MrBeastScam", f"Could not forward false positive: {retry_exc}")
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('danger')} Could not reach the review channel — try again later.", colour=_ACCENT_ERROR),
+                view=_cv(_t(lang, "review_unreachable"), colour=_ACCENT_ERROR),
                 ephemeral=True,
             )
             return
@@ -874,7 +897,7 @@ class MrBeastScam(commands.Cog, name="MrBeastScam"):
             pass
 
         await interaction.followup.send(
-            view=_cv(f"{get_emoji('tick')} Thanks! The false positive was sent to the scam review team.", colour=_ACCENT_OK),
+            view=_cv(_t(lang, "fp_thanks"), colour=_ACCENT_OK),
             ephemeral=True,
         )
 
@@ -918,7 +941,8 @@ class _ReviewConfirmButton(discord.ui.DynamicItem[discord.ui.Button], template=r
     async def callback(self, interaction: discord.Interaction) -> None:
         cog = interaction.client.get_cog("MrBeastScam")
         if cog is None:
-            await interaction.response.send_message("Scam filter is unavailable.", ephemeral=True)
+            await interaction.response.send_message(
+                _t(get_lang(interaction.guild), "filter_unavailable"), ephemeral=True)
             return
         await cog._handle_review(interaction, "confirm")  # type: ignore[attr-defined]
 
@@ -938,15 +962,16 @@ class _ReviewRejectButton(discord.ui.DynamicItem[discord.ui.Button], template=r"
     async def callback(self, interaction: discord.Interaction) -> None:
         cog = interaction.client.get_cog("MrBeastScam")
         if cog is None:
-            await interaction.response.send_message("Scam filter is unavailable.", ephemeral=True)
+            await interaction.response.send_message(
+                _t(get_lang(interaction.guild), "filter_unavailable"), ephemeral=True)
             return
         await cog._handle_review(interaction, "reject")  # type: ignore[attr-defined]
 
 
 class _FalsePositiveButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mrbeast:fp:([a-f0-9]+)"):
-    def __init__(self, image_hash: str) -> None:
+    def __init__(self, image_hash: str, lang: str = "en") -> None:
         super().__init__(discord.ui.Button(
-            label="Report False Positive",
+            label=_t(lang, "btn_false_positive"),
             style=discord.ButtonStyle.secondary,
             custom_id=f"mrbeast:fp:{image_hash}",
         ))
@@ -959,7 +984,8 @@ class _FalsePositiveButton(discord.ui.DynamicItem[discord.ui.Button], template=r
     async def callback(self, interaction: discord.Interaction) -> None:
         cog = interaction.client.get_cog("MrBeastScam")
         if cog is None:
-            await interaction.response.send_message("Scam filter is unavailable.", ephemeral=True)
+            await interaction.response.send_message(
+                _t(get_lang(interaction.guild), "filter_unavailable"), ephemeral=True)
             return
         await cog._handle_false_positive(interaction, self.image_hash)  # type: ignore[attr-defined]
 
@@ -980,7 +1006,8 @@ class _RemoveScamButton(discord.ui.DynamicItem[discord.ui.Button], template=r"mr
     async def callback(self, interaction: discord.Interaction) -> None:
         cog = interaction.client.get_cog("MrBeastScam")
         if cog is None:
-            await interaction.response.send_message("Scam filter is unavailable.", ephemeral=True)
+            await interaction.response.send_message(
+                _t(get_lang(interaction.guild), "filter_unavailable"), ephemeral=True)
             return
         await cog._remove_scam_hash(interaction, self.image_hash)  # type: ignore[attr-defined]
 

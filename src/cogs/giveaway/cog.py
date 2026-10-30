@@ -2,6 +2,9 @@ from .views import *
 from utils import logging
 from utils.blacklist_manager import BlacklistManager
 from utils.prefix_manager import get_prefixes
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 
 # SQLite accepts 0 and FALSE interchangeably, while MongoDB keeps booleans
@@ -130,43 +133,38 @@ class Giveaway(commands.Cog):
 
     # ─── COMMANDS ─────────────────────────────────────────────
 
-    @commands.group(name="giveaway", aliases=["g"], invoke_without_command=True)
+    @commands.group(
+        name="giveaway",
+        aliases=["g"],
+        invoke_without_command=True,
+        help=CMDS.help("giveaway"),
+    )
     async def giveaway(self, ctx):
         """Manage giveaways."""
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('giveaway')} Giveaway Commands"
+                content=f"### {get_emoji('giveaway')} {msg(ctx, 'group_title')}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    f"Use `{ctx.clean_prefix}giveaway start` to start a new giveaway.\n"
-                    f"Use `{ctx.clean_prefix}giveaway ban <member>` to keep a member out of every "
-                    f"giveaway in this server, and `{ctx.clean_prefix}giveaway unban <member>` to let "
-                    f"them back in."
-                )
+                content=msg(ctx, "group_body", prefix=ctx.clean_prefix)
             ),
             accent_colour=discord.Color.purple()
         )
         view.add_item(container)
         await ctx.send(view=view)
 
-    @giveaway.command(name="start")
+    @giveaway.command(name="start", help=CMDS.help("giveaway.start"))
     @commands.has_permissions(manage_guild=True)
     async def start(self, ctx, *, _ignored: str = ""):
-        """Open the interactive giveaway setup panel.
-
-        All settings — prize, duration, winners, channel, and join requirements
-        (account age, time in server, required roles, booster-only) — are
-        configured through the buttons on the panel that this command sends.
-        """
+        """Open the interactive giveaway setup panel."""
         state = _SetupState(channel_id=ctx.channel.id)
         view  = _build_setup_view(self.bot, ctx, state, ctx.author.id)
         sent  = await ctx.send(view=view)
         view.message = sent
 
-    @giveaway.command(name="reroll")
+    @giveaway.command(name="reroll", help=CMDS.help("giveaway.reroll"))
     @commands.has_permissions(manage_guild=True)
     async def reroll(self, ctx, message_id: int):
         """Reroll a finished giveaway to pick a new winner."""
@@ -267,13 +265,13 @@ class Giveaway(commands.Cog):
             cleared += 1
         return cleared
 
-    @giveaway.command(name="ban")
+    @giveaway.command(name="ban", help=CMDS.help("giveaway.ban"))
     @commands.has_permissions(manage_guild=True)
     async def ban(self, ctx, member: discord.Member):
         """Ban a member from joining giveaways in this server."""
         if member.bot:
             return await ctx.send(view=_reply_card(
-                ok=False, title="Giveaway ban", body=msg(ctx, "join_bot")
+                ok=False, title=msg(ctx, "ban_card_title"), body=msg(ctx, "join_bot")
             ))
 
         guild_id = ctx.guild.id
@@ -283,7 +281,7 @@ class Giveaway(commands.Cog):
         )
         if existing is not None:
             return await ctx.send(view=_reply_card(
-                ok=False, title="Giveaway ban",
+                ok=False, title=msg(ctx, "ban_card_title"),
                 body=msg(ctx, "ban_already", user=member.display_name),
             ))
 
@@ -297,12 +295,12 @@ class Giveaway(commands.Cog):
         # removes what the member already holds.
         cleared = await self._clear_entries(guild_id, member.id)
         await ctx.send(view=_reply_card(
-            ok=True, title="Giveaway ban",
+            ok=True, title=msg(ctx, "ban_card_title"),
             body=msg(ctx, "ban_success", user=member.display_name, count=cleared),
         ))
         await self._log_ban_change(ctx, member, banned=True, cleared=cleared)
 
-    @giveaway.command(name="unban")
+    @giveaway.command(name="unban", help=CMDS.help("giveaway.unban"))
     @commands.has_permissions(manage_guild=True)
     async def unban(self, ctx, member: discord.Member):
         """Lift a giveaway ban so the member can enter again."""
@@ -313,7 +311,7 @@ class Giveaway(commands.Cog):
         )
         if existing is None:
             return await ctx.send(view=_reply_card(
-                ok=False, title="Giveaway unban",
+                ok=False, title=msg(ctx, "unban_card_title"),
                 body=msg(ctx, "unban_not_banned", user=member.display_name),
             ))
 
@@ -322,7 +320,7 @@ class Giveaway(commands.Cog):
             guild_id, member.id,
         )
         await ctx.send(view=_reply_card(
-            ok=True, title="Giveaway unban",
+            ok=True, title=msg(ctx, "unban_card_title"),
             body=msg(ctx, "unban_success", user=member.display_name),
         ))
         await self._log_ban_change(ctx, member, banned=False)

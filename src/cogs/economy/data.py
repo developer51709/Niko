@@ -27,7 +27,8 @@ from discord.ext import commands, tasks
 
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji
 from config.links import WEBSITE
@@ -40,6 +41,7 @@ from utils.economy_jobs import (
     LOTTERY_TICKET_PRICE, LOTTERY_DRAW_INTERVAL, LOTTERY_HOUSE_RAKE, LOTTERY_BASE_POT,
     COOLDOWN_DAILY, COOLDOWN_WORK, COOLDOWN_CRIME, COOLDOWN_ROB,
 )
+from utils.locales import load_locales
 from utils.image.economy_card import (
     render_balance_card, render_reward_card, render_leaderboard_card,
     fetch_avatar_bytes,
@@ -47,34 +49,64 @@ from utils.image.economy_card import (
 )
 
 # ── Bilingual messages ───────────────────────────────────────────────────────
-MESSAGES = {
-    "normal": {
-        "en": {
-            "daily_wait":     "You can only claim your daily reward once every 24 hours.",
-            "daily_success":  "You claimed your daily reward of {reward} coins!",
-            "work_wait":      "You can only work once every hour.",
-            "work_success":   "You worked and earned {reward} coins!",
-            "level_up":       "You leveled up! You are now level {level}.",
-        },
-        "de": {
-            "daily_wait":     "Du kannst deine tägliche Belohnung nur alle 24 Stunden abholen.",
-            "daily_success":  "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
-            "work_wait":      "Du kannst nur einmal pro Stunde arbeiten.",
-            "work_success":   "Du hast gearbeitet und {reward} Münzen verdient!",
-            "level_up":       "Du bist aufgestiegen! Du bist jetzt Level {level}.",
-        },
-        "es": {
-            "daily_wait":     "Solo puedes reclamar tu recompensa diaria una vez cada 24 horas.",
-            "daily_success":  "¡Has reclamado tu recompensa diaria de {reward} monedas!",
-            "work_wait":      "Solo puedes trabajar una vez cada hora.",
-            "work_success":   "¡Trabajaste y ganaste {reward} monedas!",
-            "level_up":       "¡Has subido de nivel! Ahora eres nivel {level}.",
-        },
-    },
+MESSAGES = load_locales("cogs.economy", "data")
+
+
+msg = make_flat_msg(MESSAGES)
+
+# Niko's own emojis are filled into catalogue `{cross}`-style tokens here, so a
+# re-uploaded emoji id never has to be baked into every translation file.
+_LOCALE_EMOJI = {
+    "cross": get_emoji("cross"),
+    "tick":  get_emoji("tick"),
+    "lock":  get_emoji("lock"),
 }
 
 
-msg = make_msg(MESSAGES)
+def locale_t(table: dict):
+    """Return ``t(lang, key, **kwargs)`` bound to one loaded catalogue table.
+
+    Economy replies are built from ids and numbers, so a language code is the
+    natural first argument: every view already knows the guild it belongs to.
+
+    Usage::
+
+        from utils.locales import load_locales
+
+        T = locale_t(load_locales("cogs.economy", "bank"))
+    """
+
+    def t(lang: str, key: str, **kwargs) -> str:
+        text = table.get(lang, {}).get(key) or table["en"].get(key, key)
+        for name, value in _LOCALE_EMOJI.items():
+            token = "{" + name + "}"
+            if token in text:
+                text = text.replace(token, value)
+        return text.format(**kwargs) if kwargs else text
+
+    return t
+
+
+# The shop catalogue also drives the placeholder shop card shown while the real
+# one renders, so the loading layout speaks the same language as the panel.
+_SHOP_T = locale_t(load_locales("cogs.economy", "shop"))
+
+
+async def _reply(ctx, view=None, *, ephemeral: bool = False, allowed_mentions=None):
+    """Send a view through an interaction or a prefix context.
+
+    Every economy command runs as both a slash and a prefix command, so each
+    reply used to be written twice. Routing them through one helper means a
+    localised string can never drift between the two paths.
+    """
+    kwargs = {}
+    if ephemeral:
+        kwargs["ephemeral"] = True
+    if allowed_mentions is not None:
+        kwargs["allowed_mentions"] = allowed_mentions
+    if getattr(ctx, "interaction", None):
+        return await ctx.interaction.followup.send(view=view, **kwargs)
+    return await ctx.send(view=view, **kwargs)
 
 
 # ── Prefix resolver (used by tip text in cards) ──────────────────────────────
@@ -229,9 +261,26 @@ def achievement_icon(meta: dict) -> str:
     return meta["emoji"]
 
 
-def achievement_label(meta: dict) -> str:
+#: Badge names, ``<achievement_id>.name``, per language. The English names in
+#: ``ACHIEVEMENTS`` stay the fallback and keep a badge routable by its key.
+ACHIEVEMENT_NAMES = load_locales("cogs.economy", "achievements")
+
+
+def achievement_name(achievement_id: str, meta: dict, lang: str = "en") -> str:
+    """The badge's name in *lang*, falling back to its English name."""
+    key = f"{achievement_id}.name"
+    return (
+        ACHIEVEMENT_NAMES.get(lang, {}).get(key)
+        or ACHIEVEMENT_NAMES["en"].get(key)
+        or meta.get("name", achievement_id)
+    )
+
+
+def achievement_label(meta: dict, achievement_id: str | None = None,
+                      lang: str = "en") -> str:
     """``"Week of Votes <logo>"``, the string an unlock announcement prints."""
-    return f"{meta['name']} {achievement_icon(meta)}"
+    name = achievement_name(achievement_id, meta, lang) if achievement_id else meta["name"]
+    return f"{name} {achievement_icon(meta)}"
 
 
 def net_worth(data: dict) -> int:
@@ -694,7 +743,7 @@ def achievement_progress(
     return (max(0, min(int(current), target)), target)
 
 
-def _check_achievements(data: dict, *, now=None) -> list[str]:
+def _check_achievements(data: dict, *, now=None, lang: str = "en") -> list[str]:
     """Unlock newly earned badges, pay their rewards, list what changed.
 
     Returns display strings (``"Shift Lead 📋 (+5,000 🪙)"``) so existing
@@ -725,12 +774,12 @@ def _check_achievements(data: dict, *, now=None) -> list[str]:
             except Exception:
                 continue
         earned.add(aid)
-        label = achievement_label(meta)
+        label = achievement_label(meta, aid, lang)
         reward = int(meta.get("reward", 0))
         if reward > 0:
             data["balance"] = int(data.get("balance", 0)) + reward
             data["total_earned"] = int(data.get("total_earned", 0)) + reward
-            _log_tx(data, "achievement", reward, meta["name"])
+            _log_tx(data, "achievement", reward, achievement_name(aid, meta, lang))
             label += f" (+{reward:,} 🪙)"
         newly.append(label)
     data["achievements"] = sorted(earned)
@@ -996,6 +1045,7 @@ def _shop_loading_file(rows: int | None) -> str:
 def _loading_card_view(
     card_type: str,
     *,
+    lang: str = "en",
     rows: int | None = None,
     shop_controls: bool = False,
 ) -> discord.ui.LayoutView:
@@ -1026,10 +1076,10 @@ def _loading_card_view(
     if shop_controls:
         # Same hint and buttons as `_ShopActionView`, only disabled until the
         # card is ready — the layout does not jump when the card arrives.
-        container.add_item(discord.ui.TextDisplay(content="-# Choose an action below to open a private checkout panel."))
+        container.add_item(discord.ui.TextDisplay(content=_SHOP_T(lang, "hint_action")))
         container.add_item(discord.ui.ActionRow(
-            discord.ui.Button(label="Buy", style=discord.ButtonStyle.success, disabled=True),
-            discord.ui.Button(label="Sell", style=discord.ButtonStyle.secondary, disabled=True),
+            discord.ui.Button(label=_SHOP_T(lang, "btn_buy"), style=discord.ButtonStyle.success, disabled=True),
+            discord.ui.Button(label=_SHOP_T(lang, "btn_sell"), style=discord.ButtonStyle.secondary, disabled=True),
         ))
     view.add_item(container)
     return view

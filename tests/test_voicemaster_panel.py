@@ -15,6 +15,10 @@ sys.path.insert(0, "src")
 import cogs.voicemaster.cog as voicemaster_module
 from config.ids import SUPPORT_GUILD
 from cogs.voicemaster import messages as vm_messages
+from utils.locales import load_locales
+
+#: Command wording lives in the ``commands`` namespace every cog shares.
+COMMAND_CATALOGUE = load_locales("cogs.voicemaster", "commands")
 from cogs.voicemaster.cog import VoiceMaster, VoiceMasterChannelSelect, VoiceMasterInterface, VoiceMasterSetupView
 from database import SQLitePool
 
@@ -450,9 +454,7 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
         return found
 
     def _help_key(self, command):
-        if command.qualified_name == "voicemaster":
-            return "group"
-        return command.qualified_name.replace("voicemaster ", "").replace(" ", "_")
+        return f"{command.qualified_name.replace(' ', '.')}.help"
 
     def _parameters(self, command):
         params = getattr(command, "parameters", None)
@@ -469,14 +471,14 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
             self.assertEqual(set(parsed), {"en", "de", "es"}, command.qualified_name)
             self.assertTrue(all(parsed.values()), command.qualified_name)
 
-    def test_every_command_help_matches_the_message_catalog(self):
+    def test_every_command_help_matches_the_locale_catalog(self):
         for command in self._commands():
             key = self._help_key(command)
-            self.assertIn(key, vm_messages.COMMAND_HELP["en"], command.qualified_name)
+            self.assertIn(key, COMMAND_CATALOGUE["en"], command.qualified_name)
             parsed = json.loads(str(command.help))
             for lang in ("en", "de", "es"):
                 self.assertEqual(
-                    parsed[lang], vm_messages.COMMAND_HELP[lang][key],
+                    parsed[lang], COMMAND_CATALOGUE[lang][key],
                     f"{lang}:{key} drifted from the catalog",
                 )
 

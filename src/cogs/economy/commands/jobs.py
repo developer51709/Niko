@@ -3,9 +3,17 @@ Economy — job commands (list, info, apply, quit).
 """
 from discord.ext import commands
 from ..data import (
-    _info_view, _fmt_remaining, _check_achievements, _resolve_prefix,
-    JOBS, DEFAULT_JOB, get_job, get_emoji,
+    _info_view, _reply, _fmt_remaining, _check_achievements, _resolve_prefix, locale_t,
+    JOBS, DEFAULT_JOB, get_job,
 )
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+T = locale_t(load_locales("cogs.economy", "jobs"))
 
 
 class JobsMixin:
@@ -13,9 +21,8 @@ class JobsMixin:
 
     @commands.hybrid_group(
         name="job",
-        description="Browse, apply for, and manage your job",
-        help="{ 'en': 'manage your career 💼', 'de': 'verwalte deinen Job 💼', 'es': 'gestiona tu carrera 💼' }",
-        invoke_without_command=True
+        description=CMDS.text("job.description"),
+        help=CMDS.help("job"), invoke_without_command=True
     )
     async def job(self, ctx: commands.Context):
         if ctx.interaction:
@@ -23,111 +30,92 @@ class JobsMixin:
         await self._job_list(ctx)
 
     async def _job_list(self, ctx: commands.Context):
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         cur = data.get("job")
         lines = []
         for jid, j in JOBS.items():
-            tag  = "  ← **current**" if jid == cur else ""
-            lock = "" if data["level"] >= j["min_level"] else f"  {get_emoji('lock')} lvl {j['min_level']}"
-            lines.append(
-                f"{j['emoji']} **{j['name']}** `({jid})`{tag}{lock}\n"
-                f"-# {j['min_pay']}–{j['max_pay']} coins/shift • +{j['xp_per_shift']} XP\n"
-                f"-# *{j['description']}*"
-            )
+            current = T(lang, "current") if jid == cur else ""
+            locked  = "" if data["level"] >= j["min_level"] else T(lang, "locked", level=j["min_level"])
+            lines.append(T(
+                lang, "line",
+                emoji=j["emoji"], name=j["name"], id=jid,
+                current=current, locked=locked,
+                pay=j["min_pay"], pay_max=j["max_pay"], xp=j["xp_per_shift"],
+                desc=j["description"],
+            ))
         prefix = await _resolve_prefix(self.bot, ctx)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(
-                "💼 Job Board",
-                "\n\n".join(lines) + f"\n\n-# Apply with `{prefix}job apply <id>` once you meet the level requirement.",
-            ))
-        else:
-            await ctx.send(view=_info_view(
-                "💼 Job Board",
-                "\n\n".join(lines) + f"\n\n-# Apply with `{prefix}job apply <id>` once you meet the level requirement.",
-            ))
+        await _reply(ctx, _info_view(
+            T(lang, "board_title"),
+            "\n\n".join(lines) + T(lang, "board_hint", prefix=prefix),
+        ))
 
-    @job.command(name="list", description="See all available jobs")
+    @job.command(name="list", description=CMDS.text("job.list.description"))
     async def job_list(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
         await self._job_list(ctx)
 
-    @job.command(name="info", description="Show details for a job")
+    @job.command(name="info", description=CMDS.text("job.info.description"))
     async def job_info(self, ctx: commands.Context, job_id: str):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         j = JOBS.get(job_id.lower())
         if not j:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
-        body = (
-            f"{j['emoji']} **{j['name']}**\n*{j['description']}*\n\n"
-            f"• Min level: **{j['min_level']}**\n"
-            f"• Pay range: **{j['min_pay']:,} – {j['max_pay']:,}** coins/shift\n"
-            f"• XP per shift: **+{j['xp_per_shift']}**\n"
-            f"• Cooldown: **{_fmt_remaining(j.get('cooldown', 3600))}**"
+            return await _reply(ctx, _info_view(
+                T(lang, "unknown_title"), T(lang, "unknown_body", job=job_id)))
+        body = T(
+            lang, "info_body",
+            emoji=j["emoji"], name=j["name"], desc=j["description"],
+            level=j["min_level"], pay=f"{j['min_pay']:,}", pay_max=f"{j['max_pay']:,}",
+            xp=j["xp_per_shift"], cooldown=_fmt_remaining(j.get("cooldown", 3600)),
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(f"💼 {j['name']}", body))
-        else:
-            await ctx.send(view=_info_view(f"💼 {j['name']}", body))
+        await _reply(ctx, _info_view(T(lang, "info_title", name=j["name"]), body))
 
-    @job.command(name="apply", description="Apply for a job (must meet the level requirement)")
+    @job.command(name="apply", description=CMDS.text("job.apply.description"))
     async def job_apply(self, ctx: commands.Context, job_id: str):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         jid = job_id.lower()
         j = JOBS.get(jid)
         if not j:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Unknown job", f"No job called `{job_id}`. Try `job list`."))
+            return await _reply(ctx, _info_view(
+                T(lang, "unknown_title"), T(lang, "unknown_body", job=job_id)))
 
         if data["level"] < j["min_level"]:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    f"{get_emoji('lock')} Not yet",
-                    f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    f"{get_emoji('lock')} Not yet",
-                    f"**{j['name']}** requires career level **{j['min_level']}**. You're level **{data['level']}**.",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "not_yet_title"),
+                T(lang, "not_yet_body",
+                  job=j["name"], level=j["min_level"], current=data["level"]),
+            ))
         data["job"] = jid
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(
-                f"{get_emoji('tick')} Hired!",
-                f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
-            ))
-        else:
-            await ctx.send(view=_info_view(
-                f"{get_emoji('tick')} Hired!",
-                f"You're now working as a **{j['name']}** {j['emoji']}\n-# Run `work` to clock in.",
-            ))
+        await _reply(ctx, _info_view(
+            T(lang, "hired_title"),
+            T(lang, "hired_body", job=j["name"], emoji=j["emoji"]),
+        ))
 
-    @job.command(name="quit", description=f"Quit your current job and go back to {get_job(DEFAULT_JOB)['name']}")
+    @job.command(name="quit", description=CMDS.text("job.quit.description").format(job=get_job(DEFAULT_JOB)["name"]))
     async def job_quit(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         if data.get("job") == DEFAULT_JOB:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", f"You're already a {get_job(DEFAULT_JOB)['name']}."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to quit", f"You're already a {get_job(DEFAULT_JOB)['name']}."))
+            return await _reply(ctx, _info_view(
+                T(lang, "nothing_quit_title"),
+                T(lang, "nothing_quit_body", job=get_job(DEFAULT_JOB)["name"]),
+            ))
         data["job"] = DEFAULT_JOB
         await self.save_user_economy_data(ctx.author.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("📤 Resigned", f"You're back to **{get_job(DEFAULT_JOB)['name']}** 💼."))
-        else:
-            await ctx.send(view=_info_view("📤 Resigned", f"You're back to **{get_job(DEFAULT_JOB)['name']}** 💼."))
+        await _reply(ctx, _info_view(
+            T(lang, "resigned_title"),
+            T(lang, "resigned_body", job=get_job(DEFAULT_JOB)["name"]),
+        ))

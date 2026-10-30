@@ -34,6 +34,17 @@ from utils.music.database import MusicDatabase
 __all__ = ["_build_np_view"]
 
 
+def _fill(template: str, **values) -> str:
+    """Replace ``{token}`` placeholders literally.
+
+    Track titles and artist names are whatever the music service returned, so
+    they may contain braces; ``str.format`` would raise on those.
+    """
+    for name, value in values.items():
+        template = template.replace("{" + name + "}", str(value))
+    return template
+
+
 async def _report_failure(interaction: discord.Interaction, exc: BaseException) -> None:
     """Tell the presser that the node rejected the action.
 
@@ -43,7 +54,7 @@ async def _report_failure(interaction: discord.Interaction, exc: BaseException) 
     log.warning("Music", f"Panel action failed: {exc}")
     try:
         await interaction.followup.send(
-            "The music server didn't respond — try again in a moment.", ephemeral=True
+            msg(interaction, "panel_action_failed"), ephemeral=True
         )
     except Exception:
         pass
@@ -54,14 +65,14 @@ async def _report_failure(interaction: discord.Interaction, exc: BaseException) 
 # ──────────────────────────────────────────────────
 
 class _PauseResumeBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int, paused: bool):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild, paused: bool):
         super().__init__(
-            label="Resume" if paused else "Pause",
+            label=msg(guild, "btn_resume" if paused else "btn_pause"),
             style=discord.ButtonStyle.success if paused else discord.ButtonStyle.secondary,
             emoji=get_emoji("play") if paused else get_emoji("pause"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -75,10 +86,12 @@ class _PauseResumeBtn(discord.ui.Button):
 
 
 class _SkipBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Skip", style=discord.ButtonStyle.primary, emoji=get_emoji('skip'))
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
+        super().__init__(
+            label=msg(guild, "btn_skip"),
+            style=discord.ButtonStyle.primary, emoji=get_emoji('skip'))
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -92,10 +105,12 @@ class _SkipBtn(discord.ui.Button):
 
 
 class _StopBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int):
-        super().__init__(label="Stop", style=discord.ButtonStyle.danger, emoji=get_emoji("stop"))
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
+        super().__init__(
+            label=msg(guild, "btn_stop"),
+            style=discord.ButtonStyle.danger, emoji=get_emoji("stop"))
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -114,15 +129,15 @@ class _StopBtn(discord.ui.Button):
 
 
 class _PrevBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int, enabled: bool):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild, enabled: bool):
         super().__init__(
-            label="Prev",
+            label=msg(guild, "btn_prev"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("rewind"),
             disabled=not enabled,
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -148,14 +163,14 @@ class _PrevBtn(discord.ui.Button):
 
 
 class _LoopBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int, loop: bool):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild, loop: bool):
         super().__init__(
-            label="Loop On" if loop else "Loop",
+            label=msg(guild, "btn_loop_on" if loop else "btn_loop"),
             style=discord.ButtonStyle.success if loop else discord.ButtonStyle.secondary,
             emoji=get_emoji("loop"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -165,22 +180,23 @@ class _LoopBtn(discord.ui.Button):
 
 
 class _AutoplayBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int, autoplay: bool, available: bool):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild,
+                 autoplay: bool, available: bool):
         if not available:
             super().__init__(
-                label="Autoplay",
+                label=msg(guild, "btn_autoplay"),
                 style=discord.ButtonStyle.secondary,
                 emoji=get_emoji("autoplay"),
                 disabled=True,
             )
         else:
             super().__init__(
-                label="Autoplay On" if autoplay else "Autoplay",
+                label=msg(guild, "btn_autoplay_on" if autoplay else "btn_autoplay"),
                 style=discord.ButtonStyle.success if autoplay else discord.ButtonStyle.secondary,
                 emoji=get_emoji("autoplay"),
             )
         self.cog       = cog
-        self.guild_id  = guild_id
+        self.guild_id  = guild.id
         self.available = available
 
     async def callback(self, interaction: discord.Interaction):
@@ -199,14 +215,14 @@ class _AutoplayBtn(discord.ui.Button):
 class _LikeBtn(discord.ui.Button):
     """Save / unsave the current track in the user's liked-songs library."""
 
-    def __init__(self, cog: "MusicSystem", guild_id: int):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
         super().__init__(
-            label="Like",
+            label=msg(guild, "btn_like"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("heart"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -223,7 +239,7 @@ class _LikeBtn(discord.ui.Button):
             log.warning("Music", f"Panel like failed for {interaction.user.id}: {exc}")
             await interaction.followup.send(msg(interaction, "music_db_error"), ephemeral=True)
             return
-        title = (track.title or "Unknown")
+        title = (track.title or msg(interaction, "np_unknown_track"))
         key = "like_on" if now_liked else "like_off"
         await interaction.followup.send(msg(interaction, key, title=title), ephemeral=True)
 
@@ -231,14 +247,14 @@ class _LikeBtn(discord.ui.Button):
 class _QueueBtn(discord.ui.Button):
     """Show the queue without typing the /queue command."""
 
-    def __init__(self, cog: "MusicSystem", guild_id: int):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
         super().__init__(
-            label="Queue",
+            label=msg(guild, "btn_queue"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("queue"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -249,7 +265,7 @@ class _QueueBtn(discord.ui.Button):
             await interaction.followup.send(msg(interaction, "queue_empty"), ephemeral=True)
             return
         lines = self.cog._format_queue_lines(
-            player, self.guild_id, msg(interaction, "queue_header")
+            player, self.guild_id, msg(interaction, "queue_header"), interaction
         )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -260,14 +276,14 @@ class _QueueBtn(discord.ui.Button):
 
 
 class _VolDownBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
         super().__init__(
-            label="Vol -",
+            label=msg(guild, "btn_vol_down"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("volume_down"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -282,14 +298,14 @@ class _VolDownBtn(discord.ui.Button):
 
 
 class _VolUpBtn(discord.ui.Button):
-    def __init__(self, cog: "MusicSystem", guild_id: int):
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
         super().__init__(
-            label="Vol +",
+            label=msg(guild, "btn_vol_up"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("volume_up"),
         )
         self.cog      = cog
-        self.guild_id = guild_id
+        self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -341,6 +357,7 @@ def _build_np_view(
     guild:    discord.Guild,
     cog:      "MusicSystem",
     is_playing: bool = True,
+    prefix:   str = ".",
 ) -> discord.ui.LayoutView:
     state    = cog._state(guild.id)
     track    = (
@@ -356,9 +373,11 @@ def _build_np_view(
         # Idle / stopped card
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('stop')} Nothing Playing"),
+            discord.ui.TextDisplay(
+                content=msg(guild, "np_idle_title", stop=get_emoji("stop"))),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=f"-# Use `.play <song>` to queue something up."),
+            discord.ui.TextDisplay(
+                content=msg(guild, "np_idle_hint", prefix=prefix)),
             accent_colour=discord.Colour(0x5865F2),
         ))
         return view
@@ -366,10 +385,13 @@ def _build_np_view(
     # Track meta
     source       = (track.source or "").lower()
     accent_color = _source_colour(track)
-    author_name  = track.author or "Unknown Artist"
+    author_name  = track.author or msg(guild, "np_unknown_artist")
     # Streams report length 0; a progress bar would render as permanently full.
     if not track.length:
-        duration = f"🔴 Live · {_fmt_dur(player.position or 0)} elapsed"
+        duration = msg(
+            guild, "np_live",
+            time=_fmt_dur(player.position or 0),
+        )
     else:
         duration = _progress_bar(player.position or 0, track.length)
     uri          = track.uri or ""
@@ -382,19 +404,27 @@ def _build_np_view(
     elif "spotify" in source:
         src_badge = f"{get_emoji('spotify')} Spotify"
     else:
-        src_badge = "🎵 Music"
+        src_badge = msg(guild, "np_source_music")
 
     status_icon = get_emoji("pause") if player.paused else get_emoji("play")
 
+    badges = []
+    if loop:
+        badges.append(msg(guild, "np_loop_badge", emoji=get_emoji("loop")))
+    if autoplay:
+        badges.append(msg(guild, "np_autoplay_badge", emoji=get_emoji("autoplay")))
+
+    meta = msg(guild, "np_meta", source=src_badge, vol=vol)
+    if badges:
+        meta = f"{meta} · " + " · ".join(badges)
+
     body = (
-        f"### {status_icon} Now Playing\n"
+        f"{msg(guild, 'np_heading', status=status_icon)}\n"
         f"**{track.title}**\n"
-        f"by {author_name}\n\n"
+        f"{msg(guild, 'np_byline', author=author_name)}\n\n"
         f"{duration}\n\n"
-        f"-# {src_badge} · Vol {vol}% · "
-        f"{get_emoji('loop') + ' Loop ' if loop else ''}"
-        f"{get_emoji('autoplay') + ' Autoplay ' if autoplay else ''}"
-    ).rstrip(" · \n")
+        f"{meta}"
+    )
 
     # Build container items
     items: list = [
@@ -413,19 +443,19 @@ def _build_np_view(
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         # Row 1 — transport + like
         discord.ui.ActionRow(
-            _PrevBtn(cog, guild.id, enabled=bool(history)),
-            _PauseResumeBtn(cog, guild.id, paused=player.paused),
-            _SkipBtn(cog, guild.id),
-            _StopBtn(cog, guild.id),
-            _LikeBtn(cog, guild.id),
+            _PrevBtn(cog, guild, enabled=bool(history)),
+            _PauseResumeBtn(cog, guild, paused=player.paused),
+            _SkipBtn(cog, guild),
+            _StopBtn(cog, guild),
+            _LikeBtn(cog, guild),
         ),
         # Row 2 — modes, queue peek, volume
         discord.ui.ActionRow(
-            _LoopBtn(cog, guild.id, loop=loop),
-            _AutoplayBtn(cog, guild.id, autoplay=autoplay, available=bool(cog._lastfm_key)),
-            _QueueBtn(cog, guild.id),
-            _VolDownBtn(cog, guild.id),
-            _VolUpBtn(cog, guild.id),
+            _LoopBtn(cog, guild, loop=loop),
+            _AutoplayBtn(cog, guild, autoplay=autoplay, available=bool(cog._lastfm_key)),
+            _QueueBtn(cog, guild),
+            _VolDownBtn(cog, guild),
+            _VolUpBtn(cog, guild),
         ),
     ]
 
@@ -434,6 +464,8 @@ def _build_np_view(
     view.add_item(discord.ui.Container(*items, accent_colour=accent_color))
     if uri:
         view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(label="Open Track", style=discord.ButtonStyle.link, url=uri)
+            discord.ui.Button(
+                label=msg(guild, "btn_open_track"),
+                style=discord.ButtonStyle.link, url=uri)
         ))
     return view

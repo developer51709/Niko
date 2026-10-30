@@ -14,6 +14,10 @@ from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji
 from config.ids import OWNER_IDS
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     """Return the primary prefix for this context, honouring a dynamic prefix."""
     return await resolve_prefix(bot, ctx_or_interaction)
@@ -49,7 +53,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Developer Help
     # -------------------------------
-    @commands.command(name="devhelp")
+    @commands.command(name="devhelp", help=CMDS.help("devhelp"))
     async def dev_help(self, ctx):
         prefix = await _resolve_prefix(self.bot, ctx)
 
@@ -82,25 +86,25 @@ class Development(commands.Cog):
     # -------------------------------
     # Diagnostics
     # -------------------------------
-    @commands.command(name="devping", help="Check the bot's response time.")
+    @commands.command(name="devping", help=CMDS.help("devping"))
     async def dev_ping(self, ctx):
         before = time.monotonic()
         msg = await ctx.send("Pinging…")
         ping = (time.monotonic() - before) * 1000
         await msg.edit(content=f"Pong! `{ping:.2f}ms`")
 
-    @commands.command(name="devlatency", help="View the bot's websocket latency.")
+    @commands.command(name="devlatency", help=CMDS.help("devlatency"))
     async def dev_latency(self, ctx):
         await ctx.send(f"Websocket latency: `{self.bot.latency * 1000:.2f}ms`")
 
-    @commands.command(name="devuptime", help="View how long the bot has been running.")
+    @commands.command(name="devuptime", help=CMDS.help("devuptime"))
     async def dev_uptime(self, ctx):
         delta = time.time() - self.start_time
         hours, remainder = divmod(delta, 3600)
         minutes, seconds = divmod(remainder, 60)
         await ctx.send(f"Uptime: `{int(hours)}h {int(minutes)}m {int(seconds)}s`")
 
-    @commands.command(name="devmem", help="View the bot process's memory usage.")
+    @commands.command(name="devmem", help=CMDS.help("devmem"))
     async def dev_memory(self, ctx):
         try:
             process = psutil.Process(os.getpid())
@@ -110,7 +114,7 @@ class Development(commands.Cog):
             mem_str = "N/A"
         await ctx.send(f"Memory usage: `{mem_str}`")
 
-    @commands.command(name="devtasks", help="View the active asyncio task count")
+    @commands.command(name="devtasks", help=CMDS.help("devtasks"))
     async def dev_tasks(self, ctx):
         tasks = asyncio.all_tasks()
         await ctx.send(f"Active asyncio tasks: `{len(tasks)}`")
@@ -118,7 +122,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Guild Inspection
     # -------------------------------
-    @commands.command(name="devguild", help="View information about a server.")
+    @commands.command(name="devguild", help=CMDS.help("devguild"))
     async def dev_guild(self, ctx, guild_id: int = None):
         if guild_id:
             g = self.bot.get_guild(guild_id)
@@ -139,7 +143,7 @@ class Development(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="devchannels", help="List the channels in the current server.")
+    @commands.command(name="devchannels", help=CMDS.help("devchannels"))
     async def dev_channels(self, ctx):
         lines = [
             f"`{c.id}` — **{c.name}** ({type(c).__name__})"
@@ -152,7 +156,7 @@ class Development(commands.Cog):
         )
         await ctx.send(view=view)
 
-    @commands.command(name="devroles", help="List the roles in the current server.")
+    @commands.command(name="devroles", help=CMDS.help("devroles"))
     async def dev_roles(self, ctx):
         lines = [
             f"`{r.id}` — **{r.name}**"
@@ -166,7 +170,7 @@ class Development(commands.Cog):
         )
         await ctx.send(view=view)
 
-    @commands.command(name="devmembers", help="List the members in the current server.")
+    @commands.command(name="devmembers", help=CMDS.help("devmembers"))
     async def dev_members(self, ctx):
         lines = [
             f"`{m.id}` — **{m.display_name}** ({m.name})"
@@ -183,7 +187,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Eval / Exec
     # -------------------------------
-    @commands.command(name="devexec", help="Execute Python code in the bot process.")
+    @commands.command(name="devexec", help=CMDS.help("devexec"))
     async def dev_exec(self, ctx, *, code: str):
         """Execute Python code."""
         code = textwrap.dedent(code.strip("` "))
@@ -217,7 +221,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Bot Control
     # -------------------------------
-    @commands.command(name="devsay", help="Send a message as the bot.")
+    @commands.command(name="devsay", help=CMDS.help("devsay"))
     async def dev_say(self, ctx, *, message: str):
         await ctx.message.delete()
         await ctx.send(message)
@@ -225,7 +229,7 @@ class Development(commands.Cog):
     # -------------------------------
     # Emoji Sync
     # -------------------------------
-    @commands.command(name="syncemojis", help="Sync bot emojis as application emojis and download assets")
+    @commands.command(name="syncemojis", help=CMDS.help("syncemojis"))
     async def sync_emojis(self, ctx):
         """Manually trigger the application emoji sync."""
         status_msg = await ctx.send(f"{get_emoji('loading')} Syncing application emojis…")
@@ -259,7 +263,7 @@ class Development(commands.Cog):
 
     @commands.command(
         name="replaceemojis",
-        help="Delete every application emoji and re-upload the local art (add --force to skip the prompt)",
+        help=CMDS.help("replaceemojis"),
     )
     async def replace_emojis(self, ctx, force: str = None):
         """Owner-only: rebuild the application emoji set from ``src/assets/emojis``.
@@ -379,7 +383,7 @@ class Development(commands.Cog):
             return False
         return True
 
-    @commands.command(name="appemojis", help="List all registered application emojis")
+    @commands.command(name="appemojis", help=CMDS.help("appemojis"))
     async def list_app_emojis(self, ctx):
         """Show all emojis registered to this application."""
         try:
@@ -398,7 +402,7 @@ class Development(commands.Cog):
         view = PaginatedView(title=f"{get_emoji('paint')} Application Emojis ({len(emojis)} total)", pages=pages)
         await ctx.send(view=view)
 
-    @commands.command(name="emojistatus", help="Show which config emojis are/aren't uploaded as application emojis")
+    @commands.command(name="emojistatus", help=CMDS.help("emojistatus"))
     async def emoji_status(self, ctx):
         """Compare config emojis vs registered application emojis."""
         try:

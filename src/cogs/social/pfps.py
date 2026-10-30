@@ -13,6 +13,24 @@ from utils.image.extractor import extract_images_from_message
 from utils import logging
 from utils.prefix_manager import resolve_prefix
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "pfps")
+msg = make_flat_msg(MESSAGES, {
+    "cross": get_emoji("cross"),
+    "tick": get_emoji("tick"),
+    "loading": get_emoji("loading"),
+    "image": get_emoji("image"),
+})
+
+
+def _plural(count: int) -> str:
+    """English plural suffix; other languages ignore the token."""
+    return "" if count == 1 else "s"
+
 PFPS_FOLDER = "src/assets/pfps"
 
 # Supported options, kept in one place so the selectors and the upload
@@ -128,15 +146,21 @@ class ColorSelect(discord.ui.Select):
         self.ctx = ctx
         options = []
         for color, count in get_color_list():
-            options.append(discord.SelectOption(label=color.capitalize(), value=color, description=f"{count} images"))
-        super().__init__(placeholder="Select a color", min_values=1, max_values=1, options=options)
+            options.append(discord.SelectOption(
+                label=color.capitalize(),
+                value=color,
+                description=msg(ctx, "images_count", count=count),
+            ))
+        super().__init__(
+            placeholder=msg(ctx, "select_color"), min_values=1, max_values=1, options=options
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -150,14 +174,14 @@ class ColorSelect(discord.ui.Select):
 class ColorSubmit(discord.ui.Button):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
-        super().__init__(label="Submit", style=discord.ButtonStyle.green)
+        super().__init__(label=msg(ctx, "submit"), style=discord.ButtonStyle.green)
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -168,7 +192,7 @@ class ColorSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You must select a color first!"
+                    content=msg(self.ctx, "select_color_first")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -180,7 +204,7 @@ class ColorSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('loading')} Finding a profile picture for the selected color..."
+                content=msg(self.ctx, "finding_color")
             )
         )
         view.add_item(container)
@@ -193,7 +217,7 @@ class ColorSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} An error occurred while finding the profile picture. Please try again later."
+                    content=msg(self.ctx, "error_color")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -203,7 +227,7 @@ class ColorSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Profile Picture"
+                content=msg(self.ctx, "title_pfp")
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -220,7 +244,7 @@ class ColorSelectView(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Profile Picture"
+                content=msg(self.ctx, "title_pfp")
             ),
             discord.ui.ActionRow(
                 ColorSelect(ctx)
@@ -243,20 +267,34 @@ def get_gender_image_counts():
         counts.append((gender, len(os.listdir(f"{gender_folder_path}/{gender}"))))
     return counts
 
+def _gender_options(ctx) -> list[discord.SelectOption]:
+    """The male/female choices of the couple picker, in the guild's language."""
+    return [
+        discord.SelectOption(label=msg(ctx, "gender_male"), value="male"),
+        discord.SelectOption(label=msg(ctx, "gender_female"), value="female"),
+    ]
+
+
 class GenderSelect(discord.ui.Select):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
         options = []
         for gender, count in get_gender_image_counts():
-            options.append(discord.SelectOption(label=gender.capitalize(), value=gender, description=f"{count:,} images"))
-        super().__init__(placeholder="Select a gender", min_values=1, max_values=1, options=options)
+            options.append(discord.SelectOption(
+                label=gender.capitalize(),
+                value=gender,
+                description=msg(ctx, "images_count", count=f"{count:,}"),
+            ))
+        super().__init__(
+            placeholder=msg(ctx, "select_gender"), min_values=1, max_values=1, options=options
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -269,14 +307,14 @@ class GenderSelect(discord.ui.Select):
 class GenderSubmit(discord.ui.Button):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
-        super().__init__(label="Submit", style=discord.ButtonStyle.green)
+        super().__init__(label=msg(ctx, "submit"), style=discord.ButtonStyle.green)
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -289,7 +327,7 @@ class GenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('loading')} Finding a profile picture for the selected gender..."
+                content=msg(self.ctx, "finding_gender")
             )
         )
         view.add_item(container)
@@ -300,7 +338,7 @@ class GenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Profile Picture"
+                content=msg(self.ctx, "title_pfp")
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -317,7 +355,7 @@ class GenderSelectView(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Profile Picture"
+                content=msg(self.ctx, "title_pfp")
             ),
             discord.ui.ActionRow(
                 GenderSelect(ctx)
@@ -335,18 +373,17 @@ class GenderSelectView(discord.ui.LayoutView):
 class CoupleGenderSelect(discord.ui.Select):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
-        options = [
-            discord.SelectOption(label="Male", value="male"),
-            discord.SelectOption(label="Female", value="female")
-        ]
-        super().__init__(placeholder="Select your gender", min_values=1, max_values=1, options=options)
+        options = _gender_options(ctx)
+        super().__init__(
+            placeholder=msg(ctx, "select_your_gender"), min_values=1, max_values=1, options=options
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -361,18 +398,17 @@ class CoupleGenderSelect(discord.ui.Select):
 class CoupleGenderSelect2(discord.ui.Select):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
-        options = [
-            discord.SelectOption(label="Male", value="male"),
-            discord.SelectOption(label="Female", value="female")
-        ]
-        super().__init__(placeholder="Select your partner's gender", min_values=1, max_values=1, options=options)
+        options = _gender_options(ctx)
+        super().__init__(
+            placeholder=msg(ctx, "select_partner_gender"), min_values=1, max_values=1, options=options
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -385,14 +421,14 @@ class CoupleGenderSelect2(discord.ui.Select):
 class CoupleGenderSubmit(discord.ui.Button):
     def __init__(self, ctx: commands.Context):
         self.ctx = ctx
-        super().__init__(label="Submit", style=discord.ButtonStyle.green)
+        super().__init__(label=msg(ctx, "submit"), style=discord.ButtonStyle.green)
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You are not the author of this command."
+                    content=msg(self.ctx, "not_author")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -406,7 +442,7 @@ class CoupleGenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('loading')} Finding matching profile pictures for the selected genders..."
+                content=msg(self.ctx, "finding_couple")
             )
         )
         view.add_item(container)
@@ -418,7 +454,7 @@ class CoupleGenderSubmit(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} We couldn't find any matching profile pictures for the selected genders."
+                    content=msg(self.ctx, "no_match")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -428,7 +464,7 @@ class CoupleGenderSubmit(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Couple Profile Pictures"
+                content=msg(self.ctx, "title_couple")
             ),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(
@@ -448,7 +484,7 @@ class CouplesGenderSelect(discord.ui.LayoutView):
         super().__init__()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Couple Profile Pictures"
+                content=msg(self.ctx, "title_couple")
             ),
             discord.ui.ActionRow(
                 CoupleGenderSelect(ctx),
@@ -471,7 +507,7 @@ class PfpCog(commands.Cog):
     @commands.group(
         name="pfp", 
         aliases=["profilepicture", "profilepic", "pf"],
-        help="{ 'en': 'Find new profile pictures.', 'de': 'Finde neue Profilbilder.' }",
+        help=CMDS.help("pfp"),
         invoke_without_command=True
     )
     async def pfp(self, ctx: commands.Context):
@@ -479,12 +515,9 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Profile Pictures\n"
-                f"Find new profile pictures.\n\n"
-                f"**Subcommands:**\n"
-                f"`{prefix}pfp color` - Find a profile picture with the specified color.\n"
-                f"`{prefix}pfp gender` - Find a profile picture with the specified gender.\n"
-                f"`{prefix}pfp couple` - Find matching profile pictures with the specified genders.\n"
+                content=msg(ctx, "help_title")
+                + "\n"
+                + msg(ctx, "help_body", prefix=prefix)
             )
         )
         view.add_item(container)
@@ -494,7 +527,7 @@ class PfpCog(commands.Cog):
     @pfp.command(
         name="color",
         aliases=["colour"],
-        help="{ 'en': 'Find a profile picture with the specified color.', 'de': 'Finde ein Profilbild mit der angegebenen Farbe.' }"
+        help=CMDS.help("pfp.color"),
     )
     async def color(self, ctx: commands.Context):
         # rewrittem to use the select menu - 04/21/2026
@@ -505,7 +538,7 @@ class PfpCog(commands.Cog):
     @pfp.command(
         name="gender",
         aliases=["sex"],
-        help="{ 'en': 'Find a profile picture with the specified gender.', 'de': 'Finde ein Profilbild mit dem angegebenen Geschlecht.' }"
+        help=CMDS.help("pfp.gender"),
     )
     async def gender(self, ctx: commands.Context):
         # rewritten to use the select menu - 04/21/2026
@@ -516,7 +549,7 @@ class PfpCog(commands.Cog):
     @pfp.command(
         name="couple",
         aliases=["couples", "pair", "pairs"],
-        help="{ 'en': 'Find matching profile pictures with the specified genders.', 'de': 'Finde passende Profilbilder mit den angegebenen Geschlechtern.' }"
+        help=CMDS.help("pfp.couple"),
     )
     async def couple(self, ctx: commands.Context):
          # send a message with the gender selection dropdowns
@@ -526,7 +559,7 @@ class PfpCog(commands.Cog):
     # owner only upload subgroup
     @pfp.group(
         name="upload",
-        help="{ 'en': 'Upload profile pictures.', 'de': 'Lade Profilbilder hoch.' }",
+        help=CMDS.help("pfp.upload"),
         invoke_without_command=True
     )
     @is_owner()
@@ -535,12 +568,9 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('image')} Upload Profile Picture\n"
-                f"Upload one or more profile pictures at once.\n\n"
-                f"**Subcommands:**\n"
-                f"`{prefix}pfp upload color <color>` - Upload one or more profile pictures with the specified color.\n"
-                f"`{prefix}pfp upload gender` - Upload one or more profile pictures with the specified gender.\n"
-                f"`{prefix}pfp upload couple` - Upload matching profile pictures with the specified genders.\n"
+                content=msg(ctx, "upload_title")
+                + "\n"
+                + msg(ctx, "upload_body", prefix=prefix)
             )
         )
         view.add_item(container)
@@ -550,7 +580,7 @@ class PfpCog(commands.Cog):
     @upload.command(
         name="color",
         aliases=["colour"],
-        help="{ 'en': 'Upload one or more profile pictures with the specified color.', 'de': 'Lade ein oder mehrere Profilbilder mit der angegebenen Farbe hoch.' }"
+        help=CMDS.help("pfp.upload.color"),
     )
     @is_owner()
     async def upload_color(self, ctx: commands.Context, color: str):
@@ -561,7 +591,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} No image found in the message."
+                    content=msg(ctx, "no_image")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -571,7 +601,9 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Uploaded {saved} profile picture{'s' if saved != 1 else ''} to the **{color.lower()}** collection."
+                content=msg(
+                    ctx, "uploaded", count=saved, s=_plural(saved), collection=color.lower()
+                )
             ),
             accent_colour=discord.Color.green()
         )
@@ -582,7 +614,7 @@ class PfpCog(commands.Cog):
     @upload.command(
         name="gender",
         aliases=["sex"],
-        help="{ 'en': 'Upload one or more profile pictures with the specified gender.', 'de': 'Lade ein oder mehrere Profilbilder mit dem angegebenen Geschlecht hoch.' }"
+        help=CMDS.help("pfp.upload.gender"),
     )
     @is_owner()
     async def upload_gender(self, ctx: commands.Context, gender: str):
@@ -591,7 +623,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
+                    content=msg(ctx, "unsupported_gender", genders=", ".join(supported_genders))
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -604,7 +636,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} No image found in the message."
+                    content=msg(ctx, "no_image")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -614,7 +646,9 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Uploaded {saved} profile picture{'s' if saved != 1 else ''} to the **{gender.lower()}** collection."
+                content=msg(
+                    ctx, "uploaded", count=saved, s=_plural(saved), collection=gender.lower()
+                )
             ),
             accent_colour=discord.Color.green()
         )
@@ -625,7 +659,7 @@ class PfpCog(commands.Cog):
     @upload.command(
         name="couple",
         aliases=["couples", "pair", "pairs"],
-        help="{ 'en': 'Upload matching profile pictures with the specified genders.', 'de': 'Lade passende Profilbilder mit den angegebenen Geschlechtern hoch.' }"
+        help=CMDS.help("pfp.upload.couple"),
     )
     @is_owner()
     async def upload_couple(self, ctx: commands.Context, gender1: str, gender2: str):
@@ -634,7 +668,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} The specified gender is not supported. Supported genders are: {', '.join(supported_genders)}"
+                    content=msg(ctx, "unsupported_gender", genders=", ".join(supported_genders))
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -646,7 +680,7 @@ class PfpCog(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} No images found in the message or the number of images is not 2."
+                    content=msg(ctx, "couple_images")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -670,7 +704,7 @@ class PfpCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} The profile pictures have been uploaded successfully."
+                content=msg(ctx, "couple_uploaded")
             ),
             accent_colour=discord.Color.green()
         )

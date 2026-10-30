@@ -5,7 +5,12 @@ import re
 import random
 from typing import Dict
 from utils import logging
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 
 _MAX_RECENT_MESSAGES = 2000
@@ -13,30 +18,9 @@ _MAX_RECENT_MESSAGES = 2000
 # -----------------------------
 # MESSAGE DICTIONARY
 # -----------------------------
-MESSAGES = {
-    "normal": {
-        "en": {
-            "uwu_locked": "Uwulocked {mention}.",
-            "uwu_unlocked": "Un‑uwulocked {mention}.",
-            "fetch_fail": "Couldn't process uwu message.",
-            "no_permission": "You need administrator permissions.",
-        },
-        "de": {
-            "uwu_locked": "{mention} wurde uwugelockt.",
-            "uwu_unlocked": "{mention} wurde ent‑uwugelockt.",
-            "fetch_fail": "Konnte die uwu‑Nachricht nicht verarbeiten.",
-            "no_permission": "Du benötigst Administratorrechte.",
-        },
-        "es": {
-            "uwu_locked": "{mention} ha sido uwu-bloqueado/a.",
-            "uwu_unlocked": "{mention} ha sido des-uwu-bloqueado/a.",
-            "fetch_fail": "No pude procesar el mensaje uwu.",
-            "no_permission": "Necesitas permisos de administrador.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.fun", "uwulock")
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 # -----------------------------
@@ -67,7 +51,7 @@ class UwULock(commands.Cog):
     # -----------------------------
     @commands.command(
         name="uwulock",
-        help="{ 'en': 'uwu‑lock a user so their messages become uwu‑ified', 'de': 'uwu‑lockt einen nutzer' }"
+        help=CMDS.help("uwulock"),
     )
     @commands.guild_only()
     @commands.bot_has_permissions(manage_webhooks=True, manage_messages=True)

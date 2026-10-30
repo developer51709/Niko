@@ -12,6 +12,10 @@ from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 from ._messages import cv2_text, msg
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 
 class SystemMixin:
     """Runtime and host diagnostics."""
@@ -21,8 +25,8 @@ class SystemMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="debuginfo",
-        description="View bot debug info",
-        help="{ 'en': 'view debug info 👾', 'de': 'debug-infos anzeigen', 'es': 'mira info de depuración 👾' }"
+        description=CMDS.text("debuginfo.description"),
+        help=CMDS.help("debuginfo"),
     )
     async def debuginfo(self, ctx):
         uptime_seconds = int(time.time() - self.bot.start_time)
@@ -55,8 +59,8 @@ class SystemMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="hostinfo",
-        description="View bot host info",
-        help="{ 'en': 'view host info 💻', 'de': 'host-infos anzeigen', 'es': 'mira info del host 💻' }"
+        description=CMDS.text("hostinfo.description"),
+        help=CMDS.help("hostinfo"),
     )
     async def hostinfo(self, ctx):
         hostname = platform.node()
@@ -81,8 +85,8 @@ class SystemMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="shards",
-        description="View information about the bot's shards",
-        help="{ 'en': 'view bot shard information', 'de': 'shard-informationen ansehen', 'es': 'ver información de shards' }"
+        description=CMDS.text("shards.description"),
+        help=CMDS.help("shards"),
     )
     async def shards_command(self, ctx):
         """Display current shard information."""

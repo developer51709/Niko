@@ -36,7 +36,12 @@ from utils.music import (
     msg,
 )
 from utils.music.database import MusicDatabase
-from cogs.music.views import _build_np_view
+from cogs.music.views import _build_np_view, _fill
+from utils.prefix_manager import resolve_prefix
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 
 # ─── Retry helper for transient Lavalink failures ───────────────────────────
@@ -532,6 +537,7 @@ class MusicSystem(commands.Cog):
             guild,
             self,
             is_playing=bool(player.playing or player.paused or state_track),
+            prefix=await resolve_prefix(self.bot, guild),
         )
         try:
             await message.edit(view=view)
@@ -548,7 +554,8 @@ class MusicSystem(commands.Cog):
         state["current_track"] = player.current or state.get("current_track")
         old_msg: discord.Message | None = state.get("np_message")
 
-        view = _build_np_view(player, ctx.guild, self)
+        view = _build_np_view(
+            player, ctx.guild, self, prefix=await resolve_prefix(self.bot, ctx))
         new_msg = await ctx.send(view=view)
         state["np_message"] = new_msg
 
@@ -1212,10 +1219,10 @@ class MusicSystem(commands.Cog):
 
     @commands.hybrid_command(
         name="play", aliases=["p"],
-        description="Play a song or add it to the queue",
-        help="{ 'en': 'play a song or queue it up 🎶', 'de': 'spiele einen track ab', 'es': 'reproduce una canción o agrégala a la cola 🎶' }"
+        description=CMDS.text("play.description"),
+        help=CMDS.help("play"),
     )
-    @app_commands.describe(search="Song name, YouTube/SoundCloud/Spotify URL, or sc:<query>")
+    @app_commands.describe(search=CMDS.arg("play", "search"))
     async def play(self, ctx: commands.Context, *, search: str):
         # Slash invocations are acknowledged by cog_before_invoke; resolution
         # can take much longer than Discord's three-second window.
@@ -1377,7 +1384,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="pause",
-        help="{ 'en': 'pause the current track 🌿', 'de': 'pausiert den aktuellen track' }"
+        help=CMDS.help("pause"),
     )
     async def pause(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1391,7 +1398,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="resume",
-        help="{ 'en': 'resume the paused track 🎶', 'de': 'setzt den pausierten track fort' }"
+        help=CMDS.help("resume"),
     )
     async def resume(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1403,7 +1410,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="skip", aliases=["sk"],
-        help="{ 'en': 'skip to the next track', 'de': 'springt zum nächsten track' }"
+        help=CMDS.help("skip"),
     )
     async def skip(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1414,7 +1421,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="stop",
-        help="{ 'en': 'stop and clear the queue', 'de': 'stoppt die wiedergabe' }"
+        help=CMDS.help("stop"),
     )
     async def stop(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1431,7 +1438,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="loop", aliases=["repeat"],
-        help="{ 'en': 'toggle loop for the current track 🔁', 'de': 'wiederholt den aktuellen track' }"
+        help=CMDS.help("loop"),
     )
     async def loop(self, ctx: commands.Context):
         state = self._state(ctx.guild.id)
@@ -1442,7 +1449,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="autoplay", aliases=["ap"],
-        help="{ 'en': 'toggle Last.fm autoplay 📻', 'de': 'schaltet Last.fm-Autoplay um' }"
+        help=CMDS.help("autoplay"),
     )
     async def autoplay(self, ctx: commands.Context):
         if not self._lastfm_key:
@@ -1461,35 +1468,48 @@ class MusicSystem(commands.Cog):
         self,
         player: wavelink.Player,
         guild_id: int,
-        header: str = "**Current Queue:**",
+        header: str = "",
+        ctx=None,
     ) -> list[str]:
         """Shared queue display — used by the /queue command and the Queue
         button on the now-playing panel."""
         state = self._state(guild_id)
         ghost = list(state["ghost_queue"])
-        lines = [header]
+        lines = [header or msg(ctx, "queue_header")]
+        unknown = msg(ctx, "queue_unknown")
         for i, track in enumerate(player.queue, start=1):
-            dur = _fmt_dur(track.length) if track.length else "?"
-            lines.append(f"{i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
+            lines.append(_fill(
+                msg(ctx, "queue_track"),
+                i=i,
+                title=track.title,
+                author=track.author or unknown,
+                dur=_fmt_dur(track.length) if track.length else "?",
+            ))
             if i >= MAX_QUEUE_SHOW:
                 remaining = len(player.queue) - MAX_QUEUE_SHOW
                 if remaining > 0:
-                    lines.append(f"\n*…and {remaining} more track{'s' if remaining > 1 else ''}*")
+                    key = "queue_more_one" if remaining == 1 else "queue_more_other"
+                    lines.append(_fill(msg(ctx, key), count=remaining))
                 break
 
         # Show the autoplay suggestions separately — they are NOT part of the
         # manual queue and only play when it runs dry.
         if ghost:
             lines.append("")
-            lines.append("-# 📻 **Autoplay suggestions** (play when the queue runs dry):")
+            lines.append(msg(ctx, "queue_ghost_header"))
             for i, track in enumerate(ghost[:3], start=1):
-                dur = _fmt_dur(track.length) if track.length else "?"
-                lines.append(f"   📻 {i}. **{track.title}** — {track.author or 'Unknown'} `[{dur}]`")
+                lines.append(_fill(
+                    msg(ctx, "queue_ghost_track"),
+                    i=i,
+                    title=track.title,
+                    author=track.author or unknown,
+                    dur=_fmt_dur(track.length) if track.length else "?",
+                ))
         return lines
 
     @commands.command(
         name="queue", aliases=["q"],
-        help="{ 'en': 'show the current queue 📜', 'de': 'zeigt die warteschlange' }"
+        help=CMDS.help("queue"),
     )
     async def queue(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1498,7 +1518,8 @@ class MusicSystem(commands.Cog):
         if not player or (player.queue.is_empty and not ghost):
             return await ctx.send(msg(ctx, "queue_empty"))
 
-        lines = self._format_queue_lines(player, ctx.guild.id, msg(ctx, "queue_header"))
+        lines = self._format_queue_lines(
+            player, ctx.guild.id, msg(ctx, "queue_header"), ctx)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content="\n".join(lines)),
@@ -1510,7 +1531,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="like",
-        help="{ 'en': 'like the current track ♥', 'de': 'liked den aktuellen track' }"
+        help=CMDS.help("like"),
     )
     async def like(self, ctx: commands.Context):
         """Like (or unlike) the currently playing track. Saved in the music
@@ -1527,11 +1548,11 @@ class MusicSystem(commands.Cog):
             log.error("Music", f"Like failed for {ctx.author.id}: {exc}")
             return await ctx.send(msg(ctx, "music_db_error"))
         key = "like_on" if now_liked else "like_off"
-        await ctx.send(msg(ctx, key, title=track.title or "Unknown"))
+        await ctx.send(msg(ctx, key, title=track.title or msg(ctx, "np_unknown_track")))
 
     @commands.command(
         name="liked", aliases=["likes"],
-        help="{ 'en': 'show your liked songs ♥', 'de': 'zeigt deine gelikten songs' }"
+        help=CMDS.help("liked"),
     )
     async def liked(self, ctx: commands.Context):
         """List your liked songs (newest first). Use `.unlike <number>` to
@@ -1567,7 +1588,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="unlike",
-        help="{ 'en': 'remove a liked song (use number from .liked)', 'de': 'entfernt einen gelikten song' }"
+        help=CMDS.help("unlike"),
     )
     async def unlike(self, ctx: commands.Context, index: str = None):
         """Remove a liked song by its `.liked` number, or pass `all` to clear."""
@@ -1598,7 +1619,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="nowplaying", aliases=["np"],
-        help="{ 'en': 'see what is playing right now 🎵', 'de': 'zeigt den aktuellen track' }"
+        help=CMDS.help("nowplaying"),
     )
     async def nowplaying(self, ctx: commands.Context):
         player = _wavelink_player(ctx.voice_client)
@@ -1608,7 +1629,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="volume", aliases=["vol"],
-        help="{ 'en': 'set the playback volume ✨', 'de': 'passt die lautstärke an' }"
+        help=CMDS.help("volume"),
     )
     async def volume(self, ctx: commands.Context, vol: int):
         player = _wavelink_player(ctx.voice_client)
@@ -1621,7 +1642,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="disconnect", aliases=["dc", "leave"],
-        help="{ 'en': 'have niko leave the voice channel', 'de': 'trennt niko vom sprachkanal' }"
+        help=CMDS.help("disconnect"),
     )
     async def disconnect(self, ctx: commands.Context):
         player = ctx.voice_client
@@ -1638,7 +1659,7 @@ class MusicSystem(commands.Cog):
 
     @commands.command(
         name="musicstatus",
-        help="{ 'en': 'check if niko is connected to a music server', 'de': 'prüfe ob niko verbunden ist' }"
+        help=CMDS.help("musicstatus"),
     )
     async def music_status(self, ctx: commands.Context):
         sp_line = ""

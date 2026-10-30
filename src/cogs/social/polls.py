@@ -29,8 +29,13 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from utils.blacklist_manager import BlacklistManager
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
 from utils.guild_lockdown import paused_message as polls_paused
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 NUMBER_EMOJIS = [
     f"{get_emoji('number_zero')}", f"{get_emoji('number_one')}", f"{get_emoji('number_two')}",
@@ -38,69 +43,12 @@ NUMBER_EMOJIS = [
     f"{get_emoji('number_six')}", f"{get_emoji('number_seven')}", f"{get_emoji('number_eight')}", f"{get_emoji('number_nine')}",
 ]
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "need_options":  "❌ Provide at least 2 options — use **Add Option** in the builder, or run `poll create` to open the panel.",
-            "too_many":      "❌ Maximum of 10 options.",
-            "title":         "### {icon} {question}",
-            "vote_count":    "**{letter}** {opt} — `{count}` votes ({pct}%)",
-            "footer_open":   "-# Click a button to vote · poll by {author}",
-            "footer_closed": "-# Poll ended · created by {author}",
-            "vote_added":    "✅ Voted for **{opt}**.",
-            "vote_removed":  "✅ Vote removed.",
-            "ended":         "✅ Poll ended.",
-            "not_found":     "⚠️ No poll with that message ID found.",
-            "not_owner":     "❌ Only the poll creator or an admin can do that.",
-            "results_title": "### {icon} Final Results",
-            "only_host":     "❌ Only the poll creator can use this panel.",
-            "need_question": "❌ Set a question first.",
-            "sent":          "✅ Poll sent!",
-            "cancelled":     "🗑 Poll setup cancelled.",
-            "timed_out":     "⌛ Poll setup timed out.",
-        },
-        "de": {
-            "need_options":  "❌ Mindestens 2 Optionen — nutze **Option hinzufügen** im Panel.",
-            "too_many":      "❌ Maximal 10 Optionen.",
-            "title":         "### {icon} {question}",
-            "vote_count":    "**{letter}** {opt} — `{count}` Stimmen ({pct}%)",
-            "footer_open":   "-# Drücke einen Button zum Abstimmen · Umfrage von {author}",
-            "footer_closed": "-# Umfrage beendet · erstellt von {author}",
-            "vote_added":    "✅ Für **{opt}** gestimmt.",
-            "vote_removed":  "✅ Stimme entfernt.",
-            "ended":         "✅ Umfrage beendet.",
-            "not_found":     "⚠️ Keine Umfrage mit dieser Nachrichten-ID gefunden.",
-            "not_owner":     "❌ Nur der Ersteller oder ein Admin kann das.",
-            "results_title": "### {icon} Endergebnisse",
-            "only_host":     "❌ Nur der Ersteller kann dieses Panel bedienen.",
-            "need_question": "❌ Bitte zuerst eine Frage festlegen.",
-            "sent":          "✅ Umfrage gesendet!",
-            "cancelled":     "🗑 Umfrage-Setup abgebrochen.",
-            "timed_out":     "⌛ Umfrage-Setup abgelaufen.",
-        },
-        "es": {
-            "need_options":  "❌ Al menos 2 opciones — usa **Añadir opción** en el panel.",
-            "too_many":      "❌ Máximo 10 opciones.",
-            "title":         "### {icon} {question}",
-            "vote_count":    "**{letter}** {opt} — `{count}` votos ({pct}%)",
-            "footer_open":   "-# Pulsa un botón para votar · encuesta de {author}",
-            "footer_closed": "-# Encuesta finalizada · creada por {author}",
-            "vote_added":    "✅ Votaste por **{opt}**.",
-            "vote_removed":  "✅ Voto eliminado.",
-            "ended":         "✅ Encuesta finalizada.",
-            "not_found":     "⚠️ No se encontró una encuesta con ese ID de mensaje.",
-            "not_owner":     "❌ Solo el creador o un admin puede hacer esto.",
-            "results_title": "### {icon} Resultados finales",
-            "only_host":     "❌ Solo el creador puede usar este panel.",
-            "need_question": "❌ Primero establece una pregunta.",
-            "sent":          "✅ ¡Encuesta enviada!",
-            "cancelled":     "🗑 Configuración cancelada.",
-            "timed_out":     "⌛ Se agotó el tiempo de configuración.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.social", "polls")
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES, {
+    "lightbulb": get_emoji("lightbulb"),
+    "plus": get_emoji("plus"),
+})
 
 
 # ───────────────────────────────────────────────────
@@ -296,41 +244,57 @@ class _PollSetupState:
         self.channel_id: int = channel_id
 
 
-class _QuestionModal(discord.ui.Modal, title="Set Question"):
-    question = discord.ui.TextInput(label="Poll question", placeholder="e.g. Best drink?", max_length=200, required=True, style=discord.TextStyle.short)
+class _QuestionModal(discord.ui.Modal):
     def __init__(self, parent: "PollSetupView"):
-        super().__init__()
+        guild = parent.guild
+        super().__init__(title=msg(guild, "question_modal_title"))
         self._view = parent
+        self.question = discord.ui.TextInput(
+            label=msg(guild, "question_label"),
+            placeholder=msg(guild, "question_placeholder"),
+            max_length=200, required=True, style=discord.TextStyle.short)
         if parent.state.question:
             self.question.default = parent.state.question
+        self.add_item(self.question)
     async def on_submit(self, interaction: discord.Interaction):
         self._view.state.question = self.question.value.strip()[:200]
         await self._view.refresh(interaction)
 
 
-class _AddOptionModal(discord.ui.Modal, title="Add Option"):
-    option = discord.ui.TextInput(label="Option", placeholder="e.g. Coffee", max_length=80, required=True, style=discord.TextStyle.short)
+class _AddOptionModal(discord.ui.Modal):
     def __init__(self, parent: "PollSetupView"):
-        super().__init__()
+        guild = parent.guild
+        super().__init__(title=msg(guild, "option_add_title"))
         self._view = parent
+        self.option_input = discord.ui.TextInput(
+            label=msg(guild, "option_label"),
+            placeholder=msg(guild, "option_placeholder"),
+            max_length=80, required=True, style=discord.TextStyle.short)
+        self.add_item(self.option_input)
     async def on_submit(self, interaction: discord.Interaction):
         if len(self._view.state.options) >= 10:
             return await interaction.response.send_message(msg(interaction, "too_many"), ephemeral=True)
-        self._view.state.options.append(self.option.value.strip()[:80])
+        self._view.state.options.append(self.option_input.value.strip()[:80])
         await self._view.refresh(interaction)
 
 
-class _EditOptionModal(discord.ui.Modal, title="Edit Option"):
-    option = discord.ui.TextInput(label="Option", max_length=80, required=True, style=discord.TextStyle.short)
+class _EditOptionModal(discord.ui.Modal):
     def __init__(self, parent: "PollSetupView", idx: int):
-        super().__init__()
+        guild = parent.guild
+        super().__init__(title=msg(guild, "option_edit_title"))
         self._view = parent
         self._idx = idx
-        self.option.default = parent.state.options[idx] if 0 <= idx < len(parent.state.options) else ""
+        self.option_input = discord.ui.TextInput(
+            label=msg(guild, "option_label"),
+            max_length=80, required=True, style=discord.TextStyle.short)
+        self.option_input.default = (
+            parent.state.options[idx] if 0 <= idx < len(parent.state.options) else "")
+        self.add_item(self.option_input)
     async def on_submit(self, interaction: discord.Interaction):
         if not (0 <= self._idx < len(self._view.state.options)):
-            return await interaction.response.send_message("That option no longer exists.", ephemeral=True)
-        self._view.state.options[self._idx] = self.option.value.strip()[:80]
+            return await interaction.response.send_message(
+                msg(interaction, "option_gone"), ephemeral=True)
+        self._view.state.options[self._idx] = self.option_input.value.strip()[:80]
         await self._view.refresh(interaction)
 
 
@@ -376,7 +340,10 @@ class _BuilderBtn(discord.ui.Button):
 
 class _BuilderChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, parent: "PollSetupView"):
-        super().__init__(placeholder="Pick channel to post the poll in…", channel_types=[discord.ChannelType.text, discord.ChannelType.news], min_values=1, max_values=1)
+        super().__init__(
+            placeholder=msg(parent.guild, "channel_pick_placeholder"),
+            channel_types=[discord.ChannelType.text, discord.ChannelType.news],
+            min_values=1, max_values=1)
         self._view_ref = parent
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._view_ref.host_id:
@@ -405,13 +372,21 @@ class PollSetupView(discord.ui.LayoutView):
         self.clear_items()
         s = self.state
         guild = self.guild
-        q_disp = s.question if s.question else "_not set_"
+        q_disp = s.question if s.question else msg(guild, "builder_not_set")
         ch_disp = f"<#{s.channel_id}>" if s.channel_id else "—"
         # header
         header = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('lightbulb')} Poll Builder"),
+            discord.ui.TextDisplay(content=msg(guild, "builder_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=f"**Question:** {q_disp}\n**Channel:** {ch_disp}\n**Options:** {len(s.options)}/10"),
+            discord.ui.TextDisplay(
+                content=msg(
+                    guild,
+                    "builder_summary",
+                    question=q_disp,
+                    channel=ch_disp,
+                    count=len(s.options),
+                )
+            ),
             accent_colour=discord.Color.blurple(),
         )
         self.add_item(header)
@@ -420,17 +395,19 @@ class PollSetupView(discord.ui.LayoutView):
         if s.options:
             for idx, opt in enumerate(s.options):
                 container = discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"**{idx+1}.** {opt}"),
+                    discord.ui.TextDisplay(
+                        content=msg(guild, "builder_option", index=idx + 1, option=opt)
+                    ),
                     discord.ui.ActionRow(
-                        _BuilderBtn("Edit", discord.ButtonStyle.secondary, f"{get_emoji('edit')}", self, "edit", idx),
-                        _BuilderBtn("Delete", discord.ButtonStyle.danger, f"{get_emoji('trash')}", self, "delete", idx),
+                        _BuilderBtn(msg(guild, "builder_edit"), discord.ButtonStyle.secondary, f"{get_emoji('edit')}", self, "edit", idx),
+                        _BuilderBtn(msg(guild, "builder_delete"), discord.ButtonStyle.danger, f"{get_emoji('trash')}", self, "delete", idx),
                     ),
                     accent_colour=discord.Color.greyple(),
                 )
                 self.add_item(container)
         else:
             self.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"-# No options yet — press {get_emoji('plus')} **Add Option** to create one."),
+                discord.ui.TextDisplay(content=msg(guild, "builder_no_options")),
                 accent_colour=discord.Color.greyple(),
             ))
 
@@ -440,13 +417,13 @@ class PollSetupView(discord.ui.LayoutView):
 
         controls = discord.ui.Container(
             discord.ui.ActionRow(
-                _BuilderBtn("Set Question", discord.ButtonStyle.primary, f"{get_emoji('edit')}", self, "question"),
-                _BuilderBtn("Add Option", discord.ButtonStyle.primary, f"{get_emoji('plus')}", self, "add_option"),
+                _BuilderBtn(msg(guild, "builder_set_question"), discord.ButtonStyle.primary, f"{get_emoji('edit')}", self, "question"),
+                _BuilderBtn(msg(guild, "builder_add_option"), discord.ButtonStyle.primary, f"{get_emoji('plus')}", self, "add_option"),
             ),
             discord.ui.ActionRow(_BuilderChannelSelect(self)),
             discord.ui.ActionRow(
-                _BuilderBtn("Send Poll", send_style, f"{get_emoji('tick')}", self, "send"),
-                _BuilderBtn("Cancel", discord.ButtonStyle.danger, f"{get_emoji('cross')}", self, "cancel"),
+                _BuilderBtn(msg(guild, "builder_send"), send_style, f"{get_emoji('tick')}", self, "send"),
+                _BuilderBtn(msg(guild, "builder_cancel"), discord.ButtonStyle.danger, f"{get_emoji('cross')}", self, "cancel"),
             ),
             accent_colour=discord.Color.blurple(),
         )
@@ -455,11 +432,11 @@ class PollSetupView(discord.ui.LayoutView):
         if not ready:
             hints = []
             if not s.question:
-                hints.append("• Set a question")
+                hints.append(msg(guild, "hint_question"))
             if len(s.options) < 2:
-                hints.append(f"• Add at least {2 - len(s.options)} more option(s)")
+                hints.append(msg(guild, "hint_more_options", count=2 - len(s.options)))
             if not s.channel_id:
-                hints.append("• Pick a channel")
+                hints.append(msg(guild, "hint_channel"))
             self.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(content="-# " + " · ".join(hints)),
                 accent_colour=discord.Color.greyple(),
@@ -655,8 +632,8 @@ class Polls(commands.Cog):
 
     @commands.hybrid_group(
         name="poll",
-        description="Multi-option polls.",
-        help="{ 'en': 'Multi-option polls with live vote buttons.', 'de': 'Mehrfach-Umfragen mit Live-Buttons.', 'es': 'Encuestas multi-opción con botones de voto.' }",
+        description=CMDS.text("poll.description"),
+        help=CMDS.help("poll"),
         invoke_without_command=True,
     )
     @commands.guild_only()
@@ -668,8 +645,8 @@ class Polls(commands.Cog):
 
     @poll.command(
         name="create",
-        description="Open the interactive poll builder.",
-        help="{ 'en': 'Open the interactive poll builder.', 'de': 'Interaktiven Umfrage-Builder öffnen.', 'es': 'Abre el creador interactivo de encuestas.' }",
+        description=CMDS.text("poll.create.description"),
+        help=CMDS.help("poll.create"),
     )
     @commands.guild_only()
     async def poll_create(self, ctx: commands.Context):
@@ -681,8 +658,8 @@ class Polls(commands.Cog):
 
     @poll.command(
         name="end",
-        description="End a poll early.",
-        help="{ 'en': 'End a poll early (creator or admin).', 'de': 'Eine Umfrage vorzeitig beenden (Ersteller/Admin).', 'es': 'Finaliza una encuesta antes de tiempo (creador/admin).' }",
+        description=CMDS.text("poll.end.description"),
+        help=CMDS.help("poll.end"),
     )
     async def poll_end(self, ctx: commands.Context, message_id: str):
         try:
@@ -710,8 +687,8 @@ class Polls(commands.Cog):
 
     @poll.command(
         name="results",
-        description="Show poll results.",
-        help="{ 'en': 'Show poll results.', 'de': 'Ergebnisse einer Umfrage anzeigen.', 'es': 'Muestra los resultados de una encuesta.' }",
+        description=CMDS.text("poll.results.description"),
+        help=CMDS.help("poll.results"),
     )
     async def poll_results(self, ctx: commands.Context, message_id: str):
         try:

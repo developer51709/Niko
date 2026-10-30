@@ -18,6 +18,10 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 
 def _container(text: str, *, colour: discord.Colour | None = None) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
@@ -33,12 +37,12 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
 
     soundboard = app_commands.Group(
         name="soundboard",
-        description="Play guild soundboard sounds in your voice channel.",
+        description=CMDS.text("soundboard.description"),
     )
 
     # ── /soundboard list ──────────────────────────────────────────────────
 
-    @soundboard.command(name="list", description="List guild and default soundboard sounds.")
+    @soundboard.command(name="list", description=CMDS.text("soundboard.list.description"))
     @app_commands.guild_only()
     async def soundboard_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -87,8 +91,8 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
 
     # ── /soundboard play ──────────────────────────────────────────────────
 
-    @soundboard.command(name="play", description="Play a soundboard sound in your voice channel.")
-    @app_commands.describe(name="Name of the sound to play")
+    @soundboard.command(name="play", description=CMDS.text("soundboard.play.description"))
+    @app_commands.describe(name=CMDS.arg("soundboard.play", "name"))
     @app_commands.guild_only()
     async def soundboard_play(self, interaction: discord.Interaction, name: str) -> None:
         if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
@@ -185,7 +189,7 @@ class SoundboardCog(commands.Cog, name="Soundboard"):
 
     # ── /soundboard default ───────────────────────────────────────────────
 
-    @soundboard.command(name="default", description="List all Discord default soundboard sounds.")
+    @soundboard.command(name="default", description=CMDS.text("soundboard.default.description"))
     async def soundboard_default(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         try:

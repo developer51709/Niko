@@ -1,9 +1,14 @@
 import discord
 
 from utils.translator import Translator, SUPPORTED_LANGUAGES
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 
 from discord.ext import commands
 from discord import app_commands
+
+MESSAGES = load_locales(__package__, "misc")
+msg = make_flat_msg(MESSAGES)
 
 
 # Languages offered in the select menus (codes must exist in
@@ -33,13 +38,14 @@ class TranslateSelectView(discord.ui.LayoutView):
     by ``(user_id, message_id)`` and consumed by the translate-to pick.
     """
 
-    def __init__(self, cog: "ContextMenu", message_id: int, src: str = "auto") -> None:
+    def __init__(self, cog: "ContextMenu", message_id: int, src: str = "auto", locale=None) -> None:
         self.cog = cog
         self.message_id = message_id
+        self.locale = locale
 
         to_select = discord.ui.Select(
             custom_id=f"translate_to:{message_id}",
-            placeholder="🌐 Translate to…",
+            placeholder=msg(locale, "translate_to_placeholder"),
             min_values=1,
             max_values=1,
             options=[
@@ -51,11 +57,13 @@ class TranslateSelectView(discord.ui.LayoutView):
 
         from_select = discord.ui.Select(
             custom_id=f"translate_from:{message_id}",
-            placeholder="🔎 Translate from… (optional — auto-detect)",
+            placeholder=msg(locale, "translate_from_placeholder"),
             min_values=1,
             max_values=1,
             options=[
-                discord.SelectOption(label="Auto-detect", value="auto", default=src == "auto"),
+                discord.SelectOption(
+                    label=msg(locale, "translate_auto"), value="auto", default=src == "auto"
+                ),
                 *[
                     discord.SelectOption(label=name, value=code, default=code == src)
                     for code, name in LANGUAGE_CHOICES
@@ -65,7 +73,7 @@ class TranslateSelectView(discord.ui.LayoutView):
         from_select.callback = self.on_from_select
 
         items: list = [
-            discord.ui.TextDisplay(content="### 🌐 Translate Message"),
+            discord.ui.TextDisplay(content=msg(locale, "translate_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(to_select),
             discord.ui.ActionRow(from_select),
@@ -74,9 +82,10 @@ class TranslateSelectView(discord.ui.LayoutView):
             items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             items.append(
                 discord.ui.TextDisplay(
-                    content=(
-                        f"-# Source: **{_NAME_BY_CODE.get(src, src)}** — "
-                        "now pick the language to translate to."
+                    content=msg(
+                        locale,
+                        "translate_source",
+                        language=_NAME_BY_CODE.get(src, src),
                     )
                 )
             )
@@ -114,7 +123,9 @@ class ContextMenu(commands.Cog):
 
     async def translate_message(self, interaction: discord.Interaction, message: discord.Message) -> None:
         if not message.content.strip():
-            await interaction.response.send_message("The message is empty.", ephemeral=True)
+            await interaction.response.send_message(
+                msg(interaction, "translate_empty"), ephemeral=True
+            )
             return
 
         # Cap the pending map so abandoned pickers cannot grow it unbounded.
@@ -126,7 +137,7 @@ class ContextMenu(commands.Cog):
             "content": message.content,
             "src": "auto",
         }
-        view = TranslateSelectView(self, message.id)
+        view = TranslateSelectView(self, message.id, locale=interaction)
         await interaction.response.send_message(view=view, ephemeral=True)
 
     # ── select handling ───────────────────────────────────────────────────
@@ -145,7 +156,7 @@ class ContextMenu(commands.Cog):
 
         # Re-render through the same view class so every select keeps its
         # bound callback, and the chosen source shows as selected.
-        view = TranslateSelectView(self, message_id, src=src)
+        view = TranslateSelectView(self, message_id, src=src, locale=interaction)
         await interaction.response.edit_message(view=view)
 
     async def handle_to_select(self, interaction: discord.Interaction, message_id: int) -> None:
@@ -161,7 +172,7 @@ class ContextMenu(commands.Cog):
         if not content or not content.strip():
             self._pending.pop((interaction.user.id, message_id), None)
             await interaction.response.send_message(
-                "That translate request has expired — run Translate again.", ephemeral=True
+                msg(interaction, "translate_expired"), ephemeral=True
             )
             return
 
@@ -177,15 +188,24 @@ class ContextMenu(commands.Cog):
             container = discord.ui.Container(
                 discord.ui.TextDisplay(content=f"### {source_flag} -> {dest_flag}"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content=f"**Original:**\n{content.strip()}"),
+                discord.ui.TextDisplay(
+                    content=msg(interaction, "translate_original", text=content.strip())
+                ),
                 discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content=f"**Translation:**\n{translation}"),
+                discord.ui.TextDisplay(
+                    content=msg(interaction, "translate_result", text=translation)
+                ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=(
-                        "-# Translated using Google Translate"
-                        + ("" if src == "auto" else f" from {_NAME_BY_CODE.get(src, src)}")
-                        + f" to {dest_name}."
+                        msg(interaction, "translate_credit")
+                        if src == "auto"
+                        else msg(
+                            interaction,
+                            "translate_credit_from",
+                            source=_NAME_BY_CODE.get(src, src),
+                            target=dest_name,
+                        )
                     )
                 ),
             )
@@ -193,7 +213,7 @@ class ContextMenu(commands.Cog):
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
             await interaction.followup.send(
-                "Translation failed — try a different language.", ephemeral=True
+                msg(interaction, "translate_failed"), ephemeral=True
             )
             return
 

@@ -5,6 +5,10 @@ import discord
 from discord.ext import commands
 from ._messages import msg, _cv2
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 #: Discord's ceiling for ``rate_limit_per_user`` (6 hours). A larger value is
 #: rejected by the API, which used to surface as a raw HTTP error.
 MAX_SLOWMODE_SECONDS = 21600
@@ -22,11 +26,11 @@ class ChannelsMixin:
         channel = ctx.channel
         return channel if isinstance(channel, discord.abc.GuildChannel) else None
 
-    @commands.hybrid_command(description="Set slowmode in this channel (seconds)",
-                             help="{ 'en': 'Set slowmode in this channel (seconds).', 'de': 'Langsammodus setzen.', 'es': 'Establece el modo lento en este canal (segundos).' }")
+    @commands.hybrid_command(description=CMDS.text("slowmode.description"),
+                             help=CMDS.help("slowmode"))
     @commands.guild_only()
     @commands.has_permissions(manage_channels=True)
-    async def slowmode(self, ctx, seconds: int = commands.parameter(default=0, description="Delay between messages in seconds; use 0 to disable slowmode.")):
+    async def slowmode(self, ctx, seconds: int = commands.parameter(default=0, description=CMDS.arg("slowmode", "seconds"))):
         if seconds < 0 or seconds > MAX_SLOWMODE_SECONDS:
             return await ctx.send(view=_cv2(msg(
                 ctx, "slowmode_limit", max=MAX_SLOWMODE_SECONDS, hours=MAX_SLOWMODE_SECONDS // 3600)))
@@ -38,8 +42,8 @@ class ChannelsMixin:
             return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)))
         await ctx.send(msg(ctx, "slowmode_set", seconds=seconds))
 
-    @commands.hybrid_command(description="Lock this channel",
-                             help="{ 'en': 'Lock this channel.', 'de': 'Kanal sperren.', 'es': 'Bloquea este canal.' }")
+    @commands.hybrid_command(description=CMDS.text("lock.description"),
+                             help=CMDS.help("lock"))
     @commands.guild_only()
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx):
@@ -58,8 +62,8 @@ class ChannelsMixin:
         body = f"**Channel:** {channel.mention}\n**Moderator:** {ctx.author.mention}"
         await self.logger().log_event(ctx.guild, "channels", "Lock", body, channel_id=channel.id, action_key="Lock")
 
-    @commands.hybrid_command(description="Unlock this channel",
-                             help="{ 'en': 'Unlock this channel.', 'de': 'Kanal entsperren.', 'es': 'Desbloquea este canal.' }")
+    @commands.hybrid_command(description=CMDS.text("unlock.description"),
+                             help=CMDS.help("unlock"))
     @commands.guild_only()
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx):

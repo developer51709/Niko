@@ -285,7 +285,7 @@ class CommandTests(unittest.TestCase):
         # A hybrid command carries guild_only on the app-command side.
         self.assertTrue(command.app_command.guild_only)
         self.assertNotIn("☕", command.help)
-        self.assertIn("'en'", command.help)
+        self.assertIn('"en"', command.help)
 
 
 class DashboardThresholdTests(unittest.TestCase):

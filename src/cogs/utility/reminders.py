@@ -22,7 +22,12 @@ import discord
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 DATA_FILE = "data/reminders.json"
 
@@ -31,46 +36,7 @@ DATA_FILE = "data/reminders.json"
 #  TRILINGUAL MESSAGES
 # ───────────────────────────────────────────────────
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "set_ok":          "### {icon} Reminder Set\nI will remind you about **{text}** {ts}.",
-            "list_empty":      "You have no active reminders.",
-            "list_title":      "### {icon} Your Reminders",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ Reminder `{id}` deleted.",
-            "delete_missing":  "⚠️ No reminder with ID `{id}` found that belongs to you.",
-            "clear_ok":        "✅ Cleared all your reminders.",
-            "invalid_duration":"❌ Invalid duration. Use forms like `30s`, `10m`, `2h`, `1d`.",
-            "remind_dm":       "### {icon} Reminder\n{text}\n-# Set {ago} ago.",
-            "remind_chan":     "### {icon} Reminder for {mention}\n{text}\n-# Set {ago} ago.",
-        },
-        "de": {
-            "set_ok":          "### {icon} Erinnerung gesetzt\nIch erinnere dich an **{text}** {ts}.",
-            "list_empty":      "Du hast keine aktiven Erinnerungen.",
-            "list_title":      "### {icon} Deine Erinnerungen",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ Erinnerung `{id}` gelöscht.",
-            "delete_missing":  "⚠️ Keine Erinnerung mit ID `{id}` gefunden, die dir gehört.",
-            "clear_ok":        "✅ Alle Erinnerungen gelöscht.",
-            "invalid_duration":"❌ Ungültige Dauer. Verwende `30s`, `10m`, `2h`, `1d`.",
-            "remind_dm":       "### {icon} Erinnerung\n{text}\n-# vor {ago} gesetzt.",
-            "remind_chan":     "### {icon} Erinnerung für {mention}\n{text}\n-# vor {ago} gesetzt.",
-        },
-        "es": {
-            "set_ok":          "### {icon} Recordatorio establecido\nTe recordaré sobre **{text}** {ts}.",
-            "list_empty":      "No tienes recordatorios activos.",
-            "list_title":      "### {icon} Tus recordatorios",
-            "list_entry":      "**`{id}`** · {when}\n-# {text}",
-            "delete_ok":       "✅ Recordatorio `{id}` eliminado.",
-            "delete_missing":  "⚠️ No se encontró un recordatorio con ID `{id}` que te pertenezca.",
-            "clear_ok":        "✅ Todos tus recordatorios eliminados.",
-            "invalid_duration":"❌ Duración inválida. Usa `30s`, `10m`, `2h`, `1d`.",
-            "remind_dm":       "### {icon} Recordatorio\n{text}\n-# Establecido hace {ago}.",
-            "remind_chan":     "### {icon} Recordatorio para {mention}\n{text}\n-# Establecido hace {ago}.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.utility", "reminders")
 
 
 def _lang(ctx) -> str:
@@ -81,7 +47,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:
@@ -215,8 +181,8 @@ class Reminders(commands.Cog):
 
     @commands.hybrid_group(
         name="reminder",
-        description="Personal reminders.",
-        help="{ 'en': 'Personal reminders (set, list, delete).', 'de': 'Persönliche Erinnerungen.', 'es': 'Recordatorios personales.' }",
+        description=CMDS.text("reminder.description"),
+        help=CMDS.help("reminder"),
         invoke_without_command=True,
     )
     async def reminder(self, ctx: commands.Context):
@@ -227,8 +193,8 @@ class Reminders(commands.Cog):
 
     @reminder.command(
         name="set",
-        description="Schedule a reminder.",
-        help="{ 'en': 'Schedule a reminder. Example: reminder set 30m drink water', 'de': 'Eine Erinnerung planen. Beispiel: reminder set 30m Wasser trinken', 'es': 'Programa un recordatorio. Ejemplo: reminder set 30m beber agua' }",
+        description=CMDS.text("reminder.set.description"),
+        help=CMDS.help("reminder.set"),
     )
     async def reminder_set(self, ctx: commands.Context, duration: str, *, text: str):
         secs = parse_duration(duration)
@@ -251,8 +217,8 @@ class Reminders(commands.Cog):
 
     @reminder.command(
         name="list",
-        description="List your active reminders.",
-        help="{ 'en': 'List your active reminders.', 'de': 'Deine aktiven Erinnerungen anzeigen.', 'es': 'Lista tus recordatorios activos.' }",
+        description=CMDS.text("reminder.list.description"),
+        help=CMDS.help("reminder.list"),
     )
     async def reminder_list(self, ctx: commands.Context):
         mine = [r for r in self.reminders.values() if r["user_id"] == ctx.author.id]
@@ -272,8 +238,8 @@ class Reminders(commands.Cog):
 
     @reminder.command(
         name="delete",
-        description="Delete one of your reminders.",
-        help="{ 'en': 'Delete a reminder by its ID.', 'de': 'Erinnerung anhand der ID löschen.', 'es': 'Elimina un recordatorio por su ID.' }",
+        description=CMDS.text("reminder.delete.description"),
+        help=CMDS.help("reminder.delete"),
     )
     async def reminder_delete(self, ctx: commands.Context, reminder_id: str):
         r = self.reminders.get(reminder_id)
@@ -285,8 +251,8 @@ class Reminders(commands.Cog):
 
     @reminder.command(
         name="clear",
-        description="Delete all your reminders.",
-        help="{ 'en': 'Delete all your reminders.', 'de': 'Alle deine Erinnerungen löschen.', 'es': 'Elimina todos tus recordatorios.' }",
+        description=CMDS.text("reminder.clear.description"),
+        help=CMDS.help("reminder.clear"),
     )
     async def reminder_clear(self, ctx: commands.Context):
         self.reminders = {rid: r for rid, r in self.reminders.items() if r["user_id"] != ctx.author.id}

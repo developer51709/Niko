@@ -1,5 +1,8 @@
 from config.ids import SUPPORT_GUILD
 
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
 from .data import *
 from .commands.currency import CurrencyMixin
 from .commands.jobs import JobsMixin
@@ -9,6 +12,12 @@ from .commands.shop import ShopMixin, _ShopActionView
 from .commands.bank import BankMixin
 from .commands.lottery import LotteryMixin
 from .voting import VoteMixin
+
+# Card footers live in the currency catalogue: they belong to the balance card
+# the balance and profile commands render.
+_CARD_T = locale_t(load_locales("cogs.economy", "currency"))
+# Draw announcements read the support server's own language.
+_LOTTO_T = locale_t(load_locales("cogs.economy", "lottery"))
 
 
 class EconomyCog(
@@ -191,7 +200,7 @@ class EconomyCog(
         ``**kwargs`` reach :func:`_loading_card_view` — the shop passes its row
         count and disabled controls so the placeholder matches the final card.
         """
-        view = _loading_card_view(card_type, **kwargs)
+        view = _loading_card_view(card_type, lang=get_lang(ctx), **kwargs)
         if ctx.interaction:
             return await ctx.interaction.edit_original_response(view=view)
         return await ctx.send(view=view)
@@ -227,12 +236,13 @@ class EconomyCog(
             title=title,
         )
         prefix = await _resolve_prefix(self.bot, ctx)
+        lang = get_lang(ctx)
         view = _card_view(
             title=f"{get_emoji('credit_card')} {title}",
             image_name="balance.png",
             footer_lines=[
-                f"-# Use `{prefix}deposit` / `{prefix}withdraw` to manage your vault.",
-                f"-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend.",
+                _CARD_T(lang, "card_footer_vault", prefix=prefix),
+                _CARD_T(lang, "card_footer_earn", prefix=prefix),
             ],
         )
         await message.edit(view=view, attachments=[discord.File(buf, "balance.png")])
@@ -322,23 +332,24 @@ class EconomyCog(
             if channel is None:
                 return
             remaining = max(0, int(self.lottery.get("next_draw", 0)) - int(time.time()))
+            lang = get_lang(getattr(channel, "guild", None))
             if winner_name:
-                title = "🎰 Lottery drawn"
-                body = (
-                    f"**{winner_name}** won **{payout:,}** 🪙 this week.\n"
-                    f"• Tickets in play: **{tickets:,}** from **{entrants:,}** "
-                    f"member{'s' if entrants != 1 else ''}\n"
-                    f"• Next pot starts at **{int(self.lottery.get('pot', 0)):,}** 🪙\n\n"
-                    f"Next draw in **{_fmt_remaining(remaining)}** — buy tickets with `/lottery buy`."
+                title = _LOTTO_T(lang, "announce_title")
+                body = _LOTTO_T(
+                    lang, "announce_body",
+                    winner=winner_name,
+                    payout=f"{payout:,}",
+                    tickets=f"{tickets:,}",
+                    entrants=f"{entrants:,}",
+                    pot=f"{int(self.lottery.get('pot', 0)):,}",
+                    time=_fmt_remaining(remaining),
                 )
                 if unlocked:
-                    body += "\n\n**New achievements** " + ", ".join(unlocked)
+                    body += _LOTTO_T(lang, "announce_unlocked", items=", ".join(unlocked))
             else:
-                title = "🎰 No lottery winner this week"
-                body = (
-                    "Nobody held a ticket when the draw came up, so the pot rolls over.\n\n"
-                    f"Next draw in **{_fmt_remaining(remaining)}** — buy tickets with `/lottery buy`."
-                )
+                title = _LOTTO_T(lang, "announce_none_title")
+                body = _LOTTO_T(
+                    lang, "announce_none_body", time=_fmt_remaining(remaining))
             await channel.send(view=_info_view(title, body))
         except Exception as exc:
             log.error("Economy", f"Could not announce the lottery draw: {exc}")

@@ -33,8 +33,9 @@ import discord
 
 import database as database_module
 from utils import logging
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
 from utils.social.follows import pause_guild_notifications
+from utils.locales import load_locales
 
 #: Ordered lockdown steps and the wording the dashboard shows while each one
 #: runs. The keys are a contract with ``web/src/utils/guildBlacklist.ts``.
@@ -56,21 +57,9 @@ FEATURE_STEPS: tuple[str, ...] = tuple(
     key for key, _ in LOCKDOWN_STEPS if key != "database"
 )
 
-PAUSED_MESSAGES = {
-    "normal": {
-        "en": {
-            "paused": "This feature is paused while your server is blacklisted from Niko.",
-        },
-        "de": {
-            "paused": "Diese Funktion ist pausiert, solange dein Server bei Niko gesperrt ist.",
-        },
-        "es": {
-            "paused": "Esta función está en pausa mientras tu servidor esté bloqueado en Niko.",
-        },
-    },
-}
+PAUSED_MESSAGES = load_locales(__package__, "messages")
 
-_paused = make_msg(PAUSED_MESSAGES)
+_paused = make_flat_msg(PAUSED_MESSAGES)
 
 
 def paused_message(ctx) -> str:

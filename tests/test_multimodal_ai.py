@@ -9,7 +9,7 @@ def test_multimodal_experiment_is_opt_in_and_visible_in_config():
     config = (ROOT / "src/utils/ai/config.py").read_text(encoding="utf-8")
     panel = (ROOT / "src/cogs/ai/config.py").read_text(encoding="utf-8")
     assert '"multimodal_experiment": "False"' in config
-    assert 'ExperimentToggle(self.bot, "multimodal", self.guild_id' in panel
+    assert 'ExperimentToggle(self.bot, "multimodal", ctx' in panel
     assert "MultimodalExperimentAbout" in panel
 
 

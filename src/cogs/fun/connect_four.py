@@ -15,6 +15,11 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 # ───────────────────────────────────────────────────
 #  PIECE EMOJIS
@@ -40,32 +45,7 @@ _TOP_ROW = (
 #  LOCALISATION
 # ───────────────────────────────────────────────────
 
-_UI: dict[str, dict[str, str]] = {
-    "en": {
-        "title":        "Connect Four",
-        "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
-        "turn":         "{emoji1} **{name}**'s turn  {emoji2}",
-        "game_over":    "**Game Over**",
-        "winner":       "🎉 **{name}** wins!",
-        "tie":          "🤝 It's a tie!",
-        "not_your_turn":"It's not your turn!",
-        "col_full":     "That column is full!",
-        "vs_self":      "You can't play against yourself!",
-        "vs_bot":       "You can't play against a bot!",
-    },
-    "de": {
-        "title":        "Vier Gewinnt",
-        "vs":           "{red} **{rname}**  vs  {blue} **{bname}**",
-        "turn":         "{emoji1} **{name}** ist dran  {emoji2}",
-        "game_over":    "**Spiel vorbei**",
-        "winner":       "🎉 **{name}** gewinnt!",
-        "tie":          "🤝 Unentschieden!",
-        "not_your_turn":"Du bist nicht dran!",
-        "col_full":     "Diese Spalte ist voll!",
-        "vs_self":      "Du kannst nicht gegen dich selbst spielen!",
-        "vs_bot":       "Du kannst nicht gegen einen Bot spielen!",
-    },
-}
+_UI = load_locales("cogs.fun", "connect_four")
 
 
 def _t(lang: str, key: str, **kw) -> str:
@@ -309,8 +289,7 @@ class ConnectFourCog(commands.Cog):
     @commands.command(
         name="connectfour",
         aliases=["connect4", "c4"],
-        help="{ 'en': 'challenge someone to Connect Four 🎮', 'de': 'fordere jemanden zu Vier Gewinnt heraus 🎮' }",
-    )
+        help=CMDS.help("connectfour"))
     async def connect_four(self, ctx: commands.Context, opponent: discord.Member):
         lang = get_lang(ctx)
 

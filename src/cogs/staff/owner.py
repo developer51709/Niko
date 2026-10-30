@@ -9,6 +9,7 @@ import traceback
 import sys
 import asyncio
 from utils.paginator import PaginatedView, paginate
+from utils.command_localization import apply_command_localizations
 from config.emojis import get_emoji
 from config import links
 from cogs.system.error_handler import is_owner
@@ -22,6 +23,10 @@ import time
 import json
 import datetime
 from urllib.parse import urlsplit
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 STATUS_PANEL_INTERVAL = 30.0
 
@@ -58,7 +63,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Owner help command
     # -------------------------------
-    @commands.command(name="ownerhelp", help="Show commands available to the bot owner.")
+    @commands.command(name="ownerhelp", help=CMDS.help("ownerhelp"))
     @is_owner()
     async def owner_help(self, ctx):
         """Shows help for owner-only commands."""
@@ -90,7 +95,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot profile picture
     # -------------------------------
-    @commands.command(name="setpfp", help="Set the bot's global profile picture.")
+    @commands.command(name="setpfp", help=CMDS.help("setpfp"))
     @is_owner()
     async def set_pfp(self, ctx, url: str | None):
         downloading_view = discord.ui.LayoutView()
@@ -147,7 +152,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot banner
     # -------------------------------
-    @commands.command(name="setbanner", help="Set the bot's global profile banner.")
+    @commands.command(name="setbanner", help=CMDS.help("setbanner"))
     @is_owner()
     async def set_banner(self, ctx, url: str | None):
         downloading_view = discord.ui.LayoutView()
@@ -205,7 +210,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot username
     # -------------------------------
-    @commands.command(name="setusername", help="Set the bot's global username.")
+    @commands.command(name="setusername", help=CMDS.help("setusername"))
     @is_owner()
     async def set_name(self, ctx, *, name: str):
         """Set the bot's username."""
@@ -218,7 +223,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot status text
     # -------------------------------
-    @commands.command(name="setstatus", help="Set the bot's playing status text.")
+    @commands.command(name="setstatus", help=CMDS.help("setstatus"))
     @is_owner()
     async def set_status(self, ctx, *, text: str):
         """Set the bot's status text."""
@@ -228,7 +233,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Set bot activity type
     # -------------------------------
-    @commands.command(name="setactivity", help="Set the bot's activity type and text.")
+    @commands.command(name="setactivity", help=CMDS.help("setactivity"))
     @is_owner()
     async def set_activity(self, ctx, activity_type: str, *, text: str):
         """
@@ -254,7 +259,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Cog management
     # -------------------------------
-    @commands.command(name="load", help="Load a cog (owner only).")
+    @commands.command(name="load", help=CMDS.help("load"))
     @is_owner()
     async def load_cog(self, ctx: commands.Context, cog: str):
         try:
@@ -263,7 +268,7 @@ class OwnerCog(commands.Cog):
         except Exception as exc:
             await ctx.send(f"{get_emoji('danger')} Could not load `{cog}`: `{exc}`")
 
-    @commands.command(name="unload", help="Unload a cog (owner only).")
+    @commands.command(name="unload", help=CMDS.help("unload"))
     @is_owner()
     async def unload_cog(self, ctx: commands.Context, cog: str):
         try:
@@ -272,7 +277,7 @@ class OwnerCog(commands.Cog):
         except Exception as exc:
             await ctx.send(f"{get_emoji('danger')} Could not unload `{cog}`: `{exc}`")
 
-    @commands.command(name="reload", help="Reload a cog (owner only).")
+    @commands.command(name="reload", help=CMDS.help("reload"))
     @is_owner()
     async def reload_cog(self, ctx: commands.Context, cog: str):
         try:
@@ -284,7 +289,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Restart bot
     # -------------------------------
-    @commands.command(name="restart", help="Restart the bot process.")
+    @commands.command(name="restart", help=CMDS.help("restart"))
     @is_owner()
     async def restart_bot(self, ctx):
         """Restart the bot."""
@@ -294,7 +299,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shutdown bot
     # -------------------------------
-    @commands.command(name="shutdown", help="Shut down the bot process.")
+    @commands.command(name="shutdown", help=CMDS.help("shutdown"))
     @is_owner()
     async def shutdown_bot(self, ctx):
         """Shut down the bot."""
@@ -304,11 +309,14 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Sync slash commands
     # -------------------------------
-    @commands.command(name="sync", help="Sync application commands globally or to this server.")
+    @commands.command(name="sync", help=CMDS.help("sync"))
     @is_owner()
     async def sync_commands(self, ctx, scope: str = "global"):
         """Sync application commands."""
         try:
+            # Commands loaded or reloaded since boot still need their catalogue
+            # translations attached before Discord receives the payload.
+            apply_command_localizations(self.bot.tree)
             if scope.lower() in ["guild", "local", "here"]:
                 synced = await self.bot.tree.sync(guild=ctx.guild)
                 scope_text = f"Synced `{len(synced)}` commands to **this guild only**."
@@ -346,7 +354,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Eval command
     # -------------------------------
-    @commands.command(name="eval", help="Evaluate Python code in the bot process.")
+    @commands.command(name="eval", help=CMDS.help("eval"))
     @is_owner()
     async def eval_code(self, ctx, *, code: str):
         """Evaluate Python code (owner only)."""
@@ -397,7 +405,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Server list command
     # -------------------------------
-    @commands.command(name="servers", help="List servers the bot has joined.")
+    @commands.command(name="servers", help=CMDS.help("servers"))
     @is_owner()
     async def list_servers(self, ctx):
         """List all servers the bot is in with multipage navigation."""
@@ -415,7 +423,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Server invite command
     # -------------------------------
-    @commands.command(name="serverinvite", help="Create a single-use invite to a server.")
+    @commands.command(name="serverinvite", help=CMDS.help("serverinvite"))
     @is_owner()
     async def server_invite(self, ctx, server_id: int):
         """Create a single-use, 24-hour invite for a server."""
@@ -471,11 +479,11 @@ class OwnerCog(commands.Cog):
     #: The release ``.staff announce`` announces. The docs page and the changelog
     #: entry are named in one place, so the buttons can never point at a page that
     #: was renamed or retired alongside the update.
-    UPDATE_TITLE = "Faster cards, live leaderboards & voice XP"
-    UPDATE_DOCS_URL = f"{links.DOCS}/leveling-overview"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/loading-cards-live-leaderboards-voice-xp"
+    UPDATE_TITLE = "Niko now speaks German & Spanish 🇩🇪🇪🇸"
+    UPDATE_DOCS_URL = f"{links.DOCS}/language-support"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/multi-language-everywhere"
 
-    @commands.command(name="announce", help="Announce the latest Niko update (or `policy`) in this channel.")
+    @commands.command(name="announce", help=CMDS.help("announce"))
     @is_owner()
     async def announce(self, ctx, topic: str = ""):
         """Announce a release, with links to its docs page and changelog entry.
@@ -506,40 +514,32 @@ class OwnerCog(commands.Cog):
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**Your cards no longer make you wait in the dark.** Balance, daily, work, "
-                    "shop, inventory and rank now open with an **animated card-shaped placeholder** "
-                    "while the real image renders, then swap it in place. The placeholder loads from "
-                    "our website, so it appears instantly. `/spotify` got the same treatment — plus a "
-                    "proper now-playing card with album art and a live progress bar. Blackjack's "
-                    "suits were redrawn as smooth vector shapes, and rounded cards finally keep their "
-                    "transparent corners.\n\n"
-                    "**The server leaderboard left Discord and moved to the web.** "
-                    "`/leveling leaderboard` now replies with your server's own live board on the "
-                    "website — it refreshes itself, animates members who climb past each other, "
-                    "and shows a clear \u201cNiko isn't in this server\u201d page when the bot has left. "
-                    "Share the link in a channel topic or announcement.\n\n"
-                    "**XP only where you want it.** Exclude text and voice channels with "
-                    "`/leveling config exclude`, whitelist them again with `include`, and turn on "
-                    "passive voice XP with `voicexp`. Both are also in the leveling panel and the "
-                    "dashboard. Ticket channels never award XP, and AFK channels never earn voice XP.\n\n"
-                    "**Smaller things worth noticing.** The help menu now groups polls, giveaways, "
-                    "leveling, tickets and onboarding under **Community** instead of scattering them "
-                    "across a dozen categories. The support rules panel prints all twenty rules in "
-                    "one message, with important links and \u201cnot ours to fix\u201d reports in private "
-                    "cards. Onboarding and ticket panels explain exactly how to ask for help, the "
-                    "reported-image channel is now **#scam-reports**, and the community-help "
-                    "guidelines post finally stays pinned.\n\n"
-                    "-# The bot stays free. Every feature above ships for every server."
+                    "**Niko now speaks German and Spanish — everywhere.** Set your server's language "
+                    "in Discord and the bot answers in it: replies, panels, error messages, the "
+                    "`.help` menu, and every command's own help line. English stays the default, and "
+                    "a line that has not been translated yet falls back to it instead of breaking.\n\n"
+                    "**Discord's own command list follows each member.** Slash command descriptions, "
+                    "subcommand descriptions and argument hints now arrive translated, so a member "
+                    "whose Discord client is in German sees German in the `/` picker even when the "
+                    "server itself is English. Context menus rename themselves too — *Translate* "
+                    "becomes **Übersetzen**, *Roleplay* becomes **Rollenspiel**.\n\n"
+                    "**The website follows the visitor.** The commands page picks the language of the "
+                    "browser that opens it and now shows argument descriptions as well, so "
+                    "`/pay` explains both `member` and `amount` in German or Spanish.\n\n"
+                    "**Built to keep growing.** Every cog keeps its wording in `locales/en.json`, "
+                    "`de.json` and `es.json` next to the code. That is what let this land in one pass, "
+                    "and what makes the next language a folder to translate instead of a refactor.\n\n"
+                    "-# The bot stays free. Everything above ships for every server."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Run `/leveling leaderboard` in your server, or read the full breakdown below."
+                content="-# Read the language guide, or see the full breakdown below."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Leveling docs",
+                    label="Language docs",
                     style=discord.ButtonStyle.link,
                     url=self.UPDATE_DOCS_URL,
                     emoji=get_emoji("link")
@@ -590,7 +590,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Dev01 command
     # -------------------------------
-    @commands.command(name="dev01", help="Create and assign the dev01 role.")
+    @commands.command(name="dev01", help=CMDS.help("dev01"))
     @is_owner()
     async def dev01(self, ctx, target: discord.Member = None):
         """Create and grant the dev01 role with all permissions"""
@@ -681,7 +681,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard info (Owner)
     # -------------------------------
-    @commands.command(name="shardinfo", help="View detailed information about the bot's shards.")
+    @commands.command(name="shardinfo", help=CMDS.help("shardinfo"))
     @is_owner()
     async def shard_info(self, ctx):
         """View detailed sharding information."""
@@ -708,7 +708,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard stats (Owner)
     # -------------------------------
-    @commands.command(name="shardstats", help="View statistics for the bot's shards.")
+    @commands.command(name="shardstats", help=CMDS.help("shardstats"))
     @is_owner()
     async def shard_stats(self, ctx):
         """View comprehensive shard statistics."""
@@ -750,7 +750,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     # Shard health (Owner)
     # -------------------------------
-    @commands.command(name="shardhealth", help="Check the health of the bot's shards.")
+    @commands.command(name="shardhealth", help=CMDS.help("shardhealth"))
     @is_owner()
     async def shard_health(self, ctx):
         """Check the health of all shards."""
@@ -796,7 +796,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.group(
         name="blacklist",
-        help="Manage the bot's blacklist.",
+        help=CMDS.help("blacklist"),
         invoke_without_command=True
     )
     @is_owner()
@@ -845,7 +845,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @blacklist.command(
         name="info",
-        help="Show full info for a single blacklisted user or guild."
+        help=CMDS.help("blacklist.info"),
     )
     @is_owner()
     async def blacklist_info(self, ctx, type: str, id_or_mention: str):
@@ -880,7 +880,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @blacklist.command(
         name="reason",
-        help="Update the reason on an existing blacklist entry."
+        help=CMDS.help("blacklist.reason"),
     )
     @is_owner()
     async def blacklist_reason(self, ctx, type: str, id_or_mention: str, *, reason: str):
@@ -902,7 +902,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @blacklist.command(
         name="add",
-        help="Add a user or guild to the blacklist. Optional: --dm to notify, then a reason."
+        help=CMDS.help("blacklist.add"),
     )
     @is_owner()
     async def blacklist_add(self, ctx, type: str, id_or_mention: str, send_message: bool = False, *, reason: str = None):
@@ -1039,7 +1039,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @blacklist.command(
         name="remove",
-        help="Remove a user or guild from the blacklist."
+        help=CMDS.help("blacklist.remove"),
     )
     @is_owner()
     async def blacklist_remove(self, ctx, type: str, id_or_mention: str):
@@ -1140,7 +1140,7 @@ class OwnerCog(commands.Cog):
     # -------------------------------
     @commands.group(
         name="premium",
-        help="Manage premium users.",
+        help=CMDS.help("premium"),
         invoke_without_command=True,
     )
     @is_owner()
@@ -1161,7 +1161,7 @@ class OwnerCog(commands.Cog):
         ))
         await ctx.send(view=view)
 
-    @premium.command(name="add", help="Grant premium to a user.")
+    @premium.command(name="add", help=CMDS.help("premium.add"))
     @is_owner()
     async def premium_add(self, ctx, user: discord.User):
         added = await PremiumManager.add(self.bot.cxn, user.id)
@@ -1183,7 +1183,7 @@ class OwnerCog(commands.Cog):
             ))
         await ctx.send(view=view)
 
-    @premium.command(name="remove", help="Revoke premium from a user.")
+    @premium.command(name="remove", help=CMDS.help("premium.remove"))
     @is_owner()
     async def premium_remove(self, ctx, user: discord.User):
         removed = await PremiumManager.remove(self.bot.cxn, user.id)
@@ -1205,7 +1205,7 @@ class OwnerCog(commands.Cog):
             ))
         await ctx.send(view=view)
 
-    @premium.command(name="list", help="List all premium users.")
+    @premium.command(name="list", help=CMDS.help("premium.list"))
     @is_owner()
     async def premium_list(self, ctx):
         user_ids = await PremiumManager.list_users(self.bot.cxn)
@@ -1243,7 +1243,7 @@ class OwnerCog(commands.Cog):
     @commands.group(
         name="sendpanel",
         invoke_without_command=True,
-        help="Send persistent panels for the support server (owner only).",
+        help=CMDS.help("sendpanel"),
     )
     @is_owner()
     async def sendpanel(self, ctx):
@@ -1262,7 +1262,7 @@ class OwnerCog(commands.Cog):
     @sendpanel.command(
         name="status",
         aliases=["statuspanel"],
-        help="Send the realtime bot status panel for the support server (owner only).",
+        help=CMDS.help("sendpanel.status"),
     )
     @is_owner()
     async def sendpanel_status(self, ctx, channel: discord.TextChannel = None):
@@ -1336,7 +1336,7 @@ class OwnerCog(commands.Cog):
 
     @sendpanel.command(
         name="rules",
-        help="Send the persistent server rules panel for the support server (owner only).",
+        help=CMDS.help("sendpanel.rules"),
     )
     @is_owner()
     async def sendpanel_rules(self, ctx, channel: discord.TextChannel = None):

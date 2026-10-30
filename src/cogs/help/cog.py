@@ -1,5 +1,9 @@
 from .views import *
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 class HelpCog(commands.Cog):
     """Custom help system — fully trilingual (EN / DE / ES)."""
 
@@ -8,8 +12,8 @@ class HelpCog(commands.Cog):
 
     @commands.hybrid_command(
         name="help",
-        description="Show the help menu",
-        help="{ 'en': 'show the help menu', 'de': 'zeige das Hilfemenü', 'es': 'muestra el menú de ayuda' }",
+        description=CMDS.text("help.description"),
+        help=CMDS.help("help"),
     )
     async def help(self, ctx: commands.Context, *, command_name: str = None):
         lang = get_lang(ctx)

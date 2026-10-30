@@ -5,7 +5,7 @@ The music cog's helpers live here (outside cogs/) so they can be imported,
 tested, and reused without loading any Discord command layer:
   • constants — timing / sizing constants and source colours
   • format    — duration, progress bar, source colour helpers
-  • messages  — personality-aware EN/DE/ES message catalog
+  • messages  — trilingual EN/DE/ES catalog (strings live in cogs/music/locales)
   • spotify   — Spotify URL/URI resolution client
   • autoplay  — Last.fm similar-track helper
   • nodes     — Lavalink node discovery + probing

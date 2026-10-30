@@ -3,19 +3,27 @@ from discord.ext import commands
 import aiohttp
 import textwrap
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 
-def format_definition_dict(entry: dict) -> str:
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "misc")
+msg = make_flat_msg(MESSAGES)
+
+
+def format_definition_dict(entry: dict, locale=None) -> str:
     """Convert the dictionary entry into a clean, readable block."""
     word = entry.get("word", "unknown")
     phonetic = entry.get("phonetic", "N/A")
     origin = entry.get("origin", "N/A")
 
     lines = [
-        f"**Word:** {word}",
-        f"**Phonetic:** {phonetic}",
-        f"**Origin:** {origin}",
+        msg(locale, "define_word", word=word),
+        msg(locale, "define_phonetic", phonetic=phonetic),
+        msg(locale, "define_origin", origin=origin),
         "",
-        "**Meanings:**"
+        msg(locale, "define_meanings"),
     ]
 
     for meaning in entry.get("meanings", []):
@@ -26,7 +34,7 @@ def format_definition_dict(entry: dict) -> str:
             definition = d.get("definition", "")
             example = d.get("example", None)
 
-            lines.append(f"-#     - {definition}")
+            lines.append(msg(locale, "define_definition", definition=definition))
             # if example:
             #     lines.append(f"    _Example:_ {example}")
 
@@ -39,7 +47,7 @@ class Define(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="define", help="Define a word using a dictionary API.")
+    @commands.command(name="define", help=CMDS.help("define"))
     async def define(self, ctx, *, word: str):
         # trigger typing indicator
         async with ctx.typing():
@@ -49,7 +57,7 @@ class Define(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as r:
                     if r.status != 200:
-                        return await ctx.reply(f"No definition found for **{word}**.")
+                        return await ctx.reply(msg(ctx, "define_missing", word=word))
 
                     data = await r.json()
 
@@ -70,14 +78,14 @@ class Define(commands.Cog):
                 })
 
             # Convert to readable block
-            pretty_text = format_definition_dict(definition_dict)
+            pretty_text = format_definition_dict(definition_dict, ctx)
 
             # Create the LayoutView
             view = discord.ui.LayoutView()
         
             # Build Components v2 container
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### Definition: **{word}**"),
+                discord.ui.TextDisplay(content=msg(ctx, "define_title", word=word)),
                 discord.ui.Separator(),
                 discord.ui.TextDisplay(content=pretty_text),
                 accent_colour=discord.Colour(0x5865F2)

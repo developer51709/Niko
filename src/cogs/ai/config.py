@@ -10,100 +10,115 @@ from utils.ai.config import (
     preload_all,
     save_config,
 )
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "config")
+msg = make_flat_msg(MESSAGES, {
+    "ai": get_emoji("ai"),
+    "danger": get_emoji("danger"),
+    "tick": get_emoji("tick"),
+    "cross": get_emoji("cross"),
+})
+
+
+def _error_view(ctx, key: str = "error_permission") -> discord.ui.LayoutView:
+    """The yellow card every manage_guild gate answers with."""
+    return _card_view(ctx, "error_heading", key, discord.Color.yellow())
+
+
+def _card_view(ctx, heading_key: str, body_key: str, colour, **kwargs) -> discord.ui.LayoutView:
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=msg(ctx, heading_key)),
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+        discord.ui.TextDisplay(content=msg(ctx, body_key, **kwargs)),
+        accent_colour=colour,
+    ))
+    return view
 
 
 # exeriments view
 # this is where users can learn about the experimental features and toggle them on or off
 class ExperimentsView(discord.ui.LayoutView):
-    def __init__(self, bot: commands.Bot, guild_id: int, config: dict):
+    def __init__(self, bot: commands.Bot, ctx, config: dict):
         self.bot = bot
-        self.guild_id = guild_id
+        self.ctx = ctx
         super().__init__()
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Experiments"))
-        self.container.add_item(discord.ui.TextDisplay(content="> These are experimental features that are still under development. They may not work as expected and may change at any time."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "experiments_heading")))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "experiments_note")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**AI Actions**"))
-        self.container.add_item(discord.ui.TextDisplay(content="Allows the AI to perform real Discord actions on your behalf — such as creating polls — when you ask it to in chat."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "ai_actions_title")))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "ai_actions_description")))
         self.container.add_item(discord.ui.ActionRow(
-            ExperimentToggle(self.bot, "ai_actions", self.guild_id, config),
-            ExperimentAboutButton(self.bot, "ai_actions")
+            ExperimentToggle(self.bot, "ai_actions", ctx, config),
+            ExperimentAboutButton(self.bot, "ai_actions", ctx)
         ))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**Better Context**"))
-        self.container.add_item(discord.ui.TextDisplay(content="Gives the AI awareness of the last 5 channel messages and the message being replied to, so it can respond more naturally in ongoing conversations."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "better_context_title")))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "better_context_description")))
         self.container.add_item(discord.ui.ActionRow(
-            ExperimentToggle(self.bot, "better_context", self.guild_id, config),
-            ExperimentAboutButton(self.bot, "better_context")
+            ExperimentToggle(self.bot, "better_context", ctx, config),
+            ExperimentAboutButton(self.bot, "better_context", ctx)
         ))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**Multimodal Conversation**"))
-        self.container.add_item(discord.ui.TextDisplay(content="Lets Niko understand image attachments and transcribe Discord voice messages when responding. Media is only processed while this experiment is enabled."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "multimodal_title")))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "multimodal_description")))
         self.container.add_item(discord.ui.ActionRow(
-            ExperimentToggle(self.bot, "multimodal", self.guild_id, config),
-            ExperimentAboutButton(self.bot, "multimodal")
+            ExperimentToggle(self.bot, "multimodal", ctx, config),
+            ExperimentAboutButton(self.bot, "multimodal", ctx)
         ))
         self.add_item(self.container)
 
     @classmethod
-    async def create(cls, bot: commands.Bot, guild_id: int) -> "ExperimentsView":
-        return cls(bot, guild_id, await load_config(guild_id, fresh=True))
+    async def create(cls, bot: commands.Bot, ctx) -> "ExperimentsView":
+        return cls(bot, ctx, await load_config(ctx.guild.id, fresh=True))
 
 class ExperimentAboutButton(discord.ui.Button):
-    def __init__(self, bot: commands.Bot, experiment: str):
+    def __init__(self, bot: commands.Bot, experiment: str, ctx):
         self.bot = bot
         self.experiment = experiment
-        super().__init__(label="About", style=discord.ButtonStyle.secondary)
+        self.ctx = ctx
+        super().__init__(label=msg(ctx, "button_about"), style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction):
+        ctx = interaction
         if self.experiment == "ai_actions":
-            view = AIActionsExperimentAbout(self.bot)
+            view = AIActionsExperimentAbout(self.bot, ctx)
         elif self.experiment == "better_context":
-            view = BetterContextExperimentAbout(self.bot)
+            view = BetterContextExperimentAbout(self.bot, ctx)
         elif self.experiment == "multimodal":
-            view = MultimodalExperimentAbout(self.bot)
+            view = MultimodalExperimentAbout(self.bot, ctx)
         else:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Unknown Experiment"),
-                discord.ui.TextDisplay(content="The about page for this experiment could not be found.")
+            view = _card_view(
+                ctx, "unknown_experiment_heading", "unknown_experiment_body",
+                discord.Color.yellow(),
             )
-            view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
 
 class ExperimentToggle(discord.ui.Button):
-    def __init__(self, bot: commands.Bot, experiment: str, guild_id: int, config: dict):
+    def __init__(self, bot: commands.Bot, experiment: str, ctx, config: dict):
         self.bot = bot
         self.experiment = experiment
-        self.guild_id = guild_id
+        self.ctx = ctx
         if str(config.get(f"{experiment}_experiment")) == "True":
             emoji = get_emoji("tick")
-            label = "Enabled"
+            label = msg(ctx, "toggle_enabled")
             style = discord.ButtonStyle.green
         else:
             emoji = get_emoji("cross")
-            label = "Disabled"
+            label = msg(ctx, "toggle_disabled")
             style = discord.ButtonStyle.red
         super().__init__(label=label, style=style, emoji=emoji)
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('danger')} Error"
-                ),
-                discord.ui.Separator(
-                    visible=True,
-                    spacing=discord.SeparatorSpacing.small
-                ),
-                discord.ui.TextDisplay(
-                    content="You need the `manage_guild` permission to use this button."
-                ),
-                accent_colour=discord.Color.yellow()
+            return await interaction.response.send_message(
+                view=_error_view(interaction), ephemeral=True
             )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
         guild_id = interaction.guild.id
         config = await load_config(guild_id, fresh=True)
         enabled = str(config.get(f"{self.experiment}_experiment")) == "True"
@@ -113,136 +128,95 @@ class ExperimentToggle(discord.ui.Button):
             )
         except Exception as error:  # noqa: BLE001
             return await interaction.response.send_message(
-                f"Could not save that experiment: {error}", ephemeral=True
+                msg(interaction, "save_experiment_error", error=error), ephemeral=True
             )
         if enabled:
             self.emoji = get_emoji("cross")
-            self.label = "Disabled"
+            self.label = msg(interaction, "toggle_disabled")
             self.style = discord.ButtonStyle.red
         else:
             self.emoji = get_emoji("tick")
-            self.label = "Enabled"
+            self.label = msg(interaction, "toggle_enabled")
             self.style = discord.ButtonStyle.green
         await interaction.response.edit_message(view=self.view)
 
 class AIActionsExperimentAbout(discord.ui.LayoutView):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} AI Actions Experiment"))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_heading")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="This experiment lets Niko take real action on your server when you ask in natural language."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_intro")))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(
-            content=(
-                "**What Niko can do**\n"
-                "• Polls — *create a quick poll in chat* (posted directly — no confirmation)\n"
-                "• Moderation — *kick, ban, unban, time-out, remove time-out, warn, purge messages*\n"
-                "• Server management — *create/delete/rename channels, set channel topic, "
-                "create/delete roles, give or take a role, change a member's nickname*"
-            )
-        ))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_capabilities")))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(
-            content=(
-                "**How it works**\n"
-                "Just talk to Niko (e.g. *“ban this user for spam”* or *“make a channel called announcements”*).\n"
-                "Destructive actions show a confirmation card with the exact action and wait for "
-                "you to click **Confirm** or **Cancel** — only the person who asked can answer, and the card expires after 45 seconds."
-            )
-        ))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_how")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(
-            content=(
-                "**Permissions**\n"
-                "Niko will only run an action if **both** you and Niko hold the Discord permission required for it "
-                "(Kick Members, Ban Members, Moderate Members, Manage Messages, Manage Channels, Manage Roles, "
-                "Manage Nicknames) — checked in the affected channel, so channel overwrites apply.\n"
-                "The target member or role must also sit below **your** highest role as well as Niko's; "
-                "the server owner can reach anything below Niko."
-            )
-        ))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_permissions")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is experimental — always double-check the confirmation card before clicking Confirm."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "actions_note")))
         self.add_item(self.container)
 
 class BetterContextExperimentAbout(discord.ui.LayoutView):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Better Context Experiment"))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "context_heading")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="Gives Niko awareness of recent conversation history so responses feel more natural and connected to what's happening in the channel."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "context_intro")))
         self.container.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**What it adds**\n• The last 5 non-bot messages in the channel\n• The content of any message being replied to\n\nNiko uses this extra context to understand the flow of conversation before responding."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "context_adds")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="**Note:** This feature is still under development and may not work as expected."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "context_note")))
         self.add_item(self.container)
 
 
 class MultimodalExperimentAbout(discord.ui.LayoutView):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__()
         self.bot = bot
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Multimodal Conversation Experiment"),
+            discord.ui.TextDisplay(content=msg(ctx, "multimodal_heading")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=(
-                "When enabled, Niko can inspect up to three image attachments and "
-                "use the transcription of a Discord voice message as conversation context.\n\n"
-                "Attachments never start a conversation on their own — they are only "
-                "used when Niko is already triggered by name, ping, or the ai command.\n\n"
-                "Images use the configured vision model and voice messages use the "
-                "configured transcription model. If processing fails, Niko falls back "
-                "to the text that was sent. Media is not stored by the bot."
-            )),
+            discord.ui.TextDisplay(content=msg(ctx, "multimodal_body")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="-# This is experimental and may incur provider usage costs when enabled."),
+            discord.ui.TextDisplay(content=msg(ctx, "multimodal_footnote")),
         )
         self.add_item(container)
 
 
 class ExperimentsButton(discord.ui.Button):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__(
-            label="Experiments",
+            label=msg(ctx, "button_experiments"),
             style=discord.ButtonStyle.secondary
         )
         self.bot = bot
+        self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
         # require manage guild perm
         if not interaction.user.guild_permissions.manage_guild:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('danger')} Error"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="You need the `manage_guild` permission to use this button."
-                ),
-                accent_colour=discord.Color.yellow()
+            return await interaction.response.send_message(
+                view=_error_view(interaction), ephemeral=True
             )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
-        guild_id = interaction.guild.id
-        view = await ExperimentsView.create(self.bot, guild_id)
+        view = await ExperimentsView.create(self.bot, interaction)
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class BotPersonalitySelect(discord.ui.Select):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__(
-            placeholder="Select a personality",
+            placeholder=msg(ctx, "personality_placeholder"),
             options=[
-                discord.SelectOption(label="Normal", value="normal"),
-                discord.SelectOption(label="Café", value="cafe"),
+                discord.SelectOption(label=msg(ctx, "personality_normal"), value="normal"),
+                discord.SelectOption(label=msg(ctx, "personality_cafe"), value="cafe"),
             ],
         )
         self.bot = bot
+        self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
         personality = self.values[0]
@@ -250,13 +224,16 @@ class BotPersonalitySelect(discord.ui.Select):
             await save_config(interaction.guild.id, "personality", personality)
         except Exception as error:  # noqa: BLE001
             return await interaction.response.send_message(
-                f"Could not save the personality: {error}", ephemeral=True
+                msg(interaction, "personality_save_error", error=error), ephemeral=True
             )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Bot Personality"),
+            discord.ui.TextDisplay(content=msg(interaction, "personality_heading")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=f"The bot personality has been set to **{personality}** for this server."),
+            discord.ui.TextDisplay(content=msg(
+                interaction, "personality_set",
+                personality=msg(interaction, f"personality_{personality}"),
+            )),
             accent_colour=discord.Color.green(),
         )
         view.add_item(container)
@@ -264,93 +241,89 @@ class BotPersonalitySelect(discord.ui.Select):
 
 
 class BotPersonalityButton(discord.ui.Button):
-    def __init__(self, bot: commands.Bot):
-        super().__init__(label="Bot Personality", style=discord.ButtonStyle.secondary)
+    def __init__(self, bot: commands.Bot, ctx):
+        super().__init__(label=msg(ctx, "button_personality"), style=discord.ButtonStyle.secondary)
         self.bot = bot
+        self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
-                "You need the `manage_guild` permission to use this button.", ephemeral=True
+                msg(interaction, "error_permission"), ephemeral=True
             )
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('ai')} Bot Personality"),
+            discord.ui.TextDisplay(content=msg(interaction, "personality_heading")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="Select the personality you want the bot to have."),
-            discord.ui.ActionRow(BotPersonalitySelect(self.bot)),
-            discord.ui.TextDisplay(content="-# **Note:** This feature is still under development and may not work as expected."),
+            discord.ui.TextDisplay(content=msg(interaction, "personality_prompt")),
+            discord.ui.ActionRow(BotPersonalitySelect(self.bot, interaction)),
+            discord.ui.TextDisplay(content=msg(interaction, "personality_note")),
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
-class AINameModal(discord.ui.Modal, title="Rename the AI"):
-    name = discord.ui.TextInput(
-        label="AI name",
-        placeholder="Niko",
-        # Short names would make the AI answer nearly every message.
-        min_length=MIN_AI_NAME_LENGTH,
-        max_length=32,
-        required=True,
-    )
+class AINameModal(discord.ui.Modal):
+    def __init__(self, ctx):
+        super().__init__(title=msg(ctx, "name_modal_title"))
+        self.ctx = ctx
+        self.name_input = discord.ui.TextInput(
+            label=msg(ctx, "name_label"),
+            placeholder=msg(ctx, "name_placeholder"),
+            # Short names would make the AI answer nearly every message.
+            min_length=MIN_AI_NAME_LENGTH,
+            max_length=32,
+            required=True,
+        )
+        self.add_item(self.name_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        value = str(self.name).strip()
+        value = str(self.name_input).strip()
         if len(value) < MIN_AI_NAME_LENGTH:
             return await interaction.response.send_message(
-                f"The AI name needs at least {MIN_AI_NAME_LENGTH} characters — "
-                "a shorter name would make Niko answer every message that contains it.",
+                msg(interaction, "name_too_short", min=MIN_AI_NAME_LENGTH),
                 ephemeral=True,
             )
         try:
             await save_config(interaction.guild.id, "ai_name", value)
         except Exception as error:  # noqa: BLE001
             return await interaction.response.send_message(
-                f"Could not save that name: {error}", ephemeral=True
+                msg(interaction, "name_save_error", error=error), ephemeral=True
             )
         await interaction.response.send_message(
-            f"The AI will now respond to **{value}** in this server.", ephemeral=True
+            msg(interaction, "name_saved", name=value), ephemeral=True
         )
 
 
 class AINameButton(discord.ui.Button):
-    def __init__(self, bot: commands.Bot):
-        super().__init__(label="AI Name", style=discord.ButtonStyle.secondary)
+    def __init__(self, bot: commands.Bot, ctx):
+        super().__init__(label=msg(ctx, "button_name"), style=discord.ButtonStyle.secondary)
         self.bot = bot
+        self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
-                "You need the `manage_guild` permission to use this button.", ephemeral=True
+                msg(interaction, "error_permission"), ephemeral=True
             )
-        await interaction.response.send_modal(AINameModal())
+        await interaction.response.send_modal(AINameModal(interaction))
 
 
 class ToggleAIButton(discord.ui.Button):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__(
-            label="Toggle AI",
+            label=msg(ctx, "button_toggle"),
             style=discord.ButtonStyle.secondary
         )
         self.bot = bot
+        self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
         # require manage guild perm
         if not interaction.user.guild_permissions.manage_guild:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('danger')} Error"
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="You need the `manage_guild` permission to use this button."
-                ),
-                accent_colour=discord.Color.yellow()
+            return await interaction.response.send_message(
+                view=_error_view(interaction), ephemeral=True
             )
-            view.add_item(container)
-            return await interaction.response.send_message(view=view, ephemeral=True)
         guild_id = interaction.guild.id
         config = await load_config(guild_id, fresh=True)
         enabled = str(config.get("enabled")) == "True"
@@ -358,23 +331,22 @@ class ToggleAIButton(discord.ui.Button):
             await save_config(guild_id, "enabled", "False" if enabled else "True")
         except Exception as error:  # noqa: BLE001
             return await interaction.response.send_message(
-                f"Could not change the AI setting: {error}", ephemeral=True
+                msg(interaction, "toggle_save_error", error=error), ephemeral=True
             )
         return await interaction.response.send_message(
-            "AI has been successfully disabled for this server." if enabled
-            else "AI has been successfully enabled for this server.",
+            msg(interaction, "ai_disabled" if enabled else "ai_enabled"),
             ephemeral=True,
         )
 
 
 class MainPanelButtons(discord.ui.ActionRow):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, ctx):
         super().__init__()
         self.bot = bot
-        self.add_item(ToggleAIButton(self.bot))
-        self.add_item(AINameButton(self.bot))
-        self.add_item(BotPersonalityButton(self.bot))
-        self.add_item(ExperimentsButton(self.bot))
+        self.add_item(ToggleAIButton(self.bot, ctx))
+        self.add_item(AINameButton(self.bot, ctx))
+        self.add_item(BotPersonalityButton(self.bot, ctx))
+        self.add_item(ExperimentsButton(self.bot, ctx))
 
 
 class AIConfigPanel(discord.ui.LayoutView):
@@ -382,11 +354,11 @@ class AIConfigPanel(discord.ui.LayoutView):
         super().__init__()
         self.bot = bot
         self.container = discord.ui.Container()
-        self.container.add_item(discord.ui.TextDisplay(content=f"### {get_emoji('ai')} AI Configuration Panel"))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "panel_heading")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(discord.ui.TextDisplay(content="Use the options below to configure the AI settings for your server."))
+        self.container.add_item(discord.ui.TextDisplay(content=msg(ctx, "panel_description")))
         self.container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-        self.container.add_item(MainPanelButtons(self.bot))
+        self.container.add_item(MainPanelButtons(self.bot, ctx))
         self.add_item(self.container)
 
 
@@ -406,8 +378,8 @@ class AIConfig(commands.Cog):
 
     @commands.hybrid_command(
         name="ai-config",
-        description="Configure the AI settings for this server",
-        help="Configure the AI settings for your server."
+        description=CMDS.text("ai-config.description"),
+        help=CMDS.help("ai-config"),
     )
     @commands.has_permissions(manage_guild=True)
     async def ai_config(self, ctx: commands.Context):

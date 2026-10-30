@@ -24,14 +24,20 @@ def cooldown_view(
     title: str = "⏳ On cooldown",
     note: str | None = None,
     accent: discord.Colour = DEFAULT_ACCENT,
+    template: str | None = None,
 ) -> discord.ui.LayoutView:
     """Build the cooldown notice telling the member when they can *action* again.
 
     ``action`` completes the sentence "You can … again", e.g. "spin the slots".
+    ``template`` replaces that English sentence with a translated one that has
+    ``{action}`` and ``{timestamp}`` placeholders.
     """
     timestamp = int(ready_at)
     lines = [note] if note else []
-    lines.append(f"You can {action} again <t:{timestamp}:R>.")
+    if template:
+        lines.append(template.format(action=action, timestamp=timestamp))
+    else:
+        lines.append(f"You can {action} again <t:{timestamp}:R>.")
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {title}"),

@@ -17,6 +17,14 @@ from utils.prefix_manager import resolve_prefix
 from utils.image.blackjack import render_table
 from utils.image.economy_card import ACCENT_BRIGHT, DANGER, SAGE
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "messages")
+msg = make_flat_msg(MESSAGES)
+
 SHOE_FILE   = "blackjack_shoe.json"
 IMAGE_NAME  = "blackjack.png"
 
@@ -195,6 +203,7 @@ class BlackjackGame:
 # ============================
 
 def _build_view(
+    ctx,
     *,
     with_buttons: bool,
     game: BlackjackGame | None = None,
@@ -232,15 +241,15 @@ def _build_view(
 
         if insurance_only:
             row = discord.ui.ActionRow(
-                _Btn("Take Insurance", discord.ButtonStyle.green,   "insurance"),
-                _Btn("Decline",        discord.ButtonStyle.gray,    "decline"),
+                _Btn(msg(ctx, "blackjack_btn_insurance"), discord.ButtonStyle.green, "insurance"),
+                _Btn(msg(ctx, "blackjack_btn_decline"),   discord.ButtonStyle.gray,  "decline"),
             )
         else:
             row = discord.ui.ActionRow(
-                _Btn("Hit",       discord.ButtonStyle.green,   "hit"),
-                _Btn("Stand",     discord.ButtonStyle.red,     "stand"),
-                _Btn("Double",    discord.ButtonStyle.blurple, "double",  disabled=not game.can_double()),
-                _Btn("Split",     discord.ButtonStyle.gray,    "split",   disabled=not game.can_split()),
+                _Btn(msg(ctx, "blackjack_btn_hit"),    discord.ButtonStyle.green,  "hit"),
+                _Btn(msg(ctx, "blackjack_btn_stand"),  discord.ButtonStyle.red,    "stand"),
+                _Btn(msg(ctx, "blackjack_btn_double"), discord.ButtonStyle.blurple, "double", disabled=not game.can_double()),
+                _Btn(msg(ctx, "blackjack_btn_split"),  discord.ButtonStyle.gray,   "split",  disabled=not game.can_split()),
             )
 
         items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
@@ -262,8 +271,8 @@ class Blackjack(commands.Cog):
 
     @commands.hybrid_group(
         name="blackjack",
-        description="Play a full casino-grade blackjack game",
-        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega un blackjack de casino completo' }"
+        description=CMDS.text("blackjack.description"),
+        help=CMDS.help("blackjack"),
     )
     async def blackjack(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -271,11 +280,11 @@ class Blackjack(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### 🎰 Blackjack Help"
+                    content=msg(ctx, "blackjack_help_title")
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"**{prefix}blackjack play <amount>** - Play a game of blackjack.\n**{prefix}blackjack tutorial** - Learn how to play blackjack."
+                    content=msg(ctx, "blackjack_help_body", prefix=prefix)
                 )
             )
             view.add_item(container)
@@ -283,13 +292,13 @@ class Blackjack(commands.Cog):
 
     @blackjack.command(
         name="play",
-        description="Play a game of blackjack",
-        help="{ 'en': 'play a full casino-grade blackjack game', 'de': 'spiele ein volles Casino-Blackjack-Spiel', 'es': 'juega una partida de blackjack' }"
+        description=CMDS.text("blackjack.play.description"),
+        help=CMDS.help("blackjack.play"),
     )
     async def blackjack_play(self, ctx, amount: int = None):
         """Play a full casino-grade blackjack game with a rendered table image."""
         if amount is None or amount <= 0:
-            return await ctx.send("You must bet more than 0 coins.")
+            return await ctx.send(msg(ctx, "blackjack_bet_positive"))
 
         economy = self.bot.get_cog("EconomyCog")
         user_data = await economy.get_user_economy_data(ctx.author.id)
@@ -298,14 +307,15 @@ class Blackjack(commands.Cog):
         blackjack_cooldown = int(os.getenv("BLACKJACK_COOLDOWN") or 30)
         if user_data["last_blackjack"] + blackjack_cooldown > time.time():
             return await ctx.send(view=cooldown_view(
-                "play blackjack",
+                msg(ctx, "blackjack_cooldown_action"),
                 cooldown_ready_at(user_data["last_blackjack"], blackjack_cooldown),
-                title="🃏 Slow down",
-                note=f"Blackjack allows one hand every **{blackjack_cooldown}** seconds.",
+                title=msg(ctx, "blackjack_cooldown_title"),
+                note=msg(ctx, "blackjack_cooldown_note", seconds=blackjack_cooldown),
+                template=msg(ctx, "blackjack_cooldown_sentence"),
             ))
 
         if amount > balance:
-            return await ctx.send("You don't have enough coins.")
+            return await ctx.send(msg(ctx, "blackjack_not_enough"))
 
         game = BlackjackGame(self.shoe, amount)
         game.initial_deal()
@@ -330,7 +340,7 @@ class Blackjack(commands.Cog):
                 if interaction.user.id != ctx.author.id:
                     try:
                         await interaction.response.send_message(
-                            "This isn't your blackjack game.", ephemeral=True
+                            msg(interaction, "blackjack_not_yours"), ephemeral=True
                         )
                     except discord.InteractionResponded:
                         pass
@@ -338,21 +348,25 @@ class Blackjack(commands.Cog):
                 return True
             view.interaction_check = _check
 
-        msg: discord.Message | None = None
+        message: discord.Message | None = None
 
         async def _send_or_edit(buf, view: discord.ui.LayoutView):
-            nonlocal msg
+            nonlocal message
             file = discord.File(buf, filename=IMAGE_NAME)
-            if msg is None:
-                msg = await ctx.send(view=view, file=file)
+            if message is None:
+                message = await ctx.send(view=view, file=file)
             else:
-                await msg.edit(view=view, attachments=[file])
+                await message.edit(view=view, attachments=[file])
 
         # ── Insurance prompt ───────────────────────────────────────────────
         if game.can_insure() and not dealer_has_blackjack:
-            buf  = await _render(reveal_dealer=False, title="Insurance?",
-                                 status="Dealer is showing an Ace.", status_color=STATUS_NEUTRAL)
-            view = _build_view(with_buttons=True, game=game, accent=ACCENT_BRAND, insurance_only=True)
+            buf  = await _render(
+                reveal_dealer=False,
+                title=msg(ctx, "blackjack_insurance_title"),
+                status=msg(ctx, "blackjack_insurance_status"),
+                status_color=STATUS_NEUTRAL,
+            )
+            view = _build_view(ctx, with_buttons=True, game=game, accent=ACCENT_BRAND, insurance_only=True)
             _attach_check(view)
             await _send_or_edit(buf, view)
             await view.wait()
@@ -373,11 +387,15 @@ class Blackjack(commands.Cog):
             user_data["last_blackjack"] = time.time()
             await economy.save_user_economy_data(ctx.author.id)
 
-            status = f"{payout:+d} coins"
+            status = msg(ctx, "blackjack_status_coins", amount=f"{payout:+d}")
             status_color = STATUS_WIN if payout >= 0 else STATUS_LOSS
-            buf  = await _render(reveal_dealer=True, title="Dealer Blackjack",
-                                 status=status, status_color=status_color)
-            view = _build_view(with_buttons=False, accent=ACCENT_RED)
+            buf  = await _render(
+                reveal_dealer=True,
+                title=msg(ctx, "blackjack_dealer_blackjack"),
+                status=status,
+                status_color=status_color,
+            )
+            view = _build_view(ctx, with_buttons=False, accent=ACCENT_RED)
             return await _send_or_edit(buf, view)
 
         # ── Player natural blackjack ───────────────────────────────────────
@@ -387,9 +405,13 @@ class Blackjack(commands.Cog):
             user_data["last_blackjack"] = time.time()
             await economy.save_user_economy_data(ctx.author.id)
 
-            buf  = await _render(reveal_dealer=True, title="Blackjack! 3:2",
-                                 status=f"+{winnings} coins", status_color=STATUS_WIN)
-            view = _build_view(with_buttons=False, accent=ACCENT_BRAND)
+            buf  = await _render(
+                reveal_dealer=True,
+                title=msg(ctx, "blackjack_natural"),
+                status=msg(ctx, "blackjack_status_coins", amount=f"+{winnings}"),
+                status_color=STATUS_WIN,
+            )
+            view = _build_view(ctx, with_buttons=False, accent=ACCENT_BRAND)
             return await _send_or_edit(buf, view)
 
         # ── PLAYER TURN ────────────────────────────────────────────────────
@@ -398,9 +420,13 @@ class Blackjack(commands.Cog):
             game.current_hand = hand_index
 
             while not game.hands[hand_index]["finished"]:
-                title = f"Hand #{hand_index+1}" if len(game.hands) > 1 else "Your Move"
+                title = (
+                    msg(ctx, "blackjack_hand", index=hand_index + 1)
+                    if len(game.hands) > 1
+                    else msg(ctx, "blackjack_your_move")
+                )
                 buf   = await _render(reveal_dealer=False, title=title)
-                view  = _build_view(with_buttons=True, game=game, accent=ACCENT_GREEN)
+                view  = _build_view(ctx, with_buttons=True, game=game, accent=ACCENT_GREEN)
                 _attach_check(view)
                 await _send_or_edit(buf, view)
 
@@ -442,18 +468,18 @@ class Blackjack(commands.Cog):
         await economy.save_user_economy_data(ctx.author.id)
 
         if total_result > 0:
-            title  = "You Win"
-            status = f"+{total_result} coins"
+            title  = msg(ctx, "blackjack_win")
+            status = msg(ctx, "blackjack_status_coins", amount=f"+{total_result}")
             color  = STATUS_WIN
             accent = ACCENT_GREEN
         elif total_result < 0:
-            title  = "You Lose"
-            status = f"{total_result} coins"
+            title  = msg(ctx, "blackjack_lose")
+            status = msg(ctx, "blackjack_status_coins", amount=total_result)
             color  = STATUS_LOSS
             accent = ACCENT_RED
         else:
-            title  = "Push"
-            status = "Bet returned"
+            title  = msg(ctx, "blackjack_push")
+            status = msg(ctx, "blackjack_push_status")
             color  = STATUS_NEUTRAL
             accent = ACCENT_BRAND
 
@@ -463,27 +489,20 @@ class Blackjack(commands.Cog):
             h["finished"] = True
 
         buf  = await _render(reveal_dealer=True, title=title, status=status, status_color=color)
-        view = _build_view(with_buttons=False, accent=accent)
+        view = _build_view(ctx, with_buttons=False, accent=accent)
         await _send_or_edit(buf, view)
 
     # This command is a tutorial for people who don't know how to play blackjack
     @blackjack.command(
         name="tutorial",
-        description="Learn how to play blackjack",
-        help="{ 'en': 'learn how to play blackjack', 'de': 'lerne, wie man Blackjack spielt', 'es': 'aprende a jugar blackjack' }"
+        description=CMDS.text("blackjack.tutorial.description"),
+        help=CMDS.help("blackjack.tutorial"),
     )
     async def blackjack_tutorial(self, ctx):
         """Learn how to play blackjack."""
         # Paginated tutorial via the shared PaginatedView
-        pages = [
-            "## **Page 1 — What Is Blackjack? (The Goal of the Game)**\nBlackjack (also called **21**) is a simple card game where **you play against the dealer**, not the other players.\nYour goal is to get a hand value **closer to 21 than the dealer** *without going over 21*. Going over 21 is called **busting**, and it means you automatically lose.\n\nBlackjack is played with one or more standard 52‑card decks. Each round begins with everyone placing a bet. After that, the dealer gives each player **two cards face‑up**, and gives themselves **one face‑up card and one face‑down card**.",
-            "## **Page 2 — Understanding Card Values (No Math Skills Needed!)**\nBlackjack uses very simple card values:\n- **Number cards (2–10):** worth their number\n- **Face cards (J, Q, K):** worth **10**\n- **Ace:** worth **1 or 11**, whichever helps your hand more\n\nYou don’t need to calculate anything complicated — just add the values together.\nExample:\n- A **7** and a **King** = **17**\n- An **Ace** and a **6** = **7 or 17** (the Ace adjusts automatically)\n\nA hand with an Ace that can count as 11 without busting is called a **soft hand**.\nA hand where the Ace must count as 1 is a **hard hand**.",
-            "## **Page 3 — What Happens at the Start of a Round**\nA typical round looks like this:\n1. You place your bet.\n2. You receive **two cards face‑up**.\n3. The dealer receives **one face‑up card** and **one face‑down card** (the “hole card”).\n4. If you have an **Ace + 10‑value card**, that’s a **Blackjack**, also called a **natural**.\n   - A natural Blackjack usually pays **3:2**, though some tables pay **6:5** (which is worse for players).\n\nIf you don’t have a natural, you choose what to do next.",
-            "## **Page 4 — Your Options: Hit, Stand, Double, Split, Surrender**\nYou can choose from several actions:\n\n### **Hit**\nAsk for another card. Use this when your hand is low and you want to improve it.\n\n### **Stand**\nKeep your current hand and end your turn.\n\n### **Double Down**/nDouble your bet and receive **exactly one more card**.\nThis is best when you have a strong starting hand (like 10 or 11).\n\n### **Split**\nIf your two cards have the **same value**, you can split them into **two separate hands**, doubling your bet.\nEach new hand gets one extra card.\n\n### **Surrender** (not always available)\nYou give up your hand immediately and get **half your bet back**.\n\n### **Insurance**\nA side bet offered only when the dealer shows an Ace.\nIt pays **2:1** if the dealer has Blackjack — but statistically, it’s usually a bad bet.",
-            "## **Page 5 — Dealer Rules**\nThe dealer must follow strict rules:\n- The dealer must **hit until reaching 17 or higher**.\n- Most casinos require the dealer to stand on **all 17s**, but some require hitting on a “soft 17.”\n- If the dealer busts (goes over 21), **all players who didn’t bust win**.\n\nYou don’t need to guess what the dealer will do — the rules are fixed.",
-            "## **Page 6 — How You Win (and What a Push Is)**\nAfter all players finish their turns, the dealer reveals their hidden card and plays their hand. Then:\n\n- If your total is **closer to 21 than the dealer**, you win.\n- If your total is **lower**, you lose.\n- If both totals are **equal**, it’s a **push** (tie) — you get your bet back.\n\nA natural Blackjack (Ace + 10‑value card) pays **3:2** at most tables, but some pay **6:5**, which is worse for players. Avoid 6:5 tables when possible."
-        ]
-        view = PaginatedView(title="Blackjack Tutorial", pages=pages)
+        pages = [msg(ctx, f"blackjack_page_{page}") for page in range(1, 7)]
+        view = PaginatedView(title=msg(ctx, "blackjack_tutorial_title"), pages=pages)
         await ctx.send(view=view)
 
 

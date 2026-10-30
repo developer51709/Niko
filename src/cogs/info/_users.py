@@ -8,6 +8,10 @@ from ._avatars import AvatarButtons, UserInfoButtons
 from ._badges import _get_badges, _get_discord_badges
 from ._messages import _divider, cv2_image, key_permission_names, msg
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 
 class UserMixin:
     """Commands that describe a member or a user account."""
@@ -18,8 +22,8 @@ class UserMixin:
     @commands.hybrid_command(
         name="userinfo",
         aliases=["ui", "user"],
-        description="View user info",
-        help="{ 'en': 'see user details', 'de': 'benutzer-infos anzeigen', 'es': 'mira los detalles del usuario' }"
+        description=CMDS.text("userinfo.description"),
+        help=CMDS.help("userinfo"),
     )
     async def userinfo(self, ctx, member: discord.Member = None):
         if ctx.interaction:
@@ -132,7 +136,7 @@ class UserMixin:
         if badge_lines:
             children.append(_divider())
             children.append(discord.ui.TextDisplay(content="\n".join(badge_lines)))
-        children.append(UserInfoButtons(target.id))
+        children.append(UserInfoButtons(target.id, ctx))
 
         # No accent colour: normal command responses stay on Discord's neutral
         # container, so the card is not the odd one out.
@@ -145,8 +149,8 @@ class UserMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="avatar",
-        description="View someone's avatar",
-        help="{ 'en': 'peek at someones cute avatar 👤', 'de': 'avatar anzeigen', 'es': 'mira el avatar de alguien 👤' }"
+        description=CMDS.text("avatar.description"),
+        help=CMDS.help("avatar"),
     )
     async def avatar(self, ctx, member: discord.Member = None):
         target = member or ctx.author
@@ -163,7 +167,7 @@ class UserMixin:
                     media=avatar_url
                 )
             ),
-            AvatarButtons(target.id)
+            AvatarButtons(target.id, ctx)
         )
         view.add_item(container)
         await ctx.send(view=view)
@@ -173,8 +177,8 @@ class UserMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="banner",
-        description="View someone's banner",
-        help="{ 'en': 'see someones banner 🖼', 'de': 'banner anzeigen', 'es': 'mira el banner de alguien 🖼' }"
+        description=CMDS.text("banner.description"),
+        help=CMDS.help("banner"),
     )
     async def banner(self, ctx, member: discord.Member = None):
         target = member or ctx.author

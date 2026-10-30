@@ -27,65 +27,19 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 DATA_FILE = "data/highlights.json"
 MAX_KEYWORDS = 25
 COOLDOWN_SECONDS = 60
 
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "added":           "✅ Highlight **`{kw}`** added.",
-            "removed":         "✅ Highlight **`{kw}`** removed.",
-            "exists":          "⚠️ You already have **`{kw}`** as a highlight.",
-            "missing":         "⚠️ You don't have **`{kw}`** as a highlight.",
-            "limit":           "⚠️ You've reached the highlight limit ({max}). Remove some first.",
-            "list_empty":      "You have no highlights in this server.",
-            "list_title":      "### {icon} Your Highlights",
-            "cleared":         "✅ All highlights removed.",
-            "ignore_user_ok":  "✅ Ignoring {user}.",
-            "ignore_chan_ok":  "✅ Ignoring {channel}.",
-            "unignore_user_ok":"✅ No longer ignoring {user}.",
-            "unignore_chan_ok":"✅ No longer ignoring {channel}.",
-            "notify_title":    "### {icon} Highlight: `{kw}`",
-            "notify_body":     "**In:** {channel} of **{guild}**\n**By:** {author}\n\n{quote}\n\n[Jump to message]({link})",
-        },
-        "de": {
-            "added":           "✅ Highlight **`{kw}`** hinzugefügt.",
-            "removed":         "✅ Highlight **`{kw}`** entfernt.",
-            "exists":          "⚠️ Du hast **`{kw}`** bereits als Highlight.",
-            "missing":         "⚠️ Du hast **`{kw}`** nicht als Highlight.",
-            "limit":           "⚠️ Du hast das Highlight-Limit ({max}) erreicht. Entferne zuerst einige.",
-            "list_empty":      "Du hast keine Highlights auf diesem Server.",
-            "list_title":      "### {icon} Deine Highlights",
-            "cleared":         "✅ Alle Highlights entfernt.",
-            "ignore_user_ok":  "✅ Ignoriere {user}.",
-            "ignore_chan_ok":  "✅ Ignoriere {channel}.",
-            "unignore_user_ok":"✅ Ignoriere {user} nicht mehr.",
-            "unignore_chan_ok":"✅ Ignoriere {channel} nicht mehr.",
-            "notify_title":    "### {icon} Highlight: `{kw}`",
-            "notify_body":     "**In:** {channel} auf **{guild}**\n**Von:** {author}\n\n{quote}\n\n[Zur Nachricht springen]({link})",
-        },
-        "es": {
-            "added":           "✅ Highlight **`{kw}`** añadido.",
-            "removed":         "✅ Highlight **`{kw}`** eliminado.",
-            "exists":          "⚠️ Ya tienes **`{kw}`** como highlight.",
-            "missing":         "⚠️ No tienes **`{kw}`** como highlight.",
-            "limit":           "⚠️ Has alcanzado el límite de highlights ({max}). Elimina algunos primero.",
-            "list_empty":      "No tienes highlights en este servidor.",
-            "list_title":      "### {icon} Tus Highlights",
-            "cleared":         "✅ Todos los highlights eliminados.",
-            "ignore_user_ok":  "✅ Ignorando a {user}.",
-            "ignore_chan_ok":  "✅ Ignorando {channel}.",
-            "unignore_user_ok":"✅ Ya no se ignora a {user}.",
-            "unignore_chan_ok":"✅ Ya no se ignora {channel}.",
-            "notify_title":    "### {icon} Highlight: `{kw}`",
-            "notify_body":     "**En:** {channel} de **{guild}**\n**Por:** {author}\n\n{quote}\n\n[Saltar al mensaje]({link})",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.utility", "highlights")
 
 
 def _lang(ctx) -> str:
@@ -96,7 +50,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:
@@ -140,8 +94,8 @@ class Highlights(commands.Cog):
 
     @commands.hybrid_group(
         name="highlight",
-        description="Keyword DM notifications.",
-        help="{ 'en': 'Keyword DM notifications.', 'de': 'Schlüsselwort-DM-Benachrichtigungen.', 'es': 'Notificaciones por DM por palabras clave.' }",
+        description=CMDS.text("highlight.description"),
+        help=CMDS.help("highlight"),
         invoke_without_command=True,
     )
     @commands.guild_only()
@@ -153,8 +107,8 @@ class Highlights(commands.Cog):
 
     @highlight.command(
         name="add",
-        description="Add a highlight keyword.",
-        help="{ 'en': 'Add a highlight keyword (you\\'ll be DMed when it\\'s mentioned).', 'de': 'Schlüsselwort hinzufügen (DM bei Erwähnung).', 'es': 'Añade una palabra clave (te avisaré por DM al mencionarla).' }",
+        description=CMDS.text("highlight.add.description"),
+        help=CMDS.help("highlight.add"),
     )
     async def highlight_add(self, ctx: commands.Context, *, keyword: str):
         keyword = keyword.lower().strip()[:50]
@@ -178,8 +132,8 @@ class Highlights(commands.Cog):
 
     @highlight.command(
         name="remove",
-        description="Remove a highlight keyword.",
-        help="{ 'en': 'Remove a highlight keyword.', 'de': 'Ein Highlight-Schlüsselwort entfernen.', 'es': 'Elimina una palabra clave de highlight.' }",
+        description=CMDS.text("highlight.remove.description"),
+        help=CMDS.help("highlight.remove"),
     )
     async def highlight_remove(self, ctx: commands.Context, *, keyword: str):
         keyword = keyword.lower().strip()
@@ -194,8 +148,8 @@ class Highlights(commands.Cog):
 
     @highlight.command(
         name="list",
-        description="List your highlights for this server.",
-        help="{ 'en': 'List your highlights for this server.', 'de': 'Deine Highlights für diesen Server anzeigen.', 'es': 'Lista tus highlights para este servidor.' }",
+        description=CMDS.text("highlight.list.description"),
+        help=CMDS.help("highlight.list"),
     )
     async def highlight_list(self, ctx: commands.Context):
         u = self._user(ctx.guild.id, ctx.author.id)
@@ -213,8 +167,8 @@ class Highlights(commands.Cog):
 
     @highlight.command(
         name="clear",
-        description="Remove all your highlights for this server.",
-        help="{ 'en': 'Remove all your highlights for this server.', 'de': 'Alle deine Highlights für diesen Server entfernen.', 'es': 'Elimina todos tus highlights de este servidor.' }",
+        description=CMDS.text("highlight.clear.description"),
+        help=CMDS.help("highlight.clear"),
     )
     async def highlight_clear(self, ctx: commands.Context):
         u = self._user(ctx.guild.id, ctx.author.id)
@@ -224,14 +178,17 @@ class Highlights(commands.Cog):
 
     @highlight.group(
         name="ignore",
-        description="Ignore users or channels.",
-        help="{ 'en': 'Ignore users or channels for highlights.', 'de': 'Nutzer oder Kanäle bei Highlights ignorieren.', 'es': 'Ignora usuarios o canales para highlights.' }",
+        description=CMDS.text("highlight.ignore.description"),
+        help=CMDS.help("highlight.ignore"),
         invoke_without_command=True,
     )
     async def highlight_ignore(self, ctx: commands.Context):
         await ctx.send_help(self.highlight_ignore)
 
-    @highlight_ignore.command(name="user")
+    @highlight_ignore.command(
+        name="user",
+        help=CMDS.help("highlight.ignore.user"),
+    )
     async def highlight_ignore_user(self, ctx: commands.Context, user: discord.Member):
         u = self._user(ctx.guild.id, ctx.author.id)
         if user.id not in u["ignore_users"]:
@@ -240,7 +197,10 @@ class Highlights(commands.Cog):
         await ctx.send(view=cv2(msg(ctx, "ignore_user_ok", user=user.mention)),
                        ephemeral=True if ctx.interaction else False)
 
-    @highlight_ignore.command(name="channel")
+    @highlight_ignore.command(
+        name="channel",
+        help=CMDS.help("highlight.ignore.channel"),
+    )
     async def highlight_ignore_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         u = self._user(ctx.guild.id, ctx.author.id)
         if channel.id not in u["ignore_channels"]:
@@ -251,14 +211,17 @@ class Highlights(commands.Cog):
 
     @highlight.group(
         name="unignore",
-        description="Stop ignoring users or channels.",
-        help="{ 'en': 'Stop ignoring users or channels.', 'de': 'Nutzer oder Kanäle nicht mehr ignorieren.', 'es': 'Deja de ignorar usuarios o canales.' }",
+        description=CMDS.text("highlight.unignore.description"),
+        help=CMDS.help("highlight.unignore"),
         invoke_without_command=True,
     )
     async def highlight_unignore(self, ctx: commands.Context):
         await ctx.send_help(self.highlight_unignore)
 
-    @highlight_unignore.command(name="user")
+    @highlight_unignore.command(
+        name="user",
+        help=CMDS.help("highlight.unignore.user"),
+    )
     async def highlight_unignore_user(self, ctx: commands.Context, user: discord.Member):
         u = self._user(ctx.guild.id, ctx.author.id)
         if user.id in u["ignore_users"]:
@@ -267,7 +230,10 @@ class Highlights(commands.Cog):
         await ctx.send(view=cv2(msg(ctx, "unignore_user_ok", user=user.mention)),
                        ephemeral=True if ctx.interaction else False)
 
-    @highlight_unignore.command(name="channel")
+    @highlight_unignore.command(
+        name="channel",
+        help=CMDS.help("highlight.unignore.channel"),
+    )
     async def highlight_unignore_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         u = self._user(ctx.guild.id, ctx.author.id)
         if channel.id in u["ignore_channels"]:

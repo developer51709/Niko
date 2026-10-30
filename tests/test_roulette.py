@@ -113,7 +113,7 @@ def spin(data, *, result, bet_type="red", numbers=None, amount=BET):
          patch.object(roulette_module, "build_inside_view", lambda ctx: FakeView(bet_type)), \
          patch.object(roulette_module, "build_number_view", lambda ctx, count: FakeView(choice=numbers)), \
          patch.object(roulette_module, "build_chip_view", lambda ctx: FakeView(amount=amount)), \
-         patch.object(roulette_module, "build_spinning_view", lambda: FakeView()), \
+         patch.object(roulette_module, "build_spinning_view", lambda *_: FakeView()), \
          patch.object(roulette_module, "build_result_view",
                       lambda *args: card.append(args) or FakeView()), \
          patch.object(roulette_module.random, "choice", lambda wheel: result), \
@@ -183,7 +183,7 @@ class SpinAccountingTests(unittest.TestCase):
         entry = data["transactions"][0]
         self.assertEqual(entry["kind"], "roulette_win")
         self.assertEqual(entry["amount"], 100)
-        self.assertEqual(entry["note"], "red · 7 (🔴 Red)")
+        self.assertEqual(entry["note"], "Red · 7 (🔴 Red)")
 
     def test_losing_spin_debits_the_stake_and_records_it(self):
         data = account()
@@ -196,7 +196,7 @@ class SpinAccountingTests(unittest.TestCase):
         entry = data["transactions"][0]
         self.assertEqual(entry["kind"], "roulette_loss")
         self.assertEqual(entry["amount"], -100)
-        self.assertEqual(entry["note"], "red · 0 (🟢 Green)")
+        self.assertEqual(entry["note"], "Red · 0 (🟢 Green)")
 
     def test_result_card_shows_the_net_win(self):
         data = account()
@@ -223,7 +223,7 @@ class SpinAccountingTests(unittest.TestCase):
         with patch.object(roulette_module, "build_bet_type_view", lambda ctx: FakeView("color")), \
              patch.object(roulette_module, "build_color_view", lambda ctx: FakeView("red")), \
              patch.object(roulette_module, "build_chip_view", lambda ctx: FakeView(amount=BET)), \
-             patch.object(roulette_module, "build_spinning_view", lambda: FakeView()), \
+             patch.object(roulette_module, "build_spinning_view", lambda *_: FakeView()), \
              patch.object(roulette_module, "build_result_view", lambda *args: FakeView()), \
              patch.object(roulette_module.random, "choice", lambda wheel: 7), \
              patch.object(roulette_module.asyncio, "sleep", new=AsyncMock()):

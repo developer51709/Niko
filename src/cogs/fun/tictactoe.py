@@ -1,44 +1,19 @@
 import discord
 from discord.ext import commands
 from typing import List
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 # -----------------------------
 # MESSAGE DICTIONARY
 # -----------------------------
-MESSAGES = {
-    "normal": {
-        "en": {
-            "not_your_turn": "{mention}, it is not your turn.",
-            "winner_x": "{p1} is the winner!",
-            "winner_o": "{p2} is the winner!",
-            "tie": "It's a tie!",
-            "mention_user": "Please mention a user.",
-            "cannot_play_self": "You cannot play against yourself.",
-            "game_start": "{opponent}, your game has started!",
-        },
-        "de": {
-            "not_your_turn": "{mention}, du bist noch nicht dran.",
-            "winner_x": "{p1} hat gewonnen!",
-            "winner_o": "{p2} hat gewonnen!",
-            "tie": "Unentschieden!",
-            "mention_user": "Bitte erwähne einen Benutzer.",
-            "cannot_play_self": "Du kannst nicht gegen dich selbst spielen.",
-            "game_start": "{opponent}, euer Spiel hat begonnen!",
-        },
-        "es": {
-            "not_your_turn": "{mention}, no es tu turno todavía.",
-            "winner_x": "¡{p1} es el ganador!",
-            "winner_o": "¡{p2} es el ganador!",
-            "tie": "¡Es un empate!",
-            "mention_user": "Por favor menciona a un usuario.",
-            "cannot_play_self": "No puedes jugar contra ti mismo.",
-            "game_start": "¡{opponent}, vuestra partida ha comenzado!",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.fun", "tictactoe")
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 # -----------------------------
@@ -182,7 +157,7 @@ class tictactoe(commands.Cog):
 
     @commands.command(
         aliases=["ttt"],
-        help="{ 'en': 'play a tic‑tac‑toe match', 'de': 'spiele tictactoe mit einem nutzer' }"
+        help=CMDS.help("tictactoe"),
     )
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def tictactoe(self, ctx, member: discord.Member = None):

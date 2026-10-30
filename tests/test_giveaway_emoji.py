@@ -49,7 +49,7 @@ def _en() -> SimpleNamespace:
 
 class GiveawayEmojiTests(unittest.TestCase):
     def test_no_translated_message_still_carries_a_unicode_emoji(self):
-        for lang, table in MESSAGES["normal"].items():
+        for lang, table in MESSAGES.items():
             for key, text in table.items():
                 self.assertIsNone(
                     UNICODE_EMOJI.search(text),
@@ -78,10 +78,18 @@ class GiveawayEmojiTests(unittest.TestCase):
 
         for lang in ("en", "de", "es"):
             ctx = SimpleNamespace(guild=SimpleNamespace(preferred_locale=f"{lang}-{'DE' if lang == 'de' else 'ES'}"))
-            for key in MESSAGES["normal"][lang]:
+            for key in MESSAGES[lang]:
                 with self.subTest(lang=lang, key=key):
-                    rendered = msg(ctx, key, prize="p", mentions="m", url="u", mention="m",
-                                   user="u", count=1, command="c", s="s")
+                    # Every placeholder the catalogue uses, so a translation that
+                    # introduces a new token cannot silently ship unrendered.
+                    rendered = msg(
+                        ctx, key,
+                        prize="p", mentions="m", url="u", mention="m", user="u",
+                        count=1, command="c", s="s", age="a", channel="c",
+                        days=1, duration="d", ends="e", joined="j",
+                        participants="p", problems="p", requirements="r",
+                        roles="r", winners=1, prefix="p",
+                    )
                     self.assertNotIn("{", rendered, rendered)
 
     def test_the_manage_panel_buttons_use_custom_emojis(self):

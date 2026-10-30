@@ -23,6 +23,15 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils import logging as log
 from utils.discord_extras import forward_message, set_voice_status, stage_become_speaker
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+MESSAGES = load_locales(__package__, "nitro")
+msg = make_flat_msg(MESSAGES)
 
 
 def _cv(text: str, *, colour: discord.Colour | None = None) -> discord.ui.LayoutView:
@@ -99,21 +108,24 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             )
         elif reply == "ai_disabled_global":
             await interaction.followup.send(
-                "Niko's AI is currently disabled by the bot owner.", ephemeral=True
+                msg(interaction, "ai_disabled_global"), ephemeral=True
             )
         elif reply == "ai_disabled_guild":
             await interaction.followup.send(
-                "AI is disabled in this server.", ephemeral=True
+                msg(interaction, "ai_disabled_guild"), ephemeral=True
             )
         elif isinstance(reply, str) and reply:
             await interaction.followup.send(
-                view=_cv(f"### ☕ Niko says…\n{reply}", colour=discord.Colour(0xc8a882)),
+                view=_cv(
+                    f"### ☕ {msg(interaction, 'ask_title')}\n{reply}",
+                    colour=discord.Colour(0xc8a882),
+                ),
                 ephemeral=True,
             )
         else:
             await interaction.followup.send(
                 view=_cv(
-                    "☕ I couldn't come up with a reply just now — try again in a moment.",
+                    f"☕ {msg(interaction, 'ask_empty')}",
                     colour=discord.Colour(0xfee75c),
                 ),
                 ephemeral=True,
@@ -139,7 +151,10 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
                 interaction.guild_id, member.id,
             )
             if row:
-                lines.append(f"**Level:** {row['level']}  •  **XP:** {row['xp']}")
+                lines.append(
+                    f"**{msg(interaction, 'profile_level')}:** {row['level']}  •  "
+                    f"**{msg(interaction, 'profile_xp')}:** {row['xp']}"
+                )
         except Exception:
             pass
 
@@ -150,13 +165,24 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
                 interaction.guild_id, member.id,
             )
             if eco:
-                lines.append(f"**Wallet:** {eco['balance']:,} ☕  •  **Bank:** {eco['bank']:,} ☕")
+                lines.append(
+                    f"**{msg(interaction, 'profile_wallet')}:** {eco['balance']:,} ☕  •  "
+                    f"**{msg(interaction, 'profile_bank')}:** {eco['bank']:,} ☕"
+                )
         except Exception:
             pass
 
         # Basic info
-        lines.append(f"-# Joined: {discord.utils.format_dt(member.joined_at, 'R') if member.joined_at else 'unknown'}")
-        lines.append(f"-# Account: {discord.utils.format_dt(member.created_at, 'R')}")
+        joined = (
+            discord.utils.format_dt(member.joined_at, "R")
+            if member.joined_at
+            else msg(interaction, "profile_unknown")
+        )
+        lines.append(f"-# {msg(interaction, 'profile_joined')}: {joined}")
+        lines.append(
+            f"-# {msg(interaction, 'profile_account')}: "
+            f"{discord.utils.format_dt(member.created_at, 'R')}"
+        )
 
         # Build a Section with avatar thumbnail (Components v2)
         section = discord.ui.Section(
@@ -173,11 +199,11 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
     @app_commands.command(
         name="vcstatus",
-        description="Set or clear the text status shown in a voice channel.",
+        description=CMDS.text("vcstatus.description"),
     )
     @app_commands.describe(
-        status="Text to display (leave blank to clear)",
-        channel="Voice channel to update (defaults to the one you're in)",
+        status=CMDS.arg("vcstatus", "status"),
+        channel=CMDS.arg("vcstatus", "channel"),
     )
     @app_commands.guild_only()
     async def vcstatus(
@@ -192,7 +218,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             target = interaction.user.voice.channel  # type: ignore[union-attr]
         if target is None:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('cross')} Join a voice channel or specify one with the `channel` option."),
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'vc_need_channel')}"),
                 ephemeral=True,
             )
             return
@@ -202,7 +228,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         perms = target.permissions_for(me)
         if not perms.manage_channels:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('cross')} I need the **Manage Channels** permission to set voice status."),
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'vc_need_perms')}"),
                 ephemeral=True,
             )
             return
@@ -211,14 +237,17 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         if status:
             await interaction.response.send_message(
                 view=_cv(
-                    f"### 🎙️ Voice Status Set\n{target.mention} → `{status[:100]}`",
+                    f"### 🎙️ {msg(interaction, 'vc_set_title')}\n{target.mention} → `{status[:100]}`",
                     colour=discord.Colour(0x57f287),
                 ),
                 ephemeral=True,
             )
         else:
             await interaction.response.send_message(
-                view=_cv(f"### 🎙️ Voice Status Cleared\n{target.mention}", colour=discord.Colour(0x57f287)),
+                view=_cv(
+                    f"### 🎙️ {msg(interaction, 'vc_cleared_title')}\n{target.mention}",
+                    colour=discord.Colour(0x57f287),
+                ),
                 ephemeral=True,
             )
 
@@ -226,12 +255,12 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
     @app_commands.command(
         name="forward",
-        description="Forward a message (by ID) to another channel.",
+        description=CMDS.text("forward.description"),
     )
     @app_commands.describe(
-        message_id="ID of the message to forward",
-        source="Channel the message is in (defaults to current)",
-        destination="Channel to forward to",
+        message_id=CMDS.arg("forward", "message_id"),
+        source=CMDS.arg("forward", "source"),
+        destination=CMDS.arg("forward", "destination"),
     )
     @app_commands.guild_only()
     @app_commands.default_permissions(manage_messages=True)
@@ -247,7 +276,8 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             mid = int(message_id)
         except ValueError:
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('cross')} Invalid message ID."), ephemeral=True
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'forward_invalid_id')}"),
+                ephemeral=True,
             )
             return
 
@@ -256,14 +286,15 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         if result:
             await interaction.followup.send(
                 view=_cv(
-                    f"### ↗️ Message Forwarded\nFrom {src.mention} → {destination.mention}",
+                    f"### ↗️ {msg(interaction, 'forward_title')}\n"
+                    f"{src.mention} → {destination.mention}",
                     colour=discord.Colour(0x57f287),
                 ),
                 ephemeral=True,
             )
         else:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('cross')} Could not forward that message. Check that I have permission to send in the destination channel and the message exists."),
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'forward_failed')}"),
                 ephemeral=True,
             )
 
@@ -271,10 +302,10 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
     sticker_group = app_commands.Group(
         name="sticker",
-        description="Manage and send guild stickers.",
+        description=CMDS.text("sticker.description"),
     )
 
-    @sticker_group.command(name="list", description="List all stickers in this server.")
+    @sticker_group.command(name="list", description=CMDS.text("sticker.list.description"))
     @app_commands.guild_only()
     async def sticker_list(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -286,11 +317,14 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
         if not raw:
             await interaction.followup.send(
-                view=_cv("This server has no custom stickers yet."), ephemeral=True
+                view=_cv(msg(interaction, "sticker_none")), ephemeral=True
             )
             return
 
-        lines = [f"### {get_emoji('star')} Server Stickers — {interaction.guild.name}"]
+        lines = [
+            f"### {get_emoji('star')} "
+            + msg(interaction, "sticker_title", server=interaction.guild.name)
+        ]
         for s in raw:
             fmt = s.get("format_type", 1)
             fmt_label = {1: "PNG", 2: "APNG", 3: "Lottie", 4: "GIF"}.get(fmt, "?")
@@ -301,8 +335,8 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
             ephemeral=True,
         )
 
-    @sticker_group.command(name="send", description="Send a server sticker into this channel.")
-    @app_commands.describe(name="Name of the sticker to send")
+    @sticker_group.command(name="send", description=CMDS.text("sticker.send.description"))
+    @app_commands.describe(name=CMDS.arg("sticker.send", "name"))
     @app_commands.guild_only()
     async def sticker_send(self, interaction: discord.Interaction, name: str) -> None:
         await interaction.response.defer()
@@ -315,7 +349,7 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
         match = next((s for s in raw if s["name"].lower() == name.lower()), None)
         if not match:
             await interaction.followup.send(
-                view=_cv(f"{get_emoji('cross')} No sticker named **{name}** found. Use `/sticker list`."),
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'sticker_not_found', name=name)}"),
                 ephemeral=True,
             )
             return
@@ -343,23 +377,27 @@ class NitroFeatures(commands.Cog, name="NitroFeatures"):
 
     stage_group = app_commands.Group(
         name="stage",
-        description="Stage channel controls.",
+        description=CMDS.text("stage.description"),
     )
 
-    @stage_group.command(name="speak", description="Make Niko a speaker on the current Stage channel.")
+    @stage_group.command(name="speak", description=CMDS.text("stage.speak.description"))
     @app_commands.guild_only()
     @app_commands.default_permissions(manage_channels=True)
     async def stage_speak(self, interaction: discord.Interaction) -> None:
         vc = interaction.guild.me.voice
         if not vc or not isinstance(vc.channel, discord.StageChannel):
             await interaction.response.send_message(
-                view=_cv(f"{get_emoji('cross')} Niko must be in a Stage channel first."), ephemeral=True
+                view=_cv(f"{get_emoji('cross')} {msg(interaction, 'stage_not_in_stage')}"),
+                ephemeral=True,
             )
             return
 
         await stage_become_speaker(self.bot, interaction.guild_id, vc.channel.id)
         await interaction.response.send_message(
-            view=_cv("### 🎙️ Niko is now a speaker on Stage! ☕", colour=discord.Colour(0x57f287)),
+            view=_cv(
+                f"### 🎙️ {msg(interaction, 'stage_speaker')}",
+                colour=discord.Colour(0x57f287),
+            ),
             ephemeral=True,
         )
 

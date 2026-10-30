@@ -81,8 +81,8 @@ class _UtilsStub:
     def contains_blocked_word(self, guild_id, content):
         return False
 
-    async def log_action(self, guild, title, description):
-        self.logged.append((title, description))
+    async def log_action(self, guild, title, description, display_title=None):
+        self.logged.append((display_title or title, description))
 
     async def mute_member(self, guild, member, duration=60, reason=""):
         self.muted.append((member, reason))

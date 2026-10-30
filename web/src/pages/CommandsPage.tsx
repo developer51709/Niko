@@ -8,17 +8,24 @@ import { type Command, type CommandParameter, type CommandType } from "../types"
 
 const PREFERRED_LOCALE = typeof navigator !== "undefined" ? (navigator.language || "en").slice(0, 2) : "en";
 
-function describe(command: Command): string {
-  const description = command.description;
-  if (typeof description === "string") return description;
-  if (description && typeof description === "object") {
-    const map = description as Record<string, string>;
-    if (map[PREFERRED_LOCALE]) return map[PREFERRED_LOCALE];
-    if (map["en"]) return map["en"];
-    const first = Object.values(map).find((v) => typeof v === "string" && v.length > 0);
+/** Wording arrives as a ``{locale: text}`` map from the bot's locale files. */
+function pickLocalized(value?: string | Record<string, string>): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (value && typeof value === "object") {
+    if (value[PREFERRED_LOCALE]) return value[PREFERRED_LOCALE];
+    if (value["en"]) return value["en"];
+    const first = Object.values(value).find((text) => typeof text === "string" && text.trim());
     if (first) return first;
   }
-  return "A Niko command for your server.";
+  return undefined;
+}
+
+function describe(command: Command): string {
+  return pickLocalized(command.description) || "A Niko command for your server.";
+}
+
+function describeParameter(parameter: CommandParameter): string {
+  return pickLocalized(parameter.description) || "No description provided.";
 }
 
 
@@ -97,7 +104,7 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
               <ul className="command-detail-list">{aliases.map((alias) => <li key={alias}><code>{alias === "Not specified" ? alias : `.${alias}`}</code></li>)}</ul>
             </section>
           </div>
-          {!!parameters.length && <section className="command-detail-section command-parameters"><h3>Parameters</h3><div className="command-parameter-list">{parameters.map((parameter: CommandParameter) => <div className="command-parameter" key={parameter.name}><div className="command-parameter-title"><code>{parameter.name}</code><span>{parameter.required ? "Required" : "Optional"} · {parameter.type}</span></div><p>{parameter.description || "No description provided."}</p></div>)}</div></section>}
+          {!!parameters.length && <section className="command-detail-section command-parameters"><h3>Parameters</h3><div className="command-parameter-list">{parameters.map((parameter: CommandParameter) => <div className="command-parameter" key={parameter.name}><div className="command-parameter-title"><code>{parameter.name}</code><span>{parameter.required ? "Required" : "Optional"} · {parameter.type}</span></div><p>{describeParameter(parameter)}</p></div>)}</div></section>}
           {!!subcommands.length && <section className="command-detail-section"><h3>Subcommands</h3><div className="subcommand-list">{subcommands.map((subcommand) => <code key={subcommand}>{command.name} {subcommand}</code>)}</div></section>}
         </div>
         <footer className="command-dialog-footer"><span>Command registry details are generated from the live bot.</span><button className="button button-primary button-small" type="button" onClick={onClose}>Done</button></footer>

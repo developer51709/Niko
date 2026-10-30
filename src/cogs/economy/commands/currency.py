@@ -4,7 +4,7 @@ Economy — currency commands: balance, profile, daily, work, pay, transactions,
 import discord
 from discord.ext import commands
 from ..data import (
-    msg, _info_view, _card_view, _fmt_remaining,
+    msg, _info_view, _card_view, _reply, _fmt_remaining, locale_t,
     _check_achievements, _resolve_prefix,
     COOLDOWN_DAILY, COOLDOWN_WORK,
     get_job, get_emoji,
@@ -16,6 +16,14 @@ from ..voting import vote_earnings_multiplier
 import random
 import datetime
 
+from utils.i18n import get_lang
+from utils.locales import load_locales
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+T = locale_t(load_locales("cogs.economy", "currency"))
+
 
 class CurrencyMixin:
     """balance, profile, daily, work, pay, transactions, networth."""
@@ -23,33 +31,37 @@ class CurrencyMixin:
     # ── balance / profile ────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="balance", aliases=["bal", "wallet"],
-        description="Check your premium wallet card",
-        help="{ 'en': 'check your wallet balance 🪙✨', 'de': 'sieh dein Wallet als Karte', 'es': 'consulta tu wallet 🪙✨' }"
+        description=CMDS.text("balance.description"),
+        help=CMDS.help("balance"),
     )
     async def balance(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         target = member or ctx.author
-        await self._send_balance_card(ctx, target, title="Wallet")
+        await self._send_balance_card(ctx, target, title=T(get_lang(ctx), "wallet_title"))
 
     @commands.hybrid_command(
         name="profile", aliases=["prof", "stats"],
-        description="Full profile card",
-        help="{ 'en': 'view your full profile card 📜✨', 'de': 'sieh dein volles Profil', 'es': 'mira tu perfil completo 📜✨' }"
+        description=CMDS.text("profile.description"),
+        help=CMDS.help("profile"),
     )
     async def profile(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
-        from ..data import ACHIEVEMENTS, achievement_icon
+        from ..data import ACHIEVEMENTS, achievement_icon, achievement_name
+        lang = get_lang(ctx)
         target = member or ctx.author
-        await self._send_balance_card(ctx, target, title="Profile")
+        await self._send_balance_card(ctx, target, title=T(lang, "profile_title"))
         data = await self.get_user_economy_data(target.id)
         ach = data.get("achievements", [])
         ach_line = (
-            ", ".join(f"{achievement_icon(ACHIEVEMENTS[a])} {ACHIEVEMENTS[a]['name']}" for a in ach if a in ACHIEVEMENTS)
-            or "*no badges yet — go earn some!*"
+            ", ".join(
+                f"{achievement_icon(ACHIEVEMENTS[a])} {achievement_name(a, ACHIEVEMENTS[a], lang)}"
+                for a in ach if a in ACHIEVEMENTS
+            )
+            or T(lang, "no_badges")
         )
         txs = data.get("transactions", [])[:5]
         if txs:
@@ -59,43 +71,35 @@ class CurrencyMixin:
                 lines.append(f"`{t['kind'][:10]:<10}` {sign}{abs(t['amount']):,}  ·  {t.get('note','')}")
             tx_block = "\n".join(lines)
         else:
-            tx_block = "*no transactions yet*"
+            tx_block = T(lang, "no_tx")
         view = _info_view(
-            f"📜 {target.display_name}'s Extras",
-            f"**Badges**\n{ach_line}\n\n**Recent activity**\n{tx_block}",
+            T(lang, "extras_title", name=target.display_name),
+            T(lang, "extras_body", badges=ach_line, activity=tx_block),
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=view, allowed_mentions=discord.AllowedMentions.none())
-        else:
-            await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+        await _reply(ctx, view, allowed_mentions=discord.AllowedMentions.none())
 
     # ── daily ────────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="daily",
-        description="Claim your daily reward with streak bonus",
-        help="{ 'en': 'claim your daily reward 🎁✨', 'de': 'hol dir deine täglichen Belohnungen', 'es': 'reclama tu recompensa diaria 🎁✨' }"
+        description=CMDS.text("daily.description"),
+        help=CMDS.help("daily"),
     )
     async def daily(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         import time
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         elapsed = now - int(data.get("last_daily", 0))
 
         if elapsed < COOLDOWN_DAILY:
             remain = COOLDOWN_DAILY - elapsed
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "⏳ Daily on cooldown",
-                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "⏳ Daily on cooldown",
-                    f"Patience! Your daily reward is not ready yet.\nCome back in **{_fmt_remaining(remain)}**. ⏳",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "daily_cd_title"),
+                T(lang, "daily_cd_body", time=_fmt_remaining(remain)),
+            ))
 
         streak = int(data.get("daily_streak", 0))
         effects = data.setdefault("effects", {})
@@ -133,26 +137,27 @@ class CurrencyMixin:
                 inv[item_id] = int(inv.get(item_id, 0)) + 1
 
         total_reward = reward + milestone_bonus
-        self._credit(data, total_reward, "daily", f"day {streak} • x{multiplier:.1f}")
+        self._credit(data, total_reward, "daily",
+                     T(lang, "note_daily", streak=streak, mult=f"{multiplier:.1f}"))
         data["daily_streak"] = streak
         data["last_daily"] = now
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
 
-        subtitle = f"Streak day {streak} 🔥  •  multiplier x{multiplier:.1f}"
+        subtitle = T(lang, "daily_subtitle", streak=streak, mult=f"{multiplier:.1f}")
         if vote_bonus > 1:
-            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
+            subtitle += T(lang, "vote_bonus", bonus=f"{vote_bonus:.2f}")
         footer = msg(ctx, "daily_success", reward=total_reward)
         if milestone_items:
             from ..data import get_item
             item_names = ", ".join(
                 get_item(iid)["name"] for iid in milestone_items if get_item(iid)
             )
-            footer += f"  •  🎁 Streak milestone: **{item_names}** + **{milestone_bonus:,}** bonus!"
+            footer += T(lang, "milestone", items=item_names, bonus=f"{milestone_bonus:,}")
 
         await self._send_reward_card(
             ctx,
-            title="🎁 Daily Reward",
+            title=T(lang, "daily_title"),
             subtitle=subtitle,
             amount=total_reward,
             accent=ACCENT_GOLD,
@@ -162,14 +167,15 @@ class CurrencyMixin:
     # ── work ─────────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="work",
-        description="Work a shift at your current job",
-        help="{ 'en': 'work a shift at your current job 💼', 'de': 'arbeite eine Schicht', 'es': 'trabaja un turno 💼' }"
+        description=CMDS.text("work.description"),
+        help=CMDS.help("work"),
     )
     async def work(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         import time
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         job = get_job(data.get("job"))
@@ -181,16 +187,10 @@ class CurrencyMixin:
 
         elapsed = now - int(data.get("last_work", 0))
         if elapsed < cd:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "⏳ On a break",
-                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "⏳ On a break",
-                    f"You're resting after your last shift.\nBack to work in **{_fmt_remaining(cd - elapsed)}**. 💤",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "work_cd_title"),
+                T(lang, "work_cd_body", time=_fmt_remaining(cd - elapsed)),
+            ))
 
         if effects.get("work_cooldown_half"):
             effects.pop("work_cooldown_half", None)
@@ -201,122 +201,126 @@ class CurrencyMixin:
         vote_bonus = vote_earnings_multiplier(data.get("vote_streak", 0))
         if vote_bonus > 1:
             reward = int(reward * vote_bonus)
-        self._credit(data, reward, "work", f"{job['name']} shift")
+        self._credit(data, reward, "work", T(lang, "note_work", job=job["name"]))
         data["last_work"] = now
         data["times_worked"] = int(data.get("times_worked", 0)) + 1
 
         new_lvl, gained_levels, leveled = add_xp(data, int(job.get("xp_per_shift", 10)))
         announce = msg(ctx, "level_up", level=new_lvl) if leveled else None
 
-        newly = _check_achievements(data)
+        newly = _check_achievements(data, lang=lang)
         await self.save_user_economy_data(ctx.author.id)
 
-        subtitle = f"{job['emoji']} {job['name']} shift  •  +{job.get('xp_per_shift', 10)} XP"
+        subtitle = T(
+            lang, "work_subtitle",
+            emoji=job["emoji"], job=job["name"], xp=job.get("xp_per_shift", 10),
+        )
         if vote_bonus > 1:
-            subtitle += f"  •  🗳️ vote bonus x{vote_bonus:.2f}"
+            subtitle += T(lang, "vote_bonus", bonus=f"{vote_bonus:.2f}")
         footer = msg(ctx, "work_success", reward=reward)
         if newly:
-            footer += "  •  unlocked: " + ", ".join(newly)
+            footer += T(lang, "unlocked", items=", ".join(newly))
 
         await self._send_reward_card(
-            ctx, title="🍯 Shift complete", subtitle=subtitle, amount=reward,
+            ctx, title=T(lang, "work_title"), subtitle=subtitle, amount=reward,
             accent=ACCENT_GREEN, footer=footer, announce=announce,
         )
 
     # ── pay ───────────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="pay", aliases=["give"],
-        description="Send coins to another user",
-        help="{ 'en': 'send coins to another user 💸🪙', 'de': 'sende Münzen an jemanden', 'es': 'envía monedas a alguien 💸🪙' }"
+        description=CMDS.text("pay.description"),
+        help=CMDS.help("pay"),
     )
     async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         if not member or member.bot or member.id == ctx.author.id:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad target", "Pick a real person other than yourself."))
+            return await _reply(ctx, _info_view(
+                T(lang, "bad_target_title"), T(lang, "bad_target_body")))
 
         if amount <= 0:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Amount must be positive."))
+            return await _reply(ctx, _info_view(
+                T(lang, "bad_amount_title"), T(lang, "bad_amount_body")))
 
         data   = await self.get_user_economy_data(ctx.author.id)
         target = await self.get_user_economy_data(member.id)
         if data["balance"] < amount:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
-            else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", "Your wallet is too light for that."))
+            return await _reply(ctx, _info_view(
+                T(lang, "no_cash_title"), T(lang, "no_cash_body")))
 
-        self._credit(data, -amount, "pay", f"to {member.display_name}")
-        self._credit(target, amount, "received", f"from {ctx.author.display_name}")
+        self._credit(data, -amount, "pay", T(lang, "note_pay_to", name=member.display_name))
+        self._credit(target, amount, "received", T(lang, "note_pay_from", name=ctx.author.display_name))
         await self.save_user_economy_data(ctx.author.id)
         await self.save_user_economy_data(member.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(
-                "💸 Transfer complete",
-                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
-            ), allowed_mentions=discord.AllowedMentions.none())
-        else:
-            await ctx.send(view=_info_view(
-                "💸 Transfer complete",
-                f"You sent **{amount:,}** 🪙 to {member.mention}.\n-# New balance: **{data['balance']:,}** 🪙",
-            ), allowed_mentions=discord.AllowedMentions.none())
+        await _reply(
+            ctx,
+            _info_view(
+                T(lang, "transfer_title"),
+                T(lang, "transfer_body",
+                  amount=f"{amount:,}", target=member.mention,
+                  balance=f"{data['balance']:,}"),
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     # ── transactions ──────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="transactions", aliases=["tx", "history"],
-        description="See your recent transactions",
-        help="{ 'en': 'see your last transactions 📜', 'de': 'sieh deine letzten Transaktionen', 'es': 'mira tus últimas transacciones 📜' }"
+        description=CMDS.text("transactions.description"),
+        help=CMDS.help("transactions"),
     )
     async def transactions(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         txs = data.get("transactions", [])
         if not txs:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("📜 No history", "No transactions yet."))
-            else:
-                return await ctx.send(view=_info_view("📜 No history", "No transactions yet."))
+            return await _reply(ctx, _info_view(
+                T(lang, "no_history_title"), T(lang, "no_history_body")))
 
         lines = []
         for t in txs[:25]:
             sign = "+" if t["amount"] >= 0 else "−"
             ts = datetime.datetime.utcfromtimestamp(int(t["ts"])).strftime("%m-%d %H:%M")
             lines.append(f"`{ts}` `{t['kind'][:10]:<10}` **{sign}{abs(int(t['amount'])):,}** 🪙  ·  {t.get('note','')}")
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
-        else:
-            await ctx.send(view=_info_view(f"📜 {ctx.author.display_name}'s Recent Activity", "\n".join(lines)))
+        await _reply(ctx, _info_view(
+            T(lang, "activity_title", name=ctx.author.display_name),
+            "\n".join(lines),
+        ))
 
     # ── networth ──────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="networth", aliases=["nw"],
-        description="Quick net worth summary",
-        help="{ 'en': 'calculate your total fortune 📊🪙', 'de': 'berechne dein gesamtes Vermögen', 'es': 'calcula tu fortuna 📊🪙' }"
+        description=CMDS.text("networth.description"),
+        help=CMDS.help("networth"),
     )
     async def networth(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         target = member or ctx.author
         data = await self.get_user_economy_data(target.id)
         nw = int(data["balance"]) + int(data["bank"])
         rank = await self._net_rank(str(target.id))
-        body = (
-            f"💼 **{target.display_name}** is worth **{nw:,}** 🪙\n"
-            f"• Cash: **{int(data['balance']):,}**\n"
-            f"• Bank: **{int(data['bank']):,}** ({bank_name(int(data.get('bank_tier', 0)))})\n"
-            f"• Rank: **#{rank}**" if rank else ""
+        body = T(
+            lang, "networth_body",
+            name=target.display_name,
+            nw=f"{nw:,}",
+            cash=f"{int(data['balance']):,}",
+            bank=f"{int(data['bank']):,}",
+            tier=bank_name(int(data.get("bank_tier", 0))),
+            rank=f"#{rank}",
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("📊 Net Worth", body))
-        else:
-            await ctx.send(view=_info_view("📊 Net Worth", body))
+        if not rank:
+            body = T(lang, "networth_body_no_rank",
+                     name=target.display_name, nw=f"{nw:,}",
+                     cash=f"{int(data['balance']):,}",
+                     bank=f"{int(data['bank']):,}",
+                     tier=bank_name(int(data.get("bank_tier", 0))))
+        await _reply(ctx, _info_view(T(lang, "networth_title"), body))

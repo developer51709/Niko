@@ -19,60 +19,14 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "no_channel":     "No suggestion channel configured. An admin must run `suggest channel <channel>` first.",
-            "submitted":      "Suggestion submitted in {channel} — ID `#{id}`.",
-            "channel_set":    "Suggestion channel set to {channel}.",
-            "config_title":   "### {icon} Suggestion Config",
-            "config_body":    "**Channel:** {channel}",
-            "missing":        "No suggestion with ID `#{id}` found.",
-            "approved":       "Suggestion `#{id}` approved.",
-            "denied":         "Suggestion `#{id}` denied.",
-            "title_open":     "### {icon} Suggestion #{id}",
-            "title_approved": "### {icon} Suggestion #{id} · {tick} Approved",
-            "title_denied":   "### {icon} Suggestion #{id} · {cross} Denied",
-            "body":           "{text}\n\n-# By {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**Verdict by {who}:** {reason}",
-        },
-        "de": {
-            "no_channel":     "Kein Vorschlagskanal konfiguriert. Ein Admin muss zuerst `suggest channel <channel>` ausführen.",
-            "submitted":      "Vorschlag in {channel} eingereicht — ID `#{id}`.",
-            "channel_set":    "Vorschlagskanal auf {channel} gesetzt.",
-            "config_title":   "### {icon} Vorschlags-Konfiguration",
-            "config_body":    "**Kanal:** {channel}",
-            "missing":        "Kein Vorschlag mit ID `#{id}` gefunden.",
-            "approved":       "Vorschlag `#{id}` angenommen.",
-            "denied":         "Vorschlag `#{id}` abgelehnt.",
-            "title_open":     "### {icon} Vorschlag #{id}",
-            "title_approved": "### {icon} Vorschlag #{id} · {tick} Angenommen",
-            "title_denied":   "### {icon} Vorschlag #{id} · {cross} Abgelehnt",
-            "body":           "{text}\n\n-# Von {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**Urteil von {who}:** {reason}",
-        },
-        "es": {
-            "no_channel":     "No hay canal de sugerencias configurado. Un admin debe ejecutar `suggest channel <canal>` primero.",
-            "submitted":      "Sugerencia enviada en {channel} — ID `#{id}`.",
-            "channel_set":    "Canal de sugerencias establecido en {channel}.",
-            "config_title":   "### {icon} Configuración de Sugerencias",
-            "config_body":    "**Canal:** {channel}",
-            "missing":        "No se encontró sugerencia con ID `#{id}`.",
-            "approved":       "Sugerencia `#{id}` aprobada.",
-            "denied":         "Sugerencia `#{id}` denegada.",
-            "title_open":     "### {icon} Sugerencia #{id}",
-            "title_approved": "### {icon} Sugerencia #{id} · {tick} Aprobada",
-            "title_denied":   "### {icon} Sugerencia #{id} · {cross} Denegada",
-            "body":           "{text}\n\n-# Por {author}",
-            "votes":          "{up_emoji} `{up}`  {down_emoji} `{down}`",
-            "verdict":        "**Veredicto de {who}:** {reason}",
-        },
-    },
-}
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+MESSAGES = load_locales("cogs.social", "suggestions")
 
 
 def _lang(ctx) -> str:
@@ -84,7 +38,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 # ───────────────────────────────────────────────────
@@ -223,8 +177,8 @@ class Suggestions(commands.Cog):
 
     @commands.hybrid_group(
         name="suggest",
-        description="Submit and manage suggestions.",
-        help="{ 'en': 'Submit and manage suggestions.', 'de': 'Vorschläge einreichen und verwalten.', 'es': 'Envía y gestiona sugerencias.' }",
+        description=CMDS.text("suggest.description"),
+        help=CMDS.help("suggest"),
         invoke_without_command=True,
     )
     @commands.guild_only()
@@ -236,8 +190,8 @@ class Suggestions(commands.Cog):
 
     @suggest.command(
         name="submit",
-        description="Submit a suggestion.",
-        help="{ 'en': 'Submit a suggestion.', 'de': 'Einen Vorschlag einreichen.', 'es': 'Envía una sugerencia.' }",
+        description=CMDS.text("suggest.submit.description"),
+        help=CMDS.help("suggest.submit"),
     )
     async def suggest_submit(self, ctx: commands.Context, *, text: str):
         await self._submit(ctx, text)
@@ -282,8 +236,8 @@ class Suggestions(commands.Cog):
 
     @suggest.command(
         name="channel",
-        description="Set the suggestion channel.",
-        help="{ 'en': 'Set the suggestion channel (admin).', 'de': 'Vorschlagskanal setzen (Admin).', 'es': 'Establece el canal de sugerencias (admin).' }",
+        description=CMDS.text("suggest.channel.description"),
+        help=CMDS.help("suggest.channel"),
     )
     @commands.has_permissions(manage_guild=True)
     async def suggest_channel(self, ctx: commands.Context, channel: discord.TextChannel):
@@ -294,8 +248,8 @@ class Suggestions(commands.Cog):
 
     @suggest.command(
         name="config",
-        description="Show suggestion config.",
-        help="{ 'en': 'Show suggestion config.', 'de': 'Vorschlags-Konfiguration anzeigen.', 'es': 'Muestra la configuración de sugerencias.' }",
+        description=CMDS.text("suggest.config.description"),
+        help=CMDS.help("suggest.config"),
     )
     @commands.has_permissions(manage_guild=True)
     async def suggest_config(self, ctx: commands.Context):
@@ -309,8 +263,8 @@ class Suggestions(commands.Cog):
 
     @suggest.command(
         name="approve",
-        description="Approve a suggestion.",
-        help="{ 'en': 'Approve a suggestion (manage_guild).', 'de': 'Einen Vorschlag annehmen (manage_guild).', 'es': 'Aprueba una sugerencia (manage_guild).' }",
+        description=CMDS.text("suggest.approve.description"),
+        help=CMDS.help("suggest.approve"),
     )
     @commands.has_permissions(manage_guild=True)
     async def suggest_approve(self, ctx: commands.Context, suggestion_id: int, *, reason: str = "—"):
@@ -318,8 +272,8 @@ class Suggestions(commands.Cog):
 
     @suggest.command(
         name="deny",
-        description="Deny a suggestion.",
-        help="{ 'en': 'Deny a suggestion (manage_guild).', 'de': 'Einen Vorschlag ablehnen (manage_guild).', 'es': 'Deniega una sugerencia (manage_guild).' }",
+        description=CMDS.text("suggest.deny.description"),
+        help=CMDS.help("suggest.deny"),
     )
     @commands.has_permissions(manage_guild=True)
     async def suggest_deny(self, ctx: commands.Context, suggestion_id: int, *, reason: str = "—"):

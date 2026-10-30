@@ -39,237 +39,25 @@ from utils.tickets.utils import (
 )
 from utils.tickets.config import TicketConfig
 from config.emojis import get_emoji
+from utils.i18n import get_lang
+from utils.locales import load_locales
 
 
 # ───────────────────────────────────────────────────
 #  TRILINGUAL MESSAGE TABLE
 # ───────────────────────────────────────────────────
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "panel_default_title":  "Open a Ticket",
-            "panel_default_desc":   "Select a category or press the button below to open a ticket.",
-            "open_btn":             "Create Ticket",
-            "select_category":      "### Select a Category",
-            "select_placeholder":   "Select category...",
-            "ticket_welcome":       "### {icon} {category} Ticket\nWelcome {mention}! A staff member will be with you shortly.",
-            "ticket_created":       "✅ Your ticket has been created: {channel}",
-            "panel_updated":        "✅ Ticket panel updated.",
-            "panel_posted":         "✅ Ticket panel posted in {channel}.",
-            "category_added":       "✅ Added category **{name}**.",
-            "category_removed":     "✅ Removed category **{name}**.",
-            "category_exists":      "⚠️ Category **{name}** already exists.",
-            "category_missing":     "⚠️ Category **{name}** doesn't exist.",
-            "categories_empty":     "No categories configured. Tickets will be opened with a single 'General' category.",
-            "categories_list":      "### Ticket Categories\n{list}",
-            "support_added":        "✅ Added {role} as a support role.",
-            "support_removed":      "✅ Removed {role} from support roles.",
-            "support_exists":       "⚠️ {role} is already a support role.",
-            "support_missing":      "⚠️ {role} is not a support role.",
-            "support_empty":        "No support roles configured.",
-            "support_list":         "### Support Roles\n{list}",
-            "not_in_ticket":        "❌ This command can only be used inside a ticket channel.",
-            "no_perm_close":        "❌ You don't have permission to close tickets.",
-            "no_perm_delete":       "❌ You don't have permission to delete tickets.",
-            "no_perm_manage":       "❌ You don't have permission to manage this ticket.",
-            "user_added":           "✅ {user} has been added to the ticket.",
-            "user_removed":         "✅ {user} has been removed from the ticket.",
-            "user_already_added":   "⚠️ {user} already has access to this ticket.",
-            "user_not_in_ticket":   "⚠️ {user} doesn't have access to this ticket.",
-            "renamed":              "✅ Ticket renamed to **{name}**.",
-            "claimed":              "✅ Ticket claimed by {user}.",
-            "already_claimed":      "⚠️ This ticket is already claimed by {user}.",
-            "transcript_built":     "📝 Transcript generated.",
-            "closing":              "{loading} Closing ticket…",
-            "closed":               "🔒 This ticket has been closed by {user}.",
-            "deleting":             "🗑️ Deleting this ticket in {seconds}s…",
-            "setup_title":          "### {icon} Ticket System Setup",
-            "setup_desc":           "Configure your ticket system below. Add categories, set up support roles, then post the panel.",
-            "btn_add":              "Add User",
-            "btn_cancel":           "Cancel",
-            "btn_claim":            "Claim",
-            "btn_close":            "Close",
-            "btn_confirm_delete":   "Delete Ticket",
-            "btn_delete":           "Delete",
-            "btn_remove":           "Remove User",
-            "btn_staff":            "Staff Panel",
-            "btn_transfer":         "Transfer",
-            "deleting_panel":       "🗑️ Deleting this ticket…",
-            "header_details":       "### {icon} Ticket Details\n**Category:** {category}\n**Opener:** {opener}\n**Channel:** {channel}\n**Opened:** {opened}\n**Status:** {status}\n**Claimed by:** {claim}",
-            "no_users_added":       "⚠️ Everyone you picked already had access to this ticket.",
-            "no_users_removed":     "⚠️ Nobody you picked had access to this ticket.",
-            "not_support_target":   "⚠️ {user} isn't a support member — transfer cancelled.",
-            "panel_title":          "### {icon} Staff Panel — {channel}",
-            "prompt_add":           "Who should be able to view **{channel}**? You can pick several users.",
-            "prompt_delete":        "Are you sure you want to delete **{channel}**? This can't be undone.",
-            "prompt_remove":        "Who should lose access to **{channel}**?",
-            "prompt_transfer":      "Transfer the claim of **{channel}** to which support member?",
-            "sel_staff":            "Choose a support member…",
-            "sel_user":             "Choose user(s)…",
-            "staff_panel_only":     "❌ Only support staff can use this panel.",
-            "status_closed":        "Closed",
-            "status_open":          "Open",
-            "transferred":          "✅ Ticket transferred to {user}.",
-            "unclaimed":            "Unclaimed",
-            "users_added":          "✅ {users} can now view this ticket.",
-            "users_removed":        "✅ {users} lost access to this ticket.",
-        },
-        "de": {
-            "panel_default_title":  "Ticket öffnen",
-            "panel_default_desc":   "Wähle eine Kategorie oder drücke den Button unten, um ein Ticket zu öffnen.",
-            "open_btn":             "Ticket erstellen",
-            "select_category":      "### Wähle eine Kategorie",
-            "select_placeholder":   "Kategorie wählen...",
-            "ticket_welcome":       "### {icon} {category} Ticket\nWillkommen {mention}! Ein Mitarbeiter ist gleich für dich da.",
-            "ticket_created":       "✅ Dein Ticket wurde erstellt: {channel}",
-            "panel_updated":        "✅ Ticket-Panel aktualisiert.",
-            "panel_posted":         "✅ Ticket-Panel in {channel} gepostet.",
-            "category_added":       "✅ Kategorie **{name}** hinzugefügt.",
-            "category_removed":     "✅ Kategorie **{name}** entfernt.",
-            "category_exists":      "⚠️ Kategorie **{name}** existiert bereits.",
-            "category_missing":     "⚠️ Kategorie **{name}** existiert nicht.",
-            "categories_empty":     "Keine Kategorien konfiguriert. Tickets werden mit einer einzigen Kategorie 'Allgemein' geöffnet.",
-            "categories_list":      "### Ticket-Kategorien\n{list}",
-            "support_added":        "✅ {role} als Support-Rolle hinzugefügt.",
-            "support_removed":      "✅ {role} aus Support-Rollen entfernt.",
-            "support_exists":       "⚠️ {role} ist bereits eine Support-Rolle.",
-            "support_missing":      "⚠️ {role} ist keine Support-Rolle.",
-            "support_empty":        "Keine Support-Rollen konfiguriert.",
-            "support_list":         "### Support-Rollen\n{list}",
-            "not_in_ticket":        "❌ Dieser Befehl kann nur in einem Ticket-Kanal verwendet werden.",
-            "no_perm_close":        "❌ Du hast keine Berechtigung, Tickets zu schließen.",
-            "no_perm_delete":       "❌ Du hast keine Berechtigung, Tickets zu löschen.",
-            "no_perm_manage":       "❌ Du hast keine Berechtigung, dieses Ticket zu verwalten.",
-            "user_added":           "✅ {user} wurde dem Ticket hinzugefügt.",
-            "user_removed":         "✅ {user} wurde aus dem Ticket entfernt.",
-            "user_already_added":   "⚠️ {user} hat bereits Zugriff auf dieses Ticket.",
-            "user_not_in_ticket":   "⚠️ {user} hat keinen Zugriff auf dieses Ticket.",
-            "renamed":              "✅ Ticket umbenannt zu **{name}**.",
-            "claimed":              "✅ Ticket beansprucht von {user}.",
-            "already_claimed":      "⚠️ Dieses Ticket ist bereits von {user} beansprucht.",
-            "transcript_built":     "📝 Transkript erstellt.",
-            "closing":              "{loading} Ticket wird geschlossen…",
-            "closed":               "🔒 Dieses Ticket wurde von {user} geschlossen.",
-            "deleting":             "🗑️ Ticket wird in {seconds}s gelöscht…",
-            "setup_title":          "### {icon} Ticketsystem-Einrichtung",
-            "setup_desc":           "Konfiguriere dein Ticketsystem unten. Füge Kategorien hinzu, richte Support-Rollen ein und poste dann das Panel.",
-            "btn_add":              "Benutzer hinzufügen",
-            "btn_cancel":           "Abbrechen",
-            "btn_claim":            "Übernehmen",
-            "btn_close":            "Schließen",
-            "btn_confirm_delete":   "Ticket löschen",
-            "btn_delete":           "Löschen",
-            "btn_remove":           "Benutzer entfernen",
-            "btn_staff":            "Staff-Panel",
-            "btn_transfer":         "Übertragen",
-            "deleting_panel":       "🗑️ Ticket wird gelöscht…",
-            "header_details":       "### {icon} Ticket-Details\n**Kategorie:** {category}\n**Ersteller:** {opener}\n**Kanal:** {channel}\n**Geöffnet:** {opened}\n**Status:** {status}\n**Übernommen von:** {claim}",
-            "no_users_added":       "⚠️ Alle ausgewählten Benutzer hatten bereits Zugriff auf dieses Ticket.",
-            "no_users_removed":     "⚠️ Keiner der ausgewählten Benutzer hatte Zugriff auf dieses Ticket.",
-            "not_support_target":   "⚠️ {user} ist kein Support-Mitglied – Übertragung abgebrochen.",
-            "panel_title":          "### {icon} Staff-Panel – {channel}",
-            "prompt_add":           "Wer soll **{channel}** sehen können? Du kannst mehrere Benutzer auswählen.",
-            "prompt_delete":        "Möchtest du **{channel}** wirklich löschen? Das kann nicht rückgängig gemacht werden.",
-            "prompt_remove":        "Wer soll den Zugriff auf **{channel}** verlieren?",
-            "prompt_transfer":      "Auf welches Support-Mitglied soll die Übernahme von **{channel}** übertragen werden?",
-            "sel_staff":            "Support-Mitglied wählen…",
-            "sel_user":             "Benutzer wählen…",
-            "staff_panel_only":     "❌ Nur Support-Mitarbeiter können dieses Panel nutzen.",
-            "status_closed":        "Geschlossen",
-            "status_open":          "Offen",
-            "transferred":          "✅ Ticket an {user} übertragen.",
-            "unclaimed":            "Nicht übernommen",
-            "users_added":          "✅ {users} kann dieses Ticket nun sehen.",
-            "users_removed":        "✅ {users} hat keinen Zugriff mehr auf dieses Ticket.",
-        },
-        "es": {
-            "panel_default_title":  "Abrir un Ticket",
-            "panel_default_desc":   "Selecciona una categoría o pulsa el botón a continuación para abrir un ticket.",
-            "open_btn":             "Crear Ticket",
-            "select_category":      "### Selecciona una categoría",
-            "select_placeholder":   "Selecciona categoría...",
-            "ticket_welcome":       "### {icon} Ticket de {category}\n¡Bienvenido {mention}! Un miembro del staff estará contigo en breve.",
-            "ticket_created":       "✅ Tu ticket ha sido creado: {channel}",
-            "panel_updated":        "✅ Panel de tickets actualizado.",
-            "panel_posted":         "✅ Panel de tickets publicado en {channel}.",
-            "category_added":       "✅ Se añadió la categoría **{name}**.",
-            "category_removed":     "✅ Se eliminó la categoría **{name}**.",
-            "category_exists":      "⚠️ La categoría **{name}** ya existe.",
-            "category_missing":     "⚠️ La categoría **{name}** no existe.",
-            "categories_empty":     "No hay categorías configuradas. Los tickets se abrirán con una única categoría 'General'.",
-            "categories_list":      "### Categorías de Tickets\n{list}",
-            "support_added":        "✅ Se añadió {role} como rol de soporte.",
-            "support_removed":      "✅ Se eliminó {role} de los roles de soporte.",
-            "support_exists":       "⚠️ {role} ya es un rol de soporte.",
-            "support_missing":      "⚠️ {role} no es un rol de soporte.",
-            "support_empty":        "No hay roles de soporte configurados.",
-            "support_list":         "### Roles de Soporte\n{list}",
-            "not_in_ticket":        "❌ Este comando solo se puede usar dentro de un canal de ticket.",
-            "no_perm_close":        "❌ No tienes permiso para cerrar tickets.",
-            "no_perm_delete":       "❌ No tienes permiso para eliminar tickets.",
-            "no_perm_manage":       "❌ No tienes permiso para gestionar este ticket.",
-            "user_added":           "✅ {user} ha sido añadido al ticket.",
-            "user_removed":         "✅ {user} ha sido eliminado del ticket.",
-            "user_already_added":   "⚠️ {user} ya tiene acceso a este ticket.",
-            "user_not_in_ticket":   "⚠️ {user} no tiene acceso a este ticket.",
-            "renamed":              "✅ Ticket renombrado a **{name}**.",
-            "claimed":              "✅ Ticket reclamado por {user}.",
-            "already_claimed":      "⚠️ Este ticket ya está reclamado por {user}.",
-            "transcript_built":     "📝 Transcripción generada.",
-            "closing":              "{loading} Cerrando ticket…",
-            "closed":               "🔒 Este ticket ha sido cerrado por {user}.",
-            "deleting":             "🗑️ Eliminando este ticket en {seconds}s…",
-            "setup_title":          "### {icon} Configuración del Sistema de Tickets",
-            "setup_desc":           "Configura tu sistema de tickets a continuación. Añade categorías, configura roles de soporte y luego publica el panel.",
-            "btn_add":              "Añadir usuario",
-            "btn_cancel":           "Cancelar",
-            "btn_claim":            "Reclamar",
-            "btn_close":            "Cerrar",
-            "btn_confirm_delete":   "Eliminar ticket",
-            "btn_delete":           "Eliminar",
-            "btn_remove":           "Quitar usuario",
-            "btn_staff":            "Panel del staff",
-            "btn_transfer":         "Transferir",
-            "deleting_panel":       "🗑️ Eliminando este ticket…",
-            "header_details":       "### {icon} Detalles del ticket\n**Categoría:** {category}\n**Creador:** {opener}\n**Canal:** {channel}\n**Abierto:** {opened}\n**Estado:** {status}\n**Reclamado por:** {claim}",
-            "no_users_added":       "⚠️ Todos los seleccionados ya tenían acceso a este ticket.",
-            "no_users_removed":     "⚠️ Ninguno de los seleccionados tenía acceso a este ticket.",
-            "not_support_target":   "⚠️ {user} no es miembro del soporte; transferencia cancelada.",
-            "panel_title":          "### {icon} Panel del staff — {channel}",
-            "prompt_add":           "¿Quién debería ver **{channel}**? Puedes elegir varios usuarios.",
-            "prompt_delete":        "¿Seguro que quieres eliminar **{channel}**? Esto no se puede deshacer.",
-            "prompt_remove":        "¿Quién debería perder el acceso a **{channel}**?",
-            "prompt_transfer":      "¿A qué miembro del soporte quieres transferir el reclamo de **{channel}**?",
-            "sel_staff":            "Elige un miembro del soporte…",
-            "sel_user":             "Elige usuario(s)…",
-            "staff_panel_only":     "❌ Solo el staff de soporte puede usar este panel.",
-            "status_closed":        "Cerrado",
-            "status_open":          "Abierto",
-            "transferred":          "✅ Ticket transferido a {user}.",
-            "unclaimed":            "Sin reclamar",
-            "users_added":          "✅ {users} ya puede ver este ticket.",
-            "users_removed":        "✅ {users} perdió el acceso a este ticket.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.tickets", "views")
 
 
 def _ctx_lang(ctx_or_int) -> str:
-    guild = None
-    if isinstance(ctx_or_int, commands.Context):
-        guild = ctx_or_int.guild
-    elif isinstance(ctx_or_int, discord.Interaction):
-        guild = ctx_or_int.guild
-    elif isinstance(ctx_or_int, discord.Guild):
-        guild = ctx_or_int
-    if guild and guild.preferred_locale:
-        loc = str(guild.preferred_locale).lower()
-        if loc.startswith("de"):
-            return "de"
-        if loc.startswith("es"):
-            return "es"
-    return "en"
+    """The guild's language, from a command context, interaction or guild.
+
+    Delegates to :func:`utils.i18n.get_lang` so a panel that only has a
+    language shim (and not a real context) resolves the same way as everywhere
+    else in the bot.
+    """
+    return get_lang(ctx_or_int)
 
 
 def msg(ctx_or_int, key: str, **kwargs) -> str:
@@ -280,8 +68,8 @@ def msg(ctx_or_int, key: str, **kwargs) -> str:
     """
     lang = _ctx_lang(ctx_or_int)
     text = (
-        MESSAGES["normal"].get(lang, {}).get(key)
-        or MESSAGES["normal"]["en"].get(key, key)
+        MESSAGES.get(lang, {}).get(key)
+        or MESSAGES["en"].get(key, key)
     )
     return text.format(**kwargs) if kwargs else text
 
@@ -347,25 +135,27 @@ def has_support_perms(member: discord.Member, cfg: TicketConfig) -> bool:
 #  MODALS — admin setup
 # ───────────────────────────────────────────────────
 
-class TicketPanelModal(Modal, title="Configure Ticket Panel"):
-    def __init__(self, guild_id: int):
-        super().__init__()
+class TicketPanelModal(Modal):
+    def __init__(self, guild_id: int, ctx=None):
+        super().__init__(title=msg(ctx, "panel_modal_title"))
         self.guild_id = guild_id
 
         cfg = get_ticket_config(guild_id)
         self.title_input = TextInput(
-            label="Panel Title", required=False, default=cfg.panel_title or ""
+            label=msg(ctx, "panel_title_label"), required=False,
+            default=cfg.panel_title or ""
         )
         self.desc_input = TextInput(
-            label="Panel Description", style=discord.TextStyle.long,
+            label=msg(ctx, "panel_description_label"), style=discord.TextStyle.long,
             required=False, default=cfg.panel_description or ""
         )
         self.color_input = TextInput(
-            label="Color (hex)", required=False,
+            label=msg(ctx, "panel_colour_label"), required=False,
             default=f"#{cfg.panel_color:06X}" if cfg.panel_color else ""
         )
         self.image_input = TextInput(
-            label="Image URL", required=False, default=cfg.panel_image or ""
+            label=msg(ctx, "panel_image_label"), required=False,
+            default=cfg.panel_image or ""
         )
 
         self.add_item(self.title_input)
@@ -451,8 +241,8 @@ class TicketPanelView(discord.ui.LayoutView):
         cfg = cfg or get_ticket_config(guild_id)
         guild = None  # we don't have a context here; localise with default fallback
         # Default fallback to english panel labels — admins can override via the modal
-        title = cfg.panel_title or MESSAGES["normal"]["en"]["panel_default_title"]
-        desc = cfg.panel_description or MESSAGES["normal"]["en"]["panel_default_desc"]
+        title = cfg.panel_title or MESSAGES["en"]["panel_default_title"]
+        desc = cfg.panel_description or MESSAGES["en"]["panel_default_desc"]
 
         # The configured color is the container's accent bar. It used to be
         # appended to the title as a literal `#RRGGBB` code, which is why an
@@ -470,7 +260,7 @@ class TicketPanelView(discord.ui.LayoutView):
             )
         container.add_item(
             discord.ui.ActionRow(
-                OpenTicketBtn(guild_id, label=MESSAGES["normal"]["en"]["open_btn"])
+                OpenTicketBtn(guild_id, label=MESSAGES["en"]["open_btn"])
             )
         )
         self.add_item(container)
@@ -765,7 +555,7 @@ async def _member_has_access(channel: discord.TextChannel, member: discord.Membe
         return False
 
 
-def _ticket_member_options(channel: discord.TextChannel) -> list:
+def _ticket_member_options(channel: discord.TextChannel, ctx=None) -> list:
     """Member options (max 25) for the 'remove user' picker."""
     options: list = []
     for target, perms in list(channel.overwrites.items()):
@@ -773,9 +563,11 @@ def _ticket_member_options(channel: discord.TextChannel) -> list:
             continue
         if not (perms.read_messages or perms.view_channel):
             continue
-        name = (getattr(target, "display_name", None) or str(target))[:90] or "Member"
+        name = (getattr(target, "display_name", None) or str(target))[:90] \
+            or msg(ctx, "member_fallback")
         options.append(discord.SelectOption(
-            label=name, value=str(target.id), description="Ticket member",
+            label=name, value=str(target.id),
+            description=msg(ctx, "member_option_description"),
         ))
         if len(options) >= 25:
             break
@@ -1004,7 +796,7 @@ class _TicketRemoveButton(discord.ui.Button):
         ticket, cfg = await _panel_context(interaction)
         if ticket is None:
             return
-        options = _ticket_member_options(interaction.channel)
+        options = _ticket_member_options(interaction.channel, interaction)
         if not options:
             return await _show_panel(
                 interaction, ticket, cfg,
