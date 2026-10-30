@@ -9,6 +9,7 @@ import { LOCKDOWN_STATUS_LABELS, blacklistGuildWithLockdown, groupLockdownSteps 
 import type { GuildLockdownSummary } from "../utils/guildBlacklist";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
+import { BotAnalyticsView } from "../components/dashboard/BotAnalyticsView";
 import { BroadcastStudioView } from "../components/dashboard/BroadcastStudioView";
 import { Switch } from "../components/dashboard/Switch";
 import { ColorPicker } from "../components/dashboard/ColorPicker";
@@ -40,7 +41,7 @@ const PUBLIC_LINK_TYPES = [
   ["other", "Other"],
 ] as const;
 
-type StaffTab = "profile" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -64,6 +65,7 @@ function billingPaymentState(payment: StaffBillingPayment): { label: string; cla
 // guard both read it, so a role can never reach a panel it may not open.
 const TAB_ROLES: Record<StaffTab, string[]> = {
   profile: [],
+  analytics: [],
   global: ["owner", "head_admin", "graphic_designer"],
   guilds: ["owner", "head_admin"],
   blacklist: ["owner", "head_admin"],
@@ -651,12 +653,13 @@ export function StaffDashboardPage() {
 
   const content = <div className="staff-page">
     <header className="staff-heading">
-      <div><div className="eyebrow">Team operations</div><h1>Staff workspace.</h1><p>Manage your public staff profile, guild operations, blacklist appeals, team applications and bot health from one place.</p></div>
+      <div><div className="eyebrow">Team operations</div><h1>Staff workspace.</h1><p>Manage your public staff profile, guild operations, blacklist appeals, team applications and bot health from one place — with live bot-wide analytics for planning the next rollout.</p></div>
       <div className="staff-role-card"><span className="staff-role-mark"><img src={signedInAvatar} alt="Your Discord profile" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = discordDefaultAvatar; }} /></span><span><small>Signed in as</small><strong>{staff.role_label}</strong></span></div>
     </header>
 
     <div className="staff-tabs" role="tablist" aria-label="Staff settings" onKeyDown={onTabKeyDown}>
       <button type="button" role="tab" id="staff-profile-tab" aria-selected={activeTab === "profile"} aria-controls="staff-profile-panel" className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}><Icon name="users" /> Public profile</button>
+      <button type="button" role="tab" id="staff-analytics-tab" aria-selected={activeTab === "analytics"} aria-controls="staff-analytics-panel" className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}><Icon name="chart" /> Analytics</button>
       {canManageGlobal && <button type="button" role="tab" id="staff-global-tab" aria-selected={activeTab === "global"} aria-controls="staff-global-panel" className={activeTab === "global" ? "active" : ""} onClick={() => setActiveTab("global")}><Icon name="settings" /> Bot profile</button>}
       {canManageGuilds && <button type="button" role="tab" id="staff-guilds-tab" aria-selected={activeTab === "guilds"} aria-controls="staff-guilds-panel" className={activeTab === "guilds" ? "active" : ""} onClick={() => setActiveTab("guilds")}><Icon name="shield" /> Guild operations <span>{staffGuilds.length}</span></button>}
       {canManageGuilds && <button type="button" role="tab" id="staff-blacklist-tab" aria-selected={activeTab === "blacklist"} aria-controls="staff-blacklist-panel" className={activeTab === "blacklist" ? "active" : ""} onClick={() => setActiveTab("blacklist")}><Icon name="lock" /> Blacklist <span>{blacklistEntries.users.length + blacklistEntries.guilds.length}</span></button>}
@@ -761,6 +764,7 @@ export function StaffDashboardPage() {
     </details>
     </section>}
 
+    {activeTab === "analytics" && <section id="staff-analytics-panel" role="tabpanel" aria-labelledby="staff-analytics-tab" className="staff-guild-operations"><BotAnalyticsView /></section>}
     {activeTab === "global" && canManageGlobal && <section id="staff-global-panel" role="tabpanel" aria-labelledby="staff-global-tab" className="staff-panel staff-global-panel"><div className="staff-panel-heading"><div><span className="panel-kicker">Graphic direction</span><h2>Global Niko profile</h2><p>Reserved for Graphic Designers, Head Admins, and owners. Paste publicly reachable image URLs.</p></div><span className="staff-step">02</span></div><div className="staff-fields staff-fields-two"><label className="form-field"><span className="form-label">Bot avatar URL</span><input value={global.avatar_url} onChange={(e) => setGlobal({ ...global, avatar_url: e.target.value })} placeholder="https://…" /></label><label className="form-field"><span className="form-label">Bot banner URL</span><input value={global.banner_url} onChange={(e) => setGlobal({ ...global, banner_url: e.target.value })} placeholder="https://…" /></label></div><div className="staff-panel-footer"><span>Updates the bot-wide Discord profile.</span><button type="button" className="button button-primary" onClick={saveGlobal} disabled={savingGlobal}>{savingGlobal ? "Updating…" : "Update global profile"}</button></div></section>}
     {activeTab === "guilds" && canManageGuilds && <section id="staff-guilds-panel" role="tabpanel" aria-labelledby="staff-guilds-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Bot operations</span><h2>Guild directory</h2><p>Review every server Niko currently serves. Select a guild to inspect its owner, activity footprint, live server profile and operational controls.</p></div><div className="staff-guild-count"><strong>{staffGuilds.length}</strong><span>connected guilds</span></div></header>

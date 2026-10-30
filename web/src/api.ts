@@ -15,6 +15,7 @@ import type {
   GuildLevelsResponse,
   PublicConfig,
   UserOverview,
+  StaffAnalytics,
   StaffMember,
   StaffManagementResponse,
   StaffApplication,
@@ -94,6 +95,7 @@ export const getTeamProfileCard = (type: string, url: string, signal?: AbortSign
   api<{ card: SocialProfileCardData }>(`/api/team/profile-card?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`, { signal });
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
 export const getStaffMembers = () => api<StaffManagementResponse>("/api/staff/members");
+export const getStaffAnalytics = (days = 30) => api<StaffAnalytics>(`/api/staff/analytics?days=${days}`);
 export const manageStaffMember = (userId: string, body: { action: "assign" | "demote" | "suspend" | "lift"; role?: string; reason?: string }, csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/members/${encodeURIComponent(userId)}/manage`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const getStaffProxyWorkers = () => api<ProxyWorkersResponse>("/api/staff/proxy-workers");
 export const addStaffProxyWorker = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/proxy-workers", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });

@@ -1,0 +1,167 @@
+"""Bot-wide analytics: counters, language census, and the staff endpoint.
+
+The staff tab is only useful if its numbers are real: these checks keep the
+counters aggregate-per-day, keep a flush/restart from losing or doubling them,
+and keep the endpoint staff-only with the shapes the dashboard expects.
+"""
+
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+import utils.analytics as analytics  # noqa: E402
+from webapp import app, auth, runtime  # noqa: E402
+from webapp.routes import staff_analytics_routes as routes  # noqa: E402
+
+
+def _fresh(monkeypatch, tmp_path):
+    """Point the counters at a temporary file and clear every layer of state."""
+    monkeypatch.setattr(analytics, "ANALYTICS_PATH", str(tmp_path / "analytics.json"))
+    monkeypatch.setattr(analytics, "_state", None)
+    monkeypatch.setattr(analytics, "_active_guilds", {})
+    routes._ECONOMY_CACHE.update({"at": 0.0, "value": None})
+
+
+def _guild(locale, members):
+    return SimpleNamespace(preferred_locale=locale, member_count=members)
+
+
+def test_commands_aggregate_per_day_kind_and_language(monkeypatch, tmp_path):
+    _fresh(monkeypatch, tmp_path)
+    analytics.record_command("help", "slash", "de", guild_id=1)
+    analytics.record_command("help", "prefix", "de-DE", guild_id=2)
+    analytics.record_command("play", "context", "en-US", guild_id=2)
+
+    snapshot = analytics.snapshot(7)
+    bucket = snapshot["days"][analytics.current_day()]
+
+    assert bucket["total"] == 3
+    assert bucket["commands"] == {"help": 2, "play": 1}
+    assert bucket["kinds"] == {"slash": 1, "prefix": 1, "context": 1}
+    # Locales collapse to their base language, so en-GB and en-US share a row.
+    assert bucket["languages"] == {"de": 2, "en": 1}
+    # Two distinct guilds, not three invocations.
+    assert bucket["guilds"] == 2
+    assert snapshot["lifetime"]["total"] == 3
+
+
+def test_a_flush_survives_a_restart_without_double_counting(monkeypatch, tmp_path):
+    _fresh(monkeypatch, tmp_path)
+    analytics.record_command("daily", "slash", "es", guild_id=5)
+    analytics.record_command("daily", "slash", "es", guild_id=5)
+    assert analytics.flush() is True
+
+    # Simulate a process restart: nothing in memory, everything from the file.
+    monkeypatch.setattr(analytics, "_state", None)
+    monkeypatch.setattr(analytics, "_active_guilds", {})
+    restored = analytics.snapshot(7)
+
+    assert restored["lifetime"]["total"] == 2
+    assert restored["days"][analytics.current_day()]["commands"] == {"daily": 2}
+    assert restored["days"][analytics.current_day()]["guilds"] == 1
+
+
+def test_the_language_census_ranks_guilds_and_marks_supported_locales(monkeypatch, tmp_path):
+    _fresh(monkeypatch, tmp_path)
+    census = analytics.language_census([
+        _guild("de", 40),
+        _guild("en-US", 200),
+        _guild("en-GB", 60),
+        _guild("fr", 30),
+    ])
+
+    assert census["guilds"] == 4
+    assert census["members"] == 330
+    assert [row["code"] for row in census["languages"]] == ["en", "de", "fr"]
+    english = census["languages"][0]
+    assert english["guilds"] == 2
+    assert english["members"] == 260
+    assert english["share"] == 0.5
+    assert english["supported"] is True
+    assert census["languages"][2]["supported"] is False
+
+
+def test_the_endpoint_is_staff_only(monkeypatch, tmp_path):
+    _fresh(monkeypatch, tmp_path)
+    monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
+    monkeypatch.setattr(routes, "_current_staff_role", lambda: None)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = {"id": "10", "username": "someone"}
+            session["access_token"] = "token"
+            session["token_exp"] = time.time() + 3600
+        response = client.get("/api/staff/analytics")
+
+    assert response.status_code == 403
+    assert "restricted" in response.get_json()["error"]
+
+
+def test_the_endpoint_returns_live_charts_for_staff(monkeypatch, tmp_path):
+    _fresh(monkeypatch, tmp_path)
+    bot = SimpleNamespace(
+        guilds=[_guild("de", 40), _guild("en-US", 200), _guild("es-ES", 60)],
+        latency=0.042,
+        shards={},
+        start_time=time.time() - 3600,
+        is_ready=lambda: True,
+    )
+    monkeypatch.setattr(routes, "_discord_bot", bot)
+    monkeypatch.setattr(runtime, "_discord_bot", bot)
+    monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
+    monkeypatch.setattr(routes, "_current_staff_role", lambda: "head_admin")
+    monkeypatch.setattr(routes, "_command_categories", lambda: {"help": "utility", "play": "music"})
+    monkeypatch.setattr(routes, "get_runtime_economy_rows", lambda: [
+        {"user_id": "1", "balance": 100, "bank": 50, "net_worth": 150, "level": 4, "job": "barista", "daily_streak": 2},
+        {"user_id": "2", "balance": 300, "bank": 0, "net_worth": 300, "level": 6, "job": "baker", "daily_streak": 0},
+        {"user_id": "3", "balance": 0, "bank": 0, "net_worth": 0, "level": 0, "job": "baker", "daily_streak": 0},
+    ])
+    analytics.record_command("help", "slash", "de", guild_id=1)
+    analytics.record_command("help", "prefix", "en", guild_id=2)
+    analytics.record_command("play", "context", "es", guild_id=3)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user"] = {"id": "11", "username": "staff"}
+            session["access_token"] = "token"
+            session["token_exp"] = time.time() + 3600
+        response = client.get("/api/staff/analytics?days=14")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+
+    assert payload["bot"]["guilds"] == 3
+    assert payload["bot"]["members"] == 300
+    assert payload["bot"]["latency_ms"] == 42
+
+    usage = payload["usage"]
+    # The chart window is zero-filled, so a quiet day still has a point.
+    assert len(usage["days"]) == 14
+    assert usage["days"][-1]["total"] == 3
+    assert usage["totals"]["today"] == 3
+    assert usage["by_kind"] == {"slash": 1, "prefix": 1, "context": 1}
+    assert [row["name"] for row in usage["top_commands"]] == ["help", "play"]
+    assert usage["top_commands"][0]["count"] == 2
+    assert usage["top_commands"][0]["category"] == "utility"
+    assert usage["top_commands"][1]["category"] == "music"
+
+    assert [row["code"] for row in payload["languages"]["languages"]] == ["en", "es", "de"]
+    assert payload["languages"]["languages"][0]["supported"] is True
+
+    economy = payload["economy"]
+    assert economy["profiles"] == 3
+    assert economy["circulating"] == 400
+    assert economy["banked"] == 50
+    assert economy["average"] == 150
+    assert economy["median"] == 150
+    assert economy["top_jobs"][0] == {
+        "id": "baker", "name": "Baker", "emoji": "🍞", "count": 2, "share": 0.6667,
+    }
+
+    # Today's live totals seed the growth series the tab draws.
+    assert payload["growth"][-1]["guilds"] == 3
+    assert payload["growth"][-1]["users"] == 300
