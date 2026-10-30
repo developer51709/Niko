@@ -1,0 +1,14 @@
+{
+  "commands": {
+    "ai-config.description": "Configurer les paramètres de l'IA pour ce serveur",
+    "ai-config.help": "Configurer les paramètres de l'IA de votre serveur.",
+    "clearhistory.description": "Effacer votre historique de conversation et la mémoire de Niko sur ce serveur",
+    "clearhistory.help": "effacer votre historique et la mémoire de niko ☕",
+    "edit.args.prompt": "Conservé pour référence ; la modification d'images n'est plus disponible.",
+    "edit.help": "La modification d'images a été retirée — voici pourquoi.",
+    "generate.args.prompt": "Ce que l'image doit montrer.",
+    "generate.help": "Générer une image avec l'IA.",
+    "memory.args.member": "Membre dont afficher les notes (vous par défaut).",
+    "memory.help": "voir mes notes de café sur vous ☕📝"
+  }
+}

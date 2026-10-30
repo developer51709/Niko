@@ -5,6 +5,7 @@ import time
 
 import database
 from utils.command_locales import command_texts
+from utils.i18n import get_lang
 
 from .formatters import *
 from .revert import (
@@ -518,7 +519,7 @@ class ServerLogger(commands.Cog):
             action_key=action_key or title,
             channel_id=channel_id,
             thumbnail_url=thumbnail_url,
-            lang=_panel_lang(guild),
+            lang=get_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, pending.channel_id))
@@ -591,7 +592,7 @@ class ServerLogger(commands.Cog):
             files=files,
             file_components=file_components,
             revert=revert,
-            lang=_panel_lang(guild),
+            lang=get_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))

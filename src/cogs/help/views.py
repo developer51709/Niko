@@ -17,6 +17,7 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from config import links
 from utils.command_locales import description_map
+from utils.i18n import get_lang
 from utils.prefix_manager import resolve_prefix
 from utils.locales import load_locales
 
@@ -26,22 +27,8 @@ PAGE_SIZE = 8
 # ===================================================
 #  LANGUAGE UTILITIES
 # ===================================================
-
-def get_lang(ctx_or_guild=None) -> str:
-    """Return 'de' when the guild's preferred locale is German, else 'en'."""
-    guild = None
-    if isinstance(ctx_or_guild, commands.Context):
-        guild = ctx_or_guild.guild
-    elif isinstance(ctx_or_guild, discord.Interaction):
-        guild = ctx_or_guild.guild
-    elif isinstance(ctx_or_guild, discord.Guild):
-        guild = ctx_or_guild
-    if guild and guild.preferred_locale:
-        if str(guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
+# The language resolver itself lives in `utils.i18n.get_lang`, shared by every
+# cog; this module only reads the guild's language through it.
 
 
 def get_command_help(ctx_or_interaction, cmd: commands.Command) -> str:

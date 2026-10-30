@@ -1,0 +1,8 @@
+{
+  "commands": {
+    "Report MrBeast Scam.name": "Signaler une arnaque MrBeast",
+    "Report MrBeast Scam.description": "Envoyer les images d'un message au staff pour vérification d'arnaque",
+    "automod.description": "Ouvrir le panneau de réglages de l'AutoMod",
+    "automod.help": "Ouvrir le panneau de réglages de l'AutoMod."
+  }
+}

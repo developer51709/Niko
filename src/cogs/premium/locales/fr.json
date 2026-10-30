@@ -1,0 +1,9 @@
+{
+  "commands": {
+    "premium.description": "Gérer Niko Premium pour un serveur",
+    "premium.gift.args.server_id": "ID du serveur à offrir (ce serveur par défaut)",
+    "premium.gift.description": "Offrir Premium à un serveur dont vous êtes membre",
+    "premium.status.description": "Afficher l'abonnement Premium de ce serveur",
+    "premium.upgrade.description": "Obtenir le lien de paiement pour ce serveur"
+  }
+}

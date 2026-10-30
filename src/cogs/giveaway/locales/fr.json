@@ -1,0 +1,18 @@
+{
+  "commands": {
+    "giveaway.ban.args.member": "Membre à exclure des giveaways.",
+    "giveaway.ban.description": "Empêcher un membre de participer aux giveaways de ce serveur.",
+    "giveaway.ban.help": "empêcher un membre de participer à tous les giveaways",
+    "giveaway.description": "Gérer les giveaways.",
+    "giveaway.help": "lancer un giveaway sur ce serveur 🎉",
+    "giveaway.reroll.args.message_id": "ID du message du giveaway terminé.",
+    "giveaway.reroll.description": "Tirer un nouveau gagnant pour un giveaway terminé.",
+    "giveaway.reroll.help": "choisir un nouveau gagnant pour un giveaway terminé",
+    "giveaway.start.args._ignored": "Ignoré ; le panneau demande le reste.",
+    "giveaway.start.description": "Ouvrir le panneau de création du giveaway.",
+    "giveaway.start.help": "lancer un nouveau giveaway 🎉",
+    "giveaway.unban.args.member": "Membre à réautoriser pour les giveaways.",
+    "giveaway.unban.description": "Permettre à un membre exclu de participer de nouveau aux giveaways.",
+    "giveaway.unban.help": "réautoriser un membre exclu"
+  }
+}

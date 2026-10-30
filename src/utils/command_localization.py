@@ -9,9 +9,9 @@ library the translations itself.
 
 Niko keeps its wording in each cog's ``locales/*.json`` and builds decorators
 with plain English strings, so without help the payload Discord receives is
-always English. :func:`apply_command_localizations` extends each top-level
-application command's ``to_dict`` so the payload carries the German and Spanish
-text from the catalogue, including nested subcommands and every option.
+always English. :func:`apply_command_localizations` extends each  top-level application command's ``to_dict`` so the payload carries the German,
+Spanish, and French text from the catalogue, including nested subcommands and
+every option.
 
 The helper never changes how a command is declared, is safe to run more than
 once, and leaves commands whose cog has no catalogue untouched.
@@ -33,6 +33,7 @@ from utils.command_locales import CommandTexts, command_path, resolve_package
 DISCORD_LOCALES: dict[str, tuple[str, ...]] = {
     "de": (Locale.german.value,),
     "es": (Locale.spain_spanish.value, Locale.latin_american_spanish.value),
+    "fr": (Locale.french.value,),
 }
 
 #: Discord rejects the whole payload when a localization is too long, so a text
@@ -65,7 +66,7 @@ def _clamp(text: str, limit: int = DESCRIPTION_LIMIT) -> str:
 
 
 def _expand(values: dict[str, str] | None, limit: int = DESCRIPTION_LIMIT) -> dict[str, str]:
-    """``{"de": …, "es": …}`` → ``{"de": …, "es-ES": …, "es-419": …}``."""
+    """``{"de": …, "es": …, "fr": …}`` → ``{"de": …, "es-ES": …, "es-419": …, "fr": …}``."""
     if not values:
         return {}
     expanded: dict[str, str] = {}

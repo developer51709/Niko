@@ -38,14 +38,6 @@ MAX_TAG_LEN = 1900
 MESSAGES = load_locales("cogs.utility", "tags")
 
 
-def _lang(ctx) -> str:
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        l = str(ctx.guild.preferred_locale).lower()
-        if l.startswith("de"): return "de"
-        if l.startswith("es"): return "es"
-    return "en"
-
-
 msg = make_flat_msg(MESSAGES)
 
 

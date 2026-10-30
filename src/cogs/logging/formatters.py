@@ -19,6 +19,7 @@ from config import links
 from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
 from .revert import RestoreChannelButton, RestoreRoleButton, RevertChannelButton
+from utils.i18n import get_lang
 from utils.locales import load_locales
 
 # ── Constants ─────────────────────────────────────
@@ -422,7 +423,7 @@ async def _save_guild_log_config(guild_id: int, cfg: dict):
 
 def _act(interaction: discord.Interaction, key: str, **kwargs) -> str:
     """A quick-action reply in the language of the server it happened in."""
-    return _t(_panel_lang(getattr(interaction, "guild", None)), key, **kwargs)
+    return _t(get_lang(interaction), key, **kwargs)
 
 
 class KickButton(discord.ui.Button):
@@ -846,16 +847,6 @@ def _t(lang: str, key: str, **kwargs) -> str:
     )
 
 
-def _panel_lang(guild) -> str:
-    """The panel's language, from the guild locale."""
-    locale = str(getattr(guild, "preferred_locale", None) or "").lower()
-    if locale.startswith("de"):
-        return "de"
-    if locale.startswith("es"):
-        return "es"
-    return "en"
-
-
 def _may_manage(interaction: discord.Interaction) -> bool:
     """Manage Server, the same permission `/logging` itself requires."""
     permissions = getattr(interaction.user, "guild_permissions", None)
@@ -1007,7 +998,7 @@ class SelectChannelView(discord.ui.LayoutView):
 
     def __init__(self, guild_id: int, category: str, author, panel_message,
                  cog=None, lang: str | None = None):
-        effective_lang = lang or _panel_lang(getattr(author, "guild", None))
+        effective_lang = lang or get_lang(author)
         super().__init__(timeout=PANEL_TIMEOUT)
         self.guild_id = guild_id
         self.category = category
@@ -1105,7 +1096,7 @@ class LoggingSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author, category: str | None = None,
                  data: dict | None = None, cog=None, lang: str | None = None,
                  timeout: float = PANEL_TIMEOUT):
-        effective_lang = lang or _panel_lang(getattr(author, "guild", None))
+        effective_lang = lang or get_lang(author)
         super().__init__(timeout=timeout)
         self.guild_id = guild_id
         self.author = author

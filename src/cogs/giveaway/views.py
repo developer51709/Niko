@@ -10,6 +10,7 @@ from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
 from utils.blacklist_manager import BlacklistManager
 from utils.guild_lockdown import paused_message
+from utils.i18n import get_lang
 from utils.locales import load_locales
 
 
@@ -162,24 +163,6 @@ def _check_member_meets_reqs(member: discord.Member, reqs: dict, locale=None) ->
 MESSAGES = load_locales("cogs.giveaway", "views")
 
 
-def _get_lang(obj) -> str:
-    """The language of a prompt, of an interaction, or of a guild itself.
-
-    A modal is assembled from a view that only holds ``guild``, so a caller
-    with no context to hand passes the guild directly; without this it would
-    quietly fall back to English.
-    """
-    guild = getattr(obj, "guild", None)
-    if guild is None and getattr(obj, "preferred_locale", None):
-        guild = obj
-    if guild and getattr(guild, "preferred_locale", None):
-        if str(guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
-
-
 #: Emoji tokens a message may carry as ``{name}``.
 #:
 #: The table is translated per language, so an emoji that only lives inside a
@@ -193,7 +176,7 @@ _EMOJI_FIELDS = (
 
 def msg(obj, key: str, **kwargs) -> str:
     """Resolve a giveaway message: guild language, then English, then the key."""
-    lang = _get_lang(obj)
+    lang = get_lang(obj)
     text = MESSAGES.get(lang, {}).get(key)
     if text is None:
         text = MESSAGES["en"].get(key, key)

@@ -19,11 +19,12 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 
+from utils.locales import SUPPORTED_LANGUAGES
+
 ANALYTICS_PATH = os.path.join("data", "analytics.json")
 HISTORY_DAYS = 90
 FLUSH_SECONDS = 60
 KINDS = ("slash", "prefix", "context")
-SUPPORTED_LANGUAGES = ("en", "de", "es")
 
 LANGUAGE_LABELS = {
     "en": "English",

@@ -1,0 +1,8 @@
+{
+  "commands": {
+    "legal.community.description": "Lire la charte communautaire de Niko pour les serveurs",
+    "legal.description": "Politique de confidentialité, conditions d'utilisation et charte communautaire de Niko",
+    "legal.privacy.description": "Lire la politique de confidentialité de Niko",
+    "legal.terms.description": "Lire les conditions d'utilisation de Niko"
+  }
+}

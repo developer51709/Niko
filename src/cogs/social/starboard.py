@@ -34,15 +34,6 @@ DEFAULT_EMOJI = "⭐"
 MESSAGES = load_locales("cogs.social", "starboard")
 
 
-def _lang(ctx) -> str:
-    g = getattr(ctx, "guild", None) if not isinstance(ctx, discord.Guild) else ctx
-    if g and g.preferred_locale:
-        l = str(g.preferred_locale).lower()
-        if l.startswith("de"): return "de"
-        if l.startswith("es"): return "es"
-    return "en"
-
-
 msg = make_flat_msg(MESSAGES)
 
 

@@ -29,15 +29,6 @@ CMDS = command_texts(__package__)
 MESSAGES = load_locales("cogs.social", "suggestions")
 
 
-def _lang(ctx) -> str:
-    g = getattr(ctx, "guild", None)
-    if g and g.preferred_locale:
-        l = str(g.preferred_locale).lower()
-        if l.startswith("de"): return "de"
-        if l.startswith("es"): return "es"
-    return "en"
-
-
 msg = make_flat_msg(MESSAGES)
 
 

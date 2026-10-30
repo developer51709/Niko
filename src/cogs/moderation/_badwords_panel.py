@@ -9,8 +9,6 @@ the blocked-word filter does, editable without memorising subcommands.
 The subcommands (`/badwords add`, `remove`, `clear`) stay available for scripted
 use; this panel is the interactive front end.
 """
-from types import SimpleNamespace
-
 import discord
 
 from config.emojis import get_emoji
@@ -49,11 +47,6 @@ EMOJI = {
 MESSAGES = load_locales("cogs.moderation", "badwords_panel")
 
 
-def _lang(guild) -> str:
-    """The guild's panel language, reusing the command-message resolver."""
-    return get_lang(SimpleNamespace(guild=guild))
-
-
 def _t(lang: str, key: str, **kwargs) -> str:
     """Look up a panel string, filling in the custom emojis and any kwargs."""
     text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
@@ -77,7 +70,7 @@ def _may_manage(interaction: discord.Interaction) -> bool:
 async def _deny(interaction: discord.Interaction):
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=_t(_lang(interaction.guild), "no_permission")),
+        discord.ui.TextDisplay(content=_t(get_lang(interaction.guild), "no_permission")),
         accent_colour=discord.Color.red(),
     ))
     return await interaction.response.send_message(view=view, ephemeral=True)
@@ -187,7 +180,7 @@ def build_panel(utils, guild_id: int, section: str = "overview", guild=None) -> 
     """The `/badwords` panel for one section, ready to send or edit in place."""
     if section not in SECTIONS:
         section = "overview"
-    lang = _lang(guild)
+    lang = get_lang(guild)
     view = discord.ui.LayoutView(timeout=PANEL_TIMEOUT)
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=_section_text(utils, guild_id, section, lang)),
@@ -264,7 +257,7 @@ class AddWordButton(discord.ui.Button):
         if not _may_manage(interaction):
             return await _deny(interaction)
         await interaction.response.send_modal(
-            AddWordModal(self._utils, self._guild_id, _lang(interaction.guild)))
+            AddWordModal(self._utils, self._guild_id, get_lang(interaction.guild)))
 
 
 class AddWordModal(discord.ui.Modal):
@@ -282,7 +275,7 @@ class AddWordModal(discord.ui.Modal):
         self._guild_id = guild_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         word = normalize_blocked_word(self.word.value)
@@ -305,7 +298,7 @@ class RemoveWordButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         words = self._utils.get_blocked_words(self._guild_id)
@@ -332,7 +325,7 @@ class RemoveWordSelect(discord.ui.Select):
         self._guild_id = guild_id
         self.message = message
         super().__init__(
-            placeholder=_t(_lang(getattr(message, "guild", None)), "remove_placeholder"),
+            placeholder=_t(get_lang(getattr(message, "guild", None)), "remove_placeholder"),
             options=[
                 discord.SelectOption(label=word[:100], value=word[:100])
                 for word in words[:MAX_REMOVE_OPTIONS]
@@ -342,7 +335,7 @@ class RemoveWordSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         word = self.values[0]
@@ -363,7 +356,7 @@ class ClearWordsButton(discord.ui.Button):
         self._guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         words = self._utils.get_blocked_words(self._guild_id)
@@ -382,7 +375,7 @@ class ClearWordsButton(discord.ui.Button):
 
 class ConfirmClearButton(discord.ui.Button):
     def __init__(self, utils, guild_id: int, count: int, message):
-        lang = _lang(getattr(message, "guild", None))
+        lang = get_lang(getattr(message, "guild", None))
         super().__init__(label=_t(lang, "clear_confirm"), style=discord.ButtonStyle.red, emoji=EMOJI["trash"])
         self._utils = utils
         self._guild_id = guild_id
@@ -390,7 +383,7 @@ class ConfirmClearButton(discord.ui.Button):
         self.message = message
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         self._utils.clear_blocked_words(self._guild_id)
@@ -408,7 +401,7 @@ class CancelClearButton(discord.ui.Button):
         super().__init__(label=_t(lang, "cancel"), style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         await _notice(interaction, _t(lang, "clear_cancelled"))
@@ -441,7 +434,7 @@ class PresetSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         enabled = self._utils.set_badwords_presets(self._guild_id, self.values)
@@ -485,7 +478,7 @@ class ResponseSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         value = self.values[0]
@@ -511,7 +504,7 @@ class SetMaskButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not _may_manage(interaction):
             return await _deny(interaction)
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         await interaction.response.send_modal(
             MaskModal(self._utils, self._guild_id, lang))
 
@@ -534,7 +527,7 @@ class MaskModal(discord.ui.Modal):
         self._guild_id = guild_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        lang = _lang(interaction.guild)
+        lang = get_lang(interaction.guild)
         if not _may_manage(interaction):
             return await _deny(interaction)
         mask = normalize_badwords_mask(self.mask.value)

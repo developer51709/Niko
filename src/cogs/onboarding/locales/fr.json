@@ -1,0 +1,9 @@
+{
+  "commands": {
+    "onboarding.autoroles.help": "Configurer les rôles automatiquement attribués aux nouveaux membres à leur arrivée.",
+    "onboarding.captcha.help": "Configurer la vérification par captcha pour le serveur.",
+    "onboarding.help": "Gérer l'onboarding du serveur",
+    "onboarding.role-menu.help": "Créer, modifier et gérer les menus de rôles du serveur.",
+    "onboarding.setup.help": "Configurer l'onboarding du serveur."
+  }
+}
