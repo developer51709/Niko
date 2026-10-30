@@ -143,7 +143,7 @@ if __name__ == "__main__":
     async def _shutdown(signal_name: str):
         logging.info("Shutdown", f"Received {signal_name}, closing bot...")
         # Persist the commands recorded since the last periodic flush.
-        analytics.stop_flush_task()
+        await analytics.stop_flush_task()
         if bot.proxy_manager is not None:
             try:
                 await bot.proxy_manager.close()
