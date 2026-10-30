@@ -13,6 +13,7 @@ import os
 import re
 import time
 
+import discord
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -346,14 +347,19 @@ _AI_ACTIONS_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_channel",
-            "description": "Create a new text or voice channel. Requires Manage Channels.",
+            "description": (
+                "Create a new text or voice channel inside the server's existing "
+                "structure. Requires Manage Channels. Pick the category from the "
+                "Server layout and follow the naming style of the channels already "
+                "there."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Channel name (lowercase, dashes preferred)."},
+                    "name": {"type": "string", "description": "Channel name, written in the same style as its siblings (lowercase and dashes unless the category uses emoji prefixes or capitals)."},
                     "type": {"type": "string", "enum": ["text", "voice"], "description": "Channel type."},
-                    "topic": {"type": "string", "description": "Optional topic for text channels."},
-                    "category": {"type": "string", "description": "Optional category ID or name to create the channel in."},
+                    "topic": {"type": "string", "description": "Optional topic for text channels, in the tone of the topics already used in that category."},
+                    "category": {"type": "string", "description": "Category name or ID from the Server layout. Use the category whose existing channels serve the same purpose; omit only when no category fits."},
                 },
                 "required": ["name"],
             },
@@ -405,16 +411,41 @@ _AI_ACTIONS_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_role",
-            "description": "Create a new role. Requires Manage Roles.",
+            "description": (
+                "Create a new role, matching the naming style, colour and hoisting of "
+                "the roles around it in the Server layout. Requires Manage Roles."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Role name."},
-                    "colour": {"type": "string", "description": "Optional hex colour like #ff8800."},
+                    "name": {"type": "string", "description": "Role name, in the same style as neighbouring roles."},
+                    "colour": {"type": "string", "description": "Optional hex colour like #ff8800 — reuse one already used near this role's position."},
                     "hoist": {"type": "boolean", "description": "Display members with this role separately."},
                     "mentionable": {"type": "boolean", "description": "Allow @-mentioning the role."},
+                    "above": {"type": "string", "description": "Existing role name or ID from the layout to place the new role directly above. Omit to add it at the bottom."},
                 },
                 "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_role",
+            "description": (
+                "Change an existing role's name, colour, hoist or mentionable flag. "
+                "Send only the properties that should change. Requires Manage Roles."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "role": _ROLE_ARG,
+                    "name": {"type": "string", "description": "New role name. Omit to keep the current one."},
+                    "colour": {"type": "string", "description": "New hex colour like #ff8800, or 'default' to clear it. Omit to keep the current one."},
+                    "hoist": {"type": "boolean", "description": "Show members with this role as a separate group."},
+                    "mentionable": {"type": "boolean", "description": "Allow @-mentioning the role."},
+                },
+                "required": ["role"],
             },
         },
     },
@@ -519,6 +550,9 @@ _ACTION_RE = re.compile(
     + rf"|\b{_CREATE_VERBS}\b{_ACTION_GAP}\broles?\b"
     + rf"|\b{_GRANT_VERBS}\b{_ACTION_GAP}\broles?\b"
     + rf"|\b{_EDIT_VERBS}\b{_ACTION_GAP}\broles?\b"
+    # "set the mod role to red" — colour and flag edits use verbs the create
+    # and edit lists above do not cover.
+    + rf"|\b(?:set|recolour|recolor)\b{_ACTION_GAP}\broles?\b"
     # nicknames: change/set/reset a nickname
     + rf"|\b(?:change|set|update|reset|assign)\b{_ACTION_GAP}\bnick(?:name)?\b"
     # polls: create/start a poll
@@ -539,8 +573,96 @@ _ACTION_SYSTEM_HINT = (
     "- Never claim an action is done: the tool asks the request author to "
     "confirm and then reports the real result.\n"
     "- If the message is casual chat that merely mentions one of those words, "
-    "ignore the tools and reply normally."
+    "ignore the tools and reply normally.\n"
+    "- Structure your request around the server layout below. For a new "
+    "channel, reuse the category whose existing channels fit the purpose, "
+    "copy the naming style of that category's channels (emoji prefixes, "
+    "separators, capitalisation) and match their topic tone. If no category "
+    "fits, leave the category empty rather than inventing one.\n"
+    "- For roles, match the naming style, colour and hoisting of the roles "
+    "that sit around the new one in the hierarchy, and place it with "
+    "`above` at the spot the user asked for.\n"
+    "- Never reference an id or name that is not in the layout."
 )
+
+# ── Live server layout for action requests ────────────────────────────────────
+# The model used to receive only the server name and member count, so a new
+# channel landed without a category and roles were created with random colours.
+# The layout is attached in action mode only, and is bounded so a huge server
+# cannot blow up the prompt.
+_LAYOUT_MAX_CATEGORIES = 20
+_LAYOUT_MAX_CHANNELS = 80
+_LAYOUT_MAX_ROLES = 40
+_LAYOUT_MAX_NAME = 48
+
+
+def _channel_label(channel) -> str:
+    name = str(getattr(channel, "name", ""))[:_LAYOUT_MAX_NAME]
+    if isinstance(channel, discord.VoiceChannel):
+        kind = "voice"
+    elif isinstance(channel, discord.ForumChannel):
+        kind = "forum"
+    elif isinstance(channel, discord.StageChannel):
+        kind = "stage"
+    elif isinstance(channel, discord.TextChannel) and getattr(channel, "news", False):
+        kind = "announcement"
+    else:
+        kind = "text"
+    return f"{name} ({kind}, {getattr(channel, 'id', '?')})"
+
+
+def _role_label(role) -> str:
+    attrs = [f"id {getattr(role, 'id', '?')}"]
+    colour = getattr(role, "colour", None)
+    if colour is not None and colour.value:
+        attrs.append(f"#{colour.value:06x}")
+    if getattr(role, "hoist", False):
+        attrs.append("hoisted")
+    if getattr(role, "mentionable", False):
+        attrs.append("mentionable")
+    return f"{str(getattr(role, 'name', ''))[:_LAYOUT_MAX_NAME]} ({', '.join(attrs)})"
+
+
+def _server_layout(server) -> str:
+    """A compact map of the server's categories, channels and roles."""
+    if server is None:
+        return ""
+    lines: list[str] = ["", "Server layout (the only channels, categories and roles that exist):"]
+
+    categories = list(getattr(server, "categories", []) or [])[:_LAYOUT_MAX_CATEGORIES]
+    budget = _LAYOUT_MAX_CHANNELS
+    for category in categories:
+        children = list(getattr(category, "channels", []) or [])[:budget]
+        budget -= len(children)
+        listing = ", ".join(_channel_label(child) for child in children) or "empty"
+        lines.append(f"- Category {category.name!r} ({getattr(category, 'id', '?')}): {listing}")
+        if budget <= 0:
+            break
+
+    orphans = [
+        channel for channel in (getattr(server, "channels", []) or [])
+        if getattr(channel, "category", None) is None
+    ][:max(budget, 0)]
+    if orphans:
+        lines.append("- No category: " + ", ".join(_channel_label(channel) for channel in orphans))
+
+    if len(getattr(server, "categories", []) or []) > len(categories):
+        lines.append(f"- (Categories beyond the first {_LAYOUT_MAX_CATEGORIES} are omitted.)")
+
+    roles = [
+        role for role in reversed(getattr(server, "roles", []) or [])
+        if not getattr(role, "is_default", lambda: False)() and not getattr(role, "managed", False)
+    ][:_LAYOUT_MAX_ROLES]
+    if roles:
+        lines.append("Roles (highest to lowest): " + " | ".join(_role_label(role) for role in roles))
+
+    me = getattr(server, "me", None)
+    top_role = getattr(me, "top_role", None)
+    if top_role is not None and not getattr(top_role, "is_default", lambda: False)():
+        lines.append(
+            f"Niko's highest role is {top_role.name!r}: roles at or above it cannot be edited or deleted by Niko."
+        )
+    return "\n".join(lines)
 
 
 def _message_requests_action(message: str) -> bool:
@@ -703,10 +825,13 @@ async def generate_reply_openai(
     # action.  Sending 18 tool schemas on every casual chat message
     # burns ~2,000 input tokens per request with no benefit.
     wants_action = ai_actions_enabled and _message_requests_action(message)
+    layout = _server_layout(server) if wants_action else ""
     conversation = [
         {
             "role": "system",
-            "content": SYSTEM_PROMPT + (_ACTION_SYSTEM_HINT if wants_action else ""),
+            "content": (
+                SYSTEM_PROMPT + _ACTION_SYSTEM_HINT + layout if wants_action else SYSTEM_PROMPT
+            ),
         },
         {"role": "user",   "content": user_content},
     ]

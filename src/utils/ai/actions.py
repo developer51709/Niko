@@ -12,12 +12,20 @@ pipeline before it can affect the server:
     grant a role above the invoker or to moderate someone they outrank-check
     away. The server owner bypasses the invoker check.
 3.  **Confirmation** — a CV2 LayoutView describes exactly what is about to
-    happen. Only the requesting user can confirm or cancel, and the card expires.
+    happen. Only the requesting user can confirm or cancel, and the card
+    expires. The same card is then edited into the outcome, so a request never
+    leaves a spent prompt behind with a separate result message under it.
 
 ``create_poll`` is the one non-destructive action: it skips the confirmation but
 still requires Send Messages in the channel.
 
-Every completed action is also written to Niko's own moderation/channel logs.
+Every completed action is also written to Niko's own moderation/channel logs;
+those log entries stay in English because the logging cog translates their
+titles and field labels when it renders them.
+
+All wording shown in the requesting channel lives in ``locales/`` next to this
+package, one file per shipped language, and is resolved through the guild's
+locale at the moment it is sent.
 """
 
 from __future__ import annotations
@@ -30,6 +38,25 @@ import discord
 
 from config.emojis import get_emoji
 from utils import logging
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+#: ``{lang: {key: text}}`` for this package, namespace ``actions``.
+MESSAGES = load_locales("utils.ai", "actions")
+t = make_flat_msg(MESSAGES)
+
+#: Keys the confirmation view needs; resolved once per request so a guild that
+#: switches language mid-prompt still gets the wording it started with.
+_CONFIRM_TEXT_KEYS = (
+    "confirm_footer",
+    "button_confirm",
+    "button_cancel",
+    "confirm_author_only",
+    "cancel_title",
+    "cancel_body",
+    "expired_title",
+    "expired_body",
+)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -99,6 +126,36 @@ async def _resolve_user(bot: discord.Client, value) -> Optional[discord.User]:
         return None
 
 
+def _normalise_name(value) -> str:
+    """Lowercase a name and strip mentions, decoration and separators."""
+    name = re.sub(r"<[#@!&]*\d+>", "", str(value or ""))
+    return name.strip().lstrip("#@").strip().lower()
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+
+
+def _unique_match(name: str, items, key):
+    """Exact match, then a unique prefix, then a unique substring.
+
+    The model shortens names the way people speak — "memes" for
+    "memes-and-gifs" — and an exact-only lookup used to fail those, leaving the
+    action to report that the channel did not exist. A shortened name is only
+    accepted when it picks out one item, so nothing is changed by guesswork.
+    """
+    if not name:
+        return None
+    for item in items:
+        if key(item).lower() == name:
+            return item
+    prefixed = [item for item in items if key(item).lower().startswith(name)]
+    if len(prefixed) == 1:
+        return prefixed[0]
+    partial = [item for item in items if name in key(item).lower()]
+    return partial[0] if len(partial) == 1 else None
+
+
 def _resolve_channel(guild: discord.Guild, value) -> Optional[discord.abc.GuildChannel]:
     if value is None:
         return None
@@ -107,12 +164,15 @@ def _resolve_channel(guild: discord.Guild, value) -> Optional[discord.abc.GuildC
         ch = guild.get_channel(cid)
         if ch:
             return ch
-    name = str(value).strip().lstrip("#").lower()
+    name = _normalise_name(value)
     if not name:
         return None
-    for ch in guild.channels:
-        if ch.name.lower() == name:
-            return ch
+    channel = _unique_match(name, guild.channels, lambda c: c.name)
+    if channel is not None:
+        return channel
+    slug = _slugify(name)
+    if slug and slug != name:
+        return _unique_match(slug, guild.channels, lambda c: c.name)
     return None
 
 
@@ -124,13 +184,64 @@ def _resolve_role(guild: discord.Guild, value) -> Optional[discord.Role]:
         r = guild.get_role(rid)
         if r:
             return r
-    name = str(value).strip().lstrip("@").lower()
+    name = _normalise_name(value)
     if not name:
         return None
-    for r in guild.roles:
-        if r.name.lower() == name:
-            return r
+    role = _unique_match(name, guild.roles, lambda r: r.name)
+    if role is not None:
+        return role
+    slug = _slugify(name)
+    if slug and slug != name:
+        return _unique_match(slug, guild.roles, lambda r: r.name)
     return None
+
+
+def _as_category(channel) -> Optional[discord.CategoryChannel]:
+    """The category itself, or the category a channel belongs to.
+
+    A category is the channel flavour that owns children, so anything without
+    children is treated as a channel whose parent category is meant.
+    """
+    if channel is None:
+        return None
+    if getattr(channel, "channels", None) is not None:
+        return channel
+    return getattr(channel, "category", None)
+
+
+def _resolve_category(guild: discord.Guild, value) -> Optional[discord.CategoryChannel]:
+    """Resolve a category by id/name, or the category a named channel is in."""
+    if value is None:
+        return None
+    cid = _coerce_id(value)
+    if cid:
+        category = _as_category(guild.get_channel(cid))
+        if category is not None:
+            return category
+    name = _normalise_name(value)
+    if not name:
+        return None
+    category = _unique_match(name, guild.categories, lambda c: c.name)
+    if category is not None:
+        return category
+    slug = _slugify(name)
+    if slug and slug != name:
+        category = _unique_match(slug, guild.categories, lambda c: c.name)
+        if category is not None:
+            return category
+    # "put it next to #general" — use the category that channel lives in.
+    return _as_category(_resolve_channel(guild, value))
+
+
+def _perm_label(ctx, perm: str) -> str:
+    """The permission's name in the guild's language.
+
+    A permission with no translation falls back to its Discord name, which is
+    better than showing the raw catalogue key.
+    """
+    key = f"perm_{perm}"
+    label = t(ctx, key)
+    return label if label != key else perm.replace("_", " ").title()
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -138,6 +249,7 @@ def _resolve_role(guild: discord.Guild, value) -> Optional[discord.Role]:
 # ────────────────────────────────────────────────────────────────────
 
 def _info_view(
+    ctx,
     title: str,
     body: str,
     *,
@@ -153,31 +265,36 @@ def _info_view(
     return view
 
 
-def _error_view(body: str) -> discord.ui.LayoutView:
-    return _info_view(f"{get_emoji('danger')} AI Action Refused", body, colour=discord.Colour.red())
+def _error_view(ctx, body: str) -> discord.ui.LayoutView:
+    return _info_view(
+        ctx, f"{get_emoji('danger')} {t(ctx, 'error_title')}", body, colour=discord.Colour.red()
+    )
 
 
-def _success_view(body: str) -> discord.ui.LayoutView:
-    return _info_view(f"{get_emoji('tick')} AI Action Completed", body, colour=discord.Colour.green())
+def _success_view(ctx, body: str) -> discord.ui.LayoutView:
+    return _info_view(
+        ctx, f"{get_emoji('tick')} {t(ctx, 'success_title')}", body, colour=discord.Colour.green()
+    )
 
 
 class AIActionConfirmView(discord.ui.LayoutView):
     """LayoutView with Confirm + Cancel buttons gated to the invoker."""
 
-    def __init__(self, title: str, body: str, *, invoker_id: int, timeout: float = 45.0):
+    def __init__(self, title: str, body: str, *, invoker_id: int, text: dict, timeout: float = 45.0):
         super().__init__(timeout=timeout)
         self.invoker_id = invoker_id
         self.confirmed: bool | None = None
         self.message: discord.Message | None = None
+        self.text = text
         self._event = asyncio.Event()
 
         self._confirm = discord.ui.Button(
-            label="Confirm",
+            label=text["button_confirm"],
             style=discord.ButtonStyle.danger,
             emoji=get_emoji("tick") or "✅",
         )
         self._cancel = discord.ui.Button(
-            label="Cancel",
+            label=text["button_cancel"],
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("cross") or "❌",
         )
@@ -189,7 +306,7 @@ class AIActionConfirmView(discord.ui.LayoutView):
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=body),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="-# Niko will only proceed if you confirm. This prompt expires in 45s."),
+            discord.ui.TextDisplay(content=f"-# {text['confirm_footer']}"),
             discord.ui.ActionRow(self._confirm, self._cancel),
             accent_colour=discord.Colour.orange(),
         ))
@@ -197,7 +314,7 @@ class AIActionConfirmView(discord.ui.LayoutView):
     async def _gate(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.invoker_id:
             await interaction.response.send_message(
-                view=_error_view("Only the person who asked Niko to do this can confirm or cancel."),
+                view=_error_view(interaction, self.text["confirm_author_only"]),
                 ephemeral=True,
             )
             return False
@@ -222,8 +339,9 @@ class AIActionConfirmView(discord.ui.LayoutView):
         await self._disable_buttons()
         await interaction.response.edit_message(
             view=_info_view(
-                f"{get_emoji('cross')} Cancelled",
-                "Niko didn't do anything.",
+                interaction,
+                f"{get_emoji('cross')} {self.text['cancel_title']}",
+                self.text["cancel_body"],
                 colour=discord.Colour.greyple(),
             ),
         )
@@ -239,8 +357,9 @@ class AIActionConfirmView(discord.ui.LayoutView):
             try:
                 await self.message.edit(
                     view=_info_view(
-                        "Request expired",
-                        "Nobody confirmed this action in time, so Niko did nothing.",
+                        self.message,
+                        self.text["expired_title"],
+                        self.text["expired_body"],
                         colour=discord.Colour.greyple(),
                     )
                 )
@@ -252,10 +371,48 @@ class AIActionConfirmView(discord.ui.LayoutView):
         return bool(self.confirmed)
 
 
-async def _confirm(channel, *, title: str, body: str, invoker_id: int) -> bool:
-    view = AIActionConfirmView(title, body, invoker_id=invoker_id)
-    view.message = await channel.send(view=view)
-    return await view.wait_for_response()
+class _Confirmation:
+    """The confirm card, which turns into the result card.
+
+    One message per request: the card the user pressed is edited into the
+    outcome instead of a second message being posted underneath it.
+    """
+
+    def __init__(self, message: discord.Message | None, accepted: bool):
+        self.message = message
+        self.accepted = bool(accepted)
+        self._done = False
+
+    def __bool__(self) -> bool:
+        return self.accepted
+
+    async def finish(self, view: discord.ui.LayoutView, *, channel=None) -> None:
+        """Replace the card with the outcome, falling back to a new message."""
+        if self._done:
+            return
+        self._done = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=view)
+                return
+            except discord.HTTPException as error:
+                logging.warning("AI", f"Could not update the AI action card: {error!r}")
+        if channel is not None:
+            try:
+                await channel.send(view=view)
+            except discord.HTTPException:
+                pass
+
+
+async def _confirm(msg: discord.Message, *, title: str, body: str) -> _Confirmation:
+    view = AIActionConfirmView(
+        title,
+        body,
+        invoker_id=msg.author.id,
+        text={key: t(msg, key) for key in _CONFIRM_TEXT_KEYS},
+    )
+    view.message = await msg.channel.send(view=view)
+    return _Confirmation(view.message, await view.wait_for_response())
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -277,22 +434,18 @@ def _has_perm(member: discord.Member, perm: str, *, channel=None) -> bool:
     return bool(getattr(perms, perm, False) or getattr(perms, "administrator", False))
 
 
-def _check_perms(msg: discord.Message, perm: str, *, action_label: str, channel=None):
+def _check_perms(msg: discord.Message, perm: str, *, channel=None):
     """Return None if both invoker and bot have ``perm``, else an error view."""
     me = getattr(msg.guild, "me", None) if msg.guild else None
     if me is None:
-        return _error_view("AI Actions can only run inside a server.")
+        return _error_view(msg, t(msg, "guild_only"))
 
-    scope = f" in {channel.mention}" if channel is not None else ""
-    label = perm.replace("_", " ").title()
+    scope = t(msg, "perm_scope", channel=channel.mention) if channel is not None else ""
+    label = _perm_label(msg, perm)
     if not _has_perm(msg.author, perm, channel=channel):
-        return _error_view(
-            f"You need the **{label}** permission{scope} to ask Niko to {action_label}."
-        )
+        return _error_view(msg, t(msg, "perm_user", perm=label, scope=scope))
     if not _has_perm(me, perm, channel=channel):
-        return _error_view(
-            f"Niko doesn't have the **{label}** permission{scope} needed to {action_label}."
-        )
+        return _error_view(msg, t(msg, "perm_bot", perm=label, scope=scope))
     return None
 
 
@@ -305,23 +458,19 @@ def _invoker_outranks(author: discord.Member, member: discord.Member) -> bool:
     return author.top_role > member.top_role
 
 
-def _member_hierarchy_error(msg: discord.Message, member: discord.Member, *, action_label: str):
+def _member_hierarchy_error(msg: discord.Message, member: discord.Member):
     """Refuse a member action the invoker or Niko is not senior enough for."""
     guild = msg.guild
     if member.id == guild.me.id:
-        return _error_view(f"I won't {action_label} myself.")
+        return _error_view(msg, t(msg, "hierarchy_self"))
     if member.id == msg.author.id:
-        return _error_view(f"I won't {action_label} you.")
+        return _error_view(msg, t(msg, "hierarchy_author"))
     if member.id == guild.owner_id:
-        return _error_view(f"I can't {action_label} the server owner.")
+        return _error_view(msg, t(msg, "hierarchy_owner"))
     if member.top_role >= guild.me.top_role:
-        return _error_view(
-            f"That member's role is higher than or equal to mine — I can't {action_label} them."
-        )
+        return _error_view(msg, t(msg, "hierarchy_member_above_bot"))
     if not _invoker_outranks(msg.author, member):
-        return _error_view(
-            f"You can't {action_label} **{member}** — their role is equal to or above your highest role."
-        )
+        return _error_view(msg, t(msg, "hierarchy_member_above_invoker", member=member))
     return None
 
 
@@ -331,20 +480,16 @@ def _invoker_outranks_role(author: discord.Member, role: discord.Role) -> bool:
     return author.top_role > role
 
 
-def _role_hierarchy_error(msg: discord.Message, role: discord.Role, *, action_label: str):
+def _role_hierarchy_error(msg: discord.Message, role: discord.Role):
     guild = msg.guild
     if role.is_default():
-        return _error_view(f"I can't {action_label} the @everyone role.")
+        return _error_view(msg, t(msg, "hierarchy_everyone"))
     if role.managed:
-        return _error_view(f"I can't {action_label} **{role.name}** — it's managed by an integration.")
+        return _error_view(msg, t(msg, "hierarchy_role_managed", role=role.name))
     if role >= guild.me.top_role:
-        return _error_view(
-            f"I can't {action_label} **{role.name}** — it's equal to or above my highest role."
-        )
+        return _error_view(msg, t(msg, "hierarchy_role_above_bot", role=role.name))
     if not _invoker_outranks_role(msg.author, role):
-        return _error_view(
-            f"You can't {action_label} **{role.name}** — it's equal to or above your highest role."
-        )
+        return _error_view(msg, t(msg, "hierarchy_role_above_invoker", role=role.name))
     return None
 
 
@@ -358,7 +503,11 @@ async def _log_action(
     target_id: int | None = None,
     channel_id: int | None = None,
 ) -> None:
-    """Write an AI-performed action into Niko's own server logs."""
+    """Write an AI-performed action into Niko's own server logs.
+
+    Log bodies stay in English: the logging cog translates the title and field
+    labels when it renders an entry for a guild.
+    """
     logger = bot.get_cog("ServerLogger") if bot is not None else None
     if logger is None or msg.guild is None:
         return
@@ -381,16 +530,27 @@ async def _log_action(
         logging.warning("AI", f"Could not log AI action '{title}': {error}")
 
 
-async def _fail(msg: discord.Message, action: str, error: Exception) -> None:
+async def _fail(
+    msg: discord.Message,
+    action: str,
+    error: Exception,
+    *,
+    card: _Confirmation | None = None,
+) -> None:
     logging.error(
         "AI",
         f"AI action '{action}' failed in guild {getattr(msg.guild, 'id', None)}: {error!r}",
     )
-    await msg.channel.send(
-        view=_error_view(
-            f"I couldn't {action}. Check that I still have the required permissions and try again."
-        )
-    )
+    # "generic" is the dispatcher's catch-all: it has no action label of its
+    # own, so it uses the wording that names no action.
+    if action == "generic":
+        view = _error_view(msg, t(msg, "fail_generic"))
+    else:
+        view = _error_view(msg, t(msg, "fail", label=t(msg, f"{action}.label")))
+    if card is not None:
+        await card.finish(view, channel=msg.channel)
+    else:
+        await msg.channel.send(view=view)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -400,17 +560,15 @@ async def _fail(msg: discord.Message, action: str, error: Exception) -> None:
 async def _do_create_poll(bot, msg: discord.Message, args: dict) -> None:
     import datetime
 
-    err = _check_perms(
-        msg, "send_messages", action_label="post a poll", channel=msg.channel
-    )
+    err = _check_perms(msg, "send_messages", channel=msg.channel)
     if err:
         await msg.channel.send(view=err)
         return
 
-    question = (args.get("question") or "Poll").strip()[:300]
+    question = (args.get("question") or t(msg, "poll.label")).strip()[:300]
     options = [str(o).strip() for o in (args.get("options") or []) if str(o).strip()][:10]
     if len(options) < 2:
-        await msg.channel.send(view=_error_view("A poll needs at least two options."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "poll.needs_options")))
         return
 
     poll = discord.Poll(
@@ -440,27 +598,28 @@ async def _do_create_poll(bot, msg: discord.Message, args: dict) -> None:
 # ── Moderation actions ──────────────────────────────────────────────
 
 async def _do_kick_member(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "kick_members", action_label="kick a member")
+    err = _check_perms(msg, "kick_members")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     if not member:
-        await msg.channel.send(view=_error_view(f"I couldn't find a member matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "member_missing", query=args.get("user"))))
         return
-    err = _member_hierarchy_error(msg, member, action_label="kick")
+    err = _member_hierarchy_error(msg, member)
     if err:
         await msg.channel.send(view=err)
         return
 
-    reason = (args.get("reason") or "No reason provided").strip()[:400]
-    body = f"Kick **{member}** (`{member.id}`)?\n**Reason:** {reason}"
-    if not await _confirm(msg.channel, title="Confirm Kick", body=body, invoker_id=msg.author.id):
+    reason = (args.get("reason") or t(msg, "no_reason")).strip()[:400]
+    body = t(msg, "kick.confirm", member=member, id=member.id, reason=reason)
+    card = await _confirm(msg, title=t(msg, "kick.confirm_title"), body=body)
+    if not card:
         return
     try:
         await member.kick(reason=f"AI Action by {msg.author}: {reason}")
     except discord.HTTPException as error:
-        await _fail(msg, "kick that member", error)
+        await _fail(msg, "kick", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -468,11 +627,11 @@ async def _do_kick_member(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n**Reason:** {reason}",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Kicked **{member}** — {reason}"))
+    await card.finish(_success_view(msg, t(msg, "kick.done", member=member, reason=reason)))
 
 
 async def _do_ban_member(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "ban_members", action_label="ban a member")
+    err = _check_perms(msg, "ban_members")
     if err:
         await msg.channel.send(view=err)
         return
@@ -480,25 +639,22 @@ async def _do_ban_member(bot, msg: discord.Message, args: dict) -> None:
     if not target:
         target = await _resolve_user(bot, args.get("user"))
     if not target:
-        await msg.channel.send(view=_error_view(f"I couldn't find a user matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "user_missing", query=args.get("user"))))
         return
     if isinstance(target, discord.Member):
-        err = _member_hierarchy_error(msg, target, action_label="ban")
+        err = _member_hierarchy_error(msg, target)
         if err:
             await msg.channel.send(view=err)
             return
 
-    reason = (args.get("reason") or "No reason provided").strip()[:400]
+    reason = (args.get("reason") or t(msg, "no_reason")).strip()[:400]
     try:
         delete_days = max(0, min(7, int(args.get("delete_message_days") or 0)))
     except (TypeError, ValueError):
         delete_days = 0
-    body = (
-        f"Ban **{target}** (`{target.id}`)?\n"
-        f"**Reason:** {reason}\n"
-        f"**Delete messages from last:** {delete_days}d"
-    )
-    if not await _confirm(msg.channel, title="Confirm Ban", body=body, invoker_id=msg.author.id):
+    body = t(msg, "ban.confirm", target=target, id=target.id, reason=reason, days=delete_days)
+    card = await _confirm(msg, title=t(msg, "ban.confirm_title"), body=body)
+    if not card:
         return
     try:
         await msg.guild.ban(
@@ -507,7 +663,7 @@ async def _do_ban_member(bot, msg: discord.Message, args: dict) -> None:
             delete_message_seconds=delete_days * 86400,
         )
     except discord.HTTPException as error:
-        await _fail(msg, "ban that user", error)
+        await _fail(msg, "ban", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -518,29 +674,30 @@ async def _do_ban_member(bot, msg: discord.Message, args: dict) -> None:
         ),
         target_id=target.id,
     )
-    await msg.channel.send(view=_success_view(f"Banned **{target}** — {reason}"))
+    await card.finish(_success_view(msg, t(msg, "ban.done", target=target, reason=reason)))
 
 
 async def _do_unban_user(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "ban_members", action_label="unban a user")
+    err = _check_perms(msg, "ban_members")
     if err:
         await msg.channel.send(view=err)
         return
     user = await _resolve_user(bot, args.get("user"))
     if not user:
-        await msg.channel.send(view=_error_view("Provide a user ID to unban."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "unban.needs_id")))
         return
-    reason = (args.get("reason") or "No reason provided").strip()[:400]
-    body = f"Unban **{user}** (`{user.id}`)?\n**Reason:** {reason}"
-    if not await _confirm(msg.channel, title="Confirm Unban", body=body, invoker_id=msg.author.id):
+    reason = (args.get("reason") or t(msg, "no_reason")).strip()[:400]
+    body = t(msg, "unban.confirm", user=user, id=user.id, reason=reason)
+    card = await _confirm(msg, title=t(msg, "unban.confirm_title"), body=body)
+    if not card:
         return
     try:
         await msg.guild.unban(user, reason=f"AI Action by {msg.author}: {reason}")
     except discord.NotFound:
-        await msg.channel.send(view=_error_view("That user is not banned."))
+        await card.finish(_error_view(msg, t(msg, "unban.not_banned")), channel=msg.channel)
         return
     except discord.HTTPException as error:
-        await _fail(msg, "unban that user", error)
+        await _fail(msg, "unban", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -548,33 +705,34 @@ async def _do_unban_user(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n**Reason:** {reason}",
         target_id=user.id,
     )
-    await msg.channel.send(view=_success_view(f"Unbanned **{user}** — {reason}"))
+    await card.finish(_success_view(msg, t(msg, "unban.done", user=user, reason=reason)))
 
 
 async def _do_timeout_member(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "moderate_members", action_label="time-out a member")
+    err = _check_perms(msg, "moderate_members")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     if not member:
-        await msg.channel.send(view=_error_view(f"I couldn't find a member matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "member_missing", query=args.get("user"))))
         return
     try:
         seconds = int(args.get("duration_seconds") or 0)
     except (TypeError, ValueError):
         seconds = 0
     if seconds <= 0 or seconds > 60 * 60 * 24 * 28:
-        await msg.channel.send(view=_error_view("Duration must be between 1 second and 28 days."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "timeout.bad_duration")))
         return
-    err = _member_hierarchy_error(msg, member, action_label="time out")
+    err = _member_hierarchy_error(msg, member)
     if err:
         await msg.channel.send(view=err)
         return
 
-    reason = (args.get("reason") or "No reason provided").strip()[:400]
-    body = f"Time out **{member}** for **{seconds}s**?\n**Reason:** {reason}"
-    if not await _confirm(msg.channel, title="Confirm Timeout", body=body, invoker_id=msg.author.id):
+    reason = (args.get("reason") or t(msg, "no_reason")).strip()[:400]
+    body = t(msg, "timeout.confirm", member=member, seconds=seconds, reason=reason)
+    card = await _confirm(msg, title=t(msg, "timeout.confirm_title"), body=body)
+    if not card:
         return
     import datetime as _dt
 
@@ -582,7 +740,7 @@ async def _do_timeout_member(bot, msg: discord.Message, args: dict) -> None:
     try:
         await member.edit(timed_out_until=until, reason=f"AI Action by {msg.author}: {reason}")
     except discord.HTTPException as error:
-        await _fail(msg, "time out that member", error)
+        await _fail(msg, "timeout", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -593,25 +751,28 @@ async def _do_timeout_member(bot, msg: discord.Message, args: dict) -> None:
         ),
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Timed out **{member}** for {seconds}s — {reason}"))
+    await card.finish(
+        _success_view(msg, t(msg, "timeout.done", member=member, seconds=seconds, reason=reason))
+    )
 
 
 async def _do_remove_timeout(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "moderate_members", action_label="remove a member's time-out")
+    err = _check_perms(msg, "moderate_members")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     if not member:
-        await msg.channel.send(view=_error_view(f"I couldn't find a member matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "member_missing", query=args.get("user"))))
         return
-    body = f"Remove the time-out on **{member}** (`{member.id}`)?"
-    if not await _confirm(msg.channel, title="Confirm Remove Timeout", body=body, invoker_id=msg.author.id):
+    body = t(msg, "timeout_remove.confirm", member=member, id=member.id)
+    card = await _confirm(msg, title=t(msg, "timeout_remove.confirm_title"), body=body)
+    if not card:
         return
     try:
         await member.edit(timed_out_until=None, reason=f"AI Action by {msg.author}: remove timeout")
     except discord.HTTPException as error:
-        await _fail(msg, "remove that time-out", error)
+        await _fail(msg, "timeout_remove", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -619,31 +780,32 @@ async def _do_remove_timeout(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Removed time-out on **{member}**."))
+    await card.finish(_success_view(msg, t(msg, "timeout_remove.done", member=member)))
 
 
 async def _do_warn_member(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "moderate_members", action_label="warn a member")
+    err = _check_perms(msg, "moderate_members")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     if not member:
-        await msg.channel.send(view=_error_view(f"I couldn't find a member matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "member_missing", query=args.get("user"))))
         return
     utils_cog = bot.get_cog("ModerationUtils")
     if utils_cog is None or not hasattr(utils_cog, "add_warn"):
         # This used to report success without recording anything.
-        await msg.channel.send(view=_error_view("Warning storage is unavailable right now."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "warn.storage_unavailable")))
         return
-    reason = (args.get("reason") or "No reason provided").strip()[:400]
-    body = f"Warn **{member}** (`{member.id}`)?\n**Reason:** {reason}"
-    if not await _confirm(msg.channel, title="Confirm Warn", body=body, invoker_id=msg.author.id):
+    reason = (args.get("reason") or t(msg, "no_reason")).strip()[:400]
+    body = t(msg, "warn.confirm", member=member, id=member.id, reason=reason)
+    card = await _confirm(msg, title=t(msg, "warn.confirm_title"), body=body)
+    if not card:
         return
     try:
         await utils_cog.add_warn(msg.guild.id, member.id, msg.author.id, reason)
     except Exception as error:  # noqa: BLE001
-        await _fail(msg, "record that warning", error)
+        await _fail(msg, "warn", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -651,7 +813,7 @@ async def _do_warn_member(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n**Reason:** {reason}",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Warned **{member}** — {reason}"))
+    await card.finish(_success_view(msg, t(msg, "warn.done", member=member, reason=reason)))
 
 
 async def _do_purge_messages(bot, msg: discord.Message, args: dict) -> None:
@@ -660,23 +822,24 @@ async def _do_purge_messages(bot, msg: discord.Message, args: dict) -> None:
     except (TypeError, ValueError):
         amount = 0
     if amount < 1 or amount > 100:
-        await msg.channel.send(view=_error_view("Amount must be between 1 and 100."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "purge.bad_amount")))
         return
     channel = _resolve_channel(msg.guild, args.get("channel")) or msg.channel
     if not isinstance(channel, (discord.TextChannel, discord.Thread)):
-        await msg.channel.send(view=_error_view("I can only purge messages from text channels or threads."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "purge.not_text")))
         return
-    err = _check_perms(msg, "manage_messages", action_label="purge messages", channel=channel)
+    err = _check_perms(msg, "manage_messages", channel=channel)
     if err:
         await msg.channel.send(view=err)
         return
-    body = f"Delete the last **{amount}** messages in {channel.mention}?"
-    if not await _confirm(msg.channel, title="Confirm Purge", body=body, invoker_id=msg.author.id):
+    body = t(msg, "purge.confirm", amount=amount, channel=channel.mention)
+    card = await _confirm(msg, title=t(msg, "purge.confirm_title"), body=body)
+    if not card:
         return
     try:
         deleted = await channel.purge(limit=amount, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "purge those messages", error)
+        await _fail(msg, "purge", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -684,13 +847,15 @@ async def _do_purge_messages(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Channel:** {channel.mention}\n**Messages deleted:** `{len(deleted)}`",
         channel_id=channel.id,
     )
-    await msg.channel.send(view=_success_view(f"Deleted **{len(deleted)}** message(s) in {channel.mention}."))
+    await card.finish(
+        _success_view(msg, t(msg, "purge.done", count=len(deleted), channel=channel.mention))
+    )
 
 
 # ── Server management actions ───────────────────────────────────────
 
 async def _do_create_channel(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "manage_channels", action_label="create a channel")
+    err = _check_perms(msg, "manage_channels")
     if err:
         await msg.channel.send(view=err)
         return
@@ -702,24 +867,39 @@ async def _do_create_channel(bot, msg: discord.Message, args: dict) -> None:
     name = re.sub(r"[^\w\- ]+", "", name, flags=re.UNICODE)
     name = re.sub(r"[\s_]+", "-", name.lower()).strip("-")[:90]
     if not name:
-        await msg.channel.send(view=_error_view("Channel name is required."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "channel_create.needs_name")))
         return
     ch_type = (args.get("type") or "text").strip().lower()
     if ch_type not in {"text", "voice"}:
-        await msg.channel.send(view=_error_view("Channel type must be `text` or `voice`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "channel_create.bad_type")))
         return
     topic = (args.get("topic") or "").strip()[:1024] or None
-    category_val = args.get("category")
-    category = _resolve_channel(msg.guild, category_val) if category_val else None
-    if category and not isinstance(category, discord.CategoryChannel):
-        category = None
-    body = (
-        f"Create a new **{ch_type}** channel named **#{name}**"
-        + (f" in category **{category.name}**" if category else "")
-        + (f"\n**Topic:** {topic}" if topic else "")
-        + "?"
+    # A category the model named but that does not exist would otherwise drop
+    # the channel at the top level, silently ignoring the requested layout.
+    category = _resolve_category(msg.guild, args.get("category"))
+    if args.get("category") and category is None:
+        known = ", ".join(f"**{c.name}**" for c in list(msg.guild.categories)[:10]) or t(
+            msg, "none_listed"
+        )
+        await msg.channel.send(view=_error_view(
+            msg,
+            t(msg, "category_missing_list", query=args.get("category"), categories=known),
+        ))
+        return
+    where = (
+        t(msg, "channel_create.where_category", category=category.name)
+        if category
+        else t(msg, "channel_create.where_top")
     )
-    if not await _confirm(msg.channel, title="Confirm Create Channel", body=body, invoker_id=msg.author.id):
+    body = t(
+        msg, "channel_create.confirm",
+        type=t(msg, f"channel_create.type_{ch_type}"),
+        name=name,
+        where=where,
+        topic=t(msg, "channel_create.topic_line", topic=topic) if topic else "",
+    )
+    card = await _confirm(msg, title=t(msg, "channel_create.confirm_title"), body=body)
+    if not card:
         return
     try:
         if ch_type == "voice":
@@ -731,38 +911,40 @@ async def _do_create_channel(bot, msg: discord.Message, args: dict) -> None:
                 name=name, category=category, topic=topic, reason=f"AI Action by {msg.author}"
             )
     except discord.HTTPException as error:
-        await _fail(msg, "create that channel", error)
+        await _fail(msg, "channel_create", error, card=card)
         return
     await _log_action(
         bot, msg,
         category="channels", title="Channel Created",
-        detail=f"**Channel:** {new_ch.mention} (`{name}`)\n**Type:** {ch_type}",
+        detail=f"**Channel:** {new_ch.mention} (`{name}`)\n**Type:** {ch_type}"
+        + (f"\n**Category:** {category.name}" if category else ""),
         channel_id=new_ch.id,
     )
-    await msg.channel.send(view=_success_view(f"Created {new_ch.mention}."))
+    await card.finish(
+        _success_view(msg, t(msg, "channel_create.done", channel=new_ch.mention))
+    )
 
 
 async def _do_delete_channel(bot, msg: discord.Message, args: dict) -> None:
     channel = _resolve_channel(msg.guild, args.get("channel"))
     if not channel:
-        await msg.channel.send(view=_error_view(f"I couldn't find a channel matching `{args.get('channel')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "channel_missing", query=args.get("channel"))))
         return
-    err = _check_perms(msg, "manage_channels", action_label="delete a channel", channel=channel)
+    err = _check_perms(msg, "manage_channels", channel=channel)
     if err:
         await msg.channel.send(view=err)
         return
     if channel == msg.channel:
-        await msg.channel.send(view=_error_view(
-            "I won't delete the channel this conversation is happening in — run the request from a different channel if you really want to."
-        ))
+        await msg.channel.send(view=_error_view(msg, t(msg, "channel_delete.not_here")))
         return
-    body = f"Delete the channel **#{channel.name}** (`{channel.id}`)?\n*This cannot be undone.*"
-    if not await _confirm(msg.channel, title="Confirm Delete Channel", body=body, invoker_id=msg.author.id):
+    body = t(msg, "channel_delete.confirm", name=channel.name, id=channel.id)
+    card = await _confirm(msg, title=t(msg, "channel_delete.confirm_title"), body=body)
+    if not card:
         return
     try:
         await channel.delete(reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "delete that channel", error)
+        await _fail(msg, "channel_delete", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -770,26 +952,27 @@ async def _do_delete_channel(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Channel:** `#{channel.name}` (ID: `{channel.id}`)",
         channel_id=channel.id,
     )
-    await msg.channel.send(view=_success_view(f"Deleted channel **#{channel.name}**."))
+    await card.finish(_success_view(msg, t(msg, "channel_delete.done", name=channel.name)))
 
 
 async def _do_rename_channel(bot, msg: discord.Message, args: dict) -> None:
     channel = _resolve_channel(msg.guild, args.get("channel")) or msg.channel
-    err = _check_perms(msg, "manage_channels", action_label="rename a channel", channel=channel)
+    err = _check_perms(msg, "manage_channels", channel=channel)
     if err:
         await msg.channel.send(view=err)
         return
     new_name = (args.get("name") or "").strip().lower().replace(" ", "-")[:90]
     if not new_name:
-        await msg.channel.send(view=_error_view("New channel name is required."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "channel_rename.needs_name")))
         return
-    body = f"Rename **#{channel.name}** → **#{new_name}**?"
-    if not await _confirm(msg.channel, title="Confirm Rename Channel", body=body, invoker_id=msg.author.id):
+    body = t(msg, "channel_rename.confirm", old=channel.name, new=new_name)
+    card = await _confirm(msg, title=t(msg, "channel_rename.confirm_title"), body=body)
+    if not card:
         return
     try:
         await channel.edit(name=new_name, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "rename that channel", error)
+        await _fail(msg, "channel_rename", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -797,26 +980,31 @@ async def _do_rename_channel(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Channel:** {channel.mention}\n**Name:** `{new_name}`",
         channel_id=channel.id,
     )
-    await msg.channel.send(view=_success_view(f"Renamed channel to **#{new_name}**."))
+    await card.finish(_success_view(msg, t(msg, "channel_rename.done", name=new_name)))
 
 
 async def _do_set_channel_topic(bot, msg: discord.Message, args: dict) -> None:
     channel = _resolve_channel(msg.guild, args.get("channel")) or msg.channel
     if not isinstance(channel, discord.TextChannel):
-        await msg.channel.send(view=_error_view("Topics can only be set on text channels."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "topic.text_only")))
         return
-    err = _check_perms(msg, "manage_channels", action_label="change a channel topic", channel=channel)
+    err = _check_perms(msg, "manage_channels", channel=channel)
     if err:
         await msg.channel.send(view=err)
         return
     topic = (args.get("topic") or "").strip()[:1024]
-    body = f"Set topic of **#{channel.name}** to:\n> {topic or '(empty)'}"
-    if not await _confirm(msg.channel, title="Confirm Set Topic", body=body, invoker_id=msg.author.id):
+    body = t(
+        msg, "topic.confirm",
+        name=channel.name,
+        topic=topic or t(msg, "empty"),
+    )
+    card = await _confirm(msg, title=t(msg, "topic.confirm_title"), body=body)
+    if not card:
         return
     try:
         await channel.edit(topic=topic, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "set that topic", error)
+        await _fail(msg, "topic", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -824,7 +1012,7 @@ async def _do_set_channel_topic(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Channel:** {channel.mention}\n**Topic:** {topic or '*(cleared)*'}",
         channel_id=channel.id,
     )
-    await msg.channel.send(view=_success_view(f"Updated topic for **#{channel.name}**."))
+    await card.finish(_success_view(msg, t(msg, "topic.done", name=channel.name)))
 
 
 def _parse_colour(value) -> Optional[discord.Colour]:
@@ -843,25 +1031,43 @@ def _parse_colour(value) -> Optional[discord.Colour]:
 
 
 async def _do_create_role(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "manage_roles", action_label="create a role")
+    err = _check_perms(msg, "manage_roles")
     if err:
         await msg.channel.send(view=err)
         return
     name = (args.get("name") or "").strip()[:90]
     if not name:
-        await msg.channel.send(view=_error_view("Role name is required."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "role_create.needs_name")))
         return
     colour = _parse_colour(args.get("colour") or args.get("color"))
     hoist = bool(args.get("hoist"))
     mentionable = bool(args.get("mentionable"))
-    body = (
-        f"Create role **{name}**"
-        + (f" (colour `#{colour.value:06x}`)" if colour else "")
-        + (" *hoisted*" if hoist else "")
-        + (" *mentionable*" if mentionable else "")
-        + "?"
-    )
-    if not await _confirm(msg.channel, title="Confirm Create Role", body=body, invoker_id=msg.author.id):
+    # Discord appends new roles at the bottom; "above" lets the model put the
+    # role where it belongs in the hierarchy the user can see.
+    anchor = _resolve_role(msg.guild, args.get("above")) if args.get("above") else None
+    if args.get("above") and anchor is None:
+        await msg.channel.send(
+            view=_error_view(msg, t(msg, "role_create.above_missing", query=args.get("above")))
+        )
+        return
+    if anchor is not None:
+        err = _role_hierarchy_error(msg, anchor)
+        if err:
+            await msg.channel.send(view=err)
+            return
+    details = ""
+    if colour:
+        details += t(msg, "role_create.detail_colour", colour=f"{colour.value:06x}")
+    if hoist:
+        details += t(msg, "role_create.detail_hoist")
+    if mentionable:
+        details += t(msg, "role_create.detail_mentionable")
+    if anchor is not None:
+        body = t(msg, "role_create.confirm_above", name=name, details=details, role=anchor.name)
+    else:
+        body = t(msg, "role_create.confirm", name=name, details=details)
+    card = await _confirm(msg, title=t(msg, "role_create.confirm_title"), body=body)
+    if not card:
         return
     try:
         kwargs = {
@@ -873,67 +1079,154 @@ async def _do_create_role(bot, msg: discord.Message, args: dict) -> None:
         if colour is not None:
             kwargs["colour"] = colour
         new_role = await msg.guild.create_role(**kwargs)
+        if anchor is not None:
+            await new_role.edit(position=anchor.position, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "create that role", error)
+        await _fail(msg, "role_create", error, card=card)
         return
     await _log_action(
         bot, msg,
         category="roles", title="Role Created",
-        detail=f"**Role:** {new_role.mention} (`{name}`)",
+        detail=f"**Role:** {new_role.mention} (`{name}`)"
+        + (f"\n**Placed above:** {anchor.name}" if anchor else ""),
     )
-    await msg.channel.send(view=_success_view(f"Created role {new_role.mention}."))
+    await card.finish(_success_view(msg, t(msg, "role_create.done", role=new_role.mention)))
 
 
 async def _do_delete_role(bot, msg: discord.Message, args: dict) -> None:
     role = _resolve_role(msg.guild, args.get("role"))
     if not role:
-        await msg.channel.send(view=_error_view(f"I couldn't find a role matching `{args.get('role')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "role_missing", query=args.get("role"))))
         return
-    err = _check_perms(msg, "manage_roles", action_label="delete a role")
+    err = _check_perms(msg, "manage_roles")
     if err:
         await msg.channel.send(view=err)
         return
-    err = _role_hierarchy_error(msg, role, action_label="delete")
+    err = _role_hierarchy_error(msg, role)
     if err:
         await msg.channel.send(view=err)
         return
-    body = f"Delete the role **{role.name}** (`{role.id}`)?\n*This cannot be undone.*"
-    if not await _confirm(msg.channel, title="Confirm Delete Role", body=body, invoker_id=msg.author.id):
+    body = t(msg, "role_delete.confirm", name=role.name, id=role.id)
+    card = await _confirm(msg, title=t(msg, "role_delete.confirm_title"), body=body)
+    if not card:
         return
     try:
         await role.delete(reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "delete that role", error)
+        await _fail(msg, "role_delete", error, card=card)
         return
     await _log_action(
         bot, msg,
         category="roles", title="Role Deleted",
         detail=f"**Role:** `{role.name}` (ID: `{role.id}`)",
     )
-    await msg.channel.send(view=_success_view(f"Deleted role **{role.name}**."))
+    await card.finish(_success_view(msg, t(msg, "role_delete.done", name=role.name)))
+
+
+def _hex_colour(ctx, colour) -> str:
+    return f"#{colour.value:06x}" if getattr(colour, "value", 0) else t(ctx, "colour_default")
+
+
+async def _do_edit_role(bot, msg: discord.Message, args: dict) -> None:
+    role = _resolve_role(msg.guild, args.get("role"))
+    if not role:
+        await msg.channel.send(view=_error_view(msg, t(msg, "role_missing", query=args.get("role"))))
+        return
+    err = _check_perms(msg, "manage_roles")
+    if err:
+        await msg.channel.send(view=err)
+        return
+    err = _role_hierarchy_error(msg, role)
+    if err:
+        await msg.channel.send(view=err)
+        return
+
+    # Only the properties the model actually sent are compared, so an edit that
+    # matches the current role does nothing instead of re-writing it.
+    changes: dict = {}
+    lines: list[str] = []
+    if "name" in args:
+        new_name = (args.get("name") or "").strip()[:90]
+        if not new_name:
+            await msg.channel.send(view=_error_view(msg, t(msg, "role_edit.empty_name")))
+            return
+        if new_name != role.name:
+            changes["name"] = new_name
+            lines.append(t(msg, "role_edit.line_name", old=role.name, new=new_name))
+    if "colour" in args or "color" in args:
+        raw = args["colour"] if "colour" in args else args["color"]
+        colour = _parse_colour(raw)
+        if colour is None and str(raw or "").strip().lower() not in {"", "default", "none", "clear"}:
+            await msg.channel.send(
+                view=_error_view(msg, t(msg, "role_edit.bad_colour", value=raw))
+            )
+            return
+        new_colour = colour or discord.Colour.default()
+        if new_colour != role.colour:
+            changes["colour"] = new_colour
+            lines.append(t(
+                msg, "role_edit.line_colour",
+                old=_hex_colour(msg, role.colour),
+                new=_hex_colour(msg, new_colour),
+            ))
+    for flag, label_key in (("hoist", "role_edit.flag_hoist"), ("mentionable", "role_edit.flag_mentionable")):
+        if flag in args:
+            value = bool(args.get(flag))
+            if value != getattr(role, flag):
+                changes[flag] = value
+                lines.append(t(
+                    msg, "role_edit.line_flag",
+                    flag=t(msg, label_key),
+                    value=t(msg, "yes") if value else t(msg, "no"),
+                ))
+    if not changes:
+        await msg.channel.send(view=_info_view(
+            msg,
+            t(msg, "nothing_to_change_title"),
+            t(msg, "nothing_to_change_body", role=role.name),
+            colour=discord.Colour.greyple(),
+        ))
+        return
+
+    body = t(msg, "role_edit.confirm", role=role.name, changes="\n".join(lines))
+    card = await _confirm(msg, title=t(msg, "role_edit.confirm_title"), body=body)
+    if not card:
+        return
+    try:
+        await role.edit(**changes, reason=f"AI Action by {msg.author}")
+    except discord.HTTPException as error:
+        await _fail(msg, "role_edit", error, card=card)
+        return
+    await _log_action(
+        bot, msg,
+        category="roles", title="Role Updated",
+        detail=f"**Role:** {role.mention} (`{role.name}`)\n" + "\n".join(lines),
+    )
+    await card.finish(_success_view(msg, t(msg, "role_edit.done", role=role.mention)))
 
 
 async def _do_assign_role(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "manage_roles", action_label="assign a role")
+    err = _check_perms(msg, "manage_roles")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     role = _resolve_role(msg.guild, args.get("role"))
     if not member or not role:
-        await msg.channel.send(view=_error_view("I couldn't resolve both the member and the role."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "role_assign.missing")))
         return
-    err = _role_hierarchy_error(msg, role, action_label="assign")
+    err = _role_hierarchy_error(msg, role)
     if err:
         await msg.channel.send(view=err)
         return
-    body = f"Give the role **{role.name}** to **{member}**?"
-    if not await _confirm(msg.channel, title="Confirm Assign Role", body=body, invoker_id=msg.author.id):
+    body = t(msg, "role_assign.confirm", role=role.name, member=member)
+    card = await _confirm(msg, title=t(msg, "role_assign.confirm_title"), body=body)
+    if not card:
         return
     try:
         await member.add_roles(role, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "assign that role", error)
+        await _fail(msg, "role_assign", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -941,30 +1234,33 @@ async def _do_assign_role(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Member:** {member.mention} (`{member.id}`)\n**Role:** {role.mention}",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Gave **{role.name}** to **{member}**."))
+    await card.finish(
+        _success_view(msg, t(msg, "role_assign.done", role=role.name, member=member))
+    )
 
 
 async def _do_remove_role(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "manage_roles", action_label="remove a role")
+    err = _check_perms(msg, "manage_roles")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     role = _resolve_role(msg.guild, args.get("role"))
     if not member or not role:
-        await msg.channel.send(view=_error_view("I couldn't resolve both the member and the role."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "role_remove.missing")))
         return
-    err = _role_hierarchy_error(msg, role, action_label="remove")
+    err = _role_hierarchy_error(msg, role)
     if err:
         await msg.channel.send(view=err)
         return
-    body = f"Remove the role **{role.name}** from **{member}**?"
-    if not await _confirm(msg.channel, title="Confirm Remove Role", body=body, invoker_id=msg.author.id):
+    body = t(msg, "role_remove.confirm", role=role.name, member=member)
+    card = await _confirm(msg, title=t(msg, "role_remove.confirm_title"), body=body)
+    if not card:
         return
     try:
         await member.remove_roles(role, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "remove that role", error)
+        await _fail(msg, "role_remove", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -972,34 +1268,41 @@ async def _do_remove_role(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Member:** {member.mention} (`{member.id}`)\n**Role:** {role.mention}",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Removed **{role.name}** from **{member}**."))
+    await card.finish(
+        _success_view(msg, t(msg, "role_remove.done", role=role.name, member=member))
+    )
 
 
 async def _do_change_nickname(bot, msg: discord.Message, args: dict) -> None:
-    err = _check_perms(msg, "manage_nicknames", action_label="change a nickname")
+    err = _check_perms(msg, "manage_nicknames")
     if err:
         await msg.channel.send(view=err)
         return
     member = await _resolve_member(msg.guild, args.get("user"))
     if not member:
-        await msg.channel.send(view=_error_view(f"I couldn't find a member matching `{args.get('user')}`."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "member_missing", query=args.get("user"))))
         return
     if "nickname" not in args:
         # The tool schema requires it now; an omitted value used to silently
         # reset the member's nickname.
-        await msg.channel.send(view=_error_view("Tell me the new nickname (an empty string resets it)."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "nickname.needs_value")))
         return
     nickname = args.get("nickname")
     nickname = nickname.strip()[:32] if isinstance(nickname, str) else None
     if nickname == "":
         nickname = None
-    body = f"Change **{member}**'s nickname to **{nickname or '(reset to username)'}**?"
-    if not await _confirm(msg.channel, title="Confirm Change Nickname", body=body, invoker_id=msg.author.id):
+    body = t(
+        msg, "nickname.confirm",
+        member=member,
+        nickname=nickname or t(msg, "nickname.reset_placeholder"),
+    )
+    card = await _confirm(msg, title=t(msg, "nickname.confirm_title"), body=body)
+    if not card:
         return
     try:
         await member.edit(nick=nickname, reason=f"AI Action by {msg.author}")
     except discord.HTTPException as error:
-        await _fail(msg, "change that nickname", error)
+        await _fail(msg, "nickname", error, card=card)
         return
     await _log_action(
         bot, msg,
@@ -1007,7 +1310,7 @@ async def _do_change_nickname(bot, msg: discord.Message, args: dict) -> None:
         detail=f"**Member:** {member.mention} (`{member.id}`)\n**New nickname:** `{nickname or '(reset)'}`",
         target_id=member.id,
     )
-    await msg.channel.send(view=_success_view(f"Updated nickname for **{member}**."))
+    await card.finish(_success_view(msg, t(msg, "nickname.done", member=member)))
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -1033,6 +1336,7 @@ _HANDLERS = {
     "rename_channel": _do_rename_channel,
     "set_channel_topic": _do_set_channel_topic,
     "create_role": _do_create_role,
+    "edit_role": _do_edit_role,
     "delete_role": _do_delete_role,
     "assign_role": _do_assign_role,
     "remove_role": _do_remove_role,
@@ -1043,19 +1347,20 @@ _HANDLERS = {
 async def dispatch_ai_action(bot, msg: discord.Message, action: dict) -> None:
     """Route a structured AI Action dict to its handler.
 
-    All handlers send their own CV2 responses (success / error / cancelled),
-    so the caller doesn't need to do anything else after awaiting this.
+    Handlers own their CV2 responses: the confirmation card is edited into the
+    success, error or cancelled state, so the caller doesn't need to do
+    anything else after awaiting this.
     """
     name = (action.get("action") or "").strip()
     handler = _HANDLERS.get(name)
     if handler is None:
         logging.warning("AI", f"Model requested an unknown action '{name}'")
-        await msg.channel.send(view=_error_view("Niko doesn't know how to do that yet."))
+        await msg.channel.send(view=_error_view(msg, t(msg, "unknown_action")))
         return
 
     try:
         await handler(bot, msg, action)
     except discord.Forbidden as error:
-        await _fail(msg, "do that", error)
+        await _fail(msg, "generic", error)
     except Exception as error:  # noqa: BLE001
-        await _fail(msg, "do that", error)
+        await _fail(msg, "generic", error)

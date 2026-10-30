@@ -570,8 +570,8 @@ def test_a_lower_moderator_cannot_target_a_higher_member():
     target = _member(8, 8, guild=guild)
     msg = SimpleNamespace(guild=guild, author=author)
 
-    assert actions._member_hierarchy_error(msg, target, action_label="kick") is not None
-    assert actions._member_hierarchy_error(msg, _member(9, 2, guild=guild), action_label="kick") is None
+    assert actions._member_hierarchy_error(msg, target) is not None
+    assert actions._member_hierarchy_error(msg, _member(9, 2, guild=guild)) is None
 
 
 def test_the_server_owner_bypasses_the_invoker_check():
@@ -582,7 +582,7 @@ def test_the_server_owner_bypasses_the_invoker_check():
     )
     author = _member(7, 1, guild=guild)
     msg = SimpleNamespace(guild=guild, author=author)
-    assert actions._member_hierarchy_error(msg, _member(8, 50, guild=guild), action_label="ban") is None
+    assert actions._member_hierarchy_error(msg, _member(8, 50, guild=guild)) is None
 
 
 def test_a_moderator_cannot_manage_a_role_above_their_own():
@@ -597,8 +597,8 @@ def test_a_moderator_cannot_manage_a_role_above_their_own():
     above = _FakeRole(20, name="Admin")
     below = _FakeRole(2, name="Member")
 
-    assert actions._role_hierarchy_error(msg, above, action_label="assign") is not None
-    assert actions._role_hierarchy_error(msg, below, action_label="assign") is None
+    assert actions._role_hierarchy_error(msg, above) is not None
+    assert actions._role_hierarchy_error(msg, below) is None
 
 
 def test_purge_checks_the_target_channel_permissions():
@@ -617,8 +617,8 @@ def test_purge_checks_the_target_channel_permissions():
         mention="#public",
         permissions_for=lambda _member: SimpleNamespace(manage_messages=True, administrator=False),
     )
-    assert actions._check_perms(msg, "manage_messages", action_label="purge", channel=blocked) is not None
-    assert actions._check_perms(msg, "manage_messages", action_label="purge", channel=allowed) is None
+    assert actions._check_perms(msg, "manage_messages", channel=blocked) is not None
+    assert actions._check_perms(msg, "manage_messages", channel=allowed) is None
 
 
 # ── Error cards ──────────────────────────────────────────────────────────────
